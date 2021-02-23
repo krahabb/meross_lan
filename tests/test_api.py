@@ -1,15 +1,16 @@
-"""Tests for integration_blueprint api."""
-import asyncio
+"""Tests for MerossLan api."""
+#import asyncio
 
-import aiohttp
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+#import aiohttp
+#from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from custom_components.integration_blueprint.api import IntegrationBlueprintApiClient
+#from custom_components.integration_blueprint.api import IntegrationBlueprintApiClient
 
 
 async def test_api(hass, aioclient_mock, caplog):
     """Test API calls."""
 
+    """
     # To test the api submodule, we first create an instance of our API client
     api = IntegrationBlueprintApiClient("test", "test", async_get_clientsession(hass))
 
@@ -84,3 +85,4 @@ async def test_api(hass, aioclient_mock, caplog):
         len(caplog.record_tuples) == 1
         and "Error parsing information from" in caplog.record_tuples[0][2]
     )
+    """
