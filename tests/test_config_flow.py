@@ -7,7 +7,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.meross_lan.const import (
     DOMAIN,
-    PLATFORMS
+    PLATFORMS,
+    CONF_DEVICE_ID,
+    CONF_DISCOVERY_PAYLOAD
 )
 
 from .const import MOCK_CONFIG
@@ -40,22 +42,36 @@ async def test_successful_config_flow(hass):
     )
 
     # Check that the config flow shows the user form as the first step
-    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result["step_id"] == "user"
+    #assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    #assert result["step_id"] == "user"
 
     # If a user were to enter `test_username` for username and `test_password`
     # for password, it would result in this function call
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input=MOCK_CONFIG
-    )
+    #result = await hass.config_entries.flow.async_configure(
+    #    result["flow_id"], user_input=MOCK_CONFIG
+    #)
 
     # Check that the config flow is complete and a new entry is created with
     # the input data
     assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
-    #assert result["title"] == "test_username"
-    assert result["data"] == MOCK_CONFIG
-    assert result["result"]
+    assert result["title"] == "MQTT Hub"
+    #assert result["data"] == MOCK_CONFIG
+    #assert result["result"]
 
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context = {"source": config_entries.SOURCE_DISCOVERY}, data = MOCK_CONFIG
+    )
+
+    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["step_id"] == "user"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=MOCK_CONFIG
+    )
+
+    assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    assert result["title"] == MOCK_CONFIG[CONF_DEVICE_ID]
+    assert result["data"] == MOCK_CONFIG
 
 """
 # In this case, we want to simulate a failure during the config flow.
