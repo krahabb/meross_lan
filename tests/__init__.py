@@ -1,1 +1,1 @@
-"""Tests for integration_blueprint integration."""
+"""Tests for meross_lan integration."""
