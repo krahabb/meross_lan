@@ -7,8 +7,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.meross_lan.const import (
     DOMAIN,
-    PLATFORMS,
-    SWITCH
+    PLATFORMS
 )
 
 from .const import MOCK_CONFIG

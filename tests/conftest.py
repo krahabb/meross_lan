@@ -44,6 +44,12 @@ def bypass_get_data_fixture():
     ):
         yield
 
+@pytest.fixture(name="bypass_mqtt_subscribe")
+def bypass_mqtt_subscribe_fixture():
+    with patch(
+        "homeassistant.components.mqtt.async_subscribe"
+    ):
+        yield
 
 # In this fixture, we are forcing calls to async_get_data to raise an Exception. This is useful
 # for exception handling.
