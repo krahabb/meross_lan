@@ -31,18 +31,20 @@ Now you can start adding devices by manually toggling them so they *push* a stat
 
 
 ## Supported hardware
-At the moment this software has been developed and tested on the Meross MSS310R plug (power meter included). I have tried to make it the more optimistic and generalistic as possible based on the work from @albertogeniola and @bytespider so it should work with most of the plugs out there but..I did not test anything other than my MSS310Rs (firmware 2.1.4)
+At the moment this software has been developed and tested on the Meross MSS310R plug (power meter included). I have tried to make it the more optimistic and generalistic as possible based on the work from [@albertogeniola] and [@bytespider] so it should work with most of the plugs out there but..I did not test anything other than my MSS310Rs (firmware 2.1.4)
 
 - [MSS310R](https://www.meross.com/product/38/article/) : power plug with metering capabilties
 
 
 ## References
 This integration has been made possible only with the contribution of the awesome work done by:
-- @albertogeniola with @albertogeniola/MerossIot
-- @bytespider with @bytespider/Meross
+- [@albertogeniola]
+- [@bytespider]
 
 Have a look at their repositories to better understand how the Meross line of devices is working through MQTT
 I really thank them for the inspiration and the knowledge that made it possible for me to develop this integration
 
 [hacs]: https://github.com/custom-components/hacs
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
+[@albertogeniola]: https://github.com/albertogeniola/MerossIot
+[@bytespider]: https://github.com/bytespider/Meross
