@@ -1,0 +1,15 @@
+{
+  "domain": "meross_lan",
+  "name": "Meross LAN",
+  "config_flow": true,
+  "documentation": "https://github.com/krahabb/meross_lan",
+  "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
+  "mqtt": [],
+  "dependencies": ["mqtt"],
+  "codeowners": ["@krahabb"],
+  "version": "0.0.1"
+}
