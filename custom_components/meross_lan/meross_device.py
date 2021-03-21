@@ -2,25 +2,21 @@ from typing import Any, Callable, Dict, List, Optional
 
 from hashlib import md5
 from time import time, strftime, localtime
-from uuid import uuid4
 import json
 
 from homeassistant.components.switch import SwitchEntity, DEVICE_CLASS_OUTLET
 from .const import *
 
-def build_payload(namespace: str, method: str, payload: Any):
-    messageid = uuid4().hex
-    timestamp = int(time())
+def build_payload(namespace: str, method: str, payload: Any, credentials: Dict):
     p = {
             "header": {
-                "messageId": messageid,
+                "messageId": credentials["messageId"],
                 "namespace": namespace,
                 "method": method,
                 "payloadVersion": 1,
-                #"from": "/appliance/1909182170548290802048e1e9522946/publish",
-                "timestamp": timestamp,
+                "timestamp": credentials["timestamp"],
                 "timestampMs": 0,
-                "sign": md5((messageid + str(timestamp)).encode('utf-8')).hexdigest()
+                "sign": credentials["sign"]
             },
             "payload": payload
         }
@@ -29,7 +25,7 @@ def build_payload(namespace: str, method: str, payload: Any):
 class MerossDevice:
 
 
-    def __init__(self, device_id: str, discoverypayload: Dict, async_mqtt_publish: Callable):
+    def __init__(self, device_id: str, discoverypayload: Dict, credentials: Dict, async_mqtt_publish: Callable):
         self._device_id = device_id
         self._async_mqtt_publish = async_mqtt_publish  #provide the standard hass MQTT async_public signature
 
@@ -39,6 +35,7 @@ class MerossDevice:
         self.lastrequest = 0
         self.lastupdate = 0
         self.lastupdate_consumption = 0
+        self.credentials = credentials
 
         try:
             togglex = discoverypayload.get("all", {}).get("digest", {}).get("togglex")
@@ -95,9 +92,10 @@ class MerossDevice:
 
         return
 
-    def parsepayload(self, namespace: str, method: str, payload: Any) -> None:
+    def parsepayload(self, namespace: str, method: str, payload: Any, credentials: Dict) -> None:
         try:
             self.lastupdate = time()
+            self.credentials = credentials
 
             if namespace == NS_APPLIANCE_CONTROL_TOGGLEX:
                 togglex = payload.get("togglex")
@@ -145,7 +143,7 @@ class MerossDevice:
         # self.lastrequest should represent the time of the most recent un-responded request
         if self.lastupdate >= self.lastrequest:
             self.lastrequest = time()
-        mqttpayload = build_payload(namespace, method, payload)
+        mqttpayload = build_payload(namespace, method, payload, self.credentials)
         return self._async_mqtt_publish(COMMAND_TOPIC.format(self._device_id), mqttpayload, 0, False)
 
 class MerossLanSwitch(SwitchEntity):

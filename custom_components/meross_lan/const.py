@@ -7,6 +7,7 @@ PLATFORMS = ["switch"]
 
 CONF_DEVICE_ID = "device_id"
 CONF_DISCOVERY_PAYLOAD = "payload"
+CONF_CREDENTIALS = "credentials"
 #DEFAULT_DEVICE_ID = "1909182170548290802048e1e9522946"
 
 DISCOVERY_TOPIC = "/appliance/+/publish"

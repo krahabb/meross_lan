@@ -28,6 +28,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up Meross IoT local LAN from a config entry."""
 
+    credentials = {}
     api = hass.data.get(DOMAIN)
     if api == None:
         api = MerossLan(hass)
@@ -35,12 +36,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         # Listen to a message on MQTT.
         @callback
         async def message_received(msg):
+            _LOGGER.debug(msg)
             device_id = msg.topic.split("/")[2]
             mqttpayload = json.loads(msg.payload)
             header = mqttpayload.get("header")
             method = header.get("method")
             namespace = header.get("namespace")
             payload = mqttpayload.get("payload")
+            credentials = {
+                "messageId": header.get("messageId"),
+                "timestamp": header.get("timestamp"),
+                "sign": header.get("sign")
+            }
 
             device = api.devices.get(device_id)
             if device == None:
@@ -48,14 +55,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 if discovered == None:
                     # new device discovered: try to determine the capabilities
                     api.discovering[device_id] = {}
-                    mqttpayload = build_payload(NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, {})
+                    mqttpayload = build_payload(NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, {}, credentials)
                     hass.components.mqtt.async_publish(COMMAND_TOPIC.format(device_id), mqttpayload, 1, False)
                 else:
                     if (method == METHOD_GETACK):
 
                         if (namespace == NS_APPLIANCE_SYSTEM_ALL):
                             discovered[NS_APPLIANCE_SYSTEM_ALL] = payload
-                            mqttpayload = build_payload(NS_APPLIANCE_SYSTEM_ABILITY, METHOD_GET, {})
+                            mqttpayload = build_payload(NS_APPLIANCE_SYSTEM_ABILITY, METHOD_GET, {}, credentials)
                             hass.components.mqtt.async_publish(COMMAND_TOPIC.format(device_id), mqttpayload, 1, False)
                         elif (namespace == NS_APPLIANCE_SYSTEM_ABILITY):
                             payload.update(discovered[NS_APPLIANCE_SYSTEM_ALL])
@@ -63,11 +70,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                             await hass.config_entries.flow.async_init(
                                 DOMAIN,
                                 context={"source": SOURCE_DISCOVERY},
-                                data={CONF_DEVICE_ID: device_id, CONF_DISCOVERY_PAYLOAD: payload},
+                                data={CONF_DEVICE_ID: device_id, CONF_DISCOVERY_PAYLOAD: payload, CONF_CREDENTIALS: credentials},
                             )
 
             else:
-                device.parsepayload(namespace, method, payload)
+                device.parsepayload(namespace, method, payload, credentials)
             return
 
         api.unsubscribe_mqtt = await hass.components.mqtt.async_subscribe( DISCOVERY_TOPIC, message_received)
@@ -91,7 +98,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     device_id = entry.data.get(CONF_DEVICE_ID)
     if device_id != None:
         discoverypayload = entry.data.get(CONF_DISCOVERY_PAYLOAD)
-        device = MerossDevice(device_id, discoverypayload, hass.components.mqtt.async_publish)
+        credentials = entry.data.get(CONF_CREDENTIALS)
+        device = MerossDevice(device_id, discoverypayload, credentials, hass.components.mqtt.async_publish)
         api.devices[device_id] = device
 
         p_system = discoverypayload.get("all", {}).get("system", {})
