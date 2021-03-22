@@ -101,7 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         device_registry = await dr.async_get_registry(hass)
         device_registry.async_get_or_create(
             config_entry_id=entry.entry_id,
-            connections={(dr.CONNECTION_NETWORK_MAC, p_firmware.get("wifiMac"))},
+            connections={(dr.CONNECTION_NETWORK_MAC, p_hardware.get("macAddress"))},
             identifiers={(DOMAIN, device_id)},
             manufacturer="Meross",
             name=p_hardware.get("type", "Meross") + " " + device_id,
