@@ -36,7 +36,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         # Listen to a message on MQTT.
         @callback
         async def message_received(msg):
-            _LOGGER.debug(msg)
             device_id = msg.topic.split("/")[2]
             mqttpayload = json.loads(msg.payload)
             header = mqttpayload.get("header")
