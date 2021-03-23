@@ -1,4 +1,7 @@
-#curl -X POST -H "Content-Type: application/json" -d '{"header":{"from":"","messageId":"","method":"GET","namespace":"Appliance.System.All","payloadVersion":1,"sign":"cfcd208495d565ef66e7dff9f98764da","timestamp":0},"payload":{}}' http://192.168.10.20/config
+###
+###   device api: exchange the same message payload as per the mqtt protocol
+###   "sign" = md5(messageId + key + timestamp)
+
 POST http://192.168.10.20/config HTTP/1.1
 Content-Type: application/json
 
@@ -48,3 +51,31 @@ Content-Type: application/json
      "channel" : 0
   }
 }
+
+###
+POST http://192.168.10.21/config HTTP/1.1
+Content-Type: application/json
+
+{
+  "header": {
+    "messageId": "",
+    "namespace": "Appliance.Config.Key",
+    "method": "SET",
+    "payloadVersion": 1,
+    "timestamp": 0,
+    "sign": "cfcd208495d565ef66e7dff9f98764da"
+  },
+  "payload": {
+     "key" : {
+       "gateway": {
+         "host": "192.168.10.11",
+         "port": 8883,
+         "secondHost": "192.168.10.11",
+         "secondPort": 8883
+       },
+       "key": "",
+       "userId": ""
+     }
+  }
+}
+
