@@ -3,5 +3,5 @@ pythonenv*
 venv
 .venv
 .coverage
-.secret
-.user
+*.secret
+*.user
