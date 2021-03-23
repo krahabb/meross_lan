@@ -1,17 +1,10 @@
 """Config flow for Meross IoT local LAN integration."""
-import logging
 
 import voluptuous as vol
 
 from homeassistant import config_entries, core, exceptions
 
 from .const import *  # pylint:disable=unused-import
-
-
-_LOGGER = logging.getLogger(__name__)
-
-# TODO adjust the data schema to the data that you need
-# STEP_USER_DATA_SCHEMA = vol.Schema({CONF_DEVICE_ID: str})
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -21,6 +14,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     # TODO pick one of the available connection classes in homeassistant/config_entries.py
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_PUSH
+
+    """
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        return OptionsFlowHandler(config_entry)
+    """
 
     async def async_step_user(self, user_input=None):
         #if self._async_in_progress() or self._async_current_entries():
@@ -32,49 +31,59 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_create_entry(title=self.unique_id, data=self._discovery_info)
 
-        #if user_input is None:
-        #    return self.async_show_form(step_id="user", data_schema=vol.Schema({ vol.Required(CONF_DEVICE_ID): vol.All(str, vol.Length(min=32, max=32))}))
-
-        #return self.async_create_entry(title=DOMAIN, data=user_input)
 
     async def async_step_discovery(self, info):
-        await self.async_set_unique_id(info[CONF_DEVICE_ID])
+        self._device_id = info[CONF_DEVICE_ID]
+        await self.async_set_unique_id(self._device_id)
         self._abort_if_unique_id_configured()
         self._discovery_info = info
-        return self.async_show_form(step_id="user", data_schema=vol.Schema({ vol.Required(CONF_DEVICE_ID, default=info[CONF_DEVICE_ID]): vol.All(str, vol.Length(min=32, max=32))}))
-        #return self.async_create_entry(title=DOMAIN, data=info)
 
-    async def deleted_async_step_user(self, user_input=None):
-        """Handle the initial step."""
-        if user_input is None:
-            return self.async_show_form(
-                step_id="user",
-                data_schema=vol.Schema({CONF_DEVICE_ID: self._device_id}),
-            )
+        config_schema = vol.Schema({
+            vol.Required(CONF_DEVICE_ID, default=self._device_id): vol.All(str, vol.Length(min=32, max=32))
+            })
 
-        errors = {}
+        return self.async_show_form(step_id="config", data_schema=config_schema)
 
-        self._device_id = user_input[CONF_DEVICE_ID]
+    async def async_step_config(self, user_input=None):
+        return self.async_create_entry(title=self.unique_id, data=self._discovery_info)
 
-        if len(self._device_id) == 32:
-            await self.async_set_unique_id(f"{DOMAIN}-{self._device_id}")
-            return self.async_create_entry(title=self.unique_id, data=user_input)
-        else:
-            errors["base"] = "invalid_device_id"
-            return self.async_show_form(
-                step_id="user",
-                data_schema=vol.Schema({CONF_DEVICE_ID: self._device_id}),
-                errors=errors,
-            )
 
-    async def deleted_async_step_mqtt(self, discovery_info=None):
-        """Handle a flow initialized by MQTT discovery."""
 
-        values = discovery_info.topic.split("/")
-        self._device_id = values[2]
-        await self.async_set_unique_id(f"{DOMAIN}-{self._device_id}")
+"""
+Manage device options configuration
+This code is actually disabled since I prefer to not add too many configuration tweaks at the moment.
+The initial implementation was about letting the user choose if they wanted specific sensors for power values or not
+Actually, I think the default solution of removing attributes (from switches) and adding specific sensors is 'plain right':
+As an HA user you can just disable unwanted entities or remove them from recorder if they pollute your history
+class OptionsFlowHandler(config_entries.OptionsFlow):
 
-        # return await self.async_step_confirm()
+    def __init__(self, config_entry):
+        self._config_entry = config_entry
+
+    async def async_step_init(self, user_input=None):
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        discoverypayload = self._config_entry.data.get(CONF_DISCOVERY_PAYLOAD, {})
+        ability = discoverypayload.get("ability", {})
+        options = self._config_entry.options or {}
+
+        device_id = self._config_entry.data.get(CONF_DEVICE_ID)
+        device_name = discoverypayload.get("all", {}).get("system", {}).get("hardware", {}).get("type", "Meross") + " " + device_id
+
+        config_schema = OrderedDict()
+
+        if NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
+            config_schema[vol.Optional(CONF_OPTION_SENSOR_POWER, default=options.get(CONF_OPTION_SENSOR_POWER, False))] = bool
+            config_schema[vol.Optional(CONF_OPTION_SENSOR_CURRENT, default=options.get(CONF_OPTION_SENSOR_CURRENT, False))] = bool
+            config_schema[vol.Optional(CONF_OPTION_SENSOR_VOLTAGE, default=options.get(CONF_OPTION_SENSOR_VOLTAGE, False))] = bool
+
+        if NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
+            config_schema[vol.Optional(CONF_OPTION_SENSOR_ENERGY, default=options.get(CONF_OPTION_SENSOR_ENERGY, False))] = bool
+
         return self.async_show_form(
-            step_id="user", data_schema=vol.Schema({CONF_DEVICE_ID: self._device_id})
+            step_id="init",
+            data_schema=vol.Schema(config_schema),
+            description_placeholders={"device_name" : device_name}
         )
+        """

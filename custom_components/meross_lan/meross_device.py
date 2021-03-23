@@ -5,8 +5,16 @@ from time import time, strftime, localtime
 from uuid import uuid4
 import json
 
-from homeassistant.components.switch import SwitchEntity, DEVICE_CLASS_OUTLET
+from homeassistant.const import (
+    DEVICE_CLASS_POWER, POWER_WATT,
+    DEVICE_CLASS_CURRENT, ELECTRICAL_CURRENT_AMPERE,
+    DEVICE_CLASS_VOLTAGE, VOLT,
+    DEVICE_CLASS_ENERGY, ENERGY_WATT_HOUR
+)
+
 from .const import *
+from .switch import MerossLanSwitch
+from .sensor import MerossLanSensor
 
 def build_payload(namespace: str, method: str, payload: Any):
     messageid = uuid4().hex
@@ -17,7 +25,7 @@ def build_payload(namespace: str, method: str, payload: Any):
                 "namespace": namespace,
                 "method": method,
                 "payloadVersion": 1,
-                #"from": "/appliance/1909182170548290802048e1e9522946/publish",
+                #"from": "/appliance/9109182170548290882048e1e9522946/publish",
                 "timestamp": timestamp,
                 "timestampMs": 0,
                 "sign": md5((messageid + str(timestamp)).encode('utf-8')).hexdigest()
@@ -28,32 +36,50 @@ def build_payload(namespace: str, method: str, payload: Any):
 
 class MerossDevice:
 
-
     def __init__(self, device_id: str, discoverypayload: Dict, async_mqtt_publish: Callable):
         self._device_id = device_id
         self._async_mqtt_publish = async_mqtt_publish  #provide the standard hass MQTT async_public signature
-
         self.ability = discoverypayload.get("ability", {})
         self.switches: [MerossLanSwitch] = []
+        self.sensors: [MerossLanSensor] = []
+        self._sensor_power = None
+        self._sensor_current = None
+        self._sensor_voltage = None
+        self._sensor_energy = None
         self._online = False
         self.lastrequest = 0
         self.lastupdate = 0
         self.lastupdate_consumption = 0
 
         try:
+
             togglex = discoverypayload.get("all", {}).get("digest", {}).get("togglex")
             if isinstance(togglex, List):
                 for t in togglex:
-                    self.switches.append(MerossLanSwitch(self, t.get("channel")))
+                    self.switches.append(MerossLanSwitch(self, t.get("channel"), self.togglex_set, self.togglex_get))
             elif isinstance(togglex, Dict):
-                self.switches.append(MerossLanSwitch(self, togglex.get("channel")))
-            elif (NS_APPLIANCE_CONTROL_TOGGLE in self.ability) or (NS_APPLIANCE_CONTROL_TOGGLEX in self.ability):
+                self.switches.append(MerossLanSwitch(self, togglex.get("channel"), self.togglex_set, self.togglex_get))
+            elif NS_APPLIANCE_CONTROL_TOGGLEX in self.ability:
                 #fallback for switches: in case we couldnt get from NS_APPLIANCE_SYSTEM_ALL
-                self.switches.append(MerossLanSwitch(self, 0))
+                self.switches.append(MerossLanSwitch(self, 0, self.togglex_set, self.togglex_get))
+            elif NS_APPLIANCE_CONTROL_TOGGLE in self.ability:
+                #fallback for switches: in case we couldnt get from NS_APPLIANCE_SYSTEM_ALL
+                self.switches.append(MerossLanSwitch(self, 0, self.toggle_set, self.toggle_get))
+
+            if NS_APPLIANCE_CONTROL_ELECTRICITY in self.ability:
+                self._sensor_power = MerossLanSensor(self, DEVICE_CLASS_POWER, POWER_WATT)
+                self.sensors.append(self._sensor_power)
+                self._sensor_current = MerossLanSensor(self, DEVICE_CLASS_CURRENT, ELECTRICAL_CURRENT_AMPERE)
+                self.sensors.append(self._sensor_current)
+                self._sensor_voltage = MerossLanSensor(self, DEVICE_CLASS_VOLTAGE, VOLT)
+                self.sensors.append(self._sensor_voltage)
+
+            if NS_APPLIANCE_CONTROL_CONSUMPTIONX in self.ability:
+                self._sensor_energy = MerossLanSensor(self, DEVICE_CLASS_ENERGY, ENERGY_WATT_HOUR)
+                self.sensors.append(self._sensor_energy)
+
         except:
             pass
-
-
 
         return
 
@@ -64,18 +90,22 @@ class MerossDevice:
 
     @property
     def online(self) -> bool:
-        #evaluate device MQTT availability by checking lastrequest got answered in less than 10
-        if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < 10):
+        #evaluate device MQTT availability by checking lastrequest got answered in less than 10 seconds
+        if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < PARAM_UNAVAILABILITY_TIMEOUT):
             if not (self._online):
                 self._online = True
                 for switch in self.switches:
                     switch._set_available()
+                for sensor in self.sensors:
+                    sensor._set_available()
             return True
         #else
         if self._online:
             self._online = False
             for switch in self.switches:
                 switch._set_unavailable()
+            for sensor in self.sensors:
+                sensor._set_unavailable()
         return False
 
 
@@ -89,8 +119,8 @@ class MerossDevice:
         if NS_APPLIANCE_CONTROL_ELECTRICITY in self.ability:
             self._mqtt_publish(NS_APPLIANCE_CONTROL_ELECTRICITY, METHOD_GET)
 
-        if NS_APPLIANCE_CONTROL_CONSUMPTIONX in self.ability:
-            if ((now - self.lastupdate_consumption) > 60):
+        if self._sensor_energy and self._sensor_energy.enabled:
+            if ((now - self.lastupdate_consumption) > PARAM_ENERGY_UPDATE_PERIOD):
                 self._mqtt_publish(NS_APPLIANCE_CONTROL_CONSUMPTIONX, METHOD_GET)
 
         return
@@ -106,25 +136,59 @@ class MerossDevice:
                         self.switches[t.get("channel")]._set_is_on(t.get("onoff") == 1)
                 elif isinstance(togglex, Dict):
                     self.switches[togglex.get("channel")]._set_is_on(togglex.get("onoff") == 1)
+
             elif namespace == NS_APPLIANCE_CONTROL_ELECTRICITY:
                 electricity = payload.get("electricity")
-                self.switches[electricity.get("channel")]._set_power(
-                    electricity.get("power") / 1000,
-                    electricity.get("voltage") / 10,
-                    electricity.get("current") / 1000
-                    )
+                power_w = electricity.get("power") / 1000
+                voltage_v = electricity.get("voltage") / 10
+                current_a = electricity.get("current") / 1000
+                if self._sensor_power:
+                    self._sensor_power._set_state(power_w)
+                if self._sensor_current:
+                    self._sensor_current._set_state(current_a)
+                if self._sensor_voltage:
+                    self._sensor_voltage._set_state(voltage_v)
+                """ TAG_NOPOWERATTR
+                disable attributes publishing to avoid unnecessary recording on switch entity
+                power readings are now available as proper sensor entities
+
+                self.switches[electricity.get("channel")]._set_power(power_w, voltage_v, current_a)
+                """
+
             elif namespace == NS_APPLIANCE_CONTROL_CONSUMPTIONX:
-                self.lastupdate_consumption = self.lastupdate
-                daylabel = strftime("%Y-%m-%d", localtime())
-                for d in payload.get("consumptionx"):
-                    if d.get("date") == daylabel:
-                        self.switches[0]._set_energy(d.get("value") / 1000)
+                if self._sensor_energy:
+                    self.lastupdate_consumption = self.lastupdate
+                    daylabel = strftime("%Y-%m-%d", localtime())
+                    for d in payload.get("consumptionx"):
+                        if d.get("date") == daylabel:
+                            energy_wh = d.get("value")
+                            self._sensor_energy._set_state(energy_wh)
+                            """ TAG_NOPOWERATTR
+                            disable attributes publishing to avoid unnecessary recording on switch entity
+                            power readings are now available as proper sensor entities
+
+                            self.switches[0]._set_energy(energy_wh / 1000)
+                            """
 
         except:
             pass
 
         return
 
+
+    def toggle_set(self, channel: int, ison: int):
+        return self._mqtt_publish(
+            NS_APPLIANCE_CONTROL_TOGGLE,
+            METHOD_SET,
+            {"toggle": {"channel": channel, "onoff": ison}}
+        )
+
+    def toggle_get(self, channel: int):
+        return self._mqtt_publish(
+            NS_APPLIANCE_CONTROL_TOGGLE,
+            METHOD_GET,
+            {"toggle": {"channel": channel}}
+        )
 
     def togglex_set(self, channel: int, ison: int):
         return self._mqtt_publish(
@@ -147,132 +211,3 @@ class MerossDevice:
             self.lastrequest = time()
         mqttpayload = build_payload(namespace, method, payload)
         return self._async_mqtt_publish(COMMAND_TOPIC.format(self._device_id), mqttpayload, 0, False)
-
-class MerossLanSwitch(SwitchEntity):
-    def __init__(self, meross_device: object, channel: int):
-        self._meross_device = meross_device
-        self._channel = channel
-        self._is_on = None
-        self._current_power_w = None
-        self._current_voltage_v = None
-        self._current_current_a = None
-        self._today_energy_kwh = None
-
-    @property
-    def unique_id(self) -> Optional[str]:
-        """Return a unique id identifying the entity."""
-        return f"{self._meross_device.device_id}_{self._channel}"
-
-    # To link this entity to the  device, this property must return an
-    # identifiers value matching that used in the cover, but no other information such
-    # as name. If name is returned, this entity will then also become a device in the
-    # HA UI.
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {
-                # Serial numbers are unique identifiers within a specific domain
-                (DOMAIN, self._meross_device.device_id)
-            }
-        }
-
-    @property
-    def device_class(self):
-        """Return the class of this device, from component DEVICE_CLASSES."""
-        return DEVICE_CLASS_OUTLET
-
-    @property
-    def should_poll(self) -> bool:
-        return False
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return self._is_on != None
-
-    @property
-    def assumed_state(self) -> bool:
-        """Return true if we do optimistic updates."""
-        return False
-
-    @property
-    def is_on(self) -> bool:
-        """Return true if the switch is on."""
-        return self._is_on
-
-    @property
-    def current_power_w(self):
-        """Return the current power usage in W."""
-        return self._current_power_w
-
-    @property
-    def today_energy_kwh(self):
-        """Return the today total energy usage in kWh."""
-        return self._today_energy_kwh
-
-    @property
-    def state_attributes(self):
-        data = super().state_attributes
-        if self._current_voltage_v is not None:
-            data["current_voltage_v"] = self._current_voltage_v
-        if self._current_current_a is not None:
-            data["current_current_a"] = self._current_current_a
-        return data
-
-    async def async_added_to_hass(self) -> None:
-        self._meross_device.togglex_get(self._channel)
-        return
-
-    async def async_will_remove_from_hass(self) -> None:
-        self._is_on = None
-        self._current_current_a = None
-        self._current_voltage_v = None
-        self._current_power_w = None
-        self._today_energy_kwh = None
-        return
-
-    async def async_turn_on(self, **kwargs) -> None:
-        """Turn the entity on."""
-        ##return await self.sendmessage(1)
-        return self._meross_device.togglex_set(self._channel, 1)
-
-    async def async_turn_off(self, **kwargs) -> None:
-        """Turn the entity off."""
-        #return await self.sendmessage(0)
-        return self._meross_device.togglex_set(self._channel, 0)
-
-    def _set_available(self) -> None:
-        if self.enabled:
-            self._meross_device.togglex_get(self._channel)
-        return
-
-    def _set_unavailable(self) -> None:
-        if self.enabled and self.available:
-            self._is_on = None
-            self._current_current_a = None
-            self._current_voltage_v = None
-            self._current_power_w = None
-            self._today_energy_kwh = None
-            self.async_write_ha_state()
-        return
-
-    def _set_is_on(self, is_on: Optional[bool]) -> None:
-        if self.enabled:
-            self._is_on = is_on
-            self.async_write_ha_state()
-        return
-
-    def _set_power(self, power: float, voltage: float, current: float) -> None:
-        if self.enabled:
-            self._current_power_w = power
-            self._current_voltage_v = voltage
-            self._current_current_a = current
-            self.async_write_ha_state()
-        return
-
-    def _set_energy(self, energy: float) -> None:
-        if self.enabled:
-            self._today_energy_kwh = energy
-            self.async_write_ha_state()
-        return
-

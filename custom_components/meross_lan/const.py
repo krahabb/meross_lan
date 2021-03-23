@@ -3,11 +3,14 @@
 DOMAIN = "meross_lan"
 
 
-PLATFORMS = ["switch"]
+PLATFORMS = ["switch", "sensor"]
 
 CONF_DEVICE_ID = "device_id"
 CONF_DISCOVERY_PAYLOAD = "payload"
-#DEFAULT_DEVICE_ID = "1909182170548290802048e1e9522946"
+#CONF_OPTION_SENSOR_POWER = "sensor_power"
+#CONF_OPTION_SENSOR_CURRENT = "sensor_current"
+#CONF_OPTION_SENSOR_VOLTAGE = "sensor_voltage"
+#CONF_OPTION_SENSOR_ENERGY = "sensor_energy"
 
 DISCOVERY_TOPIC = "/appliance/+/publish"
 COMMAND_TOPIC = "/appliance/{}/subscribe"
@@ -33,6 +36,9 @@ NS_APPLIANCE_CONTROL_CONSUMPTIONX = "Appliance.Control.ConsumptionX"
 NS_APPLIANCE_CONTROL_ELECTRICITY = "Appliance.Control.Electricity"
 # Light Abilities
 NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
-#Humidifier abilities
+# Humidifier abilities
 NS_APPLIANCE_SYSTEM_DND = "Appliance.System.DNDMode"
 NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
+
+PARAM_UNAVAILABILITY_TIMEOUT = 10  # number of seconds since last inquiry to consider the device unavailable
+PARAM_ENERGY_UPDATE_PERIOD = 60 # read energy consumption only every ... second
