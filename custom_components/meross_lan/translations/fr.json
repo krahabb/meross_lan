@@ -1,5 +1,7 @@
 {
+  "title": "Meross LAN",
   "config": {
+    "flow_title": "Meross {device_type}",
     "abort": {
       "no_devices_found": "Pas d'appareils découverts sur le réseau.",
       "single_instance_allowed": "Déjà configuré. Une seule configuration possible."
@@ -9,6 +11,5 @@
         "description": "Voulez-vous commencer à configurer?"
       }
     }
-  },
-  "title": "Meross IoT local LAN"
+  }
 }
