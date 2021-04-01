@@ -2,7 +2,7 @@
   "name": "Meross LAN",
   "render_readme": true,
   "country": ["IT"],
-  "domains": ["switch"],
+  "domains": ["switch", "sensor", "light"],
   "homeassistant": "2020.0.0",
   "iot_class": "Local Push",
   "hacs": "1.6.0"

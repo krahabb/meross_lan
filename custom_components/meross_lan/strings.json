@@ -1,14 +1,46 @@
 {
   "title": "Meross LAN",
   "config": {
-    "step": {
-      "confirm": {
-        "description": "[%key:common::config_flow::description::confirm_setup%]"
-      }
-    },
+    "flow_title": "Meross {device_type}",
     "abort": {
       "single_instance_allowed": "[%key:common::config_flow::abort::single_instance_allowed%]",
       "no_devices_found": "[%key:common::config_flow::abort::no_devices_found%]"
+    },
+    "step": {
+      "hub": {
+        "title": "Meross LAN MQTT Hub",
+        "description": "Configure global Meross LAN settings",
+        "data": {
+          "key": "Device key"
+        }
+      },
+      "device": {
+        "title": "Device configuration",
+        "description": "Type: {device_type}\nUUID: {device_id}",
+        "data": {
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "hub": {
+        "title": "Meross LAN MQTT Hub",
+        "description": "Configure global Meross LAN settings",
+        "data": {
+          "key": "Device key"
+        }
+      },
+      "device": {
+        "title": "Device configuration",
+        "description": "Type: {device_type}\nUUID: {device_id}\n\n{payload}",
+        "data": {
+          "key": "Device key",
+          "device_id": "UUID of Meross appliance",
+          "all": "Appliance.System.All",
+          "ability": "Appliance.System.Ability"
+        }
+      }
     }
   }
 }

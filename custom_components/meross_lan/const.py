@@ -1,16 +1,13 @@
 """Constants for the Meross IoT local LAN integration."""
 
 DOMAIN = "meross_lan"
+#PLATFORMS = ["switch", "sensor", "light"]
 
-
-PLATFORMS = ["switch", "sensor"]
 
 CONF_DEVICE_ID = "device_id"
+CONF_KEY = "key"
 CONF_DISCOVERY_PAYLOAD = "payload"
-#CONF_OPTION_SENSOR_POWER = "sensor_power"
-#CONF_OPTION_SENSOR_CURRENT = "sensor_current"
-#CONF_OPTION_SENSOR_VOLTAGE = "sensor_voltage"
-#CONF_OPTION_SENSOR_ENERGY = "sensor_energy"
+CONF_DEVICE_TYPE = "device_type"
 
 DISCOVERY_TOPIC = "/appliance/+/publish"
 COMMAND_TOPIC = "/appliance/{}/subscribe"
@@ -20,6 +17,7 @@ METHOD_GET = "GET"
 METHOD_GETACK = "GETACK"
 METHOD_SET = "SET"
 METHOD_SETACK = "SETACK"
+METHOD_ERROR = "ERROR"
 
 NS_APPLIANCE_SYSTEM_ALL = "Appliance.System.All"
 NS_APPLIANCE_SYSTEM_ABILITY = "Appliance.System.Ability"
@@ -40,5 +38,14 @@ NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
 NS_APPLIANCE_SYSTEM_DND = "Appliance.System.DNDMode"
 NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
 
+"""
+ general working/configuration parameters (waiting to be moved to CONF_ENTRY)
+"""
 PARAM_UNAVAILABILITY_TIMEOUT = 10  # number of seconds since last inquiry to consider the device unavailable
 PARAM_ENERGY_UPDATE_PERIOD = 60 # read energy consumption only every ... second
+PARAM_UPDATE_POLLING_PERIOD = 30  # periodic state polling or whatever
+PARAM_STALE_DEVICE_REMOVE_TIMEOUT = 60 # disable config_entry when device is offline for more than...
+"""
+    GP constant strings
+"""
+MANUFACTURER = "Meross"
