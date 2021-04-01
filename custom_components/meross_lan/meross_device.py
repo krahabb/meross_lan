@@ -14,7 +14,8 @@ from homeassistant.const import (
     DEVICE_CLASS_ENERGY, ENERGY_WATT_HOUR
 )
 
-from .logger import LOGGER
+from .logger import LOGGER, LOGGER_trap
+from logging import WARNING
 from .switch import MerossLanSwitch
 from .sensor import MerossLanSensor
 from .light import MerossLanLight
@@ -133,6 +134,9 @@ class MerossDevice:
                 self._online = True
                 for entity in self.entities.values():
                     entity._set_available()
+
+            if replykey != self.key:
+                LOGGER_trap(WARNING, "Meross device key error for device_id: %s", self.device_id)
 
             if namespace == NS_APPLIANCE_CONTROL_TOGGLEX:
                 togglex = payload.get("togglex")
