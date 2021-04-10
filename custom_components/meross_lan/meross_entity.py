@@ -16,7 +16,7 @@ from .const import DOMAIN, CONF_DEVICE_ID, NS_APPLIANCE_CONTROL_ELECTRICITY, MET
 # pylint: disable=no-member
 
 class _MerossEntity:
-    def __init__(self, meross_device: object, channel: Optional[int], device_class: str):
+    def __init__(self, meross_device: object, channel: Optional[int], device_class: str):  # pylint: disable=unsubscriptable-object
         self._meross_device = meross_device
         self._channel = channel
         self._device_class = device_class
@@ -82,7 +82,6 @@ class _MerossEntity:
         return
 
     async def async_will_remove_from_hass(self) -> None:
-        self._state = None
         return
 
     def _set_state(self, state: str) -> None:
@@ -93,8 +92,6 @@ class _MerossEntity:
         return
 
     def _set_available(self) -> None:
-        #if self.enabled:
-        #    self._m_toggle_get(self._channel)
         return
 
     def _set_unavailable(self) -> None:
@@ -103,30 +100,25 @@ class _MerossEntity:
 
 
 class _MerossToggle(_MerossEntity):
-    def __init__(self, meross_device: object, channel: Optional[int], device_class: str, m_toggle_set, m_toggle_get):
+    def __init__(self, meross_device: object, channel: Optional[int], device_class: str, m_toggle_set, m_toggle_get):  # pylint: disable=unsubscriptable-object
         super().__init__(meross_device, channel, device_class)
         self._m_toggle_set = m_toggle_set
         self._m_toggle_get = m_toggle_get
 
-    #async def async_added_to_hass(self) -> None:
-    #    self._m_toggle_get(self._channel)
-    #    return
 
     async def async_turn_on(self, **kwargs) -> None:
         return self._m_toggle_set(self._channel, 1)
 
+
     async def async_turn_off(self, **kwargs) -> None:
         return self._m_toggle_set(self._channel, 0)
+
 
     @property
     def is_on(self) -> bool:
         return self._state == STATE_ON
 
+
     def _set_onoff(self, onoff) -> None:
         self._set_state(STATE_ON if onoff else STATE_OFF)
-        return
-
-    def _set_available(self) -> None:
-        if self.enabled:
-            self._m_toggle_get(self._channel)
         return

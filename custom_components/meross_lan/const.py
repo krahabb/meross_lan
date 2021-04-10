@@ -1,7 +1,7 @@
 """Constants for the Meross IoT local LAN integration."""
 
 DOMAIN = "meross_lan"
-#PLATFORMS = ["switch", "sensor", "light"]
+#PLATFORMS = ["switch", "sensor", "light", "cover"]
 
 
 CONF_DEVICE_ID = "device_id"
@@ -37,6 +37,8 @@ NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
 # Humidifier abilities
 NS_APPLIANCE_SYSTEM_DND = "Appliance.System.DNDMode"
 NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
+# Garage door opener
+NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
 
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)

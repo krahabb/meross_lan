@@ -92,6 +92,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, "light"))
         if device.has_sensors:
             hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, "sensor"))
+        if device.has_covers:
+            hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, "cover"))
 
         device.unsub_entry_update_listener = entry.add_update_listener(device_entry_update_listener)
         device.unsub_updatecoordinator_listener = api.coordinator.async_add_listener(device.updatecoordinator_listener)
@@ -117,6 +119,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 platforms_unload.append(hass.config_entries.async_forward_entry_unload(entry, "light"))
             if device.has_sensors:
                 platforms_unload.append(hass.config_entries.async_forward_entry_unload(entry, "sensor"))
+            if device.has_covers:
+                platforms_unload.append(hass.config_entries.async_forward_entry_unload(entry, "cover"))
+
+            if platforms_unload:
+                if False == all(await asyncio.gather(*platforms_unload)):
+                    return False
 
             if device.unsub_entry_update_listener:
                 device.unsub_entry_update_listener()
@@ -124,10 +132,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if device.unsub_updatecoordinator_listener:
                 device.unsub_updatecoordinator_listener()
                 device.unsub_updatecoordinator_listener = None
-
-            if platforms_unload:
-                if False == all(await asyncio.gather(*platforms_unload)):
-                    return False
 
             api.devices.pop(device_id)
 

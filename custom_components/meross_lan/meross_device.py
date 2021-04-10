@@ -15,14 +15,16 @@ from homeassistant.const import (
 )
 
 from .logger import LOGGER, LOGGER_trap
-from logging import WARNING
+from logging import WARNING, DEBUG
 from .switch import MerossLanSwitch
 from .sensor import MerossLanSensor
 from .light import MerossLanLight
+from .cover import MerossLanCover
 from .const import (
     CONF_KEY, CONF_DISCOVERY_PAYLOAD,
     METHOD_GET, METHOD_SET,
-    NS_APPLIANCE_CONTROL_TOGGLE, NS_APPLIANCE_CONTROL_TOGGLEX, NS_APPLIANCE_CONTROL_LIGHT,
+    NS_APPLIANCE_CONTROL_TOGGLE, NS_APPLIANCE_CONTROL_TOGGLEX,
+    NS_APPLIANCE_CONTROL_LIGHT, NS_APPLIANCE_GARAGEDOOR_STATE,
     NS_APPLIANCE_CONTROL_ELECTRICITY, NS_APPLIANCE_CONTROL_CONSUMPTIONX, NS_APPLIANCE_SYSTEM_ALL,
     PARAM_UNAVAILABILITY_TIMEOUT, PARAM_ENERGY_UPDATE_PERIOD
 )
@@ -40,6 +42,7 @@ class MerossDevice:
         self.has_sensors = False
         self.has_lights = False
         self.has_switches = False
+        self.has_covers = False
         self._sensor_power = None
         self._sensor_current = None
         self._sensor_voltage = None
@@ -64,6 +67,12 @@ class MerossDevice:
                     MerossLanLight(self, l.get("channel"))
             elif isinstance(light, Dict):
                 MerossLanLight(self, light.get("channel", 0))
+
+            garagedoor = digest.get("garageDoor")
+            if isinstance(garagedoor, List):
+                for g in garagedoor:
+                    MerossLanCover(self, g.get("channel"))
+
 
             # at any rate: could we have more toggles than lights? (yes: no lights at all)
             # but the question is: could we have lights (with togglex) + switches (only togglex) ?
@@ -119,6 +128,7 @@ class MerossDevice:
 
     def parsepayload(self, namespace: str, method: str, payload: dict, replykey: Union[dict, Optional[str]]) -> None:  # pylint: disable=unsubscriptable-object
         try:
+            LOGGER.debug("MerossDevice(%s) MQTT recv method:%s namespace:%s ", self.device_id, method, namespace)
             """
             every time we receive a response we save it's 'replykey':
             that would be the same as our self.key (which it is compared against in 'get_replykey')
@@ -127,16 +137,18 @@ class MerossDevice:
             if our config allows for that (our self.key is 'None' which means empty key or auto-detect)
             """
             self.replykey = replykey
+            if replykey != self.key:
+                LOGGER_trap(WARNING, "Meross device key error for device_id: %s", self.device_id)
 
             self.lastupdate = time()
             if not self._online:
                 LOGGER.debug("MerossDevice(%s) back online!", self.device_id)
                 self._online = True
+                if namespace != NS_APPLIANCE_SYSTEM_ALL:
+                    self.mqtt_publish(NS_APPLIANCE_SYSTEM_ALL, METHOD_GET)
                 for entity in self.entities.values():
                     entity._set_available()
 
-            if replykey != self.key:
-                LOGGER_trap(WARNING, "Meross device key error for device_id: %s", self.device_id)
 
             if namespace == NS_APPLIANCE_CONTROL_TOGGLEX:
                 togglex = payload.get("togglex")
@@ -181,7 +193,12 @@ class MerossDevice:
                 light = payload.get("light")
                 if isinstance(light, Dict):
                     self.entities[light.get("channel")]._set_light(light)
-                pass
+
+            elif namespace == NS_APPLIANCE_GARAGEDOOR_STATE:
+                garagedoor = payload.get("state")
+                if isinstance(garagedoor, List):
+                    for g in garagedoor:
+                        self.entities[g.get("channel")]._set_open(g.get("open"))
 
             elif namespace == NS_APPLIANCE_SYSTEM_ALL:
                 digest = payload.get("all", {}).get("digest", {})
@@ -194,6 +211,10 @@ class MerossDevice:
                 light = digest.get("light")
                 if isinstance(light, Dict):
                     self.entities[light.get("channel")]._set_light(light)
+                garagedoor = digest.get("garageDoor")
+                if isinstance(garagedoor, List):
+                    for g in garagedoor:
+                        self.entities[g.get("channel")]._set_open(g.get("open"))
 
 
         except:
@@ -232,6 +253,7 @@ class MerossDevice:
 
 
     def mqtt_publish(self, namespace: str, method: str, payload: dict = {}):
+        LOGGER.debug("MerossDevice(%s) MQTT send method:%s namespace:%s ", self.device_id, method, namespace)
         # self.lastrequest should represent the time of the most recent un-responded request
         if self.lastupdate >= self.lastrequest:
             self.lastrequest = time()
