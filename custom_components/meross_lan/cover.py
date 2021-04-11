@@ -162,6 +162,10 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
             payload=self._payload)
         return
 
+    def _set_unavailable(self) -> None:
+        self._position = None
+        super()._set_unavailable()
+        return
 
     def _set_rollerstate(self, state) -> None:
         if state == 1:

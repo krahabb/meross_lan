@@ -6,11 +6,11 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.meross_lan import (
     async_setup_entry,
     async_unload_entry,
-    MerossLan
+    MerossApi
 )
 from custom_components.meross_lan.const import DOMAIN
 
-from .const import MOCK_CONFIG
+from .const import MOCK_HUB_CONFIG
 
 
 # We can pass fixtures as defined in conftest.py to tell pytest to use the fixture
@@ -21,15 +21,15 @@ from .const import MOCK_CONFIG
 async def test_setup_unload_and_reload_entry(hass, bypass_mqtt_subscribe):
     """Test entry setup and unload."""
     # Create a mock entry so we don't have to go through config flow
-    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_CONFIG, entry_id="test")
+    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_HUB_CONFIG, entry_id="test")
 
     # Set up the entry and assert that the values set during setup are where we expect
     # them to be. Because we have patched the BlueprintDataUpdateCoordinator.async_get_data
     # call, no code from custom_components/integration_blueprint/api.py actually runs.
     assert await async_setup_entry(hass, config_entry)
-    assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
+    #assert DOMAIN in hass.data and config_entry.entry_id in hass.data[DOMAIN]
     assert (
-        type(hass.data[DOMAIN]) == MerossLan
+        type(hass.data[DOMAIN]) == MerossApi
     )
 
     """

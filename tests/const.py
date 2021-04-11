@@ -1,5 +1,14 @@
 """Constants for integration_blueprint tests."""
-from custom_components.meross_lan.const import CONF_DEVICE_ID, CONF_DISCOVERY_PAYLOAD
+from custom_components.meross_lan.const import (
+    CONF_DEVICE_ID, CONF_DISCOVERY_PAYLOAD, CONF_KEY
+)
 
 # Mock config data to be used across multiple tests
-MOCK_CONFIG = {CONF_DEVICE_ID: "19091821705482908020a8e1e9522906", CONF_DISCOVERY_PAYLOAD: {} }
+MOCK_HUB_CONFIG = {
+    CONF_KEY: "test_key"
+    }
+MOCK_DEVICE_CONFIG = {
+    CONF_DEVICE_ID: "9109182170548290880048b1a9522933",
+    CONF_KEY: "test_key",
+    CONF_DISCOVERY_PAYLOAD: {}
+    }
