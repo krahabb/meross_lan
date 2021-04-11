@@ -39,6 +39,9 @@ NS_APPLIANCE_SYSTEM_DND = "Appliance.System.DNDMode"
 NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
 # Garage door opener
 NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
+# Roller shutter
+NS_APPLIANCE_ROLLERSHUTTER_STATE = 'Appliance.RollerShutter.State'
+NS_APPLIANCE_ROLLERSHUTTER_POSITION = 'Appliance.RollerShutter.Position'
 
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)

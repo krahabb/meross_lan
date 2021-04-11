@@ -19,12 +19,13 @@ from logging import WARNING, DEBUG
 from .switch import MerossLanSwitch
 from .sensor import MerossLanSensor
 from .light import MerossLanLight
-from .cover import MerossLanCover
+from .cover import MerossLanGarage, MerossLanRollerShutter
 from .const import (
     CONF_KEY, CONF_DISCOVERY_PAYLOAD,
     METHOD_GET, METHOD_SET,
     NS_APPLIANCE_CONTROL_TOGGLE, NS_APPLIANCE_CONTROL_TOGGLEX,
     NS_APPLIANCE_CONTROL_LIGHT, NS_APPLIANCE_GARAGEDOOR_STATE,
+    NS_APPLIANCE_ROLLERSHUTTER_POSITION, NS_APPLIANCE_ROLLERSHUTTER_STATE,
     NS_APPLIANCE_CONTROL_ELECTRICITY, NS_APPLIANCE_CONTROL_CONSUMPTIONX, NS_APPLIANCE_SYSTEM_ALL,
     PARAM_UNAVAILABILITY_TIMEOUT, PARAM_ENERGY_UPDATE_PERIOD
 )
@@ -57,8 +58,10 @@ class MerossDevice:
         self.ability = discoverypayload.get("ability", {})
 
         try:
-
-            digest = discoverypayload.get("all", {}).get("digest", {})
+            # use a mix of heuristic to detect device features
+            p_all = discoverypayload.get("all", {})
+            p_type = p_all.get("system", {}).get("hardware", {}).get("type", "")
+            digest = p_all.get("digest", {})
 
             # let's assume lights are controlled by togglex (optimism)
             light = digest.get("light")
@@ -71,11 +74,15 @@ class MerossDevice:
             garagedoor = digest.get("garageDoor")
             if isinstance(garagedoor, List):
                 for g in garagedoor:
-                    MerossLanCover(self, g.get("channel"))
+                    MerossLanGarage(self, g.get("channel"))
+
+            # atm we're not sure we can detect this in 'digest' payload
+            if "mrs" in p_type.lower():
+                MerossLanRollerShutter(self, 0)
 
 
-            # at any rate: could we have more toggles than lights? (yes: no lights at all)
-            # but the question is: could we have lights (with togglex) + switches (only togglex) ?
+            # at any rate: setup switches whenever we find 'togglex'
+            # or whenever we cannot setup anything from digest
             togglex = digest.get("togglex")
             if isinstance(togglex, List):
                 for t in togglex:
@@ -88,11 +95,11 @@ class MerossDevice:
                     MerossLanSwitch(self, channel, self.togglex_set, self.togglex_get)
             elif NS_APPLIANCE_CONTROL_TOGGLEX in self.ability:
                 #fallback for switches: in case we couldnt get from NS_APPLIANCE_SYSTEM_ALL
-                if not self.has_lights:
+                if not self.entities:
                     MerossLanSwitch(self, 0, self.togglex_set, self.togglex_get)
             elif NS_APPLIANCE_CONTROL_TOGGLE in self.ability:
                 #fallback for switches: in case we couldnt get from NS_APPLIANCE_SYSTEM_ALL
-                if not self.has_lights:
+                if not self.entities:
                     MerossLanSwitch(self, 0, self.toggle_set, self.toggle_get)
 
             if NS_APPLIANCE_CONTROL_ELECTRICITY in self.ability:
@@ -135,6 +142,8 @@ class MerossDevice:
             if it's good else it would be the device message header to be used in
             a reply scheme where we're going to 'fool' the device by using its own hashes
             if our config allows for that (our self.key is 'None' which means empty key or auto-detect)
+
+            Update: this key trick actually doesnt work on MQTT (but works on HTTP)
             """
             self.replykey = replykey
             if replykey != self.key:
@@ -196,9 +205,18 @@ class MerossDevice:
 
             elif namespace == NS_APPLIANCE_GARAGEDOOR_STATE:
                 garagedoor = payload.get("state")
-                if isinstance(garagedoor, List):
-                    for g in garagedoor:
-                        self.entities[g.get("channel")]._set_open(g.get("open"))
+                for g in garagedoor:
+                    self.entities[g.get("channel")]._set_open(g.get("open"))
+
+            elif namespace == NS_APPLIANCE_ROLLERSHUTTER_STATE:
+                state = payload.get("state")
+                for s in state:
+                    self.entities[s.get("channel")]._set_rollerstate(s.get("state"))
+
+            elif namespace == NS_APPLIANCE_ROLLERSHUTTER_POSITION:
+                position = payload.get("position")
+                for p in position:
+                    self.entities[p.get("channel")]._set_rollerposition(p.get("position"))
 
             elif namespace == NS_APPLIANCE_SYSTEM_ALL:
                 digest = payload.get("all", {}).get("digest", {})
