@@ -46,7 +46,7 @@ NS_APPLIANCE_ROLLERSHUTTER_POSITION = 'Appliance.RollerShutter.Position'
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)
 """
-PARAM_UNAVAILABILITY_TIMEOUT = 10  # number of seconds since last inquiry to consider the device unavailable
+PARAM_UNAVAILABILITY_TIMEOUT = 20  # number of seconds since last inquiry to consider the device unavailable
 PARAM_ENERGY_UPDATE_PERIOD = 60 # read energy consumption only every ... second
 PARAM_UPDATE_POLLING_PERIOD = 30  # periodic state polling or whatever
 PARAM_STALE_DEVICE_REMOVE_TIMEOUT = 60 # disable config_entry when device is offline for more than...
