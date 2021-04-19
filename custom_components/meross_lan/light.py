@@ -65,6 +65,7 @@ def int_to_rgb(rgb: int) -> Tuple[int, int, int]:
 class MerossLanLight(_MerossEntity, LightEntity):
     def __init__(self, meross_device: object, channel: int):
         super().__init__(meross_device, channel, None)
+        """
         self._light = {
 			"onoff": 0,
 			"capacity": CAPACITY_LUMINANCE,
@@ -75,7 +76,8 @@ class MerossLanLight(_MerossEntity, LightEntity):
 			"transform": 0,
             "gradual": 0
 		}
-        self._payload = {"light": self._light}
+        """
+        self._light = {}
 
         self._capacity = meross_device.ability.get(NS_APPLIANCE_CONTROL_LIGHT, {}).get("capacity", CAPACITY_LUMINANCE)
 
@@ -95,7 +97,7 @@ class MerossLanLight(_MerossEntity, LightEntity):
     def brightness(self):
         """Return the brightness of this light between 0..255."""
         luminance = self._light.get("luminance")
-        return None if luminance is None else luminance * 255 / 100
+        return None if luminance is None else luminance * 255 // 100
 
 
     @property
@@ -151,7 +153,7 @@ class MerossLanLight(_MerossEntity, LightEntity):
             mired = kwargs[ATTR_COLOR_TEMP]
             norm_value = (mired - self.min_mireds) / (self.max_mireds - self.min_mireds)
             temperature = 100 - (norm_value * 100)
-            self._light["temperature"] = temperature
+            self._light["temperature"] = int(temperature)
             self._light.pop("rgb", None)
             capacity |= CAPACITY_TEMPERATURE
 
@@ -159,16 +161,40 @@ class MerossLanLight(_MerossEntity, LightEntity):
             capacity |= CAPACITY_LUMINANCE
             # Brightness must always be set, so take previous luminance if not explicitly set now.
             if ATTR_BRIGHTNESS in kwargs:
-                self._light["luminance"] = kwargs[ATTR_BRIGHTNESS] * 100 / 255
+                self._light["luminance"] = kwargs[ATTR_BRIGHTNESS] * 100 // 255
 
         self._light["capacity"] = capacity
 
-        self._internal_send(onoff=1)
+        if NS_APPLIANCE_CONTROL_TOGGLEX in self._meross_device.ability:
+            # since lights could be repeatedtly 'async_turn_on' when changing attributes
+            # we avoid flooding the device with unnecessary messages
+            if not self.is_on:
+                self._meross_device.togglex_set(channel = self._channel, ison = 1)
+
+        # only set the onoff field if the device sent it before
+        if self._light.get("onoff") is not None:
+            self._light["onoff"] = 1
+
+        self._meross_device.mqtt_publish(
+            namespace=NS_APPLIANCE_CONTROL_LIGHT,
+            method=METHOD_SET,
+            payload={"light": self._light})
+
         return
 
 
     async def async_turn_off(self, **kwargs) -> None:
-        self._internal_send(onoff = 0)
+        if NS_APPLIANCE_CONTROL_TOGGLEX in self._meross_device.ability:
+            self._meross_device.togglex_set(channel = self._channel, ison = 0)
+
+        # only set the onoff field if the device sent it before
+        if self._light.get("onoff") is not None:
+            self._light["onoff"] = 0
+            self._meross_device.mqtt_publish(
+                namespace=NS_APPLIANCE_CONTROL_LIGHT,
+                method=METHOD_SET,
+                payload={"light": self._light})
+
         return
 
 
@@ -176,7 +202,6 @@ class MerossLanLight(_MerossEntity, LightEntity):
         newstate = STATE_ON if onoff else STATE_OFF
         if self._state != newstate:
             self._state = newstate
-            self._light["onoff"] = 1 if onoff else 0
             if self.enabled:
                 self.async_write_ha_state()
         return
@@ -184,24 +209,12 @@ class MerossLanLight(_MerossEntity, LightEntity):
 
     def _set_light(self, light: dict) -> None:
         self._light = light
-        self._payload["light"] = light
-        self._state = STATE_ON if light.get("onoff") else STATE_OFF
+        onoff = light.get("onoff")
+        if onoff is not None:
+            self._state = STATE_ON if onoff else STATE_OFF
         if self.enabled:
             self.async_write_ha_state()
         return
 
-
-    def _internal_send(self, onoff: int):
-        if NS_APPLIANCE_CONTROL_TOGGLEX in self._meross_device.ability:
-            # since lights could be repeatedtly 'async_turn_on' when changing attributes
-            # we avoid flooding the device with unnecessary messages
-            if (onoff == 0) or (not self.is_on):
-                self._meross_device.togglex_set(channel = self._channel, ison = onoff)
-
-        self._light["onoff"] = onoff
-        self._meross_device.mqtt_publish(
-            namespace=NS_APPLIANCE_CONTROL_LIGHT,
-            method=METHOD_SET,
-            payload=self._payload)
 
 
