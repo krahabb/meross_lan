@@ -87,7 +87,7 @@ class _MerossEntity:
     def _set_state(self, state: str) -> None:
         if self._state != state:
             self._state = state
-            if self.enabled:
+            if self.hass and self.enabled:
                 self.async_write_ha_state()
         return
 

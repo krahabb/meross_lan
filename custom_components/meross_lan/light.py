@@ -199,11 +199,7 @@ class MerossLanLight(_MerossEntity, LightEntity):
 
 
     def _set_onoff(self, onoff) -> None:
-        newstate = STATE_ON if onoff else STATE_OFF
-        if self._state != newstate:
-            self._state = newstate
-            if self.enabled:
-                self.async_write_ha_state()
+        self._set_state(STATE_ON if onoff else STATE_OFF)
         return
 
 
@@ -212,7 +208,7 @@ class MerossLanLight(_MerossEntity, LightEntity):
         onoff = light.get("onoff")
         if onoff is not None:
             self._state = STATE_ON if onoff else STATE_OFF
-        if self.enabled:
+        if self.hass and self.enabled:
             self.async_write_ha_state()
         return
 
