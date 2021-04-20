@@ -1,0 +1,87 @@
+# meross_lan services configuration
+
+# Service ID
+mqtt_publish:
+  # Service name as shown in UI
+  name: MQTT Publish
+  # Description of the service
+  description: Publish an mqtt message formatted according to Meross MQTT protocol
+  # If the service accepts entity IDs, target allows the user to specify entities by entity, device, or area. If `target` is specified, `entity_id` should not be defined in the `fields` map. By default it shows only targets matching entities from the same domain as the service, but if further customization is required, target supports the entity, device, and area selectors (https://www.home-assistant.io/docs/blueprint/selectors/). Entity selector parameters will automatically be applied to device and area, and device selector parameters will automatically be applied to area.
+  #target:
+  # Different fields that your service accepts
+  fields:
+    device_id:
+      # Field name as shown in UI
+      name: Device identifier
+      # Description of the field
+      description: The UUID of the meross target device
+      # Whether or not field is required
+      required: true
+      # Advanced options are only shown when the advanced mode is enabled for the user
+      advanced: false
+      # Example value that can be passed for this field
+      example: "9109182170548290882048e1e9XXXXXX"
+      # The default value
+      #default: "high"
+      # Selector (https://www.home-assistant.io/docs/blueprint/selectors/) to control the input UI for this field
+      selector:
+        text:
+    method:
+      name: Method
+      description: The method to set in the message
+      required: true
+      advanced: false
+      example: "GET"
+      default: "GET"
+      selector:
+        select:
+          options:
+            - "SET"
+            - "GET"
+    namespace:
+      name: Namespace
+      description: The namespace for the request
+      required: true
+      advanced: false
+      example: "Appliance.System.All"
+      default: "Appliance.System.All"
+      selector:
+        select:
+          options:
+            - "Appliance.System.All"
+            - "Appliance.System.Ability"
+            - "Appliance.System.Online"
+            - "Appliance.System.Report"
+            - "Appliance.System.Debug"
+            - "Appliance.System.Clock"
+            - "Appliance.Config.Trace"
+            - "Appliance.Config.WifiList"
+            - "Appliance.Control.Toggle"
+            - "Appliance.Control.ToggleX"
+            - "Appliance.Control.Trigger"
+            - "Appliance.Control.TriggerX"
+            - "Appliance.Control.ConsumptionX"
+            - "Appliance.Control.ConsumptionConfig"
+            - "Appliance.Control.Electricity"
+            - "Appliance.Control.Light"
+            - "Appliance.System.DNDMode"
+            - "Appliance.Control.Spray"
+            - "Appliance.GarageDoor.State"
+            - "Appliance.RollerShutter.State"
+            - "Appliance.RollerShutter.Position"
+    key:
+      name: Key
+      description: The key used to encrypt message signatures
+      required: false
+      advanced: false
+      selector:
+        text:
+    payload:
+      name: Payload
+      description: the payload (text/json) to send
+      required: false
+      advanced: false
+      example: '{ "togglex" : { "onoff" : 0 } }'
+      default: "{}"
+      selector:
+        text:

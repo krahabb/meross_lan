@@ -43,6 +43,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             api = MerossApi(hass)
             hass.data[DOMAIN] = api
             await api.async_mqtt_register()
+
+            def _mqtt_publish(service_call):
+                device_id = service_call.data.get(CONF_DEVICE_ID)
+                method = service_call.data.get("method")
+                namespace = service_call.data.get("namespace")
+                key = service_call.data.get(CONF_KEY, api.key)
+                payload = service_call.data.get("payload", "{}")
+                api.mqtt_publish(device_id, namespace, method, json_loads(payload), key)
+                return
+            hass.services.async_register(DOMAIN, SERVICE_MQTT_PUBLISH, _mqtt_publish)
         except:
             return False
 
@@ -143,6 +153,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if api.unsub_entry_update_listener:
                 api.unsub_entry_update_listener()
                 api.unsub_entry_update_listener = None
+            if api.unsub_updatecoordinator_listener:
+                api.unsub_updatecoordinator_listener()
+                api.unsub_updatecoordinator_listener = None
             hass.data.pop(DOMAIN)
 
     return True
@@ -202,18 +215,13 @@ class MerossApi:
         self.key = None
         self.devices: Dict[str, MerossDevice] = {}
         self.discovering: Dict[str, {}] = {}
+        self.unsub_mqtt = None
+        self.unsub_entry_update_listener = None
+        self.unsub_updatecoordinator_listener = None
 
         async def async_update_data():
             """
             data fetch and control moved to MerossDevice
-
-            now = time()
-            devices = list(self.devices.values())# make a static copy since we may be destroying devices
-            for device in devices:
-                if not device.online and ((now - device.lastupdate) > PARAM_STALE_DEVICE_REMOVE_TIMEOUT):
-                    await hass.config_entries.async_set_disabled_by(device.entry_id, DOMAIN)
-                else:
-                    device.triggerupdate()
             """
             return None
 
@@ -275,6 +283,9 @@ class MerossApi:
                         # new device discovered: try to determine the capabilities
                         self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, key=replykey)
                         self.discovering[device_id] = { "__time": time() }
+                        if self.unsub_updatecoordinator_listener is None:
+                            self.unsub_updatecoordinator_listener = self.coordinator.async_add_listener(self.updatecoordinator_listener)
+
                     else:
                         if method == METHOD_GETACK:
                             if namespace == NS_APPLIANCE_SYSTEM_ALL:
@@ -289,6 +300,9 @@ class MerossApi:
                                     return
                                 payload.update(discovered[NS_APPLIANCE_SYSTEM_ALL])
                                 self.discovering.pop(device_id)
+                                if (len(self.discovering) == 0) and self.unsub_updatecoordinator_listener:
+                                    self.unsub_updatecoordinator_listener()
+                                    self.unsub_updatecoordinator_listener = None
                                 await self.hass.config_entries.flow.async_init(
                                     DOMAIN,
                                     context={ "source": SOURCE_DISCOVERY },
@@ -328,6 +342,26 @@ class MerossApi:
         mqttpayload = build_payload(namespace, method, payload, key)
         return self.hass.components.mqtt.async_publish(COMMAND_TOPIC.format(device_id), mqttpayload, 0, False)
 
+
     @callback
     async def entry_update_listener(self, hass: HomeAssistant, config_entry: ConfigEntry):
         self.key = config_entry.data.get(CONF_KEY)
+        return
+
+
+    @callback
+    def updatecoordinator_listener(self) -> None:
+        """
+        called by DataUpdateCoordinator when we have pending discoveries
+        this callback gets attached/detached dinamically when we have discoveries pending
+        """
+        now = time()
+        for device_id, discovered in self.discovering.items():
+            if (now - discovered.get("__time", 0)) > PARAM_UNAVAILABILITY_TIMEOUT:
+                if discovered.get(NS_APPLIANCE_SYSTEM_ALL) is None:
+                    self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, {}, self.key)
+                else:
+                    self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ABILITY, METHOD_GET, {}, self.key)
+                discovered["__time"] = now
+
+        return
