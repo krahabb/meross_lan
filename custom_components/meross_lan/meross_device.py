@@ -305,7 +305,11 @@ class MerossDevice:
 
     @callback
     def updatecoordinator_listener(self) -> None:
-        if not(self.online):
+        if not (self.online):
+            # sending this 'ping' looks a bit redundant since devices will
+            # publish anyway when coming online. This device could become 'stuck'
+            # when its state is disconnected and the device doesnt publish anything
+            # when coming online. This is to be further investigate
             self.mqtt_publish(NS_APPLIANCE_SYSTEM_ALL, METHOD_GET)
             return
 
@@ -318,8 +322,11 @@ class MerossDevice:
             if ((now - self.lastupdate_consumption) > PARAM_ENERGY_UPDATE_PERIOD):
                 self.mqtt_publish(NS_APPLIANCE_CONTROL_CONSUMPTIONX, METHOD_GET)
 
-        # this is a bit rude atm: we'll keep sending 'heartbeats' to check if the device is still there
+        # this is a bit rude: we'll keep sending 'heartbeats' to check if the device is still there
+        # update: disabled because old firmware doesnt support NS_APPLIANCE_SYSTEM_REPORT
+        # I could change the request to a supported one but all this heartbeat looks lame to mee atm
+        """
         if (now - self.lastrequest) > PARAM_UPDATE_POLLING_PERIOD:
             self.mqtt_publish(NS_APPLIANCE_SYSTEM_REPORT, METHOD_GET)
-
+        """
         return
