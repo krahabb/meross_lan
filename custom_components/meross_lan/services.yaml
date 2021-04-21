@@ -51,9 +51,7 @@ mqtt_publish:
             - "Appliance.System.All"
             - "Appliance.System.Ability"
             - "Appliance.System.Online"
-            - "Appliance.System.Report"
             - "Appliance.System.Debug"
-            - "Appliance.System.Clock"
             - "Appliance.Config.Trace"
             - "Appliance.Config.WifiList"
             - "Appliance.Control.Toggle"
@@ -81,7 +79,7 @@ mqtt_publish:
       description: the payload (text/json) to send
       required: false
       advanced: false
-      example: '{ "togglex" : { "onoff" : 0 } }'
+      example: '{ "togglex": { "onoff": 0, "channel": 0 } }'
       default: "{}"
       selector:
         text:
