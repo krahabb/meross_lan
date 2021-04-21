@@ -43,6 +43,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             api = MerossApi(hass)
             hass.data[DOMAIN] = api
             await api.async_mqtt_register()
+
+            def _mqtt_publish(service_call):
+                device_id = service_call.data.get(CONF_DEVICE_ID)
+                method = service_call.data.get("method")
+                namespace = service_call.data.get("namespace")
+                key = service_call.data.get(CONF_KEY, api.key)
+                payload = service_call.data.get("payload", "{}")
+                api.mqtt_publish(device_id, namespace, method, json_loads(payload), key)
+                return
+            hass.services.async_register(DOMAIN, SERVICE_MQTT_PUBLISH, _mqtt_publish)
         except:
             return False
 
@@ -92,6 +102,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, "light"))
         if device.has_sensors:
             hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, "sensor"))
+        if device.has_covers:
+            hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, "cover"))
 
         device.unsub_entry_update_listener = entry.add_update_listener(device_entry_update_listener)
         device.unsub_updatecoordinator_listener = api.coordinator.async_add_listener(device.updatecoordinator_listener)
@@ -117,6 +129,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 platforms_unload.append(hass.config_entries.async_forward_entry_unload(entry, "light"))
             if device.has_sensors:
                 platforms_unload.append(hass.config_entries.async_forward_entry_unload(entry, "sensor"))
+            if device.has_covers:
+                platforms_unload.append(hass.config_entries.async_forward_entry_unload(entry, "cover"))
+
+            if platforms_unload:
+                if False == all(await asyncio.gather(*platforms_unload)):
+                    return False
 
             if device.unsub_entry_update_listener:
                 device.unsub_entry_update_listener()
@@ -124,10 +142,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if device.unsub_updatecoordinator_listener:
                 device.unsub_updatecoordinator_listener()
                 device.unsub_updatecoordinator_listener = None
-
-            if platforms_unload:
-                if False == all(await asyncio.gather(*platforms_unload)):
-                    return False
 
             api.devices.pop(device_id)
 
@@ -139,6 +153,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if api.unsub_entry_update_listener:
                 api.unsub_entry_update_listener()
                 api.unsub_entry_update_listener = None
+            if api.unsub_updatecoordinator_listener:
+                api.unsub_updatecoordinator_listener()
+                api.unsub_updatecoordinator_listener = None
             hass.data.pop(DOMAIN)
 
     return True
@@ -198,18 +215,13 @@ class MerossApi:
         self.key = None
         self.devices: Dict[str, MerossDevice] = {}
         self.discovering: Dict[str, {}] = {}
+        self.unsub_mqtt = None
+        self.unsub_entry_update_listener = None
+        self.unsub_updatecoordinator_listener = None
 
         async def async_update_data():
             """
             data fetch and control moved to MerossDevice
-
-            now = time()
-            devices = list(self.devices.values())# make a static copy since we may be destroying devices
-            for device in devices:
-                if not device.online and ((now - device.lastupdate) > PARAM_STALE_DEVICE_REMOVE_TIMEOUT):
-                    await hass.config_entries.async_set_disabled_by(device.entry_id, DOMAIN)
-                else:
-                    device.triggerupdate()
             """
             return None
 
@@ -228,94 +240,128 @@ class MerossApi:
     async def async_mqtt_register(self):
         # Listen to a message on MQTT.
         @callback
-        async def message_received(msg):
-            device_id = msg.topic.split("/")[2]
-            mqttpayload = json_loads(msg.payload)
-            header = mqttpayload.get("header")
-            method = header.get("method")
-            namespace = header.get("namespace")
-            payload = mqttpayload.get("payload")
+        async def mqtt_receive(msg):
+            try:
+                device_id = msg.topic.split("/")[2]
+                mqttpayload = json_loads(msg.payload)
+                header = mqttpayload.get("header")
+                method = header.get("method")
+                namespace = header.get("namespace")
+                payload = mqttpayload.get("payload")
 
-            device = self.devices.get(device_id)
-            if device == None:
-                # lookout for any disabled/ignored entry
-                for domain_entry in self.hass.config_entries.async_entries(DOMAIN):
-                    if (domain_entry.unique_id == device_id):
-                        # entry already present...
-                        #if domain_entry.disabled_by == DOMAIN:
-                            # we previously disabled this one due to extended anuavailability
-                            #await self.hass.config_entries.async_set_disabled_by(domain_entry.entry_id, None)
-                        # skip discovery anyway
-                        msg_reason = "disabled" if domain_entry.disabled_by is not None \
-                            else "ignored" if domain_entry.source == "ignore" \
-                                else "unknown"
-                        LOGGER_trap(INFO, "Ignoring discovery for device_id: %s (ConfigEntry is %s)", device_id, msg_reason)
-                        return
-                #also skip discovered integrations waititng in HA queue
-                for flow in self.hass.config_entries.flow.async_progress():
-                    if (flow.get("handler") == DOMAIN) and (flow.get("context", {}).get("unique_id") == device_id):
-                        LOGGER_trap(INFO, "Ignoring discovery for device_id: %s (ConfigEntry is in progress)", device_id)
-                        return
+                LOGGER.debug("MerossApi: MQTT RECV device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
 
-                replykey = get_replykey(header, self.key)
-                if replykey != self.key:
-                    LOGGER_trap(WARNING, "Meross discovery key error for device_id: %s", device_id)
-                    if self.key is not None:# we're using a fixed key in discovery so ignore this device
-                        return
-
-                discovered = self.discovering.get(device_id)
-                if discovered == None:
-                    # new device discovered: try to determine the capabilities
-                    self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, key=replykey)
-                    self.discovering[device_id] = { "__time": time() }
-                else:
-                    if method == METHOD_GETACK:
-                        if namespace == NS_APPLIANCE_SYSTEM_ALL:
-                            discovered[NS_APPLIANCE_SYSTEM_ALL] = payload
-                            self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ABILITY, METHOD_GET, key=replykey)
-                            discovered["__time"] = time()
+                device = self.devices.get(device_id)
+                if device == None:
+                    # lookout for any disabled/ignored entry
+                    for domain_entry in self.hass.config_entries.async_entries(DOMAIN):
+                        if (domain_entry.unique_id == device_id):
+                            # entry already present...
+                            #if domain_entry.disabled_by == DOMAIN:
+                                # we previously disabled this one due to extended anuavailability
+                                #await self.hass.config_entries.async_set_disabled_by(domain_entry.entry_id, None)
+                            # skip discovery anyway
+                            msg_reason = "disabled" if domain_entry.disabled_by is not None \
+                                else "ignored" if domain_entry.source == "ignore" \
+                                    else "unknown"
+                            LOGGER_trap(INFO, "Ignoring discovery for device_id: %s (ConfigEntry is %s)", device_id, msg_reason)
                             return
-                        elif namespace == NS_APPLIANCE_SYSTEM_ABILITY:
-                            if discovered.get(NS_APPLIANCE_SYSTEM_ALL) is None:
-                                self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, key=replykey)
+                    #also skip discovered integrations waititng in HA queue
+                    for flow in self.hass.config_entries.flow.async_progress():
+                        if (flow.get("handler") == DOMAIN) and (flow.get("context", {}).get("unique_id") == device_id):
+                            LOGGER_trap(INFO, "Ignoring discovery for device_id: %s (ConfigEntry is in progress)", device_id)
+                            return
+
+                    replykey = get_replykey(header, self.key)
+                    if replykey != self.key:
+                        LOGGER_trap(WARNING, "Meross discovery key error for device_id: %s", device_id)
+                        if self.key is not None:# we're using a fixed key in discovery so ignore this device
+                            return
+
+                    discovered = self.discovering.get(device_id)
+                    if discovered == None:
+                        # new device discovered: try to determine the capabilities
+                        self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, key=replykey)
+                        self.discovering[device_id] = { "__time": time() }
+                        if self.unsub_updatecoordinator_listener is None:
+                            self.unsub_updatecoordinator_listener = self.coordinator.async_add_listener(self.updatecoordinator_listener)
+
+                    else:
+                        if method == METHOD_GETACK:
+                            if namespace == NS_APPLIANCE_SYSTEM_ALL:
+                                discovered[NS_APPLIANCE_SYSTEM_ALL] = payload
+                                self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ABILITY, METHOD_GET, key=replykey)
                                 discovered["__time"] = time()
                                 return
-                            payload.update(discovered[NS_APPLIANCE_SYSTEM_ALL])
-                            self.discovering.pop(device_id)
-                            await self.hass.config_entries.flow.async_init(
-                                DOMAIN,
-                                context={ "source": SOURCE_DISCOVERY },
-                                data={
-                                    CONF_DEVICE_ID: device_id,
-                                    CONF_DISCOVERY_PAYLOAD: payload,
-                                    CONF_KEY: replykey
-                                },
-                            )
+                            elif namespace == NS_APPLIANCE_SYSTEM_ABILITY:
+                                if discovered.get(NS_APPLIANCE_SYSTEM_ALL) is None:
+                                    self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, key=replykey)
+                                    discovered["__time"] = time()
+                                    return
+                                payload.update(discovered[NS_APPLIANCE_SYSTEM_ALL])
+                                self.discovering.pop(device_id)
+                                if (len(self.discovering) == 0) and self.unsub_updatecoordinator_listener:
+                                    self.unsub_updatecoordinator_listener()
+                                    self.unsub_updatecoordinator_listener = None
+                                await self.hass.config_entries.flow.async_init(
+                                    DOMAIN,
+                                    context={ "source": SOURCE_DISCOVERY },
+                                    data={
+                                        CONF_DEVICE_ID: device_id,
+                                        CONF_DISCOVERY_PAYLOAD: payload,
+                                        CONF_KEY: replykey
+                                    },
+                                )
+                                return
+                        #we might get here from spurious PUSH or something sent from the device
+                        #check for timeout and eventually reset the procedure
+                        if (time() - discovered.get("__time", 0)) > PARAM_UNAVAILABILITY_TIMEOUT:
+                            if discovered.get(NS_APPLIANCE_SYSTEM_ALL) is None:
+                                self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, key=replykey)
+                            else:
+                                self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ABILITY, METHOD_GET, key=replykey)
+                            discovered["__time"] = time()
                             return
-                    #we might get here from spurious PUSH or something sent from the device
-                    #check for timeout and eventually reset the procedure
-                    if (time() - discovered.get("__time", 0)) > PARAM_UNAVAILABILITY_TIMEOUT:
-                        if discovered.get(NS_APPLIANCE_SYSTEM_ALL) is None:
-                            self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, key=replykey)
-                        else:
-                            self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ABILITY, METHOD_GET, key=replykey)
-                        discovered["__time"] = time()
-                        return
 
 
-            else:
-                device.parsepayload(namespace, method, payload, get_replykey(header, device.key))
+                else:
+                    device.parsepayload(namespace, method, payload, get_replykey(header, device.key))
+
+            except Exception as e:
+                LOGGER.debug("MerossApi: mqtt_receive exception:(%s) payload:(%s)", str(e), msg.payload)
+
             return
 
         self.unsub_mqtt = await self.hass.components.mqtt.async_subscribe(
-            DISCOVERY_TOPIC, message_received
+            DISCOVERY_TOPIC, mqtt_receive
         )
 
 
     def mqtt_publish(self, device_id: str, namespace: str, method: str, payload: dict = {}, key: Union[dict, Optional[str]] = None):  # pylint: disable=unsubscriptable-object
+        LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
         mqttpayload = build_payload(namespace, method, payload, key)
         return self.hass.components.mqtt.async_publish(COMMAND_TOPIC.format(device_id), mqttpayload, 0, False)
+
 
     @callback
     async def entry_update_listener(self, hass: HomeAssistant, config_entry: ConfigEntry):
         self.key = config_entry.data.get(CONF_KEY)
+        return
+
+
+    @callback
+    def updatecoordinator_listener(self) -> None:
+        """
+        called by DataUpdateCoordinator when we have pending discoveries
+        this callback gets attached/detached dinamically when we have discoveries pending
+        """
+        now = time()
+        for device_id, discovered in self.discovering.items():
+            if (now - discovered.get("__time", 0)) > PARAM_UNAVAILABILITY_TIMEOUT:
+                if discovered.get(NS_APPLIANCE_SYSTEM_ALL) is None:
+                    self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ALL, METHOD_GET, {}, self.key)
+                else:
+                    self.mqtt_publish(device_id, NS_APPLIANCE_SYSTEM_ABILITY, METHOD_GET, {}, self.key)
+                discovered["__time"] = now
+
+        return

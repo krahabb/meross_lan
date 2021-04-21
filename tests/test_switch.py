@@ -8,7 +8,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 #from custom_components.integration_blueprint import async_setup_entry
 #from custom_components.integration_blueprint.const import DEFAULT_NAME, DOMAIN, SWITCH
 
-from .const import MOCK_CONFIG
+from .const import MOCK_DEVICE_CONFIG
 
 """
 async def test_switch_services(hass):
