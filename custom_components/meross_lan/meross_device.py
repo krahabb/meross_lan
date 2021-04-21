@@ -28,7 +28,7 @@ from .const import (
     NS_APPLIANCE_ROLLERSHUTTER_POSITION, NS_APPLIANCE_ROLLERSHUTTER_STATE,
     NS_APPLIANCE_CONTROL_ELECTRICITY, NS_APPLIANCE_CONTROL_CONSUMPTIONX,
     NS_APPLIANCE_SYSTEM_ALL, NS_APPLIANCE_SYSTEM_REPORT,
-    PARAM_UNAVAILABILITY_TIMEOUT, PARAM_ENERGY_UPDATE_PERIOD, PARAM_UPDATE_POLLING_PERIOD
+    PARAM_UNAVAILABILITY_TIMEOUT, PARAM_ENERGY_UPDATE_PERIOD, PARAM_UPDATE_POLLING_PERIOD, PARAM_HEARTBEAT_PERIOD
 )
 
 
@@ -305,15 +305,18 @@ class MerossDevice:
 
     @callback
     def updatecoordinator_listener(self) -> None:
-        if not (self.online):
-            # sending this 'ping' looks a bit redundant since devices will
-            # publish anyway when coming online. This device could become 'stuck'
-            # when its state is disconnected and the device doesnt publish anything
-            # when coming online. This is to be further investigate
+        now = time()
+        # this is a bit rude: we'll keep sending 'heartbeats' to check if the device is still there
+        # update(1): disabled because old firmware doesnt support GET NS_APPLIANCE_SYSTEM_REPORT
+        # I could change the request to a supported one but all this heartbeat looks lame to mee atm
+        # update(2): looks like any firmware doesnt support GET NS_APPLIANCE_SYSTEM_REPORT
+        # we're replacing with a well known message and, we're increasing the period
+        if (now - self.lastrequest) > PARAM_HEARTBEAT_PERIOD:
             self.mqtt_publish(NS_APPLIANCE_SYSTEM_ALL, METHOD_GET)
             return
 
-        now = time()
+        if not (self.online):
+            return
 
         if NS_APPLIANCE_CONTROL_ELECTRICITY in self.ability:
             self.mqtt_publish(NS_APPLIANCE_CONTROL_ELECTRICITY, METHOD_GET)
@@ -322,11 +325,4 @@ class MerossDevice:
             if ((now - self.lastupdate_consumption) > PARAM_ENERGY_UPDATE_PERIOD):
                 self.mqtt_publish(NS_APPLIANCE_CONTROL_CONSUMPTIONX, METHOD_GET)
 
-        # this is a bit rude: we'll keep sending 'heartbeats' to check if the device is still there
-        # update: disabled because old firmware doesnt support NS_APPLIANCE_SYSTEM_REPORT
-        # I could change the request to a supported one but all this heartbeat looks lame to mee atm
-        """
-        if (now - self.lastrequest) > PARAM_UPDATE_POLLING_PERIOD:
-            self.mqtt_publish(NS_APPLIANCE_SYSTEM_REPORT, METHOD_GET)
-        """
         return
