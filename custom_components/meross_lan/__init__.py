@@ -146,7 +146,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             api.devices.pop(device_id)
 
         #when removing the last configentry do a complete cleanup
-        if not (api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
+        if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
             if api.unsub_mqtt:
                 api.unsub_mqtt()
                 api.unsub_mqtt = None
