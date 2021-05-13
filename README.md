@@ -15,9 +15,7 @@ HAVE FUN! 😎
 
 ### HACS
 
-In your HA frontend go to `HACS -> Integrations`, tap on the menu on the top-right corner and select `Custom repositories`.
-Then select the `Category` (Integration) and type/paste this repository url: `https://github.com/krahabb/meross_lan`.
-
+In your HA frontend go to `HACS -> Integrations`, search for 'Meross LAN' and hit 'Install'
 You'll have to restart HA to let it recognize the new integration
 
 ### Manual installation
