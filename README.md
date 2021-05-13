@@ -84,6 +84,6 @@ Have a look at their repositories to better understand how the Meross line of de
 I really thank them for the inspiration and the knowledge that made it possible for me to develop this integration
 
 [hacs]: https://github.com/custom-components/hacs
-[hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
+[hacsbadge]: https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge
 [@albertogeniola]: https://github.com/albertogeniola/MerossIot
 [@bytespider]: https://github.com/bytespider/Meross
