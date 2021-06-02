@@ -2,15 +2,13 @@
   "domain": "meross_lan",
   "name": "Meross LAN",
   "config_flow": true,
-  "iot_class": "local_push",
+  "iot_class": "local_poll",
   "documentation": "https://github.com/krahabb/meross_lan",
   "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
   "requirements": [],
-  "ssdp": [],
-  "zeroconf": [],
-  "homekit": {},
-  "mqtt": [],
-  "dependencies": ["mqtt"],
+  "dhcp": [{"hostname": "*", "macaddress": "48E1E9*"}],
+  "dependencies": [],
+  "after_dependencies": ["mqtt", "dhcp"],
   "codeowners": ["@krahabb"],
-  "version": "0.0.4"
+  "version": "0.0.5"
 }

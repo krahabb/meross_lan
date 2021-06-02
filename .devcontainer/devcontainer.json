@@ -4,7 +4,8 @@
 	"name": "Blueprint integration development",
 	"context": "..",
 	"appPort": [
-		"9123:8123"
+		"9123:8123",
+		"67:67/udp"
 	],
 	"postCreateCommand": "container install",
 	"extensions": [
