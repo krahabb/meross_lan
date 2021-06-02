@@ -42,6 +42,14 @@ class MerossDeviceBulb(MerossDevice):
             self._update_light(payload)
             return True
 
+        if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLEX:
+            togglex = payload.get(mc.KEY_TOGGLEX)
+            if isinstance(togglex, list):
+                for t in togglex:
+                    self.entities[t.get(mc.KEY_CHANNEL)]._set_onoff(t.get(mc.KEY_ONOFF))
+            elif isinstance(togglex, dict):
+                self.entities[togglex.get(mc.KEY_CHANNEL)]._set_onoff(togglex.get(mc.KEY_ONOFF))
+
         return False
 
 
