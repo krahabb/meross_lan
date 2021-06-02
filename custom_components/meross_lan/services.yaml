@@ -1,11 +1,11 @@
 # meross_lan services configuration
 
 # Service ID
-mqtt_publish:
+request:
   # Service name as shown in UI
-  name: MQTT Publish
+  name: Request
   # Description of the service
-  description: Publish an mqtt message formatted according to Meross MQTT protocol
+  description: Sends either an MQTT message or HTTP request formatted according to Meross protocol
   # If the service accepts entity IDs, target allows the user to specify entities by entity, device, or area. If `target` is specified, `entity_id` should not be defined in the `fields` map. By default it shows only targets matching entities from the same domain as the service, but if further customization is required, target supports the entity, device, and area selectors (https://www.home-assistant.io/docs/blueprint/selectors/). Entity selector parameters will automatically be applied to device and area, and device selector parameters will automatically be applied to area.
   #target:
   # Different fields that your service accepts
@@ -14,16 +14,24 @@ mqtt_publish:
       # Field name as shown in UI
       name: Device identifier
       # Description of the field
-      description: The UUID of the meross target device
+      description: The UUID of the meross target device (needed for MQTT - optional for HTTP)
       # Whether or not field is required
-      required: true
+      required: false
       # Advanced options are only shown when the advanced mode is enabled for the user
       advanced: false
       # Example value that can be passed for this field
       example: "9109182170548290882048e1e9XXXXXX"
       # The default value
-      #default: "high"
+      #default: ""
       # Selector (https://www.home-assistant.io/docs/blueprint/selectors/) to control the input UI for this field
+      selector:
+        text:
+    host:
+      name: Host address
+      description: The address of the meross target device (unneeded for MQTT - optional for HTTP)
+      required: false
+      advanced: false
+      example: "192.168.1.1"
       selector:
         text:
     method:

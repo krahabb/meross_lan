@@ -1,137 +1,100 @@
-from typing import Any, Callable, Dict, List, Optional, Union
-
-from time import time, strftime, localtime
-import json
-
+from enum import Enum
+from typing import  Callable, Dict
+from time import time
+from logging import WARNING, DEBUG
+from aiohttp.client_exceptions import ClientConnectionError, ClientConnectorError
 
 from homeassistant.helpers.event import async_call_later
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.config_entries import ConfigEntries, ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.const import (
-    DEVICE_CLASS_POWER, POWER_WATT,
-    DEVICE_CLASS_CURRENT, ELECTRICAL_CURRENT_AMPERE,
-    DEVICE_CLASS_VOLTAGE, VOLT,
-    DEVICE_CLASS_ENERGY, ENERGY_WATT_HOUR
+    CONF_HOST
 )
 
 from .logger import LOGGER, LOGGER_trap
-from logging import WARNING, DEBUG
-from .switch import MerossLanSwitch
-from .sensor import MerossLanSensor
-from .light import MerossLanLight
-from .cover import MerossLanGarage, MerossLanRollerShutter
+
 from .const import (
-    CONF_KEY, CONF_DISCOVERY_PAYLOAD,
-    METHOD_GET, METHOD_SET,
-    NS_APPLIANCE_CONTROL_TOGGLE, NS_APPLIANCE_CONTROL_TOGGLEX,
-    NS_APPLIANCE_CONTROL_LIGHT, NS_APPLIANCE_GARAGEDOOR_STATE,
-    NS_APPLIANCE_ROLLERSHUTTER_POSITION, NS_APPLIANCE_ROLLERSHUTTER_STATE,
-    NS_APPLIANCE_CONTROL_ELECTRICITY, NS_APPLIANCE_CONTROL_CONSUMPTIONX,
-    NS_APPLIANCE_SYSTEM_ALL, NS_APPLIANCE_SYSTEM_REPORT,
-    PARAM_UNAVAILABILITY_TIMEOUT, PARAM_ENERGY_UPDATE_PERIOD, PARAM_UPDATE_POLLING_PERIOD, PARAM_HEARTBEAT_PERIOD
+    CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_PROTOCOL,
+    CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT, CONF_TIMESTAMP,
+    PARAM_UNAVAILABILITY_TIMEOUT, PARAM_HEARTBEAT_PERIOD
 )
+
+from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc  # mEROSS cONST
+
+
+class Protocol(Enum):
+    """
+    Describes the protocol selection behaviour in order to connect to devices
+    """
+    AUTO = 0 # 'best effort' behaviour
+    MQTT = 1
+    HTTP = 2
+
+
+MAP_CONF_PROTOCOL = {
+    CONF_OPTION_AUTO: Protocol.AUTO,
+    CONF_OPTION_MQTT: Protocol.MQTT,
+    CONF_OPTION_HTTP: Protocol.HTTP
+}
 
 
 class MerossDevice:
 
-    def __init__(self, api: object, device_id: str, entry: ConfigEntry):
-
-        LOGGER.debug("MerossDevice(%s) init", device_id)
-
+    def __init__(
+        self,
+        api: object,
+        descriptor: MerossDeviceDescriptor,
+        entry: ConfigEntry
+    ):
+        self.device_id = entry.data.get(CONF_DEVICE_ID)
+        LOGGER.debug("MerossDevice(%s) init", self.device_id)
         self.api = api
+        self.descriptor = descriptor
         self.entry_id = entry.entry_id
-        self.device_id = device_id
-        self.key = entry.data.get(CONF_KEY)  # could be 'None' : if so defaults to "" but allows key reply trick
-        self.replykey = self.key
-        self.entities: dict[any, _MerossEntity] = {}  # pylint: disable=undefined-variable
-        self.has_sensors = False
-        self.has_lights = False
-        self.has_switches = False
-        self.has_covers = False
-        self._sensor_power = None
-        self._sensor_current = None
-        self._sensor_voltage = None
-        self._sensor_energy = None
+        self.replykey = None
         self._online = False
         self.lastrequest = 0
         self.lastupdate = 0
-        self.lastupdate_consumption = 0
+        self.lastmqtt = None
+        """
+        self.entities: dict()
+        is a collection of all of the instanced entities
+        they're generally build here during __init__ and will be registered
+        in platforms(s) async_setup_entry with HA
+        """
+        self.entities: Dict[any, '_MerossEntity'] = dict()  # pylint: disable=undefined-variable
+        """
+        self.platforms: dict()
+        when we build an entity we also add the relative platform name here
+        so that the async_setup_entry for the integration will be able to forward
+        the setup to the appropriate platform.
+        The item value here will be set to the async_add_entities callback
+        during the corresponfing platform async_setup_entry so to be able
+        to dynamically add more entities should they 'pop-up' (Hub only?)
+        """
+        self.platforms: Dict[str, Callable] = {}
+        """
+        misc callbacks
+        """
+        self.unsub_entry_update_listener: Callable = None
+        self.unsub_updatecoordinator_listener: Callable = None
 
-        discoverypayload = entry.data.get(CONF_DISCOVERY_PAYLOAD, {})
+        self._parse_config_entry(entry)
+        """
+        warning: would the response be processed after this object is fully init?
+        It should if I get all of this async stuff right
+        also: !! IMPORTANT !! don't send any other message during init process
+        else the responses could overlap and 'fuck' a bit the offline -> online transition
+        causing that code to request a new NS_APPLIANCE_SYSTEM_ALL
+        """
+        self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
 
-        self.all = discoverypayload.get("all", {})
-        self.ability = discoverypayload.get("ability", {})
-
-        try:
-            # use a mix of heuristic to detect device features
-            p_type = self.all.get("system", {}).get("hardware", {}).get("type", "")
-
-            p_digest = self.all.get("digest")
-            if p_digest:
-                light = p_digest.get("light")
-                if isinstance(light, List):
-                    for l in light:
-                        MerossLanLight(self, l.get("channel"))
-                elif isinstance(light, Dict):
-                    MerossLanLight(self, light.get("channel", 0))
-
-                garagedoor = p_digest.get("garageDoor")
-                if isinstance(garagedoor, List):
-                    for g in garagedoor:
-                        MerossLanGarage(self, g.get("channel"))
-
-                # atm we're not sure we can detect this in 'digest' payload
-                if "mrs" in p_type.lower():
-                    MerossLanRollerShutter(self, 0)
-
-                # at any rate: setup switches whenever we find 'togglex'
-                # or whenever we cannot setup anything from digest
-                togglex = p_digest.get("togglex")
-                if isinstance(togglex, List):
-                    for t in togglex:
-                        channel = t.get("channel")
-                        if channel not in self.entities:
-                            MerossLanSwitch(self, channel, self.togglex_set, self.togglex_get)
-                elif isinstance(togglex, Dict):
-                    channel = t.get("channel")
-                    if channel not in self.entities:
-                        MerossLanSwitch(self, channel, self.togglex_set, self.togglex_get)
-
-                #endif p_digest
-
-            # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
-            # but have 'control'
-            p_control = self.all.get("control") if p_digest is None else None
-            if p_control:
-                p_toggle = p_control.get("toggle")
-                if isinstance(p_toggle, Dict):
-                    MerossLanSwitch(self, p_toggle.get("channel", 0), self.toggle_set, self.toggle_get)
-
-            #fallback for switches: in case we couldnt get from NS_APPLIANCE_SYSTEM_ALL
-            if not self.entities:
-                if NS_APPLIANCE_CONTROL_TOGGLEX in self.ability:
-                    MerossLanSwitch(self, 0, self.togglex_set, self.togglex_get)
-                elif NS_APPLIANCE_CONTROL_TOGGLE in self.ability:
-                    MerossLanSwitch(self, 0, self.toggle_set, self.toggle_get)
-
-            if NS_APPLIANCE_CONTROL_ELECTRICITY in self.ability:
-                self._sensor_power = MerossLanSensor(self, DEVICE_CLASS_POWER, POWER_WATT)
-                self._sensor_current = MerossLanSensor(self, DEVICE_CLASS_CURRENT, ELECTRICAL_CURRENT_AMPERE)
-                self._sensor_voltage = MerossLanSensor(self, DEVICE_CLASS_VOLTAGE, VOLT)
-
-            if NS_APPLIANCE_CONTROL_CONSUMPTIONX in self.ability:
-                self._sensor_energy = MerossLanSensor(self, DEVICE_CLASS_ENERGY, ENERGY_WATT_HOUR)
-
-            self.mqtt_publish(NS_APPLIANCE_SYSTEM_ALL, METHOD_GET)
-
-        except Exception as e:
-            LOGGER.debug("MerossDevice(%s) init exception:(%s)", device_id, str(e))
-
-        return
 
     def __del__(self):
         LOGGER.debug("MerossDevice(%s) destroy", self.device_id)
         return
+
 
     @property
     def online(self) -> bool:
@@ -140,13 +103,17 @@ class MerossDevice:
             if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < PARAM_UNAVAILABILITY_TIMEOUT):
                 return True
             #else
-            LOGGER.debug("MerossDevice(%s) going offline!", self.device_id)
-            self._online = False
-            for entity in self.entities.values():
-                entity._set_unavailable()
+            self._set_offline()
         return False
 
-    def parsepayload(self, namespace: str, method: str, payload: dict, replykey: Union[dict, Optional[str]]) -> None:  # pylint: disable=unsubscriptable-object
+
+    def receive(
+        self,
+        namespace: str,
+        method: str,
+        payload: dict,
+        replykey: KeyType
+    ) -> bool:
         """
         every time we receive a response we save it's 'replykey':
         that would be the same as our self.key (which it is compared against in 'get_replykey')
@@ -157,172 +124,203 @@ class MerossDevice:
         Update: this key trick actually doesnt work on MQTT (but works on HTTP)
         """
         self.replykey = replykey
-        if replykey != self.key:
-            LOGGER_trap(WARNING, "Meross device key error for device_id: %s", self.device_id)
+        if self.key and (replykey != self.key):
+            LOGGER_trap(WARNING, 14400, "Meross device key error for device_id: %s", self.device_id)
 
         self.lastupdate = time()
         if not self._online:
-            LOGGER.debug("MerossDevice(%s) back online!", self.device_id)
-            self._online = True
-            if namespace != NS_APPLIANCE_SYSTEM_ALL:
-                self.mqtt_publish(NS_APPLIANCE_SYSTEM_ALL, METHOD_GET)
-            for entity in self.entities.values():
-                entity._set_available()
+            if namespace != mc.NS_APPLIANCE_SYSTEM_ALL:
+                self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
+            self._set_online()
 
-        # this parsing is going to get 'bolder' as soon as we add more and more messages to parse
-        # this is not optimal since, based on device/hardware we should be able to really restrict
-        # this checks..right now let's go with it and order this check list by the likelyhood
-        # of receiving a particular message (the first should be the more frequent overall and so on...)
-        # This frequency is based on my guess of the actual devices connected to this code:
-        # Most of all should be recent switches
-        # this is naturally valid as per overall users statistic since if you have a particular device
-        # that may be unlucky and always parse down to the last item
-        if namespace == NS_APPLIANCE_CONTROL_TOGGLEX:
-            togglex = payload.get("togglex")
-            if isinstance(togglex, List):
-                for t in togglex:
-                    self.entities[t.get("channel")]._set_onoff(t.get("onoff"))
-            elif isinstance(togglex, Dict):
-                self.entities[togglex.get("channel")]._set_onoff(togglex.get("onoff"))
-            """
-            # quick refresh power readings after we toggled
-            if NS_APPLIANCE_CONTROL_ELECTRICITY in self.ability:
-                def callme(now):
-                    self._mqtt_publish(NS_APPLIANCE_CONTROL_ELECTRICITY, METHOD_GET)
-                    return
-                # by the look of it meross plugs are not very responsive in updating power readings
-                # most of the times even with 5 secs delay they dont get it right....
-                async_call_later(self.hass, delay = 2, action = callme)
-                """
+        if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
+            if self._update_descriptor(payload):
+                self._update_entry(payload)
+            return True
 
-        elif namespace == NS_APPLIANCE_CONTROL_ELECTRICITY:
-            electricity = payload.get("electricity")
-            power_w = electricity.get("power") / 1000
-            voltage_v = electricity.get("voltage") / 10
-            current_a = electricity.get("current") / 1000
-            if self._sensor_power:
-                self._sensor_power._set_state(power_w)
-            if self._sensor_current:
-                self._sensor_current._set_state(current_a)
-            if self._sensor_voltage:
-                self._sensor_voltage._set_state(voltage_v)
-
-        elif namespace == NS_APPLIANCE_CONTROL_CONSUMPTIONX:
-            if self._sensor_energy:
-                self.lastupdate_consumption = self.lastupdate
-                daylabel = strftime("%Y-%m-%d", localtime())
-                for d in payload.get("consumptionx"):
-                    if d.get("date") == daylabel:
-                        energy_wh = d.get("value")
-                        self._sensor_energy._set_state(energy_wh)
-
-        elif namespace == NS_APPLIANCE_CONTROL_LIGHT:
-            light = payload.get("light")
-            if isinstance(light, Dict):
-                self.entities[light.get("channel")]._set_light(light)
-
-        elif namespace == NS_APPLIANCE_GARAGEDOOR_STATE:
-            garagedoor = payload.get("state")
-            for g in garagedoor:
-                self.entities[g.get("channel")]._set_open(g.get("open"))
-
-        elif namespace == NS_APPLIANCE_ROLLERSHUTTER_STATE:
-            state = payload.get("state")
-            for s in state:
-                self.entities[s.get("channel")]._set_rollerstate(s.get("state"))
-
-        elif namespace == NS_APPLIANCE_ROLLERSHUTTER_POSITION:
-            position = payload.get("position")
-            for p in position:
-                self.entities[p.get("channel")]._set_rollerposition(p.get("position"))
-
-        elif namespace == NS_APPLIANCE_SYSTEM_ALL:
-            self.all = payload.get("all", {})
-            p_digest = self.all.get("digest")
-            if p_digest:
-                p_togglex = p_digest.get("togglex")
-                if isinstance(p_togglex, List):
-                    for t in p_togglex:
-                        self.entities[t.get("channel")]._set_onoff(t.get("onoff"))
-                elif isinstance(p_togglex, Dict):
-                    self.entities[p_togglex.get("channel", 0)]._set_onoff(p_togglex.get("onoff"))
-                p_light = p_digest.get("light")
-                if isinstance(p_light, Dict):
-                    self.entities[p_light.get("channel", 0)]._set_light(p_light)
-                p_garagedoor = p_digest.get("garageDoor")
-                if isinstance(p_garagedoor, List):
-                    for g in p_garagedoor:
-                        self.entities[g.get("channel")]._set_open(g.get("open"))
-                return
-            # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
-            p_control = self.all.get("control")
-            if p_control:
-                p_toggle = p_control.get("toggle")
-                if isinstance(p_toggle, Dict):
-                    self.entities[p_toggle.get("channel", 0)]._set_onoff(p_toggle.get("onoff"))
-
-        elif namespace == NS_APPLIANCE_CONTROL_TOGGLE:
-            p_toggle = payload.get("toggle")
-            if isinstance(p_toggle, Dict):
-                self.entities[p_toggle.get("channel", 0)]._set_onoff(p_toggle.get("onoff"))
-
-        return
+        return False
 
 
-    def toggle_set(self, channel: int, ison: int):
-        return self.mqtt_publish(
-            NS_APPLIANCE_CONTROL_TOGGLE,
-            METHOD_SET,
-            {"toggle": {"channel": channel, "onoff": ison}}
-        )
-
-    def toggle_get(self, channel: int):
-        return self.mqtt_publish(
-            NS_APPLIANCE_CONTROL_TOGGLE,
-            METHOD_GET,
-            {"toggle": {"channel": channel}}
-        )
-
-    def togglex_set(self, channel: int, ison: int):
-        return self.mqtt_publish(
-            NS_APPLIANCE_CONTROL_TOGGLEX,
-            METHOD_SET,
-            {"togglex": {"channel": channel, "onoff": ison}}
-        )
-
-    def togglex_get(self, channel: int):
-        return self.mqtt_publish(
-            NS_APPLIANCE_CONTROL_TOGGLEX,
-            METHOD_GET,
-            {"togglex": {"channel": channel}}
-        )
+    def mqtt_receive(
+        self,
+        namespace: str,
+        method: str,
+        payload: dict,
+        replykey: KeyType
+    ) -> None:
+        self.lastmqtt = time()
+        if (self.pref_protocol is Protocol.MQTT) and \
+            (self.curr_protocol is Protocol.HTTP):
+            self.curr_protocol = Protocol.MQTT
+        self.receive(namespace, method, payload, replykey)
 
 
-    def mqtt_publish(self, namespace: str, method: str, payload: dict = {}):
+    async def async_http_request(self, namespace: str, method: str, payload: dict = {}, callback: Callable = None):
+        try:
+            _httpclient:MerossHttpClient = getattr(self, '_httpclient', None)
+            if _httpclient is None:
+                _httpclient = MerossHttpClient(self.descriptor.ipAddress, self.key, async_get_clientsession(self.api.hass), LOGGER)
+                self._httpclient = _httpclient
+            else:
+                _httpclient.set_host(self.descriptor.ipAddress)
+                _httpclient.key = self.key
+
+            response = await _httpclient.async_request(namespace, method, payload)
+            r_header = response[mc.KEY_HEADER]
+            r_namespace = r_header[mc.KEY_NAMESPACE]
+            r_method = r_header[mc.KEY_METHOD]
+            if (callback is not None) and (r_method == mc.METHOD_SETACK):
+                #we're actually only using this for SET->SETACK command confirmation
+                callback()
+            # passing self.key to shut off MerossDevice replykey behaviour
+            # since we're already managing replykey in http client
+            self.receive(r_namespace, r_method, response[mc.KEY_PAYLOAD], self.key)
+        except ClientConnectionError as e:
+            LOGGER.info("MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e))
+            if (self.pref_protocol is Protocol.MQTT) or (self.lastmqtt is not None):
+                LOGGER.info("MerossDevice(%s) switching protocol to MQTT", self.device_id)
+                # this device was either 'discovered' over MQTT or, somehow,
+                # received an MQTT message so it could be able to talk MQTT
+                self.curr_protocol = Protocol.MQTT
+                self.api.mqtt_publish(
+                    self.device_id,
+                    namespace,
+                    method,
+                    payload,
+                    self.key or self.replykey
+                    )
+            else:
+                if self._online:
+                    self._set_offline()
+        except Exception as e:
+            LOGGER.warning("MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e))
+
+
+    def request(self, namespace: str, method: str = mc.METHOD_GET, payload: dict = {}, callback: Callable = None):
+        """
+            route the request through MQTT or HTTP to the physical device.
+            callback will be called on successful replies and actually implemented
+            only when HTTPing SET requests. On MQTT we rely on async PUSH and SETACK to manage
+            confirmation/status updates
+        """
         self.lastrequest = time()
-        return self.api.mqtt_publish(self.device_id, namespace, method, payload, key=self.replykey if self.key is None else self.key)
+        if self.curr_protocol is Protocol.HTTP:
+            self.api.hass.async_create_task(
+                self.async_http_request(namespace, method, payload, callback)
+            )
+        else: # self.curr_protocol is Protocol.MQTT:
+            self.api.mqtt_publish(
+                self.device_id,
+                namespace,
+                method,
+                payload,
+                self.key or self.replykey
+            )
 
+
+    def _set_offline(self) -> None:
+        LOGGER.debug("MerossDevice(%s) going offline!", self.device_id)
+        self._online = False
+        for entity in self.entities.values():
+            entity._set_unavailable()
+
+
+    def _set_online(self) -> None:
+        """
+            When coming back online allow for a refresh
+            also in inheriteds
+        """
+        LOGGER.debug("MerossDevice(%s) back online!", self.device_id)
+        self._online = True
+        self.updatecoordinator_listener()
+
+
+    def _update_descriptor(self, payload: dict) -> bool:
+        """
+        called internally when we receive an NS_SYSTEM_ALL
+        i.e. global device setup/status
+        we usually don't expect a 'structural' change in the device here
+        except maybe for Hub(s) which we're going to investigate later
+        Return True if we want to persist the payload to the ConfigEntry
+        """
+        oldaddr = self.descriptor.ipAddress
+        self.descriptor.update(payload)
+        #persist changes to configentry only when relevant properties change
+        return oldaddr != self.descriptor.ipAddress
+
+
+    def _update_entry(self, payload: dict) -> None:
+        try:
+            entries:ConfigEntries = self.api.hass.config_entries
+            entry:ConfigEntry = entries.async_get_entry(self.entry_id)
+            if entry is not None:
+                data = dict(entry.data) # deepcopy? not needed: see CONF_TIMESTAMP
+                data[CONF_PAYLOAD].update(payload)
+                data[CONF_TIMESTAMP] = int(time()) # force ConfigEntry update..
+                entries.async_update_entry(entry, data=data)
+        except Exception as e:
+            LOGGER.warning("MerossDevice(%s) error while updating ConfigEntry (%s)", self.device_id, str(e))
+
+
+    def _parse_config_entry(self, config_entry: ConfigEntry) -> None:
+        """
+        common properties read from ConfigEntry on __init__ or when a configentry updates
+        """
+        self.key = config_entry.data.get(CONF_KEY)
+        self.conf_protocol = MAP_CONF_PROTOCOL.get(config_entry.data.get(CONF_PROTOCOL), Protocol.AUTO)
+        if self.conf_protocol == Protocol.AUTO:
+            self.pref_protocol = Protocol.HTTP if config_entry.data.get(CONF_HOST) else Protocol.MQTT
+        else:
+            self.pref_protocol = self.conf_protocol
+        """
+        When using Protocol.AUTO we try to use our 'preferred' (pref_protocol)
+        and eventually fallback (curr_protocol) until some good news allow us
+        to retry pref_protocol
+        """
+        self.curr_protocol = self.pref_protocol
 
     @callback
-    def updatecoordinator_listener(self) -> None:
+    async def entry_update_listener(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
+        # we're not changing device_id or other 'identifying' stuff
+        self._parse_config_entry(config_entry)
+        _httpclient:MerossHttpClient = getattr(self, '_httpclient', None)
+        if _httpclient is not None:
+            _httpclient.set_host(self.descriptor.ipAddress)
+            _httpclient.key = self.key
+
+        #await hass.config_entries.async_reload(config_entry.entry_id)
+
+    @callback
+    def updatecoordinator_listener(self) -> bool:
         now = time()
-        # this is a bit rude: we'll keep sending 'heartbeats' to check if the device is still there
-        # update(1): disabled because old firmware doesnt support GET NS_APPLIANCE_SYSTEM_REPORT
-        # I could change the request to a supported one but all this heartbeat looks lame to mee atm
-        # update(2): looks like any firmware doesnt support GET NS_APPLIANCE_SYSTEM_REPORT
-        # we're replacing with a well known message and, we're increasing the period
+        """
+        this is a bit rude: we'll keep sending 'heartbeats'
+        to check if the device is still there
+        !!this is actually not happening when we connect through HTTP!!
+        unless the device went offline so we started skipping polling updates
+        """
         if (now - self.lastrequest) > PARAM_HEARTBEAT_PERIOD:
-            self.mqtt_publish(NS_APPLIANCE_SYSTEM_ALL, METHOD_GET)
-            return
+            self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
+            return False
 
-        if not (self.online):
-            return
+        if self.online:
+            # on MQTT we already have PUSHES...
+            if self.curr_protocol == Protocol.HTTP:
+                ability = self.descriptor.ability
+                if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
+                    self.request(mc.NS_APPLIANCE_CONTROL_TOGGLEX, payload={ mc.KEY_TOGGLEX : [] })
+                elif mc.NS_APPLIANCE_CONTROL_TOGGLE in ability:
+                    self.request(mc.NS_APPLIANCE_CONTROL_TOGGLE, payload={ mc.KEY_TOGGLE : {} })
+                if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
+                    self.request(mc.NS_APPLIANCE_CONTROL_LIGHT, payload={ mc.KEY_LIGHT : {} })
 
-        if NS_APPLIANCE_CONTROL_ELECTRICITY in self.ability:
-            self.mqtt_publish(NS_APPLIANCE_CONTROL_ELECTRICITY, METHOD_GET)
+            return True # tell inheriting to continue processing
 
-        if self._sensor_energy and self._sensor_energy.enabled:
-            if ((now - self.lastupdate_consumption) > PARAM_ENERGY_UPDATE_PERIOD):
-                self.mqtt_publish(NS_APPLIANCE_CONTROL_CONSUMPTIONX, METHOD_GET)
+        # when we 'fall' offline while on MQTT eventually retrigger HTTP
+        # the reverse is not needed since we switch HTTP -> MQTT right-away
+        # when HTTP fails (see async_http_request)
+        if (self.curr_protocol is Protocol.MQTT) and \
+            (self.conf_protocol is Protocol.AUTO):
+            self.curr_protocol = Protocol.HTTP
 
-        return
+        return False

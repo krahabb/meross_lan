@@ -2,7 +2,7 @@
 ###   device api: exchange the same message payload as per the mqtt protocol
 ###   "sign" = md5(messageId + key + timestamp)
 
-POST http://192.168.10.21/config HTTP/1.1
+POST http://192.168.10.13/config HTTP/1.1
 Content-Type: application/json
 
 {
@@ -10,13 +10,13 @@ Content-Type: application/json
         "from":"",
         "messageId":"",
         "method":"GET",
-        "namespace":"Appliance.System.All",
+        "namespace":"Appliance.Hub.Mts100.All",
         "payloadVersion":1,
-        "sign":"cfcd208495d565ef66e7dff9f98764da",
-        "timestamp": 0
+        "sign":"b2f7be905c2e36511b5207dc6b313d02",
+        "timestamp": 1622314429
         },
     "payload":{
-
+      "all": []
     }
 }
 
@@ -48,7 +48,7 @@ Content-Type: application/json
     }
 }
 ###
-POST http://192.168.10.21/config HTTP/1.1
+POST http://192.168.10.14/config HTTP/1.1
 Content-Type: application/json
 
 {
@@ -58,14 +58,12 @@ Content-Type: application/json
         "method": "GET",
         "payloadVersion": 1,
         "from": "",
-        "timestamp": 1617116059,
+        "timestamp": 0,
         "timestampMs": 60,
-        "sign": "e18d3d767751bc75832bafd3f7023fcd"
+        "sign": "cfcd208495d565ef66e7dff9f98764da"
     },
     "payload": {
-        "togglex": {
-            "channel": 0
-        }
+        "togglex": [ { "channel": 1}]
     }
 }
 ###
@@ -94,4 +92,40 @@ Content-Type: application/json
      }
   }
 }
+###
+POST http://192.168.10.14/config HTTP/1.1
+Content-Type: application/json
 
+{
+    "header": {
+        "messageId":"",
+        "namespace":"Appliance.Control.ToggleX",
+        "method":"GET",
+        "from":"",
+        "payloadVersion":1,
+        "timestamp": 0,
+        "timestampMs": 60,
+        "sign":"cfcd208495d565ef66e7dff9f98764da"
+        },
+    "payload": {
+      "togglex" : []
+    }
+}
+
+###
+POST http://192.168.10.14/config HTTP/1.1
+Content-Type: application/json
+
+{
+    "header":{
+        "from":"",
+        "messageId":"",
+        "method":"GET",
+        "namespace":"Appliance.System.All",
+        "payloadVersion":1,
+        "sign":"cfcd208495d565ef66e7dff9f98764da",
+        "timestamp": 0
+        },
+    "payload":{
+    }
+}

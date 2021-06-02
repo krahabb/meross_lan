@@ -1,28 +1,22 @@
 
-from typing import Any, Callable, Dict, List, Optional
-
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.components.switch import SwitchEntity, DEVICE_CLASS_OUTLET
 
-from .const import DOMAIN, CONF_DEVICE_ID
-from .meross_entity import _MerossToggle
-from .logger import LOGGER
+from .meross_entity import _MerossToggle, platform_setup_entry, platform_unload_entry
+from .const import PLATFORM_SWITCH
 
-async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry, async_add_devices):
-    device_id = config_entry.data[CONF_DEVICE_ID]
-    device = hass.data[DOMAIN].devices[device_id]
-    async_add_devices([entity for entity in device.entities.values() if isinstance(entity, MerossLanSwitch)])
-    LOGGER.debug("async_setup_entry device_id = %s - platform = switch", device_id)
-    return
+
+async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
+    platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_SWITCH)
 
 async def async_unload_entry(hass: object, config_entry: object) -> bool:
-    LOGGER.debug("async_unload_entry device_id = %s - platform = switch", config_entry.data[CONF_DEVICE_ID])
-    return True
+    return platform_unload_entry(hass, config_entry, PLATFORM_SWITCH)
+
 
 
 class MerossLanSwitch(_MerossToggle, SwitchEntity):
-    def __init__(self, meross_device: object, channel: int, m_toggle_set, m_toggle_get):
-        super().__init__(meross_device, channel, DEVICE_CLASS_OUTLET, m_toggle_set, m_toggle_get)
-        meross_device.has_switches = True
+
+    PLATFORM = PLATFORM_SWITCH
+
+    def __init__(self, device: 'MerossDevice', id: int, toggle_ns: str, toggle_key: str):
+        super().__init__(device, id, DEVICE_CLASS_OUTLET, toggle_ns, toggle_key)
 

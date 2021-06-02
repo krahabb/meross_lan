@@ -9,7 +9,7 @@ _trap_args = None
 _trap_time = 0
 _trap_level = 0
 
-def LOGGER_trap(level, msg, *args):
+def LOGGER_trap(level, timeout, msg, *args):
     """
     avoid repeating the same last log message until something changes or timeout expires
     used mainly when discovering new devices
@@ -23,7 +23,7 @@ def LOGGER_trap(level, msg, *args):
     if (_trap_level == level) \
         and (_trap_msg == msg) \
         and (_trap_args == args) \
-        and ((tm - _trap_time) < 300): # 5 minutes timeout
+        and ((tm - _trap_time) < timeout):
         return
 
     LOGGER.log(level, msg, *args)

@@ -7,6 +7,14 @@
       "no_devices_found": "[%key:common::config_flow::abort::no_devices_found%]"
     },
     "step": {
+      "user": {
+        "title": "Meross LAN",
+        "description": "Setup meross device",
+        "data": {
+          "host": "Device host address",
+          "key": "Device key"
+        }
+      },
       "hub": {
         "title": "Meross LAN MQTT Hub",
         "description": "Configure global Meross LAN settings",
@@ -36,6 +44,7 @@
         "description": "Type: {device_type}\nUUID: {device_id}\n\n{payload}",
         "data": {
           "key": "Device key",
+          "protocol": "Connection protocol",
           "device_id": "UUID of Meross appliance",
           "all": "Appliance.System.All",
           "ability": "Appliance.System.Ability"
