@@ -40,7 +40,7 @@ class _MerossEntity:
 
     PLATFORM: str
 
-    def __init__(self, device: 'MerossDevice', id: any, device_class: str):  # pylint: disable=unsubscriptable-object
+    def __init__(self, device: 'MerossDevice', id: object, device_class: str):  # pylint: disable=unsubscriptable-object
         self._device = device
         self._id = id
         self._device_class = device_class
@@ -144,7 +144,7 @@ class _MerossEntity:
 
 class _MerossToggle(_MerossEntity):
 
-    def __init__(self, device: 'MerossDevice', id: any, device_class: str, toggle_ns: str, toggle_key: str):
+    def __init__(self, device: 'MerossDevice', id: object, device_class: str, toggle_ns: str, toggle_key: str):
         super().__init__(device, id, device_class)
         self._toggle_ns = toggle_ns
         self._toggle_key = toggle_key
@@ -177,7 +177,7 @@ class _MerossToggle(_MerossEntity):
 
 class _MerossHubEntity(_MerossEntity):
 
-    def __init__(self, subdevice: 'MerossSubDevice', id: any, device_class: str):
+    def __init__(self, subdevice: 'MerossSubDevice', id: object, device_class: str):
         super().__init__(
             subdevice.hub,
             id,

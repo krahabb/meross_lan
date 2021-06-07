@@ -17,6 +17,6 @@ class MerossLanSwitch(_MerossToggle, SwitchEntity):
 
     PLATFORM = PLATFORM_SWITCH
 
-    def __init__(self, device: 'MerossDevice', id: int, toggle_ns: str, toggle_key: str):
+    def __init__(self, device: 'MerossDevice', id: object, toggle_ns: str, toggle_key: str):
         super().__init__(device, id, DEVICE_CLASS_OUTLET, toggle_ns, toggle_key)
 

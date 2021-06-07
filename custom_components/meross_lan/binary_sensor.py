@@ -15,7 +15,7 @@ class MerossLanBinarySensor(_MerossEntity, BinarySensorEntity):
 
     PLATFORM = PLATFORM_BINARY_SENSOR
 
-    def __init__(self, device: 'MerossDevice', id: any, device_class: str):
+    def __init__(self, device: 'MerossDevice', id: object, device_class: str):
         super().__init__(device, id, device_class)
 
 

@@ -26,7 +26,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
     PLATFORM = PLATFORM_COVER
 
-    def __init__(self, device: 'MerossDevice', id: any):
+    def __init__(self, device: 'MerossDevice', id: object):
         super().__init__(device, id, DEVICE_CLASS_GARAGE)
         self._payload = {mc.KEY_STATE: {mc.KEY_OPEN: 0, mc.KEY_CHANNEL: id, mc.KEY_UUID: device.device_id } }
 
@@ -82,7 +82,7 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     PLATFORM = PLATFORM_COVER
 
-    def __init__(self, device: MerossDevice, id: any):
+    def __init__(self, device: MerossDevice, id: object):
         super().__init__(device, id, DEVICE_CLASS_SHUTTER)
         self._payload = {mc.KEY_POSITION: {mc.KEY_POSITION: 0, mc.KEY_CHANNEL: id } }
         self._position = None

@@ -17,7 +17,7 @@ class MerossLanSensor(_MerossEntity, Entity):
 
     PLATFORM = PLATFORM_SENSOR
 
-    def __init__(self, device: 'MerossDevice', id: any, device_class: str):
+    def __init__(self, device: 'MerossDevice', id: object, device_class: str):
         super().__init__(device, id, device_class)
 
 

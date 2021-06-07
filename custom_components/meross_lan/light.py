@@ -64,10 +64,10 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
     PLATFORM = PLATFORM_LIGHT
 
-    def __init__(self, device: MerossDevice, p_light: dict):
+    def __init__(self, device: MerossDevice, id: object):
         # suppose we use 'togglex' to switch the light
         super().__init__(
-            device, p_light.get(mc.KEY_CHANNEL, 0), None,
+            device, id, None,
             mc.NS_APPLIANCE_CONTROL_TOGGLEX, mc.KEY_TOGGLEX)
         """
         self._light = {
@@ -81,7 +81,7 @@ class MerossLanLight(_MerossToggle, LightEntity):
             "gradual": 0
 		}
         """
-        self._light = p_light
+        self._light = dict()
         self._color_temp = None
         self._hs_color = None
         self._brightness = None
