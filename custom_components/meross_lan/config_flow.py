@@ -1,5 +1,7 @@
 """Config flow for Meross IoT local LAN integration."""
 
+from math import fabs
+from homeassistant.components.mqtt import DATA_MQTT
 import voluptuous as vol
 from typing import OrderedDict, Optional
 import json
@@ -12,12 +14,15 @@ from .merossclient import MerossHttpClient, MerossDeviceDescriptor, const as mc
 
 from .logger import LOGGER
 from .const import (
-    CONF_PROTOCOL_OPTIONS,
     DOMAIN,
-    CONF_HOST, CONF_DEVICE_ID, CONF_KEY, CONF_PROTOCOL,
+    CONF_HOST, CONF_DEVICE_ID, CONF_KEY,
     CONF_PAYLOAD, CONF_DEVICE_TYPE,
-    CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT
+    CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS,
 )
+
+
+def _mqtt_is_loaded(hass) -> bool:
+    return hass.data.get(DATA_MQTT) is not None
 
 
 
@@ -38,7 +43,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
         # check we already configured the hub ..
-        if DOMAIN not in self._async_current_ids():
+        if (DOMAIN not in self._async_current_ids()) and _mqtt_is_loaded(self.hass):
             return await self.async_step_hub()
 
         errors = {}
