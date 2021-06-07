@@ -23,12 +23,12 @@ from . import const as mc
 KeyType = Union[dict, Optional[str]] # pylint: disable=unsubscriptable-object
 #Union[dict, Optional[str]]
 
-def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = None)-> dict:
+def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = None, _from:str = None)-> dict:
     if isinstance(key, dict):
         key[mc.KEY_NAMESPACE] = namespace
         key[mc.KEY_METHOD] = method
         key[mc.KEY_PAYLOADVERSION] = 1
-        key[mc.KEY_FROM] = ""
+        key[mc.KEY_FROM] = _from
         return {
             mc.KEY_HEADER: key,
             mc.KEY_PAYLOAD: payload
@@ -42,6 +42,8 @@ def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = No
                 mc.KEY_NAMESPACE: namespace,
                 mc.KEY_METHOD: method,
                 mc.KEY_PAYLOADVERSION: 1,
+                mc.KEY_FROM: _from,
+                #mc.KEY_FROM: "/app/0-0/subscribe",
                 #"from": "/appliance/9109182170548290882048e1e9522946/publish",
                 mc.KEY_TIMESTAMP: timestamp,
                 mc.KEY_TIMESTAMPMS: 0,
