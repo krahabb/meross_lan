@@ -11,6 +11,7 @@ from aiohttp.client_exceptions import ClientConnectionError
 from homeassistant.config_entries import ConfigEntry, SOURCE_DISCOVERY
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components import mqtt
+from homeassistant.helpers import device_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
@@ -30,10 +31,10 @@ from .meross_device_bulb import MerossDeviceBulb
 from .meross_device_hub import MerossDeviceHub
 
 from .const import (
-    DOMAIN, SERVICE_REQUEST,
+    CONF_TIMESTAMP, DOMAIN, SERVICE_REQUEST,
     CONF_HOST, CONF_OPTION_MQTT, CONF_PROTOCOL,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD,
-    COMMAND_TOPIC, DISCOVERY_TOPIC,
+    DISCOVERY_TOPIC, REQUEST_TOPIC, RESPONSE_TOPIC,
     PARAM_UNAVAILABILITY_TIMEOUT, PARAM_POLLING_PERIOD,
 )
 
@@ -271,6 +272,21 @@ class MerossApi:
 
         self.devices[device_id] = device
 
+        try:
+            # try block since this is not critical and api has recently changed
+            _type = descriptor.type
+            device_registry.async_get(self.hass).async_get_or_create(
+                config_entry_id = entry.entry_id,
+                connections = {(device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
+                identifiers = {(DOMAIN, device_id)},
+                manufacturer = mc.MANUFACTURER,
+                name = _type + " " + device_id,
+                model = _type + " " + descriptor.hardware.get(mc.KEY_VERSION, ""),
+                sw_version = descriptor.firmware.get(mc.KEY_VERSION)
+            )
+        except:
+            pass
+
         return device
 
 
@@ -283,8 +299,10 @@ class MerossApi:
     ) -> None:
         LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
         self.hass.components.mqtt.async_publish(
-            COMMAND_TOPIC.format(device_id),
-            json_dumps(merossclient.build_payload(namespace, method, payload, key)),
+            REQUEST_TOPIC.format(device_id),
+            json_dumps(merossclient.build_payload(
+                namespace, method, payload,
+                key, _from=RESPONSE_TOPIC.format(device_id))),
             0,
             False)
 

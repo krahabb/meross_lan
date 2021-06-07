@@ -32,8 +32,8 @@ CONF_PROTOCOL_OPTIONS = (
 )
 
 DISCOVERY_TOPIC = "/appliance/+/publish"
-COMMAND_TOPIC = "/appliance/{}/subscribe"
-
+REQUEST_TOPIC = "/appliance/{}/subscribe"
+RESPONSE_TOPIC = "/appliance/{}/publish"
 
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)
