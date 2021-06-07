@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from homeassistant.components.climate.const import (
-    SUPPORT_PRESET_MODE, SUPPORT_TARGET_TEMPERATURE,
+    PRESET_AWAY, PRESET_COMFORT, PRESET_SLEEP, SUPPORT_PRESET_MODE, SUPPORT_TARGET_TEMPERATURE,
     CURRENT_HVAC_HEAT, CURRENT_HVAC_IDLE, CURRENT_HVAC_OFF,
     HVAC_MODE_AUTO, HVAC_MODE_HEAT, HVAC_MODE_OFF,
 )
@@ -20,32 +20,32 @@ async def async_unload_entry(hass: object, config_entry: object) -> bool:
     return platform_unload_entry(hass, config_entry, PLATFORM_CLIMATE)
 
 MTS100MODE_CUSTOM = 0
-MTS100MODE_HEAT = 1
-MTS100MODE_COOL = 2
-MTS100MODE_ECONOMY = 4
+MTS100MODE_COMFORT = 1 # aka 'Heat'
+MTS100MODE_SLEEP = 2 # aka 'Cool'
+MTS100MODE_AWAY = 4 # aka 'Economy'
 MTS100MODE_AUTO = 3
 
 PRESET_OFF = 'off'
 PRESET_CUSTOM = 'custom'
-PRESET_HEAT = 'heat'
-PRESET_COOL = 'cool'
-PRESET_ECONOMY = 'economy'
+#PRESET_COMFORT = 'heat'
+#PRESET_COOL = 'cool'
+#PRESET_ECONOMY = 'economy'
 PRESET_AUTO = 'auto'
 
 # map mts100 mode enums to HA preset keys
 MODE_TO_PRESET_MAP = {
     MTS100MODE_CUSTOM: PRESET_CUSTOM,
-    MTS100MODE_HEAT: PRESET_HEAT,
-    MTS100MODE_COOL: PRESET_COOL,
-    MTS100MODE_ECONOMY: PRESET_ECONOMY,
+    MTS100MODE_COMFORT: PRESET_COMFORT,
+    MTS100MODE_SLEEP: PRESET_SLEEP,
+    MTS100MODE_AWAY: PRESET_AWAY,
     MTS100MODE_AUTO: PRESET_AUTO
 }
 # reverse map
 PRESET_TO_MODE_MAP = {
     PRESET_CUSTOM: MTS100MODE_CUSTOM,
-    PRESET_HEAT: MTS100MODE_HEAT,
-    PRESET_COOL: MTS100MODE_COOL,
-    PRESET_ECONOMY: MTS100MODE_ECONOMY,
+    PRESET_COMFORT: MTS100MODE_COMFORT,
+    PRESET_SLEEP: MTS100MODE_SLEEP,
+    PRESET_AWAY: MTS100MODE_AWAY,
     PRESET_AUTO: MTS100MODE_AUTO
 }
 # when HA requests an HVAC mode we'll map it to a 'preset'
@@ -62,9 +62,9 @@ HVAC_TO_PRESET_MAP = {
 PRESET_TO_TEMPKEY_MAP = {
     PRESET_OFF: mc.KEY_CUSTOM,
     PRESET_CUSTOM: mc.KEY_CUSTOM,
-    PRESET_HEAT: mc.KEY_COMFORT,
-    PRESET_COOL: mc.KEY_ECONOMY,
-    PRESET_ECONOMY: mc.KEY_AWAY,
+    PRESET_COMFORT: mc.KEY_COMFORT,
+    PRESET_SLEEP: mc.KEY_ECONOMY,
+    PRESET_AWAY: mc.KEY_AWAY,
     PRESET_AUTO: mc.KEY_CUSTOM
 }
 
@@ -148,8 +148,8 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
 
     @property
     def preset_modes(self) -> list[str] | None:
-        return [PRESET_OFF, PRESET_CUSTOM, PRESET_HEAT,
-                PRESET_COOL, PRESET_ECONOMY, PRESET_AUTO]
+        return [PRESET_OFF, PRESET_CUSTOM, PRESET_COMFORT,
+                PRESET_SLEEP, PRESET_AWAY, PRESET_AUTO]
 
 
     async def async_set_temperature(self, **kwargs) -> None:

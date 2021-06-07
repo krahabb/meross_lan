@@ -117,51 +117,49 @@ class MerossDeviceSwitch(MerossDevice):
         if super().receive(namespace, method, payload, replykey):
             return True
 
-        if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLEX:
-            togglex = payload.get(mc.KEY_TOGGLEX)
-            if isinstance(togglex, list):
-                for t in togglex:
-                    self.entities[t.get(mc.KEY_CHANNEL)]._set_onoff(t.get(mc.KEY_ONOFF))
-            elif isinstance(togglex, dict):
-                self.entities[togglex.get(mc.KEY_CHANNEL)]._set_onoff(togglex.get(mc.KEY_ONOFF))
-
-        elif namespace == mc.NS_APPLIANCE_CONTROL_TOGGLE:
+        if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLE:
             p_toggle = payload.get(mc.KEY_TOGGLE)
             if isinstance(p_toggle, dict):
                 self.entities[p_toggle.get(mc.KEY_CHANNEL, 0)]._set_onoff(p_toggle.get(mc.KEY_ONOFF))
+            return True
 
-        elif namespace == mc.NS_APPLIANCE_GARAGEDOOR_STATE:
+        if namespace == mc.NS_APPLIANCE_GARAGEDOOR_STATE:
             garagedoor = payload.get(mc.KEY_STATE)
             for g in garagedoor:
                 self.entities[g.get(mc.KEY_CHANNEL)]._set_open(g.get(mc.KEY_OPEN))
+            return True
 
-        elif namespace == mc.NS_APPLIANCE_ROLLERSHUTTER_STATE:
+        if namespace == mc.NS_APPLIANCE_ROLLERSHUTTER_STATE:
             state = payload.get(mc.KEY_STATE)
             for s in state:
                 self.entities[s.get(mc.KEY_CHANNEL)]._set_rollerstate(s.get(mc.KEY_STATE))
+            return True
 
-        elif namespace == mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION:
+        if namespace == mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION:
             position = payload.get(mc.KEY_POSITION)
             for p in position:
                 self.entities[p.get(mc.KEY_CHANNEL)]._set_rollerposition(p.get(mc.KEY_POSITION))
+            return True
 
-        elif namespace == mc.NS_APPLIANCE_CONTROL_ELECTRICITY:
+        if namespace == mc.NS_APPLIANCE_CONTROL_ELECTRICITY:
             electricity = payload.get(mc.KEY_ELECTRICITY)
             self._sensor_power._set_state(electricity.get(mc.KEY_POWER) / 1000)
             self._sensor_current._set_state(electricity.get(mc.KEY_CURRENT) / 1000)
             self._sensor_voltage._set_state(electricity.get(mc.KEY_VOLTAGE) / 10)
+            return True
 
-        elif namespace == mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX:
+        if namespace == mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX:
             self._lastupdate_consumption = self.lastupdate
             daylabel = strftime("%Y-%m-%d", localtime())
             for d in payload.get(mc.KEY_CONSUMPTIONX):
                 if d.get(mc.KEY_DATE) == daylabel:
                     self._sensor_energy._set_state(d.get(mc.KEY_VALUE))
+                    break
+            else:
+                self._sensor_energy._set_state(0)
+            return True
 
-        else:
-            return False
-
-        return True
+        return False
 
 
     def _update_descriptor(self, payload: dict) -> bool:
@@ -169,12 +167,6 @@ class MerossDeviceSwitch(MerossDevice):
 
         p_digest = self.descriptor.digest
         if p_digest:
-            p_togglex = p_digest.get(mc.KEY_TOGGLEX)
-            if isinstance(p_togglex, list):
-                for t in p_togglex:
-                    self.entities[t.get(mc.KEY_CHANNEL)]._set_onoff(t.get(mc.KEY_ONOFF))
-            elif isinstance(p_togglex, dict):
-                self.entities[p_togglex.get(mc.KEY_CHANNEL, 0)]._set_onoff(p_togglex.get(mc.KEY_ONOFF))
             p_garagedoor = p_digest.get(mc.KEY_GARAGEDOOR)
             if isinstance(p_garagedoor, list):
                 for g in p_garagedoor:

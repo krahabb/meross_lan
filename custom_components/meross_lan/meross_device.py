@@ -80,7 +80,7 @@ class MerossDevice:
         self.unsub_entry_update_listener: Callable = None
         self.unsub_updatecoordinator_listener: Callable = None
 
-        self._parse_config_entry(entry)
+        self._set_config_entry(entry)
         """
         warning: would the response be processed after this object is fully init?
         It should if I get all of this async stuff right
@@ -102,8 +102,16 @@ class MerossDevice:
             #evaluate device MQTT availability by checking lastrequest got answered in less than 20 seconds
             if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < PARAM_UNAVAILABILITY_TIMEOUT):
                 return True
-            #else
+
+            # when we 'fall' offline while on MQTT eventually retrigger HTTP.
+            # the reverse is not needed since we switch HTTP -> MQTT right-away
+            # when HTTP fails (see async_http_request)
+            if (self.curr_protocol is Protocol.MQTT) and (self.conf_protocol is Protocol.AUTO):
+                self._switch_protocol(Protocol.HTTP)
+                return True
+
             self._set_offline()
+
         return False
 
 
@@ -133,9 +141,13 @@ class MerossDevice:
                 self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
             self._set_online()
 
+        if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLEX:
+            self._parse_togglex(payload)
+            return True
+
         if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
             if self._update_descriptor(payload):
-                self._update_entry(payload)
+                self._save_config_entry(payload)
             return True
 
         return False
@@ -149,9 +161,8 @@ class MerossDevice:
         replykey: KeyType
     ) -> None:
         self.lastmqtt = time()
-        if (self.pref_protocol is Protocol.MQTT) and \
-            (self.curr_protocol is Protocol.HTTP):
-            self.curr_protocol = Protocol.MQTT
+        if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
+            self._switch_protocol(Protocol.MQTT)
         self.receive(namespace, method, payload, replykey)
 
 
@@ -177,20 +188,19 @@ class MerossDevice:
             self.receive(r_namespace, r_method, response[mc.KEY_PAYLOAD], self.key)
         except ClientConnectionError as e:
             LOGGER.info("MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e))
-            if (self.pref_protocol is Protocol.MQTT) or (self.lastmqtt is not None):
-                LOGGER.info("MerossDevice(%s) switching protocol to MQTT", self.device_id)
-                # this device was either 'discovered' over MQTT or, somehow,
-                # received an MQTT message so it could be able to talk MQTT
-                self.curr_protocol = Protocol.MQTT
-                self.api.mqtt_publish(
-                    self.device_id,
-                    namespace,
-                    method,
-                    payload,
-                    self.key or self.replykey
-                    )
-            else:
-                if self._online:
+            if self._online:
+                if (self.pref_protocol is Protocol.MQTT) or (self.lastmqtt is not None):
+                    # this device was either 'discovered' over MQTT or, somehow,
+                    # received an MQTT message so it could be able to talk MQTT
+                    self._switch_protocol(Protocol.MQTT)
+                    self.api.mqtt_publish(
+                        self.device_id,
+                        namespace,
+                        method,
+                        payload,
+                        self.key or self.replykey
+                        )
+                else:
                     self._set_offline()
         except Exception as e:
             LOGGER.warning("MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e))
@@ -235,6 +245,20 @@ class MerossDevice:
         self.updatecoordinator_listener()
 
 
+    def _switch_protocol(self, protocol: Protocol) -> None:
+        LOGGER.info("MerossDevice(%s) switching protocol to %s", self.device_id, protocol.name)
+        self.curr_protocol = protocol
+
+
+    def _parse_togglex(self, payload: dict) -> None:
+        togglex = payload.get(mc.KEY_TOGGLEX)
+        if isinstance(togglex, list):
+            for t in togglex:
+                self.entities[t.get(mc.KEY_CHANNEL)]._set_onoff(t.get(mc.KEY_ONOFF))
+        elif isinstance(togglex, dict):
+            self.entities[togglex.get(mc.KEY_CHANNEL)]._set_onoff(togglex.get(mc.KEY_ONOFF))
+
+
     def _update_descriptor(self, payload: dict) -> bool:
         """
         called internally when we receive an NS_SYSTEM_ALL
@@ -245,11 +269,16 @@ class MerossDevice:
         """
         oldaddr = self.descriptor.ipAddress
         self.descriptor.update(payload)
+
+        p_digest = self.descriptor.digest
+        if p_digest:
+            self._parse_togglex(p_digest)
+
         #persist changes to configentry only when relevant properties change
         return oldaddr != self.descriptor.ipAddress
 
 
-    def _update_entry(self, payload: dict) -> None:
+    def _save_config_entry(self, payload: dict) -> None:
         try:
             entries:ConfigEntries = self.api.hass.config_entries
             entry:ConfigEntry = entries.async_get_entry(self.entry_id)
@@ -262,7 +291,7 @@ class MerossDevice:
             LOGGER.warning("MerossDevice(%s) error while updating ConfigEntry (%s)", self.device_id, str(e))
 
 
-    def _parse_config_entry(self, config_entry: ConfigEntry) -> None:
+    def _set_config_entry(self, config_entry: ConfigEntry) -> None:
         """
         common properties read from ConfigEntry on __init__ or when a configentry updates
         """
@@ -279,10 +308,11 @@ class MerossDevice:
         """
         self.curr_protocol = self.pref_protocol
 
+
     @callback
     async def entry_update_listener(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         # we're not changing device_id or other 'identifying' stuff
-        self._parse_config_entry(config_entry)
+        self._set_config_entry(config_entry)
         _httpclient:MerossHttpClient = getattr(self, '_httpclient', None)
         if _httpclient is not None:
             _httpclient.set_host(self.descriptor.ipAddress)
@@ -316,11 +346,11 @@ class MerossDevice:
 
             return True # tell inheriting to continue processing
 
-        # when we 'fall' offline while on MQTT eventually retrigger HTTP
+        # when we 'stall' offline while on MQTT eventually retrigger HTTP
         # the reverse is not needed since we switch HTTP -> MQTT right-away
         # when HTTP fails (see async_http_request)
-        if (self.curr_protocol is Protocol.MQTT) and \
-            (self.conf_protocol is Protocol.AUTO):
-            self.curr_protocol = Protocol.HTTP
+        if (self.curr_protocol is Protocol.MQTT) and (self.conf_protocol is Protocol.AUTO):
+            self._switch_protocol(Protocol.HTTP)
+            self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
 
         return False
