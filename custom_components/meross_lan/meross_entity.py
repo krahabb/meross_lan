@@ -19,7 +19,7 @@ from homeassistant.const import (
     DEVICE_CLASS_BATTERY
 )
 
-from .merossclient import const as mc
+from .merossclient import const as mc, get_productname
 from .meross_device import MerossDevice
 from .logger import LOGGER
 from .const import CONF_DEVICE_ID, DOMAIN
@@ -70,6 +70,10 @@ class _MerossEntity:
         return f"{self._device.device_id}_{self._id}"
 
     @property
+    def name(self) -> str:
+        return f"{self._device.descriptor.productname} - {self._device_class}" if self._device_class else self._device.descriptor.productname
+
+    @property
     def device_info(self):
         _id = self._device.device_id
         _desc = self._device.descriptor
@@ -78,8 +82,8 @@ class _MerossEntity:
             "identifiers": {(DOMAIN, _id)},
             "connections": {(dr.CONNECTION_NETWORK_MAC, _desc.macAddress)},
             "manufacturer": mc.MANUFACTURER,
-            "name": _type + " " + _id,
-            "model": _type + " " + _desc.hardware.get(mc.KEY_VERSION, ""),
+            "name": _desc.productname,
+            "model": _desc.productmodel,
             "sw_version": _desc.firmware.get(mc.KEY_VERSION)
             }
 
@@ -184,6 +188,10 @@ class _MerossHubEntity(_MerossEntity):
             device_class)
         self.subdevice = subdevice
 
+    @property
+    def name(self) -> str:
+        name = get_productname(self.subdevice.type, self.subdevice.id)
+        return f"{name} - {self._device_class}" if self._device_class else name
 
     @property
     def device_info(self):
@@ -193,7 +201,7 @@ class _MerossHubEntity(_MerossEntity):
             "via_device": (DOMAIN, self._device.device_id),
             "identifiers": {(DOMAIN, _id)},
             "manufacturer": mc.MANUFACTURER,
-            "name": _type + " " + _id,
+            "name": get_productname(_type, _id),
             "model": _type
             }
 

@@ -21,7 +21,7 @@ import async_timeout
 from . import const as mc
 
 KeyType = Union[dict, Optional[str]] # pylint: disable=unsubscriptable-object
-#Union[dict, Optional[str]]
+
 
 def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = None, _from:str = None)-> dict:
     if isinstance(key, dict):
@@ -74,23 +74,27 @@ def get_replykey(header: dict, key:KeyType = None) -> KeyType:
     return header
 
 
+def get_productname(type: str, uuid: str) -> str:
+    for _type, _name in mc.TYPE_NAME_MAP.items():
+        if type.startswith(_type):
+            return f"{_name} ({uuid})"
+    return f"{type} ({uuid})"
+
+
+
 class MerossDeviceDescriptor:
     """
         Utility class to extract various info from Appliance.System.All
         device descriptor
     """
     def __init__(self, payload: dict):
-        self.all: dict = {}
-        self.ability: dict = {}
+        self.all = dict()
+        self.ability = dict()
         self.update(payload)
 
     @property
     def uuid(self) -> str:
         return self.hardware.get(mc.KEY_UUID)
-
-    @property
-    def type(self) -> str:
-        return self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER)
 
     @property
     def macAddress(self) -> str:
@@ -99,6 +103,19 @@ class MerossDeviceDescriptor:
     @property
     def ipAddress(self) -> str:
         return self.firmware.get(mc.KEY_INNERIP)
+
+    @property
+    def timezone(self) -> str:
+        return self.system.get(mc.KEY_TIME, {}).get(mc.KEY_TIMEZONE)
+
+    @property
+    def productname(self) -> str:
+        return get_productname(self.type, self.uuid)
+
+    @property
+    def productmodel(self) -> str:
+        return f"{self.type} {self.hardware.get(mc.KEY_VERSION, '')}"
+
 
     def update(self, payload: dict):
         """
@@ -110,7 +127,7 @@ class MerossDeviceDescriptor:
         self.firmware = self.system.get(mc.KEY_FIRMWARE, {})
         self.digest = self.all.get(mc.KEY_DIGEST)
         self.ability = payload.get(mc.KEY_ABILITY, self.ability)
-
+        self.type = self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER)# cache because using often
 
 class MerossHttpClient:
 

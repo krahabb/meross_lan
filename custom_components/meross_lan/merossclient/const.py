@@ -1,4 +1,7 @@
 
+from typing import OrderedDict
+
+
 METHOD_PUSH = "PUSH"
 METHOD_GET = "GET"
 METHOD_GETACK = "GETACK"
@@ -34,6 +37,7 @@ NS_APPLIANCE_ROLLERSHUTTER_STATE = 'Appliance.RollerShutter.State'
 NS_APPLIANCE_ROLLERSHUTTER_POSITION = 'Appliance.RollerShutter.Position'
 # Hub
 NS_APPLIANCE_DIGEST_HUB = 'Appliance.Digest.Hub'
+NS_APPLIANCE_HUB_SUBDEVICELIST = 'Appliance.Hub.SubdeviceList'
 NS_APPLIANCE_HUB_EXCEPTION = 'Appliance.Hub.Exception'
 NS_APPLIANCE_HUB_BATTERY = 'Appliance.Hub.Battery'
 NS_APPLIANCE_HUB_TOGGLEX = 'Appliance.Hub.ToggleX'
@@ -75,6 +79,7 @@ KEY_DIGEST = 'digest'
 KEY_ABILITY = 'ability'
 KEY_ONLINE = 'online'
 KEY_TIME = 'time'
+KEY_TIMEZONE = 'timezone'
 KEY_STATUS = 'status'
 KEY_CHANNEL = 'channel'
 KEY_TOGGLE = 'toggle'
@@ -92,6 +97,7 @@ KEY_HUBID = 'hubId'
 KEY_SUBDEVICE = 'subdevice'
 KEY_ID = 'id'
 KEY_LATEST = 'latest'
+KEY_TEMPHUM = 'tempHum'
 KEY_LATESTTEMPERATURE = 'latestTemperature'
 KEY_LATESTHUMIDITY = 'latestHumidity'
 KEY_ELECTRICITY = 'electricity'
@@ -129,6 +135,24 @@ TYPE_MSH300 = 'msh300' # WiFi Hub
 TYPE_MS100 = 'ms100' # Smart temp/humidity sensor over Hub
 TYPE_MTS100 = 'mts100'
 TYPE_MTS100V3 = 'mts100v3'
+TYPE_MSS310 = 'mss310' # smart plug with energy meter
+TYPE_MSL100 = 'msl100' # smart bulb
+TYPE_MSL120 = 'msl120' # smart bulb with color/temp
+
+# common device type classes
+CLASS_MSH = 'msh'
+CLASS_MSS = 'mss'
+CLASS_MSL = 'msl'
+CLASS_MTS = 'mts'
+TYPE_NAME_MAP = OrderedDict()
+TYPE_NAME_MAP[TYPE_MSL120] = "Smart RGB Bulb"
+TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"
+TYPE_NAME_MAP[CLASS_MSL] = "Smart Light"
+TYPE_NAME_MAP[CLASS_MSH] = "Smart Hub"
+TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
+TYPE_NAME_MAP[CLASS_MSS] = "Smart Switch"
+TYPE_NAME_MAP[CLASS_MTS] = "Smart Thermostat"
+TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
 """
     GP constant strings
 """
