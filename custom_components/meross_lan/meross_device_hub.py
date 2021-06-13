@@ -11,7 +11,7 @@ from homeassistant.core import callback
 from homeassistant.components.binary_sensor import DEVICE_CLASS_WINDOW
 
 from .merossclient import KeyType, const as mc  # mEROSS cONST
-from .meross_device import MerossDevice
+from .meross_device import MerossDevice, Protocol
 from .sensor import MerossLanHubSensor
 from .climate import Mts100Climate
 from .binary_sensor import MerossLanHubBinarySensor
@@ -104,63 +104,24 @@ class MerossDeviceHub(MerossDevice):
         if namespace == mc.NS_APPLIANCE_HUB_SENSOR_ALL:
             self._lastupdate_sensor = self.lastupdate
             self._parse_subdevice(payload, mc.KEY_ALL)
-            """
-            p_all = payload.get(mc.KEY_ALL)
-            if isinstance(p_all, list):
-                for p_subdevice in p_all:
-                    p_id = p_subdevice.get(mc.KEY_ID)
-                    subdevice = self.subdevices.get(p_id)
-                    if subdevice is None:
-                        self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
-                    else:
-                        subdevice.update(p_subdevice)
-            """
+            return True
+
+        if namespace == mc.NS_APPLIANCE_HUB_SENSOR_TEMPHUM:
+            self._lastupdate_sensor = self.lastupdate
+            self._parse_subdevice(payload, mc.KEY_TEMPHUM)
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_MTS100_ALL:
             self._lastupdate_mts100 = self.lastupdate
             self._parse_subdevice(payload, mc.KEY_ALL)
-            """
-            p_all = payload.get(mc.KEY_ALL)
-            if isinstance(p_all, list):
-                for p_subdevice in p_all:
-                    p_id = p_subdevice.get(mc.KEY_ID)
-                    subdevice = self.subdevices.get(p_id)
-                    if subdevice is None:
-                        self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
-                    else:
-                        subdevice.update(p_subdevice)
-            """
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_MTS100_MODE:
             self._parse_subdevice(payload, mc.KEY_MODE)
-            """
-            p_modes = payload.get(mc.KEY_MODE)
-            if isinstance(p_modes, list):
-                for p_mode in p_modes:
-                    p_id = p_mode.get(mc.KEY_ID)
-                    subdevice: MTS100SubDevice = self.subdevices.get(p_id)
-                    if subdevice is None:
-                        self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
-                    else:
-                        subdevice.update_mode(p_mode)
-            """
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE:
             self._parse_subdevice(payload, mc.KEY_TEMPERATURE)
-            """
-            p_temperatures = payload.get(mc.KEY_TEMPERATURE)
-            if isinstance(p_temperatures, list):
-                for p_temperature in p_temperatures:
-                    p_id = p_temperature.get(mc.KEY_ID)
-                    subdevice: MTS100SubDevice = self.subdevices.get(p_id)
-                    if subdevice is None:
-                        self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
-                    else:
-                        subdevice.update_temperature(p_temperature)
-            """
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_TOGGLEX:
@@ -170,18 +131,10 @@ class MerossDeviceHub(MerossDevice):
         if namespace == mc.NS_APPLIANCE_HUB_BATTERY:
             self._lastupdate_battery = self.lastupdate
             self._parse_subdevice(payload, mc.KEY_BATTERY)
-            """
-            p_batteries = payload.get(mc.KEY_BATTERY)
-            if isinstance(p_batteries, list):
-                for p_battery in p_batteries:
-                    p_id = p_battery.get(mc.KEY_ID)
-                    subdevice = self.subdevices.get(p_id)
-                    if subdevice is None:
-                        self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
-                    else:
-                        subdevice.sensor_battery._set_state(
-                        p_battery.get(mc.KEY_VALUE))
-            """
+            return True
+
+        if namespace == mc.NS_APPLIANCE_HUB_ONLINE:
+            self._parse_subdevice(payload, mc.KEY_ONLINE)
             return True
 
         if namespace == mc.NS_APPLIANCE_DIGEST_HUB:
@@ -240,12 +193,24 @@ class MerossDeviceHub(MerossDevice):
 
         if super().updatecoordinator_listener():
             tm = time()
-            if ((tm - self._lastupdate_sensor) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
-                self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
-            if ((tm - self._lastupdate_mts100) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
-                self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
+
             if ((tm - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
                 self.request(mc.NS_APPLIANCE_HUB_BATTERY, payload={ mc.KEY_BATTERY: [] })
+
+            if self.curr_protocol == Protocol.HTTP:
+                if ((tm - self._lastupdate_sensor) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
+                    self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
+                if ((tm - self._lastupdate_mts100) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
+                    self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
+            else:
+                """
+                on MQTT we just ask for updates when something pops online
+                relying on push updates for any other changes
+                """
+                if self._lastupdate_sensor == 0:
+                    self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
+                if self._lastupdate_mts100 == 0:
+                    self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
 
             return True
 
@@ -285,6 +250,8 @@ class MerossSubDevice:
                 sensors are instead being updated in this call stack
                 """
                 self.hub._lastupdate_battery = 0
+                self.hub._lastupdate_sensor = 0
+                self.hub._lastupdate_mts100 = 0
         else:
             if self._online is True:
                 self._online = False
@@ -340,6 +307,11 @@ class MerossSubDevice:
             self.sensor_battery._set_state(p_battery.get(mc.KEY_VALUE))
 
 
+    def _parse_online(self, p_online: dict) -> None:
+        self._setonline(p_online.get(mc.KEY_STATUS))
+
+
+
 class MS100SubDevice(MerossSubDevice):
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict) -> None:
@@ -359,6 +331,15 @@ class MS100SubDevice(MerossSubDevice):
                 value = p_ms100.get(mc.KEY_LATESTHUMIDITY)
                 if isinstance(value, int):
                     self.sensor_humidity._set_state(value / 10)
+
+    def _parse_tempHum(self, p_temphum: dict) -> None:
+        value = p_temphum.get(mc.KEY_LATESTTEMPERATURE)
+        if isinstance(value, int):
+            self.sensor_temperature._set_state(value / 10)
+        value = p_temphum.get(mc.KEY_LATESTHUMIDITY)
+        if isinstance(value, int):
+            self.sensor_humidity._set_state(value / 10)
+
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
 
