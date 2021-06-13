@@ -8,12 +8,15 @@ import json
 
 from homeassistant import config_entries, core, exceptions
 from homeassistant.helpers.typing import DiscoveryInfoType
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .merossclient import MerossHttpClient, MerossDeviceDescriptor, const as mc
 
 from .logger import LOGGER
 from .const import (
+    CONF_POLLING_PERIOD,
+    CONF_POLLING_PERIOD_DEFAULT,
     DOMAIN,
     CONF_HOST, CONF_DEVICE_ID, CONF_KEY,
     CONF_PAYLOAD, CONF_DEVICE_TYPE,
@@ -179,6 +182,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data = dict(data)
             data[CONF_KEY] = user_input.get(CONF_KEY)
             data[CONF_PROTOCOL] = user_input.get(CONF_PROTOCOL)
+            data[CONF_POLLING_PERIOD] = user_input.get(CONF_POLLING_PERIOD)
             self.hass.config_entries.async_update_entry(self._config_entry, data=data)
             return self.async_create_entry(title=None, data=None)
 
@@ -195,6 +199,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 description={"suggested_value": data.get(CONF_PROTOCOL)}
                 )
             ] = vol.In(CONF_PROTOCOL_OPTIONS)
+        config_schema[
+            vol.Optional(
+                CONF_POLLING_PERIOD,
+                default=CONF_POLLING_PERIOD_DEFAULT,
+                description={"suggested_value": data.get(CONF_POLLING_PERIOD)}
+                )
+            ] = cv.positive_int
 
         return self.async_show_form(
             step_id="device",
@@ -202,6 +213,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             description_placeholders={
                 CONF_DEVICE_TYPE: device_type,
                 CONF_DEVICE_ID: device_id,
-                CONF_PAYLOAD: json.dumps(data.get(CONF_PAYLOAD, {}))
+                CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
             }
         )

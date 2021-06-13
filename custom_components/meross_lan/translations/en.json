@@ -49,7 +49,7 @@
                 "data": {
                     "key": "Device key",
                     "protocol": "Connection protocol",
-                    "device_id": "UUID of Meross appliance",
+                    "polling_period": "Polling period",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
                 }

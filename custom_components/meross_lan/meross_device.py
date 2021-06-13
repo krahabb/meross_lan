@@ -1,4 +1,5 @@
 from enum import Enum
+import math
 from typing import  Callable, Dict
 from time import time
 from logging import WARNING, DEBUG
@@ -15,8 +16,8 @@ from homeassistant.const import (
 from .logger import LOGGER, LOGGER_trap
 
 from .const import (
-    CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_PROTOCOL,
-    CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT, CONF_TIMESTAMP,
+    CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT, CONF_POLLING_PERIOD_MIN, CONF_PROTOCOL,
+    CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT, CONF_TIMESTAMP, CONF_TIME_ZONE,
     PARAM_UNAVAILABILITY_TIMEOUT, PARAM_HEARTBEAT_PERIOD
 )
 
@@ -54,6 +55,8 @@ class MerossDevice:
         self.entry_id = entry.entry_id
         self.replykey = None
         self._online = False
+        self.polling_period = CONF_POLLING_PERIOD_DEFAULT
+        self.lastpoll = 0
         self.lastrequest = 0
         self.lastupdate = 0
         self.lastmqtt = None
@@ -80,7 +83,7 @@ class MerossDevice:
         self.unsub_entry_update_listener: Callable = None
         self.unsub_updatecoordinator_listener: Callable = None
 
-        self._set_config_entry(entry)
+        self._set_config_entry(entry.data)
         """
         warning: would the response be processed after this object is fully init?
         It should if I get all of this async stuff right
@@ -267,15 +270,23 @@ class MerossDevice:
         except maybe for Hub(s) which we're going to investigate later
         Return True if we want to persist the payload to the ConfigEntry
         """
-        oldaddr = self.descriptor.ipAddress
-        self.descriptor.update(payload)
+        descr = self.descriptor
+        oldaddr = descr.ipAddress
+        descr.update(payload)
 
-        p_digest = self.descriptor.digest
+        if self.time_zone and (descr.timezone != self.time_zone):
+            self.request(
+                mc.NS_APPLIANCE_SYSTEM_TIME,
+                mc.METHOD_SET,
+                payload={mc.KEY_TIME: {mc.KEY_TIMEZONE: self.time_zone}}
+                )
+
+        p_digest = descr.digest
         if p_digest:
             self._parse_togglex(p_digest)
 
         #persist changes to configentry only when relevant properties change
-        return oldaddr != self.descriptor.ipAddress
+        return oldaddr != descr.ipAddress
 
 
     def _save_config_entry(self, payload: dict) -> None:
@@ -285,20 +296,20 @@ class MerossDevice:
             if entry is not None:
                 data = dict(entry.data) # deepcopy? not needed: see CONF_TIMESTAMP
                 data[CONF_PAYLOAD].update(payload)
-                data[CONF_TIMESTAMP] = int(time()) # force ConfigEntry update..
+                data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
                 entries.async_update_entry(entry, data=data)
         except Exception as e:
             LOGGER.warning("MerossDevice(%s) error while updating ConfigEntry (%s)", self.device_id, str(e))
 
 
-    def _set_config_entry(self, config_entry: ConfigEntry) -> None:
+    def _set_config_entry(self, data: dict) -> None:
         """
         common properties read from ConfigEntry on __init__ or when a configentry updates
         """
-        self.key = config_entry.data.get(CONF_KEY)
-        self.conf_protocol = MAP_CONF_PROTOCOL.get(config_entry.data.get(CONF_PROTOCOL), Protocol.AUTO)
+        self.key = data.get(CONF_KEY)
+        self.conf_protocol = MAP_CONF_PROTOCOL.get(data.get(CONF_PROTOCOL), Protocol.AUTO)
         if self.conf_protocol == Protocol.AUTO:
-            self.pref_protocol = Protocol.HTTP if config_entry.data.get(CONF_HOST) else Protocol.MQTT
+            self.pref_protocol = Protocol.HTTP if data.get(CONF_HOST) else Protocol.MQTT
         else:
             self.pref_protocol = self.conf_protocol
         """
@@ -307,12 +318,17 @@ class MerossDevice:
         to retry pref_protocol
         """
         self.curr_protocol = self.pref_protocol
+        self.polling_period = data.get(CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT)
+        if self.polling_period < CONF_POLLING_PERIOD_MIN:
+            self.polling_period < CONF_POLLING_PERIOD_MIN
 
+        self.time_zone = data.get(CONF_TIME_ZONE) # TODO: add to config_flow options
 
     @callback
     async def entry_update_listener(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         # we're not changing device_id or other 'identifying' stuff
-        self._set_config_entry(config_entry)
+        self._set_config_entry(config_entry.data)
+        self.api.update_polling_period()
         _httpclient:MerossHttpClient = getattr(self, '_httpclient', None)
         if _httpclient is not None:
             _httpclient.set_host(self.descriptor.ipAddress)
@@ -331,9 +347,15 @@ class MerossDevice:
         """
         if (now - self.lastrequest) > PARAM_HEARTBEAT_PERIOD:
             self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
-            return False
+            return False # prevent any other poll action...
 
         if self.online:
+
+            if (now - self.lastpoll) < self.polling_period:
+                return False
+
+            self.lastpoll = math.floor(now)
+
             # on MQTT we already have PUSHES...
             if self.curr_protocol == Protocol.HTTP:
                 ability = self.descriptor.ability

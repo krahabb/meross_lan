@@ -1,5 +1,5 @@
 """The Meross IoT local LAN integration."""
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, Optional, Union
 from time import time
 import datetime
 from json import (
@@ -31,11 +31,11 @@ from .meross_device_bulb import MerossDeviceBulb
 from .meross_device_hub import MerossDeviceHub
 
 from .const import (
-    CONF_TIMESTAMP, DOMAIN, SERVICE_REQUEST,
+    CONF_POLLING_PERIOD_DEFAULT, DOMAIN, SERVICE_REQUEST,
     CONF_HOST, CONF_OPTION_MQTT, CONF_PROTOCOL,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD,
     DISCOVERY_TOPIC, REQUEST_TOPIC, RESPONSE_TOPIC,
-    PARAM_UNAVAILABILITY_TIMEOUT, PARAM_POLLING_PERIOD,
+    PARAM_UNAVAILABILITY_TIMEOUT,
 )
 
 
@@ -137,7 +137,7 @@ class MerossApi:
             name=DOMAIN,
             update_method=async_update_data,
             # Polling interval. Will only be polled if there are subscribers.
-            update_interval=datetime.timedelta(seconds=PARAM_POLLING_PERIOD),
+            update_interval=datetime.timedelta(seconds=CONF_POLLING_PERIOD_DEFAULT),
         )
 
         def _request(service_call):
@@ -271,17 +271,17 @@ class MerossApi:
             device = MerossDeviceSwitch(self, descriptor, entry)
 
         self.devices[device_id] = device
+        self.update_polling_period()
 
         try:
             # try block since this is not critical and api has recently changed
-            _type = descriptor.type
             device_registry.async_get(self.hass).async_get_or_create(
                 config_entry_id = entry.entry_id,
                 connections = {(device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
                 identifiers = {(DOMAIN, device_id)},
                 manufacturer = mc.MANUFACTURER,
-                name = _type + " " + device_id,
-                model = _type + " " + descriptor.hardware.get(mc.KEY_VERSION, ""),
+                name = descriptor.productname,
+                model = descriptor.productmodel,
                 sw_version = descriptor.firmware.get(mc.KEY_VERSION)
             )
         except:
@@ -371,6 +371,17 @@ class MerossApi:
             )
         else:
             self.mqtt_publish(device_id, namespace, method, payload, key)
+
+
+    def update_polling_period(self) -> None:
+        """
+        called whenever a new device is added or a config_entry changes
+        """
+        polling_period = CONF_POLLING_PERIOD_DEFAULT
+        for device in self.devices.values():
+            if device.polling_period < polling_period:
+                polling_period = device.polling_period
+        self.coordinator.update_interval = datetime.timedelta(seconds=polling_period)
 
 
     @callback
