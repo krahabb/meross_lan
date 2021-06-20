@@ -78,6 +78,8 @@ class MerossDeviceHub(MerossDevice):
             p_subdevices = p_hub[mc.KEY_SUBDEVICE]
             for p_subdevice in p_subdevices:
                 type = _get_subdevice_type(p_subdevice)
+                if type is None:
+                    continue # bugged/incomplete configuration payload..wait for some good updates
                 deviceclass = WELL_KNOWN_TYPE_MAP.get(type)
                 if deviceclass is None:
                     # build something anyway...
@@ -169,6 +171,9 @@ class MerossDeviceHub(MerossDevice):
                 if subdevice is None:
                     update = True
                     type = _get_subdevice_type(p_digest)
+                    if type is None:
+                        # the hub could report incomplete info anytime so beware!
+                        continue
                     deviceclass = WELL_KNOWN_TYPE_MAP.get(type)
                     if deviceclass is None:
                         # build something anyway...
