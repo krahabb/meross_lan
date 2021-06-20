@@ -59,7 +59,7 @@ class MerossDevice:
         self.lastpoll = 0
         self.lastrequest = 0
         self.lastupdate = 0
-        self.lastmqtt = None
+        self.lastmqtt = 0
         """
         self.entities: dict()
         is a collection of all of the instanced entities
@@ -176,8 +176,7 @@ class MerossDevice:
                 _httpclient = MerossHttpClient(self.descriptor.ipAddress, self.key, async_get_clientsession(self.api.hass), LOGGER)
                 self._httpclient = _httpclient
             else:
-                _httpclient.set_host(self.descriptor.ipAddress)
-                _httpclient.key = self.key
+                _httpclient.set_host_key(self.descriptor.ipAddress, self.key)
 
             response = await _httpclient.async_request(namespace, method, payload)
             r_header = response[mc.KEY_HEADER]
@@ -192,9 +191,7 @@ class MerossDevice:
         except ClientConnectionError as e:
             LOGGER.info("MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e))
             if self._online:
-                if (self.pref_protocol is Protocol.MQTT) or (self.lastmqtt is not None):
-                    # this device was either 'discovered' over MQTT or, somehow,
-                    # received an MQTT message so it could be able to talk MQTT
+                if (self.conf_protocol is Protocol.AUTO) and ((time() - self.lastmqtt) < PARAM_UNAVAILABILITY_TIMEOUT):
                     self._switch_protocol(Protocol.MQTT)
                     self.api.mqtt_publish(
                         self.device_id,
@@ -331,8 +328,7 @@ class MerossDevice:
         self.api.update_polling_period()
         _httpclient:MerossHttpClient = getattr(self, '_httpclient', None)
         if _httpclient is not None:
-            _httpclient.set_host(self.descriptor.ipAddress)
-            _httpclient.key = self.key
+            _httpclient.set_host_key(self.descriptor.ipAddress, self.key)
 
         #await hass.config_entries.async_reload(config_entry.entry_id)
 
