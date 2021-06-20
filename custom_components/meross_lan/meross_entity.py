@@ -19,7 +19,7 @@ from homeassistant.const import (
     DEVICE_CLASS_BATTERY
 )
 
-from .merossclient import const as mc, get_productname
+from .merossclient import const as mc, get_productnameuuid
 from .meross_device import MerossDevice
 from .logger import LOGGER
 from .const import CONF_DEVICE_ID, DOMAIN
@@ -190,7 +190,7 @@ class _MerossHubEntity(_MerossEntity):
 
     @property
     def name(self) -> str:
-        name = get_productname(self.subdevice.type, self.subdevice.id)
+        name = get_productnameuuid(self.subdevice.type, self.subdevice.id)
         return f"{name} - {self._device_class}" if self._device_class else name
 
     @property
@@ -201,7 +201,7 @@ class _MerossHubEntity(_MerossEntity):
             "via_device": (DOMAIN, self._device.device_id),
             "identifiers": {(DOMAIN, _id)},
             "manufacturer": mc.MANUFACTURER,
-            "name": get_productname(_type, _id),
+            "name": get_productnameuuid(_type, _id),
             "model": _type
             }
 

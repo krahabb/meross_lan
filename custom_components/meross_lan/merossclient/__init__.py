@@ -74,12 +74,20 @@ def get_replykey(header: dict, key:KeyType = None) -> KeyType:
     return header
 
 
-def get_productname(type: str, uuid: str) -> str:
+def get_productname(type: str) -> str:
     for _type, _name in mc.TYPE_NAME_MAP.items():
         if type.startswith(_type):
-            return f"{_name} ({uuid})"
-    return f"{type} ({uuid})"
+            return _name
+    return type
 
+
+def get_productnameuuid(type: str, uuid: str) -> str:
+    return f"{get_productname(type)} ({uuid})"
+
+
+def get_productnametype(type: str) -> str:
+    name = get_productname(type)
+    return f"{name} ({type})" if name is not type else type
 
 
 class MerossDeviceDescriptor:
@@ -110,7 +118,7 @@ class MerossDeviceDescriptor:
 
     @property
     def productname(self) -> str:
-        return get_productname(self.type, self.uuid)
+        return get_productnameuuid(self.type, self.uuid)
 
     @property
     def productmodel(self) -> str:
@@ -147,10 +155,11 @@ class MerossHttpClient:
         self._logger = logger or logging.getLogger(__name__)
 
 
-    def set_host(self, host: str) -> None:
+    def set_host_key(self, host: str, key: str) -> None:
         if host != self._host:
             self._host = host
             self._requesturl = URL(f"http://{host}/config")
+        self.key = key
 
 
     async def async_request(
