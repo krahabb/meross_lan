@@ -1,26 +1,24 @@
 """Config flow for Meross IoT local LAN integration."""
 
-from math import fabs
 from homeassistant.components.mqtt import DATA_MQTT
 import voluptuous as vol
 from typing import OrderedDict, Optional
 import json
 
-from homeassistant import config_entries, core, exceptions
+from homeassistant import config_entries
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .merossclient import MerossHttpClient, MerossDeviceDescriptor, const as mc
+from .merossclient import MerossHttpClient, MerossDeviceDescriptor, const as mc, get_productnametype
 
 from .logger import LOGGER
 from .const import (
-    CONF_POLLING_PERIOD,
-    CONF_POLLING_PERIOD_DEFAULT,
     DOMAIN,
     CONF_HOST, CONF_DEVICE_ID, CONF_KEY,
     CONF_PAYLOAD, CONF_DEVICE_TYPE,
     CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS,
+    CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT,
 )
 
 
@@ -31,13 +29,13 @@ def _mqtt_is_loaded(hass) -> bool:
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
-    _discovery_info = None
-    _device_id = None
+    _discovery_info: dict = None
+    _device_id: str = None
+    _host: str = None
+    _key: str = None
 
     VERSION = 1
-    # TODO pick one of the available connection classes in homeassistant/config_entries.py
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
-
 
     @staticmethod
     def async_get_options_flow(config_entry):
@@ -45,38 +43,35 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
     async def async_step_user(self, user_input=None):
-        # check we already configured the hub ..
-        if (DOMAIN not in self._async_current_ids()) and _mqtt_is_loaded(self.hass):
-            return await self.async_step_hub()
 
         errors = {}
-        host = ""
-        key = None
-        if user_input is not None:
-            host = user_input[CONF_HOST]
-            key = user_input.get(CONF_KEY)
+        if user_input is None:
+            # we could get here from user flow start in UI
+            # or following dhcp discovery
+            if self._host is None:
+                # check we already configured the hub ..
+                if (DOMAIN not in self._async_current_ids()) and _mqtt_is_loaded(self.hass):
+                    return await self.async_step_hub()
+        else:
+            self._host = user_input[CONF_HOST]
+            self._key = user_input.get(CONF_KEY)
             try:
-                client = MerossHttpClient(host, key, async_get_clientsession(self.hass), LOGGER)
-                payload = (await client.async_request(mc.NS_APPLIANCE_SYSTEM_ALL))\
-                    .get(mc.KEY_PAYLOAD)
-                payload.update(
-                    (await client.async_request(mc.NS_APPLIANCE_SYSTEM_ABILITY))\
-                        .get(mc.KEY_PAYLOAD)
-                    )
+                client = MerossHttpClient(self._host, self._key, async_get_clientsession(self.hass), LOGGER)
+                payload = (await client.async_request(mc.NS_APPLIANCE_SYSTEM_ALL)).get(mc.KEY_PAYLOAD)
+                payload.update((await client.async_request(mc.NS_APPLIANCE_SYSTEM_ABILITY)).get(mc.KEY_PAYLOAD))
                 discovery_info={
-                    CONF_HOST: host,
+                    CONF_HOST: self._host,
                     CONF_PAYLOAD: payload,
-                    CONF_KEY: key
+                    CONF_KEY: self._key
                 }
                 return await self.async_step_discovery(discovery_info)
             except Exception as e:
                 LOGGER.debug("Error connecting to meross appliance (%s)", str(e))
                 errors["base"] = "cannot_connect"
 
-
         config_schema = {
-            vol.Required(CONF_HOST, description={"suggested_value": host}): str,
-            vol.Optional(CONF_KEY, description={"suggested_value": key}): str,
+            vol.Required(CONF_HOST, description={"suggested_value": self._host}): str,
+            vol.Optional(CONF_KEY, description={"suggested_value": self._key}): str,
             }
         return self.async_show_form(step_id="user", data_schema=vol.Schema(config_schema), errors=errors)
 
@@ -102,7 +97,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(self._device_id)
         self._abort_if_unique_id_configured()
 
-        if CONF_DEVICE_ID not in discovery_info:
+        if CONF_DEVICE_ID not in discovery_info:#this is coming from manual user entry or dhcp discovery
             discovery_info[CONF_DEVICE_ID] = self._device_id
 
         return await self.async_step_device()
@@ -113,9 +108,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is None:
             placeholders = {
-                CONF_DEVICE_TYPE: self._descriptor.type,
+                CONF_DEVICE_TYPE: get_productnametype(self._descriptor.type),
                 CONF_DEVICE_ID: self._descriptor.uuid,
-                CONF_PAYLOAD: json.dumps(data.get(CONF_PAYLOAD, {}))
+                CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
                 }
             self.context["title_placeholders"] = placeholders
             config_schema = {}
@@ -132,8 +127,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle a flow initialized by DHCP discovery."""
         LOGGER.debug("received dhcp discovery: %s", json.dumps(discovery_info))
 
-        return self.async_abort(reason='none')
-        #return await self.async_step_discovery(discovery_info)
+        self._host = discovery_info.get('ip')
+
+        # check we already dont have the device registered
+        api = self.hass.data.get(DOMAIN)
+        if api is not None:
+            if api.has_device(self._host, discovery_info.get('macaddress')):
+                return self.async_abort(reason='already_configured')
+            self._key = api.key
+
+        return await self.async_step_user()
 
 
 
@@ -211,7 +214,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             step_id="device",
             data_schema=vol.Schema(config_schema),
             description_placeholders={
-                CONF_DEVICE_TYPE: device_type,
+                CONF_DEVICE_TYPE: get_productnametype(device_type),
                 CONF_DEVICE_ID: device_id,
                 CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
             }

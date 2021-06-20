@@ -253,6 +253,16 @@ class MerossApi:
             DISCOVERY_TOPIC, mqtt_receive
         )
 
+    def has_device(self, ipaddress: str, macaddress:str) -> bool:
+        # macaddress from dhcp discovery is already stripped/lower but...
+        macaddress = macaddress.replace(':', '').lower()
+        for device in self.devices.values():
+            if device.descriptor.ipAddress == ipaddress:
+                return True
+            if device.descriptor.macAddress.replace(':', '').lower() == macaddress:
+                return True
+        else:
+            return False
 
     def build_device(self, device_id: str, entry: ConfigEntry) -> MerossDevice:
         """
@@ -321,8 +331,7 @@ class MerossApi:
                 _httpclient = MerossHttpClient(host, key, async_get_clientsession(self.hass), LOGGER)
                 self._httpclient = _httpclient
             else:
-                _httpclient.set_host(host)
-                _httpclient.key = key
+                _httpclient.set_host_key(host, key)
 
             response = await _httpclient.async_request(namespace, method, payload)
             r_header = response[mc.KEY_HEADER]
