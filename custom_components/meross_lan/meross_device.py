@@ -353,7 +353,7 @@ class MerossDevice:
             self.lastpoll = math.floor(now)
 
             # on MQTT we already have PUSHES...
-            if self.curr_protocol == Protocol.HTTP:
+            if (self.curr_protocol == Protocol.HTTP) and (self.lastmqtt < self.lastrequest):
                 ability = self.descriptor.ability
                 if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
                     self.request(mc.NS_APPLIANCE_CONTROL_TOGGLEX, payload={ mc.KEY_TOGGLEX : [] })

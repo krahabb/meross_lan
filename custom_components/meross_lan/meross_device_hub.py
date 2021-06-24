@@ -199,10 +199,7 @@ class MerossDeviceHub(MerossDevice):
         if super().updatecoordinator_listener():
             tm = time()
 
-            if ((tm - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
-                self.request(mc.NS_APPLIANCE_HUB_BATTERY, payload={ mc.KEY_BATTERY: [] })
-
-            if self.curr_protocol == Protocol.HTTP:
+            if (self.curr_protocol == Protocol.HTTP) and (self.lastmqtt < self.lastrequest):
                 if ((tm - self._lastupdate_sensor) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
                     self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
                 if ((tm - self._lastupdate_mts100) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
@@ -216,6 +213,9 @@ class MerossDeviceHub(MerossDevice):
                     self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
                 if self._lastupdate_mts100 == 0:
                     self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
+
+            if ((tm - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
+                self.request(mc.NS_APPLIANCE_HUB_BATTERY, payload={ mc.KEY_BATTERY: [] })
 
             return True
 
