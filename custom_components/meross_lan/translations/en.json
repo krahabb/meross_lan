@@ -45,7 +45,7 @@
             },
             "device": {
                 "title": "Device configuration",
-                "description": "Type: {device_type}\nUUID: {device_id}\n\n{payload}",
+                "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
                 "data": {
                     "key": "Device key",
                     "protocol": "Connection protocol",

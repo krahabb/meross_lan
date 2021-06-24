@@ -26,6 +26,16 @@ def _mqtt_is_loaded(hass) -> bool:
     return hass.data.get(DATA_MQTT) is not None
 
 
+async def _http_discovery(host: str, key: str, hass) -> dict:
+    client = MerossHttpClient(host, key, async_get_clientsession(hass), LOGGER)
+    payload = (await client.async_request(mc.NS_APPLIANCE_SYSTEM_ALL)).get(mc.KEY_PAYLOAD)
+    payload.update((await client.async_request(mc.NS_APPLIANCE_SYSTEM_ABILITY)).get(mc.KEY_PAYLOAD))
+    return {
+        CONF_HOST: host,
+        CONF_PAYLOAD: payload,
+        CONF_KEY: key
+    }
+
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
@@ -56,17 +66,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._host = user_input[CONF_HOST]
             self._key = user_input.get(CONF_KEY)
             try:
-                client = MerossHttpClient(self._host, self._key, async_get_clientsession(self.hass), LOGGER)
-                payload = (await client.async_request(mc.NS_APPLIANCE_SYSTEM_ALL)).get(mc.KEY_PAYLOAD)
-                payload.update((await client.async_request(mc.NS_APPLIANCE_SYSTEM_ABILITY)).get(mc.KEY_PAYLOAD))
-                discovery_info={
-                    CONF_HOST: self._host,
-                    CONF_PAYLOAD: payload,
-                    CONF_KEY: self._key
-                }
+                discovery_info = await _http_discovery(self._host, self._key, self.hass)
                 return await self.async_step_discovery(discovery_info)
             except Exception as e:
-                LOGGER.debug("Error connecting to meross appliance (%s)", str(e))
+                LOGGER.debug("Error (%s) connecting to meross device (host:%s)", str(e), self._host)
                 errors["base"] = "cannot_connect"
 
         config_schema = {
@@ -76,51 +79,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="user", data_schema=vol.Schema(config_schema), errors=errors)
 
 
-    async def async_step_hub(self, user_input=None):
-        #right now this is only used to setup MQTT Hub feature to allow discovery
-
-        if user_input == None:
-            await self.async_set_unique_id(DOMAIN)
-            self._abort_if_unique_id_configured()
-
-            config_schema = { vol.Optional(CONF_KEY): str }
-
-            return self.async_show_form(step_id="hub", data_schema=vol.Schema(config_schema))
-
-        return self.async_create_entry(title="MQTT Hub", data=user_input)
-
-
     async def async_step_discovery(self, discovery_info: DiscoveryInfoType):
-        self._discovery_info = discovery_info
-        self._descriptor = MerossDeviceDescriptor(discovery_info.get(CONF_PAYLOAD, {}))
-        self._device_id = self._descriptor.uuid
-        await self.async_set_unique_id(self._device_id)
-        self._abort_if_unique_id_configured()
-
-        if CONF_DEVICE_ID not in discovery_info:#this is coming from manual user entry or dhcp discovery
-            discovery_info[CONF_DEVICE_ID] = self._device_id
-
+        await self._async_set_info(discovery_info)
         return await self.async_step_device()
-
-
-    async def async_step_device(self, user_input=None):
-        data = self._discovery_info
-
-        if user_input is None:
-            placeholders = {
-                CONF_DEVICE_TYPE: get_productnametype(self._descriptor.type),
-                CONF_DEVICE_ID: self._descriptor.uuid,
-                CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
-                }
-            self.context["title_placeholders"] = placeholders
-            config_schema = {}
-            return self.async_show_form(
-                step_id="device",
-                data_schema=vol.Schema(config_schema),
-                description_placeholders=placeholders
-            )
-
-        return self.async_create_entry(title=self._descriptor.type + " " + self._device_id, data=data)
 
 
     async def async_step_dhcp(self, discovery_info: DiscoveryInfoType):
@@ -136,8 +97,61 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason='already_configured')
             self._key = api.key
 
+        try:
+            # try device identification so the user/UI has a good context to start with
+            _discovery_info = await _http_discovery(self._host, self._key, self.hass)
+            await self._async_set_info(_discovery_info)
+            # now just let the user edit/accept the host address even if identification was fine
+        except Exception as e:
+            LOGGER.debug("Error (%s) connecting to meross device (host:%s)", str(e), self._host)
+            # forgive and continue if we cant discover the device...let the user work it out
+
         return await self.async_step_user()
 
+
+    async def async_step_device(self, user_input=None):
+        data = self._discovery_info
+
+        if user_input is None:
+            config_schema = {}
+            return self.async_show_form(
+                step_id="device",
+                data_schema=vol.Schema(config_schema),
+                description_placeholders=self._placeholders
+            )
+
+        return self.async_create_entry(title=self._descriptor.type + " " + self._device_id, data=data)
+
+
+    async def async_step_hub(self, user_input=None):
+        #right now this is only used to setup MQTT Hub feature to allow discovery and mqtt message sub/pub
+        if user_input == None:
+            await self.async_set_unique_id(DOMAIN)
+            self._abort_if_unique_id_configured()
+            config_schema = { vol.Optional(CONF_KEY): str }
+            return self.async_show_form(step_id="hub", data_schema=vol.Schema(config_schema))
+
+        return self.async_create_entry(title="MQTT Hub", data=user_input)
+
+
+    async def _async_set_info(self, discovery_info: DiscoveryInfoType) -> None:
+        self._discovery_info = discovery_info
+        self._descriptor = MerossDeviceDescriptor(discovery_info.get(CONF_PAYLOAD, {}))
+        self._device_id = self._descriptor.uuid
+        await self.async_set_unique_id(self._device_id)
+        self._abort_if_unique_id_configured()
+
+        if CONF_DEVICE_ID not in discovery_info:#this is coming from manual user entry or dhcp discovery
+            discovery_info[CONF_DEVICE_ID] = self._device_id
+
+        self._placeholders = {
+            CONF_DEVICE_TYPE: get_productnametype(self._descriptor.type),
+            CONF_DEVICE_ID: self._device_id,
+            CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
+            }
+
+        self.context["title_placeholders"] = self._placeholders
+        return
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
@@ -176,10 +190,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_device(self, user_input=None):
         data = self._config_entry.data
-        descriptor = MerossDeviceDescriptor(data.get(CONF_PAYLOAD, {}))
-
-        device_id = descriptor.uuid
-        device_type = descriptor.type
 
         if user_input is not None:
             data = dict(data)
@@ -210,12 +220,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 )
             ] = cv.positive_int
 
+        descriptor = MerossDeviceDescriptor(data.get(CONF_PAYLOAD, {}))
         return self.async_show_form(
             step_id="device",
             data_schema=vol.Schema(config_schema),
             description_placeholders={
-                CONF_DEVICE_TYPE: get_productnametype(device_type),
-                CONF_DEVICE_ID: device_id,
+                CONF_DEVICE_TYPE: get_productnametype(descriptor.type),
+                CONF_DEVICE_ID: data.get(CONF_DEVICE_ID),
+                CONF_HOST: data.get(CONF_HOST) or "MQTT",
                 CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
             }
         )
