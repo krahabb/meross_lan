@@ -1,59 +1,51 @@
 """Constants for the Meross IoT local LAN integration."""
 
-DOMAIN = "meross_lan"
-#PLATFORMS = ["switch", "sensor", "light", "cover"]
-SERVICE_MQTT_PUBLISH = "mqtt_publish"
+from homeassistant import const as hac
+from .merossclient import const as mc
 
-CONF_DEVICE_ID = "device_id"
-CONF_KEY = "key"
-CONF_DISCOVERY_PAYLOAD = "payload"
+DOMAIN = "meross_lan"
+
+PLATFORM_SWITCH = 'switch'
+PLATFORM_SENSOR = 'sensor'
+PLATFORM_BINARY_SENSOR = 'binary_sensor'
+PLATFORM_LIGHT = 'light'
+PLATFORM_COVER = 'cover'
+PLATFORM_CLIMATE = 'climate'
+
+SERVICE_REQUEST = "request"
+
+# ConfigEntry keys
+CONF_DEVICE_ID = hac.CONF_DEVICE_ID
+CONF_KEY = 'key'
+CONF_PAYLOAD = hac.CONF_PAYLOAD
 CONF_DEVICE_TYPE = "device_type"
+CONF_HOST = hac.CONF_HOST
+CONF_PROTOCOL = hac.CONF_PROTOCOL # protocol used to communicate with device
+CONF_OPTION_AUTO = 'auto'
+CONF_OPTION_MQTT = 'mqtt'
+CONF_OPTION_HTTP = 'http'
+CONF_PROTOCOL_OPTIONS = (
+    CONF_OPTION_AUTO, # best-effort: tries whatever to connect
+    CONF_OPTION_MQTT,
+    CONF_OPTION_HTTP
+)
+CONF_POLLING_PERIOD = 'polling_period' # general device state polling or whatever
+CONF_POLLING_PERIOD_MIN = 5
+CONF_POLLING_PERIOD_DEFAULT = 30
+CONF_TIME_ZONE = hac.CONF_TIME_ZONE # if set in config we'll force time & zone for devices
+CONF_TIMESTAMP = mc.KEY_TIMESTAMP # this is a 'fake' conf param we'll add to config_entry when we want to force flush to storage
 
 DISCOVERY_TOPIC = "/appliance/+/publish"
-COMMAND_TOPIC = "/appliance/{}/subscribe"
-
-METHOD_PUSH = "PUSH"
-METHOD_GET = "GET"
-METHOD_GETACK = "GETACK"
-METHOD_SET = "SET"
-METHOD_SETACK = "SETACK"
-METHOD_ERROR = "ERROR"
-
-NS_APPLIANCE_SYSTEM_ALL = "Appliance.System.All"
-NS_APPLIANCE_SYSTEM_ABILITY = "Appliance.System.Ability"
-NS_APPLIANCE_SYSTEM_CLOCK = "Appliance.System.Clock"
-NS_APPLIANCE_SYSTEM_REPORT = "Appliance.System.Report"
-NS_APPLIANCE_SYSTEM_ONLINE = "Appliance.System.Online"
-NS_APPLIANCE_SYSTEM_DEBUG = "Appliance.System.Debug"
-NS_APPLIANCE_CONFIG_TRACE = "Appliance.Config.Trace"
-NS_APPLIANCE_CONFIG_WIFILIST = "Appliance.Config.WifiList"
-NS_APPLIANCE_CONTROL_TOGGLE = "Appliance.Control.Toggle"
-NS_APPLIANCE_CONTROL_TOGGLEX = "Appliance.Control.ToggleX"
-NS_APPLIANCE_CONTROL_TRIGGER = "Appliance.Control.Trigger"
-NS_APPLIANCE_CONTROL_TRIGGERX = "Appliance.Control.TriggerX"
-NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG = "Appliance.Control.ConsumptionConfig"
-NS_APPLIANCE_CONTROL_CONSUMPTIONX = "Appliance.Control.ConsumptionX"
-NS_APPLIANCE_CONTROL_ELECTRICITY = "Appliance.Control.Electricity"
-# Light Abilities
-NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
-# Humidifier abilities
-NS_APPLIANCE_SYSTEM_DND = "Appliance.System.DNDMode"
-NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
-# Garage door opener
-NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
-# Roller shutter
-NS_APPLIANCE_ROLLERSHUTTER_STATE = 'Appliance.RollerShutter.State'
-NS_APPLIANCE_ROLLERSHUTTER_POSITION = 'Appliance.RollerShutter.Position'
+REQUEST_TOPIC = "/appliance/{}/subscribe"
+RESPONSE_TOPIC = "/appliance/{}/publish"
 
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)
 """
 PARAM_UNAVAILABILITY_TIMEOUT = 20  # number of seconds since last inquiry to consider the device unavailable
-PARAM_ENERGY_UPDATE_PERIOD = 60 # read energy consumption only every ... second
-PARAM_UPDATE_POLLING_PERIOD = 30  # periodic state polling or whatever
+PARAM_HEARTBEAT_PERIOD = 295 # whatever the connection state periodically inquire the device is there
+PARAM_ENERGY_UPDATE_PERIOD = 55 # read energy consumption only every ... second
+PARAM_HUBBATTERY_UPDATE_PERIOD = 3595 # read battery levels only every ... second
+PARAM_HUBSENSOR_UPDATE_PERIOD = 55
 #PARAM_STALE_DEVICE_REMOVE_TIMEOUT = 60 # disable config_entry when device is offline for more than...
-PARAM_HEARTBEAT_PERIOD = 300 # whatever the connection state periodically inquire the device is there
-"""
-    GP constant strings
-"""
-MANUFACTURER = "Meross"
+

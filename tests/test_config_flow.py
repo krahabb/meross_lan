@@ -8,7 +8,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.meross_lan.const import (
     DOMAIN,
     CONF_DEVICE_ID,
-    CONF_DISCOVERY_PAYLOAD
+    CONF_PAYLOAD
 )
 
 from .const import (

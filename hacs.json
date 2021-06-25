@@ -1,9 +1,9 @@
 {
   "name": "Meross LAN",
   "render_readme": true,
-  "country": ["IT"],
-  "domains": ["switch", "sensor", "light", "cover"],
+  "country": ["IT", "UK", "US"],
+  "domains": ["switch", "sensor", "light", "cover", "climate", "binary_sensor"],
   "homeassistant": "2020.0.0",
-  "iot_class": "local_push",
+  "iot_class": "local_polling",
   "hacs": "1.6.0"
 }

@@ -4,24 +4,51 @@
  actual HA custom platform entities will be derived like this:
  MerossLanSwitch(_MerossToggle, SwitchEntity)
 """
-from typing import Any, Callable, Dict, List, Optional
+from __future__ import annotations
 
+from homeassistant.helpers.typing import StateType
+from homeassistant.helpers import device_registry as dr
+from homeassistant.const import (
+    STATE_UNKNOWN, STATE_ON, STATE_OFF,
+    DEVICE_CLASS_POWER, POWER_WATT,
+    DEVICE_CLASS_CURRENT, ELECTRICAL_CURRENT_AMPERE,
+    DEVICE_CLASS_VOLTAGE, VOLT,
+    DEVICE_CLASS_ENERGY, ENERGY_WATT_HOUR,
+    DEVICE_CLASS_TEMPERATURE, TEMP_CELSIUS,
+    DEVICE_CLASS_HUMIDITY, PERCENTAGE,
+    DEVICE_CLASS_BATTERY
+)
 
-from homeassistant.helpers.typing import HomeAssistantType, StateType
-from homeassistant.const import STATE_UNKNOWN, STATE_ON, STATE_OFF
-
+from .merossclient import const as mc, get_productnameuuid
+from .meross_device import MerossDevice
 from .logger import LOGGER
-from .const import DOMAIN, CONF_DEVICE_ID, NS_APPLIANCE_CONTROL_ELECTRICITY, METHOD_GET
+from .const import CONF_DEVICE_ID, DOMAIN
+
+CLASS_TO_UNIT_MAP = {
+    DEVICE_CLASS_POWER: POWER_WATT,
+    DEVICE_CLASS_CURRENT: ELECTRICAL_CURRENT_AMPERE,
+    DEVICE_CLASS_VOLTAGE: VOLT,
+    DEVICE_CLASS_ENERGY: ENERGY_WATT_HOUR,
+    DEVICE_CLASS_TEMPERATURE: TEMP_CELSIUS,
+    DEVICE_CLASS_HUMIDITY: PERCENTAGE,
+    DEVICE_CLASS_BATTERY: PERCENTAGE
+}
 
 # pylint: disable=no-member
 
 class _MerossEntity:
-    def __init__(self, meross_device: object, channel: Optional[int], device_class: str):  # pylint: disable=unsubscriptable-object
-        self._meross_device = meross_device
-        self._channel = channel
+
+    PLATFORM: str
+
+    def __init__(self, device: 'MerossDevice', id: object, device_class: str):  # pylint: disable=unsubscriptable-object
+        self._device = device
+        self._id = id
         self._device_class = device_class
         self._state = None
-        meross_device.entities[channel if channel is not None else device_class] = self
+        device.entities[id] = self
+        async_add_devices = device.platforms.setdefault(self.PLATFORM)
+        if async_add_devices is not None:
+            async_add_devices([self])
 
     def __del__(self):
         LOGGER.debug("MerossEntity(%s) destroy", self.unique_id)
@@ -40,24 +67,33 @@ class _MerossEntity:
 
     @property
     def unique_id(self):
-        return f"{self._meross_device.device_id}_{self._channel}"
+        return f"{self._device.device_id}_{self._id}"
 
-    # To link this entity to the  device, this property must return an
-    # identifiers value matching that used in the cover, but no other information such
-    # as name. If name is returned, this entity will then also become a device in the
-    # HA UI.
+    @property
+    def name(self) -> str:
+        return f"{self._device.descriptor.productname} - {self._device_class}" if self._device_class else self._device.descriptor.productname
+
     @property
     def device_info(self):
+        _id = self._device.device_id
+        _desc = self._device.descriptor
+        _type = _desc.type
         return {
-            "identifiers": {
-                # Serial numbers are unique identifiers within a specific domain
-                (DOMAIN, self._meross_device.device_id)
+            "identifiers": {(DOMAIN, _id)},
+            "connections": {(dr.CONNECTION_NETWORK_MAC, _desc.macAddress)},
+            "manufacturer": mc.MANUFACTURER,
+            "name": _desc.productname,
+            "model": _desc.productmodel,
+            "sw_version": _desc.firmware.get(mc.KEY_VERSION)
             }
-        }
 
     @property
-    def device_class(self):
+    def device_class(self) -> str | None:
         return self._device_class
+
+    @property
+    def unit_of_measurement(self) -> str | None:
+        return CLASS_TO_UNIT_MAP.get(self._device_class)
 
     @property
     def should_poll(self) -> bool:
@@ -91,34 +127,99 @@ class _MerossEntity:
                 self.async_write_ha_state()
         return
 
-    def _set_available(self) -> None:
-        return
-
     def _set_unavailable(self) -> None:
         self._set_state(None)
         return
 
 
-class _MerossToggle(_MerossEntity):
-    def __init__(self, meross_device: object, channel: Optional[int], device_class: str, m_toggle_set, m_toggle_get):  # pylint: disable=unsubscriptable-object
-        super().__init__(meross_device, channel, device_class)
-        self._m_toggle_set = m_toggle_set
-        self._m_toggle_get = m_toggle_get
-
-
-    async def async_turn_on(self, **kwargs) -> None:
-        return self._m_toggle_set(self._channel, 1)
-
-
-    async def async_turn_off(self, **kwargs) -> None:
-        return self._m_toggle_set(self._channel, 0)
-
-
+    """
+    even though these are toggle/binary_sensor properties
+    we provide a base-implement-all
+    """
     @property
     def is_on(self) -> bool:
         return self._state == STATE_ON
 
-
     def _set_onoff(self, onoff) -> None:
         self._set_state(STATE_ON if onoff else STATE_OFF)
         return
+
+
+
+class _MerossToggle(_MerossEntity):
+
+    def __init__(self, device: 'MerossDevice', id: object, device_class: str, toggle_ns: str, toggle_key: str):
+        super().__init__(device, id, device_class)
+        self._toggle_ns = toggle_ns
+        self._toggle_key = toggle_key
+
+
+    async def async_turn_on(self, **kwargs) -> None:
+        def _ack_callback():
+            self._set_state(STATE_ON)
+
+        self._device.request(
+            self._toggle_ns,
+            mc.METHOD_SET,
+            {self._toggle_key: {mc.KEY_CHANNEL: self._id, mc.KEY_ONOFF: 1}},
+            _ack_callback
+        )
+
+
+    async def async_turn_off(self, **kwargs) -> None:
+        def _ack_callback():
+            self._set_state(STATE_OFF)
+
+        self._device.request(
+            self._toggle_ns,
+            mc.METHOD_SET,
+            {self._toggle_key: {mc.KEY_CHANNEL: self._id, mc.KEY_ONOFF: 0}},
+            _ack_callback
+        )
+
+
+
+class _MerossHubEntity(_MerossEntity):
+
+    def __init__(self, subdevice: 'MerossSubDevice', id: object, device_class: str):
+        super().__init__(
+            subdevice.hub,
+            id,
+            device_class)
+        self.subdevice = subdevice
+
+    @property
+    def name(self) -> str:
+        name = get_productnameuuid(self.subdevice.type, self.subdevice.id)
+        return f"{name} - {self._device_class}" if self._device_class else name
+
+    @property
+    def device_info(self):
+        _id = self.subdevice.id
+        _type = self.subdevice.type
+        return {
+            "via_device": (DOMAIN, self._device.device_id),
+            "identifiers": {(DOMAIN, _id)},
+            "manufacturer": mc.MANUFACTURER,
+            "name": get_productnameuuid(_type, _id),
+            "model": _type
+            }
+
+
+"""
+ helper functions to 'commonize' platform setup/unload
+"""
+def platform_setup_entry(hass: object, config_entry: object, async_add_devices, platform: str):
+    device_id = config_entry.data[CONF_DEVICE_ID]
+    device: MerossDevice = hass.data[DOMAIN].devices[device_id]
+    device.platforms[platform] = async_add_devices
+    async_add_devices([entity for entity in device.entities.values() if entity.PLATFORM is platform])
+    LOGGER.debug("async_setup_entry device_id = %s - platform = %s", device_id, platform)
+    return
+
+def platform_unload_entry(hass: object, config_entry: object, platform: str) -> bool:
+    device_id = config_entry.data[CONF_DEVICE_ID]
+    device: MerossDevice = hass.data[DOMAIN].devices[device_id]
+    device.platforms[platform] = None
+    LOGGER.debug("async_unload_entry device_id = %s - platform = %s", device_id, platform)
+    return True

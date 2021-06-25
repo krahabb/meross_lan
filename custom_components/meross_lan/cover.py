@@ -1,8 +1,5 @@
 
-from typing import Any, Callable, Dict, List, Optional
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.components.cover import (
     CoverEntity,
     DEVICE_CLASS_GARAGE, DEVICE_CLASS_SHUTTER,
@@ -11,34 +8,27 @@ from homeassistant.components.cover import (
     STATE_OPEN, STATE_OPENING, STATE_CLOSED, STATE_CLOSING
 )
 
+from .merossclient import const as mc
+from .meross_device import MerossDevice
+from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
 from .const import (
-    DOMAIN,
-    CONF_DEVICE_ID,
-    METHOD_SET, METHOD_GET,
-    NS_APPLIANCE_GARAGEDOOR_STATE,
-    NS_APPLIANCE_ROLLERSHUTTER_STATE, NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-    NS_APPLIANCE_SYSTEM_ALL
+    PLATFORM_COVER,
 )
-from .meross_entity import _MerossEntity
-from .logger import LOGGER
 
-async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry, async_add_devices):
-    device_id = config_entry.data[CONF_DEVICE_ID]
-    device = hass.data[DOMAIN].devices[device_id]
-    async_add_devices([entity for entity in device.entities.values() if isinstance(entity, MerossLanGarage) or isinstance(entity, MerossLanRollerShutter)])
-    LOGGER.debug("async_setup_entry device_id = %s - platform = cover", device_id)
-    return
+async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
+    platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_COVER)
 
 async def async_unload_entry(hass: object, config_entry: object) -> bool:
-    LOGGER.debug("async_unload_entry device_id = %s - platform = cover", config_entry.data[CONF_DEVICE_ID])
-    return True
+    return platform_unload_entry(hass, config_entry, PLATFORM_COVER)
 
 
 class MerossLanGarage(_MerossEntity, CoverEntity):
-    def __init__(self, meross_device: object, channel: int):
-        super().__init__(meross_device, channel, DEVICE_CLASS_GARAGE)
-        meross_device.has_covers = True
-        self._payload = {"state": {"open": 0, "channel": channel, "uuid": meross_device.device_id } }
+
+    PLATFORM = PLATFORM_COVER
+
+    def __init__(self, device: 'MerossDevice', id: object):
+        super().__init__(device, id, DEVICE_CLASS_GARAGE)
+        self._payload = {mc.KEY_STATE: {mc.KEY_OPEN: 0, mc.KEY_CHANNEL: id, mc.KEY_UUID: device.device_id } }
 
 
     @property
@@ -64,20 +54,20 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
     async def async_open_cover(self, **kwargs) -> None:
         self._set_state(STATE_OPENING)
-        self._payload["state"]["open"] = 1
-        self._meross_device.mqtt_publish(
-            namespace=NS_APPLIANCE_GARAGEDOOR_STATE,
-            method=METHOD_SET,
+        self._payload[mc.KEY_STATE][mc.KEY_OPEN] = 1
+        self._device.request(
+            namespace=mc.NS_APPLIANCE_GARAGEDOOR_STATE,
+            method=mc.METHOD_SET,
             payload=self._payload)
         return
 
 
     async def async_close_cover(self, **kwargs) -> None:
         self._set_state(STATE_CLOSING)
-        self._payload["state"]["open"] = 0
-        self._meross_device.mqtt_publish(
-            namespace=NS_APPLIANCE_GARAGEDOOR_STATE,
-            method=METHOD_SET,
+        self._payload[mc.KEY_STATE][mc.KEY_OPEN] = 0
+        self._device.request(
+            namespace=mc.NS_APPLIANCE_GARAGEDOOR_STATE,
+            method=mc.METHOD_SET,
             payload=self._payload)
         return
 
@@ -89,11 +79,14 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
 
 class MerossLanRollerShutter(_MerossEntity, CoverEntity):
-    def __init__(self, meross_device: object, channel: int):
-        super().__init__(meross_device, channel, DEVICE_CLASS_SHUTTER)
-        meross_device.has_covers = True
+
+    PLATFORM = PLATFORM_COVER
+
+    def __init__(self, device: MerossDevice, id: object):
+        super().__init__(device, id, DEVICE_CLASS_SHUTTER)
+        self._payload = {mc.KEY_POSITION: {mc.KEY_POSITION: 0, mc.KEY_CHANNEL: id } }
         self._position = None
-        self._payload = {"position": {"position": 0, "channel": channel } }
+
 
     @property
     def supported_features(self):
@@ -121,20 +114,20 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     async def async_open_cover(self, **kwargs) -> None:
         self._set_state(STATE_OPENING)
-        self._payload["position"]["position"] = 100
-        self._meross_device.mqtt_publish(
-            namespace=NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-            method=METHOD_SET,
+        self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = 100
+        self._device.request(
+            namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            method=mc.METHOD_SET,
             payload=self._payload)
         return
 
 
     async def async_close_cover(self, **kwargs) -> None:
         self._set_state(STATE_CLOSING)
-        self._payload["position"]["position"] = 0
-        self._meross_device.mqtt_publish(
-            namespace=NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-            method=METHOD_SET,
+        self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = 0
+        self._device.request(
+            namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            method=mc.METHOD_SET,
             payload=self._payload)
         return
 
@@ -144,10 +137,10 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
             newpos = kwargs[ATTR_POSITION]
             if self._position is not None:
                 self._set_state(STATE_CLOSING if newpos < self._position else STATE_OPENING)
-            self._payload["position"]["position"] = newpos
-            self._meross_device.mqtt_publish(
-                namespace=NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-                method=METHOD_SET,
+            self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = newpos
+            self._device.request(
+                namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                method=mc.METHOD_SET,
                 payload=self._payload)
 
         return
@@ -155,10 +148,10 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     async def async_stop_cover(self, **kwargs):
         #self._set_state(STATE_CLOSING)
-        self._payload["position"]["position"] = -1
-        self._meross_device.mqtt_publish(
-            namespace=NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-            method=METHOD_SET,
+        self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = -1
+        self._device.request(
+            namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            method=mc.METHOD_SET,
             payload=self._payload)
         return
 

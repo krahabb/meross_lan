@@ -1,7 +1,5 @@
-from typing import Any, Callable, Dict, List, Optional, Union, Tuple
+from typing import Union, Tuple
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.typing import HomeAssistantType
 from homeassistant.components.light import (
     LightEntity,
     SUPPORT_BRIGHTNESS, SUPPORT_COLOR, SUPPORT_COLOR_TEMP, SUPPORT_WHITE_VALUE,
@@ -16,14 +14,12 @@ from homeassistant.util.color import (
 
 from homeassistant.const import STATE_UNKNOWN, STATE_ON, STATE_OFF
 
-from .meross_entity import _MerossEntity
+from .merossclient import const as mc
+from .meross_device import MerossDevice
+from .meross_entity import _MerossToggle, platform_setup_entry, platform_unload_entry
 from .const import (
-    DOMAIN,
-    CONF_DEVICE_ID,
-    NS_APPLIANCE_CONTROL_LIGHT, NS_APPLIANCE_CONTROL_TOGGLEX,
-    METHOD_SET, METHOD_GET,
+    PLATFORM_LIGHT,
 )
-from .logger import LOGGER
 
 CAPACITY_RGB = 1
 CAPACITY_TEMPERATURE = 2
@@ -32,20 +28,14 @@ CAPACITY_RGB_LUMINANCE = 5
 CAPACITY_TEMPERATURE_LUMINANCE = 6
 
 
-async def async_setup_entry(hass: HomeAssistantType, config_entry: ConfigEntry, async_add_devices):
-    device_id = config_entry.data[CONF_DEVICE_ID]
-    device = hass.data[DOMAIN].devices[device_id]
-    async_add_devices([entity for entity in device.entities.values() if isinstance(entity, MerossLanLight)])
-    LOGGER.debug("async_setup_entry device_id = %s - platform = light", device_id)
-    return
+async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
+    platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_LIGHT)
 
 async def async_unload_entry(hass: object, config_entry: object) -> bool:
-    LOGGER.debug("async_unload_entry device_id = %s - platform = light", config_entry.data[CONF_DEVICE_ID])
-    return True
+    return platform_unload_entry(hass, config_entry, PLATFORM_LIGHT)
 
 
-
-def rgb_to_int(rgb: Union[tuple, dict, int]) -> int:  # pylint: disable=unsubscriptable-object
+def _rgb_to_int(rgb: Union[tuple, dict, int]) -> int:  # pylint: disable=unsubscriptable-object
     if isinstance(rgb, int):
         return rgb
     elif isinstance(rgb, tuple):
@@ -58,16 +48,30 @@ def rgb_to_int(rgb: Union[tuple, dict, int]) -> int:  # pylint: disable=unsubscr
         raise ValueError("Invalid value for RGB!")
     return (red << 16) + (green << 8) + blue
 
-def int_to_rgb(rgb: int) -> Tuple[int, int, int]:
+def _int_to_rgb(rgb: int) -> Tuple[int, int, int]:
     return (rgb & 16711680) >> 16, (rgb & 65280) >> 8, (rgb & 255)
 
+def _sat_1_100(value) -> int:
+    if value > 100:
+        return 100
+    elif value < 1:
+        return 1
+    else:
+        return int(value)
 
-class MerossLanLight(_MerossEntity, LightEntity):
-    def __init__(self, meross_device: object, channel: int):
-        super().__init__(meross_device, channel, None)
+
+class MerossLanLight(_MerossToggle, LightEntity):
+
+    PLATFORM = PLATFORM_LIGHT
+
+    def __init__(self, device: MerossDevice, id: object):
+        # suppose we use 'togglex' to switch the light
+        super().__init__(
+            device, id, None,
+            mc.NS_APPLIANCE_CONTROL_TOGGLEX, mc.KEY_TOGGLEX)
         """
         self._light = {
-			"onoff": 0,
+			#"onoff": 0,
 			"capacity": CAPACITY_LUMINANCE,
 			"channel": channel,
 			#"rgb": 16753920,
@@ -77,15 +81,18 @@ class MerossLanLight(_MerossEntity, LightEntity):
             "gradual": 0
 		}
         """
-        self._light = {}
+        self._light = dict()
+        self._color_temp = None
+        self._hs_color = None
+        self._brightness = None
 
-        self._capacity = meross_device.ability.get(NS_APPLIANCE_CONTROL_LIGHT, {}).get("capacity", CAPACITY_LUMINANCE)
+        self._capacity = device.descriptor.ability.get(
+            mc.NS_APPLIANCE_CONTROL_LIGHT, {}).get(
+                mc.KEY_CAPACITY, CAPACITY_LUMINANCE)
 
         self._supported_features = (SUPPORT_COLOR if self._capacity & CAPACITY_RGB else 0)\
             | (SUPPORT_COLOR_TEMP if self._capacity & CAPACITY_TEMPERATURE else 0)\
             | (SUPPORT_BRIGHTNESS if self._capacity & CAPACITY_LUMINANCE else 0)
-
-        meross_device.has_lights = True
 
 
     @property
@@ -95,26 +102,17 @@ class MerossLanLight(_MerossEntity, LightEntity):
 
     @property
     def brightness(self):
-        """Return the brightness of this light between 0..255."""
-        luminance = self._light.get("luminance")
-        return None if luminance is None else luminance * 255 // 100
+        return self._brightness
 
 
     @property
     def hs_color(self):
-        """Return the hue and saturation color value [float, float]."""
-        rgb = self._light.get("rgb")
-        if rgb is not None:
-            r, g, b = int_to_rgb(rgb)
-            return color_RGB_to_hs(r, g, b)
-        return None
+        return self._hs_color
 
 
     @property
     def color_temp(self):
-        """Return the CT color value in mireds."""
-        temp = self._light.get("temperature")
-        return None if temp is None else ((100 - temp) / 100) * (self.max_mireds - self.min_mireds) + self.min_mireds
+        return self._color_temp
 
 
     @property
@@ -135,82 +133,89 @@ class MerossLanLight(_MerossEntity, LightEntity):
         return None
 
 
-    @property
-    def is_on(self) -> bool:
-        return self._state == STATE_ON
-
-
     async def async_turn_on(self, **kwargs) -> None:
 
         capacity = 0
         # Color is taken from either of these 2 values, but not both.
         if ATTR_HS_COLOR in kwargs:
             h, s = kwargs[ATTR_HS_COLOR]
-            self._light["rgb"] = rgb_to_int(color_hs_to_RGB(h, s))
-            self._light.pop("temperature", None)
+            self._light[mc.KEY_RGB] = _rgb_to_int(color_hs_to_RGB(h, s))
+            self._light.pop(mc.KEY_TEMPERATURE, None)
             capacity |= CAPACITY_RGB
         elif ATTR_COLOR_TEMP in kwargs:
+            # map mireds: min_mireds -> 100 - max_mireds -> 1
             mired = kwargs[ATTR_COLOR_TEMP]
             norm_value = (mired - self.min_mireds) / (self.max_mireds - self.min_mireds)
-            temperature = 100 - (norm_value * 100)
-            self._light["temperature"] = int(temperature)
-            self._light.pop("rgb", None)
+            temperature = 100 - (norm_value * 99)
+            self._light[mc.KEY_TEMPERATURE] = _sat_1_100(temperature) # meross wants temp between 1-100
+            self._light.pop(mc.KEY_RGB, None)
             capacity |= CAPACITY_TEMPERATURE
 
         if self._capacity & CAPACITY_LUMINANCE:
             capacity |= CAPACITY_LUMINANCE
             # Brightness must always be set, so take previous luminance if not explicitly set now.
             if ATTR_BRIGHTNESS in kwargs:
-                self._light["luminance"] = kwargs[ATTR_BRIGHTNESS] * 100 // 255
+                self._light[mc.KEY_LUMINANCE] = _sat_1_100(kwargs[ATTR_BRIGHTNESS] * 100 // 255)
 
-        self._light["capacity"] = capacity
+        self._light[mc.KEY_CAPACITY] = capacity
 
-        if NS_APPLIANCE_CONTROL_TOGGLEX in self._meross_device.ability:
+        if self._light.get(mc.KEY_ONOFF) is None:
             # since lights could be repeatedtly 'async_turn_on' when changing attributes
             # we avoid flooding the device with unnecessary messages
             if not self.is_on:
-                self._meross_device.togglex_set(channel = self._channel, ison = 1)
+                await super().async_turn_on(**kwargs)
+        else:
+            self._light[mc.KEY_ONOFF] = 1
 
-        # only set the onoff field if the device sent it before
-        if self._light.get("onoff") is not None:
-            self._light["onoff"] = 1
-
-        self._meross_device.mqtt_publish(
-            namespace=NS_APPLIANCE_CONTROL_LIGHT,
-            method=METHOD_SET,
-            payload={"light": self._light})
-
-        return
+        self._device.request(
+            namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
+            method=mc.METHOD_SET,
+            payload={mc.KEY_LIGHT: self._light})
 
 
     async def async_turn_off(self, **kwargs) -> None:
-        if NS_APPLIANCE_CONTROL_TOGGLEX in self._meross_device.ability:
-            self._meross_device.togglex_set(channel = self._channel, ison = 0)
 
-        # only set the onoff field if the device sent it before
-        if self._light.get("onoff") is not None:
-            self._light["onoff"] = 0
-            self._meross_device.mqtt_publish(
-                namespace=NS_APPLIANCE_CONTROL_LIGHT,
-                method=METHOD_SET,
-                payload={"light": self._light})
-
-        return
-
-
-    def _set_onoff(self, onoff) -> None:
-        self._set_state(STATE_ON if onoff else STATE_OFF)
-        return
+        if self._light.get(mc.KEY_ONOFF) is None:
+            # we suppose we have to 'toggle(x)'
+            await super().async_turn_off(**kwargs)
+        else:
+            self._light[mc.KEY_ONOFF] = 0
+            self._device.request(
+                namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
+                method=mc.METHOD_SET,
+                payload={mc.KEY_LIGHT: self._light})
 
 
     def _set_light(self, light: dict) -> None:
-        self._light = light
-        onoff = light.get("onoff")
-        if onoff is not None:
-            self._state = STATE_ON if onoff else STATE_OFF
-        if self.hass and self.enabled:
-            self.async_write_ha_state()
-        return
+        if self._light != light:
+            self._light = light
+
+            capacity = light.get(mc.KEY_CAPACITY, 0)
+
+            if capacity & CAPACITY_LUMINANCE:
+                self._brightness = light.get(mc.KEY_LUMINANCE, 0) * 255 // 100
+            else:
+                self._brightness = None
+
+            if capacity & CAPACITY_TEMPERATURE:
+                self._color_temp = ((100 - light.get(mc.KEY_TEMPERATURE, 0)) / 99) * \
+                    (self.max_mireds - self.min_mireds) + self.min_mireds
+            else:
+                self._color_temp = None
+
+            if capacity & CAPACITY_RGB:
+                r, g, b = _int_to_rgb(light.get(mc.KEY_RGB, 0))
+                self._hs_color = color_RGB_to_hs(r, g, b)
+            else:
+                self._hs_color = None
+
+            onoff = light.get(mc.KEY_ONOFF)
+            if onoff is not None:
+                self._state = STATE_ON if onoff else STATE_OFF
+
+            if self.hass and self.enabled:
+                self.async_write_ha_state()
+
 
 
 

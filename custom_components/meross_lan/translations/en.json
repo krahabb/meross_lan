@@ -6,7 +6,19 @@
             "no_devices_found": "No devices found on the network",
             "single_instance_allowed": "Already configured. Only a single configuration possible."
         },
+        "error": {
+            "cannot_connect": "Unable to connect",
+            "invalid_auth": "Authentication error"
+          },
         "step": {
+            "user": {
+                "title": "Meross LAN",
+                "description": "Setup meross device",
+                "data": {
+                    "host": "Device host address",
+                    "key": "Device key"
+                }
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configure global Meross LAN settings",
@@ -33,10 +45,11 @@
             },
             "device": {
                 "title": "Device configuration",
-                "description": "Type: {device_type}\nUUID: {device_id}\n\n{payload}",
+                "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
                 "data": {
                     "key": "Device key",
-                    "device_id": "UUID of Meross appliance",
+                    "protocol": "Connection protocol",
+                    "polling_period": "Polling period",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
                 }
