@@ -32,9 +32,9 @@ Restart HA to let it play
 
 ## Setup
 
-Once installed and restarted your Meross devices should be automatically discovered by the 'dhcp' integration and will then pop-up in your integrations panel ready to be configured (this exact timing will depend since the dhcp discovery has different strategies but a simple boot of the device should be sufficient even if not necessary)
+Once installed and restarted your Meross devices should be automatically discovered by the 'dhcp' integration and will then pop-up in your integrations panel ready to be configured (the exact timing will depend since the dhcp discovery has different strategies but a simple boot of the device should be sufficient even if not necessary)
 
-If you are using the 'MQTT way' you can ease the process of discovery by adding the 'MQTT Hub' feature of this integration (This was needed in the previous versions while you should be able to skip this step if the dhcp discovery works fine). If you need, just go to your homeassistant `Configuration -> Integrations` and add the Meross LAN by looking through the list of available ones. Here you can configure the device key used to sign the messages exchanged: this need to be the same key used when re-binding your hardware else the integration will not be able to discover new devices (dhcp should instead work anyway: the key will be asked and set when configuring every single appliance)
+If you are using the 'MQTT way' you can help the discovery process by adding the 'MQTT Hub' feature of this integration (This was needed in the previous versions while you should be able to skip this step if the dhcp discovery works fine). If you need, just go to your homeassistant `Configuration -> Integrations` and add the Meross LAN by looking through the list of available ones. Here you can configure the device key used to sign the messages exchanged: this need to be the same key used when re-binding your hardware else the integration will not be able to discover new devices (dhcp discovery should instead work anyway: the key will be asked and set when configuring every single appliance)
 
 You can also manually add your device by adding a new integration entry and providing the host address.
 
@@ -45,7 +45,7 @@ When configuring a device entry you'll have the option to set:
 
 ## Supported hardware
 
-Most of this sowftware has been developed and tested on my owned Meross devices which, over the time, are slowly expanding. I have tried to make it the more optimistic and generalistic as possible based on the work from [@albertogeniola] and [@bytespider] so it should work with most of the hardware out there but I did not test anything other than mines. There are some user reports confirming it works with other devices and the 'official' complete list is here:
+Most of this software has been developed and tested on my owned Meross devices which, over the time, are slowly expanding. I have tried to make it the more optimistic and generalistic as possible based on the work from [@albertogeniola] and [@bytespider] so it should work with most of the hardware out there but I did not test anything other than mines. There are some user reports confirming it works with other devices and the 'official' complete list is here:
 
 - Switches
   - [MSS310R](https://www.meross.com/product/38/article/): power plug with metering capabilties
@@ -66,8 +66,11 @@ Most of this sowftware has been developed and tested on my owned Meross devices 
 ## Features
 
 The component exposes the basic functionality of the underlying device (toggle on/off, dimm, report consumption through sensors) without any other effort, It should be able to detect if the device goes offline suddenly by using a periodic heartbeat.
-It also features an automatic protocol switching capability so, if you have your MQTT setup and your broker dies or whatever, the integration will try to fallback to HTTP communication and keep the device available returning automatically to MQTT mode as soon as the MQTT infrastructure returns online. The same works for HTTP mode: when the device is not reachable it will try to use MQTT (provided it is available!). This feature is enabled by default for every new configuration entry and you can control it by setting the 'Protocol' field int the configration panel of the integration: setting 'AUTO' (or empty) will do the automatic switch. Setting any fixed protocol 'MQTT' or 'HTTP' will force the use of that option (useful if you're in trouble and want to isolate or investigate inconsistent behaviours). I'd say: leave it empty or 'AUTO' it works good in my tests
+It also features an automatic protocol switching capability so, if you have your MQTT setup and your broker dies or whatever, the integration will try to fallback to HTTP communication and keep the device available returning automatically to MQTT mode as soon as the MQTT infrastructure returns online. The same works for HTTP mode: when the device is not reachable it will try to use MQTT (provided it is available!). This feature is enabled by default for every new configuration entry and you can control it by setting the 'Protocol' field in the configration panel of the integration: setting 'AUTO' (or empty) will do the automatic switch. Setting any fixed protocol 'MQTT' or 'HTTP' will force the use of that option (useful if you're in trouble and want to isolate or investigate inconsistent behaviours). I'd say: leave it empty or 'AUTO' it works good in my tests.
 
+If you have the MSH300 Hub working with this integration, every new subdevice (thermostat or sensor) can be automatically discovered once the subdevice is paired with the hub. When the hub is configured in this integration you don't need to switch back and forth to/from the Meross app in order to 'bind' new devices: just pair the thermostat or sensor to the hub by using the subdevice pairing procedure (fast double press on the hub)
+
+I'm sorry to not be able to write a complete wiki at the moment in order to better explain some procedures or share my knwoledge about the devices but time is constrained and writing knwoledge bases is always consuming (and sligthly boring I admit). I'm still working on some features and I've put a big effort trying to ensure a frictionless working of this software so I hope you can make use of it without deeper explanations. Something will come, slowly, but if you have any urgent issue or question I will be happy to help (and maybe this will speed up the documentation :)
 
 ## Service
 
