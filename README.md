@@ -45,11 +45,14 @@ When configuring a device entry you'll have the option to set:
 
 ## Supported hardware
 
-Most of this software has been developed and tested on my owned Meross devices which, over the time, are slowly expanding. I have tried to make it the more optimistic and generalistic as possible based on the work from [@albertogeniola] and [@bytespider] so it should work with most of the hardware out there but I did not test anything other than mines. There are some user reports confirming it works with other devices and the 'official' complete list is here:
+Most of this software has been developed and tested on my owned Meross devices which, over the time, are slowly expanding. I have tried to make it the more optimistic and generalistic as possible based on the work from [@albertogeniola] and [@bytespider] so it should work with most of the hardware out there but I did not test anything other than mines. There are some user reports confirming it works with other devices and the 'official' complete list is here (keep in mind some firmware versions might work while other not: this is the 'hell' of hw & sw):
 
 - Switches
-  - [MSS310R](https://www.meross.com/product/38/article/): power plug with metering capabilties
+  - [MSS110](https://www.meross.com/product/2/article/): Smart Wifi plug mini
+  - [MSS310](https://www.meross.com/product/38/article/): power plug with metering capabilties
   - [MSS425](https://www.meross.com/product/16/article/): Smart WiFi Surge Protector (multiple sockets power strip)
+  - [MSS510](https://www.meross.com/product/23/article/): Smart WiFi single pole switch
+  - [MSS710](https://www.meross.com/product/21/article/): Smart WiFi DIY switch
 - Lights
   - [MSL100](https://www.meross.com/product/4/article/): Smart bulb with dimmable light
   - [MSL120](https://www.meross.com/product/28/article/): Smart RGB bulb with dimmable light
