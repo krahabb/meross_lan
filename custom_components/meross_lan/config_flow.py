@@ -89,11 +89,26 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         LOGGER.debug("received dhcp discovery: %s", json.dumps(discovery_info))
 
         self._host = discovery_info.get('ip')
+        self._macaddress = discovery_info.get('macaddress')
 
-        # check we already dont have the device registered
+        """
+        we'll update the unique_id for the flow when we'll have the device_id
+        macaddress would have been a better choice since the beginning (...)
+        but I don't want to mess with ConfigEntry versioning right now
+        Here this is needed in case we cannot correctly identify the device
+        via our api and the dhcp integration keeps pushing us discoveries for
+        the same device
+        """
+        await self.async_set_unique_id(self._macaddress, raise_on_progress=True)
+
+        """
+        Check we already dont have the device registered.
+        This is probably overkill since the ConfigFlow will recognize
+        the duplicated unique_id sooner or later
+        """
         api = self.hass.data.get(DOMAIN)
         if api is not None:
-            if api.has_device(self._host, discovery_info.get('macaddress')):
+            if api.has_device(self._host, self._macaddress):
                 return self.async_abort(reason='already_configured')
             self._key = api.key
 
