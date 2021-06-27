@@ -34,8 +34,7 @@ from .const import (
     DOMAIN, SERVICE_REQUEST,
     CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD,
-    CONF_POLLING_PERIOD_DEFAULT, 
-    DISCOVERY_TOPIC, REQUEST_TOPIC, RESPONSE_TOPIC,
+    CONF_POLLING_PERIOD_DEFAULT,
     PARAM_UNAVAILABILITY_TIMEOUT,
 )
 
@@ -250,9 +249,8 @@ class MerossApi:
 
             return
 
-        self.unsub_mqtt = await self.hass.components.mqtt.async_subscribe(
-            DISCOVERY_TOPIC, mqtt_receive
-        )
+        self.unsub_mqtt = await self.hass.components.mqtt.async_subscribe(mc.TOPIC_DISCOVERY, mqtt_receive)
+
 
     def has_device(self, ipaddress: str, macaddress:str) -> bool:
         # macaddress from dhcp discovery is already stripped/lower but...
@@ -310,10 +308,10 @@ class MerossApi:
     ) -> None:
         LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
         self.hass.components.mqtt.async_publish(
-            REQUEST_TOPIC.format(device_id),
+            mc.TOPIC_REQUEST.format(device_id),
             json_dumps(merossclient.build_payload(
                 namespace, method, payload,
-                key, _from=RESPONSE_TOPIC.format(device_id))),
+                key, device_id=device_id)),
             0,
             False)
 

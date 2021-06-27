@@ -1,6 +1,10 @@
 
 from typing import OrderedDict
 
+# MQTT topics
+TOPIC_DISCOVERY = "/appliance/+/publish"
+TOPIC_REQUEST = "/appliance/{}/subscribe"
+TOPIC_RESPONSE = "/appliance/{}/publish"
 
 METHOD_PUSH = "PUSH"
 METHOD_GET = "GET"
