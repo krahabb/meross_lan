@@ -23,12 +23,12 @@ from . import const as mc
 KeyType = Union[dict, Optional[str]] # pylint: disable=unsubscriptable-object
 
 
-def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = None, _from:str = None)-> dict:
+def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = None, device_id:str = None)-> dict:
     if isinstance(key, dict):
         key[mc.KEY_NAMESPACE] = namespace
         key[mc.KEY_METHOD] = method
         key[mc.KEY_PAYLOADVERSION] = 1
-        key[mc.KEY_FROM] = _from
+        key[mc.KEY_FROM] = mc.TOPIC_RESPONSE.format(device_id or mc.MANUFACTURER)
         return {
             mc.KEY_HEADER: key,
             mc.KEY_PAYLOAD: payload
@@ -42,7 +42,7 @@ def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = No
                 mc.KEY_NAMESPACE: namespace,
                 mc.KEY_METHOD: method,
                 mc.KEY_PAYLOADVERSION: 1,
-                mc.KEY_FROM: _from,
+                mc.KEY_FROM: mc.TOPIC_RESPONSE.format(device_id or mc.MANUFACTURER),
                 #mc.KEY_FROM: "/app/0-0/subscribe",
                 #"from": "/appliance/9109182170548290882048e1e9522946/publish",
                 mc.KEY_TIMESTAMP: timestamp,
@@ -204,7 +204,7 @@ class MerossHttpClient:
             json_body:dict = json_loads(text_body)
             self.replykey = get_replykey(json_body.get(mc.KEY_HEADER), self.key)
         except Exception as e:
-            self._logger.warning("MerossHttpClient(%s): HTTP Exception (%s)", self._host, str(e) or type(e).__name__)
+            self._logger.debug("MerossHttpClient(%s): HTTP Exception (%s)", self._host, str(e) or type(e).__name__)
             raise
 
         return json_body

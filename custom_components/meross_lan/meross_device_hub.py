@@ -362,8 +362,9 @@ class MTS100SubDevice(MerossSubDevice):
 
         climate = self.climate
         p_mode = p_all.get(mc.KEY_MODE)
-        if p_mode is not None:
+        if isinstance(p_mode, dict):
             climate._mts100_mode = p_mode.get(mc.KEY_STATE)
+
         p_temperature = p_all.get(mc.KEY_TEMPERATURE)
         if isinstance(p_temperature, dict):
             climate._current_temperature = _get_temp_normal(p_temperature.get(mc.KEY_ROOM), climate._current_temperature)
@@ -372,15 +373,15 @@ class MTS100SubDevice(MerossSubDevice):
             climate._max_temp = _get_temp_normal(p_temperature.get(mc.KEY_MAX), climate._max_temp)
             climate._mts100_heating = p_temperature.get(mc.KEY_HEATING)
 
+            p_openwindow = p_temperature.get(mc.KEY_OPENWINDOW)
+            if p_openwindow is not None:
+                self.binary_sensor_window._set_onoff(p_openwindow)
+
         p_togglex = p_all.get(mc.KEY_TOGGLEX)
-        if p_togglex is not None:
+        if isinstance(p_togglex, dict):
             climate._mts100_onoff = p_togglex.get(mc.KEY_ONOFF)
 
         climate.update_modes()
-
-        p_openwindow = p_temperature.get(mc.KEY_OPENWINDOW)
-        if p_openwindow is not None:
-            self.binary_sensor_window._set_onoff(p_openwindow)
 
 
     def _parse_mode(self, p_mode: dict) -> None:

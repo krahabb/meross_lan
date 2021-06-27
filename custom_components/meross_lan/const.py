@@ -35,10 +35,6 @@ CONF_POLLING_PERIOD_DEFAULT = 30
 CONF_TIME_ZONE = hac.CONF_TIME_ZONE # if set in config we'll force time & zone for devices
 CONF_TIMESTAMP = mc.KEY_TIMESTAMP # this is a 'fake' conf param we'll add to config_entry when we want to force flush to storage
 
-DISCOVERY_TOPIC = "/appliance/+/publish"
-REQUEST_TOPIC = "/appliance/{}/subscribe"
-RESPONSE_TOPIC = "/appliance/{}/publish"
-
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)
 """
