@@ -31,9 +31,10 @@ from .meross_device_bulb import MerossDeviceBulb
 from .meross_device_hub import MerossDeviceHub
 
 from .const import (
-    CONF_POLLING_PERIOD_DEFAULT, DOMAIN, SERVICE_REQUEST,
-    CONF_HOST, CONF_OPTION_MQTT, CONF_PROTOCOL,
+    DOMAIN, SERVICE_REQUEST,
+    CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD,
+    CONF_POLLING_PERIOD_DEFAULT, 
     DISCOVERY_TOPIC, REQUEST_TOPIC, RESPONSE_TOPIC,
     PARAM_UNAVAILABILITY_TIMEOUT,
 )
@@ -54,7 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     device_id = entry.data.get(CONF_DEVICE_ID)
     if (api.unsub_mqtt is None) and \
-        ((device_id is None) or (entry.data.get(CONF_PROTOCOL) == CONF_OPTION_MQTT)):
+        ((device_id is None) or (entry.data.get(CONF_PROTOCOL) != CONF_OPTION_HTTP)):
         # this is the MQTT Hub entry or a device which needs MQTT
         # and we still havent registered MQTT
         try:
