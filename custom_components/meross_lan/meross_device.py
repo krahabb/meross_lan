@@ -188,9 +188,9 @@ class MerossDevice:
             # passing self.key to shut off MerossDevice replykey behaviour
             # since we're already managing replykey in http client
             self.receive(r_namespace, r_method, response[mc.KEY_PAYLOAD], self.key)
-        except ClientConnectionError as e:
-            LOGGER.info("MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e))
+        except (ClientConnectionError, TimeoutError) as e:
             if self._online:
+                LOGGER.info("MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e))
                 if (self.conf_protocol is Protocol.AUTO) and ((time() - self.lastmqtt) < PARAM_UNAVAILABILITY_TIMEOUT):
                     self._switch_protocol(Protocol.MQTT)
                     self.api.mqtt_publish(
@@ -203,7 +203,7 @@ class MerossDevice:
                 else:
                     self._set_offline()
         except Exception as e:
-            LOGGER.warning("MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e))
+            LOGGER_trap(WARNING, 14400, "MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e))
 
 
     def request(self, namespace: str, method: str = mc.METHOD_GET, payload: dict = {}, callback: Callable = None):

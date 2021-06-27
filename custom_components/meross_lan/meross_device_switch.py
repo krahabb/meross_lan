@@ -13,7 +13,7 @@ from homeassistant.const import (
 
 from .merossclient import KeyType, const as mc  # mEROSS cONST
 from .meross_device import MerossDevice
-from .logger import LOGGER, LOGGER_trap
+from .logger import LOGGER
 from .sensor import MerossLanSensor
 from .switch import MerossLanSwitch
 from .cover import MerossLanGarage, MerossLanRollerShutter

@@ -204,7 +204,7 @@ class MerossHttpClient:
             json_body:dict = json_loads(text_body)
             self.replykey = get_replykey(json_body.get(mc.KEY_HEADER), self.key)
         except Exception as e:
-            self._logger.warning("MerossHttpClient(%s): HTTP Exception (%s)", self._host, str(e) or type(e).__name__)
+            self._logger.debug("MerossHttpClient(%s): HTTP Exception (%s)", self._host, str(e) or type(e).__name__)
             raise
 
         return json_body
