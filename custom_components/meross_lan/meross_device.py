@@ -55,7 +55,6 @@ class MerossDevice:
         self.entry_id = entry.entry_id
         self.replykey = None
         self._online = False
-        self.polling_period = CONF_POLLING_PERIOD_DEFAULT
         self.lastpoll = 0
         self.lastrequest = 0
         self.lastupdate = 0
@@ -67,6 +66,28 @@ class MerossDevice:
         in platforms(s) async_setup_entry with HA
         """
         self.entities: Dict[any, '_MerossEntity'] = dict()  # pylint: disable=undefined-variable
+
+        """
+        This is mainly for HTTP based devices: we build a dictionary of what we think could be
+        useful to asynchronously poll so the actual polling cycle doesnt waste time in checks
+        """
+        self.polling_period = CONF_POLLING_PERIOD_DEFAULT
+        self.polling_dictionary = dict()
+        ability = self.descriptor.ability
+        if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
+            self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_TOGGLEX] = { mc.KEY_TOGGLEX : [] }
+        elif mc.NS_APPLIANCE_CONTROL_TOGGLE in ability:
+            self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_TOGGLE] = { mc.KEY_TOGGLE : {} }
+        if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
+            self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_LIGHT] = { mc.KEY_LIGHT : {} }
+        if mc.NS_APPLIANCE_GARAGEDOOR_STATE in ability:
+            self.polling_dictionary[mc.NS_APPLIANCE_GARAGEDOOR_STATE] = { mc.KEY_STATE : [] }
+        if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
+            self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_STATE] = { mc.KEY_STATE : [] }
+        if mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION in ability:
+            self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION] = { mc.KEY_POSITION : [] }
+
+
         """
         self.platforms: dict()
         when we build an entity we also add the relative platform name here
@@ -84,6 +105,7 @@ class MerossDevice:
         self.unsub_updatecoordinator_listener: Callable = None
 
         self._set_config_entry(entry.data)
+
         """
         warning: would the response be processed after this object is fully init?
         It should if I get all of this async stuff right
@@ -338,10 +360,11 @@ class MerossDevice:
         """
         this is a bit rude: we'll keep sending 'heartbeats'
         to check if the device is still there
-        !!this is actually not happening when we connect through HTTP!!
+        !!this is mainly for MQTT mode since in HTTP we'll more or less poll
         unless the device went offline so we started skipping polling updates
         """
-        if (now - self.lastrequest) > PARAM_HEARTBEAT_PERIOD:
+        if ((now - self.lastrequest) > PARAM_HEARTBEAT_PERIOD) \
+            and ((now - self.lastupdate) > PARAM_HEARTBEAT_PERIOD):
             self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
             return False # prevent any other poll action...
 
@@ -354,14 +377,8 @@ class MerossDevice:
 
             # on MQTT we already have PUSHES...
             if (self.curr_protocol == Protocol.HTTP) and (self.lastmqtt < self.lastrequest):
-                ability = self.descriptor.ability
-                if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
-                    self.request(mc.NS_APPLIANCE_CONTROL_TOGGLEX, payload={ mc.KEY_TOGGLEX : [] })
-                elif mc.NS_APPLIANCE_CONTROL_TOGGLE in ability:
-                    self.request(mc.NS_APPLIANCE_CONTROL_TOGGLE, payload={ mc.KEY_TOGGLE : {} })
-                if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
-                    self.request(mc.NS_APPLIANCE_CONTROL_LIGHT, payload={ mc.KEY_LIGHT : {} })
-
+                for namespace, payload in self.polling_dictionary.items():
+                    self.request(namespace, payload=payload)
             return True # tell inheriting to continue processing
 
         # when we 'stall' offline while on MQTT eventually retrigger HTTP
