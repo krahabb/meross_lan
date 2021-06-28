@@ -55,6 +55,7 @@ class MerossDevice:
         self.entry_id = entry.entry_id
         self.replykey = None
         self._online = False
+        self._retry_period = 0 # used to try reconnect when falling offline
         self.lastpoll = 0
         self.lastrequest = 0
         self.lastupdate = 0
@@ -212,7 +213,7 @@ class MerossDevice:
             self.receive(r_namespace, r_method, response[mc.KEY_PAYLOAD], self.key)
         except (ClientConnectionError, TimeoutError) as e:
             if self._online:
-                LOGGER.info("MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e))
+                LOGGER.info("MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
                 if (self.conf_protocol is Protocol.AUTO) and ((time() - self.lastmqtt) < PARAM_UNAVAILABILITY_TIMEOUT):
                     self._switch_protocol(Protocol.MQTT)
                     self.api.mqtt_publish(
@@ -225,7 +226,7 @@ class MerossDevice:
                 else:
                     self._set_offline()
         except Exception as e:
-            LOGGER_trap(WARNING, 14400, "MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e))
+            LOGGER_trap(WARNING, 14400, "MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
 
 
     def request(self, namespace: str, method: str = mc.METHOD_GET, payload: dict = {}, callback: Callable = None):
@@ -253,6 +254,7 @@ class MerossDevice:
     def _set_offline(self) -> None:
         LOGGER.debug("MerossDevice(%s) going offline!", self.device_id)
         self._online = False
+        self._retry_period = 0
         for entity in self.entities.values():
             entity._set_unavailable()
 
@@ -386,6 +388,9 @@ class MerossDevice:
         # when HTTP fails (see async_http_request)
         if (self.curr_protocol is Protocol.MQTT) and (self.conf_protocol is Protocol.AUTO):
             self._switch_protocol(Protocol.HTTP)
+
+        if (now - self.lastrequest) > self._retry_period:
+            self._retry_period = self._retry_period + self.polling_period
             self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
 
         return False
