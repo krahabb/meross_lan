@@ -1,6 +1,7 @@
 
 
 from time import localtime, strftime, time
+from homeassistant.components.light import Light
 
 
 from homeassistant.core import callback
@@ -124,21 +125,15 @@ class MerossDeviceSwitch(MerossDevice):
             return True
 
         if namespace == mc.NS_APPLIANCE_GARAGEDOOR_STATE:
-            garagedoor = payload.get(mc.KEY_STATE)
-            for g in garagedoor:
-                self.entities[g.get(mc.KEY_CHANNEL)]._set_open(g.get(mc.KEY_OPEN))
+            self._parse_garagedoor_state(payload.get(mc.KEY_STATE))
             return True
 
         if namespace == mc.NS_APPLIANCE_ROLLERSHUTTER_STATE:
-            state = payload.get(mc.KEY_STATE)
-            for s in state:
-                self.entities[s.get(mc.KEY_CHANNEL)]._set_rollerstate(s.get(mc.KEY_STATE))
+            self._parse_rollershutter_state(payload.get(mc.KEY_STATE))
             return True
 
         if namespace == mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION:
-            position = payload.get(mc.KEY_POSITION)
-            for p in position:
-                self.entities[p.get(mc.KEY_CHANNEL)]._set_rollerposition(p.get(mc.KEY_POSITION))
+            self._parse_rollershutter_position(payload.get(mc.KEY_POSITION))
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_ELECTRICITY:
@@ -155,11 +150,35 @@ class MerossDeviceSwitch(MerossDevice):
                 if d.get(mc.KEY_DATE) == daylabel:
                     self._sensor_energy._set_state(d.get(mc.KEY_VALUE))
                     break
-            else:
+            else:# this means consumption for current day is not yet measured i.e. null
                 self._sensor_energy._set_state(0)
             return True
 
         return False
+
+
+    def _parse_garagedoor_state(self, p_state) -> None:
+        if isinstance(p_state, dict):
+            self.entities[p_state.get(mc.KEY_CHANNEL, 0)]._set_open(p_state.get(mc.KEY_OPEN))
+        elif isinstance(p_state, list):
+            for s in p_state:
+                self._parse_garagedoor_state(s)
+
+
+    def _parse_rollershutter_state(self, p_state) -> None:
+        if isinstance(p_state, dict):
+            self.entities[p_state.get(mc.KEY_CHANNEL, 0)]._set_rollerstate(p_state.get(mc.KEY_STATE))
+        elif isinstance(p_state, list):
+            for s in p_state:
+                self._parse_rollershutter_state(s)
+
+
+    def _parse_rollershutter_position(self, p_position) -> None:
+        if isinstance(p_position, dict):
+            self.entities[p_position.get(mc.KEY_CHANNEL, 0)]._set_rollerposition(p_position.get(mc.KEY_POSITION))
+        elif isinstance(p_position, list):
+            for p in p_position:
+                self._parse_rollershutter_position(p)
 
 
     def _update_descriptor(self, payload: dict) -> bool:
@@ -167,14 +186,11 @@ class MerossDeviceSwitch(MerossDevice):
 
         p_digest = self.descriptor.digest
         if p_digest:
-            p_garagedoor = p_digest.get(mc.KEY_GARAGEDOOR)
-            if isinstance(p_garagedoor, list):
-                for g in p_garagedoor:
-                    self.entities[g.get(mc.KEY_CHANNEL)]._set_open(g.get(mc.KEY_OPEN))
+            self._parse_garagedoor_state(p_digest.get(mc.KEY_GARAGEDOOR))
         else:
             # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
             p_control = self.descriptor.all.get(mc.KEY_CONTROL)
-            if p_control:
+            if isinstance(p_control, dict):
                 p_toggle = p_control.get(mc.KEY_TOGGLE)
                 if isinstance(p_toggle, dict):
                     self.entities[p_toggle.get(mc.KEY_CHANNEL, 0)]._set_onoff(p_toggle.get(mc.KEY_ONOFF))
