@@ -59,7 +59,6 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
             namespace=mc.NS_APPLIANCE_GARAGEDOOR_STATE,
             method=mc.METHOD_SET,
             payload=self._payload)
-        return
 
 
     async def async_close_cover(self, **kwargs) -> None:
@@ -69,12 +68,25 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
             namespace=mc.NS_APPLIANCE_GARAGEDOOR_STATE,
             method=mc.METHOD_SET,
             payload=self._payload)
-        return
 
 
     def _set_open(self, open) -> None:
         self._set_state(STATE_OPEN if open else STATE_CLOSED)
-        return
+
+
+    def _set_onoff(self, onoff) -> None:
+        """
+        MSG100 exposes a 'togglex' interface so my code interprets that as a switch state
+        Here we'll intercept that behaviour and right now the guess is:
+        The toggle state represents the contact of the garagedoor which is likely a short
+        pulse so we'll use it to guess state transitions in our cover
+        """
+        if onoff:
+            if self._state == STATE_CLOSED:
+                self._set_state(STATE_OPENING)
+            elif self._state == STATE_OPEN:
+                self._set_state(STATE_CLOSING)
+        #else: RIP!
 
 
 
@@ -119,7 +131,6 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
             namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
             method=mc.METHOD_SET,
             payload=self._payload)
-        return
 
 
     async def async_close_cover(self, **kwargs) -> None:
@@ -129,7 +140,6 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
             namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
             method=mc.METHOD_SET,
             payload=self._payload)
-        return
 
 
     async def async_set_cover_position(self, **kwargs):
@@ -143,8 +153,6 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
                 method=mc.METHOD_SET,
                 payload=self._payload)
 
-        return
-
 
     async def async_stop_cover(self, **kwargs):
         #self._set_state(STATE_CLOSING)
@@ -153,19 +161,19 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
             namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
             method=mc.METHOD_SET,
             payload=self._payload)
-        return
+
 
     def _set_unavailable(self) -> None:
         self._position = None
         super()._set_unavailable()
-        return
+
 
     def _set_rollerstate(self, state) -> None:
         if state == 1:
             self._set_state(STATE_CLOSING)
         elif state == 2:
             self._set_state(STATE_OPENING)
-        return
+
 
     def _set_rollerposition(self, position) -> None:
         self._position = position
@@ -173,4 +181,3 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
             self._set_state(STATE_CLOSED)
         else:
             self._set_state(STATE_OPEN)
-        return
