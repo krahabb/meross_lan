@@ -186,6 +186,8 @@ class MerossDevice:
         payload: dict,
         replykey: KeyType
     ) -> None:
+        if self.conf_protocol is Protocol.HTTP:
+            return # even if mqtt parsing is no harming we want a 'consistent' HTTP only behaviour
         self.lastmqtt = time()
         if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
             self._switch_protocol(Protocol.MQTT)
@@ -339,9 +341,10 @@ class MerossDevice:
         to retry pref_protocol
         """
         self.curr_protocol = self.pref_protocol
+        self.lastmqtt = 0
         self.polling_period = data.get(CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT)
         if self.polling_period < CONF_POLLING_PERIOD_MIN:
-            self.polling_period < CONF_POLLING_PERIOD_MIN
+            self.polling_period = CONF_POLLING_PERIOD_MIN
 
         self.time_zone = data.get(CONF_TIME_ZONE) # TODO: add to config_flow options
 
