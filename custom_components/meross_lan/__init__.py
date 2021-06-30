@@ -32,7 +32,7 @@ from .meross_device_hub import MerossDeviceHub
 
 from .const import (
     DOMAIN, SERVICE_REQUEST,
-    CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP, CONF_OPTION_MQTT, 
+    CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD,
     CONF_POLLING_PERIOD_DEFAULT,
     PARAM_UNAVAILABILITY_TIMEOUT,
@@ -87,7 +87,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         device = api.build_device(device_id, entry)
         device.unsub_entry_update_listener = entry.add_update_listener(device.entry_update_listener)
         device.unsub_updatecoordinator_listener = api.coordinator.async_add_listener(device.updatecoordinator_listener)
-        hass.config_entries.async_setup_platforms(entry, device.platforms.keys())
+        # this api is too recent (around April 2021): hass.config_entries.async_setup_platforms(entry, device.platforms.keys())
+        for platform in device.platforms.keys():
+            hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, platform))
+
 
     return True
 
