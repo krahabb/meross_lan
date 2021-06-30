@@ -1,5 +1,8 @@
 
 
+from time import time
+from datetime import datetime
+
 from homeassistant.components.cover import (
     CoverEntity,
     DEVICE_CLASS_GARAGE, DEVICE_CLASS_SHUTTER,
@@ -7,12 +10,16 @@ from homeassistant.components.cover import (
     SUPPORT_OPEN, SUPPORT_CLOSE, SUPPORT_SET_POSITION, SUPPORT_STOP,
     STATE_OPEN, STATE_OPENING, STATE_CLOSED, STATE_CLOSING
 )
+from homeassistant.core import HassJob, callback
+from homeassistant.helpers import event
 
 from .merossclient import const as mc
 from .meross_device import MerossDevice
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
 from .const import (
     PLATFORM_COVER,
+    PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
+    PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -29,11 +36,15 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
     def __init__(self, device: 'MerossDevice', id: object):
         super().__init__(device, id, DEVICE_CLASS_GARAGE)
         self._payload = {mc.KEY_STATE: {mc.KEY_OPEN: 0, mc.KEY_CHANNEL: id, mc.KEY_UUID: device.device_id } }
+        self._transition_duration = (PARAM_GARAGEDOOR_TRANSITION_MAXDURATION + PARAM_GARAGEDOOR_TRANSITION_MINDURATION) / 2
+        self._transition_start = 0
+        self._transition_end_job = HassJob(self._transition_end_callback)
+        self._state_lastupdate = 0
+        self._state_pending = None # used when we start a transition to prevent 'async polling incursion'
 
 
     @property
     def supported_features(self):
-        """Flag supported features."""
         return SUPPORT_OPEN | SUPPORT_CLOSE
 
 
@@ -53,7 +64,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
 
     async def async_open_cover(self, **kwargs) -> None:
-        self._set_state(STATE_OPENING)
+        self._start_transition(STATE_OPEN)
         self._payload[mc.KEY_STATE][mc.KEY_OPEN] = 1
         self._device.request(
             namespace=mc.NS_APPLIANCE_GARAGEDOOR_STATE,
@@ -62,7 +73,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
 
     async def async_close_cover(self, **kwargs) -> None:
-        self._set_state(STATE_CLOSING)
+        self._start_transition(STATE_CLOSED)
         self._payload[mc.KEY_STATE][mc.KEY_OPEN] = 0
         self._device.request(
             namespace=mc.NS_APPLIANCE_GARAGEDOOR_STATE,
@@ -70,8 +81,39 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
             payload=self._payload)
 
 
+    async def async_will_remove_from_hass(self) -> None:
+        self._cancel_transition()
+
+
+    def _set_unavailable(self) -> None:
+        self._cancel_transition()
+        super()._set_unavailable()
+
+
     def _set_open(self, open) -> None:
-        self._set_state(STATE_OPEN if open else STATE_CLOSED)
+        now = time()
+
+        if self._transition_unsub is not None:
+            if (now - self._transition_start) > self._transition_duration:
+                self._cancel_transition()
+                self._set_state(STATE_OPEN if open else STATE_CLOSED)
+            else:
+                self._state_pending = STATE_OPEN if open else STATE_CLOSED
+        else:
+            # this state 'out of transition' likely represent an externally
+            # triggered movement (scenario is device on HTTP and controlled by other means)
+            if (now - self._state_lastupdate) > self._transition_duration:
+                # the polling period is likely too long..we skip the transition
+                self._set_state(STATE_OPEN if open else STATE_CLOSED)
+            else:
+                if open:
+                    if self._state is not STATE_OPEN:
+                        self._start_transition(STATE_OPEN)
+                else:
+                    if self._state is not STATE_CLOSED:
+                        self._start_transition(STATE_CLOSED)
+
+        self._state_lastupdate = now
 
 
     def _set_onoff(self, onoff) -> None:
@@ -83,10 +125,40 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         """
         if onoff:
             if self._state == STATE_CLOSED:
-                self._set_state(STATE_OPENING)
+                self._start_transition(STATE_OPEN)
             elif self._state == STATE_OPEN:
-                self._set_state(STATE_CLOSING)
+                self._start_transition(STATE_CLOSED)
         #else: RIP!
+
+
+    def _start_transition(self, state):
+        self._cancel_transition()
+        self._transition_start = time()
+        self._state_pending = state
+        self._set_state(STATE_OPENING if state is STATE_OPEN else STATE_CLOSING)
+        self._transition_unsub = event.async_track_point_in_utc_time(
+            self.hass,
+            self._transition_end_job,
+            datetime.fromtimestamp(self._transition_start + self._transition_duration)
+        )
+
+
+    def _cancel_transition(self):
+        if self._transition_unsub is not None:
+            self._transition_unsub()
+            self._transition_unsub = None
+        self._state_pending = None
+
+
+    @callback
+    def _transition_end_callback(self, _now: datetime) -> None:
+        """
+        called by the event loop some 'self._transition_duration' after starting
+        a transition
+        """
+        self._set_state(self._state_pending)
+        self._transition_unsub = None
+        self._state_pending = None
 
 
 

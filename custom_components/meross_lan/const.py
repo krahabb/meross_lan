@@ -44,4 +44,5 @@ PARAM_ENERGY_UPDATE_PERIOD = 55 # read energy consumption only every ... second
 PARAM_HUBBATTERY_UPDATE_PERIOD = 3595 # read battery levels only every ... second
 PARAM_HUBSENSOR_UPDATE_PERIOD = 55
 #PARAM_STALE_DEVICE_REMOVE_TIMEOUT = 60 # disable config_entry when device is offline for more than...
-
+PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 30
+PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
