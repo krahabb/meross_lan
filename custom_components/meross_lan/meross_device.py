@@ -1,28 +1,41 @@
 from enum import Enum
+from io import TextIOWrapper
+import logging
 import math
+import os
 from typing import  Callable, Dict
-from time import time
-from logging import WARNING, DEBUG
+from time import strftime, time
+from logging import INFO, WARNING, DEBUG
 from aiohttp.client_exceptions import ClientConnectionError, ClientConnectorError
+from json import (
+    dumps as json_dumps,
+    loads as json_loads,
+)
 
+from homeassistant.helpers.config_validation import path
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.config_entries import ConfigEntries, ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.const import (
-    CONF_HOST
-)
 
 from .logger import LOGGER, LOGGER_trap
 
 from .const import (
-    CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT, CONF_POLLING_PERIOD_MIN, CONF_PROTOCOL,
-    CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT, CONF_TIMESTAMP, CONF_TIME_ZONE,
+    DOMAIN,
+    CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_HOST, CONF_TIMESTAMP,
+    CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT, CONF_POLLING_PERIOD_MIN,
+    CONF_PROTOCOL, CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
+    CONF_TIME_ZONE,
+    CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE,
     PARAM_UNAVAILABILITY_TIMEOUT, PARAM_HEARTBEAT_PERIOD
 )
 
 from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc  # mEROSS cONST
 
+# these are dynamically created MerossDevice attributes in a sort of a dumb optimization
+VOLATILE_ATTR_HTTPCLIENT = '_httpclient'
+VOLATILE_ATTR_TRACEFILE = '_tracefile'
+VOLATILE_ATTR_TRACEENDTIME = '_traceendtime'
 
 class Protocol(Enum):
     """
@@ -159,7 +172,7 @@ class MerossDevice:
         """
         self.replykey = replykey
         if self.key and (replykey != self.key):
-            LOGGER_trap(WARNING, 14400, "Meross device key error for device_id: %s", self.device_id)
+            self._trace_log(WARNING, 14400, "Meross device key error for device_id: %s", self.device_id)
 
         self.lastupdate = time()
         if not self._online:
@@ -188,6 +201,7 @@ class MerossDevice:
     ) -> None:
         if self.conf_protocol is Protocol.HTTP:
             return # even if mqtt parsing is no harming we want a 'consistent' HTTP only behaviour
+        self._trace(payload, namespace, method, CONF_OPTION_MQTT)
         self.lastmqtt = time()
         if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
             self._switch_protocol(Protocol.MQTT)
@@ -196,28 +210,32 @@ class MerossDevice:
 
     async def async_http_request(self, namespace: str, method: str, payload: dict = {}, callback: Callable = None):
         try:
-            _httpclient:MerossHttpClient = getattr(self, '_httpclient', None)
+            _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)
             if _httpclient is None:
                 _httpclient = MerossHttpClient(self.descriptor.ipAddress, self.key, async_get_clientsession(self.api.hass), LOGGER)
                 self._httpclient = _httpclient
             else:
                 _httpclient.set_host_key(self.descriptor.ipAddress, self.key)
 
+            self._trace(payload, namespace, method, CONF_OPTION_HTTP)
             response = await _httpclient.async_request(namespace, method, payload)
             r_header = response[mc.KEY_HEADER]
             r_namespace = r_header[mc.KEY_NAMESPACE]
             r_method = r_header[mc.KEY_METHOD]
+            r_payload = response[mc.KEY_PAYLOAD]
+            self._trace(r_payload, r_namespace, r_method, CONF_OPTION_HTTP)
             if (callback is not None) and (r_method == mc.METHOD_SETACK):
                 #we're actually only using this for SET->SETACK command confirmation
                 callback()
             # passing self.key to shut off MerossDevice replykey behaviour
             # since we're already managing replykey in http client
-            self.receive(r_namespace, r_method, response[mc.KEY_PAYLOAD], self.key)
+            self.receive(r_namespace, r_method, r_payload, self.key)
         except (ClientConnectionError, TimeoutError) as e:
             if self._online:
-                LOGGER.info("MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
+                self._trace_log(INFO, 0, "MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
                 if (self.conf_protocol is Protocol.AUTO) and ((time() - self.lastmqtt) < PARAM_UNAVAILABILITY_TIMEOUT):
                     self._switch_protocol(Protocol.MQTT)
+                    self._trace(payload, namespace, method, CONF_OPTION_MQTT)
                     self.api.mqtt_publish(
                         self.device_id,
                         namespace,
@@ -228,7 +246,7 @@ class MerossDevice:
                 else:
                     self._set_offline()
         except Exception as e:
-            LOGGER_trap(WARNING, 14400, "MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
+            self._trace_log(WARNING, 14400, "MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
 
 
     def request(self, namespace: str, method: str = mc.METHOD_GET, payload: dict = {}, callback: Callable = None):
@@ -244,6 +262,7 @@ class MerossDevice:
                 self.async_http_request(namespace, method, payload, callback)
             )
         else: # self.curr_protocol is Protocol.MQTT:
+            self._trace(payload, namespace, method, CONF_OPTION_MQTT)
             self.api.mqtt_publish(
                 self.device_id,
                 namespace,
@@ -254,7 +273,7 @@ class MerossDevice:
 
 
     def _set_offline(self) -> None:
-        LOGGER.debug("MerossDevice(%s) going offline!", self.device_id)
+        self._trace_log(DEBUG, 0, "MerossDevice(%s) going offline!", self.device_id)
         self._online = False
         self._retry_period = 0
         for entity in self.entities.values():
@@ -266,13 +285,13 @@ class MerossDevice:
             When coming back online allow for a refresh
             also in inheriteds
         """
-        LOGGER.debug("MerossDevice(%s) back online!", self.device_id)
+        self._trace_log(DEBUG, 0, "MerossDevice(%s) back online!", self.device_id)
         self._online = True
         self.updatecoordinator_listener()
 
 
     def _switch_protocol(self, protocol: Protocol) -> None:
-        LOGGER.info("MerossDevice(%s) switching protocol to %s", self.device_id, protocol.name)
+        self._trace_log(INFO, 0, "MerossDevice(%s) switching protocol to %s", self.device_id, protocol.name)
         self.curr_protocol = protocol
 
 
@@ -322,7 +341,7 @@ class MerossDevice:
                 data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
                 entries.async_update_entry(entry, data=data)
         except Exception as e:
-            LOGGER.warning("MerossDevice(%s) error while updating ConfigEntry (%s)", self.device_id, str(e))
+            self._trace_log(WARNING, 0, "MerossDevice(%s) error while updating ConfigEntry (%s)", self.device_id, str(e))
 
 
     def _set_config_entry(self, data: dict) -> None:
@@ -348,16 +367,74 @@ class MerossDevice:
 
         self.time_zone = data.get(CONF_TIME_ZONE) # TODO: add to config_flow options
 
+
     @callback
     async def entry_update_listener(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
         # we're not changing device_id or other 'identifying' stuff
         self._set_config_entry(config_entry.data)
         self.api.update_polling_period()
-        _httpclient:MerossHttpClient = getattr(self, '_httpclient', None)
+        _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)
         if _httpclient is not None:
             _httpclient.set_host_key(self.descriptor.ipAddress, self.key)
+        """
+        We'll activate debug tracing only when the user turns it on in OptionsFlowHandler so we usually
+        don't care about it on startup ('_set_config_entry'). When updating ConfigEntry
+        we always reset the timeout and so the trace will (eventually) restart
+        """
+        _tracefile: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACEFILE, None)
+        if _tracefile is not None:
+            self._trace_close(_tracefile)
+        _traceendtime = config_entry.data.get(CONF_TRACE, 0)
+        if _traceendtime > time():
+            try:
+                tracedir = hass.config.path('custom_components', DOMAIN, CONF_TRACE_DIRECTORY)
+                os.makedirs(tracedir, exist_ok=True)
+                self._tracefile = open(os.path.join(tracedir, CONF_TRACE_FILENAME.format(self.descriptor.type, self.device_id)), 'w')
+                self._traceendtime = _traceendtime
+                self._trace(self.descriptor.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
+                self._trace(self.descriptor.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK)
+            except Exception as e:
+                LOGGER.warning("MerossDevice(%s) error while creating trace file (%s)", self.device_id, str(e))
 
         #await hass.config_entries.async_reload(config_entry.entry_id)
+
+
+    def _trace_close(self, tracefile: TextIOWrapper):
+        try:
+            delattr(self, VOLATILE_ATTR_TRACEFILE)
+            delattr(self, VOLATILE_ATTR_TRACEENDTIME)
+            tracefile.close()
+        except Exception as e:
+            LOGGER.warning("MerossDevice(%s) error while closing trace file (%s)", self.device_id, str(e))
+
+
+    def _trace(self, data, namespace = '', method = '', protocol = CONF_OPTION_AUTO):
+        _tracefile: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACEFILE, None)
+        if _tracefile is not None:
+            now = time()
+            _traceendtime = getattr(self, VOLATILE_ATTR_TRACEENDTIME, 0)
+            if now > _traceendtime:
+                self._trace_close(_tracefile)
+                return
+
+            try:
+                _tracefile.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
+                    + protocol + '\t' + method + '\t' + namespace + '\t' \
+                    + (json_dumps(data) if isinstance(data, dict) else data) + '\r\n')
+                if _tracefile.tell() > CONF_TRACE_MAXSIZE:
+                    self._trace_close(_tracefile)
+            except Exception as e:
+                LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
+                self._trace_close(_tracefile)
+
+
+    def _trace_log(self, level: int, timeout: int, msg: str, *args):
+        if timeout:
+            LOGGER_trap(level, timeout, msg, args)
+        else:
+            LOGGER.log(level, msg, args)
+        self._trace(msg.format(args), logging.getLevelName(level), 'LOG')
+
 
     @callback
     def updatecoordinator_listener(self) -> bool:

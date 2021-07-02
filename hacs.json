@@ -5,5 +5,6 @@
   "domains": ["switch", "sensor", "light", "cover", "climate", "binary_sensor"],
   "homeassistant": "2021.4.0",
   "iot_class": "local_polling",
+  "persistent_directory": "traces",
   "hacs": "1.6.0"
 }

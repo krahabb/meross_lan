@@ -5,3 +5,4 @@ venv
 .coverage
 *.secret
 *.user
+traces

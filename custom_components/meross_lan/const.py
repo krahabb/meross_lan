@@ -20,6 +20,7 @@ CONF_KEY = 'key'
 CONF_PAYLOAD = hac.CONF_PAYLOAD
 CONF_DEVICE_TYPE = "device_type"
 CONF_HOST = hac.CONF_HOST
+
 CONF_PROTOCOL = hac.CONF_PROTOCOL # protocol used to communicate with device
 CONF_OPTION_AUTO = 'auto'
 CONF_OPTION_MQTT = 'mqtt'
@@ -29,10 +30,19 @@ CONF_PROTOCOL_OPTIONS = (
     CONF_OPTION_MQTT,
     CONF_OPTION_HTTP
 )
+
 CONF_POLLING_PERIOD = 'polling_period' # general device state polling or whatever
 CONF_POLLING_PERIOD_MIN = 5
 CONF_POLLING_PERIOD_DEFAULT = 30
-CONF_TIME_ZONE = hac.CONF_TIME_ZONE # if set in config we'll force time & zone for devices
+
+CONF_TRACE = 'trace' # create a file with device info and communication tracing (only CONF_TRACE_TIMEOUT seconds then shut off)
+CONF_TRACE_TIMEOUT = 600 # when starting a trace stop it and close the file after .. secs
+CONF_TRACE_MAXSIZE = 65536 # or when MAXSIZE exceeded
+CONF_TRACE_DIRECTORY = 'traces' # folder where to store traces
+CONF_TRACE_FILENAME = '{}-{}.csv' # filename format: device_type-device_id.csv
+
+CONF_TIME_ZONE = hac.CONF_TIME_ZONE # TODO: if set in config we'll force time & zone for devices
+
 CONF_TIMESTAMP = mc.KEY_TIMESTAMP # this is a 'fake' conf param we'll add to config_entry when we want to force flush to storage
 
 """
