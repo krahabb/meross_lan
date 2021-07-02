@@ -46,6 +46,7 @@
           "key": "Device key",
           "protocol": "Connection protocol",
           "polling_period": "Polling period",
+          "trace": "Activate device debug tracing (for 10 min)",
           "all": "Appliance.System.All",
           "ability": "Appliance.System.Ability"
         }

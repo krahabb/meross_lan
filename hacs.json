@@ -3,7 +3,8 @@
   "render_readme": true,
   "country": ["IT", "UK", "US"],
   "domains": ["switch", "sensor", "light", "cover", "climate", "binary_sensor"],
-  "homeassistant": "2020.0.0",
+  "homeassistant": "2021.4.0",
   "iot_class": "local_polling",
+  "persistent_directory": "traces",
   "hacs": "1.6.0"
 }

@@ -1,8 +1,9 @@
 """Config flow for Meross IoT local LAN integration."""
 
+from time import time
 from homeassistant.components.mqtt import DATA_MQTT
 import voluptuous as vol
-from typing import OrderedDict, Optional
+from typing import OrderedDict
 import json
 
 from homeassistant import config_entries
@@ -19,6 +20,7 @@ from .const import (
     CONF_PAYLOAD, CONF_DEVICE_TYPE,
     CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT,
+    CONF_TRACE, CONF_TRACE_TIMEOUT,
 )
 
 
@@ -211,6 +213,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data[CONF_KEY] = user_input.get(CONF_KEY)
             data[CONF_PROTOCOL] = user_input.get(CONF_PROTOCOL)
             data[CONF_POLLING_PERIOD] = user_input.get(CONF_POLLING_PERIOD)
+            data[CONF_TRACE] = time() + CONF_TRACE_TIMEOUT if user_input.get(CONF_TRACE) else 0
             self.hass.config_entries.async_update_entry(self._config_entry, data=data)
             return self.async_create_entry(title=None, data=None)
 
@@ -234,6 +237,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 description={"suggested_value": data.get(CONF_POLLING_PERIOD)}
                 )
             ] = cv.positive_int
+        config_schema[
+            vol.Optional(
+                CONF_TRACE,
+                # CONF_TRACE contains the trace 'end' time epoch if set
+                description={"suggested_value": data.get(CONF_TRACE, 0) > time()}
+                )
+            ] = bool
 
         descriptor = MerossDeviceDescriptor(data.get(CONF_PAYLOAD, {}))
         return self.async_show_form(

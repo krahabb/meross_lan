@@ -32,7 +32,7 @@ from .meross_device_hub import MerossDeviceHub
 
 from .const import (
     DOMAIN, SERVICE_REQUEST,
-    CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP,
+    CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD,
     CONF_POLLING_PERIOD_DEFAULT,
     PARAM_UNAVAILABILITY_TIMEOUT,
@@ -54,13 +54,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     device_id = entry.data.get(CONF_DEVICE_ID)
     if (api.unsub_mqtt is None) and \
+        (api.mqtt_subscribing is False) and \
         ((device_id is None) or (entry.data.get(CONF_PROTOCOL) != CONF_OPTION_HTTP)):
-        # this is the MQTT Hub entry or a device which needs MQTT
-        # and we still havent registered MQTT
+        """
+        this is the MQTT Hub entry or a device which could/should use MQTT
+        and we still havent registered MQTT
+        """
+        api.mqtt_subscribing = True # guard ON
         try:
             await api.async_mqtt_register()
-        except Exception as e:
-            raise ConfigEntryNotReady from e
+        except Exception:
+            pass
+        api.mqtt_subscribing = False
+
+    """
+    this is a hell of race conditions: the previous mqtt_register could be overlapping (awaited)
+    because of a different ConfigEntry request (where CONF_PROTOCOL != HTTP)
+    here we need to be sure to delay load this entry until mqtt is in place (at least for those
+    directly requiring MQTT)
+    """
+    if (device_id is None) or (entry.data.get(CONF_PROTOCOL) == CONF_OPTION_MQTT):
+        if api.unsub_mqtt is None:
+            raise ConfigEntryNotReady
 
     if device_id is None:
         # this is the MQTT Hub entry
@@ -72,7 +87,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         device = api.build_device(device_id, entry)
         device.unsub_entry_update_listener = entry.add_update_listener(device.entry_update_listener)
         device.unsub_updatecoordinator_listener = api.coordinator.async_add_listener(device.updatecoordinator_listener)
-        hass.config_entries.async_setup_platforms(entry, device.platforms.keys())
+        # this api is too recent (around April 2021): hass.config_entries.async_setup_platforms(entry, device.platforms.keys())
+        for platform in device.platforms.keys():
+            hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, platform))
+
 
     return True
 
@@ -120,6 +138,7 @@ class MerossApi:
         self.key = None
         self.devices: Dict[str, MerossDevice] = {}
         self.discovering: Dict[str, dict] = {}
+        self.mqtt_subscribing = False # guard for asynchronous mqtt sub registration
         self.unsub_mqtt = None
         self.unsub_entry_update_listener = None
         self.unsub_updatecoordinator_listener = None

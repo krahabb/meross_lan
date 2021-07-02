@@ -49,6 +49,7 @@ Most of this software has been developed and tested on my owned Meross devices w
 
 - Switches
   - [MSS110](https://www.meross.com/product/2/article/): Smart Wifi plug mini
+  - [MSS210](https://www.meross.com/Detail/3/Smart%20Wi-Fi%20Plug): Smart Wifi plug
   - [MSS310](https://www.meross.com/product/38/article/): power plug with metering capabilties
   - [MSS425](https://www.meross.com/product/16/article/): Smart WiFi Surge Protector (multiple sockets power strip)
   - [MSS510](https://www.meross.com/product/23/article/): Smart WiFi single pole switch
@@ -64,7 +65,7 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MTS100](https://www.meross.com/Detail/30/Smart%20Thermostat%20Valve): Smart Thermostat Valve
 - Covers
   - Support for garage door opener and roller shutter is implemented by guess-work so I'm not expecting flawless behaviour but...could work
-
+  - [MSG100](https://www.meross.com/product/29/article/): Smart Wi-Fi Garage Door Opener
 
 ## Features
 
@@ -77,7 +78,7 @@ I'm sorry to not be able to write a complete wiki at the moment in order to bett
 
 ## Service
 
-There is a service (since version 0.0.4) exposed to simplify communication with the device and play with it a bit. It basically requires the needed informations to setup a command request and send it over MQTT or HTTP without the hassle of signatures and timestamps computations. You can check it in the 'Developer Tools' of the HA instance, everything should be enough self-explanatory there. 
+There is a service (since version 0.0.4) exposed to simplify communication with the device and play with it a bit. It basically requires the needed informations to setup a command request and send it over MQTT or HTTP without the hassle of signatures and timestamps computations. You can check it in the 'Developer Tools' of the HA instance, everything should be enough self-explanatory there.
 I find it a bit frustrating that the HA service infrastructure does not allow to return anything from a service invocation so, the eventual reply from the device will get 'lost' in the mqtt flow. I've personally played a bit with the MQTT integration configuration pane to listen and see the mqtt responses from my devices but it's somewhat a pain unless you have a big screen to play with (or multiple monitors for the matter). Nevertheless you can use the service wherever you like to maybe invoke features at the device level or dig into it's configuration
 *WARNING*: the service name has changed from 'mqtt_publish' to 'request' to accomodate the more general protocol support
 

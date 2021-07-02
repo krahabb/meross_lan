@@ -213,7 +213,11 @@ class MerossLanLight(_MerossToggle, LightEntity):
             if onoff is not None:
                 self._state = STATE_ON if onoff else STATE_OFF
 
-            if self.hass and self.enabled:
+            if self.hass and self.enabled and ((onoff is not None) or (self._state is STATE_ON)):
+                # since the light payload could be processed before the relative 'togglex'
+                # here we'll flush only when the lamp is 'on' to avoid intra-updates to HA states.
+                # when the togglex will arrive, the _light (attributes) will be already set
+                # and HA will save a consistent state (hopefully..we'll see)
                 self.async_write_ha_state()
 
 
