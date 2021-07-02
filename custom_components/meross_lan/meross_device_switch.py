@@ -159,7 +159,7 @@ class MerossDeviceSwitch(MerossDevice):
 
     def _parse_garagedoor_state(self, p_state) -> None:
         if isinstance(p_state, dict):
-            self.entities[p_state.get(mc.KEY_CHANNEL, 0)]._set_open(p_state.get(mc.KEY_OPEN))
+            self.entities[p_state.get(mc.KEY_CHANNEL, 0)]._set_open(p_state.get(mc.KEY_OPEN), p_state.get(mc.KEY_EXECUTE))
         elif isinstance(p_state, list):
             for s in p_state:
                 self._parse_garagedoor_state(s)
