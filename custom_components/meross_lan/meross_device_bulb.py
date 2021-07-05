@@ -19,9 +19,9 @@ class MerossDeviceBulb(MerossDevice):
             p_light = p_digest[mc.KEY_LIGHT]
             if isinstance(p_light, list):
                 for l in p_light:
-                    MerossLanLight(self, l.get(mc.KEY_CHANNEL, 0))
+                    MerossLanLight(self, l.get(mc.KEY_CHANNEL, 0), p_digest.get(mc.KEY_TOGGLEX))
             elif isinstance(p_light, dict):
-                MerossLanLight(self, p_light.get(mc.KEY_CHANNEL, 0))
+                MerossLanLight(self, p_light.get(mc.KEY_CHANNEL, 0), p_digest.get(mc.KEY_TOGGLEX))
 
         except Exception as e:
             LOGGER.warning("MerossDeviceBulb(%s) init exception:(%s)", self.device_id, str(e))
