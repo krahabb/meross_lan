@@ -1,5 +1,6 @@
 from time import time
 from datetime import datetime
+from logging import DEBUG, WARNING
 
 from homeassistant.components.cover import (
     CoverEntity,
@@ -64,21 +65,31 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
 
     async def async_open_cover(self, **kwargs) -> None:
-        #self._start_transition(STATE_OPEN)
-        self._payload[mc.KEY_STATE][mc.KEY_OPEN] = 1
-        self._device.request(
-            namespace=mc.NS_APPLIANCE_GARAGEDOOR_STATE,
-            method=mc.METHOD_SET,
-            payload=self._payload)
+        self.request(1)
 
 
     async def async_close_cover(self, **kwargs) -> None:
-        #self._start_transition(STATE_CLOSED)
-        self._payload[mc.KEY_STATE][mc.KEY_OPEN] = 0
+        self.request(0)
+
+
+    def request(self, open):
+        def _ack_callback():
+            """
+            this will be called on HTTP only and gives us a chance to synchronously
+            request a status update on the GarageDoor to see what's going on
+            (on MQTT I'd expect PUSH status messages flowing up). The confirmation
+            payload itself from the garagedoor (talking about HTTP) is anyway processed
+            from the standard parser (this payload will carry status informations)
+            """
+            pass
+        
+        self._payload[mc.KEY_STATE][mc.KEY_OPEN] = open
         self._device.request(
-            namespace=mc.NS_APPLIANCE_GARAGEDOOR_STATE,
-            method=mc.METHOD_SET,
-            payload=self._payload)
+            mc.NS_APPLIANCE_GARAGEDOOR_STATE,
+            mc.METHOD_SET,
+            self._payload,
+            _ack_callback
+            )
 
 
     async def async_will_remove_from_hass(self) -> None:
@@ -97,7 +108,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
             state_pending = STATE_CLOSED if open else STATE_OPEN
             if self._transition_unsub is not None:
                 if self._state_pending != state_pending:
-                    LOGGER.info("MerossLanGarage(%s): received start of new transition while another is pending", self.name)
+                    self._device.log(WARNING, 0, "MerossLanGarage(%s): received start of new transition while another is pending", self.name)
             self._start_transition(state_pending)
 
         elif self._transition_unsub is not None:
@@ -119,7 +130,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
                         self._transition_duration = PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
                     elif self._transition_duration < PARAM_GARAGEDOOR_TRANSITION_MINDURATION:
                         self._transition_duration = PARAM_GARAGEDOOR_TRANSITION_MINDURATION
-                    LOGGER.debug("MerossLanGarage(%s): updated transition_duration to %d sec", self.name, self._transition_duration)
+                    self._device.log(DEBUG, 0, "MerossLanGarage(%s): updated transition_duration to %d sec", self.name, self._transition_duration)
                     self._cancel_transition()
                     self._set_state(STATE_CLOSED)
             else: # self._state_pending == STATE_OPEN:
@@ -146,14 +157,16 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         MSG100 exposes a 'togglex' interface so my code interprets that as a switch state
         Here we'll intercept that behaviour and right now the guess is:
         The toggle state represents the contact of the garagedoor which is likely a short
-        pulse so we'll use it to guess state transitions in our cover
-        """
+        pulse so we'll use it to guess state transitions in our cover (disabled this until further knowledge)
+
         if onoff:
             if self._state == STATE_CLOSED:
                 self._start_transition(STATE_OPEN)
             elif self._state == STATE_OPEN:
                 self._start_transition(STATE_CLOSED)
         #else: RIP!
+
+        """
 
 
     def _start_transition(self, state):
@@ -206,7 +219,7 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     def __init__(self, device: MerossDevice, id: object):
         super().__init__(device, id, DEVICE_CLASS_SHUTTER)
-        self._payload = {mc.KEY_POSITION: {mc.KEY_POSITION: 0, mc.KEY_CHANNEL: id } }
+        self._payload = {mc.KEY_POSITION: {mc.KEY_CHANNEL: id, mc.KEY_POSITION: 0}}
         self._position = None
 
 
@@ -230,47 +243,50 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
     def is_closed(self):
         return self._state == STATE_CLOSED
 
+
     @property
     def current_cover_position(self):
         return self._position
 
+
     async def async_open_cover(self, **kwargs) -> None:
-        self._set_state(STATE_OPENING)
-        self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = 100
-        self._device.request(
-            namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-            method=mc.METHOD_SET,
-            payload=self._payload)
+        self.request(100)
 
 
     async def async_close_cover(self, **kwargs) -> None:
-        self._set_state(STATE_CLOSING)
-        self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = 0
-        self._device.request(
-            namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-            method=mc.METHOD_SET,
-            payload=self._payload)
+        self.request(0)
 
 
     async def async_set_cover_position(self, **kwargs):
         if ATTR_POSITION in kwargs:
-            newpos = kwargs[ATTR_POSITION]
-            if self._position is not None:
-                self._set_state(STATE_CLOSING if newpos < self._position else STATE_OPENING)
-            self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = newpos
-            self._device.request(
-                namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-                method=mc.METHOD_SET,
-                payload=self._payload)
+            position = kwargs[ATTR_POSITION]
+            self.request(position)
 
 
     async def async_stop_cover(self, **kwargs):
-        #self._set_state(STATE_CLOSING)
-        self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = -1
+        self.request(-1)
+
+
+    def request(self, position):
+        def _ack_callback():
+            """
+            this will be called on HTTP only and gives us a chance to synchronously
+            request a status update on the RollerShutter to see what's going on
+            (on MQTT I'd expect PUSH status messages flowing up). The confirmation
+            payload itself from the shutter (talking about HTTP) is empty (;)
+            """
+            self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                mc.METHOD_GET, { mc.KEY_POSITION : [] })
+            self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+                mc.METHOD_GET, { mc.KEY_STATE : [] })
+
+        self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = position
         self._device.request(
-            namespace=mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-            method=mc.METHOD_SET,
-            payload=self._payload)
+            mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            mc.METHOD_SET,
+            self._payload,
+            _ack_callback
+            )
 
 
     def _set_unavailable(self) -> None:
@@ -280,14 +296,14 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     def _set_rollerstate(self, state) -> None:
         if state == 1:
-            self._set_state(STATE_CLOSING)
-        elif state == 2:
             self._set_state(STATE_OPENING)
+        elif state == 2:
+            self._set_state(STATE_CLOSING)
+        else:
+            self._set_state(STATE_OPEN if self._position else STATE_CLOSED)
 
 
     def _set_rollerposition(self, position) -> None:
         self._position = position
-        if position == 0:
-            self._set_state(STATE_CLOSED)
-        else:
-            self._set_state(STATE_OPEN)
+        if self._state not in (STATE_OPENING, STATE_CLOSING):
+            self._set_state(STATE_OPEN if self._position else STATE_CLOSED)
