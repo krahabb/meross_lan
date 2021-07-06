@@ -105,48 +105,48 @@ class MerossDeviceHub(MerossDevice):
 
         if namespace == mc.NS_APPLIANCE_HUB_SENSOR_ALL:
             self._lastupdate_sensor = self.lastupdate
-            self._parse_subdevice(payload, mc.KEY_ALL)
+            self._subdevice_parse(payload, mc.KEY_ALL)
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_SENSOR_TEMPHUM:
             self._lastupdate_sensor = self.lastupdate
-            self._parse_subdevice(payload, mc.KEY_TEMPHUM)
+            self._subdevice_parse(payload, mc.KEY_TEMPHUM)
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_MTS100_ALL:
             self._lastupdate_mts100 = self.lastupdate
-            self._parse_subdevice(payload, mc.KEY_ALL)
+            self._subdevice_parse(payload, mc.KEY_ALL)
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_MTS100_MODE:
-            self._parse_subdevice(payload, mc.KEY_MODE)
+            self._subdevice_parse(payload, mc.KEY_MODE)
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE:
-            self._parse_subdevice(payload, mc.KEY_TEMPERATURE)
+            self._subdevice_parse(payload, mc.KEY_TEMPERATURE)
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_TOGGLEX:
-            self._parse_subdevice(payload, mc.KEY_TOGGLEX)
+            self._subdevice_parse(payload, mc.KEY_TOGGLEX)
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_BATTERY:
             self._lastupdate_battery = self.lastupdate
-            self._parse_subdevice(payload, mc.KEY_BATTERY)
+            self._subdevice_parse(payload, mc.KEY_BATTERY)
             return True
 
         if namespace == mc.NS_APPLIANCE_HUB_ONLINE:
-            self._parse_subdevice(payload, mc.KEY_ONLINE)
+            self._subdevice_parse(payload, mc.KEY_ONLINE)
             return True
 
         if namespace == mc.NS_APPLIANCE_DIGEST_HUB:
-            self._parse_digest_hub(payload.get(mc.KEY_HUB))
+            self._parse_hub(payload.get(mc.KEY_HUB))
             return True
 
         return False
 
 
-    def _parse_subdevice(self, payload: dict, key: str) -> None:
+    def _subdevice_parse(self, payload: dict, key: str) -> None:
         p_subdevices = payload.get(key)
         if isinstance(p_subdevices, list):
             for p_subdevice in p_subdevices:
@@ -160,16 +160,14 @@ class MerossDeviceHub(MerossDevice):
                         method(p_subdevice)
 
 
-    def _parse_digest_hub(self, p_hub: dict) -> bool:
-        update = False
-
+    def _parse_hub(self, p_hub: dict) -> None:
         p_subdevices = p_hub.get(mc.KEY_SUBDEVICE)
         if isinstance(p_subdevices, list):
             for p_digest in p_subdevices:
                 p_id = p_digest.get(mc.KEY_ID)
                 subdevice = self.subdevices.get(p_id)
                 if subdevice is None:
-                    update = True
+                    self.needsave = True
                     type = _get_subdevice_type(p_digest)
                     if type is None:
                         # the hub could report incomplete info anytime so beware!
@@ -181,16 +179,6 @@ class MerossDeviceHub(MerossDevice):
                     else:
                         subdevice = deviceclass(self, p_digest)
                 subdevice.update_digest(p_digest)
-
-        return update
-
-
-    def _update_descriptor(self, payload: dict) -> bool:
-        update = super()._update_descriptor(payload)
-        p_digest = self.descriptor.digest
-        if p_digest:
-            update |= self._parse_digest_hub(p_digest.get(mc.KEY_HUB, {}))
-        return update
 
 
     @callback

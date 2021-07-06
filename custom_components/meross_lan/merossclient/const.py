@@ -77,7 +77,11 @@ KEY_VERSION = 'version'
 KEY_UUID = 'uuid'
 KEY_MACADDRESS = 'macAddress'
 KEY_FIRMWARE = 'firmware'
+KEY_WIFIMAC = 'wifiMac'
 KEY_INNERIP = 'innerIp'
+KEY_SERVER = 'server'
+KEY_PORT = 'port'
+KEY_USERID = 'userId'
 KEY_CONTROL = 'control'
 KEY_DIGEST = 'digest'
 KEY_ABILITY = 'ability'
@@ -162,3 +166,4 @@ TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
     GP constant strings
 """
 MANUFACTURER = "Meross"
+MEROSS_MACADDRESS = '48:e1:e9:xx:xx:xx'
