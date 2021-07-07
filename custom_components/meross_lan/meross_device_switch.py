@@ -67,18 +67,18 @@ class MerossDeviceSwitch(MerossDevice):
                             mc.KEY_TOGGLEX)
 
                 #endif p_digest
-
-            # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
-            # but have 'control'
-            p_control = self.descriptor.all.get(mc.KEY_CONTROL) if p_digest is None else None
-            if p_control:
-                p_toggle = p_control.get(mc.KEY_TOGGLE)
-                if isinstance(p_toggle, dict):
-                    MerossLanSwitch(
-                        self,
-                        p_toggle.get(mc.KEY_CHANNEL, 0),
-                        mc.NS_APPLIANCE_CONTROL_TOGGLE,
-                        mc.KEY_TOGGLE)
+            else:
+                # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
+                # but have 'control'
+                p_control = self.descriptor.all.get(mc.KEY_CONTROL)
+                if p_control:
+                    p_toggle = p_control.get(mc.KEY_TOGGLE)
+                    if isinstance(p_toggle, dict):
+                        MerossLanSwitch(
+                            self,
+                            p_toggle.get(mc.KEY_CHANNEL, 0),
+                            mc.NS_APPLIANCE_CONTROL_TOGGLE,
+                            mc.KEY_TOGGLE)
 
             #fallback for switches: in case we couldnt get from NS_APPLIANCE_SYSTEM_ALL
             if not self.entities:
@@ -119,13 +119,11 @@ class MerossDeviceSwitch(MerossDevice):
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLE:
-            p_toggle = payload.get(mc.KEY_TOGGLE)
-            if isinstance(p_toggle, dict):
-                self.entities[p_toggle.get(mc.KEY_CHANNEL, 0)]._set_onoff(p_toggle.get(mc.KEY_ONOFF))
+            self._parse_togglex(payload.get(mc.KEY_TOGGLE))
             return True
 
         if namespace == mc.NS_APPLIANCE_GARAGEDOOR_STATE:
-            self._parse_garagedoor_state(payload.get(mc.KEY_STATE))
+            self._parse_garageDoor(payload.get(mc.KEY_STATE))
             return True
 
         if namespace == mc.NS_APPLIANCE_ROLLERSHUTTER_STATE:
@@ -157,12 +155,12 @@ class MerossDeviceSwitch(MerossDevice):
         return False
 
 
-    def _parse_garagedoor_state(self, p_state) -> None:
-        if isinstance(p_state, dict):
-            self.entities[p_state.get(mc.KEY_CHANNEL, 0)]._set_open(p_state.get(mc.KEY_OPEN), p_state.get(mc.KEY_EXECUTE))
-        elif isinstance(p_state, list):
-            for s in p_state:
-                self._parse_garagedoor_state(s)
+    def _parse_garageDoor(self, payload) -> None:
+        if isinstance(payload, dict):
+            self.entities[payload.get(mc.KEY_CHANNEL, 0)]._set_open(payload.get(mc.KEY_OPEN), payload.get(mc.KEY_EXECUTE))
+        elif isinstance(payload, list):
+            for p in payload:
+                self._parse_garageDoor(p)
 
 
     def _parse_rollershutter_state(self, p_state) -> None:
@@ -181,21 +179,17 @@ class MerossDeviceSwitch(MerossDevice):
                 self._parse_rollershutter_position(p)
 
 
-    def _update_descriptor(self, payload: dict) -> bool:
-        update = super()._update_descriptor(payload)
+    def _parse_all(self, payload: dict) -> None:
+        super()._parse_all(payload)
 
         p_digest = self.descriptor.digest
         if p_digest:
-            self._parse_garagedoor_state(p_digest.get(mc.KEY_GARAGEDOOR))
+            pass
         else:
             # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
             p_control = self.descriptor.all.get(mc.KEY_CONTROL)
             if isinstance(p_control, dict):
-                p_toggle = p_control.get(mc.KEY_TOGGLE)
-                if isinstance(p_toggle, dict):
-                    self.entities[p_toggle.get(mc.KEY_CHANNEL, 0)]._set_onoff(p_toggle.get(mc.KEY_ONOFF))
-
-        return update
+                self._parse_togglex(p_control.get(mc.KEY_TOGGLE))
 
 
     @callback

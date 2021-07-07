@@ -19,9 +19,9 @@ class MerossDeviceBulb(MerossDevice):
             p_light = p_digest[mc.KEY_LIGHT]
             if isinstance(p_light, list):
                 for l in p_light:
-                    MerossLanLight(self, l.get(mc.KEY_CHANNEL, 0))
+                    MerossLanLight(self, l.get(mc.KEY_CHANNEL, 0), p_digest.get(mc.KEY_TOGGLEX))
             elif isinstance(p_light, dict):
-                MerossLanLight(self, p_light.get(mc.KEY_CHANNEL, 0))
+                MerossLanLight(self, p_light.get(mc.KEY_CHANNEL, 0), p_digest.get(mc.KEY_TOGGLEX))
 
         except Exception as e:
             LOGGER.warning("MerossDeviceBulb(%s) init exception:(%s)", self.device_id, str(e))
@@ -39,23 +39,12 @@ class MerossDeviceBulb(MerossDevice):
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_LIGHT:
-            self._parse_light(payload)
+            self._parse_light(payload.get(mc.KEY_LIGHT))
             return True
 
         return False
 
 
-    def _update_descriptor(self, payload: dict) -> bool:
-        update = super()._update_descriptor(payload)
-
-        p_digest = self.descriptor.digest
-        if p_digest:
-            self._parse_light(p_digest)
-
-        return update
-
-
-    def _parse_light(self, payload: dict) -> None:
-        p_light = payload.get(mc.KEY_LIGHT)
-        if isinstance(p_light, dict):
-            self.entities[p_light.get(mc.KEY_CHANNEL)]._set_light(p_light)
+    def _parse_light(self, payload) -> None:
+        if isinstance(payload, dict):
+            self.entities[payload.get(mc.KEY_CHANNEL)]._set_light(payload)

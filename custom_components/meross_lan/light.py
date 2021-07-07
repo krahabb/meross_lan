@@ -64,11 +64,30 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
     PLATFORM = PLATFORM_LIGHT
 
-    def __init__(self, device: MerossDevice, id: object):
-        # suppose we use 'togglex' to switch the light
+    def __init__(self, device: MerossDevice, id: object, p_togglex):
+        # we'll use the (eventual) togglex payload to
+        # see if we have to toggle the light by togglex or so
+        # with msl120j (fw 3.1.4) I've discovered that any 'light' payload sent will turn on the light
+        # (disregarding any 'onoff' field inside).
+        # The msl120j never 'pushes' an 'onoff' field in the light payload while msl120b (fw 2.1.16)
+        # does that.
+        # we'll use a 'conservative' approach here where we always toggle by togglex (if presented in digest)
+        # and kindly ignore any 'onoff' in the 'light' payload (except digest didn't presented togglex)
+        self._usetogglex = False
+        if isinstance(p_togglex, list):
+            for t in p_togglex:
+                if t.get(mc.KEY_CHANNEL) == id:
+                    self._usetogglex = True
+                    break
+        elif isinstance(p_togglex, dict):
+            self._usetogglex = (p_togglex.get(mc.KEY_CHANNEL) == id)
+
+        # in case we're not using togglex fallback to toggle but..the light could
+        # be switchable by 'onoff' field in light payload itself..(to be investigated)
         super().__init__(
             device, id, None,
-            mc.NS_APPLIANCE_CONTROL_TOGGLEX, mc.KEY_TOGGLEX)
+            mc.NS_APPLIANCE_CONTROL_TOGGLEX if self._usetogglex else mc.NS_APPLIANCE_CONTROL_TOGGLE,
+            mc.KEY_TOGGLEX if self._usetogglex else mc.KEY_TOGGLE)
         """
         self._light = {
 			#"onoff": 0,
@@ -159,9 +178,10 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
         self._light[mc.KEY_CAPACITY] = capacity
 
-        if self._light.get(mc.KEY_ONOFF) is None:
+        if self._usetogglex:
             # since lights could be repeatedtly 'async_turn_on' when changing attributes
             # we avoid flooding the device with unnecessary messages
+            # this is probably unneeded since any light payload sent seems to turn on the light
             if not self.is_on:
                 await super().async_turn_on(**kwargs)
         else:
@@ -175,7 +195,7 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
 
-        if self._light.get(mc.KEY_ONOFF) is None:
+        if self._usetogglex:
             # we suppose we have to 'toggle(x)'
             await super().async_turn_off(**kwargs)
         else:
@@ -219,7 +239,3 @@ class MerossLanLight(_MerossToggle, LightEntity):
                 # when the togglex will arrive, the _light (attributes) will be already set
                 # and HA will save a consistent state (hopefully..we'll see)
                 self.async_write_ha_state()
-
-
-
-

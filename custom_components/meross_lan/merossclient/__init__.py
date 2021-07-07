@@ -95,11 +95,32 @@ class MerossDeviceDescriptor:
         Utility class to extract various info from Appliance.System.All
         device descriptor
     """
+    all = dict()
+
+    _dynamicattrs = {
+        mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),
+        mc.KEY_HARDWARE: lambda _self: _self.system.get(mc.KEY_HARDWARE, {}),
+        mc.KEY_FIRMWARE: lambda _self: _self.system.get(mc.KEY_FIRMWARE, {}),
+        mc.KEY_TYPE: lambda _self: _self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER),
+        mc.KEY_UUID: lambda _self: _self.hardware.get(mc.KEY_UUID),
+        mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(mc.KEY_MACADDRESS, mc.MEROSS_MACADDRESS),
+        mc.KEY_INNERIP: lambda _self: _self.firmware.get(mc.KEY_INNERIP),
+        mc.KEY_TIMEZONE: lambda _self: _self.system.get(mc.KEY_TIME, {}).get(mc.KEY_TIMEZONE),
+        'productname': lambda _self: get_productnameuuid(_self.type, _self.uuid),
+        'productmodel': lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, '')}"
+    }
+
     def __init__(self, payload: dict):
-        self.all = dict()
-        self.ability = dict()
+        self.ability = payload.get(mc.KEY_ABILITY, {})
         self.update(payload)
 
+
+    def __getattr__(self, name):
+        value = MerossDeviceDescriptor._dynamicattrs[name](self)
+        setattr(self, name, value)
+        return value
+
+    """
     @property
     def uuid(self) -> str:
         return self.hardware.get(mc.KEY_UUID)
@@ -123,19 +144,21 @@ class MerossDeviceDescriptor:
     @property
     def productmodel(self) -> str:
         return f"{self.type} {self.hardware.get(mc.KEY_VERSION, '')}"
-
+    """
 
     def update(self, payload: dict):
         """
             reset the cached pointers
         """
         self.all = payload.get(mc.KEY_ALL, self.all)
-        self.system = self.all.get(mc.KEY_SYSTEM, {})
-        self.hardware = self.system.get(mc.KEY_HARDWARE, {})
-        self.firmware = self.system.get(mc.KEY_FIRMWARE, {})
-        self.digest = self.all.get(mc.KEY_DIGEST)
-        self.ability = payload.get(mc.KEY_ABILITY, self.ability)
-        self.type = self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER)# cache because using often
+        self.digest = self.all.get(mc.KEY_DIGEST, {})
+        for key in MerossDeviceDescriptor._dynamicattrs.keys():
+            try:
+                delattr(self, key)
+            except Exception:
+                continue
+
+
 
 class MerossHttpClient:
 

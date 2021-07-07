@@ -275,7 +275,7 @@ class MerossApi:
         # macaddress from dhcp discovery is already stripped/lower but...
         macaddress = macaddress.replace(':', '').lower()
         for device in self.devices.values():
-            if device.descriptor.ipAddress == ipaddress:
+            if device.descriptor.innerIp == ipaddress:
                 return True
             if device.descriptor.macAddress.replace(':', '').lower() == macaddress:
                 return True
@@ -289,9 +289,7 @@ class MerossApi:
         but some devices (i.e. Hub) need a (radically?) different behaviour
         """
         descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD, {}))
-        if not descriptor.digest: # legacy firmware -> switches likely
-            device = MerossDeviceSwitch(self, descriptor, entry)
-        elif (mc.KEY_HUB in descriptor.digest):
+        if (mc.KEY_HUB in descriptor.digest):
             device = MerossDeviceHub(self, descriptor, entry)
         elif (mc.KEY_LIGHT in descriptor.digest):
             device = MerossDeviceBulb(self, descriptor, entry)
@@ -392,7 +390,7 @@ class MerossApi:
                 if device is None:
                     LOGGER.warning("MerossApi: cannot call async_http_request (device_id(%s) not found)", device_id)
                     return
-                host = device.descriptor.ipAddress
+                host = device.descriptor.innerIp
             self.hass.async_create_task(
                 self.async_http_request(host, namespace, method, payload, key, callback_or_device)
             )
