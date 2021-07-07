@@ -42,7 +42,6 @@ When configuring a device entry you'll have the option to set:
 - host address: this is available when manually adding a device or when a device is discovered via DHCP: provide the ip address or a valid network host name. When you set the ip address, ensure it is 'stable' and not changing between re-boots else the integration will 'loose' access to the device
 - device key: this is used to sign messages according to the official Meross protocol behaviour. Provide the same key you used to re-configure your appliance or, in case you're side-communicating and/or don't know the key leave it empty: this way the HTTP stack will be instructed to 'hack' the protocol by using a simple trick
 
-
 ## Supported hardware
 
 Most of this software has been developed and tested on my owned Meross devices which, over the time, are slowly expanding. I have tried to make it the more optimistic and generalistic as possible based on the work from [@albertogeniola] and [@bytespider] so it should work with most of the hardware out there but I did not test anything other than mines. There are some user reports confirming it works with other devices and the 'official' complete list is here (keep in mind some firmware versions might work while other not: this is the 'hell' of hw & sw):
@@ -82,6 +81,9 @@ There is a service (since version 0.0.4) exposed to simplify communication with 
 I find it a bit frustrating that the HA service infrastructure does not allow to return anything from a service invocation so, the eventual reply from the device will get 'lost' in the mqtt flow. I've personally played a bit with the MQTT integration configuration pane to listen and see the mqtt responses from my devices but it's somewhat a pain unless you have a big screen to play with (or multiple monitors for the matter). Nevertheless you can use the service wherever you like to maybe invoke features at the device level or dig into it's configuration
 *WARNING*: the service name has changed from 'mqtt_publish' to 'request' to accomodate the more general protocol support
 
+## Troubleshooting
+
+In order to help troubleshoot issues there is a tracing feature (available since 2.0.2) which dumps the protocol exchange and other debug messages to a text (TAB separated) file without the need and the mess of going through the HA (debug) log. This trace is available 'per device' and you can activate it from the integration configuration UI. Once activated it will start recording for 10 minutes (or maximum 64Kb whichever comes first) and then will stop automatically. If needed you can also stop it manually at any time while in progress by just entering the configuration UI and deselecting the checkbox. The trace(s) will be saved under 'custom_components/meross_lan/traces'. The trace feature takes care of obfuscating some 'sensitive' (like mac(s), Ip(s), and userId(s)) data fields extracted by the protocol. I've taken care of hiding those informations I guess would be nice to, but if you're concerned and find something 'leaking' from my masking please let me know so I can eventually proceed to mask those other infos (For example I didn't take care of some WiFi related message payloads which could carry very sensitive info since my code is not using them in any way at the moment)
 
 ## References
 
