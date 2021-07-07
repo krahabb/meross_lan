@@ -17,6 +17,7 @@ from .climate import Mts100Climate
 from .binary_sensor import MerossLanHubBinarySensor
 from .logger import LOGGER
 from .const import (
+    PARAM_HEARTBEAT_PERIOD,
     PARAM_HUBBATTERY_UPDATE_PERIOD,
     PARAM_HUBSENSOR_UPDATE_PERIOD,
     PLATFORM_BINARY_SENSOR,
@@ -185,12 +186,12 @@ class MerossDeviceHub(MerossDevice):
     def updatecoordinator_listener(self) -> bool:
 
         if super().updatecoordinator_listener():
-            tm = time()
+            now = time()
 
-            if (self.curr_protocol == Protocol.HTTP) and (self.lastmqtt < self.lastrequest):
-                if ((tm - self._lastupdate_sensor) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
+            if (self.curr_protocol == Protocol.HTTP) and ((now - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
+                if ((now - self._lastupdate_sensor) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
                     self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
-                if ((tm - self._lastupdate_mts100) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
+                if ((now - self._lastupdate_mts100) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
                     self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
             else:
                 """
@@ -202,7 +203,7 @@ class MerossDeviceHub(MerossDevice):
                 if self._lastupdate_mts100 == 0:
                     self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
 
-            if ((tm - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
+            if ((now - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
                 self.request(mc.NS_APPLIANCE_HUB_BATTERY, payload={ mc.KEY_BATTERY: [] })
 
             return True

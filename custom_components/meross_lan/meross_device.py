@@ -77,7 +77,7 @@ class MerossDevice:
         """
         self.entities: dict()
         is a collection of all of the instanced entities
-        they're generally build here during __init__ and will be registered
+        they're generally built here during __init__ and will be registered
         in platforms(s) async_setup_entry with HA
         """
         self.entities: Dict[any, '_MerossEntity'] = dict()  # pylint: disable=undefined-variable
@@ -89,21 +89,14 @@ class MerossDevice:
         in a single transaction. Also (see #33) the multiplug mss425 doesnt publish the full switch list state
         through NS_CNTRL_TOGGLEX (not sure if it's the firmware or the dialect)
         As far as we know rollershutter digest doesnt report state..so we'll add requests for that
+        For Hub(s) use a 'dedicated' poll structure and don't use NS_ALL at all since it is bulky and doesnt
+        carry all the relevant status info (at least MTS100 state is not fully exposed)
         """
         self.polling_period = CONF_POLLING_PERIOD_DEFAULT
         self.polling_dictionary = dict()
         ability = self.descriptor.ability
-        self.polling_dictionary[mc.NS_APPLIANCE_SYSTEM_ALL] = {} # default
-        """
-        if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
-            self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_TOGGLEX] = { mc.KEY_TOGGLEX : [] }
-        elif mc.NS_APPLIANCE_CONTROL_TOGGLE in ability:
-            self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_TOGGLE] = { mc.KEY_TOGGLE : {} }
-        if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
-            self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_LIGHT] = { mc.KEY_LIGHT : {} }
-        if mc.NS_APPLIANCE_GARAGEDOOR_STATE in ability:
-            self.polling_dictionary[mc.NS_APPLIANCE_GARAGEDOOR_STATE] = { mc.KEY_STATE : [] }
-        """
+        if (mc.KEY_HUB not in descriptor.digest):
+            self.polling_dictionary[mc.NS_APPLIANCE_SYSTEM_ALL] = {} # default
         if mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION in ability:
             self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION] = { mc.KEY_POSITION : [] }
         if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
@@ -116,7 +109,7 @@ class MerossDevice:
         so that the async_setup_entry for the integration will be able to forward
         the setup to the appropriate platform.
         The item value here will be set to the async_add_entities callback
-        during the corresponfing platform async_setup_entry so to be able
+        during the corresponding platform async_setup_entry so to be able
         to dynamically add more entities should they 'pop-up' (Hub only?)
         """
         self.platforms: Dict[str, Callable] = {}
@@ -146,8 +139,8 @@ class MerossDevice:
     @property
     def online(self) -> bool:
         if self._online:
-            #evaluate device MQTT availability by checking lastrequest got answered in less than 20 seconds
-            if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < PARAM_UNAVAILABILITY_TIMEOUT):
+            #evaluate device MQTT availability by checking lastrequest got answered in less than polling_period
+            if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < self.polling_period):
                 return True
 
             # when we 'fall' offline while on MQTT eventually retrigger HTTP.
