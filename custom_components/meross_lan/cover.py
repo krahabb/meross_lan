@@ -35,13 +35,13 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
     def __init__(self, device: 'MerossDevice', id: object):
         super().__init__(device, id, DEVICE_CLASS_GARAGE)
-        self._payload = {mc.KEY_STATE: {mc.KEY_OPEN: 0, mc.KEY_CHANNEL: id, mc.KEY_UUID: device.device_id } }
+        self._payload = {mc.KEY_STATE: {mc.KEY_CHANNEL: id, mc.KEY_OPEN: 0 } }
         self._transition_duration = (PARAM_GARAGEDOOR_TRANSITION_MAXDURATION + PARAM_GARAGEDOOR_TRANSITION_MINDURATION) / 2
         self._transition_start = 0
         self._transition_end_job = HassJob(self._transition_end_callback)
         self._transition_unsub = None
         self._state_lastupdate = 0
-        self._state_pending = None # used when we start a transition to prevent 'async polling incursion'
+        self._open_pending = None # cache since device reply doesnt report it (just actual state)
 
 
     @property
@@ -75,14 +75,19 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
     def request(self, open):
         def _ack_callback():
             """
-            this will be called on HTTP only and gives us a chance to synchronously
-            request a status update on the GarageDoor to see what's going on
-            (on MQTT I'd expect PUSH status messages flowing up). The confirmation
+            this will be calledback on HTTP only. The confirmation
             payload itself from the garagedoor (talking about HTTP) is anyway processed
             from the standard parser (this payload will carry status informations)
+            example payload in SETACK:
+            {"state": {"channel": 0, "open": 0, "lmTime": 0, "execute": 1}}
+            "open" reports the current state and not the command
+            "execute" represent command ack (I guess: never seen this == 0)
+            Beware: if the garage is 'closed' and we send a 'close' "execute" will
+            be replied as "1" and the garage will stay closed
             """
             pass
-        
+
+        self._open_pending = open
         self._payload[mc.KEY_STATE][mc.KEY_OPEN] = open
         self._device.request(
             mc.NS_APPLIANCE_GARAGEDOOR_STATE,
@@ -105,15 +110,36 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         now = time()
 
         if execute:
-            state_pending = STATE_CLOSED if open else STATE_OPEN
-            if self._transition_unsub is not None:
-                if self._state_pending != state_pending:
-                    self._device.log(WARNING, 0, "MerossLanGarage(%s): received start of new transition while another is pending", self.name)
-            self._start_transition(state_pending)
+            if self._open_pending == open:
+                self._device.log(DEBUG, 0, "MerossLanGarage(%s): ignoring start of ghost transition", self.name)
+                #continue processing after this
+            elif self._open_pending is not None:
+                if self._transition_unsub is not None:
+                    self._transition_unsub()
+                    self._transition_unsub = None
+                    self._device.log(WARNING, 0, "MerossLanGarage(%s): re-starting an overlapped transition ", self.name)
+                self._start_transition()
+                return
 
-        elif self._transition_unsub is not None:
+        if self._transition_unsub is None:
+            if open:
+                if self._state is not STATE_OPEN:
+                    if (now - self._state_lastupdate) > self._transition_duration:
+                        # the polling period is likely too long..we skip the transition
+                        self._set_state(STATE_OPEN)
+                    else:
+                        # when opening the contact will report open right after few inches
+                        self._open_pending = open
+                        self._start_transition()
+            else: # when reporting 'closed' the transition would be ended (almost)
+                self._set_state(STATE_CLOSED)
+        else:
             transition_duration = now - self._transition_start
-            if self._state_pending == STATE_CLOSED:
+            if self._open_pending:
+                if open and transition_duration > self._transition_duration:
+                    self._cancel_transition()
+                    self._set_state(STATE_OPEN)
+            else: # not _open_pending
                 """
                 we can monitor the (sampled) exact time when the garage closes to
                 estimate the transition_duration and update it dinamically since
@@ -133,21 +159,6 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
                     self._device.log(DEBUG, 0, "MerossLanGarage(%s): updated transition_duration to %d sec", self.name, self._transition_duration)
                     self._cancel_transition()
                     self._set_state(STATE_CLOSED)
-            else: # self._state_pending == STATE_OPEN:
-                if open and transition_duration > self._transition_duration:
-                    self._cancel_transition()
-                    self._set_state(STATE_OPEN)
-        else:
-            if open:
-                if self._state is not STATE_OPEN:
-                    if (now - self._state_lastupdate) > self._transition_duration:
-                        # the polling period is likely too long..we skip the transition
-                        self._set_state(STATE_OPEN)
-                    else:
-                        # when opening the contact will report open right after few inches
-                        self._start_transition(STATE_OPEN)
-            else: # when reporting 'closed' the transition would be ended (almost)
-                self._set_state(STATE_CLOSED)
 
         self._state_lastupdate = now
 
@@ -169,11 +180,9 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         """
 
 
-    def _start_transition(self, state):
-        self._cancel_transition()
+    def _start_transition(self):
         self._transition_start = time()
-        self._state_pending = state
-        self._set_state(STATE_OPENING if state is STATE_OPEN else STATE_CLOSING)
+        self._set_state(STATE_OPENING if self._open_pending else STATE_CLOSING)
         # this callback will get called some secs after the estimated transition occur
         # in order for the estimation algorithm to always/mostly work (see '_set_open')
         # especially on MQTT where we would expect real time status updates.
@@ -191,7 +200,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         if self._transition_unsub is not None:
             self._transition_unsub()
             self._transition_unsub = None
-        self._state_pending = None
+        self._open_pending = None
 
 
     @callback
@@ -200,8 +209,11 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         called by the event loop some 'self._transition_duration' after starting
         a transition
         """
-        self._set_state(self._state_pending)
-        if self._state_pending == STATE_CLOSED:
+
+        if self._open_pending:
+            self._set_state(STATE_OPEN)
+        else:
+            self._set_state(STATE_CLOSED)
             # when closing we expect this callback not to be called since
             # the transition is terminated by '_set_open'. If that happens that means
             # our estimate is too short
@@ -209,7 +221,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
                 self._transition_duration = self._transition_duration + 1
 
         self._transition_unsub = None
-        self._state_pending = None
+        self._open_pending = None
 
 
 
