@@ -1,7 +1,3 @@
-
-
-from typing import Optional, Union
-
 from .merossclient import KeyType, const as mc  # mEROSS cONST
 from .meross_device import MerossDevice
 from .light import MerossLanLight
@@ -23,6 +19,7 @@ class MerossDeviceBulb(MerossDevice):
             elif isinstance(p_light, dict):
                 MerossLanLight(self, p_light.get(mc.KEY_CHANNEL, 0), p_digest.get(mc.KEY_TOGGLEX))
 
+            self.polling_dictionary[mc.NS_APPLIANCE_SYSTEM_ALL] = {} # default
         except Exception as e:
             LOGGER.warning("MerossDeviceBulb(%s) init exception:(%s)", self.device_id, str(e))
 

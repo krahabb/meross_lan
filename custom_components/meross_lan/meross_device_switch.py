@@ -1,8 +1,4 @@
-
-
 from time import localtime, strftime, time
-from homeassistant.components.light import Light
-
 
 from homeassistant.core import callback
 from homeassistant.const import (
@@ -13,13 +9,12 @@ from homeassistant.const import (
 )
 
 from .merossclient import KeyType, const as mc  # mEROSS cONST
-from .meross_device import MerossDevice
 from .logger import LOGGER
 from .sensor import MerossLanSensor
 from .switch import MerossLanSwitch
 from .cover import MerossLanGarage, MerossLanRollerShutter
+from .meross_device import MerossDevice
 from .const import PARAM_ENERGY_UPDATE_PERIOD
-
 
 class MerossDeviceSwitch(MerossDevice):
 
@@ -33,74 +28,69 @@ class MerossDeviceSwitch(MerossDevice):
 
         try:
             # use a mix of heuristic to detect device features
-            p_digest = self.descriptor.digest
-            if p_digest:
-
-                garagedoor = p_digest.get(mc.KEY_GARAGEDOOR)
-                if isinstance(garagedoor, list):
-                    for g in garagedoor:
-                        MerossLanGarage(self, g.get(mc.KEY_CHANNEL))
-
-                # atm we're not sure we can detect this in 'digest' payload
-                if "mrs" in self.descriptor.type.lower():
-                    MerossLanRollerShutter(self, 0)
-
-                # at any rate: setup switches whenever we find 'togglex'
-                # or whenever we cannot setup anything from digest
-                togglex = p_digest.get(mc.KEY_TOGGLEX)
-                if isinstance(togglex, list):
-                    for t in togglex:
-                        channel = t.get(mc.KEY_CHANNEL)
+            ability = self.descriptor.ability
+            # atm we're not sure we can detect this in 'digest' payload
+            # looks like mrs100 just exposes abilities and we'll have to poll
+            # related NS
+            if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
+                MerossLanRollerShutter(self, 0)
+                self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION] = { mc.KEY_POSITION : [] }
+                self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_STATE] = { mc.KEY_STATE : [] }
+            else:
+                self.polling_dictionary[mc.NS_APPLIANCE_SYSTEM_ALL] = {} # default
+                p_digest = self.descriptor.digest
+                if p_digest:
+                    garagedoor = p_digest.get(mc.KEY_GARAGEDOOR)
+                    if isinstance(garagedoor, list):
+                        for g in garagedoor:
+                            MerossLanGarage(self, g.get(mc.KEY_CHANNEL))
+                    # at any rate: setup switches whenever we find 'togglex'
+                    # or whenever we cannot setup anything from digest
+                    togglex = p_digest.get(mc.KEY_TOGGLEX)
+                    if isinstance(togglex, list):
+                        for t in togglex:
+                            channel = t.get(mc.KEY_CHANNEL)
+                            if channel not in self.entities:
+                                MerossLanSwitch(
+                                    self,
+                                    channel,
+                                    mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+                                    mc.KEY_TOGGLEX)
+                    elif isinstance(togglex, dict):
+                        channel = togglex.get(mc.KEY_CHANNEL)
                         if channel not in self.entities:
                             MerossLanSwitch(
                                 self,
                                 channel,
                                 mc.NS_APPLIANCE_CONTROL_TOGGLEX,
                                 mc.KEY_TOGGLEX)
-                elif isinstance(togglex, dict):
-                    channel = togglex.get(mc.KEY_CHANNEL)
-                    if channel not in self.entities:
-                        MerossLanSwitch(
-                            self,
-                            channel,
-                            mc.NS_APPLIANCE_CONTROL_TOGGLEX,
-                            mc.KEY_TOGGLEX)
-
-                #endif p_digest
-            else:
-                # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
-                # but have 'control'
-                p_control = self.descriptor.all.get(mc.KEY_CONTROL)
-                if p_control:
-                    p_toggle = p_control.get(mc.KEY_TOGGLE)
-                    if isinstance(p_toggle, dict):
-                        MerossLanSwitch(
-                            self,
-                            p_toggle.get(mc.KEY_CHANNEL, 0),
-                            mc.NS_APPLIANCE_CONTROL_TOGGLE,
-                            mc.KEY_TOGGLE)
+                    #endif p_digest
+                else:
+                    # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
+                    # but have 'control'
+                    p_control = self.descriptor.all.get(mc.KEY_CONTROL)
+                    if p_control:
+                        p_toggle = p_control.get(mc.KEY_TOGGLE)
+                        if isinstance(p_toggle, dict):
+                            MerossLanSwitch(
+                                self,
+                                p_toggle.get(mc.KEY_CHANNEL, 0),
+                                mc.NS_APPLIANCE_CONTROL_TOGGLE,
+                                mc.KEY_TOGGLE)
 
             #fallback for switches: in case we couldnt get from NS_APPLIANCE_SYSTEM_ALL
             if not self.entities:
-                if mc.NS_APPLIANCE_CONTROL_TOGGLEX in self.descriptor.ability:
-                    MerossLanSwitch(
-                        self,
-                        0,
-                        mc.NS_APPLIANCE_CONTROL_TOGGLEX,
-                        mc.KEY_TOGGLEX)
-                elif mc.NS_APPLIANCE_CONTROL_TOGGLE in self.descriptor.ability:
-                    MerossLanSwitch(
-                        self,
-                        0,
-                        mc.NS_APPLIANCE_CONTROL_TOGGLE,
-                        mc.KEY_TOGGLE)
+                if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
+                    MerossLanSwitch(self, 0, mc.NS_APPLIANCE_CONTROL_TOGGLEX, mc.KEY_TOGGLEX)
+                elif mc.NS_APPLIANCE_CONTROL_TOGGLE in ability:
+                    MerossLanSwitch(self, 0, mc.NS_APPLIANCE_CONTROL_TOGGLE, mc.KEY_TOGGLE)
 
-            if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in self.descriptor.ability:
+            if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
                 self._sensor_power = MerossLanSensor(self, DEVICE_CLASS_POWER, DEVICE_CLASS_POWER)
                 self._sensor_current = MerossLanSensor(self, DEVICE_CLASS_CURRENT, DEVICE_CLASS_CURRENT)
                 self._sensor_voltage = MerossLanSensor(self, DEVICE_CLASS_VOLTAGE, DEVICE_CLASS_VOLTAGE)
 
-            if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in self.descriptor.ability:
+            if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
                 self._sensor_energy = MerossLanSensor(self, DEVICE_CLASS_ENERGY, DEVICE_CLASS_ENERGY)
 
         except Exception as e:
