@@ -130,6 +130,7 @@ KEY_ECONOMY = 'economy'
 KEY_HEATING = 'heating'
 KEY_AWAY = 'away'
 KEY_OPENWINDOW = 'openWindow'
+KEY_DNDMODE = 'DNDMode'
 
 # online status
 STATUS_UNKNOWN = -1

@@ -1,27 +1,24 @@
-from enum import Enum
-from io import TextIOWrapper
 import logging
-import math
 import os
+import math
 from typing import  Callable, Dict
 from time import strftime, time
-from logging import INFO, WARNING, DEBUG
-from aiohttp.client_exceptions import ClientConnectionError, ClientConnectorError
+from io import TextIOWrapper
 from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
+from enum import Enum
 
-from homeassistant.helpers.config_validation import path
-from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.config_entries import ConfigEntries, ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
+from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc  # mEROSS cONST
+from .switch import MerossLanDND
 from .logger import LOGGER, LOGGER_trap
-
 from .const import (
-    DOMAIN,
+    DOMAIN, DND_ID,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_HOST, CONF_TIMESTAMP,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT, CONF_POLLING_PERIOD_MIN,
     CONF_PROTOCOL, CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
@@ -29,8 +26,6 @@ from .const import (
     CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE,
     PARAM_UNAVAILABILITY_TIMEOUT, PARAM_HEARTBEAT_PERIOD
 )
-
-from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc  # mEROSS cONST
 
 # these are dynamically created MerossDevice attributes in a sort of a dumb optimization
 VOLATILE_ATTR_HTTPCLIENT = '_httpclient'
@@ -94,14 +89,6 @@ class MerossDevice:
         """
         self.polling_period = CONF_POLLING_PERIOD_DEFAULT
         self.polling_dictionary = dict()
-        ability = self.descriptor.ability
-        if (mc.KEY_HUB not in descriptor.digest):
-            self.polling_dictionary[mc.NS_APPLIANCE_SYSTEM_ALL] = {} # default
-        if mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION in ability:
-            self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION] = { mc.KEY_POSITION : [] }
-        if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
-            self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_STATE] = { mc.KEY_STATE : [] }
-
 
         """
         self.platforms: dict()
@@ -120,6 +107,9 @@ class MerossDevice:
         self.unsub_updatecoordinator_listener: Callable = None
 
         self._set_config_entry(entry.data)
+
+        if mc.NS_APPLIANCE_SYSTEM_DND in self.descriptor.ability:
+            MerossLanDND(self)
 
         """
         warning: would the response be processed after this object is fully init?
@@ -173,7 +163,7 @@ class MerossDevice:
         """
         self.replykey = replykey
         if self.key and (replykey != self.key):
-            self.log(WARNING, 14400, "Meross device key error for device_id: %s", self.device_id)
+            self.log(logging.WARNING, 14400, "Meross device key error for device_id: %s", self.device_id)
 
         self.lastupdate = time()
         if not self._online:
@@ -181,15 +171,21 @@ class MerossDevice:
                 self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
             self._set_online()
 
-        if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLEX:
-            self._parse_togglex(payload.get(mc.KEY_TOGGLEX))
-            return True
-
         if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
             self._parse_all(payload)
             if self.needsave is True:
                 self.needsave = False
                 self._save_config_entry(payload)
+            return True
+
+        if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLEX:
+            self._parse_togglex(payload.get(mc.KEY_TOGGLEX))
+            return True
+
+        if namespace == mc.NS_APPLIANCE_SYSTEM_DND:
+            dndmode = payload.get(mc.KEY_DNDMODE)
+            if isinstance(dndmode, dict):
+                self.entities[DND_ID]._set_onoff(dndmode.get(mc.KEY_MODE))
             return True
 
         return False
@@ -225,7 +221,7 @@ class MerossDevice:
                 response = await _httpclient.async_request(namespace, method, payload)
             except Exception as e:
                 if self._online:
-                    self.log(INFO, 0, "MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
+                    self.log(logging.INFO, 0, "MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
                     if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt:
                         self.lastmqtt = 0
                         self._switch_protocol(Protocol.MQTT)
@@ -253,7 +249,7 @@ class MerossDevice:
             # since we're already managing replykey in http client
             self.receive(r_namespace, r_method, r_payload, self.key)
         except Exception as e:
-            self.log(WARNING, 14400, "MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
+            self.log(logging.WARNING, 14400, "MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
 
 
     def request(self, namespace: str, method: str = mc.METHOD_GET, payload: dict = {}, callback: Callable = None):
@@ -316,7 +312,7 @@ class MerossDevice:
 
 
     def _set_offline(self) -> None:
-        self.log(DEBUG, 0, "MerossDevice(%s) going offline!", self.device_id)
+        self.log(logging.DEBUG, 0, "MerossDevice(%s) going offline!", self.device_id)
         self._online = False
         self._retry_period = 0
         for entity in self.entities.values():
@@ -328,13 +324,13 @@ class MerossDevice:
             When coming back online allow for a refresh
             also in inheriteds
         """
-        self.log(DEBUG, 0, "MerossDevice(%s) back online!", self.device_id)
+        self.log(logging.DEBUG, 0, "MerossDevice(%s) back online!", self.device_id)
         self._online = True
         self.updatecoordinator_listener()
 
 
     def _switch_protocol(self, protocol: Protocol) -> None:
-        self.log(INFO, 0, "MerossDevice(%s) switching protocol to %s", self.device_id, protocol.name)
+        self.log(logging.INFO, 0, "MerossDevice(%s) switching protocol to %s", self.device_id, protocol.name)
         self.curr_protocol = protocol
 
 
@@ -348,7 +344,7 @@ class MerossDevice:
                 data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
                 entries.async_update_entry(entry, data=data)
         except Exception as e:
-            self.log(WARNING, 0, "MerossDevice(%s) error while updating ConfigEntry (%s)", self.device_id, str(e))
+            self.log(logging.WARNING, 0, "MerossDevice(%s) error while updating ConfigEntry (%s)", self.device_id, str(e))
 
 
     def _set_config_entry(self, data: dict) -> None:
