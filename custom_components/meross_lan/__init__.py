@@ -7,12 +7,12 @@ from json import (
     loads as json_loads,
 )
 from aiohttp.client_exceptions import ClientConnectionError
-
 from homeassistant.config_entries import ConfigEntry, SOURCE_DISCOVERY
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.components import mqtt
+from homeassistant.components.mqtt.const import MQTT_DISCONNECTED
 from homeassistant.helpers import device_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
 )
@@ -22,10 +22,10 @@ from . import merossclient
 from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc
 
 from logging import WARNING, INFO
-from .logger import LOGGER, LOGGER_trap
+from .helpers import LOGGER, LOGGER_trap
 
 
-from .meross_device import MerossDevice
+from .meross_device import MerossDevice, Protocol
 from .meross_device_switch import MerossDeviceSwitch
 from .meross_device_bulb import MerossDeviceBulb
 from .meross_device_hub import MerossDeviceHub
@@ -118,6 +118,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         #when removing the last configentry do a complete cleanup
         if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
+            if api.unsub_mqtt_disconnected is not None:
+                api.unsub_mqtt_disconnected()
+                api.unsub_mqtt_disconnected = None
             if api.unsub_mqtt is not None:
                 api.unsub_mqtt()
                 api.unsub_mqtt = None
@@ -140,6 +143,7 @@ class MerossApi:
         self.discovering: Dict[str, dict] = {}
         self.mqtt_subscribing = False # guard for asynchronous mqtt sub registration
         self.unsub_mqtt = None
+        self.unsub_mqtt_disconnected = None
         self.unsub_entry_update_listener = None
         self.unsub_updatecoordinator_listener = None
 
@@ -159,6 +163,7 @@ class MerossApi:
             update_interval=datetime.timedelta(seconds=CONF_POLLING_PERIOD_DEFAULT),
         )
 
+        @callback
         def _request(service_call):
             self.request(
                 device_id=service_call.data.get(CONF_DEVICE_ID),
@@ -268,7 +273,15 @@ class MerossApi:
 
             return
 
+        @callback
+        def mqtt_disconnected():
+            for device in self.devices.values():
+                if (device.curr_protocol is Protocol.MQTT) and device.conf_protocol is Protocol.AUTO:
+                    device.switch_protocol(Protocol.HTTP)
+
         self.unsub_mqtt = await self.hass.components.mqtt.async_subscribe(mc.TOPIC_DISCOVERY, mqtt_receive)
+        self.unsub_mqtt_disconnected = async_dispatcher_connect(self.hass, MQTT_DISCONNECTED, mqtt_disconnected)
+        #self.unsub_mqtt_connected = async_dispatcher_connect(self.hass, MQTT_CONNECTED, mqtt_connected)
 
 
     def has_device(self, ipaddress: str, macaddress:str) -> bool:
@@ -281,6 +294,7 @@ class MerossApi:
                 return True
         else:
             return False
+
 
     def build_device(self, device_id: str, entry: ConfigEntry) -> MerossDevice:
         """

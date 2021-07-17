@@ -9,11 +9,12 @@ from homeassistant.const import (
 )
 
 from .merossclient import KeyType, const as mc  # mEROSS cONST
-from .logger import LOGGER
+from .meross_entity import MerossFakeEntity
 from .sensor import MerossLanSensor
 from .switch import MerossLanSwitch
 from .cover import MerossLanGarage, MerossLanRollerShutter
 from .meross_device import MerossDevice
+from .helpers import LOGGER
 from .const import PARAM_ENERGY_UPDATE_PERIOD
 
 class MerossDeviceSwitch(MerossDevice):
@@ -21,10 +22,10 @@ class MerossDeviceSwitch(MerossDevice):
     def __init__(self, api, descriptor, entry):
         super().__init__(api, descriptor, entry)
         self._lastupdate_consumption = 0
-        self._sensor_power = None
-        self._sensor_current = None
-        self._sensor_voltage = None
-        self._sensor_energy = None
+        self._sensor_power = MerossFakeEntity
+        self._sensor_current = MerossFakeEntity
+        self._sensor_voltage = MerossFakeEntity
+        self._sensor_energy = MerossFakeEntity
 
         try:
             # use a mix of heuristic to detect device features
@@ -37,7 +38,6 @@ class MerossDeviceSwitch(MerossDevice):
                 self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION] = { mc.KEY_POSITION : [] }
                 self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_STATE] = { mc.KEY_STATE : [] }
             else:
-                self.polling_dictionary[mc.NS_APPLIANCE_SYSTEM_ALL] = {} # default
                 p_digest = self.descriptor.digest
                 if p_digest:
                     garagedoor = p_digest.get(mc.KEY_GARAGEDOOR)
@@ -121,7 +121,17 @@ class MerossDeviceSwitch(MerossDevice):
             return True
 
         if namespace == mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION:
-            self._parse_rollershutter_position(payload.get(mc.KEY_POSITION))
+            if method == mc.METHOD_SETACK:
+                """
+                the SETACK PAYLOAD is empty so no info to extract but we'll use it
+                as a trigger to request status update so to refresh movement state
+                """
+                self.request(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                    mc.METHOD_GET, { mc.KEY_POSITION : [] })
+                self.request(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+                    mc.METHOD_GET, { mc.KEY_STATE : [] })
+            else:
+                self._parse_rollershutter_position(payload.get(mc.KEY_POSITION))
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_ELECTRICITY:
@@ -182,20 +192,13 @@ class MerossDeviceSwitch(MerossDevice):
                 self._parse_togglex(p_control.get(mc.KEY_TOGGLE))
 
 
-    @callback
-    def updatecoordinator_listener(self) -> bool:
-
-        if super().updatecoordinator_listener():
-
-            if ((self._sensor_power is not None) and self._sensor_power.enabled) or \
-                ((self._sensor_voltage is not None) and self._sensor_voltage.enabled)  or \
-                ((self._sensor_current is not None) and self._sensor_current.enabled) :
-                self.request(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
-            if (self._sensor_energy is not None) and self._sensor_energy.enabled:
-                if ((time() - self._lastupdate_consumption) > PARAM_ENERGY_UPDATE_PERIOD):
-                    self.request(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)
-
-            return True
-
-        return False
+    def request_updates(self, epoch, namespace):
+        super().request_updates(epoch, namespace)
+        # we're not checking context namespace since it should be very unusual
+        # to enter here with one of those following
+        if self._sensor_power.enabled or self._sensor_voltage.enabled or self._sensor_current.enabled:
+            self.request(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
+        if self._sensor_energy.enabled:
+            if ((epoch - self._lastupdate_consumption) > PARAM_ENERGY_UPDATE_PERIOD):
+                self.request(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)
 

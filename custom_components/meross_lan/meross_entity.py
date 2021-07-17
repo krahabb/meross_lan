@@ -20,7 +20,7 @@ from homeassistant.const import (
 )
 
 from .merossclient import const as mc, get_productnameuuid
-from .logger import LOGGER
+from .helpers import LOGGER
 from .const import CONF_DEVICE_ID, DOMAIN
 
 CLASS_TO_UNIT_MAP = {
@@ -33,8 +33,18 @@ CLASS_TO_UNIT_MAP = {
     DEVICE_CLASS_BATTERY: PERCENTAGE
 }
 
-# pylint: disable=no-member
 
+
+class MerossFakeEntity:
+    """
+    an 'abstract' class we'll use as a placeholder to reduce optional and/or
+    disabled entities access overhead
+    """
+    enabled = False
+
+
+
+# pylint: disable=no-member
 class _MerossEntity:
 
     PLATFORM: str
