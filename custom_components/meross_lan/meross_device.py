@@ -476,7 +476,7 @@ class MerossDevice:
             try:
                 tracedir = hass.config.path('custom_components', DOMAIN, CONF_TRACE_DIRECTORY)
                 os.makedirs(tracedir, exist_ok=True)
-                self._tracefile = open(os.path.join(tracedir, CONF_TRACE_FILENAME.format(self.descriptor.type, self.device_id)), 'w')
+                self._tracefile = open(os.path.join(tracedir, CONF_TRACE_FILENAME.format(self.descriptor.type, int(_traceendtime))), 'w')
                 self._traceendtime = _traceendtime
                 self._trace(self.descriptor.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
                 self._trace(self.descriptor.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK)
