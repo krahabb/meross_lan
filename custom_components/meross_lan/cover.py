@@ -14,7 +14,6 @@ from homeassistant.helpers import event
 
 from .merossclient import const as mc
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
-from .logger import LOGGER
 from .const import (
     PLATFORM_COVER,
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
@@ -250,11 +249,18 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
         super().__init__(device, id, DEVICE_CLASS_SHUTTER)
         self._payload = {mc.KEY_POSITION: {mc.KEY_CHANNEL: id, mc.KEY_POSITION: 0}}
         self._position = None
+        self._transition_unsub = None
+        self._transition_job = HassJob(self._transition_callback)
+
+
+    @property
+    def assumed_state(self) -> bool:
+        """RollerShutter position is unreliable"""
+        return True
 
 
     @property
     def supported_features(self):
-        """Flag supported features."""
         return SUPPORT_OPEN | SUPPORT_CLOSE | SUPPORT_STOP | SUPPORT_SET_POSITION
 
 
@@ -297,42 +303,59 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
 
     def request(self, position):
-        def _ack_callback():
-            """
-            this will be called on HTTP only and gives us a chance to synchronously
-            request a status update on the RollerShutter to see what's going on
-            (on MQTT I'd expect PUSH status messages flowing up). The confirmation
-            payload itself from the shutter (talking about HTTP) is empty (;)
-            """
-            self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-                mc.METHOD_GET, { mc.KEY_POSITION : [] })
-            self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
-                mc.METHOD_GET, { mc.KEY_STATE : [] })
-
         self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = position
         self._device.request(
             mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
             mc.METHOD_SET,
-            self._payload,
-            _ack_callback
+            self._payload
             )
 
 
     def _set_unavailable(self) -> None:
+        self._cancel_transition()
         self._position = None
         super()._set_unavailable()
-
-
-    def _set_rollerstate(self, state) -> None:
-        if state == 1:
-            self._set_state(STATE_OPENING)
-        elif state == 2:
-            self._set_state(STATE_CLOSING)
-        else:
-            self._set_state(STATE_OPEN if self._position else STATE_CLOSED)
 
 
     def _set_rollerposition(self, position) -> None:
         self._position = position
         if self._state not in (STATE_OPENING, STATE_CLOSING):
             self._set_state(STATE_OPEN if self._position else STATE_CLOSED)
+
+
+    def _set_rollerstate(self, state) -> None:
+
+        self._cancel_transition()
+
+        if state == 1:
+            self._set_state(STATE_OPENING)
+        elif state == 2:
+            self._set_state(STATE_CLOSING)
+        else:
+            self._set_state(STATE_OPEN if self._position else STATE_CLOSED)
+            return
+        #when moving we'll ask an update sooner
+        self._transition_unsub = event.async_track_point_in_utc_time(
+            self.hass,
+            self._transition_job,
+            datetime.fromtimestamp(time() + 2)
+        )
+
+
+    @callback
+    def _transition_callback(self, _now: datetime) -> None:
+        """
+        called by the event loop every so often to refresh movement state
+        """
+        self._transition_unsub = None
+        self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            mc.METHOD_GET, { mc.KEY_POSITION : [] })
+        self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+            mc.METHOD_GET, { mc.KEY_STATE : [] })
+
+
+    def _cancel_transition(self):
+        if self._transition_unsub is not None:
+            self._transition_unsub()
+            self._transition_unsub = None
+
