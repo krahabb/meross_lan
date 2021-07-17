@@ -13,14 +13,14 @@ from homeassistant.core import HassJob, callback
 from homeassistant.helpers import event
 
 from .merossclient import const as mc
-from .meross_device import MerossDevice
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
-from .logger import LOGGER
 from .const import (
     PLATFORM_COVER,
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
+
+NOTIFICATION_ID_TIMEOUT = 'garagedoor_timeout'
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
     platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_COVER)
@@ -41,6 +41,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         self._transition_end_job = HassJob(self._transition_end_callback)
         self._transition_unsub = None
         self._state_lastupdate = 0
+        self._open = None # this is the last known (or actual) physical state from device state
         self._open_pending = None # cache since device reply doesnt report it (just actual state)
 
 
@@ -102,12 +103,14 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
 
     def _set_unavailable(self) -> None:
+        self._open = None
         self._cancel_transition()
         super()._set_unavailable()
 
 
     def _set_open(self, open, execute) -> None:
         now = time()
+        self._open = open
 
         if execute:
             if self._open_pending == open:
@@ -119,6 +122,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
                     self._transition_unsub = None
                     self._device.log(WARNING, 0, "MerossLanGarage(%s): re-starting an overlapped transition ", self.name)
                 self._start_transition()
+                self._state_lastupdate = now
                 return
 
         if self._transition_unsub is None:
@@ -142,7 +146,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
             else: # not _open_pending
                 """
                 we can monitor the (sampled) exact time when the garage closes to
-                estimate the transition_duration and update it dinamically since
+                estimate the transition_duration and dynamically update it since
                 during the transition the state will be closed only at the end
                 while during opening the garagedoor contact will open right at the beginning
                 and so will be unuseful
@@ -209,18 +213,30 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         called by the event loop some 'self._transition_duration' after starting
         a transition
         """
-
-        if self._open_pending:
-            self._set_state(STATE_OPEN)
-        else:
-            self._set_state(STATE_CLOSED)
+        self._transition_unsub = None
+        # transition ended: set the state according to our last known hardware status
+        self._set_state(STATE_OPEN if self._open else STATE_CLOSED)
+        if not self._open_pending:
             # when closing we expect this callback not to be called since
-            # the transition is terminated by '_set_open'. If that happens that means
-            # our estimate is too short
+            # the transition should be terminated by '_set_open' provided it gets
+            # called on time (on polling this is not guaranteed).
+            # If we're here, we still havent received a proper 'physical close'
+            # because our estimate is too short or the garage didnt close at all
             if self._transition_duration < PARAM_GARAGEDOOR_TRANSITION_MAXDURATION:
                 self._transition_duration = self._transition_duration + 1
 
-        self._transition_unsub = None
+        if self._open_pending == self._open:
+            self.hass.components.persistent_notification.async_dismiss(
+                notification_id=NOTIFICATION_ID_TIMEOUT + '.' + self.unique_id
+            )
+        else:
+            self.hass.components.persistent_notification.async_create(
+                title=self.entryname,
+                message="Garage door didn't reach the '" +\
+                    (STATE_OPEN if self._open_pending else STATE_CLOSED) +\
+                    "' state on time",
+                notification_id=NOTIFICATION_ID_TIMEOUT + '.' + self.unique_id,
+            )
         self._open_pending = None
 
 
@@ -229,15 +245,22 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     PLATFORM = PLATFORM_COVER
 
-    def __init__(self, device: MerossDevice, id: object):
+    def __init__(self, device: 'MerossDevice', id: object):
         super().__init__(device, id, DEVICE_CLASS_SHUTTER)
         self._payload = {mc.KEY_POSITION: {mc.KEY_CHANNEL: id, mc.KEY_POSITION: 0}}
         self._position = None
+        self._transition_unsub = None
+        self._transition_job = HassJob(self._transition_callback)
+
+
+    @property
+    def assumed_state(self) -> bool:
+        """RollerShutter position is unreliable"""
+        return True
 
 
     @property
     def supported_features(self):
-        """Flag supported features."""
         return SUPPORT_OPEN | SUPPORT_CLOSE | SUPPORT_STOP | SUPPORT_SET_POSITION
 
 
@@ -280,42 +303,59 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
 
     def request(self, position):
-        def _ack_callback():
-            """
-            this will be called on HTTP only and gives us a chance to synchronously
-            request a status update on the RollerShutter to see what's going on
-            (on MQTT I'd expect PUSH status messages flowing up). The confirmation
-            payload itself from the shutter (talking about HTTP) is empty (;)
-            """
-            self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-                mc.METHOD_GET, { mc.KEY_POSITION : [] })
-            self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
-                mc.METHOD_GET, { mc.KEY_STATE : [] })
-
         self._payload[mc.KEY_POSITION][mc.KEY_POSITION] = position
         self._device.request(
             mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
             mc.METHOD_SET,
-            self._payload,
-            _ack_callback
+            self._payload
             )
 
 
     def _set_unavailable(self) -> None:
+        self._cancel_transition()
         self._position = None
         super()._set_unavailable()
-
-
-    def _set_rollerstate(self, state) -> None:
-        if state == 1:
-            self._set_state(STATE_OPENING)
-        elif state == 2:
-            self._set_state(STATE_CLOSING)
-        else:
-            self._set_state(STATE_OPEN if self._position else STATE_CLOSED)
 
 
     def _set_rollerposition(self, position) -> None:
         self._position = position
         if self._state not in (STATE_OPENING, STATE_CLOSING):
             self._set_state(STATE_OPEN if self._position else STATE_CLOSED)
+
+
+    def _set_rollerstate(self, state) -> None:
+
+        self._cancel_transition()
+
+        if state == 1:
+            self._set_state(STATE_OPENING)
+        elif state == 2:
+            self._set_state(STATE_CLOSING)
+        else:
+            self._set_state(STATE_OPEN if self._position else STATE_CLOSED)
+            return
+        #when moving we'll ask an update sooner
+        self._transition_unsub = event.async_track_point_in_utc_time(
+            self.hass,
+            self._transition_job,
+            datetime.fromtimestamp(time() + 2)
+        )
+
+
+    @callback
+    def _transition_callback(self, _now: datetime) -> None:
+        """
+        called by the event loop every so often to refresh movement state
+        """
+        self._transition_unsub = None
+        self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            mc.METHOD_GET, { mc.KEY_POSITION : [] })
+        self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+            mc.METHOD_GET, { mc.KEY_STATE : [] })
+
+
+    def _cancel_transition(self):
+        if self._transition_unsub is not None:
+            self._transition_unsub()
+            self._transition_unsub = None
+

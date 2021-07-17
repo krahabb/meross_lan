@@ -1,11 +1,7 @@
-
-
-from typing import Optional, Union
-
 from .merossclient import KeyType, const as mc  # mEROSS cONST
 from .meross_device import MerossDevice
 from .light import MerossLanLight
-from .logger import LOGGER
+from .helpers import LOGGER
 
 class MerossDeviceBulb(MerossDevice):
 

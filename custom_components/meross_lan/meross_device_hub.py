@@ -15,7 +15,7 @@ from .meross_device import MerossDevice, Protocol
 from .sensor import MerossLanHubSensor
 from .climate import Mts100Climate
 from .binary_sensor import MerossLanHubBinarySensor
-from .logger import LOGGER
+from .helpers import LOGGER
 from .const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_HUBBATTERY_UPDATE_PERIOD,
@@ -71,6 +71,9 @@ class MerossDeviceHub(MerossDevice):
         self.platforms[PLATFORM_BINARY_SENSOR] = None
         self.platforms[PLATFORM_CLIMATE] = None
 
+        self.polling_dictionary[mc.NS_APPLIANCE_HUB_SENSOR_ALL] = { mc.KEY_ALL : [] }
+        self.polling_dictionary[mc.NS_APPLIANCE_HUB_MTS100_ALL] = { mc.KEY_ALL : [] }
+
         try:
             # we expect a well structured digest here since
             # we're sure 'hub' key is there by __init__ device factory
@@ -87,7 +90,6 @@ class MerossDeviceHub(MerossDevice):
                     MerossSubDevice(self, p_subdevice, type)
                 else:
                     deviceclass(self, p_subdevice)
-
 
         except Exception as e:
             LOGGER.warning("MerossDeviceHub(%s) init exception:(%s)", self.device_id, str(e))
@@ -182,33 +184,20 @@ class MerossDeviceHub(MerossDevice):
                 subdevice.update_digest(p_digest)
 
 
-    @callback
-    def updatecoordinator_listener(self) -> bool:
+    def request_updates(self, epoch, namespace):
+        super().request_updates(epoch, namespace)
+        """
+        we just ask for updates when something pops online (_lastupdate_sensor == 0)
+        relying on push (over MQTT) or base polling updates (only HTTP) for any other changes
+        """
+        if self.curr_protocol == Protocol.MQTT:
+            if self._lastupdate_sensor == 0:
+                self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
+            if self._lastupdate_mts100 == 0:
+                self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
 
-        if super().updatecoordinator_listener():
-            now = time()
-
-            if (self.curr_protocol == Protocol.HTTP) and ((now - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
-                if ((now - self._lastupdate_sensor) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
-                    self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
-                if ((now - self._lastupdate_mts100) >= PARAM_HUBSENSOR_UPDATE_PERIOD):
-                    self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
-            else:
-                """
-                on MQTT we just ask for updates when something pops online
-                relying on push updates for any other changes
-                """
-                if self._lastupdate_sensor == 0:
-                    self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
-                if self._lastupdate_mts100 == 0:
-                    self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
-
-            if ((now - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
-                self.request(mc.NS_APPLIANCE_HUB_BATTERY, payload={ mc.KEY_BATTERY: [] })
-
-            return True
-
-        return False
+        if ((epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
+            self.request(mc.NS_APPLIANCE_HUB_BATTERY, payload={ mc.KEY_BATTERY: [] })
 
 
 

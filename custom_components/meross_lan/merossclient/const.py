@@ -88,6 +88,7 @@ KEY_ABILITY = 'ability'
 KEY_ONLINE = 'online'
 KEY_TIME = 'time'
 KEY_TIMEZONE = 'timezone'
+KEY_TIMERULE = 'timeRule'
 KEY_STATUS = 'status'
 KEY_CHANNEL = 'channel'
 KEY_TOGGLE = 'toggle'
@@ -130,6 +131,7 @@ KEY_ECONOMY = 'economy'
 KEY_HEATING = 'heating'
 KEY_AWAY = 'away'
 KEY_OPENWINDOW = 'openWindow'
+KEY_DNDMODE = 'DNDMode'
 
 # online status
 STATUS_UNKNOWN = -1

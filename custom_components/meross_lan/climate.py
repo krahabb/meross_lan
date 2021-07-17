@@ -163,7 +163,7 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
         self._device.request(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
-            {mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.subdevice.id, key: t * 10}]},
+            {mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.subdevice.id, key: t * 10 + 1}]}, # the device rounds down ?!
             _ack_callback
         )
 
@@ -183,7 +183,7 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
                     self._mts100_mode = mode
                     self.update_modes()
 
-                self._device.request(
+                await self._device.async_http_request(
                     mc.NS_APPLIANCE_HUB_MTS100_MODE,
                     mc.METHOD_SET,
                     {mc.KEY_MODE: [{mc.KEY_ID: self.subdevice.id, mc.KEY_STATE: mode}]},
@@ -199,7 +199,10 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
             self._mts100_onoff = 1
             self.update_modes()
 
-        self._device.request(
+        #same as DND: force http request to get a consistent acknowledge
+        #the device will PUSH anyway a state update when the valve actually switches
+        #but this way we'll update the UI consistently right after setting mode
+        await self._device.async_http_request(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
             mc.METHOD_SET,
             {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.subdevice.id, mc.KEY_ONOFF: 1}]},
@@ -212,7 +215,7 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
             self._mts100_onoff = 0
             self.update_modes()
 
-        self._device.request(
+        await self._device.async_http_request(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
             mc.METHOD_SET,
             {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.subdevice.id, mc.KEY_ONOFF: 0}]},
