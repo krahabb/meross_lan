@@ -163,7 +163,7 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
         self._device.request(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
-            {mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.subdevice.id, key: t * 10}]},
+            {mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.subdevice.id, key: t * 10 + 1}]}, # the device rounds down ?!
             _ack_callback
         )
 
