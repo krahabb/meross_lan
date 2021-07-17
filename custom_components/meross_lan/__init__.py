@@ -276,8 +276,7 @@ class MerossApi:
         @callback
         def mqtt_disconnected():
             for device in self.devices.values():
-                if (device.curr_protocol is Protocol.MQTT) and device.conf_protocol is Protocol.AUTO:
-                    device.switch_protocol(Protocol.HTTP)
+                device.mqtt_disconnected()
 
         self.unsub_mqtt = await self.hass.components.mqtt.async_subscribe(mc.TOPIC_DISCOVERY, mqtt_receive)
         self.unsub_mqtt_disconnected = async_dispatcher_connect(self.hass, MQTT_DISCONNECTED, mqtt_disconnected)

@@ -217,10 +217,19 @@ class MerossDevice:
         if self.conf_protocol is Protocol.HTTP:
             return # even if mqtt parsing is no harming we want a 'consistent' HTTP only behaviour
         self._trace(payload, namespace, method, CONF_OPTION_MQTT)
-        self.lastmqtt = time()
         if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
-            self.switch_protocol(Protocol.MQTT)
+            self.switch_protocol(Protocol.MQTT) # will reset 'lastmqtt'
+        self.lastmqtt = time()
         self.receive(namespace, method, payload, replykey)
+
+
+    def mqtt_disconnected(self) -> None:
+        if self.curr_protocol is Protocol.MQTT:
+            if self.conf_protocol is Protocol.AUTO:
+                self.switch_protocol(Protocol.HTTP)
+            # conf_protocol should be Protocol.MQTT:
+            elif self._online:
+                self._set_offline()
 
 
     async def async_http_request(self, namespace: str, method: str, payload: dict = {}, callback: Callable = None):
@@ -239,7 +248,6 @@ class MerossDevice:
                 if self._online:
                     self.log(logging.INFO, 0, "MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
                     if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt and mqtt_is_connected(self.api.hass):
-                        self.lastmqtt = 0
                         self.switch_protocol(Protocol.MQTT)
                         self._trace(payload, namespace, method, CONF_OPTION_MQTT)
                         self.api.mqtt_publish(
@@ -406,6 +414,7 @@ class MerossDevice:
 
     def switch_protocol(self, protocol: Protocol) -> None:
         self.log(logging.INFO, 0, "MerossDevice(%s) switching protocol to %s", self.device_id, protocol.name)
+        self.lastmqtt = 0 # reset so we'll need a new mqtt message to ensure mqtt availability
         self.curr_protocol = protocol
 
 
