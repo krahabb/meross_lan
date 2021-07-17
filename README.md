@@ -79,6 +79,8 @@ It also features an automatic protocol switching capability so, if you have your
 
 If you have the MSH300 Hub working with this integration, every new subdevice (thermostat or sensor) can be automatically discovered once the subdevice is paired with the hub. When the hub is configured in this integration you don't need to switch back and forth to/from the Meross app in order to 'bind' new devices: just pair the thermostat or sensor to the hub by using the subdevice pairing procedure (fast double press on the hub)
 
+DND mode (status/presence light on switches) is also supported through a switch entity. This entity is by default disabled when setting up the integration so, if you want/need to control that, be sure to show the disabled entities or access it through the 'Device' panel in HA and enable it. Also, bear in mind it works the opposite than a light: if you want to turn off the status light please turn on the DND mode switch (it's do-not-disturb mode!)
+
 I'm sorry to not be able to write a complete wiki at the moment in order to better explain some procedures or share my knwoledge about the devices but time is constrained and writing knwoledge bases is always consuming (and sligthly boring I admit). I'm still working on some features and I've put a big effort trying to ensure a frictionless working of this software so I hope you can make use of it without deeper explanations. Something will come, slowly, but if you have any urgent issue or question I will be happy to help (and maybe this will speed up the documentation :)
 
 ## Service
