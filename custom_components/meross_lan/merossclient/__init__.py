@@ -105,7 +105,8 @@ class MerossDeviceDescriptor:
         mc.KEY_UUID: lambda _self: _self.hardware.get(mc.KEY_UUID),
         mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(mc.KEY_MACADDRESS, mc.MEROSS_MACADDRESS),
         mc.KEY_INNERIP: lambda _self: _self.firmware.get(mc.KEY_INNERIP),
-        mc.KEY_TIMEZONE: lambda _self: _self.system.get(mc.KEY_TIME, {}).get(mc.KEY_TIMEZONE),
+        mc.KEY_TIME: lambda _self: _self.system.get(mc.KEY_TIME, {}),
+        mc.KEY_TIMEZONE: lambda _self: _self.time.get(mc.KEY_TIMEZONE),
         'productname': lambda _self: get_productnameuuid(_self.type, _self.uuid),
         'productmodel': lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, '')}"
     }

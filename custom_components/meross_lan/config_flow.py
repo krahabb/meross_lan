@@ -1,10 +1,12 @@
 """Config flow for Meross IoT local LAN integration."""
-
 from time import time
-from homeassistant.components.mqtt import DATA_MQTT
 import voluptuous as vol
 from typing import OrderedDict
 import json
+try:
+    from pytz import common_timezones
+except Exception:
+    common_timezones = None
 
 from homeassistant import config_entries
 from homeassistant.helpers.typing import DiscoveryInfoType
@@ -13,19 +15,17 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .merossclient import MerossHttpClient, MerossDeviceDescriptor, const as mc, get_productnametype
 
-from .logger import LOGGER
+from .helpers import LOGGER, mqtt_is_loaded
 from .const import (
     DOMAIN,
     CONF_HOST, CONF_DEVICE_ID, CONF_KEY,
     CONF_PAYLOAD, CONF_DEVICE_TYPE,
     CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT,
+    CONF_TIME_ZONE,
     CONF_TRACE, CONF_TRACE_TIMEOUT,
 )
 
-
-def _mqtt_is_loaded(hass) -> bool:
-    return hass.data.get(DATA_MQTT) is not None
 
 
 async def _http_discovery(host: str, key: str, hass) -> dict:
@@ -62,7 +62,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # or following dhcp discovery
             if self._host is None:
                 # check we already configured the hub ..
-                if (DOMAIN not in self._async_current_ids()) and _mqtt_is_loaded(self.hass):
+                if (DOMAIN not in self._async_current_ids()) and mqtt_is_loaded(self.hass):
                     return await self.async_step_hub()
         else:
             self._host = user_input[CONF_HOST]
@@ -158,6 +158,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(self._device_id)
         self._abort_if_unique_id_configured()
 
+        discovery_info[CONF_TIME_ZONE] = self._descriptor.timezone
         if CONF_DEVICE_ID not in discovery_info:#this is coming from manual user entry or dhcp discovery
             discovery_info[CONF_DEVICE_ID] = self._device_id
 
@@ -213,6 +214,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data[CONF_KEY] = user_input.get(CONF_KEY)
             data[CONF_PROTOCOL] = user_input.get(CONF_PROTOCOL)
             data[CONF_POLLING_PERIOD] = user_input.get(CONF_POLLING_PERIOD)
+            data[CONF_TIME_ZONE] = user_input.get(CONF_TIME_ZONE)
             data[CONF_TRACE] = time() + CONF_TRACE_TIMEOUT if user_input.get(CONF_TRACE) else 0
             self.hass.config_entries.async_update_entry(self._config_entry, data=data)
             return self.async_create_entry(title=None, data=None)
@@ -237,6 +239,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 description={"suggested_value": data.get(CONF_POLLING_PERIOD)}
                 )
             ] = cv.positive_int
+        config_schema[
+            vol.Optional(
+                CONF_TIME_ZONE,
+                description={"suggested_value": data.get(CONF_TIME_ZONE)}
+                )
+            ] = vol.In(common_timezones) if common_timezones is not None else str
         config_schema[
             vol.Optional(
                 CONF_TRACE,
