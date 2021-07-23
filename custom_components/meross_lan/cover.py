@@ -1,3 +1,4 @@
+from __future__ import annotations
 from time import time
 from datetime import datetime
 from logging import DEBUG, WARNING
@@ -21,6 +22,8 @@ from .const import (
 )
 
 NOTIFICATION_ID_TIMEOUT = 'garagedoor_timeout'
+EXTRA_ATTR_TIMEOUT_ERROR_TIME = "timeout_error_time" # the time at which the transition timeout occurred
+EXTRA_ATTR_TIMEOUT_ERROR_STATE = "timeout_error_state" # the state which was not reached
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
     platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_COVER)
@@ -43,7 +46,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         self._state_lastupdate = 0
         self._open = None # this is the last known (or actual) physical state from device state
         self._open_pending = None # cache since device reply doesnt report it (just actual state)
-
+        self._attr_extra_state_attributes = dict()
 
     @property
     def supported_features(self):
@@ -226,17 +229,20 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
                 self._transition_duration = self._transition_duration + 1
 
         if self._open_pending == self._open:
-            self.hass.components.persistent_notification.async_dismiss(
+            self._attr_extra_state_attributes.pop(EXTRA_ATTR_TIMEOUT_ERROR_STATE, None)
+            self._attr_extra_state_attributes.pop(EXTRA_ATTR_TIMEOUT_ERROR_TIME, None)
+            """self.hass.components.persistent_notification.async_dismiss(
                 notification_id=NOTIFICATION_ID_TIMEOUT + '.' + self.unique_id
-            )
+            )"""
         else:
-            self.hass.components.persistent_notification.async_create(
+            state_pending = (STATE_OPEN if self._open_pending else STATE_CLOSED)
+            self._attr_extra_state_attributes[EXTRA_ATTR_TIMEOUT_ERROR_STATE] = state_pending
+            self._attr_extra_state_attributes[EXTRA_ATTR_TIMEOUT_ERROR_TIME] = str(_now)
+            """self.hass.components.persistent_notification.async_create(
                 title=self.entryname,
-                message="Garage door didn't reach the '" +\
-                    (STATE_OPEN if self._open_pending else STATE_CLOSED) +\
-                    "' state on time",
+                message=f"Garage door didn't reach the '{state_pending}' state on time",
                 notification_id=NOTIFICATION_ID_TIMEOUT + '.' + self.unique_id,
-            )
+            )"""
         self._open_pending = None
 
 
