@@ -1,0 +1,61 @@
+{
+    "title": "Meross LAN",
+    "config": {
+        "flow_title": "Meross {device_type}",
+        "abort": {
+            "no_devices_found": "ネットワーク上でデバイスが見つかりませんでした。",
+            "single_instance_allowed": "すでに構成済みです。 構成は一つだけ可能です。"
+        },
+        "error": {
+            "cannot_connect": "接続できません",
+            "invalid_auth": "認証エラー"
+          },
+        "step": {
+            "user": {
+                "title": "Meross LAN",
+                "description": "Meross デバイスのセットアップ",
+                "data": {
+                    "host": "デバイスのホストアドレス",
+                    "key": "デバイスキー"
+                }
+            },
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Meross LAN のグローバル設定",
+                "data": {
+                    "key": "デバイスキー"
+                }
+            },
+            "device": {
+                "title": "デバイス設定",
+                "description": "Type: {device_type}\nUUID: {device_id}",
+                "data": {
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Meross LAN のグローバル設定",
+                "data": {
+                    "key": "デバイスキー"
+                }
+            },
+            "device": {
+                "title": "デバイス設定",
+                "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
+                "data": {
+                    "key": "デバイスキー",
+                    "protocol": "接続プロトコル",
+                    "polling_period": "ポーリング間隔(秒)",
+                    "time_zone": "デバイスのタイムゾーン",
+                    "trace": "デバイスのデバグトレースを開始する (10分間)",
+                    "all": "Appliance.System.All",
+                    "ability": "Appliance.System.Ability"
+                }
+            }
+        }
+    }
+}
