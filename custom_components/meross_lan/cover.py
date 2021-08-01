@@ -22,8 +22,9 @@ from .const import (
 )
 
 NOTIFICATION_ID_TIMEOUT = 'garagedoor_timeout'
-EXTRA_ATTR_TIMEOUT_ERROR_TIME = "timeout_error_time" # the time at which the transition timeout occurred
-EXTRA_ATTR_TIMEOUT_ERROR_STATE = "timeout_error_state" # the state which was not reached
+EXTRA_ATTR_TRANSITION_DURATION = 'transition_duration'
+EXTRA_ATTR_TRANSITION_TIMEOUT = 'transition_timeout' # the time at which the transition timeout occurred
+EXTRA_ATTR_TRANSITION_TARGET = 'transition_target' # the target state which was not reached
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
     platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_COVER)
@@ -47,6 +48,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         self._open = None # this is the last known (or actual) physical state from device state
         self._open_pending = None # cache since device reply doesnt report it (just actual state)
         self._attr_extra_state_attributes = dict()
+        self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = self._transition_duration
 
     @property
     def supported_features(self):
@@ -163,6 +165,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
                         self._transition_duration = PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
                     elif self._transition_duration < PARAM_GARAGEDOOR_TRANSITION_MINDURATION:
                         self._transition_duration = PARAM_GARAGEDOOR_TRANSITION_MINDURATION
+                    self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = self._transition_duration
                     self._device.log(DEBUG, 0, "MerossLanGarage(%s): updated transition_duration to %d sec", self.name, self._transition_duration)
                     self._cancel_transition()
                     self._set_state(STATE_CLOSED)
@@ -227,17 +230,18 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
             # because our estimate is too short or the garage didnt close at all
             if self._transition_duration < PARAM_GARAGEDOOR_TRANSITION_MAXDURATION:
                 self._transition_duration = self._transition_duration + 1
+                self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = self._transition_duration
 
         if self._open_pending == self._open:
-            self._attr_extra_state_attributes.pop(EXTRA_ATTR_TIMEOUT_ERROR_STATE, None)
-            self._attr_extra_state_attributes.pop(EXTRA_ATTR_TIMEOUT_ERROR_TIME, None)
+            self._attr_extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TIMEOUT, None)
+            self._attr_extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TARGET, None)
             """self.hass.components.persistent_notification.async_dismiss(
                 notification_id=NOTIFICATION_ID_TIMEOUT + '.' + self.unique_id
             )"""
         else:
             state_pending = (STATE_OPEN if self._open_pending else STATE_CLOSED)
-            self._attr_extra_state_attributes[EXTRA_ATTR_TIMEOUT_ERROR_STATE] = state_pending
-            self._attr_extra_state_attributes[EXTRA_ATTR_TIMEOUT_ERROR_TIME] = str(_now)
+            self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_TARGET] = state_pending
+            self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_TIMEOUT] = str(_now)
             """self.hass.components.persistent_notification.async_create(
                 title=self.entryname,
                 message=f"Garage door didn't reach the '{state_pending}' state on time",
