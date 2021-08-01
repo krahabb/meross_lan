@@ -372,7 +372,7 @@ class MerossDevice:
                         1 if _transition_info[1].total_seconds() else 0
                         ])
                 except Exception as e:
-                    self.log(logging.INFO, 0, "MerossDevice(%s) error while building timezone info (%s)", self.device_id, str(e))
+                    self.log(logging.WARNING, 0, "MerossDevice(%s) error while building timezone info (%s)", self.device_id, str(e))
                     timerules = [[0, 0, 0], [epoch + PARAM_TIMEZONE_CHECK_PERIOD, 0, 1]]
 
                 self.request(
