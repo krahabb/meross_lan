@@ -1,0 +1,61 @@
+{
+    "title": "Meross LAN",
+    "config": {
+        "flow_title": "Meross {device_type}",
+        "abort": {
+            "no_devices_found": "Nessun dispositivo trovato",
+            "single_instance_allowed": "Già configurato. E' possibile aggiungere solo una configurazione."
+        },
+        "error": {
+            "cannot_connect": "Impossibile connettersi",
+            "invalid_auth": "Errore di autenticazione"
+          },
+        "step": {
+            "user": {
+                "title": "Meross LAN",
+                "description": "Configurazione dispositivo",
+                "data": {
+                    "host": "Indirizzo dispositivo",
+                    "key": "Chiave dispositivo"
+                }
+            },
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Configura le impostazioni globali di Meross LAN",
+                "data": {
+                    "key": "Chiave dispositivo"
+                }
+            },
+            "device": {
+                "title": "Configurazione dispositivo",
+                "description": "Tipo: {device_type}\nUUID: {device_id}",
+                "data": {
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Configura le impostazioni globali di Meross LAN",
+                "data": {
+                    "key": "Chiave dispositivo"
+                }
+            },
+            "device": {
+                "title": "Configurazione dispositivo",
+                "description": "Tipo: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
+                "data": {
+                    "key": "Chiave dispositivo",
+                    "protocol": "Protocollo",
+                    "polling_period": "Intervallo di aggiornamento",
+                    "time_zone": "Zona oraria",
+                    "trace": "Attiva il debug tracing (per 10 min)",
+                    "all": "Appliance.System.All",
+                    "ability": "Appliance.System.Ability"
+                }
+            }
+        }
+    }
+}

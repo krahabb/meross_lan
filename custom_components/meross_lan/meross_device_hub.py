@@ -334,6 +334,7 @@ class MTS100SubDevice(MerossSubDevice):
         super().__init__(hub, p_digest, type)
         self.climate = Mts100Climate(self)
         self.binary_sensor_window = MerossLanHubBinarySensor(self, DEVICE_CLASS_WINDOW)
+        self.sensor_temperature = MerossLanHubSensor(self, DEVICE_CLASS_TEMPERATURE)
 
     def _parse_all(self, p_all: dict) -> None:
         super()._parse_all(p_all)
@@ -354,6 +355,8 @@ class MTS100SubDevice(MerossSubDevice):
             p_openwindow = p_temperature.get(mc.KEY_OPENWINDOW)
             if p_openwindow is not None:
                 self.binary_sensor_window._set_onoff(p_openwindow)
+
+            self.sensor_temperature._set_state(climate._current_temperature)
 
         p_togglex = p_all.get(mc.KEY_TOGGLEX)
         if isinstance(p_togglex, dict):
@@ -376,6 +379,7 @@ class MTS100SubDevice(MerossSubDevice):
         climate._max_temp = _get_temp_normal(p_temperature.get(mc.KEY_MAX), climate._max_temp)
         climate._mts100_heating = p_temperature.get(mc.KEY_HEATING, climate._mts100_heating)
         climate.update_modes()
+        self.sensor_temperature._set_state(climate._current_temperature)
 
 
     def _parse_togglex(self, p_togglex: dict) -> None:

@@ -1,9 +1,6 @@
 """An Http API Client to interact with meross devices"""
-from email import header
 import logging
-from types import MappingProxyType
-from typing import List, MappingView, Optional, Dict, Any, Callable, Union
-from enum import Enum
+from typing import Optional, Union
 from uuid import uuid4
 from hashlib import md5
 from time import time
@@ -14,8 +11,6 @@ from json import (
 
 import aiohttp
 from yarl import URL
-import socket
-import asyncio
 import async_timeout
 
 from . import const as mc
@@ -121,31 +116,6 @@ class MerossDeviceDescriptor:
         setattr(self, name, value)
         return value
 
-    """
-    @property
-    def uuid(self) -> str:
-        return self.hardware.get(mc.KEY_UUID)
-
-    @property
-    def macAddress(self) -> str:
-        return self.hardware.get(mc.KEY_MACADDRESS, '48:e1:e9:XX:XX:XX')
-
-    @property
-    def ipAddress(self) -> str:
-        return self.firmware.get(mc.KEY_INNERIP)
-
-    @property
-    def timezone(self) -> str:
-        return self.system.get(mc.KEY_TIME, {}).get(mc.KEY_TIMEZONE)
-
-    @property
-    def productname(self) -> str:
-        return get_productnameuuid(self.type, self.uuid)
-
-    @property
-    def productmodel(self) -> str:
-        return f"{self.type} {self.hardware.get(mc.KEY_VERSION, '')}"
-    """
 
     def update(self, payload: dict):
         """

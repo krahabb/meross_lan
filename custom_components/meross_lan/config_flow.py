@@ -68,8 +68,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._host = user_input[CONF_HOST]
             self._key = user_input.get(CONF_KEY)
             try:
-                discovery_info = await _http_discovery(self._host, self._key, self.hass)
-                return await self.async_step_discovery(discovery_info)
+                _discovery_info = await _http_discovery(self._host, self._key, self.hass)
+                return await self.async_step_discovery(_discovery_info)
             except Exception as e:
                 LOGGER.debug("Error (%s) connecting to meross device (host:%s)", str(e), self._host)
                 errors["base"] = "cannot_connect"

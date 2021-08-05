@@ -9,15 +9,31 @@ from __future__ import annotations
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers import device_registry as dr
 from homeassistant.const import (
-    STATE_UNKNOWN, STATE_ON, STATE_OFF,
+    STATE_ON, STATE_OFF,
     DEVICE_CLASS_POWER, POWER_WATT,
-    DEVICE_CLASS_CURRENT, ELECTRICAL_CURRENT_AMPERE,
-    DEVICE_CLASS_VOLTAGE, VOLT,
+    DEVICE_CLASS_CURRENT,
+    DEVICE_CLASS_VOLTAGE,
     DEVICE_CLASS_ENERGY, ENERGY_WATT_HOUR,
     DEVICE_CLASS_TEMPERATURE, TEMP_CELSIUS,
     DEVICE_CLASS_HUMIDITY, PERCENTAGE,
     DEVICE_CLASS_BATTERY
 )
+
+try:
+    # new in 2021.8.0 core (#52 #53)
+    from homeassistant.const import (
+        ELECTRIC_CURRENT_AMPERE,
+        ELECTRIC_POTENTIAL_VOLT,
+    )
+except:#someone still pre 2021.8.0 ?
+    from homeassistant.const import (
+        ELECTRICAL_CURRENT_AMPERE,
+        VOLT,
+    )
+    ELECTRIC_CURRENT_AMPERE = ELECTRICAL_CURRENT_AMPERE
+    ELECTRIC_POTENTIAL_VOLT = VOLT
+
+
 
 from .merossclient import const as mc, get_productnameuuid
 from .helpers import LOGGER
@@ -25,8 +41,8 @@ from .const import CONF_DEVICE_ID, DOMAIN
 
 CLASS_TO_UNIT_MAP = {
     DEVICE_CLASS_POWER: POWER_WATT,
-    DEVICE_CLASS_CURRENT: ELECTRICAL_CURRENT_AMPERE,
-    DEVICE_CLASS_VOLTAGE: VOLT,
+    DEVICE_CLASS_CURRENT: ELECTRIC_CURRENT_AMPERE,
+    DEVICE_CLASS_VOLTAGE: ELECTRIC_POTENTIAL_VOLT,
     DEVICE_CLASS_ENERGY: ENERGY_WATT_HOUR,
     DEVICE_CLASS_TEMPERATURE: TEMP_CELSIUS,
     DEVICE_CLASS_HUMIDITY: PERCENTAGE,

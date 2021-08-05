@@ -169,6 +169,15 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
 
 
     async def async_set_hvac_mode(self, hvac_mode: str) -> None:
+        if hvac_mode == HVAC_MODE_HEAT:
+            # when requesting HEAT we'll just switch ON the MTS
+            # while leaving it's own mode (#48) if it's one of
+            # the manual modes, else switch it to MTS100MODE_CUSTOM
+            # through HVAC_TO_PRESET_MAP
+            if self._mts100_mode != MTS100MODE_AUTO:
+                await self.async_turn_on()
+                return
+
         await self.async_set_preset_mode(HVAC_TO_PRESET_MAP.get(hvac_mode))
 
 
