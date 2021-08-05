@@ -10,5 +10,5 @@
   "dependencies": [],
   "after_dependencies": ["mqtt", "dhcp"],
   "codeowners": ["@krahabb"],
-  "version": "2.1.0"
+  "version": "2.1.1"
 }
