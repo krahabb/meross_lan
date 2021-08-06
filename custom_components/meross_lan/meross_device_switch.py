@@ -1,4 +1,5 @@
-from time import localtime, strftime, time
+from time import localtime, strftime
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.core import callback
 from homeassistant.const import (
@@ -143,7 +144,11 @@ class MerossDeviceSwitch(MerossDevice):
 
         if namespace == mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX:
             self._lastupdate_consumption = self.lastupdate
-            daylabel = strftime("%Y-%m-%d", localtime())
+            s_tm = localtime()
+            self._sensor_energy._attr_last_reset = datetime(
+                s_tm.tm_year, s_tm.tm_mon, s_tm.tm_mday,
+                tzinfo=timezone(timedelta(seconds=s_tm.tm_gmtoff), s_tm.tm_zone))
+            daylabel = strftime("%Y-%m-%d", s_tm)
             for d in payload.get(mc.KEY_CONSUMPTIONX):
                 if d.get(mc.KEY_DATE) == daylabel:
                     self._sensor_energy._set_state(d.get(mc.KEY_VALUE))
