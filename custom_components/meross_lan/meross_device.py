@@ -204,6 +204,18 @@ class MerossDevice:
                     self.entities[DND_ID]._set_onoff(dndmode.get(mc.KEY_MODE))
             return True
 
+        if namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
+            # this is part of initial flow over MQTT
+            # we'll try to set the correct time in order to avoid
+            # having NTP opened to setup the device
+            if method == mc.METHOD_PUSH:
+                self.request(
+                    mc.NS_APPLIANCE_SYSTEM_CLOCK,
+                    mc.METHOD_PUSH,
+                    { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: int(self.lastupdate)}}
+                    )
+            return True
+
         return False
 
 
