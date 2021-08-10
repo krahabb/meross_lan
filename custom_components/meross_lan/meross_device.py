@@ -135,7 +135,7 @@ class MerossDevice:
     def online(self) -> bool:
         if self._online:
             #evaluate device MQTT availability by checking lastrequest got answered in less than polling_period
-            if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < self.polling_period):
+            if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < (self.polling_period - 2)):
                 return True
 
             # when we 'fall' offline while on MQTT eventually retrigger HTTP.
@@ -231,8 +231,11 @@ class MerossDevice:
         self._trace(payload, namespace, method, CONF_OPTION_MQTT)
         if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
             self.switch_protocol(Protocol.MQTT) # will reset 'lastmqtt'
-        self.lastmqtt = time()
         self.receive(namespace, method, payload, replykey)
+        # self.lastmqtt is checked against to see if we have to request a full state update
+        # when coming online. Set it last so we know (inside self.receive) that we're
+        # eventually coming from offline
+        self.lastmqtt = time()
 
 
     def mqtt_disconnected(self) -> None:
