@@ -75,7 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """
     if (device_id is None) or (entry.data.get(CONF_PROTOCOL) == CONF_OPTION_MQTT):
         if api.unsub_mqtt is None:
-            raise ConfigEntryNotReady
+            raise ConfigEntryNotReady("MQTT unavailable")
 
     if device_id is None:
         # this is the MQTT Hub entry
@@ -206,12 +206,12 @@ class MerossApi:
                             msg_reason = "disabled" if domain_entry.disabled_by is not None \
                                 else "ignored" if domain_entry.source == "ignore" \
                                     else "unknown"
-                            LOGGER_trap(INFO, 300, "Ignoring discovery for device_id: %s (ConfigEntry is %s)", device_id, msg_reason)
+                            LOGGER_trap(INFO, 14400, "Ignoring discovery for device_id: %s (ConfigEntry is %s)", device_id, msg_reason)
                             return
                     #also skip discovered integrations waititng in HA queue
                     for flow in self.hass.config_entries.flow.async_progress():
                         if (flow.get("handler") == DOMAIN) and (flow.get("context", {}).get("unique_id") == device_id):
-                            LOGGER_trap(INFO, 300, "Ignoring discovery for device_id: %s (ConfigEntry is in progress)", device_id)
+                            LOGGER_trap(INFO, 14400, "Ignoring discovery for device_id: %s (ConfigEntry is in progress)", device_id)
                             return
 
                     replykey = merossclient.get_replykey(header, self.key)
