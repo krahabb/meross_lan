@@ -16,7 +16,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.config_entries import ConfigEntries, ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
-from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc  # mEROSS cONST
+from .merossclient import (
+    const as mc,  # mEROSS cONST
+    MerossDeviceDescriptor, MerossHttpClient,
+    get_replykey,
+)
 from .meross_entity import MerossFakeEntity
 from .switch import MerossLanDND
 from .helpers import LOGGER, LOGGER_trap, mqtt_is_connected
@@ -27,7 +31,7 @@ from .const import (
     CONF_PROTOCOL, CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
     CONF_TIME_ZONE,
     CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE,
-    PARAM_HEARTBEAT_PERIOD, PARAM_TIMEZONE_CHECK_PERIOD, PARAM_TIMESTAMP_TOLERANCE, 
+    PARAM_HEARTBEAT_PERIOD, PARAM_TIMEZONE_CHECK_PERIOD, PARAM_TIMESTAMP_TOLERANCE,
 )
 
 # these are dynamically created MerossDevice attributes in a sort of a dumb optimization
@@ -155,7 +159,7 @@ class MerossDevice:
         namespace: str,
         method: str,
         payload: dict,
-        replykey: KeyType
+        header: dict
     ) -> bool:
         """
         every time we receive a response we save it's 'replykey':
@@ -163,16 +167,23 @@ class MerossDevice:
         if it's good else it would be the device message header to be used in
         a reply scheme where we're going to 'fool' the device by using its own hashes
         if our config allows for that (our self.key is 'None' which means empty key or auto-detect)
-
         Update: this key trick actually doesnt work on MQTT (but works on HTTP)
         """
-        self.replykey = replykey
-        if self.key and (replykey != self.key):
+        self.replykey = get_replykey(header, self.key)
+        if self.key and (self.replykey != self.key):
             self.log(
                 logging.WARNING, 14400,
-                "Meross device key error for device_id: %s",
+                "MerossDevice(%s) received signature error (incorrect key?)",
                 self.device_id
             )
+
+        if method == mc.METHOD_ERROR:
+            self.log(
+                logging.WARNING, 14400,
+                "MerossDevice(%s) protocol error: namespace = '%s' payload = '%s'",
+                self.device_id, namespace, json_dumps(payload)
+            )
+            return True
 
         self.lastupdate = time()
         if not self._online:
@@ -230,18 +241,19 @@ class MerossDevice:
         namespace: str,
         method: str,
         payload: dict,
-        replykey: KeyType
+        header: dict
     ) -> None:
         if self.conf_protocol is Protocol.HTTP:
             return # even if mqtt parsing is no harming we want a 'consistent' HTTP only behaviour
         self._trace(payload, namespace, method, CONF_OPTION_MQTT)
         if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
             self.switch_protocol(Protocol.MQTT) # will reset 'lastmqtt'
-        self.receive(namespace, method, payload, replykey)
+        self.receive(namespace, method, payload, header)
         # self.lastmqtt is checked against to see if we have to request a full state update
         # when coming online. Set it last so we know (inside self.receive) that we're
         # eventually coming from offline
-        self.lastmqtt = time()
+        # self.lastupdate is not updated when we have protocol ERROR!
+        self.lastmqtt = self.lastupdate
 
 
     def mqtt_disconnected(self) -> None:
@@ -294,9 +306,7 @@ class MerossDevice:
             if (callback is not None) and (r_method == mc.METHOD_SETACK):
                 #we're actually only using this for SET->SETACK command confirmation
                 callback()
-            # passing self.key to shut off MerossDevice replykey behaviour
-            # since we're already managing replykey in http client
-            self.receive(r_namespace, r_method, r_payload, self.key)
+            self.receive(r_namespace, r_method, r_payload, r_header)
         except Exception as e:
             self.log(
                 logging.WARNING, 14400,

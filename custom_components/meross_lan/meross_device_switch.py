@@ -103,10 +103,10 @@ class MerossDeviceSwitch(MerossDevice):
         namespace: str,
         method: str,
         payload: dict,
-        replykey: KeyType
+        header: dict
     ) -> bool:
 
-        if super().receive(namespace, method, payload, replykey):
+        if super().receive(namespace, method, payload, header):
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLE:
@@ -155,6 +155,22 @@ class MerossDeviceSwitch(MerossDevice):
                     break
             else:# this means consumption for current day is not yet measured i.e. null
                 self._sensor_energy._set_state(0)
+            """
+            # we're changing our perspective here:
+            # we'll extract the most recent reading from the set
+            # and eventually roundtrip it against our midnight
+            timestamp_last = 0
+            timestamp_prevlast = 0
+            wh_last = 0
+            for d in payload.get(mc.KEY_CONSUMPTIONX):
+                d_timestamp = d.get(mc.KEY_TIME)
+                if d_timestamp > timestamp_last:
+                    timestamp_prevlast = timestamp_last
+                    timestamp_last = d_timestamp
+                    wh_last = d.get(mc.KEY_VALUE)
+
+            self._sensor_energy._set_state(wh_last)
+            """
             return True
 
         return False

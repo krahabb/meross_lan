@@ -25,7 +25,7 @@ from logging import WARNING, INFO
 from .helpers import LOGGER, LOGGER_trap
 
 
-from .meross_device import MerossDevice, Protocol
+from .meross_device import MerossDevice
 from .meross_device_switch import MerossDeviceSwitch
 from .meross_device_bulb import MerossDeviceBulb
 from .meross_device_hub import MerossDeviceHub
@@ -266,7 +266,7 @@ class MerossApi:
                             return
 
                 else:
-                    device.mqtt_receive(namespace, method, payload, merossclient.get_replykey(header, device.key))
+                    device.mqtt_receive(namespace, method, payload, header)
 
             except Exception as e:
                 LOGGER.debug("MerossApi: mqtt_receive exception:(%s) payload:(%s)", str(e), msg.payload)
@@ -369,7 +369,7 @@ class MerossApi:
             if callback_or_device is not None:
                 if isinstance(callback_or_device, MerossDevice):
                     callback_or_device.receive( r_namespace, r_method,
-                        response[mc.KEY_PAYLOAD], _httpclient.replykey)
+                        response[mc.KEY_PAYLOAD], r_header)
                 elif (r_method == mc.METHOD_SETACK):
                     #we're actually only using this for SET->SETACK command confirmation
                     callback_or_device()

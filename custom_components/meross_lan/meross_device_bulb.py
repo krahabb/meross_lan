@@ -28,10 +28,10 @@ class MerossDeviceBulb(MerossDevice):
         namespace: str,
         method: str,
         payload: dict,
-        replykey: KeyType
+        header: dict
     ) -> bool:
 
-        if super().receive(namespace, method, payload, replykey):
+        if super().receive(namespace, method, payload, header):
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_LIGHT:
