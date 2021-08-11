@@ -27,7 +27,7 @@ from .const import (
     CONF_PROTOCOL, CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
     CONF_TIME_ZONE,
     CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE,
-    PARAM_HEARTBEAT_PERIOD, PARAM_TIMEZONE_CHECK_PERIOD,
+    PARAM_HEARTBEAT_PERIOD, PARAM_TIMEZONE_CHECK_PERIOD, PARAM_TIMESTAMP_TOLERANCE, 
 )
 
 # these are dynamically created MerossDevice attributes in a sort of a dumb optimization
@@ -168,7 +168,11 @@ class MerossDevice:
         """
         self.replykey = replykey
         if self.key and (replykey != self.key):
-            self.log(logging.WARNING, 14400, "Meross device key error for device_id: %s", self.device_id)
+            self.log(
+                logging.WARNING, 14400,
+                "Meross device key error for device_id: %s",
+                self.device_id
+            )
 
         self.lastupdate = time()
         if not self._online:
@@ -208,6 +212,8 @@ class MerossDevice:
             # this is part of initial flow over MQTT
             # we'll try to set the correct time in order to avoid
             # having NTP opened to setup the device
+            # Note: I actually see this NS only on mss310 plugs
+            # (msl120j bulb doesnt have it)
             if method == mc.METHOD_PUSH:
                 self.request(
                     mc.NS_APPLIANCE_SYSTEM_CLOCK,
@@ -261,7 +267,11 @@ class MerossDevice:
                 response = await _httpclient.async_request(namespace, method, payload)
             except Exception as e:
                 if self._online:
-                    self.log(logging.INFO, 0, "MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
+                    self.log(
+                        logging.INFO, 0,
+                        "MerossDevice(%s) client connection error in async_http_request: %s",
+                        self.device_id, str(e) or type(e).__name__
+                    )
                     if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt and mqtt_is_connected(self.api.hass):
                         self.switch_protocol(Protocol.MQTT)
                         self._trace(payload, namespace, method, CONF_OPTION_MQTT)
@@ -288,7 +298,11 @@ class MerossDevice:
             # since we're already managing replykey in http client
             self.receive(r_namespace, r_method, r_payload, self.key)
         except Exception as e:
-            self.log(logging.WARNING, 14400, "MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
+            self.log(
+                logging.WARNING, 14400,
+                "MerossDevice(%s) error in async_http_request: %s",
+                self.device_id, str(e) or type(e).__name__
+            )
 
 
     def request(self, namespace: str, method: str = mc.METHOD_GET, payload: dict = {}, callback: Callable = None):
@@ -347,10 +361,29 @@ class MerossDevice:
         if oldaddr != descr.innerIp:
             self.needsave = True
 
-        if self.time_zone:
+        epoch = int(time())
+        p_time: dict = descr.time
+        device_epoch = p_time.get(mc.KEY_TIMESTAMP, 0)
+        if abs(epoch - device_epoch) > PARAM_TIMESTAMP_TOLERANCE:
+            self.log(
+                logging.WARNING, 86400,
+                "MerossDevice(%s) has incorrect timestamp",
+                self.device_id
+            )
+
+            if (self.curr_protocol == Protocol.MQTT) \
+                and mc.NS_APPLIANCE_SYSTEM_CLOCK in descr.ability:
+                #timestamp misalignment: try to fix it
+                #only when devices are paired on our MQTT
+                self.request(
+                    mc.NS_APPLIANCE_SYSTEM_CLOCK,
+                    mc.METHOD_PUSH,
+                    { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: epoch }}
+                )
+
+
+        if self.time_zone and (mc.NS_APPLIANCE_SYSTEM_TIME in descr.ability):
             # check the appliance timeoffsets are updated (see #36)
-            epoch = int(time())
-            p_time: dict = descr.time
             p_timerule: list = p_time.get(mc.KEY_TIMERULE, [])
             """
             timeRule should contain 2 entries: the actual time offsets and
@@ -367,12 +400,14 @@ class MerossDevice:
                 appliance so it knows how and when to offset utc to localtime
                 """
                 timerules = list()
-
                 try:
                     import pytz
                     import bisect
                     tz_local = pytz.timezone(self.time_zone)
-                    idx = bisect.bisect_right(tz_local._utc_transition_times, datetime.datetime.utcfromtimestamp(epoch))
+                    idx = bisect.bisect_right(
+                        tz_local._utc_transition_times,
+                        datetime.datetime.utcfromtimestamp(epoch)
+                    )
                     # idx would be the next transition offset index
                     _transition_info = tz_local._transition_info[idx-1]
                     timerules.append([
@@ -385,9 +420,13 @@ class MerossDevice:
                         int(tz_local._utc_transition_times[idx].timestamp()),
                         int(_transition_info[0].total_seconds()),
                         1 if _transition_info[1].total_seconds() else 0
-                        ])
+                    ])
                 except Exception as e:
-                    self.log(logging.WARNING, 0, "MerossDevice(%s) error while building timezone info (%s)", self.device_id, str(e))
+                    self.log(
+                        logging.WARNING, 0,
+                        "MerossDevice(%s) error while building timezone info (%s)",
+                        self.device_id, str(e)
+                    )
                     timerules = [[0, 0, 0], [epoch + PARAM_TIMEZONE_CHECK_PERIOD, 0, 1]]
 
                 self.request(
@@ -397,9 +436,9 @@ class MerossDevice:
                         mc.KEY_TIME: {
                             mc.KEY_TIMEZONE: self.time_zone,
                             mc.KEY_TIMERULE: timerules
-                            }
                         }
-                    )
+                    }
+                )
 
         for key, value in descr.digest.items():
             _parse = getattr(self, f"_parse_{key}", None)
@@ -408,7 +447,11 @@ class MerossDevice:
 
 
     def _set_offline(self) -> None:
-        self.log(logging.DEBUG, 0, "MerossDevice(%s) going offline!", self.device_id)
+        self.log(
+            logging.DEBUG, 0,
+            "MerossDevice(%s) going offline!",
+            self.device_id
+        )
         self._online = False
         self._retry_period = 0
         self.lastmqtt = 0
@@ -422,13 +465,21 @@ class MerossDevice:
             also in inheriteds. Pass received namespace along
             so to decide what to refresh (see 'updatecoordinator_listener')
         """
-        self.log(logging.DEBUG, 0, "MerossDevice(%s) back online!", self.device_id)
+        self.log(
+            logging.DEBUG, 0,
+            "MerossDevice(%s) back online!",
+            self.device_id
+        )
         self._online = True
         self.request_updates(time(), namespace)
 
 
     def switch_protocol(self, protocol: Protocol) -> None:
-        self.log(logging.INFO, 0, "MerossDevice(%s) switching protocol to %s", self.device_id, protocol.name)
+        self.log(
+            logging.INFO, 0,
+            "MerossDevice(%s) switching protocol to %s",
+            self.device_id, protocol.name
+        )
         self.lastmqtt = 0 # reset so we'll need a new mqtt message to ensure mqtt availability
         self.curr_protocol = protocol
 
@@ -443,7 +494,11 @@ class MerossDevice:
                 data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
                 entries.async_update_entry(entry, data=data)
         except Exception as e:
-            self.log(logging.WARNING, 0, "MerossDevice(%s) error while updating ConfigEntry (%s)", self.device_id, str(e))
+            self.log(
+                logging.WARNING, 0,
+                "MerossDevice(%s) error while updating ConfigEntry (%s)",
+                self.device_id, str(e)
+            )
 
 
     def _set_config_entry(self, data: dict) -> None:

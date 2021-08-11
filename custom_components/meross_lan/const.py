@@ -59,3 +59,4 @@ PARAM_TIMEZONE_CHECK_PERIOD = 604800 # 1 week before retrying timezone updates
 #PARAM_STALE_DEVICE_REMOVE_TIMEOUT = 60 # disable config_entry when device is offline for more than...
 PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
+PARAM_TIMESTAMP_TOLERANCE = 5 # max device timestamp diff against our and trigger warning and (eventually) fix it
