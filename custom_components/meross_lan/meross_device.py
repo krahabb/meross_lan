@@ -73,6 +73,8 @@ class MerossDevice:
         self.needsave = False # while parsing ns.ALL code signals to persist ConfigEntry
         self._retry_period = 0 # used to try reconnect when falling offline
         self._switch_dnd = MerossFakeEntity
+        self.device_timestamp = 0
+        self.device_timedelta = 0
         self.lastpoll = 0
         self.lastrequest = 0
         self.lastupdate = 0
@@ -161,6 +163,34 @@ class MerossDevice:
         payload: dict,
         header: dict
     ) -> bool:
+
+        """
+        we'll use the device timestamp to 'align' our time to the device one
+        this is useful for metered plugs reporting timestamped energy consumption
+        and we want to 'translate' this timings in our (local) time.
+        We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
+        we'll always be a bit late in processing
+        """
+        epoch = time()
+        self.device_timestamp = header.get(mc.KEY_TIMESTAMP, epoch)
+        device_timedelta = epoch - self.device_timestamp
+        if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
+            self.log(
+                logging.WARNING, 86400,
+                "MerossDevice(%s) has incorrect timestamp",
+                self.device_id
+            )
+            self.log(
+                logging.DEBUG, 0,
+                "MerossDevice(%s) timedelta = %d",
+                self.device_id, device_timedelta
+            )
+            if abs(self.device_timedelta - device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
+                self.device_timedelta = device_timedelta
+            else:
+                self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
+        else:
+            self.device_timedelta = 0
         """
         every time we receive a response we save it's 'replykey':
         that would be the same as our self.key (which it is compared against in 'get_replykey')
@@ -185,7 +215,7 @@ class MerossDevice:
             )
             return True
 
-        self.lastupdate = time()
+        self.lastupdate = epoch
         if not self._online:
             self._set_online(namespace)
 
@@ -229,8 +259,8 @@ class MerossDevice:
                 self.request(
                     mc.NS_APPLIANCE_SYSTEM_CLOCK,
                     mc.METHOD_PUSH,
-                    { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: int(self.lastupdate)}}
-                    )
+                    { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: int(epoch)}}
+                )
             return True
 
         return False
@@ -371,29 +401,22 @@ class MerossDevice:
         if oldaddr != descr.innerIp:
             self.needsave = True
 
-        epoch = int(time())
-        p_time: dict = descr.time
-        device_epoch = p_time.get(mc.KEY_TIMESTAMP, 0)
-        if abs(epoch - device_epoch) > PARAM_TIMESTAMP_TOLERANCE:
-            self.log(
-                logging.WARNING, 86400,
-                "MerossDevice(%s) has incorrect timestamp",
-                self.device_id
+        epoch = int(self.lastupdate) # we're not calling time() since it's fresh enough
+
+        if self.device_timedelta \
+            and (self.curr_protocol == Protocol.MQTT) \
+            and mc.NS_APPLIANCE_SYSTEM_CLOCK in descr.ability:
+            #timestamp misalignment: try to fix it
+            #only when devices are paired on our MQTT
+            self.request(
+                mc.NS_APPLIANCE_SYSTEM_CLOCK,
+                mc.METHOD_PUSH,
+                { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: epoch }}
             )
-
-            if (self.curr_protocol == Protocol.MQTT) \
-                and mc.NS_APPLIANCE_SYSTEM_CLOCK in descr.ability:
-                #timestamp misalignment: try to fix it
-                #only when devices are paired on our MQTT
-                self.request(
-                    mc.NS_APPLIANCE_SYSTEM_CLOCK,
-                    mc.METHOD_PUSH,
-                    { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: epoch }}
-                )
-
 
         if self.time_zone and (mc.NS_APPLIANCE_SYSTEM_TIME in descr.ability):
             # check the appliance timeoffsets are updated (see #36)
+            p_time: dict = descr.time
             p_timerule: list = p_time.get(mc.KEY_TIMERULE, [])
             """
             timeRule should contain 2 entries: the actual time offsets and
