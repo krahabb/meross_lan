@@ -1,4 +1,5 @@
-from time import localtime, strftime
+import logging
+from time import localtime
 from datetime import datetime, timedelta, timezone
 
 from homeassistant.core import callback
@@ -22,11 +23,12 @@ class MerossDeviceSwitch(MerossDevice):
 
     def __init__(self, api, descriptor, entry):
         super().__init__(api, descriptor, entry)
-        self._lastupdate_consumption = 0
         self._sensor_power = MerossFakeEntity
         self._sensor_current = MerossFakeEntity
         self._sensor_voltage = MerossFakeEntity
         self._sensor_energy = MerossFakeEntity
+        self._energy_lastupdate = 0
+        self._energy_last_reset = 0 # store the last 'device time' we passed onto to _attr_last_reset
 
         try:
             # use a mix of heuristic to detect device features
@@ -143,7 +145,8 @@ class MerossDeviceSwitch(MerossDevice):
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX:
-            self._lastupdate_consumption = self.lastupdate
+            self._energy_lastupdate = self.lastupdate
+            """
             s_tm = localtime()
             self._sensor_energy._attr_last_reset = datetime(
                 s_tm.tm_year, s_tm.tm_mon, s_tm.tm_mday,
@@ -159,18 +162,42 @@ class MerossDeviceSwitch(MerossDevice):
             # we're changing our perspective here:
             # we'll extract the most recent reading from the set
             # and eventually roundtrip it against our midnight
-            timestamp_last = 0
-            timestamp_prevlast = 0
-            wh_last = 0
-            for d in payload.get(mc.KEY_CONSUMPTIONX):
-                d_timestamp = d.get(mc.KEY_TIME)
-                if d_timestamp > timestamp_last:
-                    timestamp_prevlast = timestamp_last
-                    timestamp_last = d_timestamp
-                    wh_last = d.get(mc.KEY_VALUE)
+            st = localtime()
+            dt = datetime(
+                st.tm_year, st.tm_mon, st.tm_mday,
+                tzinfo=timezone(timedelta(seconds=st.tm_gmtoff), st.tm_zone)
+            )
+            timestamp_last_reset = dt.timestamp() - self.device_timedelta
+            self.log(
+                logging.DEBUG, 0,
+                "MerossDevice(%s) Energy: device midnight = %d",
+                self.device_id, timestamp_last_reset
+            )
+            wh = 0
+            def get_timestamp(day):
+                return day.get(mc.KEY_TIME)
+            days = sorted(payload.get(mc.KEY_CONSUMPTIONX), key=get_timestamp, reverse=True)
+            days_len = len(days)
+            if days_len > 0:
+                day_last:dict = days[0]
+                d_timestamp = day_last.get(mc.KEY_TIME)
+                if d_timestamp > timestamp_last_reset:
+                    wh = day_last.get(mc.KEY_VALUE)
+                    if days_len > 1:
+                        timestamp_last_reset = days[1].get(mc.KEY_TIME)
 
-            self._sensor_energy._set_state(wh_last)
-            """
+            if self._energy_last_reset != timestamp_last_reset:
+                # we 'cache' timestamp_last_reset so we don't 'jitter' _attr_last_reset
+                # should device_timedelta change (and it will!)
+                # this is not really working until days_len is >= 2
+                self._energy_last_reset = timestamp_last_reset
+                self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(timestamp_last_reset + self.device_timedelta)
+                self.log(
+                    logging.DEBUG, 0,
+                    "MerossDevice(%s) Energy: update last_reset to %s",
+                    self.device_id, self._sensor_energy._attr_last_reset.isoformat()
+                )
+            self._sensor_energy._set_state(wh)
             return True
 
         return False
@@ -220,6 +247,6 @@ class MerossDeviceSwitch(MerossDevice):
         if self._sensor_power.enabled or self._sensor_voltage.enabled or self._sensor_current.enabled:
             self.request(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
         if self._sensor_energy.enabled:
-            if ((epoch - self._lastupdate_consumption) > PARAM_ENERGY_UPDATE_PERIOD):
+            if ((epoch - self._energy_lastupdate) > PARAM_ENERGY_UPDATE_PERIOD):
                 self.request(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)
 
