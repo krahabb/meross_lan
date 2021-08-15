@@ -25,7 +25,7 @@ from logging import WARNING, INFO
 from .helpers import LOGGER, LOGGER_trap
 
 
-from .meross_device import MerossDevice, Protocol
+from .meross_device import MerossDevice
 from .meross_device_switch import MerossDeviceSwitch
 from .meross_device_bulb import MerossDeviceBulb
 from .meross_device_hub import MerossDeviceHub
@@ -75,7 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """
     if (device_id is None) or (entry.data.get(CONF_PROTOCOL) == CONF_OPTION_MQTT):
         if api.unsub_mqtt is None:
-            raise ConfigEntryNotReady
+            raise ConfigEntryNotReady("MQTT unavailable")
 
     if device_id is None:
         # this is the MQTT Hub entry
@@ -206,12 +206,12 @@ class MerossApi:
                             msg_reason = "disabled" if domain_entry.disabled_by is not None \
                                 else "ignored" if domain_entry.source == "ignore" \
                                     else "unknown"
-                            LOGGER_trap(INFO, 300, "Ignoring discovery for device_id: %s (ConfigEntry is %s)", device_id, msg_reason)
+                            LOGGER_trap(INFO, 14400, "Ignoring discovery for device_id: %s (ConfigEntry is %s)", device_id, msg_reason)
                             return
                     #also skip discovered integrations waititng in HA queue
                     for flow in self.hass.config_entries.flow.async_progress():
                         if (flow.get("handler") == DOMAIN) and (flow.get("context", {}).get("unique_id") == device_id):
-                            LOGGER_trap(INFO, 300, "Ignoring discovery for device_id: %s (ConfigEntry is in progress)", device_id)
+                            LOGGER_trap(INFO, 14400, "Ignoring discovery for device_id: %s (ConfigEntry is in progress)", device_id)
                             return
 
                     replykey = merossclient.get_replykey(header, self.key)
@@ -266,7 +266,7 @@ class MerossApi:
                             return
 
                 else:
-                    device.mqtt_receive(namespace, method, payload, merossclient.get_replykey(header, device.key))
+                    device.mqtt_receive(namespace, method, payload, header)
 
             except Exception as e:
                 LOGGER.debug("MerossApi: mqtt_receive exception:(%s) payload:(%s)", str(e), msg.payload)
@@ -369,7 +369,7 @@ class MerossApi:
             if callback_or_device is not None:
                 if isinstance(callback_or_device, MerossDevice):
                     callback_or_device.receive( r_namespace, r_method,
-                        response[mc.KEY_PAYLOAD], _httpclient.replykey)
+                        response[mc.KEY_PAYLOAD], r_header)
                 elif (r_method == mc.METHOD_SETACK):
                     #we're actually only using this for SET->SETACK command confirmation
                     callback_or_device()

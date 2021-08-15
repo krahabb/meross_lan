@@ -16,7 +16,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.config_entries import ConfigEntries, ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
-from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc  # mEROSS cONST
+from .merossclient import (
+    const as mc,  # mEROSS cONST
+    MerossDeviceDescriptor, MerossHttpClient,
+    get_replykey,
+)
 from .meross_entity import MerossFakeEntity
 from .switch import MerossLanDND
 from .helpers import LOGGER, LOGGER_trap, mqtt_is_connected
@@ -27,7 +31,7 @@ from .const import (
     CONF_PROTOCOL, CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
     CONF_TIME_ZONE,
     CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE,
-    PARAM_HEARTBEAT_PERIOD, PARAM_TIMEZONE_CHECK_PERIOD,
+    PARAM_HEARTBEAT_PERIOD, PARAM_TIMEZONE_CHECK_PERIOD, PARAM_TIMESTAMP_TOLERANCE,
 )
 
 # these are dynamically created MerossDevice attributes in a sort of a dumb optimization
@@ -69,6 +73,8 @@ class MerossDevice:
         self.needsave = False # while parsing ns.ALL code signals to persist ConfigEntry
         self._retry_period = 0 # used to try reconnect when falling offline
         self._switch_dnd = MerossFakeEntity
+        self.device_timestamp = 0
+        self.device_timedelta = 0
         self.lastpoll = 0
         self.lastrequest = 0
         self.lastupdate = 0
@@ -135,7 +141,7 @@ class MerossDevice:
     def online(self) -> bool:
         if self._online:
             #evaluate device MQTT availability by checking lastrequest got answered in less than polling_period
-            if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < self.polling_period):
+            if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < (self.polling_period - 2)):
                 return True
 
             # when we 'fall' offline while on MQTT eventually retrigger HTTP.
@@ -155,22 +161,61 @@ class MerossDevice:
         namespace: str,
         method: str,
         payload: dict,
-        replykey: KeyType
+        header: dict
     ) -> bool:
+
+        """
+        we'll use the device timestamp to 'align' our time to the device one
+        this is useful for metered plugs reporting timestamped energy consumption
+        and we want to 'translate' this timings in our (local) time.
+        We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
+        we'll always be a bit late in processing
+        """
+        epoch = time()
+        self.device_timestamp = header.get(mc.KEY_TIMESTAMP, epoch)
+        device_timedelta = epoch - self.device_timestamp
+        if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
+            self.log(
+                logging.WARNING, 86400,
+                "MerossDevice(%s) has incorrect timestamp",
+                self.device_id
+            )
+            self.log(
+                logging.DEBUG, 0,
+                "MerossDevice(%s) timedelta = %d",
+                self.device_id, device_timedelta
+            )
+            if abs(self.device_timedelta - device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
+                self.device_timedelta = device_timedelta
+            else:
+                self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
+        else:
+            self.device_timedelta = 0
         """
         every time we receive a response we save it's 'replykey':
         that would be the same as our self.key (which it is compared against in 'get_replykey')
         if it's good else it would be the device message header to be used in
         a reply scheme where we're going to 'fool' the device by using its own hashes
         if our config allows for that (our self.key is 'None' which means empty key or auto-detect)
-
         Update: this key trick actually doesnt work on MQTT (but works on HTTP)
         """
-        self.replykey = replykey
-        if self.key and (replykey != self.key):
-            self.log(logging.WARNING, 14400, "Meross device key error for device_id: %s", self.device_id)
+        self.replykey = get_replykey(header, self.key)
+        if self.key and (self.replykey != self.key):
+            self.log(
+                logging.WARNING, 14400,
+                "MerossDevice(%s) received signature error (incorrect key?)",
+                self.device_id
+            )
 
-        self.lastupdate = time()
+        if method == mc.METHOD_ERROR:
+            self.log(
+                logging.WARNING, 14400,
+                "MerossDevice(%s) protocol error: namespace = '%s' payload = '%s'",
+                self.device_id, namespace, json_dumps(payload)
+            )
+            return True
+
+        self.lastupdate = epoch
         if not self._online:
             self._set_online(namespace)
 
@@ -204,6 +249,20 @@ class MerossDevice:
                     self.entities[DND_ID]._set_onoff(dndmode.get(mc.KEY_MODE))
             return True
 
+        if namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
+            # this is part of initial flow over MQTT
+            # we'll try to set the correct time in order to avoid
+            # having NTP opened to setup the device
+            # Note: I actually see this NS only on mss310 plugs
+            # (msl120j bulb doesnt have it)
+            if method == mc.METHOD_PUSH:
+                self.request(
+                    mc.NS_APPLIANCE_SYSTEM_CLOCK,
+                    mc.METHOD_PUSH,
+                    { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: int(epoch)}}
+                )
+            return True
+
         return False
 
 
@@ -212,15 +271,19 @@ class MerossDevice:
         namespace: str,
         method: str,
         payload: dict,
-        replykey: KeyType
+        header: dict
     ) -> None:
         if self.conf_protocol is Protocol.HTTP:
             return # even if mqtt parsing is no harming we want a 'consistent' HTTP only behaviour
         self._trace(payload, namespace, method, CONF_OPTION_MQTT)
         if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
             self.switch_protocol(Protocol.MQTT) # will reset 'lastmqtt'
-        self.lastmqtt = time()
-        self.receive(namespace, method, payload, replykey)
+        self.receive(namespace, method, payload, header)
+        # self.lastmqtt is checked against to see if we have to request a full state update
+        # when coming online. Set it last so we know (inside self.receive) that we're
+        # eventually coming from offline
+        # self.lastupdate is not updated when we have protocol ERROR!
+        self.lastmqtt = self.lastupdate
 
 
     def mqtt_disconnected(self) -> None:
@@ -246,7 +309,11 @@ class MerossDevice:
                 response = await _httpclient.async_request(namespace, method, payload)
             except Exception as e:
                 if self._online:
-                    self.log(logging.INFO, 0, "MerossDevice(%s) client connection error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
+                    self.log(
+                        logging.INFO, 0,
+                        "MerossDevice(%s) client connection error in async_http_request: %s",
+                        self.device_id, str(e) or type(e).__name__
+                    )
                     if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt and mqtt_is_connected(self.api.hass):
                         self.switch_protocol(Protocol.MQTT)
                         self._trace(payload, namespace, method, CONF_OPTION_MQTT)
@@ -269,11 +336,13 @@ class MerossDevice:
             if (callback is not None) and (r_method == mc.METHOD_SETACK):
                 #we're actually only using this for SET->SETACK command confirmation
                 callback()
-            # passing self.key to shut off MerossDevice replykey behaviour
-            # since we're already managing replykey in http client
-            self.receive(r_namespace, r_method, r_payload, self.key)
+            self.receive(r_namespace, r_method, r_payload, r_header)
         except Exception as e:
-            self.log(logging.WARNING, 14400, "MerossDevice(%s) error in async_http_request: %s", self.device_id, str(e) or type(e).__name__)
+            self.log(
+                logging.WARNING, 14400,
+                "MerossDevice(%s) error in async_http_request: %s",
+                self.device_id, str(e) or type(e).__name__
+            )
 
 
     def request(self, namespace: str, method: str = mc.METHOD_GET, payload: dict = {}, callback: Callable = None):
@@ -332,9 +401,21 @@ class MerossDevice:
         if oldaddr != descr.innerIp:
             self.needsave = True
 
-        if self.time_zone:
+        epoch = int(self.lastupdate) # we're not calling time() since it's fresh enough
+
+        if self.device_timedelta \
+            and (self.curr_protocol == Protocol.MQTT) \
+            and mc.NS_APPLIANCE_SYSTEM_CLOCK in descr.ability:
+            #timestamp misalignment: try to fix it
+            #only when devices are paired on our MQTT
+            self.request(
+                mc.NS_APPLIANCE_SYSTEM_CLOCK,
+                mc.METHOD_PUSH,
+                { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: epoch }}
+            )
+
+        if self.time_zone and (mc.NS_APPLIANCE_SYSTEM_TIME in descr.ability):
             # check the appliance timeoffsets are updated (see #36)
-            epoch = int(time())
             p_time: dict = descr.time
             p_timerule: list = p_time.get(mc.KEY_TIMERULE, [])
             """
@@ -352,12 +433,14 @@ class MerossDevice:
                 appliance so it knows how and when to offset utc to localtime
                 """
                 timerules = list()
-
                 try:
                     import pytz
                     import bisect
                     tz_local = pytz.timezone(self.time_zone)
-                    idx = bisect.bisect_right(tz_local._utc_transition_times, datetime.datetime.utcfromtimestamp(epoch))
+                    idx = bisect.bisect_right(
+                        tz_local._utc_transition_times,
+                        datetime.datetime.utcfromtimestamp(epoch)
+                    )
                     # idx would be the next transition offset index
                     _transition_info = tz_local._transition_info[idx-1]
                     timerules.append([
@@ -370,9 +453,13 @@ class MerossDevice:
                         int(tz_local._utc_transition_times[idx].timestamp()),
                         int(_transition_info[0].total_seconds()),
                         1 if _transition_info[1].total_seconds() else 0
-                        ])
+                    ])
                 except Exception as e:
-                    self.log(logging.WARNING, 0, "MerossDevice(%s) error while building timezone info (%s)", self.device_id, str(e))
+                    self.log(
+                        logging.WARNING, 0,
+                        "MerossDevice(%s) error while building timezone info (%s)",
+                        self.device_id, str(e)
+                    )
                     timerules = [[0, 0, 0], [epoch + PARAM_TIMEZONE_CHECK_PERIOD, 0, 1]]
 
                 self.request(
@@ -382,9 +469,9 @@ class MerossDevice:
                         mc.KEY_TIME: {
                             mc.KEY_TIMEZONE: self.time_zone,
                             mc.KEY_TIMERULE: timerules
-                            }
                         }
-                    )
+                    }
+                )
 
         for key, value in descr.digest.items():
             _parse = getattr(self, f"_parse_{key}", None)
@@ -393,7 +480,11 @@ class MerossDevice:
 
 
     def _set_offline(self) -> None:
-        self.log(logging.DEBUG, 0, "MerossDevice(%s) going offline!", self.device_id)
+        self.log(
+            logging.DEBUG, 0,
+            "MerossDevice(%s) going offline!",
+            self.device_id
+        )
         self._online = False
         self._retry_period = 0
         self.lastmqtt = 0
@@ -407,13 +498,21 @@ class MerossDevice:
             also in inheriteds. Pass received namespace along
             so to decide what to refresh (see 'updatecoordinator_listener')
         """
-        self.log(logging.DEBUG, 0, "MerossDevice(%s) back online!", self.device_id)
+        self.log(
+            logging.DEBUG, 0,
+            "MerossDevice(%s) back online!",
+            self.device_id
+        )
         self._online = True
         self.request_updates(time(), namespace)
 
 
     def switch_protocol(self, protocol: Protocol) -> None:
-        self.log(logging.INFO, 0, "MerossDevice(%s) switching protocol to %s", self.device_id, protocol.name)
+        self.log(
+            logging.INFO, 0,
+            "MerossDevice(%s) switching protocol to %s",
+            self.device_id, protocol.name
+        )
         self.lastmqtt = 0 # reset so we'll need a new mqtt message to ensure mqtt availability
         self.curr_protocol = protocol
 
@@ -428,7 +527,11 @@ class MerossDevice:
                 data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
                 entries.async_update_entry(entry, data=data)
         except Exception as e:
-            self.log(logging.WARNING, 0, "MerossDevice(%s) error while updating ConfigEntry (%s)", self.device_id, str(e))
+            self.log(
+                logging.WARNING, 0,
+                "MerossDevice(%s) error while updating ConfigEntry (%s)",
+                self.device_id, str(e)
+            )
 
 
     def _set_config_entry(self, data: dict) -> None:

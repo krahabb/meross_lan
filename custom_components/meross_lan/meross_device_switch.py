@@ -1,4 +1,6 @@
-from time import localtime, strftime, time
+import logging
+from time import localtime
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.core import callback
 from homeassistant.const import (
@@ -21,11 +23,12 @@ class MerossDeviceSwitch(MerossDevice):
 
     def __init__(self, api, descriptor, entry):
         super().__init__(api, descriptor, entry)
-        self._lastupdate_consumption = 0
         self._sensor_power = MerossFakeEntity
         self._sensor_current = MerossFakeEntity
         self._sensor_voltage = MerossFakeEntity
         self._sensor_energy = MerossFakeEntity
+        self._energy_lastupdate = 0
+        self._energy_last_reset = 0 # store the last 'device time' we passed onto to _attr_last_reset
 
         try:
             # use a mix of heuristic to detect device features
@@ -102,10 +105,10 @@ class MerossDeviceSwitch(MerossDevice):
         namespace: str,
         method: str,
         payload: dict,
-        replykey: KeyType
+        header: dict
     ) -> bool:
 
-        if super().receive(namespace, method, payload, replykey):
+        if super().receive(namespace, method, payload, header):
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLE:
@@ -142,14 +145,53 @@ class MerossDeviceSwitch(MerossDevice):
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX:
-            self._lastupdate_consumption = self.lastupdate
-            daylabel = strftime("%Y-%m-%d", localtime())
-            for d in payload.get(mc.KEY_CONSUMPTIONX):
-                if d.get(mc.KEY_DATE) == daylabel:
-                    self._sensor_energy._set_state(d.get(mc.KEY_VALUE))
-                    break
-            else:# this means consumption for current day is not yet measured i.e. null
+            self._energy_lastupdate = self.lastupdate
+            days = payload.get(mc.KEY_CONSUMPTIONX)
+            days_len = len(days)
+            if days_len < 1:
+                self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(0)
                 self._sensor_energy._set_state(0)
+                return True
+            # we'll look through the device array values to see
+            # data timestamped (in device time) after last midnight
+            # since we usually reset this around midnight localtime
+            # the device timezone should be aligned else it will roundtrip
+            # against it's own midnight and we'll see a delayed 'sawtooth'
+            st = localtime()
+            dt = datetime(
+                st.tm_year, st.tm_mon, st.tm_mday,
+                tzinfo=timezone(timedelta(seconds=st.tm_gmtoff), st.tm_zone)
+            )
+            timestamp_last_reset = dt.timestamp() - self.device_timedelta
+            self.log(
+                logging.DEBUG, 0,
+                "MerossDevice(%s) Energy: device midnight = %d",
+                self.device_id, timestamp_last_reset
+            )
+            def get_timestamp(day):
+                return day.get(mc.KEY_TIME)
+            days = sorted(days, key=get_timestamp, reverse=True)
+            day_last:dict = days[0]
+            if day_last.get(mc.KEY_TIME) < timestamp_last_reset:
+                return True
+            if days_len > 1:
+                timestamp_last_reset = days[1].get(mc.KEY_TIME)
+            if self._energy_last_reset != timestamp_last_reset:
+                # we 'cache' timestamp_last_reset so we don't 'jitter' _attr_last_reset
+                # should device_timedelta change (and it will!)
+                # this is not really working until days_len is >= 2
+                self._energy_last_reset = timestamp_last_reset
+                # we'll add .5 (sec) to the device last reading since the reset
+                # occurs right after that
+                self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(
+                    timestamp_last_reset + self.device_timedelta + .5
+                )
+                self.log(
+                    logging.DEBUG, 0,
+                    "MerossDevice(%s) Energy: update last_reset to %s",
+                    self.device_id, self._sensor_energy._attr_last_reset.isoformat()
+                )
+            self._sensor_energy._set_state(day_last.get(mc.KEY_VALUE))
             return True
 
         return False
@@ -199,6 +241,6 @@ class MerossDeviceSwitch(MerossDevice):
         if self._sensor_power.enabled or self._sensor_voltage.enabled or self._sensor_current.enabled:
             self.request(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
         if self._sensor_energy.enabled:
-            if ((epoch - self._lastupdate_consumption) > PARAM_ENERGY_UPDATE_PERIOD):
+            if ((epoch - self._energy_lastupdate) > PARAM_ENERGY_UPDATE_PERIOD):
                 self.request(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)
 

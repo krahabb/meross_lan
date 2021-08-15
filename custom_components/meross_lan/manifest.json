@@ -6,9 +6,12 @@
   "documentation": "https://github.com/krahabb/meross_lan",
   "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
   "requirements": [],
-  "dhcp": [{"hostname": "*", "macaddress": "48E1E9*"}],
+  "dhcp": [
+    {"hostname": "*", "macaddress": "48E1E9*"},
+    {"hostname": "*", "macaddress": "34298F1*"}
+  ],
   "dependencies": [],
   "after_dependencies": ["mqtt", "dhcp"],
   "codeowners": ["@krahabb"],
-  "version": "2.1.1"
+  "version": "2.2.0"
 }

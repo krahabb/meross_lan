@@ -5,12 +5,12 @@ from .merossclient import const as mc
 
 DOMAIN = "meross_lan"
 
-PLATFORM_SWITCH = 'switch'
-PLATFORM_SENSOR = 'sensor'
-PLATFORM_BINARY_SENSOR = 'binary_sensor'
-PLATFORM_LIGHT = 'light'
-PLATFORM_COVER = 'cover'
-PLATFORM_CLIMATE = 'climate'
+from homeassistant.components.switch import DOMAIN as PLATFORM_SWITCH
+from homeassistant.components.sensor import DOMAIN as PLATFORM_SENSOR
+from homeassistant.components.binary_sensor import DOMAIN as PLATFORM_BINARY_SENSOR
+from homeassistant.components.light import DOMAIN as PLATFORM_LIGHT
+from homeassistant.components.cover import DOMAIN as PLATFORM_COVER
+from homeassistant.components.climate import DOMAIN as PLATFORM_CLIMATE
 
 SERVICE_REQUEST = "request"
 
@@ -59,3 +59,4 @@ PARAM_TIMEZONE_CHECK_PERIOD = 604800 # 1 week before retrying timezone updates
 #PARAM_STALE_DEVICE_REMOVE_TIMEOUT = 60 # disable config_entry when device is offline for more than...
 PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
+PARAM_TIMESTAMP_TOLERANCE = 5 # max device timestamp diff against our and trigger warning and (eventually) fix it
