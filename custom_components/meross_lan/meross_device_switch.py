@@ -12,7 +12,7 @@ from homeassistant.const import (
 
 from .merossclient import KeyType, const as mc  # mEROSS cONST
 from .meross_entity import MerossFakeEntity
-from .sensor import MerossLanSensor
+from .sensor import MerossLanSensor, STATE_CLASS_TOTAL_INCREASING
 from .switch import MerossLanSwitch
 from .cover import MerossLanGarage, MerossLanRollerShutter
 from .meross_device import MerossDevice
@@ -95,6 +95,7 @@ class MerossDeviceSwitch(MerossDevice):
 
             if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
                 self._sensor_energy = MerossLanSensor(self, DEVICE_CLASS_ENERGY, DEVICE_CLASS_ENERGY)
+                self._sensor_energy._attr_state_class = STATE_CLASS_TOTAL_INCREASING
 
         except Exception as e:
             LOGGER.warning("MerossDeviceSwitch(%s) init exception:(%s)", self.device_id, str(e))

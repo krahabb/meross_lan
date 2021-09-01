@@ -1,7 +1,17 @@
 from __future__ import annotations
 from datetime import datetime
 
-from homeassistant.components.sensor import SensorEntity, STATE_CLASS_MEASUREMENT
+from homeassistant.components.sensor import SensorEntity
+
+try:
+    from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
+except:#someone still pre 2021.8.0 ?
+    STATE_CLASS_MEASUREMENT = None
+try:
+    from homeassistant.components.sensor import STATE_CLASS_TOTAL_INCREASING
+except:#someone still pre 2021.9.0 ?
+    STATE_CLASS_TOTAL_INCREASING = STATE_CLASS_MEASUREMENT
+
 
 from .meross_entity import (
     _MerossEntity,
@@ -23,14 +33,15 @@ async def async_unload_entry(hass: object, config_entry: object) -> bool:
 class _MerossSensorEntity(SensorEntity):
 
     PLATFORM = PLATFORM_SENSOR
-    _attr_last_reset: datetime | None = None
+    _attr_state_class: str | None = STATE_CLASS_MEASUREMENT
+    _attr_last_reset: datetime | None = None # Deprecated, to be removed in 2021.11
 
     @property
-    def state_class(self) -> str:
-        return STATE_CLASS_MEASUREMENT
+    def state_class(self) -> str | None:
+        return self._attr_state_class
 
     @property
-    def last_reset(self) -> datetime | None:
+    def last_reset(self) -> datetime | None: # Deprecated, to be removed in 2021.11
         return self._attr_last_reset
 
 
