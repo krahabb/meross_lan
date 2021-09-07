@@ -14,7 +14,6 @@ from .merossclient import KeyType, const as mc  # mEROSS cONST
 from .meross_entity import MerossFakeEntity
 from .sensor import MerossLanSensor, STATE_CLASS_TOTAL_INCREASING
 from .switch import MerossLanSwitch
-from .cover import MerossLanGarage, MerossLanRollerShutter
 from .meross_device import MerossDevice
 from .helpers import LOGGER
 from .const import PARAM_ENERGY_UPDATE_PERIOD
@@ -37,6 +36,7 @@ class MerossDeviceSwitch(MerossDevice):
             # looks like mrs100 just exposes abilities and we'll have to poll
             # related NS
             if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
+                from .cover import MerossLanRollerShutter
                 MerossLanRollerShutter(self, 0)
                 self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION] = { mc.KEY_POSITION : [] }
                 self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_STATE] = { mc.KEY_STATE : [] }
@@ -45,8 +45,21 @@ class MerossDeviceSwitch(MerossDevice):
                 if p_digest:
                     garagedoor = p_digest.get(mc.KEY_GARAGEDOOR)
                     if isinstance(garagedoor, list):
+                        from .cover import MerossLanGarage
                         for g in garagedoor:
                             MerossLanGarage(self, g.get(mc.KEY_CHANNEL))
+                    spray = p_digest.get(mc.KEY_SPRAY)
+                    if isinstance(spray, list):
+                        try:
+                            from .select import MerossLanSpray
+                        except:# SELECT entity platform added later in 2021
+                            LOGGER.warning("MerossDeviceSwitch(%s):"
+                                " missing 'select' entity type. Please update HA to latest version"
+                                " to fully support this device. Falling back to basic switch behaviour"
+                                , self.device_id)
+                            from .switch import MerossLanSpray
+                        for s in spray:
+                            MerossLanSpray(self, s.get(mc.KEY_CHANNEL))
                     # at any rate: setup switches whenever we find 'togglex'
                     # or whenever we cannot setup anything from digest
                     togglex = p_digest.get(mc.KEY_TOGGLEX)
@@ -195,6 +208,10 @@ class MerossDeviceSwitch(MerossDevice):
             self._sensor_energy._set_state(day_last.get(mc.KEY_VALUE))
             return True
 
+        if namespace == mc.NS_APPLIANCE_CONTROL_SPRAY:
+            self._parse_spray(payload.get(mc.KEY_SPRAY))
+            return True
+
         return False
 
 
@@ -220,6 +237,14 @@ class MerossDeviceSwitch(MerossDevice):
         elif isinstance(p_position, list):
             for p in p_position:
                 self._parse_rollershutter_position(p)
+
+
+    def _parse_spray(self, payload) -> None:
+        if isinstance(payload, dict):
+            self.entities[payload.get(mc.KEY_CHANNEL, 0)]._set_mode(payload.get(mc.KEY_MODE))
+        elif isinstance(payload, list):
+            for p in payload:
+                self._parse_spray(p)
 
 
     def _parse_all(self, payload: dict) -> None:
