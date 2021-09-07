@@ -4,6 +4,7 @@ from datetime import datetime
 from logging import DEBUG, WARNING
 
 from homeassistant.components.cover import (
+    DOMAIN as PLATFORM_COVER,
     CoverEntity,
     DEVICE_CLASS_GARAGE, DEVICE_CLASS_SHUTTER,
     ATTR_POSITION,
@@ -16,7 +17,6 @@ from homeassistant.helpers import event
 from .merossclient import const as mc
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
 from .const import (
-    PLATFORM_COVER,
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )

@@ -1,8 +1,11 @@
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    DOMAIN as PLATFORM_BINARY_SENSOR,
+    BinarySensorEntity
+)
 
 from .meross_entity import _MerossEntity, _MerossHubEntity, platform_setup_entry, platform_unload_entry
-from .const import PLATFORM_BINARY_SENSOR
+
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
     platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_BINARY_SENSOR)

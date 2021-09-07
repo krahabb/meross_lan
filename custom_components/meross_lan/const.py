@@ -5,13 +5,6 @@ from .merossclient import const as mc
 
 DOMAIN = "meross_lan"
 
-from homeassistant.components.switch import DOMAIN as PLATFORM_SWITCH
-from homeassistant.components.sensor import DOMAIN as PLATFORM_SENSOR
-from homeassistant.components.binary_sensor import DOMAIN as PLATFORM_BINARY_SENSOR
-from homeassistant.components.light import DOMAIN as PLATFORM_LIGHT
-from homeassistant.components.cover import DOMAIN as PLATFORM_COVER
-from homeassistant.components.climate import DOMAIN as PLATFORM_CLIMATE
-
 SERVICE_REQUEST = "request"
 
 DND_ID = 'dnd' # entity (sub)id for the switch representing DNDMode

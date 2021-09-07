@@ -20,6 +20,7 @@ NS_APPLIANCE_SYSTEM_REPORT = "Appliance.System.Report"
 NS_APPLIANCE_SYSTEM_ONLINE = "Appliance.System.Online"
 NS_APPLIANCE_SYSTEM_DEBUG = "Appliance.System.Debug"
 NS_APPLIANCE_SYSTEM_TIME = "Appliance.System.Time"
+NS_APPLIANCE_SYSTEM_DND = "Appliance.System.DNDMode"
 NS_APPLIANCE_CONFIG_TRACE = "Appliance.Config.Trace"
 NS_APPLIANCE_CONFIG_WIFILIST = "Appliance.Config.WifiList"
 NS_APPLIANCE_CONTROL_TOGGLE = "Appliance.Control.Toggle"
@@ -32,7 +33,6 @@ NS_APPLIANCE_CONTROL_ELECTRICITY = "Appliance.Control.Electricity"
 # Light Abilities
 NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
 # Humidifier abilities
-NS_APPLIANCE_SYSTEM_DND = "Appliance.System.DNDMode"
 NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
 # Garage door opener
 NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
@@ -100,6 +100,7 @@ KEY_CAPACITY = 'capacity'
 KEY_RGB = 'rgb'
 KEY_LUMINANCE = 'luminance'
 KEY_TEMPERATURE = 'temperature'
+KEY_SPRAY = 'spray'
 KEY_HUB = 'hub'
 KEY_BATTERY = 'battery'
 KEY_VALUE = 'value'
@@ -140,6 +141,18 @@ STATUS_NOTONLINE = 0
 STATUS_ONLINE = 1
 STATUS_OFFLINE = 2
 STATUS_UPGRADING = 3
+
+# light bulb capacity enums
+LIGHT_CAPACITY_RGB = 1
+LIGHT_CAPACITY_TEMPERATURE = 2
+LIGHT_CAPACITY_LUMINANCE = 4
+LIGHT_CAPACITY_RGB_LUMINANCE = 5
+LIGHT_CAPACITY_TEMPERATURE_LUMINANCE = 6
+
+# spray mode enums
+SPRAY_MODE_OFF = 0
+SPRAY_MODE_CONTINUOUS = 1
+SPRAY_MODE_INTERMITTENT = 2
 
 # well known device types
 TYPE_UNKNOWN = 'unknown'

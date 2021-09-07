@@ -12,17 +12,14 @@ from homeassistant.components.binary_sensor import DEVICE_CLASS_WINDOW
 
 from .merossclient import KeyType, const as mc  # mEROSS cONST
 from .meross_device import MerossDevice, Protocol
-from .sensor import MerossLanHubSensor
-from .climate import Mts100Climate
-from .binary_sensor import MerossLanHubBinarySensor
+from .sensor import PLATFORM_SENSOR, MerossLanHubSensor
+from .climate import PLATFORM_CLIMATE, Mts100Climate
+from .binary_sensor import PLATFORM_BINARY_SENSOR, MerossLanHubBinarySensor
 from .helpers import LOGGER
 from .const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_HUBBATTERY_UPDATE_PERIOD,
     PARAM_HUBSENSOR_UPDATE_PERIOD,
-    PLATFORM_BINARY_SENSOR,
-    PLATFORM_CLIMATE,
-    PLATFORM_SENSOR
 )
 
 

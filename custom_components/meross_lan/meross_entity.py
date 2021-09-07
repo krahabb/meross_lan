@@ -75,6 +75,7 @@ class _MerossEntity:
         if async_add_devices is not None:
             async_add_devices([self])
 
+
     def __del__(self):
         LOGGER.debug("MerossEntity(%s) destroy", self.unique_id)
         return
@@ -94,9 +95,11 @@ class _MerossEntity:
     def unique_id(self):
         return f"{self._device.device_id}_{self._id}"
 
+
     @property
     def name(self) -> str:
         return f"{self._device.descriptor.productname} - {self._device_class}" if self._device_class else self._device.descriptor.productname
+
 
     @property
     def device_info(self):
@@ -110,49 +113,58 @@ class _MerossEntity:
             "sw_version": _desc.firmware.get(mc.KEY_VERSION)
             }
 
+
     @property
     def device_class(self) -> str | None:
         return self._device_class
+
 
     @property
     def unit_of_measurement(self) -> str | None:
         return CLASS_TO_UNIT_MAP.get(self._device_class)
 
+
     @property
     def should_poll(self) -> bool:
         return False
+
 
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
         return self._state != None
 
+
     @property
     def assumed_state(self) -> bool:
         """Return true if we do optimistic updates."""
         return False
+
 
     @property
     def state(self) -> StateType:
         """Return the state of the entity."""
         return self._state
 
+
     async def async_added_to_hass(self) -> None:
         return
 
+
     async def async_will_remove_from_hass(self) -> None:
         return
+
 
     def _set_state(self, state: str) -> None:
         if self._state != state:
             self._state = state
             if self.hass and self.enabled:
                 self.async_write_ha_state()
-        return
+
 
     def _set_unavailable(self) -> None:
         self._set_state(None)
-        return
+
 
     @property
     def entryname(self) -> str: # ATTR friendly_name in HA api
@@ -213,10 +225,12 @@ class _MerossHubEntity(_MerossEntity):
             device_class)
         self.subdevice = subdevice
 
+
     @property
     def name(self) -> str:
         name = get_productnameuuid(self.subdevice.type, self.subdevice.id)
         return f"{name} - {self._device_class}" if self._device_class else name
+
 
     @property
     def device_info(self):
@@ -240,7 +254,6 @@ def platform_setup_entry(hass: object, config_entry: object, async_add_devices, 
     device.platforms[platform] = async_add_devices
     async_add_devices([entity for entity in device.entities.values() if entity.PLATFORM is platform])
     LOGGER.debug("async_setup_entry device_id = %s - platform = %s", device_id, platform)
-    return
 
 def platform_unload_entry(hass: object, config_entry: object, platform: str) -> bool:
     device_id = config_entry.data[CONF_DEVICE_ID]

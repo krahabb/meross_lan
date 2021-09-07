@@ -1,7 +1,10 @@
 from __future__ import annotations
 from datetime import datetime
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    DOMAIN as PLATFORM_SENSOR,
+    SensorEntity
+)
 
 try:
     from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
@@ -19,12 +22,10 @@ from .meross_entity import (
     platform_setup_entry,
     platform_unload_entry,
 )
-from .const import PLATFORM_SENSOR
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
     platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_SENSOR)
-    return
 
 async def async_unload_entry(hass: object, config_entry: object) -> bool:
     return platform_unload_entry(hass, config_entry, PLATFORM_SENSOR)
