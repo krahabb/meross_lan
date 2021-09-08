@@ -2,7 +2,6 @@ import logging
 from time import localtime
 from datetime import datetime, timedelta, timezone
 
-from homeassistant.core import callback
 from homeassistant.const import (
     DEVICE_CLASS_POWER,
     DEVICE_CLASS_CURRENT,
@@ -260,8 +259,8 @@ class MerossDeviceSwitch(MerossDevice):
                 self._parse_togglex(p_control.get(mc.KEY_TOGGLE))
 
 
-    def request_updates(self, epoch, namespace):
-        super().request_updates(epoch, namespace)
+    def _request_updates(self, epoch, namespace):
+        super()._request_updates(epoch, namespace)
         # we're not checking context namespace since it should be very unusual
         # to enter here with one of those following
         if self._sensor_power.enabled or self._sensor_voltage.enabled or self._sensor_current.enabled:
@@ -269,4 +268,3 @@ class MerossDeviceSwitch(MerossDevice):
         if self._sensor_energy.enabled:
             if ((epoch - self._energy_lastupdate) > PARAM_ENERGY_UPDATE_PERIOD):
                 self.request(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)
-

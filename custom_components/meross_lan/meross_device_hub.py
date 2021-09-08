@@ -4,10 +4,10 @@ from time import time
 from typing import Callable, Dict
 
 from homeassistant.const import (
-    DEVICE_CLASS_BATTERY, DEVICE_CLASS_TEMPERATURE,
+    DEVICE_CLASS_BATTERY,
+    DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_HUMIDITY,
 )
-from homeassistant.core import callback
 from homeassistant.components.binary_sensor import DEVICE_CLASS_WINDOW
 
 from .merossclient import KeyType, const as mc  # mEROSS cONST
@@ -181,8 +181,8 @@ class MerossDeviceHub(MerossDevice):
                 subdevice.update_digest(p_digest)
 
 
-    def request_updates(self, epoch, namespace):
-        super().request_updates(epoch, namespace)
+    def _request_updates(self, epoch, namespace):
+        super()._request_updates(epoch, namespace)
         """
         we just ask for updates when something pops online (_lastupdate_sensor == 0)
         relying on push (over MQTT) or base polling updates (only HTTP) for any other changes
@@ -299,6 +299,7 @@ class MS100SubDevice(MerossSubDevice):
         self.sensor_temperature = MerossLanHubSensor(self, DEVICE_CLASS_TEMPERATURE)
         self.sensor_humidity = MerossLanHubSensor(self, DEVICE_CLASS_HUMIDITY)
 
+
     def update_digest(self, p_digest: dict) -> None:
         super().update_digest(p_digest)
         if self._online:
@@ -311,6 +312,7 @@ class MS100SubDevice(MerossSubDevice):
                 value = p_ms100.get(mc.KEY_LATESTHUMIDITY)
                 if isinstance(value, int):
                     self.sensor_humidity._set_state(value / 10)
+
 
     def _parse_tempHum(self, p_temphum: dict) -> None:
         value = p_temphum.get(mc.KEY_LATESTTEMPERATURE)
@@ -332,6 +334,7 @@ class MTS100SubDevice(MerossSubDevice):
         self.climate = Mts100Climate(self)
         self.binary_sensor_window = MerossLanHubBinarySensor(self, DEVICE_CLASS_WINDOW)
         self.sensor_temperature = MerossLanHubSensor(self, DEVICE_CLASS_TEMPERATURE)
+
 
     def _parse_all(self, p_all: dict) -> None:
         super()._parse_all(p_all)
