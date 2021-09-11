@@ -236,7 +236,8 @@ class MerossSubDevice:
             if self._online is True:
                 self._online = False
                 for entity in self.hub.entities.values():
-                    if entity.subdevice is self:
+                    # not every entity in hub is a 'subdevice' entity
+                    if getattr(entity, "subdevice", None) is self:
                         entity._set_unavailable()
 
 
