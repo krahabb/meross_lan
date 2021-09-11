@@ -224,7 +224,7 @@ class MerossDeviceSwitch(MerossDevice):
 
     def _parse_rollershutter_state(self, p_state) -> None:
         if isinstance(p_state, dict):
-            self.entities[p_state.get(mc.KEY_CHANNEL, 0)]._set_rollerstate(p_state.get(mc.KEY_STATE))
+            self.entities[p_state.get(mc.KEY_CHANNEL, 0)]._set_rollerstate(p_state.get(mc.KEY_STATE), self.device_timestamp)
         elif isinstance(p_state, list):
             for s in p_state:
                 self._parse_rollershutter_state(s)

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging
 import os
 import math
@@ -10,11 +11,12 @@ from json import (
 )
 from enum import Enum
 
-import datetime
+from datetime import datetime
 
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.config_entries import ConfigEntries, ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.config_entries import ConfigEntries, ConfigEntry
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.event import async_track_point_in_utc_time
 
 from .merossclient import (
     const as mc,  # mEROSS cONST
@@ -36,8 +38,31 @@ from .const import (
 
 # these are dynamically created MerossDevice attributes in a sort of a dumb optimization
 VOLATILE_ATTR_HTTPCLIENT = '_httpclient'
-VOLATILE_ATTR_TRACEFILE = '_tracefile'
-VOLATILE_ATTR_TRACEENDTIME = '_traceendtime'
+VOLATILE_ATTR_TRACE_FILE = '_trace_file'
+VOLATILE_ATTR_TRACE_ENDTIME = '_trace_endtime'
+VOLATILE_ATTR_TRACE_ABILITY_ITER = '_trace_ability_iter'
+
+# when tracing we enumerate appliance abilities to get insights on payload structures
+# this list will be excluded from enumeration since it's redundant/exposing sensitive info
+TRACE_ABILITY_EXCLUDE = (
+    mc.NS_APPLIANCE_SYSTEM_ALL,
+    mc.NS_APPLIANCE_SYSTEM_ABILITY,
+    mc.NS_APPLIANCE_SYSTEM_DND,
+    mc.NS_APPLIANCE_SYSTEM_TIME,
+    mc.NS_APPLIANCE_SYSTEM_HARDWARE,
+    mc.NS_APPLIANCE_SYSTEM_FIRMWARE,
+    mc.NS_APPLIANCE_SYSTEM_ONLINE,
+    mc.NS_APPLIANCE_SYSTEM_REPORT,
+    mc.NS_APPLIANCE_SYSTEM_DEBUG,
+    mc.NS_APPLIANCE_CONFIG_KEY,
+    mc.NS_APPLIANCE_CONFIG_WIFI,
+    mc.NS_APPLIANCE_CONFIG_WIFILIST,
+    mc.NS_APPLIANCE_CONFIG_TRACE,
+    mc.NS_APPLIANCE_CONTROL_BIND,
+    mc.NS_APPLIANCE_CONTROL_UNBIND,
+    mc.NS_APPLIANCE_CONTROL_MULTIPLE,
+    mc.NS_APPLIANCE_CONTROL_UPGRADE
+)
 
 class Protocol(Enum):
     """
@@ -73,7 +98,7 @@ class MerossDevice:
         self.needsave = False # while parsing ns.ALL code signals to persist ConfigEntry
         self._retry_period = 0 # used to try reconnect when falling offline
         self._switch_dnd = MerossFakeEntity
-        self.device_timestamp = 0
+        self.device_timestamp: int = 0
         self.device_timedelta = 0
         self.lastpoll = 0
         self.lastrequest = 0
@@ -170,7 +195,7 @@ class MerossDevice:
         we'll always be a bit late in processing
         """
         epoch = time()
-        self.device_timestamp = header.get(mc.KEY_TIMESTAMP, epoch)
+        self.device_timestamp = int(header.get(mc.KEY_TIMESTAMP, epoch))
         device_timedelta = epoch - self.device_timestamp
         if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
             self.log(
@@ -407,18 +432,20 @@ class MerossDevice:
         don't care about it on startup ('_set_config_entry'). When updating ConfigEntry
         we always reset the timeout and so the trace will (eventually) restart
         """
-        _tracefile: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACEFILE, None)
-        if _tracefile is not None:
-            self._trace_close(_tracefile)
-        _traceendtime = config_entry.data.get(CONF_TRACE, 0)
-        if _traceendtime > time():
+        _trace_file: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACE_FILE, None)
+        if _trace_file is not None:
+            self._trace_close(_trace_file)
+        _trace_endtime = config_entry.data.get(CONF_TRACE, 0)
+        if _trace_endtime > time():
             try:
                 tracedir = hass.config.path('custom_components', DOMAIN, CONF_TRACE_DIRECTORY)
                 os.makedirs(tracedir, exist_ok=True)
-                self._tracefile = open(os.path.join(tracedir, CONF_TRACE_FILENAME.format(self.descriptor.type, int(_traceendtime))), 'w')
-                self._traceendtime = _traceendtime
+                self._trace_file = open(os.path.join(tracedir, CONF_TRACE_FILENAME.format(self.descriptor.type, int(_trace_endtime))), 'w')
+                self._trace_endtime = _trace_endtime
                 self._trace(self.descriptor.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
                 self._trace(self.descriptor.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK)
+                self._trace_ability_iter = iter(self.descriptor.ability)
+                self._trace_ability()
             except Exception as e:
                 LOGGER.warning("MerossDevice(%s) error while creating trace file (%s)", self.device_id, str(e))
 
@@ -646,20 +673,44 @@ class MerossDevice:
 
     def _trace_close(self, tracefile: TextIOWrapper):
         try:
-            delattr(self, VOLATILE_ATTR_TRACEFILE)
-            delattr(self, VOLATILE_ATTR_TRACEENDTIME)
+            delattr(self, VOLATILE_ATTR_TRACE_FILE)
+            delattr(self, VOLATILE_ATTR_TRACE_ENDTIME)
+            delattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER)
             tracefile.close()
         except Exception as e:
             LOGGER.warning("MerossDevice(%s) error while closing trace file (%s)", self.device_id, str(e))
 
 
-    def _trace(self, data, namespace = '', method = '', protocol = CONF_OPTION_AUTO):
-        _tracefile: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACEFILE, None)
-        if _tracefile is not None:
+    @callback
+    def _trace_ability(self, *args):
+        _trace_ability_iter = getattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER, None)
+        if _trace_ability_iter is None:
+            return
+        try:
+            while True:
+                ability:str = next(_trace_ability_iter)
+                if ability not in TRACE_ABILITY_EXCLUDE:
+                    key = ability.split('.')[-1].lower()
+                    self.request(ability, mc.METHOD_GET, { key: {} })
+                    break
+
+            async_track_point_in_utc_time(
+                self.api.hass,
+                self._trace_ability,
+                datetime.fromtimestamp(time() + 5)
+            )
+
+        except:# finished ?!
+            delattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER)
+
+
+    def _trace(self, data: str | dict, namespace: str = '', method: str = '', protocol = CONF_OPTION_AUTO):
+        _trace_file: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACE_FILE, None)
+        if _trace_file is not None:
             now = time()
-            _traceendtime = getattr(self, VOLATILE_ATTR_TRACEENDTIME, 0)
-            if now > _traceendtime:
-                self._trace_close(_tracefile)
+            _trace_endtime = getattr(self, VOLATILE_ATTR_TRACE_ENDTIME, 0)
+            if now > _trace_endtime:
+                self._trace_close(_trace_file)
                 return
 
             if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
@@ -684,14 +735,14 @@ class MerossDevice:
                 firmware[mc.KEY_USERID] = ''
 
             try:
-                _tracefile.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
+                _trace_file.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
                     + protocol + '\t' + method + '\t' + namespace + '\t' \
                     + (json_dumps(data) if isinstance(data, dict) else data) + '\r\n')
-                if _tracefile.tell() > CONF_TRACE_MAXSIZE:
-                    self._trace_close(_tracefile)
+                if _trace_file.tell() > CONF_TRACE_MAXSIZE:
+                    self._trace_close(_trace_file)
             except Exception as e:
                 LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
-                self._trace_close(_tracefile)
+                self._trace_close(_trace_file)
 
             if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
                 hardware[mc.KEY_UUID] = obfuscated.get(mc.KEY_UUID)
