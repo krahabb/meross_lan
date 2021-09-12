@@ -10,12 +10,18 @@ from json import (
 )
 
 import aiohttp
+
 from yarl import URL
 import async_timeout
 
 from . import const as mc
 
 KeyType = Union[dict, Optional[str]] # pylint: disable=unsubscriptable-object
+
+class MerossKeyError(Exception):
+    """
+    signal a protocol key error (wrong key)
+    """
 
 
 def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = None, device_id:str = None)-> dict:
@@ -170,6 +176,8 @@ class MerossHttpClient:
         response: dict = await self.async_raw_request(request, timeout)
 
         if response.get(mc.KEY_PAYLOAD, {}).get(mc.KEY_ERROR, {}).get(mc.KEY_CODE) == 5001:
+            if self.key:
+                raise MerossKeyError
             #sign error... hack and fool
             self._logger.debug(
                 "Key error on %s (%s:%s) -> retrying with key-reply hack",

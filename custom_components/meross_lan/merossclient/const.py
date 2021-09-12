@@ -142,6 +142,10 @@ KEY_HEATING = 'heating'
 KEY_AWAY = 'away'
 KEY_OPENWINDOW = 'openWindow'
 KEY_DNDMODE = 'DNDMode'
+KEY_NONCE = 'nonce'
+KEY_KEY = 'key'
+KEY_DATA = 'data'
+KEY_PARAMS = 'params'
 
 # online status
 STATUS_UNKNOWN = -1
@@ -191,3 +195,4 @@ TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
 """
 MANUFACTURER = "Meross"
 MEROSS_MACADDRESS = '48:e1:e9:xx:xx:xx'
+MEROSS_API_LOGIN_URL = "https://iot.meross.com/v1/Auth/Login"

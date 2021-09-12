@@ -7,6 +7,8 @@
             "single_instance_allowed": "Già configurato. E' possibile aggiungere solo una configurazione."
         },
         "error": {
+            "invalid_key": "Chiave errata: procedi per recuperare dall'account Meross",
+            "already_configured_device": "Il dispositivo è già configurato",
             "cannot_connect": "Impossibile connettersi",
             "invalid_auth": "Errore di autenticazione"
           },
@@ -24,6 +26,14 @@
                 "description": "Configura le impostazioni globali di Meross LAN",
                 "data": {
                     "key": "Chiave dispositivo"
+                }
+            },
+            "retrievekey": {
+                "title": "Recupera chiave dispositivo",
+                "description": "Accedi al tuo account Meross per recuperare",
+                "data": {
+                    "username": "Meross login",
+                    "password": "Meross password"
                 }
             },
             "device": {

@@ -1,19 +1,33 @@
 """Config flow for Meross IoT local LAN integration."""
-from time import time
-import voluptuous as vol
 from typing import OrderedDict
+from time import time
+from uuid import uuid4
+from hashlib import md5
+from base64 import b64encode
+import async_timeout
+import voluptuous as vol
 import json
+
+
 try:
     from pytz import common_timezones
 except Exception:
     common_timezones = None
 
 from homeassistant import config_entries
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .merossclient import MerossHttpClient, MerossDeviceDescriptor, const as mc, get_productnametype
+from .merossclient import (
+    MerossHttpClient,
+    MerossDeviceDescriptor,
+    MerossKeyError,
+    const as mc,
+    get_productnametype
+)
 
 from .helpers import LOGGER, mqtt_is_loaded
 from .const import (
@@ -27,24 +41,13 @@ from .const import (
 )
 
 
-
-async def _http_discovery(host: str, key: str, hass) -> dict:
-    client = MerossHttpClient(host, key, async_get_clientsession(hass), LOGGER)
-    payload = (await client.async_request(mc.NS_APPLIANCE_SYSTEM_ALL)).get(mc.KEY_PAYLOAD)
-    payload.update((await client.async_request(mc.NS_APPLIANCE_SYSTEM_ABILITY)).get(mc.KEY_PAYLOAD))
-    return {
-        CONF_HOST: host,
-        CONF_PAYLOAD: payload,
-        CONF_KEY: key
-    }
-
-
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
     _discovery_info: dict = None
     _device_id: str = None
     _host: str = None
     _key: str = None
+    _keyerror: bool = False
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
@@ -65,14 +68,29 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if (DOMAIN not in self._async_current_ids()) and mqtt_is_loaded(self.hass):
                     return await self.async_step_hub()
         else:
-            self._host = user_input[CONF_HOST]
-            self._key = user_input.get(CONF_KEY)
+            _host = user_input[CONF_HOST]
+            _key = user_input.get(CONF_KEY)
+
+            if self._keyerror: #previous attempt failed
+                self._keyerror = False #reset
+                if (_host == self._host) and (_key == self._key):
+                    #if user didn't modified the data forward to cloud key retrieval
+                    return await self.async_step_retrievekey()
+
+            self._host = _host
+            self._key = _key
             try:
-                _discovery_info = await _http_discovery(self._host, self._key, self.hass)
+                _discovery_info = await self._http_discovery()
                 return await self.async_step_discovery(_discovery_info)
+            except MerossKeyError as e:
+                errors["base"] = "invalid_key"
+                self._keyerror = True
+            except AbortFlow as e:
+                errors["base"] = "already_configured_device"
             except Exception as e:
                 LOGGER.debug("Error (%s) connecting to meross device (host:%s)", str(e), self._host)
                 errors["base"] = "cannot_connect"
+
 
         config_schema = {
             vol.Required(CONF_HOST, description={"suggested_value": self._host}): str,
@@ -116,7 +134,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             # try device identification so the user/UI has a good context to start with
-            _discovery_info = await _http_discovery(self._host, self._key, self.hass)
+            _discovery_info = await self._http_discovery()
             await self._async_set_info(_discovery_info)
             # now just let the user edit/accept the host address even if identification was fine
         except Exception as e:
@@ -151,6 +169,49 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_create_entry(title="MQTT Hub", data=user_input)
 
 
+    async def async_step_retrievekey(self, user_input=None):
+        errors = {}
+
+        if user_input:
+            username = user_input[CONF_USERNAME]
+            password = user_input[CONF_PASSWORD]
+            try:
+                timestamp = int(time())
+                nonce = uuid4().hex
+                params = '{"email": "'+username+'", "password": "'+password+'"}'
+                params = b64encode(params.encode('utf-8')).decode('ascii')
+                sign = md5(("23x17ahWarFH6w29" + str(timestamp) + nonce + params).encode('utf-8')).hexdigest()
+                with async_timeout.timeout(10):
+                    response = await async_get_clientsession(self.hass).post(
+                        url=mc.MEROSS_API_LOGIN_URL,
+                        json={
+                            mc.KEY_TIMESTAMP: timestamp,
+                            mc.KEY_NONCE: nonce,
+                            mc.KEY_PARAMS: params,
+                            mc.KEY_SIGN: sign
+                        }
+                    )
+                    response.raise_for_status()
+                json: dict = await response.json()
+                self._key = json.get(mc.KEY_DATA, {}).get(mc.KEY_KEY)
+                return await self.async_step_user()
+            except Exception as e:
+                errors["base"] = "cannot_connect"
+
+        else:
+            username = ""
+            password = ""
+
+        return self.async_show_form(
+            step_id="retrievekey",
+            data_schema=vol.Schema({
+                vol.Required(CONF_USERNAME, description={ "suggested_value" : username }): str,
+                vol.Required(CONF_PASSWORD, description={ "suggested_value" : password }): str
+                }),
+            errors=errors
+            )
+
+
     async def _async_set_info(self, discovery_info: DiscoveryInfoType) -> None:
         self._discovery_info = discovery_info
         self._descriptor = MerossDeviceDescriptor(discovery_info.get(CONF_PAYLOAD, {}))
@@ -170,6 +231,17 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         self.context["title_placeholders"] = self._placeholders
         return
+
+
+    async def _http_discovery(self) -> dict:
+        client = MerossHttpClient(self._host, self._key, async_get_clientsession(self.hass), LOGGER)
+        payload = (await client.async_request(mc.NS_APPLIANCE_SYSTEM_ALL)).get(mc.KEY_PAYLOAD)
+        payload.update((await client.async_request(mc.NS_APPLIANCE_SYSTEM_ABILITY)).get(mc.KEY_PAYLOAD))
+        return {
+            CONF_HOST: self._host,
+            CONF_PAYLOAD: payload,
+            CONF_KEY: self._key
+        }
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):

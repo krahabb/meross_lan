@@ -7,6 +7,8 @@
             "single_instance_allowed": "すでに構成済みです。 構成は一つだけ可能です。"
         },
         "error": {
+            "invalid_key": "キーエラー：Merossアカウントからの取得に進みます",
+            "already_configured_device": "可能なデバイスは1つだけ",
             "cannot_connect": "接続できません",
             "invalid_auth": "認証エラー"
           },
@@ -24,6 +26,14 @@
                 "description": "Meross LAN のグローバル設定",
                 "data": {
                     "key": "デバイスキー"
+                }
+            },
+            "retrievekey": {
+                "title": "デバイスキーの取得",
+                "description": "Merossアカウントにログインして、デバイスキーを取得します",
+                "data": {
+                    "username": "メロスログイン",
+                    "password": "メロスパスワード"
                 }
             },
             "device": {
