@@ -47,6 +47,7 @@ NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
 # Roller shutter
 NS_APPLIANCE_ROLLERSHUTTER_STATE = 'Appliance.RollerShutter.State'
 NS_APPLIANCE_ROLLERSHUTTER_POSITION = 'Appliance.RollerShutter.Position'
+NS_APPLIANCE_ROLLERSHUTTER_CONFIG = 'Appliance.RollerShutter.Config'
 # Hub
 NS_APPLIANCE_DIGEST_HUB = 'Appliance.Digest.Hub'
 NS_APPLIANCE_HUB_SUBDEVICELIST = 'Appliance.Hub.SubdeviceList'
@@ -128,6 +129,9 @@ KEY_DATE = 'date'
 KEY_GARAGEDOOR = 'garageDoor'
 KEY_STATE = 'state'
 KEY_POSITION = 'position'
+KEY_CONFIG = 'config'
+KEY_SIGNALOPEN = 'signalOpen'
+KEY_SIGNALCLOSE = 'signalClose'
 KEY_OPEN = 'open'
 KEY_EXECUTE = 'execute'
 KEY_MODE = 'mode'
@@ -165,6 +169,11 @@ LIGHT_CAPACITY_TEMPERATURE_LUMINANCE = 6
 SPRAY_MODE_OFF = 0
 SPRAY_MODE_CONTINUOUS = 1
 SPRAY_MODE_INTERMITTENT = 2
+
+# rollershutter states
+ROLLERSHUTTER_STATE_IDLE = 0
+ROLLERSHUTTER_STATE_OPENING = 1
+ROLLERSHUTTER_STATE_CLOSING = 2
 
 # well known device types
 TYPE_UNKNOWN = 'unknown'

@@ -26,9 +26,6 @@ from .helpers import LOGGER, LOGGER_trap
 
 
 from .meross_device import MerossDevice
-from .meross_device_switch import MerossDeviceSwitch
-from .meross_device_bulb import MerossDeviceBulb
-from .meross_device_hub import MerossDeviceHub
 
 from .const import (
     DOMAIN, SERVICE_REQUEST,
@@ -303,10 +300,19 @@ class MerossApi:
         """
         descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD, {}))
         if (mc.KEY_HUB in descriptor.digest):
+            from .meross_device_hub import MerossDeviceHub
             device = MerossDeviceHub(self, descriptor, entry)
         elif (mc.KEY_LIGHT in descriptor.digest):
+            from .meross_device_bulb import MerossDeviceBulb
             device = MerossDeviceBulb(self, descriptor, entry)
+        elif (mc.KEY_GARAGEDOOR in descriptor.digest):
+            from .meross_device_cover import MerossDeviceGarage
+            device = MerossDeviceGarage(self, descriptor, entry)
+        elif (mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in descriptor.ability):
+            from .meross_device_cover import MerossDeviceShutter
+            device = MerossDeviceShutter(self, descriptor, entry)
         else:
+            from .meross_device_switch import MerossDeviceSwitch
             device = MerossDeviceSwitch(self, descriptor, entry)
 
         self.devices[device_id] = device

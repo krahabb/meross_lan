@@ -98,7 +98,7 @@ class MerossDevice:
         self._online = False
         self.needsave = False # while parsing ns.ALL code signals to persist ConfigEntry
         self._retry_period = 0 # used to try reconnect when falling offline
-        self._switch_dnd = MerossFakeEntity
+        self.switch_dnd = MerossFakeEntity
         self.device_timestamp: int = 0
         self.device_timedelta = 0
         self.lastpoll = 0
@@ -146,7 +146,7 @@ class MerossDevice:
         self._set_config_entry(entry.data)
 
         if mc.NS_APPLIANCE_SYSTEM_DND in self.descriptor.ability:
-            self._switch_dnd = MerossLanDND(self)
+            self.switch_dnd = MerossLanDND(self)
 
         """
         warning: would the response be processed after this object is fully init?
@@ -248,7 +248,7 @@ class MerossDevice:
             if self.needsave is True:
                 self.needsave = False
                 self._save_config_entry(payload)
-            if self._switch_dnd.enabled:
+            if self.switch_dnd.enabled:
                 """
                 this is to optimize polling: when on MQTT we're only requesting/receiving
                 when coming online and 'DND' will then work by pushes. While on HTTP we'll
@@ -258,7 +258,13 @@ class MerossDevice:
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLEX:
-            self._parse_togglex(payload.get(mc.KEY_TOGGLEX))
+            if method == mc.METHOD_SETACK:
+                # SETACK doesnt carry payload :(
+                # on MQTT this is a pain since we dont have a setack callback
+                # system in place and we're not sure this SETACK is for us
+                pass
+            else:
+                self._parse_togglex(payload.get(mc.KEY_TOGGLEX))
             return True
 
         if namespace == mc.NS_APPLIANCE_SYSTEM_DND:
