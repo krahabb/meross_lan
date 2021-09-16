@@ -355,8 +355,7 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
                     self._stop_job,
                     datetime.fromtimestamp(self._position_endtime)
                 )
-            self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
-                    mc.METHOD_GET, { mc.KEY_STATE : [] })
+            self._device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
 
         self._stop_cancel()
         # WARNING: on MQTT we'll loose the ack callback since
@@ -456,8 +455,7 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
             self._transition_job,
             datetime.fromtimestamp(time() + 1)
         )
-        self._device.request(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
-            mc.METHOD_GET, { mc.KEY_STATE : [] })
+        self._device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
         #REMOVE
         #self._device.request(mc.NS_APPLIANCE_CONTROL_TOGGLEX,
         #    mc.METHOD_GET, { mc.KEY_TOGGLEX: [] })

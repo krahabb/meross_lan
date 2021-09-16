@@ -191,10 +191,10 @@ class MerossHttpClient:
         self.key = key
 
 
-    async def async_request_raw(self, payload: dict) -> dict:
+    async def async_request_raw(self, data: dict) -> dict:
         timeout = 1
         try:
-            text_payload = json_dumps(payload)
+            data = json_dumps(data)
             """
             since device HTTP service sometimes timeouts with no apparent
             reason we're using an increasing timeout loop to try recover
@@ -205,7 +205,7 @@ class MerossHttpClient:
                     with async_timeout.timeout(timeout):
                         response = await self._session.post(
                             url=self._requesturl,
-                            data=text_payload
+                            data=data
                         )
                     break
                 except asyncio.TimeoutError as e:
@@ -226,12 +226,7 @@ class MerossHttpClient:
         return json_body
 
 
-    async def async_request(
-        self,
-        namespace: str,
-        method: str = mc.METHOD_GET,
-        payload: dict = {}
-    ) -> dict:
+    async def async_request(self, namespace: str, method: str, payload: dict) -> dict:
 
         self._logger.debug("MerossHttpClient(%s): HTTP POST method:(%s) namespace:(%s)", self._host, method, namespace)
 
@@ -255,12 +250,7 @@ class MerossHttpClient:
         return response
 
 
-    async def async_request_strict(
-        self,
-        namespace: str,
-        method: str = mc.METHOD_GET,
-        payload: dict = {}
-    ) -> dict:
+    async def async_request_strict(self, namespace: str, method: str, payload: dict) -> dict:
         """
         check the protocol layer is correct and no protocol ERROR
         is being reported
@@ -282,3 +272,11 @@ class MerossHttpClient:
                 raise MerossProtocolError(r_payload)
 
         return response
+
+
+    async def async_request_strict_get(self, namespace: str) -> dict:
+        return await self.async_request_strict(
+            namespace,
+            mc.METHOD_GET,
+            mc.PAYLOAD_GET.get(namespace) or { namespace.split('.')[-1].lower(): {} }
+        )

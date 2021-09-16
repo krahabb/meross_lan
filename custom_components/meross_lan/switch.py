@@ -103,7 +103,7 @@ class MerossLanDND(_MerossToggle, SwitchEntity):
         # update the state will be loosed since the ack payload is empty
         # right now 'force' http proto even tho that could be disabled in config
         await self._device.async_http_request(
-            mc.NS_APPLIANCE_SYSTEM_DND,
+            mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},
             _ack_callback
@@ -116,7 +116,7 @@ class MerossLanDND(_MerossToggle, SwitchEntity):
             self._set_state(STATE_OFF)
 
         await self._device.async_http_request(
-            mc.NS_APPLIANCE_SYSTEM_DND,
+            mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},
             _ack_callback

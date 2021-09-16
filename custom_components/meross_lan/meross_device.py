@@ -47,7 +47,7 @@ VOLATILE_ATTR_TRACE_ABILITY_ITER = '_trace_ability_iter'
 TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_SYSTEM_ALL,
     mc.NS_APPLIANCE_SYSTEM_ABILITY,
-    mc.NS_APPLIANCE_SYSTEM_DND,
+    mc.NS_APPLIANCE_SYSTEM_DNDMODE,
     mc.NS_APPLIANCE_SYSTEM_TIME,
     mc.NS_APPLIANCE_SYSTEM_HARDWARE,
     mc.NS_APPLIANCE_SYSTEM_FIRMWARE,
@@ -125,8 +125,8 @@ class MerossDevice:
         For Hub(s) too NS_ALL is very 'partial' (at least MTS100 state is not fully exposed)
         """
         self.polling_period = CONF_POLLING_PERIOD_DEFAULT
-        self.polling_dictionary = dict()
-        self.polling_dictionary[mc.NS_APPLIANCE_SYSTEM_ALL] = {}
+        self.polling_dictionary = list()
+        self.polling_dictionary.append(mc.NS_APPLIANCE_SYSTEM_ALL)
         """
         self.platforms: dict()
         when we build an entity we also add the relative platform name here
@@ -145,7 +145,7 @@ class MerossDevice:
 
         self._set_config_entry(entry.data)
 
-        if mc.NS_APPLIANCE_SYSTEM_DND in self.descriptor.ability:
+        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in self.descriptor.ability:
             self.switch_dnd = MerossLanDND(self)
 
         """
@@ -155,7 +155,7 @@ class MerossDevice:
         else the responses could overlap and 'fuck' a bit the offline -> online transition
         causing that code to request a new NS_APPLIANCE_SYSTEM_ALL
         """
-        self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
+        self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
 
 
     def __del__(self):
@@ -254,7 +254,7 @@ class MerossDevice:
                 when coming online and 'DND' will then work by pushes. While on HTTP we'll
                 always call right after receiving 'ALL' which is the general status update
                 """
-                self.request(mc.NS_APPLIANCE_SYSTEM_DND)
+                self.request_get(mc.NS_APPLIANCE_SYSTEM_DNDMODE)
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLEX:
@@ -267,7 +267,7 @@ class MerossDevice:
                 self._parse_togglex(payload.get(mc.KEY_TOGGLEX))
             return True
 
-        if namespace == mc.NS_APPLIANCE_SYSTEM_DND:
+        if namespace == mc.NS_APPLIANCE_SYSTEM_DNDMODE:
             if method == mc.METHOD_SETACK:
                 # SETACK doesnt carry payload :(
                 # on MQTT this is a pain since we dont have a setack callback
@@ -325,7 +325,7 @@ class MerossDevice:
                 self._set_offline()
 
 
-    async def async_http_request(self, namespace: str, method: str, payload: dict = {}, callback: Callable = None):
+    async def async_http_request(self, namespace: str, method: str, payload: dict, callback: Callable = None):
         try:
             _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)
             if _httpclient is None:
@@ -375,7 +375,7 @@ class MerossDevice:
             )
 
 
-    def request(self, namespace: str, method: str = mc.METHOD_GET, payload: dict = {}, callback: Callable = None):
+    def request(self, namespace: str, method: str, payload: dict, callback: Callable = None):
         """
             route the request through MQTT or HTTP to the physical device.
             callback will be called on successful replies and actually implemented
@@ -406,6 +406,14 @@ class MerossDevice:
         self.api.hass.async_create_task(
             self.async_http_request(namespace, method, payload, callback)
             )
+
+
+    def request_get(self, namespace: str) -> None:
+        self.request(
+            namespace,
+            mc.METHOD_GET,
+            mc.PAYLOAD_GET.get(namespace) or { namespace.split('.')[-1].lower(): {} }
+        )
 
 
     def switch_protocol(self, protocol: Protocol) -> None:
@@ -470,7 +478,7 @@ class MerossDevice:
         """
         if ((epoch - self.lastrequest) > PARAM_HEARTBEAT_PERIOD) \
             and ((epoch - self.lastupdate) > PARAM_HEARTBEAT_PERIOD):
-            self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
+            self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
             return
 
         if self.online:
@@ -487,7 +495,7 @@ class MerossDevice:
                 self.switch_protocol(Protocol.HTTP)
             if (epoch - self.lastrequest) > self._retry_period:
                 self._retry_period = self._retry_period + self.polling_period
-                self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
+                self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
 
 
     def _parse_togglex(self, payload) -> None:
@@ -632,9 +640,9 @@ class MerossDevice:
         or when not listening any MQTT over the PARAM_HEARTBEAT_PERIOD
         """
         if (epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD:
-            for key, value in self.polling_dictionary.items():
-                if key != namespace:
-                    self.request(key, payload=value)
+            for ns in self.polling_dictionary:
+                if ns != namespace:
+                    self.request_get(ns)
 
 
     def _save_config_entry(self, payload: dict) -> None:
@@ -697,8 +705,7 @@ class MerossDevice:
             while True:
                 ability:str = next(_trace_ability_iter)
                 if ability not in TRACE_ABILITY_EXCLUDE:
-                    key = ability.split('.')[-1].lower()
-                    self.request(ability, mc.METHOD_GET, { key: {} })
+                    self.request_get(ability)
                     break
 
             async_track_point_in_utc_time(

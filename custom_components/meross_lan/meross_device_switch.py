@@ -204,7 +204,7 @@ class MerossDeviceSwitch(MerossDevice):
         # we're not checking context namespace since it should be very unusual
         # to enter here with one of those following
         if self._sensor_power.enabled or self._sensor_voltage.enabled or self._sensor_current.enabled:
-            self.request(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
+            self.request_get(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
         if self._sensor_energy.enabled:
             if ((epoch - self._energy_lastupdate) > PARAM_ENERGY_UPDATE_PERIOD):
-                self.request(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)
+                self.request_get(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)

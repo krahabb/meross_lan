@@ -66,9 +66,9 @@ class MerossDeviceShutter(MerossDevice):
             if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
                 from .cover import MerossLanRollerShutter
                 MerossLanRollerShutter(self, 0)
-                self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION] = { mc.KEY_POSITION : [] }
-                self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_STATE] = { mc.KEY_STATE : [] }
-                self.polling_dictionary[mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG] = { mc.KEY_CONFIG : [] }
+                self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
+                self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
+                self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG)
 
         except Exception as e:
             LOGGER.warning("MerossDeviceShutter(%s) init exception:(%s)", self.device_id, str(e))

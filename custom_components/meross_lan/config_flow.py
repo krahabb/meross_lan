@@ -269,8 +269,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _http_discovery(self) -> dict:
         client = MerossHttpClient(self._host, self._key, async_get_clientsession(self.hass), LOGGER)
-        payload = (await client.async_request_strict(mc.NS_APPLIANCE_SYSTEM_ALL)).get(mc.KEY_PAYLOAD)
-        payload.update((await client.async_request_strict(mc.NS_APPLIANCE_SYSTEM_ABILITY)).get(mc.KEY_PAYLOAD))
+        payload: dict = (await client.async_request_strict_get(mc.NS_APPLIANCE_SYSTEM_ALL))[mc.KEY_PAYLOAD]
+        payload.update((await client.async_request_strict_get(mc.NS_APPLIANCE_SYSTEM_ABILITY))[mc.KEY_PAYLOAD])
         return {
             CONF_HOST: self._host,
             CONF_PAYLOAD: payload,

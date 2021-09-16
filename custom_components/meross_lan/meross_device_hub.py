@@ -68,8 +68,8 @@ class MerossDeviceHub(MerossDevice):
         self.platforms[PLATFORM_BINARY_SENSOR] = None
         self.platforms[PLATFORM_CLIMATE] = None
 
-        self.polling_dictionary[mc.NS_APPLIANCE_HUB_SENSOR_ALL] = { mc.KEY_ALL : [] }
-        self.polling_dictionary[mc.NS_APPLIANCE_HUB_MTS100_ALL] = { mc.KEY_ALL : [] }
+        self.polling_dictionary.append(mc.NS_APPLIANCE_HUB_SENSOR_ALL)
+        self.polling_dictionary.append(mc.NS_APPLIANCE_HUB_MTS100_ALL)
 
         try:
             # we expect a well structured digest here since
@@ -153,7 +153,7 @@ class MerossDeviceHub(MerossDevice):
                 p_id = p_subdevice.get(mc.KEY_ID)
                 subdevice = self.subdevices.get(p_id)
                 if subdevice is None:# force a rescan since we discovered a new subdevice
-                    self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
+                    self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
                 else:
                     method = getattr(subdevice, f"_parse_{key}", None)
                     if method is not None:
@@ -189,12 +189,12 @@ class MerossDeviceHub(MerossDevice):
         """
         if self.curr_protocol == Protocol.MQTT:
             if self._lastupdate_sensor == 0:
-                self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
+                self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ALL)
             if self._lastupdate_mts100 == 0:
-                self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
+                self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ALL)
 
         if ((epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
-            self.request(mc.NS_APPLIANCE_HUB_BATTERY, payload={ mc.KEY_BATTERY: [] })
+            self.request_get(mc.NS_APPLIANCE_HUB_BATTERY)
 
 
 
