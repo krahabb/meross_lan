@@ -32,7 +32,7 @@ from .merossclient import (
 from .helpers import LOGGER, mqtt_is_loaded
 from .const import (
     DOMAIN,
-    CONF_HOST, CONF_DEVICE_ID, CONF_KEY,
+    CONF_HOST, CONF_DEVICE_ID, CONF_KEY, CONF_CLOUD_KEY,
     CONF_PAYLOAD, CONF_DEVICE_TYPE,
     CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT,
@@ -47,6 +47,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     _device_id: str = None
     _host: str = None
     _key: str = None
+    _cloud_key: str = None
     _keyerror: bool = False
 
     VERSION = 1
@@ -63,10 +64,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             # we could get here from user flow start in UI
             # or following dhcp discovery
-            if self._host is None:
+            if self._host is None:# it means it's not dhcp discovery
                 # check we already configured the hub ..
                 if (DOMAIN not in self._async_current_ids()) and mqtt_is_loaded(self.hass):
                     return await self.async_step_hub()
+                # user starting a flow then: fill up the key if any
+                api = self.hass.data.get(DOMAIN)
+                if api is not None:
+                    if api.cloud_key is not None:
+                        self._key = api.cloud_key
+                        self._cloud_key = api.cloud_key
         else:
             _host = user_input[CONF_HOST]
             _key = user_input.get(CONF_KEY)
@@ -88,7 +95,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except AbortFlow as e:
                 errors["base"] = "already_configured_device"
             except Exception as e:
-                LOGGER.debug("Error (%s) connecting to meross device (host:%s)", str(e), self._host)
+                LOGGER.warning("Error (%s) configuring meross device (host:%s)", str(e), self._host)
                 errors["base"] = "cannot_connect"
 
 
@@ -130,15 +137,35 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if api is not None:
             if api.has_device(self._host, self._macaddress):
                 return self.async_abort(reason='already_configured')
-            self._key = api.key
 
         try:
             # try device identification so the user/UI has a good context to start with
-            _discovery_info = await self._http_discovery()
+            _discovery_info = None
+            if api is not None:
+                """
+                we'll see if any previous device already used a 'cloud_key' retrieved
+                from meross api for cloud-paired devices and try it
+                """
+                if api.cloud_key is not None:
+                    self._key = api.cloud_key
+                    try:
+                        _discovery_info = await self._http_discovery()
+                        self._cloud_key = self._key # pass along so we'll save it in this entry too
+                    except MerossKeyError:
+                        pass
+                if (_discovery_info is None) and (api.key is not None):
+                    self._key = api.key
+                    try:
+                        _discovery_info = await self._http_discovery()
+                    except MerossKeyError:
+                        pass
+            if _discovery_info is None:
+                self._key = None # no other options: try empty key (which will eventually use the reply-hack)
+                _discovery_info = await self._http_discovery()
             await self._async_set_info(_discovery_info)
             # now just let the user edit/accept the host address even if identification was fine
         except Exception as e:
-            LOGGER.debug("Error (%s) connecting to meross device (host:%s)", str(e), self._host)
+            LOGGER.debug("Error (%s) identifying meross device (host:%s)", str(e), self._host)
             # forgive and continue if we cant discover the device...let the user work it out
 
         return await self.async_step_user()
@@ -193,7 +220,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                     response.raise_for_status()
                 json: dict = await response.json()
-                self._key = json.get(mc.KEY_DATA, {}).get(mc.KEY_KEY)
+                self._cloud_key = json.get(mc.KEY_DATA, {}).get(mc.KEY_KEY)
+                self._key = self._cloud_key
                 return await self.async_step_user()
             except Exception as e:
                 errors["base"] = "cannot_connect"
@@ -223,6 +251,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if CONF_DEVICE_ID not in discovery_info:#this is coming from manual user entry or dhcp discovery
             discovery_info[CONF_DEVICE_ID] = self._device_id
 
+        if (self._cloud_key is not None) and (self._cloud_key == self._key):
+            # save (only if good) so we can later automatically retrieve for new devices
+            discovery_info[CONF_CLOUD_KEY] = self._cloud_key
+        else:
+            discovery_info.pop(CONF_CLOUD_KEY, None)
+
         self._placeholders = {
             CONF_DEVICE_TYPE: get_productnametype(self._descriptor.type),
             CONF_DEVICE_ID: self._device_id,
@@ -235,8 +269,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _http_discovery(self) -> dict:
         client = MerossHttpClient(self._host, self._key, async_get_clientsession(self.hass), LOGGER)
-        payload = (await client.async_request(mc.NS_APPLIANCE_SYSTEM_ALL)).get(mc.KEY_PAYLOAD)
-        payload.update((await client.async_request(mc.NS_APPLIANCE_SYSTEM_ABILITY)).get(mc.KEY_PAYLOAD))
+        payload = (await client.async_request_strict(mc.NS_APPLIANCE_SYSTEM_ALL)).get(mc.KEY_PAYLOAD)
+        payload.update((await client.async_request_strict(mc.NS_APPLIANCE_SYSTEM_ABILITY)).get(mc.KEY_PAYLOAD))
         return {
             CONF_HOST: self._host,
             CONF_PAYLOAD: payload,

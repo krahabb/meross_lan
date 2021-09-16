@@ -151,6 +151,9 @@ KEY_KEY = 'key'
 KEY_DATA = 'data'
 KEY_PARAMS = 'params'
 
+# error codes as reported by Meross device protocol
+ERROR_INVALIDKEY = 5001
+
 # online status
 STATUS_UNKNOWN = -1
 STATUS_NOTONLINE = 0

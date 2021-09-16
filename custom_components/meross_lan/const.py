@@ -12,6 +12,7 @@ DND_ID = 'dnd' # entity (sub)id for the switch representing DNDMode
 # ConfigEntry keys
 CONF_DEVICE_ID = hac.CONF_DEVICE_ID
 CONF_KEY = 'key'
+CONF_CLOUD_KEY = 'cloud_key' # device key eventually retrieved from Meross account
 CONF_PAYLOAD = hac.CONF_PAYLOAD
 CONF_DEVICE_TYPE = "device_type"
 CONF_HOST = hac.CONF_HOST

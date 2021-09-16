@@ -20,17 +20,13 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from . import merossclient
 from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc
-
+from .meross_device import MerossDevice
 from logging import WARNING, INFO
 from .helpers import LOGGER, LOGGER_trap
-
-
-from .meross_device import MerossDevice
-
 from .const import (
     DOMAIN, SERVICE_REQUEST,
     CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
-    CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD,
+    CONF_DEVICE_ID, CONF_KEY, CONF_CLOUD_KEY, CONF_PAYLOAD,
     CONF_POLLING_PERIOD_DEFAULT,
     PARAM_UNAVAILABILITY_TIMEOUT,
 )
@@ -81,6 +77,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     else:
         #device related entry
         LOGGER.debug("async_setup_entry device_id = %s", device_id)
+        cloud_key = entry.data.get(CONF_CLOUD_KEY)
+        if cloud_key is not None:
+            api.cloud_key = cloud_key # last loaded overwrites existing: shouldnt it be the same ?!
         device = api.build_device(device_id, entry)
         device.unsub_entry_update_listener = entry.add_update_listener(device.entry_update_listener)
         device.unsub_updatecoordinator_listener = api.coordinator.async_add_listener(device.updatecoordinator_listener)
@@ -136,6 +135,7 @@ class MerossApi:
     def __init__(self, hass: HomeAssistant):
         self.hass = hass
         self.key = None
+        self.cloud_key = None
         self.devices: Dict[str, MerossDevice] = {}
         self.discovering: Dict[str, dict] = {}
         self.mqtt_subscribing = False # guard for asynchronous mqtt sub registration
@@ -381,9 +381,9 @@ class MerossApi:
                     callback_or_device()
 
         except ClientConnectionError as e:
-            LOGGER.info("MerossApi: client connection error in async_http_request(%s)", str(e))
+            LOGGER.info("MerossApi: client connection error in async_http_request(%s)", str(e) or type(e).__name__)
         except Exception as e:
-            LOGGER.warning("MerossApi: error in async_http_request(%s)", str(e))
+            LOGGER.warning("MerossApi: error in async_http_request(%s)", str(e) or type(e).__name__)
 
 
     def request(self,
