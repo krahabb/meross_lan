@@ -119,9 +119,9 @@ class MerossDeviceSwitch(MerossDevice):
 
         if namespace == mc.NS_APPLIANCE_CONTROL_ELECTRICITY:
             electricity = payload.get(mc.KEY_ELECTRICITY)
-            self._sensor_power._set_state(electricity.get(mc.KEY_POWER) / 1000)
-            self._sensor_current._set_state(electricity.get(mc.KEY_CURRENT) / 1000)
-            self._sensor_voltage._set_state(electricity.get(mc.KEY_VOLTAGE) / 10)
+            self._sensor_power.set_state(electricity.get(mc.KEY_POWER) / 1000)
+            self._sensor_current.set_state(electricity.get(mc.KEY_CURRENT) / 1000)
+            self._sensor_voltage.set_state(electricity.get(mc.KEY_VOLTAGE) / 10)
             config = electricity.get(mc.KEY_CONFIG)
             if isinstance(config, dict):
                 self._consumptionConfig = config
@@ -133,7 +133,7 @@ class MerossDeviceSwitch(MerossDevice):
             days_len = len(days)
             if days_len < 1:
                 self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(0)
-                self._sensor_energy._set_state(0)
+                self._sensor_energy.set_state(0)
                 return True
             # we'll look through the device array values to see
             # data timestamped (in device time) after last midnight
@@ -174,7 +174,7 @@ class MerossDeviceSwitch(MerossDevice):
                     "MerossDevice(%s) Energy: update last_reset to %s",
                     self.device_id, self._sensor_energy._attr_last_reset.isoformat()
                 )
-            self._sensor_energy._set_state(day_last.get(mc.KEY_VALUE))
+            self._sensor_energy.set_state(day_last.get(mc.KEY_VALUE))
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_SPRAY:

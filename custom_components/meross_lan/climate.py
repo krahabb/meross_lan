@@ -100,7 +100,7 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
             self._hvac_action = CURRENT_HVAC_OFF
             self._preset_mode = PRESET_OFF
 
-        self._state = self._hvac_mode if self.subdevice.online else None
+        self._attr_state = self._hvac_mode if self.subdevice.online else None
 
         if self.hass and self.enabled:
             self.async_write_ha_state()

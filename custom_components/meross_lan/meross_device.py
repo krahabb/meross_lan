@@ -633,7 +633,7 @@ class MerossDevice:
         self._retry_period = 0
         self.lastmqtt = 0
         for entity in self.entities.values():
-            entity._set_unavailable()
+            entity.set_unavailable()
 
 
     def _set_online(self, namespace: str) -> None:

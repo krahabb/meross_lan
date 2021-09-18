@@ -64,17 +64,17 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
     @property
     def is_opening(self):
-        return self._state == STATE_OPENING
+        return self._attr_state == STATE_OPENING
 
 
     @property
     def is_closing(self):
-        return self._state == STATE_CLOSING
+        return self._attr_state == STATE_CLOSING
 
 
     @property
     def is_closed(self):
-        return self._state == STATE_CLOSED
+        return self._attr_state == STATE_CLOSED
 
 
     async def async_open_cover(self, **kwargs) -> None:
@@ -114,10 +114,10 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         self._cancel_transition()
 
 
-    def _set_unavailable(self) -> None:
+    def set_unavailable(self) -> None:
         self._open = None
         self._cancel_transition()
-        super()._set_unavailable()
+        super().set_unavailable()
 
 
     def _set_open(self, open, execute) -> None:
@@ -139,22 +139,22 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
         if self._transition_unsub is None:
             if open:
-                if self._state is not STATE_OPEN:
+                if self._attr_state is not STATE_OPEN:
                     if (now - self._state_lastupdate) > self._transition_duration:
                         # the polling period is likely too long..we skip the transition
-                        self._set_state(STATE_OPEN)
+                        self.set_state(STATE_OPEN)
                     else:
                         # when opening the contact will report open right after few inches
                         self._open_pending = open
                         self._start_transition()
             else: # when reporting 'closed' the transition would be ended (almost)
-                self._set_state(STATE_CLOSED)
+                self.set_state(STATE_CLOSED)
         else:
             transition_duration = now - self._transition_start
             if self._open_pending:
                 if open and transition_duration > self._transition_duration:
                     self._cancel_transition()
-                    self._set_state(STATE_OPEN)
+                    self.set_state(STATE_OPEN)
             else: # not _open_pending
                 """
                 we can monitor the (sampled) exact time when the garage closes to
@@ -175,7 +175,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
                     self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = self._transition_duration
                     self._device.log(DEBUG, 0, "MerossLanGarage(%s): updated transition_duration to %d sec", self.name, self._transition_duration)
                     self._cancel_transition()
-                    self._set_state(STATE_CLOSED)
+                    self.set_state(STATE_CLOSED)
 
         self._state_lastupdate = now
 
@@ -188,9 +188,9 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         pulse so we'll use it to guess state transitions in our cover (disabled this until further knowledge)
 
         if onoff:
-            if self._state == STATE_CLOSED:
+            if self._attr_state == STATE_CLOSED:
                 self._start_transition(STATE_OPEN)
-            elif self._state == STATE_OPEN:
+            elif self._attr_state == STATE_OPEN:
                 self._start_transition(STATE_CLOSED)
         #else: RIP!
 
@@ -199,7 +199,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
     def _start_transition(self):
         self._transition_start = time()
-        self._set_state(STATE_OPENING if self._open_pending else STATE_CLOSING)
+        self.set_state(STATE_OPENING if self._open_pending else STATE_CLOSING)
         # this callback will get called some secs after the estimated transition occur
         # in order for the estimation algorithm to always/mostly work (see '_set_open')
         # especially on MQTT where we would expect real time status updates.
@@ -228,7 +228,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         """
         self._transition_unsub = None
         # transition ended: set the state according to our last known hardware status
-        self._set_state(STATE_OPEN if self._open else STATE_CLOSED)
+        self.set_state(STATE_OPEN if self._open else STATE_CLOSED)
         if not self._open_pending:
             # when closing we expect this callback not to be called since
             # the transition should be terminated by '_set_open' provided it gets
@@ -291,17 +291,17 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     @property
     def is_opening(self):
-        return self._state == STATE_OPENING
+        return self._attr_state == STATE_OPENING
 
 
     @property
     def is_closing(self):
-        return self._state == STATE_CLOSING
+        return self._attr_state == STATE_CLOSING
 
 
     @property
     def is_closed(self):
-        return self._state == STATE_CLOSED
+        return self._attr_state == STATE_CLOSED
 
 
     @property
@@ -372,11 +372,11 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
         )
 
 
-    def _set_unavailable(self) -> None:
+    def set_unavailable(self) -> None:
         self._transition_cancel()
         self._stop_cancel()
         self._position_native = None
-        super()._set_unavailable()
+        super().set_unavailable()
 
 
     def _set_rollerposition(self, position) -> None:
@@ -390,14 +390,14 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
     def _set_rollerstate(self, state) -> None:
         self._device.log(DEBUG, 0, "MerossLanShutter(0): _set_rollerstate(%s)", str(state))
         epoch = time()
-        if self._state == STATE_OPENING:
+        if self._attr_state == STATE_OPENING:
             self._position_timed = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)
             if self._position_timed > 100:
                 self._position_timed = 100
             if (state == mc.ROLLERSHUTTER_STATE_OPENING) and self.hass and self.enabled:
                 self.async_write_ha_state()
 
-        elif self._state == STATE_CLOSING:
+        elif self._attr_state == STATE_CLOSING:
             self._position_timed = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)
             if self._position_timed < 0:
                 self._position_timed = 0
@@ -405,19 +405,19 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
                 self.async_write_ha_state()
 
         if state == mc.ROLLERSHUTTER_STATE_OPENING:
-            if self._state != STATE_OPENING:
+            if self._attr_state != STATE_OPENING:
                 self._position_start = self._position_timed
                 self._position_starttime = epoch
-                self._set_state(STATE_OPENING)
+                self.set_state(STATE_OPENING)
         elif state == mc.ROLLERSHUTTER_STATE_CLOSING:
-            if self._state != STATE_CLOSING:
+            if self._attr_state != STATE_CLOSING:
                 self._position_start = self._position_timed
                 self._position_starttime = epoch
-                self._set_state(STATE_CLOSING)
+                self.set_state(STATE_CLOSING)
         else: # state == mc.ROLLERSHUTTER_STATE_IDLE:
             self._stop_cancel()
             self._transition_cancel()
-            self._set_state(STATE_OPEN if self.current_cover_position else STATE_CLOSED)
+            self.set_state(STATE_OPEN if self.current_cover_position else STATE_CLOSED)
             return
 
         # here the cover is moving so...

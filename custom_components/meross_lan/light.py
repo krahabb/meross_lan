@@ -3,11 +3,8 @@ from typing import Union, Tuple
 from homeassistant.components.light import (
     DOMAIN as PLATFORM_LIGHT,
     LightEntity,
-    SUPPORT_BRIGHTNESS, SUPPORT_COLOR, SUPPORT_COLOR_TEMP, SUPPORT_WHITE_VALUE,
-    SUPPORT_EFFECT, SUPPORT_FLASH, SUPPORT_TRANSITION,
-    ATTR_HS_COLOR, ATTR_COLOR_TEMP, ATTR_RGB_COLOR,
-    ATTR_BRIGHTNESS, ATTR_TRANSITION,
-    ATTR_MIN_MIREDS, ATTR_MAX_MIREDS,
+    SUPPORT_BRIGHTNESS, SUPPORT_COLOR, SUPPORT_COLOR_TEMP,
+    ATTR_BRIGHTNESS, ATTR_HS_COLOR, ATTR_COLOR_TEMP,
 )
 from homeassistant.util.color import (
     color_hs_to_RGB, color_RGB_to_hs
@@ -223,9 +220,9 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
             onoff = light.get(mc.KEY_ONOFF)
             if onoff is not None:
-                self._state = STATE_ON if onoff else STATE_OFF
+                self._attr_state = STATE_ON if onoff else STATE_OFF
 
-            if self.hass and self.enabled and ((onoff is not None) or (self._state is STATE_ON)):
+            if self.hass and self.enabled and ((onoff is not None) or (self._attr_state is STATE_ON)):
                 # since the light payload could be processed before the relative 'togglex'
                 # here we'll flush only when the lamp is 'on' to avoid intra-updates to HA states.
                 # when the togglex will arrive, the _light (attributes) will be already set
