@@ -61,6 +61,10 @@
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
                     "time_zone": "Device time zone",
+                    "voltageRatio": "voltageRatio",
+                    "electricityRatio": "electricityRatio",
+                    "signalOpen": "Cover open timeout (sec)",
+                    "signalClose": "Cover close timeout (sec)",
                     "trace": "Activate device debug tracing (for 10 min)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"

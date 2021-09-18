@@ -111,7 +111,7 @@ class MerossDevice:
         they're generally built here during __init__ and will be registered
         in platforms(s) async_setup_entry with HA
         """
-        self.entities: Dict[any, '_MerossEntity'] = dict()  # pylint: disable=undefined-variable
+        self.entities: Dict[object, '_MerossEntity'] = dict()  # pylint: disable=undefined-variable
 
         """
         This is mainly for HTTP based devices: we build a dictionary of what we think could be
@@ -432,6 +432,26 @@ class MerossDevice:
         else:
             LOGGER.log(level, msg, *args)
         self._trace(msg % args, logging.getLevelName(level), 'LOG')
+
+
+    def entry_option_setup(self, config_schema: dict):
+        """
+        called when setting up an OptionsFlowHandler to expose
+        configurable device preoperties which are stored at the device level
+        and not at the configuration/option level
+        see derived implementations
+        """
+        return
+
+
+    def entry_option_update(self, user_input: dict):
+        """
+        called when the user 'SUBMIT' an OptionsFlowHandler: here we'll
+        receive the full user_input so to update device config properties
+        (this is actually called in sequence with entry_update_listener
+        just the latter is async)
+        """
+        return
 
 
     @callback

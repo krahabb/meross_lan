@@ -8,7 +8,6 @@ import async_timeout
 import voluptuous as vol
 import json
 
-
 try:
     from pytz import common_timezones
 except Exception:
@@ -28,7 +27,8 @@ from .merossclient import (
     const as mc,
     get_productnametype
 )
-
+from . import MerossApi
+from .meross_device import MerossDevice
 from .helpers import LOGGER, mqtt_is_loaded
 from .const import (
     DOMAIN,
@@ -314,6 +314,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_device(self, user_input=None):
         data = self._config_entry.data
+        device_id = data.get(CONF_DEVICE_ID)
+        device: MerossDevice = None
+        api: MerossApi = self.hass.data.get(DOMAIN)
+        if api is not None:
+            device: MerossDevice = api.devices.get(device_id)
 
         if user_input is not None:
             data = dict(data)
@@ -323,6 +328,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data[CONF_TIME_ZONE] = user_input.get(CONF_TIME_ZONE)
             data[CONF_TRACE] = time() + CONF_TRACE_TIMEOUT if user_input.get(CONF_TRACE) else 0
             self.hass.config_entries.async_update_entry(self._config_entry, data=data)
+            if device is not None:
+                device.entry_option_update(user_input)
             return self.async_create_entry(title=None, data=None)
 
         config_schema = OrderedDict()
@@ -351,6 +358,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 description={"suggested_value": data.get(CONF_TIME_ZONE)}
                 )
             ] = vol.In(common_timezones) if common_timezones is not None else str
+        # setup device specific config right before last option
+        if device is not None:
+            device.entry_option_setup(config_schema)
+
         config_schema[
             vol.Optional(
                 CONF_TRACE,
@@ -365,7 +376,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=vol.Schema(config_schema),
             description_placeholders={
                 CONF_DEVICE_TYPE: get_productnametype(descriptor.type),
-                CONF_DEVICE_ID: data.get(CONF_DEVICE_ID),
+                CONF_DEVICE_ID: device_id,
                 CONF_HOST: data.get(CONF_HOST) or "MQTT",
                 CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
             }

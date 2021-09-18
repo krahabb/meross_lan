@@ -1,5 +1,9 @@
+import voluptuous as vol
+from homeassistant.helpers import config_validation as cv
+
 from .merossclient import const as mc  # mEROSS cONST
 from .meross_device import MerossDevice
+from .cover import MerossLanGarage, MerossLanRollerShutter
 from .helpers import LOGGER
 
 
@@ -13,7 +17,6 @@ class MerossDeviceGarage(MerossDevice):
             if p_digest:
                 garagedoor = p_digest.get(mc.KEY_GARAGEDOOR)
                 if isinstance(garagedoor, list):
-                    from .cover import MerossLanGarage
                     for g in garagedoor:
                         MerossLanGarage(self, g.get(mc.KEY_CHANNEL))
                 #endif p_digest
@@ -64,7 +67,6 @@ class MerossDeviceShutter(MerossDevice):
             # looks like mrs100 just exposes abilities and we'll have to poll
             # related NS
             if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
-                from .cover import MerossLanRollerShutter
                 MerossLanRollerShutter(self, 0)
                 self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
                 self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
@@ -104,6 +106,39 @@ class MerossDeviceShutter(MerossDevice):
             # payload = {"config": [{"channel": 0, "signalOpen": 50000, "signalClose": 50000}]}
             self._parse_rollershutter_config(payload.get(mc.KEY_CONFIG))
         return False
+
+
+    def entry_option_setup(self, config_schema: dict):
+        shutter: MerossLanRollerShutter = self.entities[0]
+        config_schema[
+            vol.Optional(
+                mc.KEY_SIGNALOPEN,
+                description={"suggested_value": shutter._signalOpen / 1000}
+                )
+            ] = cv.positive_int
+        config_schema[
+            vol.Optional(
+                mc.KEY_SIGNALCLOSE,
+                description={"suggested_value": shutter._signalClose / 1000}
+                )
+            ] = cv.positive_int
+
+
+    def entry_option_update(self, user_input: dict):
+        shutter: MerossLanRollerShutter = self.entities[0]
+        signalopen = user_input.get(mc.KEY_SIGNALOPEN, shutter._signalOpen / 1000) * 1000
+        signalclose = user_input.get(mc.KEY_SIGNALCLOSE, shutter._signalClose / 1000) * 1000
+        if (signalopen != shutter._signalOpen) or (signalclose != shutter._signalClose):
+            self.request(
+                mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG,
+                mc.METHOD_SET,
+                {mc.KEY_CONFIG: [{
+                    mc.KEY_CHANNEL: 0,
+                    mc.KEY_SIGNALOPEN: signalopen,
+                    mc.KEY_SIGNALCLOSE: signalclose
+                    }]
+                }
+            )
 
 
     def _parse_rollershutter_state(self, p_state) -> None:

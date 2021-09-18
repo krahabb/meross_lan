@@ -61,6 +61,10 @@
                     "protocol": "接続プロトコル",
                     "polling_period": "ポーリング間隔(秒)",
                     "time_zone": "デバイスのタイムゾーン",
+                    "voltageRatio": "voltageRatio",
+                    "electricityRatio": "electricityRatio",
+                    "signalOpen": "開封時間 (秒)",
+                    "signalClose": "終了時間 (秒)",
                     "trace": "デバイスのデバグトレースを開始する (10分間)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"

@@ -1,7 +1,9 @@
 import logging
 from time import localtime
 from datetime import datetime, timedelta, timezone
+import voluptuous as vol
 
+from homeassistant.helpers import config_validation as cv
 from homeassistant.const import (
     DEVICE_CLASS_POWER,
     DEVICE_CLASS_CURRENT,
@@ -27,6 +29,7 @@ class MerossDeviceSwitch(MerossDevice):
         self._sensor_energy = MerossFakeEntity
         self._energy_lastupdate = 0
         self._energy_last_reset = 0 # store the last 'device time' we passed onto to _attr_last_reset
+        self._consumptionConfig: dict = None
 
         try:
             # use a mix of heuristic to detect device features
@@ -119,6 +122,9 @@ class MerossDeviceSwitch(MerossDevice):
             self._sensor_power._set_state(electricity.get(mc.KEY_POWER) / 1000)
             self._sensor_current._set_state(electricity.get(mc.KEY_CURRENT) / 1000)
             self._sensor_voltage._set_state(electricity.get(mc.KEY_VOLTAGE) / 10)
+            config = electricity.get(mc.KEY_CONFIG)
+            if isinstance(config, dict):
+                self._consumptionConfig = config
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX:
@@ -175,7 +181,37 @@ class MerossDeviceSwitch(MerossDevice):
             self._parse_spray(payload.get(mc.KEY_SPRAY))
             return True
 
+        if namespace == mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG:
+            config = payload.get(mc.KEY_CONFIG)
+            if isinstance(config, dict):
+                self._consumptionConfig = config
         return False
+
+    """
+        NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG->SET not working!
+        leave the code for future reference
+        """
+    def entry_option_setup(self, config_schema: dict):
+        if isinstance(self._consumptionConfig, dict):
+            for key, value in self._consumptionConfig.items():
+                config_schema[
+                    vol.Optional(
+                        key,
+                        description={"suggested_value": value}
+                        )
+                    ] = int
+
+
+    def entry_option_update(self, user_input: dict):
+        if isinstance(self._consumptionConfig, dict):
+            config = dict()
+            for key, value in self._consumptionConfig.items():
+                config[key] = user_input.get(key, value)
+            self.request(
+                mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
+                mc.METHOD_PUSH,
+                {mc.KEY_CONSUMPTIONCONFIG: config}
+            )
 
 
     def _parse_spray(self, payload) -> None:

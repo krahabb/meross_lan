@@ -42,5 +42,33 @@
         "data": {}
       }
     }
+  },
+  "options": {
+    "step": {
+      "hub": {
+        "title": "Meross LAN MQTT Hub",
+        "description": "Configurer les paramètres LAN globaux de Meross",
+        "data": {
+          "key": "Clé"
+        }
+      },
+      "device": {
+        "title": "Configuration de l'appareil",
+        "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
+        "data": {
+          "key": "Clé",
+          "protocol": "Protocole de connexion",
+          "polling_period": "Période de requête",
+          "time_zone": "Fuseau horaire de l'appareil",
+          "voltageRatio": "voltageRatio",
+          "electricityRatio": "electricityRatio",
+          "signalOpen": "Temps d'ouverture (sec)",
+          "signalClose": "Temps de fermeture (sec)",
+          "trace": "Activer le traçage de l'appareil (pendant 10 min)",
+          "all": "Appliance.System.All",
+          "ability": "Appliance.System.Ability"
+        }
+      }
+    }
   }
 }
