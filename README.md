@@ -103,6 +103,17 @@ This integration has been made possible only with the contribution of the awesom
 Have a look at their repositories to better understand how the Meross line of devices is working through MQTT.
 I really thank them for the inspiration and the knowledge that made it possible for me to develop this integration
 
+Special mention also for:
+- [@nao-pon](https://github.com/nao-pon)
+- [@wsw70](https://github.com/wsw70)
+- [@gelokatil](https://github.com/gelokatil)
+- [@scannifn](https://github.com/scannifn)
+- [@almico](https://github.com/almico)
+- [@Gronda74](https://github.com/Gronda74)
+- [@GeorgeCaliment](https://github.com/GeorgeCaliment)
+
+who greatly helped me fixing issues or developing nice enhancements to the component
+
 [hacs]: https://github.com/custom-components/hacs
 [hacsbadge]: https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge
 [@albertogeniola]: https://github.com/albertogeniola/MerossIot
