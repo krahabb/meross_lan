@@ -4,25 +4,22 @@ from time import time
 from typing import Callable, Dict
 
 from homeassistant.const import (
-    DEVICE_CLASS_BATTERY, DEVICE_CLASS_TEMPERATURE,
+    DEVICE_CLASS_BATTERY,
+    DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_HUMIDITY,
 )
-from homeassistant.core import callback
 from homeassistant.components.binary_sensor import DEVICE_CLASS_WINDOW
 
 from .merossclient import KeyType, const as mc  # mEROSS cONST
 from .meross_device import MerossDevice, Protocol
-from .sensor import MerossLanHubSensor
-from .climate import Mts100Climate
-from .binary_sensor import MerossLanHubBinarySensor
+from .sensor import PLATFORM_SENSOR, MerossLanHubSensor
+from .climate import PLATFORM_CLIMATE, Mts100Climate
+from .binary_sensor import PLATFORM_BINARY_SENSOR, MerossLanHubBinarySensor
 from .helpers import LOGGER
 from .const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_HUBBATTERY_UPDATE_PERIOD,
     PARAM_HUBSENSOR_UPDATE_PERIOD,
-    PLATFORM_BINARY_SENSOR,
-    PLATFORM_CLIMATE,
-    PLATFORM_SENSOR
 )
 
 
@@ -71,8 +68,8 @@ class MerossDeviceHub(MerossDevice):
         self.platforms[PLATFORM_BINARY_SENSOR] = None
         self.platforms[PLATFORM_CLIMATE] = None
 
-        self.polling_dictionary[mc.NS_APPLIANCE_HUB_SENSOR_ALL] = { mc.KEY_ALL : [] }
-        self.polling_dictionary[mc.NS_APPLIANCE_HUB_MTS100_ALL] = { mc.KEY_ALL : [] }
+        self.polling_dictionary.append(mc.NS_APPLIANCE_HUB_SENSOR_ALL)
+        self.polling_dictionary.append(mc.NS_APPLIANCE_HUB_MTS100_ALL)
 
         try:
             # we expect a well structured digest here since
@@ -156,7 +153,7 @@ class MerossDeviceHub(MerossDevice):
                 p_id = p_subdevice.get(mc.KEY_ID)
                 subdevice = self.subdevices.get(p_id)
                 if subdevice is None:# force a rescan since we discovered a new subdevice
-                    self.request(mc.NS_APPLIANCE_SYSTEM_ALL)
+                    self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
                 else:
                     method = getattr(subdevice, f"_parse_{key}", None)
                     if method is not None:
@@ -184,20 +181,20 @@ class MerossDeviceHub(MerossDevice):
                 subdevice.update_digest(p_digest)
 
 
-    def request_updates(self, epoch, namespace):
-        super().request_updates(epoch, namespace)
+    def _request_updates(self, epoch, namespace):
+        super()._request_updates(epoch, namespace)
         """
         we just ask for updates when something pops online (_lastupdate_sensor == 0)
         relying on push (over MQTT) or base polling updates (only HTTP) for any other changes
         """
         if self.curr_protocol == Protocol.MQTT:
             if self._lastupdate_sensor == 0:
-                self.request(mc.NS_APPLIANCE_HUB_SENSOR_ALL, payload={ mc.KEY_ALL: [] })
+                self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ALL)
             if self._lastupdate_mts100 == 0:
-                self.request(mc.NS_APPLIANCE_HUB_MTS100_ALL, payload={ mc.KEY_ALL: [] })
+                self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ALL)
 
         if ((epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
-            self.request(mc.NS_APPLIANCE_HUB_BATTERY, payload={ mc.KEY_BATTERY: [] })
+            self.request_get(mc.NS_APPLIANCE_HUB_BATTERY)
 
 
 
@@ -239,8 +236,9 @@ class MerossSubDevice:
             if self._online is True:
                 self._online = False
                 for entity in self.hub.entities.values():
-                    if entity.subdevice is self:
-                        entity._set_unavailable()
+                    # not every entity in hub is a 'subdevice' entity
+                    if getattr(entity, "subdevice", None) is self:
+                        entity.set_unavailable()
 
 
     def update_digest(self, p_digest: dict) -> None:
@@ -282,12 +280,12 @@ class MerossSubDevice:
                         if not sensor:
                             sensor = MerossLanHubSensor(self, p_key)
                             setattr(self, sensorattr, sensor)
-                        sensor._set_state(p_latest / 10)
+                        sensor.set_state(p_latest / 10)
 
 
     def _parse_battery(self, p_battery: dict) -> None:
         if self._online:
-            self.sensor_battery._set_state(p_battery.get(mc.KEY_VALUE))
+            self.sensor_battery.set_state(p_battery.get(mc.KEY_VALUE))
 
 
     def _parse_online(self, p_online: dict) -> None:
@@ -302,6 +300,7 @@ class MS100SubDevice(MerossSubDevice):
         self.sensor_temperature = MerossLanHubSensor(self, DEVICE_CLASS_TEMPERATURE)
         self.sensor_humidity = MerossLanHubSensor(self, DEVICE_CLASS_HUMIDITY)
 
+
     def update_digest(self, p_digest: dict) -> None:
         super().update_digest(p_digest)
         if self._online:
@@ -310,18 +309,19 @@ class MS100SubDevice(MerossSubDevice):
                 # beware! it happens some keys are missing sometimes!!!
                 value = p_ms100.get(mc.KEY_LATESTTEMPERATURE)
                 if isinstance(value, int):
-                    self.sensor_temperature._set_state(value / 10)
+                    self.sensor_temperature.set_state(value / 10)
                 value = p_ms100.get(mc.KEY_LATESTHUMIDITY)
                 if isinstance(value, int):
-                    self.sensor_humidity._set_state(value / 10)
+                    self.sensor_humidity.set_state(value / 10)
+
 
     def _parse_tempHum(self, p_temphum: dict) -> None:
         value = p_temphum.get(mc.KEY_LATESTTEMPERATURE)
         if isinstance(value, int):
-            self.sensor_temperature._set_state(value / 10)
+            self.sensor_temperature.set_state(value / 10)
         value = p_temphum.get(mc.KEY_LATESTHUMIDITY)
         if isinstance(value, int):
-            self.sensor_humidity._set_state(value / 10)
+            self.sensor_humidity.set_state(value / 10)
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
@@ -335,6 +335,7 @@ class MTS100SubDevice(MerossSubDevice):
         self.climate = Mts100Climate(self)
         self.binary_sensor_window = MerossLanHubBinarySensor(self, DEVICE_CLASS_WINDOW)
         self.sensor_temperature = MerossLanHubSensor(self, DEVICE_CLASS_TEMPERATURE)
+
 
     def _parse_all(self, p_all: dict) -> None:
         super()._parse_all(p_all)
@@ -356,7 +357,7 @@ class MTS100SubDevice(MerossSubDevice):
             if p_openwindow is not None:
                 self.binary_sensor_window._set_onoff(p_openwindow)
 
-            self.sensor_temperature._set_state(climate._current_temperature)
+            self.sensor_temperature.set_state(climate._current_temperature)
 
         p_togglex = p_all.get(mc.KEY_TOGGLEX)
         if isinstance(p_togglex, dict):
@@ -379,7 +380,7 @@ class MTS100SubDevice(MerossSubDevice):
         climate._max_temp = _get_temp_normal(p_temperature.get(mc.KEY_MAX), climate._max_temp)
         climate._mts100_heating = p_temperature.get(mc.KEY_HEATING, climate._mts100_heating)
         climate.update_modes()
-        self.sensor_temperature._set_state(climate._current_temperature)
+        self.sensor_temperature.set_state(climate._current_temperature)
 
 
     def _parse_togglex(self, p_togglex: dict) -> None:

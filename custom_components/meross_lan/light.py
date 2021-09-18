@@ -1,31 +1,20 @@
 from typing import Union, Tuple
 
 from homeassistant.components.light import (
+    DOMAIN as PLATFORM_LIGHT,
     LightEntity,
-    SUPPORT_BRIGHTNESS, SUPPORT_COLOR, SUPPORT_COLOR_TEMP, SUPPORT_WHITE_VALUE,
-    SUPPORT_EFFECT, SUPPORT_FLASH, SUPPORT_TRANSITION,
-    ATTR_HS_COLOR, ATTR_COLOR_TEMP, ATTR_RGB_COLOR,
-    ATTR_BRIGHTNESS, ATTR_TRANSITION,
-    ATTR_MIN_MIREDS, ATTR_MAX_MIREDS,
+    SUPPORT_BRIGHTNESS, SUPPORT_COLOR, SUPPORT_COLOR_TEMP,
+    ATTR_BRIGHTNESS, ATTR_HS_COLOR, ATTR_COLOR_TEMP,
 )
 from homeassistant.util.color import (
     color_hs_to_RGB, color_RGB_to_hs
 )
 
-from homeassistant.const import STATE_UNKNOWN, STATE_ON, STATE_OFF
+from homeassistant.const import STATE_ON, STATE_OFF
 
 from .merossclient import const as mc
 from .meross_device import MerossDevice
 from .meross_entity import _MerossToggle, platform_setup_entry, platform_unload_entry
-from .const import (
-    PLATFORM_LIGHT,
-)
-
-CAPACITY_RGB = 1
-CAPACITY_TEMPERATURE = 2
-CAPACITY_LUMINANCE = 4
-CAPACITY_RGB_LUMINANCE = 5
-CAPACITY_TEMPERATURE_LUMINANCE = 6
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -107,11 +96,11 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
         self._capacity = device.descriptor.ability.get(
             mc.NS_APPLIANCE_CONTROL_LIGHT, {}).get(
-                mc.KEY_CAPACITY, CAPACITY_LUMINANCE)
+                mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE)
 
-        self._supported_features = (SUPPORT_COLOR if self._capacity & CAPACITY_RGB else 0)\
-            | (SUPPORT_COLOR_TEMP if self._capacity & CAPACITY_TEMPERATURE else 0)\
-            | (SUPPORT_BRIGHTNESS if self._capacity & CAPACITY_LUMINANCE else 0)
+        self._supported_features = (SUPPORT_COLOR if self._capacity & mc.LIGHT_CAPACITY_RGB else 0)\
+            | (SUPPORT_COLOR_TEMP if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE else 0)\
+            | (SUPPORT_BRIGHTNESS if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE else 0)
 
 
     @property
@@ -160,7 +149,7 @@ class MerossLanLight(_MerossToggle, LightEntity):
             h, s = kwargs[ATTR_HS_COLOR]
             self._light[mc.KEY_RGB] = _rgb_to_int(color_hs_to_RGB(h, s))
             self._light.pop(mc.KEY_TEMPERATURE, None)
-            capacity |= CAPACITY_RGB
+            capacity |= mc.LIGHT_CAPACITY_RGB
         elif ATTR_COLOR_TEMP in kwargs:
             # map mireds: min_mireds -> 100 - max_mireds -> 1
             mired = kwargs[ATTR_COLOR_TEMP]
@@ -168,10 +157,10 @@ class MerossLanLight(_MerossToggle, LightEntity):
             temperature = 100 - (norm_value * 99)
             self._light[mc.KEY_TEMPERATURE] = _sat_1_100(temperature) # meross wants temp between 1-100
             self._light.pop(mc.KEY_RGB, None)
-            capacity |= CAPACITY_TEMPERATURE
+            capacity |= mc.LIGHT_CAPACITY_TEMPERATURE
 
-        if self._capacity & CAPACITY_LUMINANCE:
-            capacity |= CAPACITY_LUMINANCE
+        if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+            capacity |= mc.LIGHT_CAPACITY_LUMINANCE
             # Brightness must always be set, so take previous luminance if not explicitly set now.
             if ATTR_BRIGHTNESS in kwargs:
                 self._light[mc.KEY_LUMINANCE] = _sat_1_100(kwargs[ATTR_BRIGHTNESS] * 100 // 255)
@@ -212,18 +201,18 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
             capacity = light.get(mc.KEY_CAPACITY, 0)
 
-            if capacity & CAPACITY_LUMINANCE:
+            if capacity & mc.LIGHT_CAPACITY_LUMINANCE:
                 self._brightness = light.get(mc.KEY_LUMINANCE, 0) * 255 // 100
             else:
                 self._brightness = None
 
-            if capacity & CAPACITY_TEMPERATURE:
+            if capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
                 self._color_temp = ((100 - light.get(mc.KEY_TEMPERATURE, 0)) / 99) * \
                     (self.max_mireds - self.min_mireds) + self.min_mireds
             else:
                 self._color_temp = None
 
-            if capacity & CAPACITY_RGB:
+            if capacity & mc.LIGHT_CAPACITY_RGB:
                 r, g, b = _int_to_rgb(light.get(mc.KEY_RGB, 0))
                 self._hs_color = color_RGB_to_hs(r, g, b)
             else:
@@ -231,9 +220,9 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
             onoff = light.get(mc.KEY_ONOFF)
             if onoff is not None:
-                self._state = STATE_ON if onoff else STATE_OFF
+                self._attr_state = STATE_ON if onoff else STATE_OFF
 
-            if self.hass and self.enabled and ((onoff is not None) or (self._state is STATE_ON)):
+            if self.hass and self.enabled and ((onoff is not None) or (self._attr_state is STATE_ON)):
                 # since the light payload could be processed before the relative 'togglex'
                 # here we'll flush only when the lamp is 'on' to avoid intra-updates to HA states.
                 # when the togglex will arrive, the _light (attributes) will be already set

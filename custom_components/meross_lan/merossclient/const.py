@@ -15,13 +15,22 @@ METHOD_ERROR = "ERROR"
 
 NS_APPLIANCE_SYSTEM_ALL = "Appliance.System.All"
 NS_APPLIANCE_SYSTEM_ABILITY = "Appliance.System.Ability"
+NS_APPLIANCE_SYSTEM_HARDWARE = "Appliance.System.Hardware"
+NS_APPLIANCE_SYSTEM_FIRMWARE = "Appliance.System.Firmware"
 NS_APPLIANCE_SYSTEM_CLOCK = "Appliance.System.Clock"
 NS_APPLIANCE_SYSTEM_REPORT = "Appliance.System.Report"
 NS_APPLIANCE_SYSTEM_ONLINE = "Appliance.System.Online"
 NS_APPLIANCE_SYSTEM_DEBUG = "Appliance.System.Debug"
 NS_APPLIANCE_SYSTEM_TIME = "Appliance.System.Time"
-NS_APPLIANCE_CONFIG_TRACE = "Appliance.Config.Trace"
+NS_APPLIANCE_SYSTEM_DNDMODE = "Appliance.System.DNDMode"
+NS_APPLIANCE_CONFIG_KEY = 'Appliance.Config.Key'
+NS_APPLIANCE_CONFIG_WIFI = 'Appliance.Config.Wifi'
 NS_APPLIANCE_CONFIG_WIFILIST = "Appliance.Config.WifiList"
+NS_APPLIANCE_CONFIG_TRACE = "Appliance.Config.Trace"
+NS_APPLIANCE_CONTROL_MULTIPLE = "Appliance.Control.Multiple"
+NS_APPLIANCE_CONTROL_BIND = "Appliance.Control.Bind"
+NS_APPLIANCE_CONTROL_UNBIND = "Appliance.Control.Unbind"
+NS_APPLIANCE_CONTROL_UPGRADE = "Appliance.Control.Upgrade"
 NS_APPLIANCE_CONTROL_TOGGLE = "Appliance.Control.Toggle"
 NS_APPLIANCE_CONTROL_TOGGLEX = "Appliance.Control.ToggleX"
 NS_APPLIANCE_CONTROL_TRIGGER = "Appliance.Control.Trigger"
@@ -32,13 +41,13 @@ NS_APPLIANCE_CONTROL_ELECTRICITY = "Appliance.Control.Electricity"
 # Light Abilities
 NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
 # Humidifier abilities
-NS_APPLIANCE_SYSTEM_DND = "Appliance.System.DNDMode"
 NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
 # Garage door opener
 NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
 # Roller shutter
 NS_APPLIANCE_ROLLERSHUTTER_STATE = 'Appliance.RollerShutter.State'
 NS_APPLIANCE_ROLLERSHUTTER_POSITION = 'Appliance.RollerShutter.Position'
+NS_APPLIANCE_ROLLERSHUTTER_CONFIG = 'Appliance.RollerShutter.Config'
 # Hub
 NS_APPLIANCE_DIGEST_HUB = 'Appliance.Digest.Hub'
 NS_APPLIANCE_HUB_SUBDEVICELIST = 'Appliance.Hub.SubdeviceList'
@@ -100,6 +109,7 @@ KEY_CAPACITY = 'capacity'
 KEY_RGB = 'rgb'
 KEY_LUMINANCE = 'luminance'
 KEY_TEMPERATURE = 'temperature'
+KEY_SPRAY = 'spray'
 KEY_HUB = 'hub'
 KEY_BATTERY = 'battery'
 KEY_VALUE = 'value'
@@ -115,10 +125,14 @@ KEY_POWER = 'power'
 KEY_CURRENT = 'current'
 KEY_VOLTAGE = 'voltage'
 KEY_CONSUMPTIONX = 'consumptionx'
+KEY_CONSUMPTIONCONFIG = 'consumptionconfig'
 KEY_DATE = 'date'
 KEY_GARAGEDOOR = 'garageDoor'
 KEY_STATE = 'state'
 KEY_POSITION = 'position'
+KEY_CONFIG = 'config'
+KEY_SIGNALOPEN = 'signalOpen'
+KEY_SIGNALCLOSE = 'signalClose'
 KEY_OPEN = 'open'
 KEY_EXECUTE = 'execute'
 KEY_MODE = 'mode'
@@ -133,6 +147,28 @@ KEY_HEATING = 'heating'
 KEY_AWAY = 'away'
 KEY_OPENWINDOW = 'openWindow'
 KEY_DNDMODE = 'DNDMode'
+KEY_NONCE = 'nonce'
+KEY_KEY = 'key'
+KEY_DATA = 'data'
+KEY_PARAMS = 'params'
+
+# 'well-know' syntax for METHOD_GET
+PAYLOAD_GET = {
+    NS_APPLIANCE_SYSTEM_ALL: { KEY_ALL: {} },
+    NS_APPLIANCE_SYSTEM_ABILITY: { KEY_ABILITY: {} },
+    NS_APPLIANCE_SYSTEM_DNDMODE: { KEY_DNDMODE: {} },
+    NS_APPLIANCE_CONTROL_CONSUMPTIONX: { KEY_CONSUMPTIONX: [] },
+    NS_APPLIANCE_CONTROL_ELECTRICITY: { KEY_ELECTRICITY: {} },
+    NS_APPLIANCE_ROLLERSHUTTER_POSITION: { KEY_POSITION: [] },
+    NS_APPLIANCE_ROLLERSHUTTER_STATE: { KEY_STATE: [] },
+    NS_APPLIANCE_ROLLERSHUTTER_CONFIG: { KEY_CONFIG: [] },
+    NS_APPLIANCE_HUB_SENSOR_ALL: { KEY_ALL: [] },
+    NS_APPLIANCE_HUB_MTS100_ALL: { KEY_ALL: [] },
+    NS_APPLIANCE_HUB_BATTERY: { KEY_BATTERY: [] }
+}
+
+# error codes as reported by Meross device protocol
+ERROR_INVALIDKEY = 5001
 
 # online status
 STATUS_UNKNOWN = -1
@@ -140,6 +176,23 @@ STATUS_NOTONLINE = 0
 STATUS_ONLINE = 1
 STATUS_OFFLINE = 2
 STATUS_UPGRADING = 3
+
+# light bulb capacity enums
+LIGHT_CAPACITY_RGB = 1
+LIGHT_CAPACITY_TEMPERATURE = 2
+LIGHT_CAPACITY_LUMINANCE = 4
+LIGHT_CAPACITY_RGB_LUMINANCE = 5
+LIGHT_CAPACITY_TEMPERATURE_LUMINANCE = 6
+
+# spray mode enums
+SPRAY_MODE_OFF = 0
+SPRAY_MODE_CONTINUOUS = 1
+SPRAY_MODE_INTERMITTENT = 2
+
+# rollershutter states
+ROLLERSHUTTER_STATE_IDLE = 0
+ROLLERSHUTTER_STATE_OPENING = 1
+ROLLERSHUTTER_STATE_CLOSING = 2
 
 # well known device types
 TYPE_UNKNOWN = 'unknown'
@@ -170,3 +223,4 @@ TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
 """
 MANUFACTURER = "Meross"
 MEROSS_MACADDRESS = '48:e1:e9:xx:xx:xx'
+MEROSS_API_LOGIN_URL = "https://iot.meross.com/v1/Auth/Login"

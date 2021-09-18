@@ -7,6 +7,8 @@
             "single_instance_allowed": "Already configured. Only a single configuration possible."
         },
         "error": {
+            "invalid_key": "Key error: proceed to retrieve from Meross account",
+            "already_configured_device": "Device is already configured",
             "cannot_connect": "Unable to connect",
             "invalid_auth": "Authentication error"
           },
@@ -24,6 +26,14 @@
                 "description": "Configure global Meross LAN settings",
                 "data": {
                     "key": "Device key"
+                }
+            },
+            "retrievekey": {
+                "title": "Device key retrieve",
+                "description": "Login to your Meross account to retrieve the device key",
+                "data": {
+                    "username": "Meross login",
+                    "password": "Meross password"
                 }
             },
             "device": {
@@ -51,6 +61,10 @@
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
                     "time_zone": "Device time zone",
+                    "voltageRatio": "voltageRatio",
+                    "electricityRatio": "electricityRatio",
+                    "signalOpen": "Cover open timeout (sec)",
+                    "signalClose": "Cover close timeout (sec)",
                     "trace": "Activate device debug tracing (for 10 min)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"

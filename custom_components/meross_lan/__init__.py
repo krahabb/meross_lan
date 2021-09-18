@@ -20,20 +20,13 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from . import merossclient
 from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc
-
+from .meross_device import MerossDevice
 from logging import WARNING, INFO
 from .helpers import LOGGER, LOGGER_trap
-
-
-from .meross_device import MerossDevice
-from .meross_device_switch import MerossDeviceSwitch
-from .meross_device_bulb import MerossDeviceBulb
-from .meross_device_hub import MerossDeviceHub
-
 from .const import (
     DOMAIN, SERVICE_REQUEST,
     CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
-    CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD,
+    CONF_DEVICE_ID, CONF_KEY, CONF_CLOUD_KEY, CONF_PAYLOAD,
     CONF_POLLING_PERIOD_DEFAULT,
     PARAM_UNAVAILABILITY_TIMEOUT,
 )
@@ -84,6 +77,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     else:
         #device related entry
         LOGGER.debug("async_setup_entry device_id = %s", device_id)
+        cloud_key = entry.data.get(CONF_CLOUD_KEY)
+        if cloud_key is not None:
+            api.cloud_key = cloud_key # last loaded overwrites existing: shouldnt it be the same ?!
         device = api.build_device(device_id, entry)
         device.unsub_entry_update_listener = entry.add_update_listener(device.entry_update_listener)
         device.unsub_updatecoordinator_listener = api.coordinator.async_add_listener(device.updatecoordinator_listener)
@@ -139,6 +135,7 @@ class MerossApi:
     def __init__(self, hass: HomeAssistant):
         self.hass = hass
         self.key = None
+        self.cloud_key = None
         self.devices: Dict[str, MerossDevice] = {}
         self.discovering: Dict[str, dict] = {}
         self.mqtt_subscribing = False # guard for asynchronous mqtt sub registration
@@ -223,7 +220,7 @@ class MerossApi:
                     discovered = self.discovering.get(device_id)
                     if discovered == None:
                         # new device discovered: try to determine the capabilities
-                        self.mqtt_publish(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GET, key=replykey)
+                        self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, replykey)
                         self.discovering[device_id] = { "__time": time() }
                         if self.unsub_updatecoordinator_listener is None:
                             self.unsub_updatecoordinator_listener = self.coordinator.async_add_listener(self.updatecoordinator_listener)
@@ -232,12 +229,12 @@ class MerossApi:
                         if method == mc.METHOD_GETACK:
                             if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
                                 discovered[mc.NS_APPLIANCE_SYSTEM_ALL] = payload
-                                self.mqtt_publish(device_id, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GET, key=replykey)
+                                self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ABILITY, replykey)
                                 discovered["__time"] = time()
                                 return
                             elif namespace == mc.NS_APPLIANCE_SYSTEM_ABILITY:
                                 if discovered.get(mc.NS_APPLIANCE_SYSTEM_ALL) is None:
-                                    self.mqtt_publish(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GET, key=replykey)
+                                    self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, replykey)
                                     discovered["__time"] = time()
                                     return
                                 payload.update(discovered[mc.NS_APPLIANCE_SYSTEM_ALL])
@@ -259,9 +256,9 @@ class MerossApi:
                         #check for timeout and eventually reset the procedure
                         if (time() - discovered.get("__time", 0)) > PARAM_UNAVAILABILITY_TIMEOUT:
                             if discovered.get(mc.NS_APPLIANCE_SYSTEM_ALL) is None:
-                                self.mqtt_publish(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GET, key=replykey)
+                                self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, replykey)
                             else:
-                                self.mqtt_publish(device_id, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GET, key=replykey)
+                                self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ABILITY, replykey)
                             discovered["__time"] = time()
                             return
 
@@ -303,10 +300,19 @@ class MerossApi:
         """
         descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD, {}))
         if (mc.KEY_HUB in descriptor.digest):
+            from .meross_device_hub import MerossDeviceHub
             device = MerossDeviceHub(self, descriptor, entry)
         elif (mc.KEY_LIGHT in descriptor.digest):
+            from .meross_device_bulb import MerossDeviceBulb
             device = MerossDeviceBulb(self, descriptor, entry)
+        elif (mc.KEY_GARAGEDOOR in descriptor.digest):
+            from .meross_device_cover import MerossDeviceGarage
+            device = MerossDeviceGarage(self, descriptor, entry)
+        elif (mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in descriptor.ability):
+            from .meross_device_cover import MerossDeviceShutter
+            device = MerossDeviceShutter(self, descriptor, entry)
         else:
+            from .meross_device_switch import MerossDeviceSwitch
             device = MerossDeviceSwitch(self, descriptor, entry)
 
         self.devices[device_id] = device
@@ -333,7 +339,7 @@ class MerossApi:
         device_id: str,
         namespace: str,
         method: str,
-        payload: dict = {},
+        payload: dict,
         key: KeyType = None
     ) -> None:
         LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
@@ -346,11 +352,25 @@ class MerossApi:
             False)
 
 
+    def mqtt_publish_get(self,
+        device_id: str,
+        namespace: str,
+        key: KeyType = None
+    ) -> None:
+        self.mqtt_publish(
+            device_id,
+            namespace,
+            mc.METHOD_GET,
+            mc.PAYLOAD_GET.get(namespace) or { namespace.split('.')[-1].lower(): {} },
+            key
+        )
+
+
     async def async_http_request(self,
         host: str,
         namespace: str,
         method: str,
-        payload: dict = {},
+        payload: dict,
         key: KeyType = None,
         callback_or_device: Union[Callable, MerossDevice] = None # pylint: disable=unsubscriptable-object
     ) -> None:
@@ -375,9 +395,9 @@ class MerossApi:
                     callback_or_device()
 
         except ClientConnectionError as e:
-            LOGGER.info("MerossApi: client connection error in async_http_request(%s)", str(e))
+            LOGGER.info("MerossApi: client connection error in async_http_request(%s)", str(e) or type(e).__name__)
         except Exception as e:
-            LOGGER.warning("MerossApi: error in async_http_request(%s)", str(e))
+            LOGGER.warning("MerossApi: error in async_http_request(%s)", str(e) or type(e).__name__)
 
 
     def request(self,
@@ -437,9 +457,9 @@ class MerossApi:
         for device_id, discovered in self.discovering.items():
             if (now - discovered.get("__time", 0)) > PARAM_UNAVAILABILITY_TIMEOUT:
                 if discovered.get(mc.NS_APPLIANCE_SYSTEM_ALL) is None:
-                    self.mqtt_publish(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GET, {}, self.key)
+                    self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, self.key)
                 else:
-                    self.mqtt_publish(device_id, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GET, {}, self.key)
+                    self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ABILITY, self.key)
                 discovered["__time"] = now
 
         return

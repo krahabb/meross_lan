@@ -7,6 +7,8 @@
             "single_instance_allowed": "Ya esta configurada la Integración. Solo se puede configurar una vez."
         },
         "error": {
+            "invalid_key": "Error clave: proceda a recuperar de la cuenta de Meross",
+            "already_configured_device": "Solo un dispositivo posible",
             "cannot_connect": "No es posible conectarse",
             "invalid_auth": "Error de autenticación"
           },
@@ -24,6 +26,14 @@
                 "description": "Configurar las opciones globales de Meross LAN",
                 "data": {
                     "key": "Clave de dispositivo"
+                }
+            },
+            "retrievekey": {
+                "title": "Recuperar clave de dispositivo",
+                "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
+                "data": {
+                    "username": "Nombre de usuario de Meross",
+                    "password": "Contraseña de Meross"
                 }
             },
             "device": {
@@ -51,6 +61,10 @@
                     "protocol": "Protocolo de conexión",
                     "polling_period": "Intervalo de consulta",
                     "time_zone": "Zona horaria del dispositivo",
+                    "voltageRatio": "voltageRatio",
+                    "electricityRatio": "electricityRatio",
+                    "signalOpen": "Tiempo de apertura (seg)",
+                    "signalClose": "Tiempo de cierre (seg)",
                     "trace": "Activar el modo debug (durante 10 min)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"

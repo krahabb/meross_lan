@@ -6,9 +6,68 @@
       "no_devices_found": "Pas d'appareils découverts sur le réseau.",
       "single_instance_allowed": "Déjà configuré. Une seule configuration possible."
     },
+    "error": {
+      "invalid_key": "Erreur de clé: procédez à la récupération à partir de la connexion Meross",
+      "already_configured_device": "Déjà configuré. Un seul appareil possible.",
+      "cannot_connect": "Pas de connect",
+      "invalid_auth": "Authentication"
+    },
     "step": {
-      "confirm": {
-        "description": "Voulez-vous commencer à configurer?"
+      "user": {
+        "title": "Meross LAN",
+        "description": "Découvrir l'appareil",
+        "data": {
+          "host": "Adresse",
+          "key": "Clé"
+        }
+      },
+      "hub": {
+        "title": "Meross LAN MQTT Hub",
+        "description": "Configurer les paramètres LAN globaux de Meross",
+        "data": {
+          "key": "Clé"
+        }
+      },
+      "retrievekey": {
+        "title": "Récupérer la clé de l'appareil",
+        "description": "Connectez-vous à votre compte Meross pour récupérer la clé",
+        "data": {
+          "username": "Nom d'utilisateur Meross",
+          "password": "Mot de passe Meross"
+        }
+      },
+      "device": {
+        "title": "Configuration de l'appareil",
+        "description": "Type: {device_type}\nUUID: {device_id}",
+        "data": {}
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "hub": {
+        "title": "Meross LAN MQTT Hub",
+        "description": "Configurer les paramètres LAN globaux de Meross",
+        "data": {
+          "key": "Clé"
+        }
+      },
+      "device": {
+        "title": "Configuration de l'appareil",
+        "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
+        "data": {
+          "key": "Clé",
+          "protocol": "Protocole de connexion",
+          "polling_period": "Période de requête",
+          "time_zone": "Fuseau horaire de l'appareil",
+          "voltageRatio": "voltageRatio",
+          "electricityRatio": "electricityRatio",
+          "signalOpen": "Temps d'ouverture (sec)",
+          "signalClose": "Temps de fermeture (sec)",
+          "trace": "Activer le traçage de l'appareil (pendant 10 min)",
+          "all": "Appliance.System.All",
+          "ability": "Appliance.System.Ability"
+        }
       }
     }
   }
