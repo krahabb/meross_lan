@@ -60,6 +60,8 @@ CLASS_TO_UNIT_MAP = {
     DEVICE_CLASS_BATTERY: PERCENTAGE
 }
 
+CORE_HAS_NATIVE_UNIT = hasattr(SensorEntity, 'native_unit_of_measurement')
+
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
     platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_SENSOR)
@@ -74,7 +76,7 @@ class _MerossSensorEntity:
 
     _attr_state_class: str | None = STATE_CLASS_MEASUREMENT
     _attr_last_reset: datetime | None = None # Deprecated, to be removed in 2021.11
-    _attr_unit_of_measurement: str | None
+    _attr_native_unit_of_measurement: str | None
     _attr_state: StateType
 
 
@@ -94,16 +96,16 @@ class _MerossSensorEntity:
 
     @property
     def native_unit_of_measurement(self) -> str | None:
-        return self._attr_unit_of_measurement
+        return self._attr_native_unit_of_measurement
 
 
     @property
     def unit_of_measurement(self) -> str | None:
-        if hasattr(SensorEntity, 'native_unit_of_measurement'):
+        if CORE_HAS_NATIVE_UNIT:
             # let the core implementation manage unit conversions
             # in it's '@final unit_of_measurement'
             return SensorEntity.unit_of_measurement.__get__(self)
-        return self._attr_unit_of_measurement
+        return self._attr_native_unit_of_measurement
 
 
     @property
@@ -113,7 +115,7 @@ class _MerossSensorEntity:
 
     @property
     def state(self) -> StateType:
-        if hasattr(SensorEntity, 'native_value'):
+        if CORE_HAS_NATIVE_UNIT:
             # let the core implementation manage unit conversions
             return SensorEntity.state.__get__(self)
         return self._attr_state
@@ -124,7 +126,7 @@ class MerossLanSensor(_MerossSensorEntity, _MerossEntity, SensorEntity):
 
     def __init__(self, device: "MerossDevice", id: object, device_class: str):
         super().__init__(device, id, device_class)
-        self._attr_unit_of_measurement = CLASS_TO_UNIT_MAP.get(self.device_class)
+        self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(self.device_class)
 
 
 
@@ -132,4 +134,4 @@ class MerossLanHubSensor(_MerossSensorEntity, _MerossHubEntity, SensorEntity):
 
     def __init__(self, subdevice: "MerossSubDevice", device_class: str):
         super().__init__(subdevice, f"{subdevice.id}_{device_class}", device_class)
-        self._attr_unit_of_measurement = CLASS_TO_UNIT_MAP.get(self.device_class)
+        self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(self.device_class)
