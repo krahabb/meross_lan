@@ -249,7 +249,12 @@ class MerossHttpClient:
             req_header[mc.KEY_MESSAGEID] = resp_header[mc.KEY_MESSAGEID]
             req_header[mc.KEY_TIMESTAMP] = resp_header[mc.KEY_TIMESTAMP]
             req_header[mc.KEY_SIGN] = resp_header[mc.KEY_SIGN]
-            response = await self.async_request_raw(request)
+            try:
+                response = await self.async_request_raw(request)
+            except Exception:
+                # any error here is likely consequence of key-reply hack
+                # so we'll rethrow that (see #83 lacking invalid key message when configuring)
+                raise MerossKeyError(response.get(mc.KEY_PAYLOAD))
 
         return response
 
