@@ -192,6 +192,8 @@ class MerossDeviceSwitch(MerossDevice):
         leave the code for future reference
         """
     def entry_option_setup(self, config_schema: dict):
+        super().entry_option_setup(config_schema)
+        """
         if isinstance(self._consumptionConfig, dict):
             for key, value in self._consumptionConfig.items():
                 config_schema[
@@ -200,9 +202,12 @@ class MerossDeviceSwitch(MerossDevice):
                         description={"suggested_value": value}
                         )
                     ] = int
-
+        """
+        
 
     def entry_option_update(self, user_input: dict):
+        super().entry_option_update(user_input)
+        """
         if isinstance(self._consumptionConfig, dict):
             config = dict()
             for key, value in self._consumptionConfig.items():
@@ -212,6 +217,7 @@ class MerossDeviceSwitch(MerossDevice):
                 mc.METHOD_PUSH,
                 {mc.KEY_CONSUMPTIONCONFIG: config}
             )
+        """
 
 
     def _parse_spray(self, payload) -> None:

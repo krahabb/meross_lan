@@ -109,6 +109,7 @@ class MerossDeviceShutter(MerossDevice):
 
 
     def entry_option_setup(self, config_schema: dict):
+        super().entry_option_setup(config_schema)
         shutter: MerossLanRollerShutter = self.entities[0]
         config_schema[
             vol.Optional(
@@ -125,6 +126,7 @@ class MerossDeviceShutter(MerossDevice):
 
 
     def entry_option_update(self, user_input: dict):
+        super().entry_option_update(user_input)
         shutter: MerossLanRollerShutter = self.entities[0]
         signalopen = user_input.get(mc.KEY_SIGNALOPEN, shutter._signalOpen / 1000) * 1000
         signalclose = user_input.get(mc.KEY_SIGNALCLOSE, shutter._signalClose / 1000) * 1000

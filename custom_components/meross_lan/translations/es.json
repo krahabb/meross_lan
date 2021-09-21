@@ -60,7 +60,7 @@
                     "key": "Clave de dispositivo",
                     "protocol": "Protocolo de conexión",
                     "polling_period": "Intervalo de consulta",
-                    "time_zone": "Zona horaria del dispositivo",
+                    "timezone": "Zona horaria del dispositivo",
                     "voltageRatio": "voltageRatio",
                     "electricityRatio": "electricityRatio",
                     "signalOpen": "Tiempo de apertura (seg)",

@@ -60,7 +60,7 @@
                     "key": "Device key",
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
-                    "time_zone": "Device time zone",
+                    "timezone": "Device time zone",
                     "voltageRatio": "voltageRatio",
                     "electricityRatio": "electricityRatio",
                     "signalOpen": "Cover open timeout (sec)",

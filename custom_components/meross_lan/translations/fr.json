@@ -59,7 +59,7 @@
           "key": "Clé",
           "protocol": "Protocole de connexion",
           "polling_period": "Période de requête",
-          "time_zone": "Fuseau horaire de l'appareil",
+          "timezone": "Fuseau horaire de l'appareil",
           "voltageRatio": "voltageRatio",
           "electricityRatio": "electricityRatio",
           "signalOpen": "Temps d'ouverture (sec)",
