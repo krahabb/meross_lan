@@ -60,7 +60,7 @@
                     "key": "デバイスキー",
                     "protocol": "接続プロトコル",
                     "polling_period": "ポーリング間隔(秒)",
-                    "time_zone": "デバイスのタイムゾーン",
+                    "timezone": "デバイスのタイムゾーン",
                     "voltageRatio": "voltageRatio",
                     "electricityRatio": "electricityRatio",
                     "signalOpen": "開封時間 (秒)",

@@ -8,11 +8,6 @@ import async_timeout
 import voluptuous as vol
 import json
 
-try:
-    from pytz import common_timezones
-except Exception:
-    common_timezones = None
-
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.data_entry_flow import AbortFlow
@@ -36,7 +31,6 @@ from .const import (
     CONF_PAYLOAD, CONF_DEVICE_TYPE,
     CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT,
-    CONF_TIME_ZONE,
     CONF_TRACE, CONF_TRACE_TIMEOUT,
 )
 
@@ -247,7 +241,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(self._device_id)
         self._abort_if_unique_id_configured()
 
-        discovery_info[CONF_TIME_ZONE] = self._descriptor.timezone
         if CONF_DEVICE_ID not in discovery_info:#this is coming from manual user entry or dhcp discovery
             discovery_info[CONF_DEVICE_ID] = self._device_id
 
@@ -325,11 +318,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data[CONF_KEY] = user_input.get(CONF_KEY)
             data[CONF_PROTOCOL] = user_input.get(CONF_PROTOCOL)
             data[CONF_POLLING_PERIOD] = user_input.get(CONF_POLLING_PERIOD)
-            data[CONF_TIME_ZONE] = user_input.get(CONF_TIME_ZONE)
             data[CONF_TRACE] = time() + CONF_TRACE_TIMEOUT if user_input.get(CONF_TRACE) else 0
             self.hass.config_entries.async_update_entry(self._config_entry, data=data)
             if device is not None:
-                device.entry_option_update(user_input)
+                try:
+                    device.entry_option_update(user_input)
+                except:
+                    pass # forgive any error
             return self.async_create_entry(title=None, data=None)
 
         config_schema = OrderedDict()
@@ -352,15 +347,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 description={"suggested_value": data.get(CONF_POLLING_PERIOD)}
                 )
             ] = cv.positive_int
-        config_schema[
-            vol.Optional(
-                CONF_TIME_ZONE,
-                description={"suggested_value": data.get(CONF_TIME_ZONE)}
-                )
-            ] = vol.In(common_timezones) if common_timezones is not None else str
+
         # setup device specific config right before last option
         if device is not None:
-            device.entry_option_setup(config_schema)
+            try:
+                device.entry_option_setup(config_schema)
+            except:
+                pass # forgive any error
 
         config_schema[
             vol.Optional(

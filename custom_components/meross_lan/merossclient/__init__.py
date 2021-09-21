@@ -165,6 +165,10 @@ class MerossDeviceDescriptor:
                 continue
 
 
+    def update_time(self, p_time: dict):
+        self.system[mc.KEY_TIME] = p_time
+        self.time = p_time
+        self.timezone = p_time.get(mc.KEY_TIMEZONE)
 
 class MerossHttpClient:
 

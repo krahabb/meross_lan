@@ -37,8 +37,6 @@ CONF_TRACE_MAXSIZE = 65536 # or when MAXSIZE exceeded
 CONF_TRACE_DIRECTORY = 'traces' # folder where to store traces
 CONF_TRACE_FILENAME = '{}-{}.csv' # filename format: device_type-device_id.csv
 
-CONF_TIME_ZONE = hac.CONF_TIME_ZONE # if set in config we'll force time_zone for devices
-
 CONF_TIMESTAMP = mc.KEY_TIMESTAMP # this is a 'fake' conf param we'll add to config_entry when we want to force flush to storage
 
 """
