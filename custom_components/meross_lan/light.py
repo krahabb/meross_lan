@@ -1,20 +1,55 @@
+from __future__ import annotations
 from typing import Union, Tuple
 
 from homeassistant.components.light import (
+    ATTR_RGB_COLOR,
+    COLOR_MODE_ONOFF,
+    COLOR_MODE_UNKNOWN,
     DOMAIN as PLATFORM_LIGHT,
     LightEntity,
-    SUPPORT_BRIGHTNESS, SUPPORT_COLOR, SUPPORT_COLOR_TEMP,
     ATTR_BRIGHTNESS, ATTR_HS_COLOR, ATTR_COLOR_TEMP,
 )
-from homeassistant.util.color import (
-    color_hs_to_RGB, color_RGB_to_hs
-)
+# back-forward compatibility hell
+try:
+    from homeassistant.components.light import (
+        SUPPORT_BRIGHTNESS,
+        SUPPORT_COLOR,
+        SUPPORT_COLOR_TEMP,
+    )
+except:
+    SUPPORT_BRIGHTNESS = 0
+    SUPPORT_COLOR = 0
+    SUPPORT_COLOR_TEMP = 0
 
+try:
+    from homeassistant.components.light import (
+        COLOR_MODE_BRIGHTNESS,
+        COLOR_MODE_HS, COLOR_MODE_RGB,
+        COLOR_MODE_COLOR_TEMP,
+    )
+except:
+    COLOR_MODE_BRIGHTNESS = ''
+    COLOR_MODE_HS = COLOR_MODE_BRIGHTNESS
+    COLOR_MODE_RGB = COLOR_MODE_BRIGHTNESS
+    COLOR_MODE_COLOR_TEMP = COLOR_MODE_BRIGHTNESS
+
+
+import homeassistant.util.color as color_util
 from homeassistant.const import STATE_ON, STATE_OFF
 
 from .merossclient import const as mc
 from .meross_device import MerossDevice
 from .meross_entity import _MerossToggle, platform_setup_entry, platform_unload_entry
+
+"""
+    map light Temperature effective range to HA mired(s):
+    right now we'll use a const approach since it looks like
+    any light bulb out there carries the same specs
+    MIRED <> 1000000/TEMPERATURE[K]
+    (thanks to @nao-pon #87)
+"""
+MSLANY_MIRED_MIN = 153 # math.floor(1/(6500/1000000))
+MSLANY_MIRED_MAX = 371 # math.ceil(1/(2700/1000000))
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -53,6 +88,17 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
     PLATFORM = PLATFORM_LIGHT
 
+    _attr_max_mireds = MSLANY_MIRED_MAX
+    _attr_min_mireds = MSLANY_MIRED_MIN
+    _attr_supported_features = 0
+    _attr_supported_color_modes = {}
+    _attr_color_mode = None
+    _attr_rgb_color: tuple[int, int, int] | None = None
+    _attr_hs_color: tuple[float, float] | None = None
+    _attr_color_temp = None
+    _attr_brightness = None
+
+
     def __init__(self, device: MerossDevice, id: object, p_togglex):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
@@ -90,82 +136,96 @@ class MerossLanLight(_MerossToggle, LightEntity):
 		}
         """
         self._light = dict()
-        self._color_temp = None
-        self._hs_color = None
-        self._brightness = None
 
         self._capacity = device.descriptor.ability.get(
             mc.NS_APPLIANCE_CONTROL_LIGHT, {}).get(
                 mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE)
 
-        self._supported_features = (SUPPORT_COLOR if self._capacity & mc.LIGHT_CAPACITY_RGB else 0)\
-            | (SUPPORT_COLOR_TEMP if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE else 0)\
-            | (SUPPORT_BRIGHTNESS if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE else 0)
+        if SUPPORT_BRIGHTNESS:
+            # these will be removed in 2021.10
+            self._attr_supported_features = (SUPPORT_BRIGHTNESS if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE else 0)\
+                | (SUPPORT_COLOR if self._capacity & mc.LIGHT_CAPACITY_RGB else 0)\
+                | (SUPPORT_COLOR_TEMP if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE else 0)
+
+        if COLOR_MODE_BRIGHTNESS:
+            # new color_mode support from 2021.4.0
+            self._attr_supported_color_modes = set()
+            if self._capacity & mc.LIGHT_CAPACITY_RGB:
+                self._attr_supported_color_modes.add(COLOR_MODE_RGB)
+                self._attr_supported_color_modes.add(COLOR_MODE_HS)
+            if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
+                self._attr_supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
+            if not self._attr_supported_color_modes:
+                if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+                    self._attr_supported_color_modes.add(COLOR_MODE_BRIGHTNESS)
+                else:
+                    self._attr_supported_color_modes.add(COLOR_MODE_ONOFF)
 
 
     @property
     def supported_features(self):
-        return self._supported_features
+        return self._attr_supported_features
+
+
+    @property
+    def supported_color_modes(self):
+        return self._attr_supported_color_modes
+
+
+    @property
+    def color_mode(self):
+        return self._attr_color_mode
 
 
     @property
     def brightness(self):
-        return self._brightness
+        return self._attr_brightness
+
+
+    @property
+    def rgb_color(self):
+        return self._attr_rgb_color
 
 
     @property
     def hs_color(self):
-        return self._hs_color
+        return self._attr_hs_color
 
 
     @property
     def color_temp(self):
-        return self._color_temp
-
-
-    @property
-    def white_value(self):
-        """Return the white value of this light between 0..255."""
-        return None
-
-
-    @property
-    def effect_list(self):
-        """Return the list of supported effects."""
-        return None
-
-
-    @property
-    def effect(self):
-        """Return the current effect."""
-        return None
+        return self._attr_color_temp
 
 
     async def async_turn_on(self, **kwargs) -> None:
 
+        light = dict()
         capacity = 0
         # Color is taken from either of these 2 values, but not both.
         if ATTR_HS_COLOR in kwargs:
             h, s = kwargs[ATTR_HS_COLOR]
-            self._light[mc.KEY_RGB] = _rgb_to_int(color_hs_to_RGB(h, s))
-            self._light.pop(mc.KEY_TEMPERATURE, None)
+            light[mc.KEY_RGB] = _rgb_to_int(color_util.color_hs_to_RGB(h, s))
+            capacity |= mc.LIGHT_CAPACITY_RGB
+        elif ATTR_RGB_COLOR in kwargs:
+            rgb = kwargs[ATTR_RGB_COLOR]
+            light[mc.KEY_RGB] = _rgb_to_int(rgb)
             capacity |= mc.LIGHT_CAPACITY_RGB
         elif ATTR_COLOR_TEMP in kwargs:
             # map mireds: min_mireds -> 100 - max_mireds -> 1
             mired = kwargs[ATTR_COLOR_TEMP]
             norm_value = (mired - self.min_mireds) / (self.max_mireds - self.min_mireds)
             temperature = 100 - (norm_value * 99)
-            self._light[mc.KEY_TEMPERATURE] = _sat_1_100(temperature) # meross wants temp between 1-100
-            self._light.pop(mc.KEY_RGB, None)
+            light[mc.KEY_TEMPERATURE] = _sat_1_100(temperature) # meross wants temp between 1-100
             capacity |= mc.LIGHT_CAPACITY_TEMPERATURE
 
         if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
             capacity |= mc.LIGHT_CAPACITY_LUMINANCE
             # Brightness must always be set, so take previous luminance if not explicitly set now.
-            if ATTR_BRIGHTNESS in kwargs:
-                self._light[mc.KEY_LUMINANCE] = _sat_1_100(kwargs[ATTR_BRIGHTNESS] * 100 // 255)
+            light[mc.KEY_LUMINANCE] = _sat_1_100(kwargs[ATTR_BRIGHTNESS] * 100 // 255)\
+                if ATTR_BRIGHTNESS in kwargs\
+                else self._light.get(mc.KEY_LUMINANCE, 100)
 
-        self._light[mc.KEY_CAPACITY] = capacity
+        light[mc.KEY_CAPACITY] = capacity
 
         if self._usetogglex:
             # since lights could be repeatedtly 'async_turn_on' when changing attributes
@@ -174,12 +234,12 @@ class MerossLanLight(_MerossToggle, LightEntity):
             if not self.is_on:
                 await super().async_turn_on(**kwargs)
         else:
-            self._light[mc.KEY_ONOFF] = 1
+            light[mc.KEY_ONOFF] = 1
 
         self._device.request(
             namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
             method=mc.METHOD_SET,
-            payload={mc.KEY_LIGHT: self._light})
+            payload={mc.KEY_LIGHT: light})
 
 
     async def async_turn_off(self, **kwargs) -> None:
@@ -188,11 +248,10 @@ class MerossLanLight(_MerossToggle, LightEntity):
             # we suppose we have to 'toggle(x)'
             await super().async_turn_off(**kwargs)
         else:
-            self._light[mc.KEY_ONOFF] = 0
             self._device.request(
                 namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
                 method=mc.METHOD_SET,
-                payload={mc.KEY_LIGHT: self._light})
+                payload={mc.KEY_LIGHT: { mc.KEY_CHANNEL: self._id, mc.KEY_ONOFF: 0}})
 
 
     def _set_light(self, light: dict) -> None:
@@ -200,23 +259,28 @@ class MerossLanLight(_MerossToggle, LightEntity):
             self._light = light
 
             capacity = light.get(mc.KEY_CAPACITY, 0)
+            self._attr_color_mode = COLOR_MODE_UNKNOWN
 
             if capacity & mc.LIGHT_CAPACITY_LUMINANCE:
-                self._brightness = light.get(mc.KEY_LUMINANCE, 0) * 255 // 100
+                self._attr_color_mode = COLOR_MODE_BRIGHTNESS
+                self._attr_brightness = light.get(mc.KEY_LUMINANCE, 0) * 255 // 100
             else:
-                self._brightness = None
+                self._attr_brightness = None
 
             if capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
-                self._color_temp = ((100 - light.get(mc.KEY_TEMPERATURE, 0)) / 99) * \
+                self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+                self._attr_color_temp = ((100 - light.get(mc.KEY_TEMPERATURE, 0)) / 99) * \
                     (self.max_mireds - self.min_mireds) + self.min_mireds
             else:
-                self._color_temp = None
+                self._attr_color_temp = None
 
             if capacity & mc.LIGHT_CAPACITY_RGB:
-                r, g, b = _int_to_rgb(light.get(mc.KEY_RGB, 0))
-                self._hs_color = color_RGB_to_hs(r, g, b)
+                self._attr_color_mode = COLOR_MODE_RGB
+                self._attr_rgb_color = _int_to_rgb(light.get(mc.KEY_RGB, 0))
+                self._attr_hs_color = color_util.color_RGB_to_hs(*self._attr_rgb_color)
             else:
-                self._hs_color = None
+                self._attr_rgb_color = None
+                self._attr_hs_color = None
 
             onoff = light.get(mc.KEY_ONOFF)
             if onoff is not None:
