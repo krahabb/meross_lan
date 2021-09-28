@@ -58,6 +58,7 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MSS310](https://www.meross.com/product/38/article/): power plug with metering capabilties
   - [MSS425](https://www.meross.com/product/16/article/): Smart WiFi Surge Protector (multiple sockets power strip)
   - [MSS510](https://www.meross.com/product/23/article/): Smart WiFi single pole switch
+  - [MSS620](https://www.meross.com/product/94/article/): Smart Wi-Fi Indoor/Outdoor Plug
   - [MSS710](https://www.meross.com/product/21/article/): Smart WiFi DIY switch
 - Lights
   - [MSL100](https://www.meross.com/product/4/article/): Smart bulb with dimmable light
@@ -71,6 +72,7 @@ Most of this software has been developed and tested on my owned Meross devices w
 - Covers
   - [MRS100](https://www.meross.com/product/91/article/): Smart Wi-Fi Roller Shutter Timer
   - [MSG100](https://www.meross.com/product/29/article/): Smart Wi-Fi Garage Door Opener
+
 
 ## Features
 
