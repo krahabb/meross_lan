@@ -72,6 +72,11 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MRS100](https://www.meross.com/product/91/article/): Smart Wi-Fi Roller Shutter Timer
   - [MSG100](https://www.meross.com/product/29/article/): Smart Wi-Fi Garage Door Opener
 
+## Reported Working HW
+- Switches
+  - [MSS620](https://www.meross.com/product/94/article/): Smart Wi-Fi Indoor/Outdoor Plug
+
+
 ## Features
 
 The component exposes the basic functionality of the underlying device (toggle on/off, dimm, report consumption through sensors) without any other effort, It should be able to detect if the device goes offline suddenly by using a periodic heartbeat.
