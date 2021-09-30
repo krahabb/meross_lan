@@ -188,11 +188,15 @@ class MerossHttpClient:
         self._logger = logger or logging.getLogger(__name__)
 
 
-    def set_host_key(self, host: str, key: str) -> None:
-        if host != self._host:
-            self._host = host
-            self._requesturl = URL(f"http://{host}/config")
-        self.key = key
+    @property
+    def host(self) -> str:
+        return self._host
+
+
+    @host.setter
+    def host(self, value: str):
+        self._host = value
+        self._requesturl = URL(f"http://{value}/config")
 
 
     async def async_request_raw(self, data: dict) -> dict:

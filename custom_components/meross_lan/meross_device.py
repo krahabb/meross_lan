@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 import os
+import socket
 import math
 from typing import  Callable, Dict
 from time import strftime, time
@@ -164,6 +165,11 @@ class MerossDevice:
     def __del__(self):
         LOGGER.debug("MerossDevice(%s) destroy", self.device_id)
         return
+
+
+    @property
+    def host(self) -> str:
+        return self._host or self.descriptor.innerIp
 
 
     @property
@@ -338,10 +344,8 @@ class MerossDevice:
         try:
             _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)
             if _httpclient is None:
-                _httpclient = MerossHttpClient(self.descriptor.innerIp, self.key, async_get_clientsession(self.api.hass), LOGGER)
+                _httpclient = MerossHttpClient(self.host, self.key, async_get_clientsession(self.api.hass), LOGGER)
                 self._httpclient = _httpclient
-            else:
-                _httpclient.set_host_key(self.descriptor.innerIp, self.key)
 
             self._trace(payload, namespace, method, CONF_OPTION_HTTP)
             try:
@@ -365,7 +369,8 @@ class MerossDevice:
                             )
                     else:
                         self._set_offline()
-                return
+                else:# if not self._online:
+                    raise e
 
             r_header = response[mc.KEY_HEADER]
             r_namespace = r_header[mc.KEY_NAMESPACE]
@@ -494,7 +499,10 @@ class MerossDevice:
         self.api.update_polling_period()
         _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)
         if _httpclient is not None:
-            _httpclient.set_host_key(self.descriptor.innerIp, self.key)
+            # this is actually unneeded since OptionsFlow doesnt allow editing CONF_HOST ;)
+            if self._host:
+                _httpclient.host = self._host
+            _httpclient.key = self.key
         """
         We'll activate debug tracing only when the user turns it on in OptionsFlowHandler so we usually
         don't care about it on startup ('_set_config_entry'). When updating ConfigEntry
@@ -571,8 +579,22 @@ class MerossDevice:
         oldaddr = descr.innerIp
         descr.update(payload)
         #persist changes to configentry only when relevant properties change
-        if oldaddr != descr.innerIp:
-            self.needsave = True
+        newaddr = descr.innerIp
+        if oldaddr != newaddr:
+            #check the new innerIp is good since we have random blanks in the wild (#90)
+            try:
+                socket.inet_aton(newaddr)
+                # good enough..check if we're using an MQTT device (i.e. device with no CONF_HOST)
+                # and eventually cache this value so we could use it when falling back to HTTP
+                if not self._host:
+                    _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)
+                    if _httpclient is not None:
+                        _httpclient.host = newaddr
+
+                self.needsave = True
+            except:
+                pass
+
 
         epoch = int(self.lastupdate) # we're not calling time() since it's fresh enough
 
@@ -724,10 +746,11 @@ class MerossDevice:
         """
         common properties read from ConfigEntry on __init__ or when a configentry updates
         """
+        self._host = data.get(CONF_HOST)
         self.key = data.get(CONF_KEY)
         self.conf_protocol = MAP_CONF_PROTOCOL.get(data.get(CONF_PROTOCOL), Protocol.AUTO)
         if self.conf_protocol == Protocol.AUTO:
-            self.pref_protocol = Protocol.HTTP if data.get(CONF_HOST) else Protocol.MQTT
+            self.pref_protocol = Protocol.HTTP if self._host else Protocol.MQTT
         else:
             self.pref_protocol = self.conf_protocol
         """
