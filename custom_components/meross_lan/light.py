@@ -240,6 +240,13 @@ class MerossLanLight(_MerossToggle, LightEntity):
             namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
             method=mc.METHOD_SET,
             payload={mc.KEY_LIGHT: light})
+        #87: @nao-pon bulbs need a 'double' send when setting Temp
+        if ATTR_COLOR_TEMP in kwargs:
+            if self._device.descriptor.firmware.get(mc.KEY_VERSION) == '2.1.2':
+                self._device.request(
+                    namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
+                    method=mc.METHOD_SET,
+                    payload={mc.KEY_LIGHT: light})
 
 
     async def async_turn_off(self, **kwargs) -> None:
