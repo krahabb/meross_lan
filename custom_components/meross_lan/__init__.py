@@ -380,7 +380,8 @@ class MerossApi:
                 _httpclient = MerossHttpClient(host, key, async_get_clientsession(self.hass), LOGGER)
                 self._httpclient = _httpclient
             else:
-                _httpclient.set_host_key(host, key)
+                _httpclient.host = host
+                _httpclient.key = key
 
             response = await _httpclient.async_request(namespace, method, payload)
             r_header = response[mc.KEY_HEADER]
@@ -394,8 +395,6 @@ class MerossApi:
                     #we're actually only using this for SET->SETACK command confirmation
                     callback_or_device()
 
-        except ClientConnectionError as e:
-            LOGGER.info("MerossApi: client connection error in async_http_request(%s)", str(e) or type(e).__name__)
         except Exception as e:
             LOGGER.warning("MerossApi: error in async_http_request(%s)", str(e) or type(e).__name__)
 
@@ -423,7 +422,7 @@ class MerossApi:
                 if device is None:
                     LOGGER.warning("MerossApi: cannot call async_http_request (device_id(%s) not found)", device_id)
                     return
-                host = device.descriptor.innerIp
+                host = device.host
             self.hass.async_create_task(
                 self.async_http_request(host, namespace, method, payload, key, callback_or_device)
             )
