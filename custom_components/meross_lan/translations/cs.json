@@ -10,12 +10,12 @@
             "invalid_key": "Neplatný klíč: Obnovte klíč z účtu Meross",
             "already_configured_device": "Zařízení již bylo konfigurováno",
             "cannot_connect": "Pokus o připojení se nezdařil",
-            "invalid_auth": "Chyba autentikace"
+            "invalid_auth": "Ověření selhalo"
         },
         "step": {
             "user": {
                 "title": "Meross LAN",
-                "description": "Nastavení zařízení Meros",
+                "description": "Nastavení zařízení Meross",
                 "data": {
                     "host": "Adresa hostitele zařízení",
                     "key": "Klíč zařízení",
@@ -65,7 +65,7 @@
                     "electricityRatio": "electricityRatio",
                     "signalOpen": "Časový limit pro otevření krytu (sekundy)",
                     "signalClose": "Časový limit pro zavření krytu (sekundy)",
-                    "trace": "Aktivovat ladění zařízení (na 10 minut)",
+                    "trace": "Zapnout ladění zařízení (po dobu 10 minut)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
                 }
