@@ -1,0 +1,75 @@
+{
+    "title": "Meross LAN",
+    "config": {
+        "flow_title": "Meross {device_type}",
+        "abort": {
+            "no_devices_found": "V síti nebylo nalezeno žádné zařízení",
+            "single_instance_allowed": "Konfigurace již existuje. Více konfigurací není podporováno."
+        },
+        "error": {
+            "invalid_key": "Neplatný klíč: Obnovte klíč z účtu Meross",
+            "already_configured_device": "Zařízení již bylo konfigurováno",
+            "cannot_connect": "Pokus o připojení se nezdařil",
+            "invalid_auth": "Ověření selhalo"
+        },
+        "step": {
+            "user": {
+                "title": "Meross LAN",
+                "description": "Nastavení zařízení Meross",
+                "data": {
+                    "host": "Adresa hostitele zařízení",
+                    "key": "Klíč zařízení",
+                    "Required": "Povinné pole"
+                }
+            },
+            "hub": {
+                "title": "Centrum Meross LAN MQTT",
+                "description": "Globální konfigurace nastavení Meross LAN",
+                "data": {
+                    "key": "Klíč zařízení"
+                }
+            },
+            "retrievekey": {
+                "title": "Obnova klíče zařízení",
+                "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
+                "data": {
+                    "username": "Uživatelské jméno účtu Meross",
+                    "password": "Heslo k účtu Meross"
+                }
+            },
+            "device": {
+                "title": "Konfigurace zařízení",
+                "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}",
+                "data": {}
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "hub": {
+                "title": "Centrum Meross LAN MQTT",
+                "description": "Globální konfigurace nastavení Meross LAN",
+                "data": {
+                    "key": "Klíč zařízení"
+                }
+            },
+            "device": {
+                "title": "Konfigurace zařízení",
+                "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}\nHostitel: {host}\n\n{payload}",
+                "data": {
+                    "key": "Klíč zařízení",
+                    "protocol": "Protokol připojení",
+                    "polling_period": "Interval dotazování",
+                    "timezone": "Časové pásmo zařízení",
+                    "voltageRatio": "voltageRatio",
+                    "electricityRatio": "electricityRatio",
+                    "signalOpen": "Časový limit pro otevření krytu (sekundy)",
+                    "signalClose": "Časový limit pro zavření krytu (sekundy)",
+                    "trace": "Zapnout ladění zařízení (po dobu 10 minut)",
+                    "all": "Appliance.System.All",
+                    "ability": "Appliance.System.Ability"
+                }
+            }
+        }
+    }
+}
