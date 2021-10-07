@@ -18,7 +18,7 @@ HAVE FUN! 😎
 ### HACS
 
 In your HA frontend go to `HACS -> Integrations`, search for 'Meross LAN' and hit 'Install'
-You'll have to restart HA to let it recognize the new integration
+You'll have to restart HA to let it recognize the new integration.
 
 ### Manual installation
 
@@ -28,13 +28,13 @@ Depending on the type of HA installation you might have to follow specific instr
 
 This is working for a standard 'core' installation but should work for any other flavour: remember to set the appropriate ownership and access rights on your copied files so the homeassistant user running your instance is able to read and execute the integration code.
 
-Restart HA to let it play
+Restart HA to let it play.
 
 ## Setup
 
-Once installed and restarted your Meross devices should be automatically discovered by the 'dhcp' integration and will then pop-up in your integrations panel ready to be configured (the exact timing will depend since the dhcp discovery has different strategies but a simple boot of the device should be sufficient even if not necessary)
+Once installed and restarted your Meross devices should be automatically discovered by the 'dhcp' integration and will then pop-up in your integrations panel ready to be configured (the exact timing will depend since the dhcp discovery has different strategies but a simple boot of the device should be sufficient even if not necessary).
 
-If you are using the 'MQTT way' you can help the discovery process by adding the 'MQTT Hub' feature of this integration (This was needed in the previous versions while you should be able to skip this step if the dhcp discovery works fine). If you need, just go to your homeassistant `Configuration -> Integrations` and add the Meross LAN by looking through the list of available ones. Here you can configure the device key used to sign the messages exchanged: this need to be the same key used when re-binding your hardware else the integration will not be able to discover new devices (dhcp discovery should instead work anyway: the key will be asked and set when configuring every single appliance)
+If you are using the 'MQTT way' you can help the discovery process by adding the 'MQTT Hub' feature of this integration (This was needed in the previous versions while you should be able to skip this step if the dhcp discovery works fine). If you need, just go to your homeassistant `Configuration -> Integrations` and add the Meross LAN by looking through the list of available ones. Here you can configure the device key used to sign the messages exchanged: this need to be the same key used when re-binding your hardware else the integration will not be able to discover new devices (dhcp discovery should instead work anyway: the key will be asked and set when configuring every single appliance).
 
 You can also manually add your device by adding a new integration entry and providing the host address.
 
@@ -79,21 +79,21 @@ Most of this software has been developed and tested on my owned Meross devices w
 The component exposes the basic functionality of the underlying device (toggle on/off, dimm, report consumption through sensors) without any other effort, It should be able to detect if the device goes offline suddenly by using a periodic heartbeat.
 It also features an automatic protocol switching capability so, if you have your MQTT setup and your broker dies or whatever, the integration will try to fallback to HTTP communication and keep the device available returning automatically to MQTT mode as soon as the MQTT infrastructure returns online. The same works for HTTP mode: when the device is not reachable it will try to use MQTT (provided it is available!). This feature is enabled by default for every new configuration entry and you can control it by setting the 'Protocol' field in the configration panel of the integration: setting 'AUTO' (or empty) will do the automatic switch. Setting any fixed protocol 'MQTT' or 'HTTP' will force the use of that option (useful if you're in trouble and want to isolate or investigate inconsistent behaviours). I'd say: leave it empty or 'AUTO' it works good in my tests.
 
-If you have the MSH300 Hub working with this integration, every new subdevice (thermostat or sensor) can be automatically discovered once the subdevice is paired with the hub. When the hub is configured in this integration you don't need to switch back and forth to/from the Meross app in order to 'bind' new devices: just pair the thermostat or sensor to the hub by using the subdevice pairing procedure (fast double press on the hub)
+If you have the MSH300 Hub working with this integration, every new subdevice (thermostat or sensor) can be automatically discovered once the subdevice is paired with the hub. When the hub is configured in this integration you don't need to switch back and forth to/from the Meross app in order to 'bind' new devices: just pair the thermostat or sensor to the hub by using the subdevice pairing procedure (fast double press on the hub).
 
-DND mode (status/presence light on switches) is also supported through a switch entity. This entity is by default disabled when setting up the integration so, if you want/need to control that, be sure to show the disabled entities or access it through the 'Device' panel in HA and enable it. Also, bear in mind it works the opposite than a light: if you want to turn off the status light please turn on the DND mode switch (it's do-not-disturb mode!)
+DND mode (status/presence light on switches) is also supported through a switch entity. This entity is by default disabled when setting up the integration so, if you want/need to control that, be sure to show the disabled entities or access it through the 'Device' panel in HA and enable it. Also, bear in mind it works the opposite than a light: if you want to turn off the status light please turn on the DND mode switch (it's do-not-disturb mode!).
 
-I'm sorry to not be able to write a complete wiki at the moment in order to better explain some procedures or share my knwoledge about the devices but time is constrained and writing knwoledge bases is always consuming (and sligthly boring I admit). I'm still working on some features and I've put a big effort trying to ensure a frictionless working of this software so I hope you can make use of it without deeper explanations. Something will come, slowly, but if you have any urgent issue or question I will be happy to help (and maybe this will speed up the documentation :)
+I'm sorry to not be able to write a complete wiki at the moment in order to better explain some procedures or share my knowledge about the devices but time is constrained and writing knowledge bases is always consuming (and sligthly boring I admit). I'm still working on some features and I've put a big effort trying to ensure a frictionless working of this software so I hope you can make use of it without deeper explanations. Something will come, slowly, but if you have any urgent issue or question I will be happy to help (and maybe this will speed up the documentation :).
 
 ## Service
 
 There is a service (since version 0.0.4) exposed to simplify communication with the device and play with it a bit. It basically requires the needed informations to setup a command request and send it over MQTT or HTTP without the hassle of signatures and timestamps computations. You can check it in the 'Developer Tools' of the HA instance, everything should be enough self-explanatory there.
-I find it a bit frustrating that the HA service infrastructure does not allow to return anything from a service invocation so, the eventual reply from the device will get 'lost' in the mqtt flow. I've personally played a bit with the MQTT integration configuration pane to listen and see the mqtt responses from my devices but it's somewhat a pain unless you have a big screen to play with (or multiple monitors for the matter). Nevertheless you can use the service wherever you like to maybe invoke features at the device level or dig into it's configuration
+I find it a bit frustrating that the HA service infrastructure does not allow to return anything from a service invocation so, the eventual reply from the device will get 'lost' in the mqtt flow. I've personally played a bit with the MQTT integration configuration pane to listen and see the mqtt responses from my devices but it's somewhat a pain unless you have a big screen to play with (or multiple monitors for the matter). Nevertheless you can use the service wherever you like to maybe invoke features at the device level or dig into it's configuration.
 *WARNING*: the service name has changed from 'mqtt_publish' to 'request' to accomodate the more general protocol support
 
 ## Troubleshooting
 
-In order to help troubleshoot issues there is a tracing feature (available since 2.0.2) which dumps the protocol exchange and other debug messages to a text (TAB separated) file without the need and the mess of going through the HA (debug) log. This trace is available 'per device' and you can activate it from the integration configuration UI. Once activated it will start recording for 10 minutes (or maximum 64Kb whichever comes first) and then will stop automatically. If needed you can also stop it manually at any time while in progress by just entering the configuration UI and deselecting the checkbox. The trace(s) will be saved under 'custom_components/meross_lan/traces'. The trace feature takes care of obfuscating some 'sensitive' (like mac(s), Ip(s), and userId(s)) data fields extracted by the protocol. I've taken care of hiding those informations I guess would be nice to, but if you're concerned and find something 'leaking' from my masking please let me know so I can eventually proceed to mask those other infos (For example I didn't take care of some WiFi related message payloads which could carry very sensitive info since my code is not using them in any way at the moment)
+In order to help troubleshoot issues there is a tracing feature (available since 2.0.2) which dumps the protocol exchange and other debug messages to a text (TAB separated) file without the need and the mess of going through the HA (debug) log. This trace is available 'per device' and you can activate it from the integration configuration UI. Once activated it will start recording for 10 minutes (or maximum 64Kb whichever comes first) and then will stop automatically. If needed you can also stop it manually at any time while in progress by just entering the configuration UI and deselecting the checkbox. The trace(s) will be saved under 'custom_components/meross_lan/traces'. The trace feature takes care of obfuscating some 'sensitive' (like mac(s), Ip(s), and userId(s)) data fields extracted by the protocol. I've taken care of hiding those informations I guess would be nice to, but if you're concerned and find something 'leaking' from my masking please let me know so I can eventually proceed to mask those other infos (For example I didn't take care of some WiFi related message payloads which could carry very sensitive info since my code is not using them in any way at the moment).
 
 ## References
 
@@ -103,7 +103,7 @@ This integration has been made possible only with the contribution of the awesom
 - [@bytespider]
 
 Have a look at their repositories to better understand how the Meross line of devices is working through MQTT.
-I really thank them for the inspiration and the knowledge that made it possible for me to develop this integration
+I really thank them for the inspiration and the knowledge that made it possible for me to develop this integration.
 
 Special mention also for:
 - [@nao-pon](https://github.com/nao-pon)
