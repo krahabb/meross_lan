@@ -63,7 +63,10 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_CONTROL_BIND,
     mc.NS_APPLIANCE_CONTROL_UNBIND,
     mc.NS_APPLIANCE_CONTROL_MULTIPLE,
-    mc.NS_APPLIANCE_CONTROL_UPGRADE
+    mc.NS_APPLIANCE_CONTROL_UPGRADE,
+    mc.NS_APPLIANCE_HUB_EXCEPTION,
+    mc.NS_APPLIANCE_HUB_REPORT,
+    mc.NS_APPLIANCE_HUB_SUBDEVICELIST
 )
 
 TIMEZONES_SET = None
@@ -351,26 +354,26 @@ class MerossDevice:
             try:
                 response = await _httpclient.async_request(namespace, method, payload)
             except Exception as e:
-                if self._online:
-                    self.log(
-                        logging.INFO, 0,
-                        "MerossDevice(%s) client connection error in async_http_request: %s",
-                        self.device_id, str(e) or type(e).__name__
-                    )
-                    if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt and mqtt_is_connected(self.api.hass):
-                        self.switch_protocol(Protocol.MQTT)
-                        self._trace(payload, namespace, method, CONF_OPTION_MQTT)
-                        self.api.mqtt_publish(
-                            self.device_id,
-                            namespace,
-                            method,
-                            payload,
-                            self.key or self.replykey
-                            )
-                    else:
-                        self._set_offline()
-                else:# if not self._online:
+                if not self._online:
                     raise e
+                self.log(
+                    logging.INFO, 0,
+                    "MerossDevice(%s) client connection error in async_http_request: %s",
+                    self.device_id, str(e) or type(e).__name__
+                )
+                if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt and mqtt_is_connected(self.api.hass):
+                    self.switch_protocol(Protocol.MQTT)
+                    self._trace(payload, namespace, method, CONF_OPTION_MQTT)
+                    self.api.mqtt_publish(
+                        self.device_id,
+                        namespace,
+                        method,
+                        payload,
+                        self.key or self.replykey
+                        )
+                else:
+                    self._set_offline()
+                return
 
             r_header = response[mc.KEY_HEADER]
             r_namespace = r_header[mc.KEY_NAMESPACE]
