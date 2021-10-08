@@ -37,6 +37,7 @@ class MerossDeviceSwitch(MerossDevice):
             p_digest = self.descriptor.digest
             if p_digest:
                 spray = p_digest.get(mc.KEY_SPRAY)
+                #spray = [{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]
                 if isinstance(spray, list):
                     try:
                         from .select import MerossLanSpray
@@ -203,7 +204,7 @@ class MerossDeviceSwitch(MerossDevice):
                         )
                     ] = int
         """
-        
+
 
     def entry_option_update(self, user_input: dict):
         super().entry_option_update(user_input)
@@ -222,7 +223,7 @@ class MerossDeviceSwitch(MerossDevice):
 
     def _parse_spray(self, payload) -> None:
         if isinstance(payload, dict):
-            self.entities[payload.get(mc.KEY_CHANNEL, 0)]._set_mode(payload.get(mc.KEY_MODE))
+            self.entities[payload.get(mc.KEY_CHANNEL, 0)].update_mode(payload.get(mc.KEY_MODE))
         elif isinstance(payload, list):
             for p in payload:
                 self._parse_spray(p)

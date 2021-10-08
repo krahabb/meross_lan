@@ -72,8 +72,8 @@ class MerossLanSpray(_MerossToggle, SwitchEntity):
         )
 
 
-    def _set_mode(self, mode) -> None:
-        self._set_onoff(0 if mode == mc.SPRAY_MODE_OFF else 1)
+    def update_mode(self, spray_mode: int) -> None:
+        self.set_state(STATE_OFF if spray_mode == mc.SPRAY_MODE_OFF else STATE_ON)
 
 
 

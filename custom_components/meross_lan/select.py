@@ -4,7 +4,6 @@ from homeassistant.components.select import (
     DOMAIN as PLATFORM_SELECT,
     SelectEntity
 )
-from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNKNOWN
 
 from .merossclient import const as mc  # mEROSS cONST
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
@@ -17,9 +16,15 @@ async def async_unload_entry(hass: object, config_entry: object) -> bool:
     return platform_unload_entry(hass, config_entry, PLATFORM_SELECT)
 
 
-OPTION_SPRAY_MODE_OFF = STATE_OFF
-OPTION_SPRAY_MODE_CONTINUOUS = STATE_ON
-OPTION_SPRAY_MODE_INTERMITTENT = 'intermittent'
+from homeassistant.const import (
+    STATE_OFF as OPTION_SPRAY_MODE_OFF,
+    STATE_ON as OPTION_SPRAY_MODE_CONTINUOUS,
+    STATE_UNKNOWN
+)
+try:
+    from homeassistant.components.humidifier.const import MODE_ECO as OPTION_SPRAY_MODE_INTERMITTENT
+except:
+    OPTION_SPRAY_MODE_INTERMITTENT = 'intermittent'
 
 OPTION_TO_SPRAY_MODE_MAP = {
     OPTION_SPRAY_MODE_OFF: mc.SPRAY_MODE_OFF,
@@ -27,6 +32,11 @@ OPTION_TO_SPRAY_MODE_MAP = {
     OPTION_SPRAY_MODE_INTERMITTENT: mc.SPRAY_MODE_INTERMITTENT
 }
 
+"""
+    This code is an alternative implementation for SPRAY/humidifier
+    since the meross SPRAY doesnt support target humidity and
+    the 'semantics' for HA humidifier are a bit odd for this device
+"""
 class MerossLanSpray(_MerossEntity, SelectEntity):
 
     PLATFORM = PLATFORM_SELECT
@@ -46,23 +56,38 @@ class MerossLanSpray(_MerossEntity, SelectEntity):
 
     async def async_select_option(self, option: str) -> None:
 
-        mode = OPTION_TO_SPRAY_MODE_MAP[option]
+        spray_mode = OPTION_TO_SPRAY_MODE_MAP[option]
 
         def _ack_callback():
-            self._set_mode(mode)
+            self.update_mode(spray_mode)
+
 
         self._device.request(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
-            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self._id, mc.KEY_MODE: mode}},
+            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self._id, mc.KEY_MODE: spray_mode}},
             _ack_callback
         )
+        #REMOVE MAYBE
+        """
+        self._device.request(
+            mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+            mc.METHOD_SET,
+            {mc.KEY_TOGGLEX: {mc.KEY_CHANNEL: self._id, mc.KEY_ONOFF: 1 if spray_mode != mc.SPRAY_MODE_OFF else 0}},
+            _ack_callback
+        )
+        """
 
 
-    def _set_mode(self, mode) -> None:
+    def update_mode(self, spray_mode: int) -> None:
         try:
-            self._attr_current_option = self._attr_options[mode]
+            self._attr_current_option = self._attr_options[spray_mode]
             self.set_state(self._attr_current_option)
         except:
             self._attr_current_option = None
             self.set_state(STATE_UNKNOWN)
+
+
+    #REMOVE MAYBE: debug only code
+    def _set_onoff(self, onoff) -> None:
+        self.update_mode(mc.SPRAY_MODE_CONTINUOUS if onoff else mc.SPRAY_MODE_OFF)
