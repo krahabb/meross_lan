@@ -51,6 +51,7 @@ NS_APPLIANCE_ROLLERSHUTTER_CONFIG = 'Appliance.RollerShutter.Config'
 # Hub
 NS_APPLIANCE_DIGEST_HUB = 'Appliance.Digest.Hub'
 NS_APPLIANCE_HUB_SUBDEVICELIST = 'Appliance.Hub.SubdeviceList'
+NS_APPLIANCE_HUB_REPORT = 'Appliance.Hub.Report'
 NS_APPLIANCE_HUB_EXCEPTION = 'Appliance.Hub.Exception'
 NS_APPLIANCE_HUB_BATTERY = 'Appliance.Hub.Battery'
 NS_APPLIANCE_HUB_TOGGLEX = 'Appliance.Hub.ToggleX'
