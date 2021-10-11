@@ -45,6 +45,7 @@ VOLATILE_ATTR_TRACE_ABILITY_ITER = '_trace_ability_iter'
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
 # this list will be excluded from enumeration since it's redundant/exposing sensitive info
+# or simply crashes/hangs the device
 TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_SYSTEM_ALL,
     mc.NS_APPLIANCE_SYSTEM_ABILITY,
@@ -63,11 +64,46 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_CONTROL_BIND,
     mc.NS_APPLIANCE_CONTROL_UNBIND,
     mc.NS_APPLIANCE_CONTROL_MULTIPLE,
-    mc.NS_APPLIANCE_CONTROL_UPGRADE,
-    mc.NS_APPLIANCE_HUB_EXCEPTION,
-    mc.NS_APPLIANCE_HUB_REPORT,
-    mc.NS_APPLIANCE_HUB_SUBDEVICELIST
+    mc.NS_APPLIANCE_CONTROL_UPGRADE, # disconnects
+    mc.NS_APPLIANCE_HUB_EXCEPTION, # disconnects
+    mc.NS_APPLIANCE_HUB_REPORT, # disconnects
+    mc.NS_APPLIANCE_HUB_SUBDEVICELIST, # disconnects
+    mc.NS_APPLIANCE_MCU_UPGRADE, # disconnects
+    mc.NS_APPLIANCE_MCU_HP110_PREVIEW # disconnects
 )
+
+TRACE_KEYS_OBFUSCATE = (
+    mc.KEY_UUID, mc.KEY_MACADDRESS, mc.KEY_WIFIMAC, mc.KEY_INNERIP,
+    mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_USERID, mc.KEY_TOKEN
+)
+
+def _obfuscate(payload: dict) -> dict:
+    """
+    payload: input-output gets modified by blanking sensistive keys
+    returns: a dict with the original mapped obfuscated keys
+    parses the input payload and 'hides' (obfuscates) some sensitive keys.
+    returns the mapping of the obfuscated keys in 'obfuscated' so to re-set them in _deobfuscate
+    this function is recursive
+    """
+    obfuscated = dict()
+    for key, value in payload.items():
+        if isinstance(value, dict):
+            o = _obfuscate(value)
+            if o:
+                obfuscated[key] = o
+        elif key in TRACE_KEYS_OBFUSCATE:
+            obfuscated[key] = value
+            payload[key] = '#' * len(str(value))
+
+    return obfuscated
+
+def _deobfuscate(payload: dict, obfuscated: dict):
+    for key, value in obfuscated.items():
+        if isinstance(value, dict):
+            _deobfuscate(payload[key], value)
+        else:
+            payload[key] = value
+
 
 TIMEZONES_SET = None
 
@@ -810,6 +846,7 @@ class MerossDevice:
                 self._trace_close(_trace_file)
                 return
 
+            """
             if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
                 all = data.get(mc.KEY_ALL, data)
                 system = all.get(mc.KEY_SYSTEM, {})
@@ -830,6 +867,9 @@ class MerossDevice:
                 firmware[mc.KEY_PORT] = ''
                 obfuscated[mc.KEY_USERID] = firmware.get(mc.KEY_USERID)
                 firmware[mc.KEY_USERID] = ''
+            """
+            if isinstance(data, dict):
+                obfuscated = _obfuscate(data)
 
             try:
                 _trace_file.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
@@ -841,6 +881,10 @@ class MerossDevice:
                 LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
                 self._trace_close(_trace_file)
 
+            if isinstance(data, dict):
+                _deobfuscate(data, obfuscated)
+
+            """
             if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
                 hardware[mc.KEY_UUID] = obfuscated.get(mc.KEY_UUID)
                 hardware[mc.KEY_MACADDRESS] = obfuscated.get(mc.KEY_MACADDRESS)
@@ -849,3 +893,4 @@ class MerossDevice:
                 firmware[mc.KEY_SERVER] = obfuscated.get(mc.KEY_SERVER)
                 firmware[mc.KEY_PORT] = obfuscated.get(mc.KEY_PORT)
                 firmware[mc.KEY_USERID] = obfuscated.get(mc.KEY_USERID)
+            """

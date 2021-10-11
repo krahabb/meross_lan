@@ -27,6 +27,9 @@ NS_APPLIANCE_CONFIG_KEY = 'Appliance.Config.Key'
 NS_APPLIANCE_CONFIG_WIFI = 'Appliance.Config.Wifi'
 NS_APPLIANCE_CONFIG_WIFILIST = "Appliance.Config.WifiList"
 NS_APPLIANCE_CONFIG_TRACE = "Appliance.Config.Trace"
+NS_APPLIANCE_CONFIG_INFO = "Appliance.Config.Info"
+NS_APPLIANCE_DIGEST_TRIGGERX = "Appliance.Digest.TriggerX"
+NS_APPLIANCE_DIGEST_TIMERX = "Appliance.Digest.TimerX"
 NS_APPLIANCE_CONTROL_MULTIPLE = "Appliance.Control.Multiple"
 NS_APPLIANCE_CONTROL_BIND = "Appliance.Control.Bind"
 NS_APPLIANCE_CONTROL_UNBIND = "Appliance.Control.Unbind"
@@ -35,6 +38,7 @@ NS_APPLIANCE_CONTROL_TOGGLE = "Appliance.Control.Toggle"
 NS_APPLIANCE_CONTROL_TOGGLEX = "Appliance.Control.ToggleX"
 NS_APPLIANCE_CONTROL_TRIGGER = "Appliance.Control.Trigger"
 NS_APPLIANCE_CONTROL_TRIGGERX = "Appliance.Control.TriggerX"
+NS_APPLIANCE_CONTROL_TIMERX = "Appliance.Control.TimerX"
 NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG = "Appliance.Control.ConsumptionConfig"
 NS_APPLIANCE_CONTROL_CONSUMPTIONX = "Appliance.Control.ConsumptionX"
 NS_APPLIANCE_CONTROL_ELECTRICITY = "Appliance.Control.Electricity"
@@ -65,6 +69,13 @@ NS_APPLIANCE_HUB_MTS100_ALL = 'Appliance.Hub.Mts100.All'
 NS_APPLIANCE_HUB_MTS100_TEMPERATURE = 'Appliance.Hub.Mts100.Temperature'
 NS_APPLIANCE_HUB_MTS100_MODE = 'Appliance.Hub.Mts100.Mode'
 
+# Smart cherub HP110A
+NS_APPLIANCE_MCU_UPGRADE = 'Appliance.Mcu.Upgrade'
+NS_APPLIANCE_MCU_HP110_FIRMWARE = 'Appliance.Mcu.Hp110.Firmware'
+NS_APPLIANCE_MCU_HP110_FAVORITE = 'Appliance.Mcu.Hp110.Favorite'
+NS_APPLIANCE_MCU_HP110_PREVIEW = 'Appliance.Mcu.Hp110.Preview'
+NS_APPLIANCE_MCU_HP110_LOCK = 'Appliance.Mcu.Hp110.Lock'
+NS_APPLIANCE_CONTROL_MP3 = "Appliance.Control.Mp3"
 
 # misc keys for json payloads
 KEY_HEADER = 'header'
@@ -96,11 +107,21 @@ KEY_CONTROL = 'control'
 KEY_DIGEST = 'digest'
 KEY_ABILITY = 'ability'
 KEY_ONLINE = 'online'
+KEY_TRIGGERX = 'triggerx'
+KEY_TIMERX = 'timerx'
 KEY_CLOCK = 'clock'
 KEY_TIME = 'time'
 KEY_TIMEZONE = 'timezone'
 KEY_TIMERULE = 'timeRule'
 KEY_STATUS = 'status'
+KEY_INFO = 'info'
+KEY_HOMEKIT = 'homekit'
+KEY_MODEL = 'model'
+KEY_SN = 'sn'
+KEY_CATEGORY = 'category'
+KEY_SETUPID = 'setupId'
+KEY_SETUPCODE = 'setupCode'
+KEY_TOKEN = 'token'
 KEY_CHANNEL = 'channel'
 KEY_TOGGLE = 'toggle'
 KEY_TOGGLEX = 'togglex'
@@ -158,8 +179,12 @@ PAYLOAD_GET = {
     NS_APPLIANCE_SYSTEM_ALL: { KEY_ALL: {} },
     NS_APPLIANCE_SYSTEM_ABILITY: { KEY_ABILITY: {} },
     NS_APPLIANCE_SYSTEM_DNDMODE: { KEY_DNDMODE: {} },
+    NS_APPLIANCE_DIGEST_TRIGGERX: { KEY_DIGEST: [] },
+    NS_APPLIANCE_DIGEST_TIMERX: { KEY_DIGEST: [] },
     NS_APPLIANCE_CONTROL_CONSUMPTIONX: { KEY_CONSUMPTIONX: [] },
     NS_APPLIANCE_CONTROL_ELECTRICITY: { KEY_ELECTRICITY: {} },
+    NS_APPLIANCE_CONTROL_TRIGGERX: { KEY_TRIGGERX: {} },
+    NS_APPLIANCE_CONTROL_TIMERX: { KEY_TIMERX: {} },
     NS_APPLIANCE_ROLLERSHUTTER_POSITION: { KEY_POSITION: [] },
     NS_APPLIANCE_ROLLERSHUTTER_STATE: { KEY_STATE: [] },
     NS_APPLIANCE_ROLLERSHUTTER_CONFIG: { KEY_CONFIG: [] },
