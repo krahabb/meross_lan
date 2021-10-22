@@ -11,7 +11,7 @@ from homeassistant.const import (
     DEVICE_CLASS_ENERGY,
 )
 
-from .merossclient import KeyType, const as mc  # mEROSS cONST
+from .merossclient import KeyType, MerossDeviceDescriptor, const as mc  # mEROSS cONST
 from .meross_entity import MerossFakeEntity
 from .sensor import MerossLanSensor, STATE_CLASS_TOTAL_INCREASING
 from .switch import MerossLanSwitch
@@ -21,7 +21,7 @@ from .const import PARAM_ENERGY_UPDATE_PERIOD
 
 class MerossDeviceSwitch(MerossDevice):
 
-    def __init__(self, api, descriptor, entry):
+    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(api, descriptor, entry)
         self._sensor_power = MerossFakeEntity
         self._sensor_current = MerossFakeEntity
@@ -33,8 +33,8 @@ class MerossDeviceSwitch(MerossDevice):
 
         try:
             # use a mix of heuristic to detect device features
-            ability = self.descriptor.ability
-            p_digest = self.descriptor.digest
+            ability = descriptor.ability
+            p_digest = descriptor.digest
             if p_digest:
                 spray = p_digest.get(mc.KEY_SPRAY)
                 #spray = [{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]
@@ -73,7 +73,7 @@ class MerossDeviceSwitch(MerossDevice):
             else:
                 # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
                 # but have 'control'
-                p_control = self.descriptor.all.get(mc.KEY_CONTROL)
+                p_control = descriptor.all.get(mc.KEY_CONTROL)
                 if p_control:
                     p_toggle = p_control.get(mc.KEY_TOGGLE)
                     if isinstance(p_toggle, dict):

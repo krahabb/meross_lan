@@ -10,7 +10,7 @@ from homeassistant.const import (
 )
 from homeassistant.components.binary_sensor import DEVICE_CLASS_WINDOW
 
-from .merossclient import KeyType, const as mc  # mEROSS cONST
+from .merossclient import KeyType, MerossDeviceDescriptor, const as mc  # mEROSS cONST
 from .meross_device import MerossDevice, Protocol
 from .sensor import PLATFORM_SENSOR, MerossLanHubSensor
 from .climate import PLATFORM_CLIMATE, Mts100Climate
@@ -53,7 +53,7 @@ def _get_temp_normal(value: int | None, default) -> float | None:
 
 class MerossDeviceHub(MerossDevice):
 
-    def __init__(self, api, descriptor, entry) -> None:
+    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry) -> None:
         super().__init__(api, descriptor, entry)
         self.subdevices: Dict[any, MerossSubDevice] = {}
         self._lastupdate_battery = 0
@@ -74,10 +74,7 @@ class MerossDeviceHub(MerossDevice):
         try:
             # we expect a well structured digest here since
             # we're sure 'hub' key is there by __init__ device factory
-            p_digest = self.descriptor.digest
-            p_hub = p_digest[mc.KEY_HUB]
-            p_subdevices = p_hub[mc.KEY_SUBDEVICE]
-            for p_subdevice in p_subdevices:
+            for p_subdevice in descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]:
                 type = _get_subdevice_type(p_subdevice)
                 if type is None:
                     continue # bugged/incomplete configuration payload..wait for some good updates
@@ -168,14 +165,14 @@ class MerossDeviceHub(MerossDevice):
                 subdevice = self.subdevices.get(p_id)
                 if subdevice is None:
                     self.needsave = True
-                    type = _get_subdevice_type(p_digest)
-                    if type is None:
+                    subdevice_type = _get_subdevice_type(p_digest)
+                    if subdevice_type is None:
                         # the hub could report incomplete info anytime so beware!
                         continue
-                    deviceclass = WELL_KNOWN_TYPE_MAP.get(type)
+                    deviceclass = WELL_KNOWN_TYPE_MAP.get(subdevice_type)
                     if deviceclass is None:
                         # build something anyway...
-                        subdevice = MerossSubDevice(self, p_digest, type)
+                        subdevice = MerossSubDevice(self, p_digest, subdevice_type)
                     else:
                         subdevice = deviceclass(self, p_digest)
                 subdevice.update_digest(p_digest)
