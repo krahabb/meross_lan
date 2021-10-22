@@ -2,12 +2,12 @@ from __future__ import annotations
 from typing import Union, Tuple
 
 from homeassistant.components.light import (
-    ATTR_RGB_COLOR,
     COLOR_MODE_ONOFF,
     COLOR_MODE_UNKNOWN,
     DOMAIN as PLATFORM_LIGHT,
     LightEntity,
     ATTR_BRIGHTNESS, ATTR_HS_COLOR, ATTR_COLOR_TEMP,
+    ATTR_RGB_COLOR, ATTR_EFFECT,
 )
 # back-forward compatibility hell
 try:
@@ -15,11 +15,13 @@ try:
         SUPPORT_BRIGHTNESS,
         SUPPORT_COLOR,
         SUPPORT_COLOR_TEMP,
+        SUPPORT_EFFECT
     )
 except:
     SUPPORT_BRIGHTNESS = 0
     SUPPORT_COLOR = 0
     SUPPORT_COLOR_TEMP = 0
+    SUPPORT_EFFECT = 0
 
 try:
     from homeassistant.components.light import (
@@ -97,6 +99,7 @@ class MerossLanLight(_MerossToggle, LightEntity):
     _attr_hs_color: tuple[float, float] | None = None
     _attr_color_temp = None
     _attr_brightness = None
+    _attr_effect: str | None = None
 
 
     def __init__(self, device: MerossDevice, id: object, p_togglex):
@@ -197,6 +200,16 @@ class MerossLanLight(_MerossToggle, LightEntity):
         return self._attr_color_temp
 
 
+    @property
+    def effect_list(self) -> list[str] | None:
+        return self._device.effect_list
+
+
+    @property
+    def effect(self) -> str | None:
+        return self._attr_effect
+
+
     async def async_turn_on(self, **kwargs) -> None:
 
         light = dict(self._light)
@@ -226,6 +239,15 @@ class MerossLanLight(_MerossToggle, LightEntity):
             capacity |= mc.LIGHT_CAPACITY_LUMINANCE
             if ATTR_BRIGHTNESS in kwargs:
                 light[mc.KEY_LUMINANCE] = _sat_1_100(kwargs[ATTR_BRIGHTNESS] * 100 // 255)
+
+        if ATTR_EFFECT in kwargs:
+            effect_id = self._device.effect_dict_names.get(kwargs[ATTR_EFFECT], None)
+            if effect_id is not None:
+                light[mc.KEY_EFFECT] = effect_id
+            else:
+                light.pop(mc.KEY_EFFECT, None)
+        else:
+            light.pop(mc.KEY_EFFECT, None)
 
         light[mc.KEY_CAPACITY] = capacity
 
@@ -263,12 +285,20 @@ class MerossLanLight(_MerossToggle, LightEntity):
                 payload={mc.KEY_LIGHT: { mc.KEY_CHANNEL: self._id, mc.KEY_ONOFF: 0}})
 
 
-    def _set_light(self, light: dict) -> None:
+    def update_light(self, light: dict) -> None:
+        """
+        update light entity state with fresh data from the device
+        """
         if self._light != light:
             self._light = light
 
             capacity = light.get(mc.KEY_CAPACITY, 0)
             self._attr_color_mode = COLOR_MODE_UNKNOWN
+
+            if mc.KEY_EFFECT in light:
+                self._attr_effect = self._device.effect_dict_ids.get(light[mc.KEY_EFFECT], None)
+            else:
+                self._attr_effect = None
 
             if capacity & mc.LIGHT_CAPACITY_LUMINANCE:
                 self._attr_color_mode = COLOR_MODE_BRIGHTNESS
@@ -301,3 +331,16 @@ class MerossLanLight(_MerossToggle, LightEntity):
                 # when the togglex will arrive, the _light (attributes) will be already set
                 # and HA will save a consistent state (hopefully..we'll see)
                 self.async_write_ha_state()
+
+
+    def update_effect_list(self):
+        """
+        the list of available effects was changed (context at device level)
+        so we'll just tell HA to update the state
+        """
+        if self._device.effect_list:
+            self._attr_supported_features = self._attr_supported_features | SUPPORT_EFFECT
+        else:
+            self._attr_supported_features = self._attr_supported_features & ~SUPPORT_EFFECT
+        if self.hass and self.enabled:
+            self.async_write_ha_state()

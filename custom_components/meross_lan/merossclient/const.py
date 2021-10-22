@@ -25,6 +25,7 @@ NS_APPLIANCE_SYSTEM_TIME = "Appliance.System.Time"
 NS_APPLIANCE_SYSTEM_DNDMODE = "Appliance.System.DNDMode"
 NS_APPLIANCE_CONFIG_KEY = 'Appliance.Config.Key'
 NS_APPLIANCE_CONFIG_WIFI = 'Appliance.Config.Wifi'
+NS_APPLIANCE_CONFIG_WIFIX = 'Appliance.Config.WifiX'
 NS_APPLIANCE_CONFIG_WIFILIST = "Appliance.Config.WifiList"
 NS_APPLIANCE_CONFIG_TRACE = "Appliance.Config.Trace"
 NS_APPLIANCE_CONFIG_INFO = "Appliance.Config.Info"
@@ -44,6 +45,7 @@ NS_APPLIANCE_CONTROL_CONSUMPTIONX = "Appliance.Control.ConsumptionX"
 NS_APPLIANCE_CONTROL_ELECTRICITY = "Appliance.Control.Electricity"
 # Light Abilities
 NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
+NS_APPLIANCE_CONTROL_LIGHT_EFFECT = "Appliance.Control.Light.Effect"
 # Humidifier abilities
 NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
 # Garage door opener
@@ -127,6 +129,9 @@ KEY_TOGGLE = 'toggle'
 KEY_TOGGLEX = 'togglex'
 KEY_ONOFF = 'onoff'
 KEY_LIGHT = 'light'
+KEY_EFFECT = 'effect'
+KEY_EFFECTNAME = 'effectName'
+KEY_ID_ = 'Id'
 KEY_CAPACITY = 'capacity'
 KEY_RGB = 'rgb'
 KEY_LUMINANCE = 'luminance'
