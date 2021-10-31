@@ -343,11 +343,11 @@ class MerossApi:
         key: KeyType = None
     ) -> None:
         LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
-        self.hass.components.mqtt.async_publish(
+        self.hass.components.mqtt.publish(
             mc.TOPIC_REQUEST.format(device_id),
             json_dumps(merossclient.build_payload(
                 namespace, method, payload,
-                key, device_id=device_id)),
+                key, mc.TOPIC_RESPONSE.format(device_id))),
             0,
             False)
 

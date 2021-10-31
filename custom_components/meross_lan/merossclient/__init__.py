@@ -53,12 +53,12 @@ class MerossSignatureError(MerossProtocolError):
         super().__init__("Signature error")
 
 
-def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = None, device_id:str = None)-> dict:
+def build_payload(namespace:str, method:str, payload:dict, key:KeyType, from_:str)-> dict:
     if isinstance(key, dict):
         key[mc.KEY_NAMESPACE] = namespace
         key[mc.KEY_METHOD] = method
         key[mc.KEY_PAYLOADVERSION] = 1
-        key[mc.KEY_FROM] = mc.TOPIC_RESPONSE.format(device_id or mc.MANUFACTURER)
+        key[mc.KEY_FROM] = from_
         return {
             mc.KEY_HEADER: key,
             mc.KEY_PAYLOAD: payload
@@ -72,7 +72,7 @@ def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = No
                 mc.KEY_NAMESPACE: namespace,
                 mc.KEY_METHOD: method,
                 mc.KEY_PAYLOADVERSION: 1,
-                mc.KEY_FROM: mc.TOPIC_RESPONSE.format(device_id or mc.MANUFACTURER),
+                mc.KEY_FROM: from_,
                 #mc.KEY_FROM: "/app/0-0/subscribe",
                 #"from": "/appliance/9109182170548290882048e1e9522946/publish",
                 mc.KEY_TIMESTAMP: timestamp,
@@ -238,7 +238,7 @@ class MerossHttpClient:
 
         self._logger.debug("MerossHttpClient(%s): HTTP POST method:(%s) namespace:(%s)", self._host, method, namespace)
 
-        request: dict = build_payload(namespace, method, payload, self.key or self.replykey)
+        request: dict = build_payload(namespace, method, payload, self.key or self.replykey, mc.MANUFACTURER)
         response: dict = await self.async_request_raw(request)
 
         if response.get(mc.KEY_PAYLOAD, {}).get(mc.KEY_ERROR, {}).get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
@@ -278,8 +278,7 @@ class MerossHttpClient:
             raise MerossProtocolError(e)
 
         if r_method == mc.METHOD_ERROR:
-            code = r_payload.get(mc.KEY_ERROR, {}).get(mc.KEY_CODE)
-            if code == mc.ERROR_INVALIDKEY:
+            if r_payload.get(mc.KEY_ERROR, {}).get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
                 raise MerossKeyError(r_payload)
             else:
                 raise MerossProtocolError(r_payload)
