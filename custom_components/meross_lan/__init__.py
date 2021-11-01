@@ -22,7 +22,7 @@ from . import merossclient
 from .merossclient import KeyType, MerossDeviceDescriptor, MerossHttpClient, const as mc
 from .meross_device import MerossDevice
 from logging import WARNING, INFO
-from .helpers import LOGGER, LOGGER_trap
+from .helpers import LOGGER, LOGGER_trap, mqtt_publish
 from .const import (
     DOMAIN, SERVICE_REQUEST,
     CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
@@ -343,13 +343,13 @@ class MerossApi:
         key: KeyType = None
     ) -> None:
         LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
-        self.hass.components.mqtt.publish(
+        mqtt_publish(
+            self.hass,
             mc.TOPIC_REQUEST.format(device_id),
             json_dumps(merossclient.build_payload(
                 namespace, method, payload,
                 key, mc.TOPIC_RESPONSE.format(device_id))),
-            0,
-            False)
+            )
 
 
     def mqtt_publish_get(self,
