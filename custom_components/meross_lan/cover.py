@@ -442,7 +442,7 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
     def _set_onoff(self, onoff) -> None:
         self._device.log(DEBUG, 0, "MerossLanShutter(0): _set_onoff(%s)", str(onoff))
         if onoff:
-            self._set_rollerstate(mc.ROLLERSHUTTER_STATE_OPENING if self._device.switch_dnd.is_on else mc.ROLLERSHUTTER_STATE_CLOSING)
+            self._set_rollerstate(mc.ROLLERSHUTTER_STATE_OPENING if self._device.entity_dnd.is_on else mc.ROLLERSHUTTER_STATE_CLOSING)
         else:
             self._set_rollerstate(mc.ROLLERSHUTTER_STATE_IDLE)
 

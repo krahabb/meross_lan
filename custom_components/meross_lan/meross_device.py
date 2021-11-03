@@ -26,7 +26,6 @@ from .merossclient import (
     get_replykey,
 )
 from .meross_entity import MerossFakeEntity
-from .switch import MerossLanDND
 from .helpers import LOGGER, LOGGER_trap, mqtt_is_connected
 from .const import (
     DOMAIN, DND_ID,
@@ -59,6 +58,7 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_SYSTEM_CLOCK,
     mc.NS_APPLIANCE_CONFIG_KEY,
     mc.NS_APPLIANCE_CONFIG_WIFI,
+    mc.NS_APPLIANCE_CONFIG_WIFIX, # disconnects
     mc.NS_APPLIANCE_CONFIG_WIFILIST,
     mc.NS_APPLIANCE_CONFIG_TRACE,
     mc.NS_APPLIANCE_CONTROL_BIND,
@@ -140,9 +140,10 @@ class MerossDevice:
         self._online = False
         self.needsave = False # while parsing ns.ALL code signals to persist ConfigEntry
         self._retry_period = 0 # used to try reconnect when falling offline
-        self.switch_dnd = MerossFakeEntity
+        self.entity_dnd = MerossFakeEntity
         self.device_timestamp: int = 0
         self.device_timedelta = 0
+        self.device_timedelta_log_epoch = 0
         self.lastpoll = 0
         self.lastrequest = 0
         self.lastupdate = 0
@@ -189,7 +190,10 @@ class MerossDevice:
         self._set_config_entry(entry.data)
 
         if mc.NS_APPLIANCE_SYSTEM_DNDMODE in self.descriptor.ability:
-            self.switch_dnd = MerossLanDND(self)
+            #from .switch import MerossLanDND
+            from .light import MerossLanDNDLight
+            #self.entity_dnd = MerossLanDND(self)
+            self.entity_dnd = MerossLanDNDLight(self)
 
         """
         warning: would the response be processed after this object is fully init?
@@ -247,20 +251,17 @@ class MerossDevice:
         self.device_timestamp = int(header.get(mc.KEY_TIMESTAMP, epoch))
         device_timedelta = epoch - self.device_timestamp
         if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-            self.log(
-                logging.WARNING, 86400,
-                "MerossDevice(%s) has incorrect timestamp",
-                self.device_id
-            )
-            self.log(
-                logging.DEBUG, 0,
-                "MerossDevice(%s) timedelta = %d",
-                self.device_id, device_timedelta
-            )
             if abs(self.device_timedelta - device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
                 self.device_timedelta = device_timedelta
             else:
                 self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
+            if (epoch - self.device_timedelta_log_epoch) > 604800: # 1 week lockout
+                self.device_timedelta_log_epoch = epoch
+                self.log(
+                    logging.WARNING, 0,
+                    "MerossDevice(%s) has incorrect timestamp: %d seconds behind HA",
+                    self.device_id, int(self.device_timedelta)
+            )
         else:
             self.device_timedelta = 0
         """
@@ -296,7 +297,7 @@ class MerossDevice:
             if self.needsave is True:
                 self.needsave = False
                 self._save_config_entry(payload)
-            if self.switch_dnd.enabled:
+            if self.entity_dnd.enabled:
                 """
                 this is to optimize polling: when on MQTT we're only requesting/receiving
                 when coming online and 'DND' will then work by pushes. While on HTTP we'll
@@ -324,7 +325,7 @@ class MerossDevice:
             else:
                 dndmode = payload.get(mc.KEY_DNDMODE)
                 if isinstance(dndmode, dict):
-                    self.entities[DND_ID]._set_onoff(dndmode.get(mc.KEY_MODE))
+                    self.entity_dnd._set_onoff(dndmode.get(mc.KEY_MODE))
             return True
 
         if namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
@@ -407,7 +408,7 @@ class MerossDevice:
                         payload,
                         self.key or self.replykey
                         )
-                else:
+                elif isinstance(e, TimeoutError):
                     self._set_offline()
                 return
 
@@ -517,7 +518,6 @@ class MerossDevice:
                     description={"suggested_value": self.descriptor.timezone}
                     )
                 ] = TIMEZONES_SET
-        return
 
 
     def entry_option_update(self, user_input: dict):
@@ -533,7 +533,10 @@ class MerossDevice:
 
     @callback
     async def entry_update_listener(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-        # we're not changing device_id or other 'identifying' stuff
+        """
+        callback after user changed configuration through OptionsFlowHandler
+        deviceid and/or host are not changed so we're still referring to the same device
+        """
         self._set_config_entry(config_entry.data)
         self.api.update_polling_period()
         _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)

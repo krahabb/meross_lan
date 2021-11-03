@@ -88,11 +88,6 @@ class MerossLanDND(_MerossToggle, SwitchEntity):
         super().__init__(device, DND_ID, mc.KEY_DNDMODE, None, None)
 
 
-    @property
-    def entity_registry_enabled_default(self) -> bool:
-        return False
-
-
     async def async_turn_on(self, **kwargs) -> None:
 
         def _ack_callback():
