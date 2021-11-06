@@ -37,7 +37,10 @@ except:
 
 
 import homeassistant.util.color as color_util
-from homeassistant.const import STATE_ON, STATE_OFF
+from homeassistant.const import (
+    STATE_ON, STATE_OFF,
+    ENTITY_CATEGORY_CONFIG,
+)
 
 from .merossclient import const as mc
 from .meross_device import MerossDevice
@@ -375,6 +378,11 @@ class MerossLanDNDLight(_MerossToggle, LightEntity):
     @property
     def color_mode(self):
         return COLOR_MODE_ONOFF
+
+
+    @property
+    def entity_category(self) -> str | None:
+        return ENTITY_CATEGORY_CONFIG
 
 
     async def async_turn_on(self, **kwargs) -> None:

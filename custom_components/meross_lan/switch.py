@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 from homeassistant.components.switch import (
     DOMAIN as PLATFORM_SWITCH,
     SwitchEntity,
     DEVICE_CLASS_OUTLET
 )
-from homeassistant.const import STATE_OFF, STATE_ON
+from homeassistant.const import (
+    STATE_OFF, STATE_ON,
+    ENTITY_CATEGORY_CONFIG,
+)
 
 from .merossclient import const as mc  # mEROSS cONST
 from .meross_entity import _MerossToggle, platform_setup_entry, platform_unload_entry
@@ -86,6 +91,11 @@ class MerossLanDND(_MerossToggle, SwitchEntity):
 
     def __init__(self, device: 'MerossDevice'):
         super().__init__(device, DND_ID, mc.KEY_DNDMODE, None, None)
+
+
+    @property
+    def entity_category(self) -> str | None:
+        return ENTITY_CATEGORY_CONFIG
 
 
     async def async_turn_on(self, **kwargs) -> None:
