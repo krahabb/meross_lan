@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import logging
 import os
 import socket
@@ -387,29 +388,38 @@ class MerossDevice:
                 _httpclient = MerossHttpClient(self.host, self.key, async_get_clientsession(self.api.hass), LOGGER)
                 self._httpclient = _httpclient
 
-            self._trace(payload, namespace, method, CONF_OPTION_HTTP)
-            try:
-                response = await _httpclient.async_request(namespace, method, payload)
-            except Exception as e:
-                if not self._online:
-                    raise e
-                self.log(
-                    logging.INFO, 0,
-                    "MerossDevice(%s) client connection error in async_http_request: %s",
-                    self.device_id, str(e) or type(e).__name__
-                )
-                if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt and mqtt_is_connected(self.api.hass):
-                    self.switch_protocol(Protocol.MQTT)
-                    self._trace(payload, namespace, method, CONF_OPTION_MQTT)
-                    self.api.mqtt_publish(
-                        self.device_id,
-                        namespace,
-                        method,
-                        payload,
-                        self.key or self.replykey
-                        )
-                elif isinstance(e, TimeoutError):
-                    self._set_offline()
+            for attempt in range(3):
+                # since we get 'random' connection errors, this is a retry attempts loop
+                # until we get it done. We'd want to break out early on specific events tho (Timeouts)
+                self._trace(payload, namespace, method, CONF_OPTION_HTTP)
+                try:
+                    response = await _httpclient.async_request(namespace, method, payload)
+                    break
+                except Exception as e:
+                    if (not self._online):
+                        raise e # manage this error on the external handler
+                    self.log(
+                        logging.INFO, 0,
+                        "MerossDevice(%s) client connection attempt(%s) error in async_http_request: %s",
+                        self.device_id, str(attempt), str(e) or type(e).__name__
+                    )
+                    if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt and mqtt_is_connected(self.api.hass):
+                        self.switch_protocol(Protocol.MQTT)
+                        self._trace(payload, namespace, method, CONF_OPTION_MQTT)
+                        self.api.mqtt_publish(
+                            self.device_id,
+                            namespace,
+                            method,
+                            payload,
+                            self.key or self.replykey
+                            )
+                        return
+                    elif isinstance(e, TimeoutError):
+                        self._set_offline()
+                        return
+                    await asyncio.sleep(0.1)# wait a bit before re-issuing request
+            else:
+                self._set_offline()
                 return
 
             r_header = response[mc.KEY_HEADER]
