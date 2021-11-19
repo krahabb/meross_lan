@@ -20,7 +20,7 @@ from .const import CONF_DEVICE_ID, DOMAIN
 
 class MerossFakeEntity:
     """
-    an 'abstract' class we'll use as a placeholder to reduce optional and/or
+    a 'dummy' class we'll use as a placeholder to reduce optional and/or
     disabled entities access overhead
     """
     enabled = False
@@ -32,13 +32,20 @@ class _MerossEntity:
 
     PLATFORM: str
 
-    def __init__(self, device: 'MerossDevice', id: object, device_class: str):  # pylint: disable=unsubscriptable-object
-        self._device = device
-        self._id = id
+    _attr_state: StateType = None
+
+    def __init__(
+        self,
+        device: "MerossDevice",
+        _id: object,
+        device_class: str,
+        subdevice: 'MerossSubDevice' = None
+        ):
+        self.device = device
+        self.id = _id
         self._attr_device_class = device_class
-        self._attr_state = None
-        #self._attr_unit_of_measurement = CLASS_TO_UNIT_MAP.get(device_class)
-        device.entities[id] = self
+        self.subdevice = subdevice
+        device.entities[_id] = self
         async_add_devices = device.platforms.setdefault(self.PLATFORM)
         if async_add_devices is not None:
             async_add_devices([self])
@@ -61,19 +68,36 @@ class _MerossEntity:
 
     @property
     def unique_id(self):
-        return f"{self._device.device_id}_{self._id}"
+        return f"{self.device.device_id}_{self.id}"
 
 
     @property
     def name(self) -> str:
-        return f"{self._device.descriptor.productname} - {self._attr_device_class}" if self._attr_device_class else self._device.descriptor.productname
+        if (subdevice := self.subdevice) is not None:
+            if self._attr_device_class is not None:
+                return f"{get_productnameuuid(subdevice.type, subdevice.id)} - {self._attr_device_class}"
+            else:
+                return get_productnameuuid(subdevice.type, subdevice.id)
+        if self._attr_device_class:
+            return f"{self.device.descriptor.productname} - {self._attr_device_class}"
+        return self.device.descriptor.productname
 
 
     @property
     def device_info(self):
-        _desc = self._device.descriptor
+        if (subdevice := self.subdevice) is not None:
+            _id = subdevice.id
+            _type = subdevice.type
+            return {
+                "via_device": (DOMAIN, self.device.device_id),
+                "identifiers": {(DOMAIN, _id)},
+                "manufacturer": mc.MANUFACTURER,
+                "name": get_productnameuuid(_type, _id),
+                "model": _type
+                }
+        _desc = self.device.descriptor
         return {
-            "identifiers": {(DOMAIN, self._device.device_id)},
+            "identifiers": {(DOMAIN, self.device.device_id)},
             "connections": {(dr.CONNECTION_NETWORK_MAC, _desc.macAddress)},
             "manufacturer": mc.MANUFACTURER,
             "name": _desc.productname,
@@ -152,8 +176,8 @@ class _MerossEntity:
 
 class _MerossToggle(_MerossEntity):
 
-    def __init__(self, device: 'MerossDevice', id: object, device_class: str, toggle_ns: str, toggle_key: str):
-        super().__init__(device, id, device_class)
+    def __init__(self, device: 'MerossDevice', _id: object, device_class: str, toggle_ns: str, toggle_key: str):
+        super().__init__(device, _id, device_class)
         self._toggle_ns = toggle_ns
         self._toggle_key = toggle_key
 
@@ -162,10 +186,10 @@ class _MerossToggle(_MerossEntity):
         def _ack_callback():
             self.set_state(STATE_ON)
 
-        self._device.request(
+        self.device.request(
             self._toggle_ns,
             mc.METHOD_SET,
-            {self._toggle_key: {mc.KEY_CHANNEL: self._id, mc.KEY_ONOFF: 1}},
+            {self._toggle_key: {mc.KEY_CHANNEL: self.id, mc.KEY_ONOFF: 1}},
             _ack_callback
         )
 
@@ -174,42 +198,14 @@ class _MerossToggle(_MerossEntity):
         def _ack_callback():
             self.set_state(STATE_OFF)
 
-        self._device.request(
+        self.device.request(
             self._toggle_ns,
             mc.METHOD_SET,
-            {self._toggle_key: {mc.KEY_CHANNEL: self._id, mc.KEY_ONOFF: 0}},
+            {self._toggle_key: {mc.KEY_CHANNEL: self.id, mc.KEY_ONOFF: 0}},
             _ack_callback
         )
 
 
-
-class _MerossHubEntity(_MerossEntity):
-
-    def __init__(self, subdevice: 'MerossSubDevice', id: object, device_class: str):
-        super().__init__(
-            subdevice.hub,
-            id,
-            device_class)
-        self.subdevice = subdevice
-
-
-    @property
-    def name(self) -> str:
-        name = get_productnameuuid(self.subdevice.type, self.subdevice.id)
-        return f"{name} - {self._attr_device_class}" if self._attr_device_class else name
-
-
-    @property
-    def device_info(self):
-        _id = self.subdevice.id
-        _type = self.subdevice.type
-        return {
-            "via_device": (DOMAIN, self._device.device_id),
-            "identifiers": {(DOMAIN, _id)},
-            "manufacturer": mc.MANUFACTURER,
-            "name": get_productnameuuid(_type, _id),
-            "model": _type
-            }
 
 
 """

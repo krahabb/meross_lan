@@ -30,8 +30,8 @@ class MerossLanSwitch(_MerossToggle, SwitchEntity):
     PLATFORM = PLATFORM_SWITCH
 
 
-    def __init__(self, device: 'MerossDevice', id: object, toggle_ns: str, toggle_key: str):
-        super().__init__(device, id, DEVICE_CLASS_OUTLET, toggle_ns, toggle_key)
+    def __init__(self, device: 'MerossDevice', _id: object, toggle_ns: str, toggle_key: str):
+        super().__init__(device, _id, DEVICE_CLASS_OUTLET, toggle_ns, toggle_key)
 
 
 
@@ -43,8 +43,8 @@ class MerossLanSpray(_MerossToggle, SwitchEntity):
     PLATFORM = PLATFORM_SWITCH
 
 
-    def __init__(self, device: 'MerossDevice', id: object):
-        super().__init__(device, id, mc.KEY_SPRAY, None, None)
+    def __init__(self, device: 'MerossDevice', _id: object):
+        super().__init__(device, _id, mc.KEY_SPRAY, None, None)
 
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -56,10 +56,10 @@ class MerossLanSpray(_MerossToggle, SwitchEntity):
         # it's not (yet) implemented and the option to correctly
         # update the state will be loosed since the ack payload is empty
         # right now 'force' http proto even tho that could be disabled in config
-        await self._device.async_http_request(
+        await self.device.async_http_request(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
-            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self._id, mc.KEY_MODE: mc.SPRAY_MODE_CONTINUOUS}},
+            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.id, mc.KEY_MODE: mc.SPRAY_MODE_CONTINUOUS}},
             _ack_callback
         )
 
@@ -69,10 +69,10 @@ class MerossLanSpray(_MerossToggle, SwitchEntity):
         def _ack_callback():
             self.set_state(STATE_OFF)
 
-        await self._device.async_http_request(
+        await self.device.async_http_request(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
-            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self._id, mc.KEY_MODE: mc.SPRAY_MODE_OFF}},
+            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.id, mc.KEY_MODE: mc.SPRAY_MODE_OFF}},
             _ack_callback
         )
 
@@ -107,7 +107,7 @@ class MerossLanDND(_MerossToggle, SwitchEntity):
         # it's not (yet) implemented and the option to correctly
         # update the state will be loosed since the ack payload is empty
         # right now 'force' http proto even tho that could be disabled in config
-        await self._device.async_http_request(
+        await self.device.async_http_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},
@@ -120,7 +120,7 @@ class MerossLanDND(_MerossToggle, SwitchEntity):
         def _ack_callback():
             self.set_state(STATE_OFF)
 
-        await self._device.async_http_request(
+        await self.device.async_http_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},

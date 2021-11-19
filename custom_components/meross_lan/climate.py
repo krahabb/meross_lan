@@ -13,7 +13,7 @@ from homeassistant.const import TEMP_CELSIUS
 
 
 from .merossclient import const as mc  # mEROSS cONST
-from .meross_entity import _MerossHubEntity, platform_setup_entry, platform_unload_entry
+from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -29,12 +29,12 @@ MTS100MODE_SLEEP = 2 # aka 'Cool'
 MTS100MODE_AWAY = 4 # aka 'Economy'
 MTS100MODE_AUTO = 3
 
-PRESET_OFF = 'off'
-PRESET_CUSTOM = 'custom'
+PRESET_OFF = 'Off'
+PRESET_CUSTOM = 'Custom'
 #PRESET_COMFORT = 'heat'
 #PRESET_COOL = 'cool'
 #PRESET_ECONOMY = 'economy'
-PRESET_AUTO = 'auto'
+PRESET_AUTO = 'Auto'
 
 # map mts100 mode enums to HA preset keys
 MODE_TO_PRESET_MAP = {
@@ -72,35 +72,40 @@ PRESET_TO_TEMPKEY_MAP = {
     PRESET_AUTO: mc.KEY_CUSTOM
 }
 
-class Mts100Climate(_MerossHubEntity, ClimateEntity):
+class Mts100Climate(_MerossEntity, ClimateEntity):
 
     PLATFORM = PLATFORM_CLIMATE
 
+    _attr_min_temp = None
+    _attr_max_temp = None
+    _attr_target_temperature = None
+    _attr_current_temperature = None
+    _attr_preset_modes = [PRESET_OFF, PRESET_CUSTOM, PRESET_COMFORT,
+                PRESET_SLEEP, PRESET_AWAY, PRESET_AUTO]
+    _attr_preset_mode = None
+    _attr_hvac_modes = [HVAC_MODE_OFF, HVAC_MODE_HEAT, HVAC_MODE_AUTO]
+    _attr_hvac_mode = None
+    _attr_hvac_action = None
+
+    mts100_mode = None
+    mts100_onoff = None
+    mts100_heating = None
+
     def __init__(self, subdevice: 'MerossSubDevice'):
-        super().__init__(subdevice, subdevice.id, None)
-        self._min_temp = None
-        self._max_temp = None
-        self._target_temperature = None
-        self._current_temperature = None
-        self._preset_mode = None
-        self._hvac_mode = None
-        self._hvac_action = None
-        self._mts100_mode = None
-        self._mts100_onoff = None
-        self._mts100_heating = None
+        super().__init__(subdevice.hub, subdevice.id, None, subdevice)
 
 
     def update_modes(self) -> None:
-        if self._mts100_onoff:
-            self._hvac_mode = HVAC_MODE_AUTO if self._mts100_mode == MTS100MODE_AUTO else HVAC_MODE_HEAT
-            self._hvac_action = CURRENT_HVAC_HEAT if self._mts100_heating else CURRENT_HVAC_IDLE
-            self._preset_mode = MODE_TO_PRESET_MAP.get(self._mts100_mode)
+        if self.mts100_onoff:
+            self._attr_hvac_mode = HVAC_MODE_AUTO if self.mts100_mode == MTS100MODE_AUTO else HVAC_MODE_HEAT
+            self._attr_hvac_action = CURRENT_HVAC_HEAT if self.mts100_heating else CURRENT_HVAC_IDLE
+            self._attr_preset_mode = MODE_TO_PRESET_MAP.get(self.mts100_mode)
         else:
-            self._hvac_mode = HVAC_MODE_OFF
-            self._hvac_action = CURRENT_HVAC_OFF
-            self._preset_mode = PRESET_OFF
+            self._attr_hvac_mode = HVAC_MODE_OFF
+            self._attr_hvac_action = CURRENT_HVAC_OFF
+            self._attr_preset_mode = PRESET_OFF
 
-        self._attr_state = self._hvac_mode if self.subdevice.online else None
+        self._attr_state = self._attr_hvac_mode if self.subdevice.online else None
 
         if self.hass and self.enabled:
             self.async_write_ha_state()
@@ -116,58 +121,56 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
 
     @property
     def min_temp(self) -> float:
-        return self._min_temp
+        return self._attr_min_temp
 
     @property
     def max_temp(self) -> float:
-        return self._max_temp
+        return self._attr_max_temp
 
     @property
     def hvac_modes(self) -> list[str]:
-        return [HVAC_MODE_OFF, HVAC_MODE_HEAT, HVAC_MODE_AUTO]
+        return self._attr_hvac_modes
 
     @property
     def hvac_mode(self) -> str:
-        return self._hvac_mode
+        return self._attr_hvac_mode
 
     @property
     def hvac_action(self) -> str | None:
-        return self._hvac_action
+        return self._attr_hvac_action
 
     @property
     def current_temperature(self) -> float | None:
-        return self._current_temperature
+        return self._attr_current_temperature
 
     @property
     def target_temperature(self) -> float | None:
-        return self._target_temperature
+        return self._attr_target_temperature
 
     @property
     def target_temperature_step(self) -> float | None:
         return 0.5
 
     @property
-    def preset_mode(self) -> str | None:
-        return self._preset_mode
+    def preset_modes(self) -> list[str] | None:
+        return self._attr_preset_modes
 
     @property
-    def preset_modes(self) -> list[str] | None:
-        return [PRESET_OFF, PRESET_CUSTOM, PRESET_COMFORT,
-                PRESET_SLEEP, PRESET_AWAY, PRESET_AUTO]
-
+    def preset_mode(self) -> str | None:
+        return self._attr_preset_mode
 
     async def async_set_temperature(self, **kwargs) -> None:
         t = kwargs.get('temperature')
-        key = PRESET_TO_TEMPKEY_MAP[self._preset_mode or PRESET_CUSTOM]
+        key = PRESET_TO_TEMPKEY_MAP[self._attr_preset_mode or PRESET_CUSTOM]
 
         def _ack_callback():
-            self._target_temperature = t
+            self._attr_target_temperature = t
             self.update_modes()
 
-        self._device.request(
+        self.device.request(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
-            {mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.subdevice.id, key: t * 10 + 1}]}, # the device rounds down ?!
+            {mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.id, key: t * 10 + 1}]}, # the device rounds down ?!
             _ack_callback
         )
 
@@ -178,7 +181,7 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
             # while leaving it's own mode (#48) if it's one of
             # the manual modes, else switch it to MTS100MODE_CUSTOM
             # through HVAC_TO_PRESET_MAP
-            if self._mts100_mode != MTS100MODE_AUTO:
+            if self.mts100_mode != MTS100MODE_AUTO:
                 await self.async_turn_on()
                 return
 
@@ -193,44 +196,44 @@ class Mts100Climate(_MerossHubEntity, ClimateEntity):
             if mode is not None:
 
                 def _ack_callback():
-                    self._mts100_mode = mode
+                    self.mts100_mode = mode
                     self.update_modes()
 
-                await self._device.async_http_request(
+                await self.device.async_http_request(
                     mc.NS_APPLIANCE_HUB_MTS100_MODE,
                     mc.METHOD_SET,
-                    {mc.KEY_MODE: [{mc.KEY_ID: self.subdevice.id, mc.KEY_STATE: mode}]},
+                    {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
                     _ack_callback
                 )
 
-                if not self._mts100_onoff:
+                if not self.mts100_onoff:
                     await self.async_turn_on()
 
 
     async def async_turn_on(self) -> None:
         def _ack_callback():
-            self._mts100_onoff = 1
+            self.mts100_onoff = 1
             self.update_modes()
 
         #same as DND: force http request to get a consistent acknowledge
         #the device will PUSH anyway a state update when the valve actually switches
         #but this way we'll update the UI consistently right after setting mode
-        await self._device.async_http_request(
+        await self.device.async_http_request(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
             mc.METHOD_SET,
-            {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.subdevice.id, mc.KEY_ONOFF: 1}]},
+            {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: 1}]},
             _ack_callback
         )
 
 
     async def async_turn_off(self) -> None:
         def _ack_callback():
-            self._mts100_onoff = 0
+            self.mts100_onoff = 0
             self.update_modes()
 
-        await self._device.async_http_request(
+        await self.device.async_http_request(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
             mc.METHOD_SET,
-            {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.subdevice.id, mc.KEY_ONOFF: 0}]},
+            {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: 0}]},
             _ack_callback
         )

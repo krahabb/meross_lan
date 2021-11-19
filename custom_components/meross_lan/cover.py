@@ -102,7 +102,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
         self._open_pending = open
         self._payload[mc.KEY_STATE][mc.KEY_OPEN] = open
-        self._device.request(
+        self.device.request(
             mc.NS_APPLIANCE_GARAGEDOOR_STATE,
             mc.METHOD_SET,
             self._payload,
@@ -126,13 +126,13 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
         if execute:
             if self._open_pending == open:
-                self._device.log(DEBUG, 0, "MerossLanGarage(%s): ignoring start of ghost transition", self.name)
+                self.device.log(DEBUG, 0, "MerossLanGarage(%s): ignoring start of ghost transition", self.name)
                 #continue processing after this
             elif self._open_pending is not None:
                 if self._transition_unsub is not None:
                     self._transition_unsub()
                     self._transition_unsub = None
-                    self._device.log(WARNING, 0, "MerossLanGarage(%s): re-starting an overlapped transition ", self.name)
+                    self.device.log(WARNING, 0, "MerossLanGarage(%s): re-starting an overlapped transition ", self.name)
                 self._start_transition()
                 self._state_lastupdate = now
                 return
@@ -173,7 +173,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
                     elif self._transition_duration < PARAM_GARAGEDOOR_TRANSITION_MINDURATION:
                         self._transition_duration = PARAM_GARAGEDOOR_TRANSITION_MINDURATION
                     self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = self._transition_duration
-                    self._device.log(DEBUG, 0, "MerossLanGarage(%s): updated transition_duration to %d sec", self.name, self._transition_duration)
+                    self.device.log(DEBUG, 0, "MerossLanGarage(%s): updated transition_duration to %d sec", self.name, self._transition_duration)
                     self._cancel_transition()
                     self.set_state(STATE_CLOSED)
 
@@ -345,9 +345,9 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
 
     def _request(self, command, timeout = None):
-        self._device.log(DEBUG, 0, "MerossLanShutter(0): _request(%s, %s)", str(command), str(timeout))
+        self.device.log(DEBUG, 0, "MerossLanShutter(0): _request(%s, %s)", str(command), str(timeout))
         def _ack_callback():
-            self._device.log(DEBUG, 0, "MerossLanShutter(0): _ack_callback")
+            self.device.log(DEBUG, 0, "MerossLanShutter(0): _ack_callback")
             if timeout is not None:
                 self._position_endtime = time() + timeout
                 self._stop_unsub = async_track_point_in_utc_time(
@@ -355,7 +355,7 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
                     self._stop_job,
                     datetime.fromtimestamp(self._position_endtime)
                 )
-            self._device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
+            self.device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
 
         self._stop_cancel()
         # WARNING: on MQTT we'll loose the ack callback since
@@ -363,10 +363,10 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
         # update the state will be loosed since the ack payload is empty
         # right now 'force' http proto even tho that could be disabled in config
         self.hass.async_create_task(
-            self._device.async_http_request(
+            self.device.async_http_request(
                 mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
                 mc.METHOD_SET,
-                {mc.KEY_POSITION: {mc.KEY_CHANNEL: self._id, mc.KEY_POSITION: command}},
+                {mc.KEY_POSITION: {mc.KEY_CHANNEL: self.id, mc.KEY_POSITION: command}},
                 _ack_callback
             )
         )
@@ -388,7 +388,7 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
 
     def _set_rollerstate(self, state) -> None:
-        self._device.log(DEBUG, 0, "MerossLanShutter(0): _set_rollerstate(%s)", str(state))
+        self.device.log(DEBUG, 0, "MerossLanShutter(0): _set_rollerstate(%s)", str(state))
         epoch = time()
         if self._attr_state == STATE_OPENING:
             self._position_timed = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)
@@ -440,29 +440,26 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     #REMOVE: debug only code
     def _set_onoff(self, onoff) -> None:
-        self._device.log(DEBUG, 0, "MerossLanShutter(0): _set_onoff(%s)", str(onoff))
+        self.device.log(DEBUG, 0, "MerossLanShutter(0): _set_onoff(%s)", str(onoff))
         if onoff:
-            self._set_rollerstate(mc.ROLLERSHUTTER_STATE_OPENING if self._device.entity_dnd.is_on else mc.ROLLERSHUTTER_STATE_CLOSING)
+            self._set_rollerstate(mc.ROLLERSHUTTER_STATE_OPENING if self.device.entity_dnd.is_on else mc.ROLLERSHUTTER_STATE_CLOSING)
         else:
             self._set_rollerstate(mc.ROLLERSHUTTER_STATE_IDLE)
 
 
     @callback
     def _transition_callback(self, _now: datetime) -> None:
-        self._device.log(DEBUG, 0, "MerossLanShutter(0): _transition_callback")
+        self.device.log(DEBUG, 0, "MerossLanShutter(0): _transition_callback")
         self._transition_unsub = async_track_point_in_utc_time(
             self.hass,
             self._transition_job,
             datetime.fromtimestamp(time() + 1)
         )
-        self._device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
-        #REMOVE
-        #self._device.request(mc.NS_APPLIANCE_CONTROL_TOGGLEX,
-        #    mc.METHOD_GET, { mc.KEY_TOGGLEX: [] })
+        self.device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
 
 
     def _transition_cancel(self):
-        self._device.log(DEBUG, 0, "MerossLanShutter(0): _transition_cancel")
+        self.device.log(DEBUG, 0, "MerossLanShutter(0): _transition_cancel")
         if self._transition_unsub is not None:
             self._transition_unsub()
             self._transition_unsub = None
@@ -470,13 +467,13 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     @callback
     def _stop_callback(self, _now: datetime) -> None:
-        self._device.log(DEBUG, 0, "MerossLanShutter(0): _stop_callback")
+        self.device.log(DEBUG, 0, "MerossLanShutter(0): _stop_callback")
         self._stop_unsub = None
         self._request(-1)
 
 
     def _stop_cancel(self):
-        self._device.log(DEBUG, 0, "MerossLanShutter(0): _stop_cancel")
+        self.device.log(DEBUG, 0, "MerossLanShutter(0): _stop_cancel")
         self._position_endtime = None
         if self._stop_unsub is not None:
             self._stop_unsub()

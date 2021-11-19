@@ -50,8 +50,8 @@ class MerossLanSpray(_MerossEntity, SelectEntity):
     _attr_current_option: str | None = None
 
 
-    def __init__(self, device: 'MerossDevice', id: object):
-        super().__init__(device, id, None)
+    def __init__(self, device: 'MerossDevice', _id: object):
+        super().__init__(device, _id, None)
 
 
     async def async_select_option(self, option: str) -> None:
@@ -62,21 +62,12 @@ class MerossLanSpray(_MerossEntity, SelectEntity):
             self.update_mode(spray_mode)
 
 
-        self._device.request(
+        self.device.request(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
-            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self._id, mc.KEY_MODE: spray_mode}},
+            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.id, mc.KEY_MODE: spray_mode}},
             _ack_callback
         )
-        #REMOVE MAYBE
-        """
-        self._device.request(
-            mc.NS_APPLIANCE_CONTROL_TOGGLEX,
-            mc.METHOD_SET,
-            {mc.KEY_TOGGLEX: {mc.KEY_CHANNEL: self._id, mc.KEY_ONOFF: 1 if spray_mode != mc.SPRAY_MODE_OFF else 0}},
-            _ack_callback
-        )
-        """
 
 
     def update_mode(self, spray_mode: int) -> None:
@@ -86,8 +77,3 @@ class MerossLanSpray(_MerossEntity, SelectEntity):
         except:
             self._attr_current_option = None
             self.set_state(STATE_UNKNOWN)
-
-
-    #REMOVE MAYBE: debug only code
-    def _set_onoff(self, onoff) -> None:
-        self.update_mode(mc.SPRAY_MODE_CONTINUOUS if onoff else mc.SPRAY_MODE_OFF)

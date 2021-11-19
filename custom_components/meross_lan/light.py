@@ -209,7 +209,7 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
     @property
     def effect_list(self) -> list[str] | None:
-        return self._device.effect_list
+        return self.device.effect_list
 
 
     @property
@@ -248,7 +248,7 @@ class MerossLanLight(_MerossToggle, LightEntity):
                 light[mc.KEY_LUMINANCE] = _sat_1_100(kwargs[ATTR_BRIGHTNESS] * 100 // 255)
 
         if ATTR_EFFECT in kwargs:
-            effect_id = self._device.effect_dict_names.get(kwargs[ATTR_EFFECT], None)
+            effect_id = self.device.effect_dict_names.get(kwargs[ATTR_EFFECT], None)
             if effect_id is not None:
                 light[mc.KEY_EFFECT] = effect_id
             else:
@@ -267,14 +267,14 @@ class MerossLanLight(_MerossToggle, LightEntity):
         else:
             light[mc.KEY_ONOFF] = 1
 
-        self._device.request(
+        self.device.request(
             namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
             method=mc.METHOD_SET,
             payload={mc.KEY_LIGHT: light})
         #87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
-            if self._device.descriptor.firmware.get(mc.KEY_VERSION) == '2.1.2':
-                self._device.request(
+            if self.device.descriptor.firmware.get(mc.KEY_VERSION) == '2.1.2':
+                self.device.request(
                     namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
                     method=mc.METHOD_SET,
                     payload={mc.KEY_LIGHT: light})
@@ -286,10 +286,10 @@ class MerossLanLight(_MerossToggle, LightEntity):
             # we suppose we have to 'toggle(x)'
             await super().async_turn_off(**kwargs)
         else:
-            self._device.request(
+            self.device.request(
                 namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
                 method=mc.METHOD_SET,
-                payload={mc.KEY_LIGHT: { mc.KEY_CHANNEL: self._id, mc.KEY_ONOFF: 0}})
+                payload={mc.KEY_LIGHT: { mc.KEY_CHANNEL: self.id, mc.KEY_ONOFF: 0}})
 
 
     def update_light(self, light: dict) -> None:
@@ -303,7 +303,7 @@ class MerossLanLight(_MerossToggle, LightEntity):
             self._attr_color_mode = COLOR_MODE_UNKNOWN
 
             if mc.KEY_EFFECT in light:
-                self._attr_effect = self._device.effect_dict_ids.get(light[mc.KEY_EFFECT], None)
+                self._attr_effect = self.device.effect_dict_ids.get(light[mc.KEY_EFFECT], None)
             else:
                 self._attr_effect = None
 
@@ -345,7 +345,7 @@ class MerossLanLight(_MerossToggle, LightEntity):
         the list of available effects was changed (context at device level)
         so we'll just tell HA to update the state
         """
-        if self._device.effect_list:
+        if self.device.effect_list:
             self._attr_supported_features = self._attr_supported_features | SUPPORT_EFFECT
         else:
             self._attr_supported_features = self._attr_supported_features & ~SUPPORT_EFFECT
@@ -389,7 +389,7 @@ class MerossLanDNDLight(_MerossToggle, LightEntity):
         def _ack_callback():
             self.set_state(STATE_ON)
 
-        await self._device.async_http_request(
+        await self.device.async_http_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},
@@ -401,7 +401,7 @@ class MerossLanDNDLight(_MerossToggle, LightEntity):
         def _ack_callback():
             self.set_state(STATE_OFF)
 
-        await self._device.async_http_request(
+        await self.device.async_http_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},

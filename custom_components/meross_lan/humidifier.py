@@ -77,10 +77,10 @@ class MerossLanSpray(_MerossEntity, HumidifierEntity):
         def _ack_callback():
             self.update_mode(spray_mode)
 
-        self._device.request(
+        self.device.request(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
-            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self._id, mc.KEY_MODE: spray_mode}},
+            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.id, mc.KEY_MODE: spray_mode}},
             _ack_callback
         )
 
