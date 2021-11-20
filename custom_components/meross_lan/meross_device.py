@@ -326,7 +326,7 @@ class MerossDevice:
             else:
                 dndmode = payload.get(mc.KEY_DNDMODE)
                 if isinstance(dndmode, dict):
-                    self.entity_dnd._set_onoff(dndmode.get(mc.KEY_MODE))
+                    self.entity_dnd.update_onoff(dndmode.get(mc.KEY_MODE))
             return True
 
         if namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
@@ -613,7 +613,7 @@ class MerossDevice:
 
     def _parse_togglex(self, payload) -> None:
         if isinstance(payload, dict):
-            self.entities[payload.get(mc.KEY_CHANNEL, 0)]._set_onoff(payload.get(mc.KEY_ONOFF))
+            self.entities[payload.get(mc.KEY_CHANNEL, 0)].update_onoff(payload.get(mc.KEY_ONOFF))
         elif isinstance(payload, list):
             for p in payload:
                 self._parse_togglex(p)

@@ -144,7 +144,7 @@ class _MerossEntity:
         return
 
 
-    def set_state(self, state: str):
+    def update_state(self, state: str):
         if self._attr_state != state:
             self._attr_state = state
             if self.hass and self.enabled:
@@ -152,7 +152,7 @@ class _MerossEntity:
 
 
     def set_unavailable(self):
-        self.set_state(None)
+        self.update_state(None)
 
 
     @property
@@ -169,8 +169,8 @@ class _MerossEntity:
         return self._attr_state == STATE_ON
 
 
-    def _set_onoff(self, onoff) -> None:
-        self.set_state(STATE_ON if onoff else STATE_OFF)
+    def update_onoff(self, onoff) -> None:
+        self.update_state(STATE_ON if onoff else STATE_OFF)
 
 
 
@@ -184,7 +184,7 @@ class _MerossToggle(_MerossEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         def _ack_callback():
-            self.set_state(STATE_ON)
+            self.update_state(STATE_ON)
 
         self.device.request(
             self._toggle_ns,
@@ -196,7 +196,7 @@ class _MerossToggle(_MerossEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         def _ack_callback():
-            self.set_state(STATE_OFF)
+            self.update_state(STATE_OFF)
 
         self.device.request(
             self._toggle_ns,

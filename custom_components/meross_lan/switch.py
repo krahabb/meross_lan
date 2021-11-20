@@ -50,7 +50,7 @@ class MerossLanSpray(_MerossToggle, SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
 
         def _ack_callback():
-            self.set_state(STATE_ON)
+            self.update_state(STATE_ON)
 
         # WARNING: on MQTT we'll loose the ack callback since
         # it's not (yet) implemented and the option to correctly
@@ -67,7 +67,7 @@ class MerossLanSpray(_MerossToggle, SwitchEntity):
     async def async_turn_off(self, **kwargs) -> None:
 
         def _ack_callback():
-            self.set_state(STATE_OFF)
+            self.update_state(STATE_OFF)
 
         await self.device.async_http_request(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
@@ -78,7 +78,7 @@ class MerossLanSpray(_MerossToggle, SwitchEntity):
 
 
     def update_mode(self, spray_mode: int) -> None:
-        self.set_state(STATE_OFF if spray_mode == mc.SPRAY_MODE_OFF else STATE_ON)
+        self.update_state(STATE_OFF if spray_mode == mc.SPRAY_MODE_OFF else STATE_ON)
 
 
 
@@ -101,7 +101,7 @@ class MerossLanDND(_MerossToggle, SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
 
         def _ack_callback():
-            self.set_state(STATE_ON)
+            self.update_state(STATE_ON)
 
         # WARNING: on MQTT we'll loose the ack callback since
         # it's not (yet) implemented and the option to correctly
@@ -118,7 +118,7 @@ class MerossLanDND(_MerossToggle, SwitchEntity):
     async def async_turn_off(self, **kwargs) -> None:
 
         def _ack_callback():
-            self.set_state(STATE_OFF)
+            self.update_state(STATE_OFF)
 
         await self.device.async_http_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,

@@ -73,7 +73,7 @@ class MerossLanSpray(_MerossEntity, SelectEntity):
     def update_mode(self, spray_mode: int) -> None:
         try:
             self._attr_current_option = self._attr_options[spray_mode]
-            self.set_state(self._attr_current_option)
+            self.update_state(self._attr_current_option)
         except:
             self._attr_current_option = None
-            self.set_state(STATE_UNKNOWN)
+            self.update_state(STATE_UNKNOWN)

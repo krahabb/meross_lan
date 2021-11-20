@@ -87,15 +87,10 @@ class MerossLanSpray(_MerossEntity, HumidifierEntity):
 
     def update_mode(self, spray_mode: int) -> None:
         if spray_mode == mc.SPRAY_MODE_OFF:
-            self.set_state(STATE_OFF)
+            self.update_state(STATE_OFF)
         else:
             if (self._attr_state != STATE_ON) or (self._spray_mode != spray_mode):
                 self._attr_state = STATE_ON
                 self._spray_mode = spray_mode
                 if self.hass and self.enabled:
                     self.async_write_ha_state()
-
-
-    #REMOVE MAYBE: debug only code
-    def _set_onoff(self, onoff) -> None:
-        self.update_mode((self._spray_mode or mc.SPRAY_MODE_CONTINUOUS) if onoff else mc.SPRAY_MODE_OFF)

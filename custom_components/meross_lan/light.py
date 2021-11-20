@@ -387,7 +387,7 @@ class MerossLanDNDLight(_MerossToggle, LightEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         def _ack_callback():
-            self.set_state(STATE_ON)
+            self.update_state(STATE_ON)
 
         await self.device.async_http_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
@@ -399,7 +399,7 @@ class MerossLanDNDLight(_MerossToggle, LightEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         def _ack_callback():
-            self.set_state(STATE_OFF)
+            self.update_state(STATE_OFF)
 
         await self.device.async_http_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
@@ -409,8 +409,8 @@ class MerossLanDNDLight(_MerossToggle, LightEntity):
         )
 
 
-    def _set_onoff(self, onoff) -> None:
+    def update_onoff(self, onoff) -> None:
         """
-        intercept base _set_onoff to invert the dndmode flag/state
+        intercept base update_onoff to invert the dndmode flag/state
         """
-        self.set_state(STATE_OFF if onoff else STATE_ON)
+        self.update_state(STATE_OFF if onoff else STATE_ON)
