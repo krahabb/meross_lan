@@ -24,5 +24,5 @@ class MerossLanBinarySensor(_MerossEntity, BinarySensorEntity):
     """
 
     @staticmethod
-    def build(subdevice: "MerossSubDevice", device_class: str):
+    def build_for_subdevice(subdevice: "MerossSubDevice", device_class: str):
         return MerossLanBinarySensor(subdevice.hub, f"{subdevice.id}_{device_class}", device_class, subdevice)

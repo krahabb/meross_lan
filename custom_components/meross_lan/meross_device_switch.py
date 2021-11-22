@@ -232,14 +232,10 @@ class MerossDeviceSwitch(MerossDevice):
     def _parse_all(self, payload: dict) -> None:
         super()._parse_all(payload)
 
-        p_digest = self.descriptor.digest
-        if p_digest:
-            pass
-        else:
-            # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
-            p_control = self.descriptor.all.get(mc.KEY_CONTROL)
-            if isinstance(p_control, dict):
-                self._parse_togglex(p_control.get(mc.KEY_TOGGLE))
+        # older firmwares (MSS110 with 1.1.28) look like
+        # carrying 'control' instead of 'digest'
+        if isinstance(p_control := self.descriptor.all.get(mc.KEY_CONTROL), dict):
+            self._parse_togglex(p_control.get(mc.KEY_TOGGLE))
 
 
     def _request_updates(self, epoch, namespace):

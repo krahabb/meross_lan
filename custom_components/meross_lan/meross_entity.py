@@ -75,9 +75,9 @@ class _MerossEntity:
     def name(self) -> str:
         if (subdevice := self.subdevice) is not None:
             if self._attr_device_class is not None:
-                return f"{get_productnameuuid(subdevice.type, subdevice.id)} - {self._attr_device_class}"
+                return f"{subdevice.name} - {self._attr_device_class}"
             else:
-                return get_productnameuuid(subdevice.type, subdevice.id)
+                return subdevice.name
         if self._attr_device_class:
             return f"{self.device.descriptor.productname} - {self._attr_device_class}"
         return self.device.descriptor.productname
