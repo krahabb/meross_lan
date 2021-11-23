@@ -78,6 +78,9 @@ TRACE_KEYS_OBFUSCATE = (
     mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_USERID, mc.KEY_TOKEN
 )
 
+TRACE_DIRECTION_RX = 'RX'
+TRACE_DIRECTION_TX = 'TX'
+
 def _obfuscate(payload: dict) -> dict:
     """
     payload: input-output gets modified by blanking sensistive keys
@@ -361,7 +364,7 @@ class MerossDevice:
         if self.conf_protocol is Protocol.HTTP:
             return # even if mqtt parsing is no harming we want a 'consistent' HTTP only behaviour
         self.hasmqtt = True
-        self._trace(payload, namespace, method, CONF_OPTION_MQTT)
+        self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_RX)
         if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
             self.switch_protocol(Protocol.MQTT) # will reset 'lastmqtt'
         self.receive(namespace, method, payload, header)
@@ -391,7 +394,7 @@ class MerossDevice:
             for attempt in range(3):
                 # since we get 'random' connection errors, this is a retry attempts loop
                 # until we get it done. We'd want to break out early on specific events tho (Timeouts)
-                self._trace(payload, namespace, method, CONF_OPTION_HTTP)
+                self._trace(payload, namespace, method, CONF_OPTION_HTTP, TRACE_DIRECTION_TX)
                 try:
                     response = await _httpclient.async_request(namespace, method, payload)
                     break
@@ -405,7 +408,7 @@ class MerossDevice:
                     )
                     if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt and mqtt_is_connected(self.api.hass):
                         self.switch_protocol(Protocol.MQTT)
-                        self._trace(payload, namespace, method, CONF_OPTION_MQTT)
+                        self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_TX)
                         self.api.mqtt_publish(
                             self.device_id,
                             namespace,
@@ -426,7 +429,7 @@ class MerossDevice:
             r_namespace = r_header[mc.KEY_NAMESPACE]
             r_method = r_header[mc.KEY_METHOD]
             r_payload = response[mc.KEY_PAYLOAD]
-            self._trace(r_payload, r_namespace, r_method, CONF_OPTION_HTTP)
+            self._trace(r_payload, r_namespace, r_method, CONF_OPTION_HTTP, TRACE_DIRECTION_RX)
             if (callback is not None) and (r_method == mc.METHOD_SETACK):
                 #we're actually only using this for SET->SETACK command confirmation
                 callback()
@@ -451,7 +454,7 @@ class MerossDevice:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
             if mqtt_is_connected(self.api.hass):
-                self._trace(payload, namespace, method, CONF_OPTION_MQTT)
+                self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_TX)
                 self.api.mqtt_publish(
                     self.device_id,
                     namespace,
@@ -850,7 +853,14 @@ class MerossDevice:
             delattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER)
 
 
-    def _trace(self, data: str | dict, namespace: str = '', method: str = '', protocol = CONF_OPTION_AUTO):
+    def _trace(
+        self,
+        data: str | dict,
+        namespace: str = '',
+        method: str = '',
+        protocol = CONF_OPTION_AUTO,
+        rxtx = ''
+        ):
         _trace_file: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACE_FILE, None)
         if _trace_file is not None:
             now = time()
@@ -859,34 +869,12 @@ class MerossDevice:
                 self._trace_close(_trace_file)
                 return
 
-            """
-            if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
-                all = data.get(mc.KEY_ALL, data)
-                system = all.get(mc.KEY_SYSTEM, {})
-                hardware = system.get(mc.KEY_HARDWARE, {})
-                firmware = system.get(mc.KEY_FIRMWARE, {})
-                obfuscated = dict()
-                obfuscated[mc.KEY_UUID] = hardware.get(mc.KEY_UUID)
-                hardware[mc.KEY_UUID] = ''
-                obfuscated[mc.KEY_MACADDRESS] = hardware.get(mc.KEY_MACADDRESS)
-                hardware[mc.KEY_MACADDRESS] = ''
-                obfuscated[mc.KEY_WIFIMAC] = firmware.get(mc.KEY_WIFIMAC)
-                firmware[mc.KEY_WIFIMAC] = ''
-                obfuscated[mc.KEY_INNERIP] = firmware.get(mc.KEY_INNERIP)
-                firmware[mc.KEY_INNERIP] = ''
-                obfuscated[mc.KEY_SERVER] = firmware.get(mc.KEY_SERVER)
-                firmware[mc.KEY_SERVER] = ''
-                obfuscated[mc.KEY_PORT] = firmware.get(mc.KEY_PORT)
-                firmware[mc.KEY_PORT] = ''
-                obfuscated[mc.KEY_USERID] = firmware.get(mc.KEY_USERID)
-                firmware[mc.KEY_USERID] = ''
-            """
             if isinstance(data, dict):
                 obfuscated = _obfuscate(data)
 
             try:
                 _trace_file.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
-                    + protocol + '\t' + method + '\t' + namespace + '\t' \
+                    + rxtx + '\t' + protocol + '\t' + method + '\t' + namespace + '\t' \
                     + (json_dumps(data) if isinstance(data, dict) else data) + '\r\n')
                 if _trace_file.tell() > CONF_TRACE_MAXSIZE:
                     self._trace_close(_trace_file)
@@ -896,14 +884,3 @@ class MerossDevice:
 
             if isinstance(data, dict):
                 _deobfuscate(data, obfuscated)
-
-            """
-            if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
-                hardware[mc.KEY_UUID] = obfuscated.get(mc.KEY_UUID)
-                hardware[mc.KEY_MACADDRESS] = obfuscated.get(mc.KEY_MACADDRESS)
-                firmware[mc.KEY_WIFIMAC] = obfuscated.get(mc.KEY_WIFIMAC)
-                firmware[mc.KEY_INNERIP] = obfuscated.get(mc.KEY_INNERIP)
-                firmware[mc.KEY_SERVER] = obfuscated.get(mc.KEY_SERVER)
-                firmware[mc.KEY_PORT] = obfuscated.get(mc.KEY_PORT)
-                firmware[mc.KEY_USERID] = obfuscated.get(mc.KEY_USERID)
-            """
