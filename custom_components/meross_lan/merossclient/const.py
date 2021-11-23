@@ -62,16 +62,24 @@ NS_APPLIANCE_HUB_EXCEPTION = 'Appliance.Hub.Exception'
 NS_APPLIANCE_HUB_BATTERY = 'Appliance.Hub.Battery'
 NS_APPLIANCE_HUB_TOGGLEX = 'Appliance.Hub.ToggleX'
 NS_APPLIANCE_HUB_ONLINE = 'Appliance.Hub.Online'
-#
+# miscellaneous
+NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST = 'Appliance.Hub.SubDevice.MotorAdjust'
+# MS100
 NS_APPLIANCE_HUB_SENSOR_ALL = 'Appliance.Hub.Sensor.All'
 NS_APPLIANCE_HUB_SENSOR_TEMPHUM = 'Appliance.Hub.Sensor.TempHum'
 NS_APPLIANCE_HUB_SENSOR_ALERT = 'Appliance.Hub.Sensor.Alert'
 NS_APPLIANCE_HUB_SENSOR_ADJUST = 'Appliance.Hub.Sensor.Adjust'
+NS_APPLIANCE_HUB_SENSOR_LATEST = 'Appliance.Hub.Sensor.Latest'
+NS_APPLIANCE_HUB_SENSOR_SMOKE = 'Appliance.Hub.Sensor.Smoke'
+NS_APPLIANCE_HUB_SENSOR_WATERLEAK = 'Appliance.Hub.Sensor.WaterLeak'
 # MTS100
 NS_APPLIANCE_HUB_MTS100_ALL = 'Appliance.Hub.Mts100.All'
 NS_APPLIANCE_HUB_MTS100_TEMPERATURE = 'Appliance.Hub.Mts100.Temperature'
 NS_APPLIANCE_HUB_MTS100_MODE = 'Appliance.Hub.Mts100.Mode'
 NS_APPLIANCE_HUB_MTS100_ADJUST = 'Appliance.Hub.Mts100.Adjust'
+NS_APPLIANCE_HUB_MTS100_SCHEDULE = 'Appliance.Hub.Mts100.Schedule'
+NS_APPLIANCE_HUB_MTS100_SCHEDULEB = 'Appliance.Hub.Mts100.ScheduleB'
+NS_APPLIANCE_HUB_MTS100_TIMESYNC = 'Appliance.Hub.Mts100.TimeSync'
 # Smart cherub HP110A
 NS_APPLIANCE_MCU_UPGRADE = 'Appliance.Mcu.Upgrade'
 NS_APPLIANCE_MCU_HP110_FIRMWARE = 'Appliance.Mcu.Hp110.Firmware'
@@ -198,7 +206,8 @@ PAYLOAD_GET = {
     NS_APPLIANCE_ROLLERSHUTTER_CONFIG: { KEY_CONFIG: [] },
     NS_APPLIANCE_HUB_SENSOR_ALL: { KEY_ALL: [] },
     NS_APPLIANCE_HUB_MTS100_ALL: { KEY_ALL: [] },
-    NS_APPLIANCE_HUB_BATTERY: { KEY_BATTERY: [] }
+    NS_APPLIANCE_HUB_BATTERY: { KEY_BATTERY: [] },
+    NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST: { KEY_ADJUST: [] }, # unconfirmed but 'motoradjust' is wrong for sure
 }
 
 # error codes as reported by Meross device protocol
@@ -232,8 +241,9 @@ ROLLERSHUTTER_STATE_CLOSING = 2
 TYPE_UNKNOWN = 'unknown'
 TYPE_MSH300 = 'msh300' # WiFi Hub
 TYPE_MS100 = 'ms100' # Smart temp/humidity sensor over Hub
-TYPE_MTS100 = 'mts100'
-TYPE_MTS100V3 = 'mts100v3'
+TYPE_MTS100 = 'mts100' # Smart thermostat over hub
+TYPE_MTS100V3 = 'mts100v3' # Smart thermostat over hub
+TYPE_MTS150 = 'mts150' # Smart thermostat over hub
 TYPE_MSS310 = 'mss310' # smart plug with energy meter
 TYPE_MSL100 = 'msl100' # smart bulb
 TYPE_MSL120 = 'msl120' # smart bulb with color/temp

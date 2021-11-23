@@ -444,3 +444,10 @@ class MTS100V3SubDevice(MTS100SubDevice):
         super().__init__(hub, p_digest, mc.TYPE_MTS100V3)
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100V3] = MTS100V3SubDevice
+
+class MTS150SubDevice(MTS100SubDevice):
+
+    def __init__(self, hub: MerossDeviceHub, p_digest: dict) -> None:
+        super().__init__(hub, p_digest, mc.TYPE_MTS150)
+
+WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150] = MTS150SubDevice
