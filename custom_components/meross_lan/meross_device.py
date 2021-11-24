@@ -339,7 +339,7 @@ class MerossDevice:
             # Note: I actually see this NS only on mss310 plugs
             # (msl120j bulb doesnt have it)
             if method == mc.METHOD_PUSH:
-                self.request(
+                self.mqtt_request(
                     mc.NS_APPLIANCE_SYSTEM_CLOCK,
                     mc.METHOD_PUSH,
                     { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: int(epoch)}}
@@ -350,6 +350,21 @@ class MerossDevice:
             if method == mc.METHOD_PUSH:
                 self.descriptor.update_time(payload.get(mc.KEY_TIME, {}))
             return True
+
+        if namespace == mc.NS_APPLIANCE_CONTROL_BIND:
+            """
+            this transaction was observed on a trace from a msh300hk
+            the device keeps sending 'SET'-'Bind' so I'm trying to
+            kindly answer a 'SETACK'
+            assumption is we're working on mqtt
+            """
+            if method == mc.METHOD_SET:
+                self.mqtt_request(
+                    mc.NS_APPLIANCE_CONTROL_BIND,
+                    mc.METHOD_SETACK,
+                    {},
+                    header[mc.KEY_MESSAGEID]
+                )
 
         return False
 
@@ -384,6 +399,18 @@ class MerossDevice:
                 self._set_offline()
 
 
+    def mqtt_request(self, namespace: str, method: str, payload: dict, messageid: str = None):
+        self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_TX)
+        self.api.mqtt_publish(
+            self.device_id,
+            namespace,
+            method,
+            payload,
+            self.key or self.replykey,
+            messageid
+        )
+
+
     async def async_http_request(self, namespace: str, method: str, payload: dict, callback: Callable = None):
         try:
             _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)
@@ -406,16 +433,13 @@ class MerossDevice:
                         "MerossDevice(%s) client connection attempt(%s) error in async_http_request: %s",
                         self.device_id, str(attempt), str(e) or type(e).__name__
                     )
-                    if (self.conf_protocol is Protocol.AUTO) and self.lastmqtt and mqtt_is_connected(self.api.hass):
+                    if (
+                        (self.conf_protocol is Protocol.AUTO) and
+                        self.lastmqtt and
+                        mqtt_is_connected(self.api.hass)
+                    ):
                         self.switch_protocol(Protocol.MQTT)
-                        self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_TX)
-                        self.api.mqtt_publish(
-                            self.device_id,
-                            namespace,
-                            method,
-                            payload,
-                            self.key or self.replykey
-                            )
+                        self.mqtt_request(namespace, method, payload)
                         return
                     elif isinstance(e, TimeoutError):
                         self._set_offline()
@@ -454,14 +478,7 @@ class MerossDevice:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
             if mqtt_is_connected(self.api.hass):
-                self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_TX)
-                self.api.mqtt_publish(
-                    self.device_id,
-                    namespace,
-                    method,
-                    payload,
-                    self.key or self.replykey
-                )
+                self.mqtt_request(namespace, method, payload)
                 return
             # MQTT not connected
             if self.conf_protocol is Protocol.MQTT:

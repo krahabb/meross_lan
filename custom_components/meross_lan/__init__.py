@@ -340,15 +340,16 @@ class MerossApi:
         namespace: str,
         method: str,
         payload: dict,
-        key: KeyType = None
+        key: KeyType = None,
+        messageid: str = None
     ) -> None:
         LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
         mqtt_publish(
             self.hass,
             mc.TOPIC_REQUEST.format(device_id),
             json_dumps(merossclient.build_payload(
-                namespace, method, payload,
-                key, mc.TOPIC_RESPONSE.format(device_id))),
+                namespace, method, payload, key,
+                mc.TOPIC_RESPONSE.format(device_id), messageid))
             )
 
 

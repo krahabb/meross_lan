@@ -53,7 +53,14 @@ class MerossSignatureError(MerossProtocolError):
         super().__init__("Signature error")
 
 
-def build_payload(namespace:str, method:str, payload:dict, key:KeyType, from_:str)-> dict:
+def build_payload(
+    namespace:str,
+    method:str,
+    payload:dict,
+    key:KeyType,
+    from_:str,
+    messageid:str = None
+)-> dict:
     if isinstance(key, dict):
         key[mc.KEY_NAMESPACE] = namespace
         key[mc.KEY_METHOD] = method
@@ -64,7 +71,8 @@ def build_payload(namespace:str, method:str, payload:dict, key:KeyType, from_:st
             mc.KEY_PAYLOAD: payload
         }
     else:
-        messageid = uuid4().hex
+        if messageid is None:
+            messageid = uuid4().hex
         timestamp = int(time())
         return {
             mc.KEY_HEADER: {
