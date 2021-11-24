@@ -1,0 +1,75 @@
+{
+    "title": "Meross LAN",
+    "config": {
+        "flow_title": "Meross {device_type}",
+        "abort": {
+            "no_devices_found": "Keine Geräte im Netzwerk gefunden",
+            "single_instance_allowed": "Das Gerät ist bereits vorhanden. Jedes Gerät kann nur ein mal konfiguriert werden."
+        },
+        "error": {
+            "invalid_key": "Geräteschlüssel fehlerhaft: Fortfahren um den Schlüssel aus den Meross Account zu übertragen",
+            "already_configured_device": "Das Gerät ist bereits vorhanden",
+            "cannot_connect": "Verbindung nicht möglich",
+            "invalid_auth": "Fehlerhafte Zugangsdaten"
+          },
+        "step": {
+            "user": {
+                "title": "Meross LAN",
+                "description": "Meross Gerät einrichten",
+                "data": {
+                    "host": "IP-Adresse des Geräts",
+                    "key": "Geräteschlüssel"
+                }
+            },
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Allgemeine Meross LAN Einstellungen",
+                "data": {
+                    "key": "Geräteschlüssel"
+                }
+            },
+            "retrievekey": {
+                "title": "Geräteschlüssel übertragen",
+                "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
+                "data": {
+                    "username": "Meross Benutzername",
+                    "password": "Meross Passwort"
+                }
+            },
+            "device": {
+                "title": "Gerätekonfiguration",
+                "description": "Typ: {device_type}\nUUID: {device_id}",
+                "data": {
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Allgemeine Meross LAN Einstellungen",
+                "data": {
+                    "key": "Geräteschlüssel"
+                }
+            },
+            "device": {
+                "title": "Gerätekonfiguration",
+                "description": "Typ: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
+                "data": {
+                    "key": "Geräteschlüssel",
+                    "protocol": "Verbindungsart",
+                    "polling_period": "Abfragerate",
+                    "timezone": "Gerätezeitzone",
+                    "voltageRatio": "Spannung",
+                    "electricityRatio": "Strom",
+                    "signalOpen": "Öffnungszeit (Sek.)",
+                    "signalClose": "Verschlusszeit (Sek.)",
+                    "trace": "Debugmodus aktivieren (für 10 Min.)",
+                    "all": "Appliance.System.All",
+                    "ability": "Appliance.System.Ability"
+                }
+            }
+        }
+    }
+}
