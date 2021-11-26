@@ -667,7 +667,6 @@ class MerossDevice:
             except:
                 pass
 
-
         epoch = int(self.lastupdate) # we're not calling time() since it's fresh enough
 
         if self.hasmqtt:
@@ -677,11 +676,7 @@ class MerossDevice:
                 and mc.NS_APPLIANCE_SYSTEM_CLOCK in descr.ability:
                 #timestamp misalignment: try to fix it
                 #only when devices are paired on our MQTT
-                self.request(
-                    mc.NS_APPLIANCE_SYSTEM_CLOCK,
-                    mc.METHOD_PUSH,
-                    { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: epoch }}
-                )
+                self.request(mc.NS_APPLIANCE_SYSTEM_CLOCK, mc.METHOD_PUSH, {})
 
             if mc.NS_APPLIANCE_SYSTEM_TIME in descr.ability:
                 # check the appliance timeoffsets are updated (see #36)
