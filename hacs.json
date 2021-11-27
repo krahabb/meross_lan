@@ -1,7 +1,7 @@
 {
   "name": "Meross LAN",
   "render_readme": true,
-  "country": ["IT", "UK", "US", "JP", "ES", "FR"],
+  "country": ["IT", "UK", "US", "JP", "ES", "FR", "DE"],
   "domains": ["switch", "sensor", "light", "cover", "climate", "binary_sensor", "select"],
   "homeassistant": "2021.4.0",
   "iot_class": "local_polling",
