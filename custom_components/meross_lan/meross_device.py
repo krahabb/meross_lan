@@ -24,7 +24,7 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 from .merossclient import (
     const as mc,  # mEROSS cONST
     MerossDeviceDescriptor, MerossHttpClient,
-    get_replykey,
+    get_replykey, build_default_payload_get,
 )
 from .meross_entity import MerossFakeEntity
 from .helpers import LOGGER, LOGGER_trap, mqtt_is_connected
@@ -496,7 +496,7 @@ class MerossDevice:
         self.request(
             namespace,
             mc.METHOD_GET,
-            mc.PAYLOAD_GET.get(namespace) or { namespace.split('.')[-1].lower(): {} }
+            build_default_payload_get(namespace)
         )
 
 
@@ -558,7 +558,7 @@ class MerossDevice:
         just the latter is async)
         """
         if self.hasmqtt and (mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability):
-            self._config_timezone(int(time()), timezone = user_input.get(mc.KEY_TIMEZONE))
+            self._config_timezone(int(time()), user_input.get(mc.KEY_TIMEZONE))
 
 
     @callback
@@ -680,7 +680,7 @@ class MerossDevice:
 
             if mc.NS_APPLIANCE_SYSTEM_TIME in descr.ability:
                 # check the appliance timeoffsets are updated (see #36)
-                self._config_timezone(epoch)
+                self._config_timezone(epoch, descr.time.get(mc.KEY_TIMEZONE))
 
         for key, value in descr.digest.items():
             _parse = getattr(self, f"_parse_{key}", None)
@@ -688,27 +688,27 @@ class MerossDevice:
                 _parse(value)
 
 
-    def _config_timezone(self, epoch, **kwargs) -> None:
+    def _config_timezone(self, epoch, timezone) -> None:
         p_time: dict = self.descriptor.time
         p_timerule: list = p_time.get(mc.KEY_TIMERULE, [])
+        p_timezone: str = p_time.get(mc.KEY_TIMEZONE)
         """
         timeRule should contain 2 entries: the actual time offsets and
         the next (incoming). If 'now' is after 'incoming' it means the
         first entry became stale and so we'll update the daylight offsets
         to current/next DST time window
         """
-        timezone = kwargs[mc.KEY_TIMEZONE] if mc.KEY_TIMEZONE in kwargs else p_time.get(mc.KEY_TIMEZONE)
-
-        if (p_time.get(mc.KEY_TIMEZONE) != timezone) \
+        if (p_timezone != timezone) \
             or len(p_timerule) < 2 \
             or p_timerule[1][0] < epoch:
-            """
-            we'll look through the list of transition times for current tz
-            and provide the actual (last past daylight) and the next to the
-            appliance so it knows how and when to offset utc to localtime
-            """
-            timerules = list()
+
             if timezone:
+                """
+                we'll look through the list of transition times for current tz
+                and provide the actual (last past daylight) and the next to the
+                appliance so it knows how and when to offset utc to localtime
+                """
+                timerules = list()
                 try:
                     import pytz
                     import bisect
@@ -738,16 +738,27 @@ class MerossDevice:
                     )
                     timerules = [[0, 0, 0], [epoch + PARAM_TIMEZONE_CHECK_PERIOD, 0, 1]]
 
-            self.request(
-                mc.NS_APPLIANCE_SYSTEM_TIME,
-                mc.METHOD_SET,
-                payload={
-                    mc.KEY_TIME: {
-                        mc.KEY_TIMEZONE: timezone or "",
-                        mc.KEY_TIMERULE: timerules
+                self.request(
+                    mc.NS_APPLIANCE_SYSTEM_TIME,
+                    mc.METHOD_SET,
+                    payload={
+                        mc.KEY_TIME: {
+                            mc.KEY_TIMEZONE: timezone,
+                            mc.KEY_TIMERULE: timerules
+                        }
                     }
-                }
-            )
+                )
+            elif p_timezone: # and !timezone
+                self.request(
+                    mc.NS_APPLIANCE_SYSTEM_TIME,
+                    mc.METHOD_SET,
+                    payload={
+                        mc.KEY_TIME: {
+                            mc.KEY_TIMEZONE: '',
+                            mc.KEY_TIMERULE: []
+                        }
+                    }
+                )
 
 
     def _set_offline(self) -> None:
