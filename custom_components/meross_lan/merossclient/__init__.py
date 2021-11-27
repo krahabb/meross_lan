@@ -91,6 +91,17 @@ def build_payload(
         }
 
 
+def build_default_payload_get(namespace: str) -> dict:
+    """
+    when we query a device 'namespace' with a GET method the request payload
+    is usually 'well structured' (more or less). We have a dictionary of
+    well-known payloads else we'll use some heuristics
+    """
+    if namespace in mc.PAYLOAD_GET:
+        return mc.PAYLOAD_GET[namespace]
+    split = namespace.split('.')
+    return { split[-1].lower(): [] if split[1] == 'Hub' else {} }
+
 
 def get_replykey(header: dict, key:KeyType = None) -> KeyType:
     """
@@ -299,5 +310,5 @@ class MerossHttpClient:
         return await self.async_request_strict(
             namespace,
             mc.METHOD_GET,
-            mc.PAYLOAD_GET.get(namespace) or { namespace.split('.')[-1].lower(): {} }
+            build_default_payload_get(namespace)
         )
