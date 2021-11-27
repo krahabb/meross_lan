@@ -53,18 +53,26 @@ class MerossSignatureError(MerossProtocolError):
         super().__init__("Signature error")
 
 
-def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = None, device_id:str = None)-> dict:
+def build_payload(
+    namespace:str,
+    method:str,
+    payload:dict,
+    key:KeyType,
+    from_:str,
+    messageid:str = None
+)-> dict:
     if isinstance(key, dict):
         key[mc.KEY_NAMESPACE] = namespace
         key[mc.KEY_METHOD] = method
         key[mc.KEY_PAYLOADVERSION] = 1
-        key[mc.KEY_FROM] = mc.TOPIC_RESPONSE.format(device_id or mc.MANUFACTURER)
+        key[mc.KEY_FROM] = from_
         return {
             mc.KEY_HEADER: key,
             mc.KEY_PAYLOAD: payload
         }
     else:
-        messageid = uuid4().hex
+        if messageid is None:
+            messageid = uuid4().hex
         timestamp = int(time())
         return {
             mc.KEY_HEADER: {
@@ -72,7 +80,7 @@ def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = No
                 mc.KEY_NAMESPACE: namespace,
                 mc.KEY_METHOD: method,
                 mc.KEY_PAYLOADVERSION: 1,
-                mc.KEY_FROM: mc.TOPIC_RESPONSE.format(device_id or mc.MANUFACTURER),
+                mc.KEY_FROM: from_,
                 #mc.KEY_FROM: "/app/0-0/subscribe",
                 #"from": "/appliance/9109182170548290882048e1e9522946/publish",
                 mc.KEY_TIMESTAMP: timestamp,
@@ -82,6 +90,17 @@ def build_payload(namespace:str, method:str, payload:dict = {}, key:KeyType = No
             mc.KEY_PAYLOAD: payload
         }
 
+
+def build_default_payload_get(namespace: str) -> dict:
+    """
+    when we query a device 'namespace' with a GET method the request payload
+    is usually 'well structured' (more or less). We have a dictionary of
+    well-known payloads else we'll use some heuristics
+    """
+    if namespace in mc.PAYLOAD_GET:
+        return mc.PAYLOAD_GET[namespace]
+    split = namespace.split('.')
+    return { split[-1].lower(): [] if split[1] == 'Hub' else {} }
 
 
 def get_replykey(header: dict, key:KeyType = None) -> KeyType:
@@ -228,6 +247,7 @@ class MerossHttpClient:
             json_body:dict = json_loads(text_body)
             self.replykey = get_replykey(json_body.get(mc.KEY_HEADER), self.key)
         except Exception as e:
+            self.replykey = None # reset the key hack since it could became stale
             self._logger.debug("MerossHttpClient(%s): HTTP Exception (%s)", self._host, str(e) or type(e).__name__)
             raise e
 
@@ -238,7 +258,7 @@ class MerossHttpClient:
 
         self._logger.debug("MerossHttpClient(%s): HTTP POST method:(%s) namespace:(%s)", self._host, method, namespace)
 
-        request: dict = build_payload(namespace, method, payload, self.key or self.replykey)
+        request: dict = build_payload(namespace, method, payload, self.key or self.replykey, mc.MANUFACTURER)
         response: dict = await self.async_request_raw(request)
 
         if response.get(mc.KEY_PAYLOAD, {}).get(mc.KEY_ERROR, {}).get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
@@ -278,8 +298,7 @@ class MerossHttpClient:
             raise MerossProtocolError(e)
 
         if r_method == mc.METHOD_ERROR:
-            code = r_payload.get(mc.KEY_ERROR, {}).get(mc.KEY_CODE)
-            if code == mc.ERROR_INVALIDKEY:
+            if r_payload.get(mc.KEY_ERROR, {}).get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
                 raise MerossKeyError(r_payload)
             else:
                 raise MerossProtocolError(r_payload)
@@ -291,5 +310,5 @@ class MerossHttpClient:
         return await self.async_request_strict(
             namespace,
             mc.METHOD_GET,
-            mc.PAYLOAD_GET.get(namespace) or { namespace.split('.')[-1].lower(): {} }
+            build_default_payload_get(namespace)
         )

@@ -11,7 +11,7 @@ from homeassistant.const import (
     DEVICE_CLASS_ENERGY,
 )
 
-from .merossclient import KeyType, const as mc  # mEROSS cONST
+from .merossclient import KeyType, MerossDeviceDescriptor, const as mc  # mEROSS cONST
 from .meross_entity import MerossFakeEntity
 from .sensor import MerossLanSensor, STATE_CLASS_TOTAL_INCREASING
 from .switch import MerossLanSwitch
@@ -21,7 +21,7 @@ from .const import PARAM_ENERGY_UPDATE_PERIOD
 
 class MerossDeviceSwitch(MerossDevice):
 
-    def __init__(self, api, descriptor, entry):
+    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(api, descriptor, entry)
         self._sensor_power = MerossFakeEntity
         self._sensor_current = MerossFakeEntity
@@ -33,10 +33,11 @@ class MerossDeviceSwitch(MerossDevice):
 
         try:
             # use a mix of heuristic to detect device features
-            ability = self.descriptor.ability
-            p_digest = self.descriptor.digest
+            ability = descriptor.ability
+            p_digest = descriptor.digest
             if p_digest:
                 spray = p_digest.get(mc.KEY_SPRAY)
+                #spray = [{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]
                 if isinstance(spray, list):
                     try:
                         from .select import MerossLanSpray
@@ -72,7 +73,7 @@ class MerossDeviceSwitch(MerossDevice):
             else:
                 # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
                 # but have 'control'
-                p_control = self.descriptor.all.get(mc.KEY_CONTROL)
+                p_control = descriptor.all.get(mc.KEY_CONTROL)
                 if p_control:
                     p_toggle = p_control.get(mc.KEY_TOGGLE)
                     if isinstance(p_toggle, dict):
@@ -119,9 +120,9 @@ class MerossDeviceSwitch(MerossDevice):
 
         if namespace == mc.NS_APPLIANCE_CONTROL_ELECTRICITY:
             electricity = payload.get(mc.KEY_ELECTRICITY)
-            self._sensor_power.set_state(electricity.get(mc.KEY_POWER) / 1000)
-            self._sensor_current.set_state(electricity.get(mc.KEY_CURRENT) / 1000)
-            self._sensor_voltage.set_state(electricity.get(mc.KEY_VOLTAGE) / 10)
+            self._sensor_power.update_state(electricity.get(mc.KEY_POWER) / 1000)
+            self._sensor_current.update_state(electricity.get(mc.KEY_CURRENT) / 1000)
+            self._sensor_voltage.update_state(electricity.get(mc.KEY_VOLTAGE) / 10)
             config = electricity.get(mc.KEY_CONFIG)
             if isinstance(config, dict):
                 self._consumptionConfig = config
@@ -133,7 +134,7 @@ class MerossDeviceSwitch(MerossDevice):
             days_len = len(days)
             if days_len < 1:
                 self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(0)
-                self._sensor_energy.set_state(0)
+                self._sensor_energy.update_state(0)
                 return True
             # we'll look through the device array values to see
             # data timestamped (in device time) after last midnight
@@ -174,7 +175,7 @@ class MerossDeviceSwitch(MerossDevice):
                     "MerossDevice(%s) Energy: update last_reset to %s",
                     self.device_id, self._sensor_energy._attr_last_reset.isoformat()
                 )
-            self._sensor_energy.set_state(day_last.get(mc.KEY_VALUE))
+            self._sensor_energy.update_state(day_last.get(mc.KEY_VALUE))
             return True
 
         if namespace == mc.NS_APPLIANCE_CONTROL_SPRAY:
@@ -203,7 +204,7 @@ class MerossDeviceSwitch(MerossDevice):
                         )
                     ] = int
         """
-        
+
 
     def entry_option_update(self, user_input: dict):
         super().entry_option_update(user_input)
@@ -222,7 +223,7 @@ class MerossDeviceSwitch(MerossDevice):
 
     def _parse_spray(self, payload) -> None:
         if isinstance(payload, dict):
-            self.entities[payload.get(mc.KEY_CHANNEL, 0)]._set_mode(payload.get(mc.KEY_MODE))
+            self.entities[payload.get(mc.KEY_CHANNEL, 0)].update_mode(payload.get(mc.KEY_MODE))
         elif isinstance(payload, list):
             for p in payload:
                 self._parse_spray(p)
@@ -231,14 +232,10 @@ class MerossDeviceSwitch(MerossDevice):
     def _parse_all(self, payload: dict) -> None:
         super()._parse_all(payload)
 
-        p_digest = self.descriptor.digest
-        if p_digest:
-            pass
-        else:
-            # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
-            p_control = self.descriptor.all.get(mc.KEY_CONTROL)
-            if isinstance(p_control, dict):
-                self._parse_togglex(p_control.get(mc.KEY_TOGGLE))
+        # older firmwares (MSS110 with 1.1.28) look like
+        # carrying 'control' instead of 'digest'
+        if isinstance(p_control := self.descriptor.all.get(mc.KEY_CONTROL), dict):
+            self._parse_togglex(p_control.get(mc.KEY_TOGGLE))
 
 
     def _request_updates(self, epoch, namespace):

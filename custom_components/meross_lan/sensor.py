@@ -45,7 +45,6 @@ except:#someone still pre 2021.8.0 ?
 
 from .meross_entity import (
     _MerossEntity,
-    _MerossHubEntity,
     platform_setup_entry,
     platform_unload_entry,
 )
@@ -70,18 +69,23 @@ async def async_unload_entry(hass: object, config_entry: object) -> bool:
     return platform_unload_entry(hass, config_entry, PLATFORM_SENSOR)
 
 
-class _MerossSensorEntity:
+
+class MerossLanSensor(_MerossEntity, SensorEntity):
 
     PLATFORM = PLATFORM_SENSOR
 
     _attr_state_class: str | None = STATE_CLASS_MEASUREMENT
     _attr_last_reset: datetime | None = None # Deprecated, to be removed in 2021.11
     _attr_native_unit_of_measurement: str | None
-    _attr_state: StateType
+
+    def __init__(self, device: "MerossDevice", _id: object, device_class: str, subdevice: "MerossSubDevice" = None):
+        super().__init__(device, _id, device_class, subdevice)
+        self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(device_class)
 
 
-    #def __init__(self):
-    #    self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(self.device_class)
+    @staticmethod
+    def build_for_subdevice(subdevice: "MerossSubDevice", device_class: str):
+        return MerossLanSensor(subdevice.hub, f"{subdevice.id}_{device_class}", device_class, subdevice)
 
 
     @property
@@ -119,19 +123,3 @@ class _MerossSensorEntity:
             # let the core implementation manage unit conversions
             return SensorEntity.state.__get__(self)
         return self._attr_state
-
-
-
-class MerossLanSensor(_MerossSensorEntity, _MerossEntity, SensorEntity):
-
-    def __init__(self, device: "MerossDevice", id: object, device_class: str):
-        super().__init__(device, id, device_class)
-        self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(self.device_class)
-
-
-
-class MerossLanHubSensor(_MerossSensorEntity, _MerossHubEntity, SensorEntity):
-
-    def __init__(self, subdevice: "MerossSubDevice", device_class: str):
-        super().__init__(subdevice, f"{subdevice.id}_{device_class}", device_class)
-        self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(self.device_class)

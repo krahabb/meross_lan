@@ -1,7 +1,7 @@
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
-from .merossclient import const as mc  # mEROSS cONST
+from .merossclient import MerossDeviceDescriptor, const as mc  # mEROSS cONST
 from .meross_device import MerossDevice
 from .cover import MerossLanGarage, MerossLanRollerShutter
 from .helpers import LOGGER
@@ -9,11 +9,11 @@ from .helpers import LOGGER
 
 class MerossDeviceGarage(MerossDevice):
 
-    def __init__(self, api, descriptor, entry):
+    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(api, descriptor, entry)
 
         try:
-            p_digest = self.descriptor.digest
+            p_digest = descriptor.digest
             if p_digest:
                 garagedoor = p_digest.get(mc.KEY_GARAGEDOOR)
                 if isinstance(garagedoor, list):
@@ -57,16 +57,14 @@ class MerossDeviceGarage(MerossDevice):
 
 class MerossDeviceShutter(MerossDevice):
 
-    def __init__(self, api, descriptor, entry):
+    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(api, descriptor, entry)
 
         try:
-            # use a mix of heuristic to detect device features
-            ability = self.descriptor.ability
             # atm we're not sure we can detect this in 'digest' payload
             # looks like mrs100 just exposes abilities and we'll have to poll
             # related NS
-            if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
+            if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in descriptor.ability:
                 MerossLanRollerShutter(self, 0)
                 self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
                 self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
