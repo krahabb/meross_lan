@@ -4,7 +4,7 @@ import logging
 import os
 import socket
 import math
-from typing import  Callable, Dict
+from typing import  Callable, Dict, List
 from time import strftime, time
 from io import TextIOWrapper
 from json import (
@@ -39,9 +39,6 @@ from .const import (
 
 # these are dynamically created MerossDevice attributes in a sort of a dumb optimization
 VOLATILE_ATTR_HTTPCLIENT = '_httpclient'
-VOLATILE_ATTR_TRACE_FILE = '_trace_file'
-VOLATILE_ATTR_TRACE_ENDTIME = '_trace_endtime'
-VOLATILE_ATTR_TRACE_ABILITY_ITER = '_trace_ability_iter'
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
 # this list will be excluded from enumeration since it's redundant/exposing sensitive info
@@ -153,6 +150,9 @@ class MerossDevice:
         self.lastupdate = 0
         self.lastmqtt = 0 # means we recently received an mqtt message
         self.hasmqtt = False # hasmqtt means it is somehow available to communicate over mqtt
+        self._trace_file: TextIOWrapper = None
+        self._trace_endtime = 0
+        self._trace_ability_iter = None
         """
         self.entities: dict()
         is a collection of all of the instanced entities
@@ -173,7 +173,7 @@ class MerossDevice:
         For Hub(s) too NS_ALL is very 'partial' (at least MTS100 state is not fully exposed)
         """
         self.polling_period = CONF_POLLING_PERIOD_DEFAULT
-        self.polling_dictionary = list()
+        self.polling_dictionary: List[str] = list()
         self.polling_dictionary.append(mc.NS_APPLIANCE_SYSTEM_ALL)
         """
         self.platforms: dict()
@@ -406,7 +406,7 @@ class MerossDevice:
             namespace,
             method,
             payload,
-            self.key or self.replykey,
+            self.key,
             messageid
         )
 
@@ -580,9 +580,8 @@ class MerossDevice:
         don't care about it on startup ('_set_config_entry'). When updating ConfigEntry
         we always reset the timeout and so the trace will (eventually) restart
         """
-        _trace_file: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACE_FILE, None)
-        if _trace_file is not None:
-            self._trace_close(_trace_file)
+        if self._trace_file is not None:
+            self._trace_close()
         _trace_endtime = config_entry.data.get(CONF_TRACE, 0)
         if _trace_endtime > time():
             try:
@@ -844,24 +843,21 @@ class MerossDevice:
             self.polling_period = CONF_POLLING_PERIOD_MIN
 
 
-    def _trace_close(self, tracefile: TextIOWrapper):
+    def _trace_close(self):
         try:
-            delattr(self, VOLATILE_ATTR_TRACE_FILE)
-            delattr(self, VOLATILE_ATTR_TRACE_ENDTIME)
-            delattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER)
-            tracefile.close()
+            self._trace_file.close()
         except Exception as e:
             LOGGER.warning("MerossDevice(%s) error while closing trace file (%s)", self.device_id, str(e))
-
+        self._trace_file = None
+        self._trace_ability_iter = None
 
     @callback
     def _trace_ability(self, *args):
-        _trace_ability_iter = getattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER, None)
-        if _trace_ability_iter is None:
+        if self._trace_ability_iter is None:
             return
         try:
             while True:
-                ability:str = next(_trace_ability_iter)
+                ability:str = next(self._trace_ability_iter)
                 if ability not in TRACE_ABILITY_EXCLUDE:
                     self.request_get(ability)
                     break
@@ -871,9 +867,8 @@ class MerossDevice:
                 self._trace_ability,
                 datetime.fromtimestamp(time() + 5)
             )
-
         except:# finished ?!
-            delattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER)
+            self._trace_ability_iter = None
 
 
     def _trace(
@@ -884,26 +879,24 @@ class MerossDevice:
         protocol = CONF_OPTION_AUTO,
         rxtx = ''
         ):
-        _trace_file: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACE_FILE, None)
-        if _trace_file is not None:
+        if self._trace_file is not None:
             now = time()
-            _trace_endtime = getattr(self, VOLATILE_ATTR_TRACE_ENDTIME, 0)
-            if now > _trace_endtime:
-                self._trace_close(_trace_file)
+            if now > self._trace_endtime:
+                self._trace_close()
                 return
 
             if isinstance(data, dict):
                 obfuscated = _obfuscate(data)
 
             try:
-                _trace_file.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
+                self._trace_file.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
                     + rxtx + '\t' + protocol + '\t' + method + '\t' + namespace + '\t' \
                     + (json_dumps(data) if isinstance(data, dict) else data) + '\r\n')
-                if _trace_file.tell() > CONF_TRACE_MAXSIZE:
-                    self._trace_close(_trace_file)
+                if self._trace_file.tell() > CONF_TRACE_MAXSIZE:
+                    self._trace_close()
             except Exception as e:
                 LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
-                self._trace_close(_trace_file)
+                self._trace_close()
 
             if isinstance(data, dict):
                 _deobfuscate(data, obfuscated)
