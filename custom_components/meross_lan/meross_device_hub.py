@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 
 from typing import Callable, Dict
 
@@ -7,6 +8,8 @@ from homeassistant.const import (
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_HUMIDITY,
 )
+from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers import device_registry
 from homeassistant.components.binary_sensor import DEVICE_CLASS_WINDOW
 
 from custom_components.meross_lan.number import MerossLanHubAdjustNumber
@@ -23,6 +26,7 @@ from .binary_sensor import PLATFORM_BINARY_SENSOR, MerossLanBinarySensor
 from .number import PLATFORM_NUMBER, MerossLanHubAdjustNumber
 from .helpers import LOGGER
 from .const import (
+    DOMAIN,
     PARAM_HEARTBEAT_PERIOD,
     PARAM_HUBBATTERY_UPDATE_PERIOD,
 )
@@ -38,17 +42,8 @@ WELL_KNOWN_TYPE_MAP: Dict[str, Callable] = dict({
 }
 """
 
-def _get_subdevice_type(p_digest: dict) -> str:
-    """
-    parses the subdevice payload in 'digest' to look for a well-known type
-    or extract the type itself:
-    """
-    for p_key, p_value in p_digest.items():
-        if isinstance(p_value, dict):
-            return p_key
-    return None
-
-
+#REMOVE
+TRICK = False
 
 class MerossDeviceHub(MerossDevice):
 
@@ -72,15 +67,16 @@ class MerossDeviceHub(MerossDevice):
             # we expect a well structured digest here since
             # we're sure 'hub' key is there by __init__ device factory
             for p_subdevice in descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]:
-                _type = _get_subdevice_type(p_subdevice)
-                if _type is None:
-                    continue # bugged/incomplete configuration payload..wait for some good updates
-                deviceclass = WELL_KNOWN_TYPE_MAP.get(_type)
-                if deviceclass is None:
-                    # build something anyway...
-                    MerossSubDevice(self, p_subdevice, _type)
-                else:
-                    deviceclass(self, p_subdevice)
+                self._subdevice_build(p_subdevice)
+
+            #REMOVE
+            global TRICK
+            if TRICK:
+                TRICK = False
+                MS100SubDevice(
+                    self,
+                    {"id": "120027D281CF", "status": 1, "onoff": 0, "lastActiveTime": 1638019438, "ms100": {"latestTime": 1638019438, "latestTemperature": 224, "latestHumidity": 460, "voltage": 2766}}
+                )
 
         except Exception as e:
             LOGGER.warning("MerossDeviceHub(%s) init exception:(%s)", self.device_id, str(e))
@@ -156,13 +152,48 @@ class MerossDeviceHub(MerossDevice):
         return False
 
 
+    def _subdevice_build(self, p_subdevice: dict) -> MerossSubDevice:
+        """
+        parses the subdevice payload in 'digest' to look for a well-known type
+        and builds accordingly
+        """
+        _type = None
+        for p_key, p_value in p_subdevice.items():
+            if isinstance(p_value, dict):
+                _type = p_key
+                break
+        else:
+            # the hub could report incomplete info anytime so beware.
+            # this is true when subdevice is offline and hub has no recent info
+            # we'll check our device registry for luck
+            try:
+                hassdevice = device_registry.async_get(self.api.hass).async_get_device(
+                    identifiers = {(DOMAIN, p_subdevice.get(mc.KEY_ID))}
+                )
+                if hassdevice is None:
+                    return None
+                _type = hassdevice.model
+            except:
+                return None
+        deviceclass = WELL_KNOWN_TYPE_MAP.get(_type)
+        if deviceclass is None:
+            # build something anyway...
+            return MerossSubDevice(self, p_subdevice, _type)
+        return deviceclass(self, p_subdevice)
+
+
     def _subdevice_parse(self, payload: dict, key: str) -> None:
         if isinstance(p_subdevices := payload.get(key), list):
             for p_subdevice in p_subdevices:
                 p_id = p_subdevice.get(mc.KEY_ID)
                 subdevice = self.subdevices.get(p_id)
-                if subdevice is None:# force a rescan since we discovered a new subdevice
-                    self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+                if subdevice is None:
+                    # force a rescan since we discovered a new subdevice
+                    # only if it appears this device is online else it
+                    # would be a waste since we wouldnt have enough info
+                    # to correctly build that
+                    if p_subdevice.get(mc.KEY_ONLINE, {}).get(mc.KEY_STATUS) == mc.STATUS_ONLINE:
+                        self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
                 else:
                     method = getattr(subdevice, f"_parse_{key}", None)
                     if method is not None:
@@ -170,23 +201,42 @@ class MerossDeviceHub(MerossDevice):
 
 
     def _parse_hub(self, p_hub: dict) -> None:
+        """
+        This is usually called inside _parse_all as part of the digest parsing
+        Here we'll check the fresh subdevice list against the actual one and
+        eventually manage newly added subdevices or removed ones #119
+        telling the caller to persist the changed configuration (self.needsave)
+        """
         if isinstance(p_subdevices := p_hub.get(mc.KEY_SUBDEVICE), list):
+            subdevices_actual: set = set(self.subdevices.keys())
             for p_digest in p_subdevices:
                 p_id = p_digest.get(mc.KEY_ID)
                 subdevice = self.subdevices.get(p_id)
                 if subdevice is None:
-                    self.needsave = True
-                    _type = _get_subdevice_type(p_digest)
-                    if _type is None:
-                        # the hub could report incomplete info anytime so beware!
+                    subdevice = self._subdevice_build(p_digest)
+                    if subdevice is None:
                         continue
-                    deviceclass = WELL_KNOWN_TYPE_MAP.get(_type)
-                    if deviceclass is None:
-                        # build something anyway...
-                        subdevice = MerossSubDevice(self, p_digest, _type)
-                    else:
-                        subdevice = deviceclass(self, p_digest)
+                    self.needsave = True
+                else:
+                    subdevices_actual.remove(p_id)
                 subdevice.update_digest(p_digest)
+
+            if len(subdevices_actual):
+                # now we're left with non-existent (removed) subdevices
+                self.needsave = True
+                for p_id in subdevices_actual:
+                    subdevice = self.subdevices.pop(p_id)
+                    self.log(logging.WARNING, 0, "removing subdevice %s(%s) - configuration will be reloaded in 15 sec", subdevice.type, p_id)
+                """
+                before reloading we have to be sure configentry data were persisted
+                so we'll wait a bit..
+                also, we're not registering an unsub and we're not checking
+                for redundant invocations (playing a bit unsafe that is)
+                """
+                hass = self.api.hass
+                async def setup_again(*_) -> None:
+                    await hass.config_entries.async_reload(self.entry_id)
+                async_call_later(hass, 15, setup_again)
 
 
     def _request_updates(self, epoch, namespace):
@@ -198,8 +248,7 @@ class MerossDeviceHub(MerossDevice):
         if (self._lastupdate_sensor == 0) or ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
             self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ALL)
         if (self._lastupdate_mts100 == 0) or ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
-                self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ALL)
-
+            self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ALL)
         if ((epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
             self.request_get(mc.NS_APPLIANCE_HUB_BATTERY)
 
