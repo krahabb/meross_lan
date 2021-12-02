@@ -4,7 +4,7 @@ import logging
 import os
 import socket
 import math
-from typing import  Callable, Dict
+from typing import  Callable, Dict, List
 from time import strftime, time
 from io import TextIOWrapper
 from json import (
@@ -39,9 +39,6 @@ from .const import (
 
 # these are dynamically created MerossDevice attributes in a sort of a dumb optimization
 VOLATILE_ATTR_HTTPCLIENT = '_httpclient'
-VOLATILE_ATTR_TRACE_FILE = '_trace_file'
-VOLATILE_ATTR_TRACE_ENDTIME = '_trace_endtime'
-VOLATILE_ATTR_TRACE_ABILITY_ITER = '_trace_ability_iter'
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
 # this list will be excluded from enumeration since it's redundant/exposing sensitive info
@@ -148,11 +145,15 @@ class MerossDevice:
         self.device_timestamp: int = 0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
+        self.device_timedelta_config_epoch = 0
         self.lastpoll = 0
         self.lastrequest = 0
         self.lastupdate = 0
         self.lastmqtt = 0 # means we recently received an mqtt message
         self.hasmqtt = False # hasmqtt means it is somehow available to communicate over mqtt
+        self._trace_file: TextIOWrapper = None
+        self._trace_endtime = 0
+        self._trace_ability_iter = None
         """
         self.entities: dict()
         is a collection of all of the instanced entities
@@ -173,7 +174,7 @@ class MerossDevice:
         For Hub(s) too NS_ALL is very 'partial' (at least MTS100 state is not fully exposed)
         """
         self.polling_period = CONF_POLLING_PERIOD_DEFAULT
-        self.polling_dictionary = list()
+        self.polling_dictionary: List[str] = list()
         self.polling_dictionary.append(mc.NS_APPLIANCE_SYSTEM_ALL)
         """
         self.platforms: dict()
@@ -255,17 +256,7 @@ class MerossDevice:
         self.device_timestamp = int(header.get(mc.KEY_TIMESTAMP, epoch))
         device_timedelta = epoch - self.device_timestamp
         if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-            if abs(self.device_timedelta - device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-                self.device_timedelta = device_timedelta
-            else:
-                self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
-            if (epoch - self.device_timedelta_log_epoch) > 604800: # 1 week lockout
-                self.device_timedelta_log_epoch = epoch
-                self.log(
-                    logging.WARNING, 0,
-                    "MerossDevice(%s) has incorrect timestamp: %d seconds behind HA",
-                    self.device_id, int(self.device_timedelta)
-            )
+            self._config_timestamp(epoch, device_timedelta)
         else:
             self.device_timedelta = 0
         """
@@ -406,7 +397,7 @@ class MerossDevice:
             namespace,
             method,
             payload,
-            self.key or self.replykey,
+            self.key,
             messageid
         )
 
@@ -580,9 +571,8 @@ class MerossDevice:
         don't care about it on startup ('_set_config_entry'). When updating ConfigEntry
         we always reset the timeout and so the trace will (eventually) restart
         """
-        _trace_file: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACE_FILE, None)
-        if _trace_file is not None:
-            self._trace_close(_trace_file)
+        if self._trace_file is not None:
+            self._trace_close()
         _trace_endtime = config_entry.data.get(CONF_TRACE, 0)
         if _trace_endtime > time():
             try:
@@ -686,6 +676,35 @@ class MerossDevice:
             _parse = getattr(self, f"_parse_{key}", None)
             if _parse is not None:
                 _parse(value)
+
+
+    def _config_timestamp(self, epoch, device_timedelta):
+        if abs(self.device_timedelta - device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
+            self.device_timedelta = device_timedelta
+        else: # average the sampled timedelta
+            self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
+        if self.hasmqtt \
+            and mc.NS_APPLIANCE_SYSTEM_CLOCK in self.descriptor.ability:
+            # only deal with time related settings when devices are un-paired
+            # from the meross cloud
+            last_config_delay = epoch - self.device_timedelta_config_epoch
+            if last_config_delay > 1800:
+                # 30 minutes 'cooldown' in order to avoid restarting
+                # the prcedure too often
+                self.request(mc.NS_APPLIANCE_SYSTEM_CLOCK, mc.METHOD_PUSH, {})
+                self.device_timedelta_config_epoch = epoch
+                return
+            if last_config_delay < 30:
+                # 30 sec 'deadzone' where we allow the timestamp
+                # transaction to complete (should really be like few seconds)
+                return
+        if (epoch - self.device_timedelta_log_epoch) > 604800: # 1 week lockout
+            self.device_timedelta_log_epoch = epoch
+            self.log(
+                logging.WARNING, 0,
+                "MerossDevice(%s) has incorrect timestamp: %d seconds behind HA",
+                self.device_id, int(self.device_timedelta)
+        )
 
 
     def _config_timezone(self, epoch, timezone) -> None:
@@ -844,24 +863,21 @@ class MerossDevice:
             self.polling_period = CONF_POLLING_PERIOD_MIN
 
 
-    def _trace_close(self, tracefile: TextIOWrapper):
+    def _trace_close(self):
         try:
-            delattr(self, VOLATILE_ATTR_TRACE_FILE)
-            delattr(self, VOLATILE_ATTR_TRACE_ENDTIME)
-            delattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER)
-            tracefile.close()
+            self._trace_file.close()
         except Exception as e:
             LOGGER.warning("MerossDevice(%s) error while closing trace file (%s)", self.device_id, str(e))
-
+        self._trace_file = None
+        self._trace_ability_iter = None
 
     @callback
     def _trace_ability(self, *args):
-        _trace_ability_iter = getattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER, None)
-        if _trace_ability_iter is None:
+        if self._trace_ability_iter is None:
             return
         try:
             while True:
-                ability:str = next(_trace_ability_iter)
+                ability:str = next(self._trace_ability_iter)
                 if ability not in TRACE_ABILITY_EXCLUDE:
                     self.request_get(ability)
                     break
@@ -871,9 +887,8 @@ class MerossDevice:
                 self._trace_ability,
                 datetime.fromtimestamp(time() + 5)
             )
-
         except:# finished ?!
-            delattr(self, VOLATILE_ATTR_TRACE_ABILITY_ITER)
+            self._trace_ability_iter = None
 
 
     def _trace(
@@ -884,26 +899,24 @@ class MerossDevice:
         protocol = CONF_OPTION_AUTO,
         rxtx = ''
         ):
-        _trace_file: TextIOWrapper = getattr(self, VOLATILE_ATTR_TRACE_FILE, None)
-        if _trace_file is not None:
+        if self._trace_file is not None:
             now = time()
-            _trace_endtime = getattr(self, VOLATILE_ATTR_TRACE_ENDTIME, 0)
-            if now > _trace_endtime:
-                self._trace_close(_trace_file)
+            if now > self._trace_endtime:
+                self._trace_close()
                 return
 
             if isinstance(data, dict):
                 obfuscated = _obfuscate(data)
 
             try:
-                _trace_file.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
+                self._trace_file.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
                     + rxtx + '\t' + protocol + '\t' + method + '\t' + namespace + '\t' \
                     + (json_dumps(data) if isinstance(data, dict) else data) + '\r\n')
-                if _trace_file.tell() > CONF_TRACE_MAXSIZE:
-                    self._trace_close(_trace_file)
+                if self._trace_file.tell() > CONF_TRACE_MAXSIZE:
+                    self._trace_close()
             except Exception as e:
                 LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
-                self._trace_close(_trace_file)
+                self._trace_close()
 
             if isinstance(data, dict):
                 _deobfuscate(data, obfuscated)

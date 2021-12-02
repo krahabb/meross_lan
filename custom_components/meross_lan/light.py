@@ -37,14 +37,15 @@ except:
 
 
 import homeassistant.util.color as color_util
-from homeassistant.const import (
-    STATE_ON, STATE_OFF,
-    ENTITY_CATEGORY_CONFIG,
-)
 
 from .merossclient import const as mc
 from .meross_device import MerossDevice
-from .meross_entity import _MerossToggle, platform_setup_entry, platform_unload_entry
+from .meross_entity import (
+    _MerossToggle,
+    platform_setup_entry, platform_unload_entry,
+    STATE_ON, STATE_OFF,
+    ENTITY_CATEGORY_CONFIG,
+)
 from .const import DND_ID
 
 """

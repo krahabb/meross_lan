@@ -3,6 +3,9 @@
 
  actual HA custom platform entities will be derived like this:
  MerossLanSwitch(_MerossToggle, SwitchEntity)
+
+ we also try to 'commonize' HA core symbols import in order to better manage
+ versioning
 """
 from __future__ import annotations
 
@@ -11,6 +14,10 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.const import (
     STATE_ON, STATE_OFF,
 )
+try:# 2021.11 new symbols
+    from homeassistant.const import ENTITY_CATEGORY_CONFIG
+except:
+    ENTITY_CATEGORY_CONFIG = 'config'
 
 
 from .merossclient import const as mc, get_productnameuuid
