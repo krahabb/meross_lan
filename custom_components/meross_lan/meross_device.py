@@ -145,6 +145,7 @@ class MerossDevice:
         self.device_timestamp: int = 0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
+        self.device_timedelta_config_epoch = 0
         self.lastpoll = 0
         self.lastrequest = 0
         self.lastupdate = 0
@@ -255,17 +256,7 @@ class MerossDevice:
         self.device_timestamp = int(header.get(mc.KEY_TIMESTAMP, epoch))
         device_timedelta = epoch - self.device_timestamp
         if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-            if abs(self.device_timedelta - device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-                self.device_timedelta = device_timedelta
-            else:
-                self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
-            if (epoch - self.device_timedelta_log_epoch) > 604800: # 1 week lockout
-                self.device_timedelta_log_epoch = epoch
-                self.log(
-                    logging.WARNING, 0,
-                    "MerossDevice(%s) has incorrect timestamp: %d seconds behind HA",
-                    self.device_id, int(self.device_timedelta)
-            )
+            self._config_timestamp(epoch, device_timedelta)
         else:
             self.device_timedelta = 0
         """
@@ -685,6 +676,35 @@ class MerossDevice:
             _parse = getattr(self, f"_parse_{key}", None)
             if _parse is not None:
                 _parse(value)
+
+
+    def _config_timestamp(self, epoch, device_timedelta):
+        if abs(self.device_timedelta - device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
+            self.device_timedelta = device_timedelta
+        else: # average the sampled timedelta
+            self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
+        if self.hasmqtt \
+            and mc.NS_APPLIANCE_SYSTEM_CLOCK in self.descriptor.ability:
+            # only deal with time related settings when devices are un-paired
+            # from the meross cloud
+            last_config_delay = epoch - self.device_timedelta_config_epoch
+            if last_config_delay > 1800:
+                # 30 minutes 'cooldown' in order to avoid restarting
+                # the prcedure too often
+                self.request(mc.NS_APPLIANCE_SYSTEM_CLOCK, mc.METHOD_PUSH, {})
+                self.device_timedelta_config_epoch = epoch
+                return
+            if last_config_delay < 30:
+                # 30 sec 'deadzone' where we allow the timestamp
+                # transaction to complete (should really be like few seconds)
+                return
+        if (epoch - self.device_timedelta_log_epoch) > 604800: # 1 week lockout
+            self.device_timedelta_log_epoch = epoch
+            self.log(
+                logging.WARNING, 0,
+                "MerossDevice(%s) has incorrect timestamp: %d seconds behind HA",
+                self.device_id, int(self.device_timedelta)
+        )
 
 
     def _config_timezone(self, epoch, timezone) -> None:
