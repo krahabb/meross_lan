@@ -8,12 +8,14 @@ from homeassistant.components.number.const import (
     DEFAULT_MIN_VALUE,
     DEFAULT_MAX_VALUE,
     DEFAULT_STEP,
-    MODE_BOX,
 )
-from homeassistant.const import ENTITY_CATEGORY_CONFIG
 
 from .merossclient import const as mc  # mEROSS cONST
-from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
+from .meross_entity import (
+    _MerossEntity,
+    platform_setup_entry, platform_unload_entry,
+    ENTITY_CATEGORY_CONFIG,
+)
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -100,9 +102,6 @@ class MerossLanHubAdjustNumber(MerossLanNumber):
     def name(self) -> str:
         return f"{self.subdevice.name} - adjust {self._label} {self._attr_device_class}"
 
-    @property
-    def mode(self) -> str:
-        return MODE_BOX
 
     async def async_set_value(self, value: float) -> None:
 

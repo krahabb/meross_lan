@@ -9,21 +9,19 @@ from homeassistant.components.climate.const import (
     CURRENT_HVAC_HEAT, CURRENT_HVAC_IDLE, CURRENT_HVAC_OFF,
     HVAC_MODE_AUTO, HVAC_MODE_HEAT, HVAC_MODE_OFF,
 )
-
 from homeassistant.components.number import (
     DOMAIN as PLATFORM_NUMBER,
     NumberEntity,
 )
-from homeassistant.components.number.const import (
-    MODE_BOX,
-)
 from homeassistant.const import (
     DEVICE_CLASS_TEMPERATURE,
     TEMP_CELSIUS,
-    ENTITY_CATEGORY_CONFIG,
 )
 
-from ..meross_entity import _MerossEntity
+from ..meross_entity import (
+    _MerossEntity,
+    ENTITY_CATEGORY_CONFIG,
+)
 from ..merossclient import const as mc  # mEROSS cONST
 
 
@@ -274,10 +272,6 @@ class Mts100SetPointNumber(_MerossEntity, NumberEntity):
     @property
     def name(self) -> str:
         return f"{self.subdevice.name} - {self._preset_mode} {DEVICE_CLASS_TEMPERATURE}"
-
-    @property
-    def mode(self) -> str:
-        return MODE_BOX
 
     @property
     def step(self) -> float:

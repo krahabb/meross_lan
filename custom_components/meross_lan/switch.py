@@ -5,13 +5,14 @@ from homeassistant.components.switch import (
     SwitchEntity,
     DEVICE_CLASS_OUTLET
 )
-from homeassistant.const import (
+
+from .merossclient import const as mc  # mEROSS cONST
+from .meross_entity import (
+    _MerossToggle,
+    platform_setup_entry, platform_unload_entry,
     STATE_OFF, STATE_ON,
     ENTITY_CATEGORY_CONFIG,
 )
-
-from .merossclient import const as mc  # mEROSS cONST
-from .meross_entity import _MerossToggle, platform_setup_entry, platform_unload_entry
 from .const import DND_ID
 
 
