@@ -4,9 +4,10 @@ from time import time
 from uuid import uuid4
 from hashlib import md5
 from base64 import b64encode
+from logging import DEBUG
 import async_timeout
 import voluptuous as vol
-import json
+
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
@@ -14,6 +15,7 @@ from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.components import dhcp
 
 from .merossclient import (
     MerossHttpClient,
@@ -105,12 +107,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_device()
 
 
-    async def async_step_dhcp(self, discovery_info: DiscoveryInfoType):
+    async def async_step_dhcp(self, discovery_info: object):
         """Handle a flow initialized by DHCP discovery."""
-        LOGGER.debug("received dhcp discovery: %s", json.dumps(discovery_info))
+        if LOGGER.isEnabledFor(DEBUG):
+            LOGGER.debug("received dhcp discovery: %s", str(discovery_info))
 
-        self._host = discovery_info.get('ip')
-        self._macaddress = discovery_info.get('macaddress')
+        try:# not sure when discovery_info signature changed...we'll play it safe
+            if isinstance(discovery_info, dhcp.DhcpServiceInfo):
+                self._host = discovery_info.ip
+                self._macaddress = discovery_info.macaddress
+        except:
+            self._host = discovery_info.get('ip')
+            self._macaddress = discovery_info.get('macaddress')
 
         """
         we'll update the unique_id for the flow when we'll have the device_id
@@ -159,7 +167,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self._async_set_info(_discovery_info)
             # now just let the user edit/accept the host address even if identification was fine
         except Exception as e:
-            LOGGER.debug("Error (%s) identifying meross device (host:%s)", str(e), self._host)
+            if LOGGER.isEnabledFor(DEBUG):
+                LOGGER.debug("Error (%s) identifying meross device (host:%s)", str(e), self._host)
             # forgive and continue if we cant discover the device...let the user work it out
 
         return await self.async_step_user()

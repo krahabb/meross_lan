@@ -2,18 +2,23 @@
 from unittest.mock import patch
 
 from homeassistant import config_entries, data_entry_flow
+from homeassistant.components import dhcp
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.meross_lan.const import (
+    CONF_HOST,
+    CONF_KEY,
     DOMAIN,
     CONF_DEVICE_ID,
     CONF_PAYLOAD
 )
 
 from .const import (
+    MOCK_DEVICE_IP,
     MOCK_HUB_CONFIG,
-    MOCK_DEVICE_CONFIG
+    MOCK_DEVICE_CONFIG,
+    MOCK_KEY
 )
 
 
@@ -32,13 +37,26 @@ def bypass_setup_fixture():
     ):
         yield
 
+@pytest.fixture
+def fixture_mqtt_is_loaded():
+    with patch(
+        "custom_components.meross_lan.config_flow.mqtt_is_loaded",
+        return_value = True
+    ):
+        yield
 
-# Here we simiulate a successful config flow from the backend.
+@pytest.fixture
+def fixture_mqtt_is_not_loaded():
+    with patch(
+        "custom_components.meross_lan.config_flow.mqtt_is_loaded",
+        return_value = False
+    ):
+        yield
+
+# Here we simulate a successful config flow from the backend.
 # Note that we use the `bypass_get_data` fixture here because
 # we want the config flow validation to succeed during the test.
-async def test_successful_config_flow(hass):
-
-
+async def test_user_config_flow_mqtt(hass, fixture_mqtt_is_loaded):
 
     #test initial user config-flow (MQTT Hub)
     result = await hass.config_entries.flow.async_init(
@@ -48,7 +66,6 @@ async def test_successful_config_flow(hass):
     # Check that the config flow shows the user form as the first step
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
     assert result["step_id"] == "hub"
-
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=MOCK_HUB_CONFIG
@@ -61,7 +78,31 @@ async def test_successful_config_flow(hass):
     assert result["data"] == MOCK_HUB_CONFIG
     assert result["result"]
 
+    # Now, a new configentry would add a device manually
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    # Check that the config flow shows the user form as the first step
+    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["step_id"] == "user"
+
+
+async def test_user_config_flow_no_mqtt(hass, fixture_mqtt_is_not_loaded):
+    #test user config-flow when no mqtt available
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    # Check that the config flow shows the user form as the first step
+    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["step_id"] == "user"
+
+
+async def test_mqttdiscovery_config_flow(hass, fixture_mqtt_is_loaded):
     #test discovery config flow
+
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context = {"source": config_entries.SOURCE_DISCOVERY}, data = MOCK_DEVICE_CONFIG
     )
@@ -69,12 +110,45 @@ async def test_successful_config_flow(hass):
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
     assert result["step_id"] == "device"
 
+
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input=MOCK_DEVICE_CONFIG
+        result["flow_id"], user_input={}
     )
 
     assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
     assert result["data"] == MOCK_DEVICE_CONFIG
+
+
+async def test_dhcpdiscovery_config_flow(hass):
+    #test discovery config flow
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context = {"source": config_entries.SOURCE_DHCP},
+        data = dhcp.DhcpServiceInfo(
+            ip=MOCK_DEVICE_IP,
+            macaddress='48E1E9000000',
+            hostname='fakehost'
+        )
+    )
+
+    assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
+    assert result["step_id"] == "user"
+
+    """
+    for this to work we'd need to mock a bit of aioclient
+    since the flow is querying the device over HTTP
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_HOST: MOCK_DEVICE_IP,
+            CONF_KEY: MOCK_KEY
+        }
+    )
+
+    assert result["type"] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    assert result["data"] == MOCK_DEVICE_CONFIG
+    """
 
 """
 # In this case, we want to simulate a failure during the config flow.
