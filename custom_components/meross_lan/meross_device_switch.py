@@ -13,7 +13,7 @@ from homeassistant.const import (
 
 from .merossclient import KeyType, MerossDeviceDescriptor, const as mc  # mEROSS cONST
 from .meross_entity import MerossFakeEntity
-from .sensor import MerossLanSensor, STATE_CLASS_TOTAL_INCREASING
+from .sensor import MerossLanSensor, STATE_CLASS_TOTAL_INCREASING, STATE_CLASS_MEASUREMENT
 from .switch import MerossLanSwitch
 from .meross_device import MerossDevice
 from .helpers import LOGGER
@@ -133,7 +133,8 @@ class MerossDeviceSwitch(MerossDevice):
             days = payload.get(mc.KEY_CONSUMPTIONX)
             days_len = len(days)
             if days_len < 1:
-                self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(0)
+                if STATE_CLASS_TOTAL_INCREASING == STATE_CLASS_MEASUREMENT:
+                    self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(0)
                 self._sensor_energy.update_state(0)
                 return True
             # we'll look through the device array values to see
@@ -167,14 +168,18 @@ class MerossDeviceSwitch(MerossDevice):
                 self._energy_last_reset = timestamp_last_reset
                 # we'll add .5 (sec) to the device last reading since the reset
                 # occurs right after that
-                self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(
-                    timestamp_last_reset + self.device_timedelta + .5
-                )
-                self.log(
-                    logging.DEBUG, 0,
-                    "MerossDevice(%s) Energy: update last_reset to %s",
-                    self.device_id, self._sensor_energy._attr_last_reset.isoformat()
-                )
+                # update the entity last_reset only for a 'corner case'
+                # when the feature was initially added (2021.8) and
+                # STATE_CLASS_TOTAL_INCREASING was not defined yet
+                if STATE_CLASS_TOTAL_INCREASING == STATE_CLASS_MEASUREMENT:
+                    self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(
+                        timestamp_last_reset + self.device_timedelta + .5
+                    )
+                    self.log(
+                        logging.DEBUG, 0,
+                        "MerossDevice(%s) Energy: update last_reset to %s",
+                        self.device_id, self._sensor_energy._attr_last_reset.isoformat()
+                    )
             self._sensor_energy.update_state(day_last.get(mc.KEY_VALUE))
             return True
 

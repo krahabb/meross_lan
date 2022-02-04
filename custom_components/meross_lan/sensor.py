@@ -7,16 +7,23 @@ from homeassistant.components.sensor import (
 )
 try:
     from homeassistant.components.sensor import SensorEntity
+    try:
+        from homeassistant.components.sensor import SensorStateClass
+        STATE_CLASS_MEASUREMENT = SensorStateClass.MEASUREMENT
+        STATE_CLASS_TOTAL_INCREASING = SensorStateClass.TOTAL_INCREASING
+    except:
+        try:
+            from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
+        except:
+            STATE_CLASS_MEASUREMENT = None
+        try:
+            from homeassistant.components.sensor import STATE_CLASS_TOTAL_INCREASING
+        except:
+            STATE_CLASS_TOTAL_INCREASING = STATE_CLASS_MEASUREMENT
 except:#someone still pre 2021.5.0 ?
     from homeassistant.helpers.entity import Entity as SensorEntity
-try:
-    from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
-except:#someone still pre 2021.8.0 ?
     STATE_CLASS_MEASUREMENT = None
-try:
-    from homeassistant.components.sensor import STATE_CLASS_TOTAL_INCREASING
-except:#someone still pre 2021.9.0 ?
-    STATE_CLASS_TOTAL_INCREASING = STATE_CLASS_MEASUREMENT
+    STATE_CLASS_TOTAL_INCREASING = None
 
 from homeassistant.const import (
     DEVICE_CLASS_POWER, POWER_WATT,
@@ -75,7 +82,7 @@ class MerossLanSensor(_MerossEntity, SensorEntity):
     PLATFORM = PLATFORM_SENSOR
 
     _attr_state_class: str | None = STATE_CLASS_MEASUREMENT
-    _attr_last_reset: datetime | None = None # Deprecated, to be removed in 2021.11
+    _attr_last_reset: datetime | None = None
     _attr_native_unit_of_measurement: str | None
 
     def __init__(self, device: "MerossDevice", _id: object, device_class: str, subdevice: "MerossSubDevice" = None):
