@@ -1,35 +1,51 @@
 {
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-      {
-        // Example of attaching to local debug server
-        "name": "Python: Attach Local",
-        "type": "python",
-        "request": "attach",
-        "port": 5678,
-        "host": "localhost",
-        "justMyCode": false,
-        "pathMappings": [
-          {
-            "localRoot": "${workspaceFolder}",
-            "remoteRoot": "."
-          }
-        ]
-      },
-      {
-        // Example of attaching to my production server
-        "name": "Python: Attach Remote",
-        "type": "python",
-        "request": "attach",
-        "port": 5678,
-        "host": "homeassistant.local",
-        "pathMappings": [
-          {
-            "localRoot": "${workspaceFolder}",
-            "remoteRoot": "/usr/src/homeassistant"
-          }
-        ]
-      }
-    ]
-  }
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Emulator",
+      "type": "python",
+      "request": "launch",
+      "module": "aiohttp.web",
+      "args": [
+        "-H",
+        "127.0.0.1",
+        "-P",
+        "40000",
+        "custom_components.meross_lan.emulator:run",
+        "custom_components/meross_lan/traces/emulator",
+        "-K pippo",
+        "-U 01234567890123456789012345678901"
+      ]
+    },
+    {
+      // Example of attaching to local debug server
+      "name": "Python: Attach Local",
+      "type": "python",
+      "request": "attach",
+      "port": 5678,
+      "host": "localhost",
+      "justMyCode": false,
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "."
+        }
+      ]
+    },
+    {
+      // Example of attaching to my production server
+      "name": "Python: Attach Remote",
+      "type": "python",
+      "request": "attach",
+      "port": 5678,
+      "host": "homeassistant.local",
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "/usr/src/homeassistant"
+        }
+      ]
+    }
+  ]
+}
