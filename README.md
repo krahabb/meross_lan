@@ -58,6 +58,7 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MSS310](https://www.meross.com/product/38/article/): power plug with metering capabilties
   - [MSS425](https://www.meross.com/product/16/article/): Smart WiFi Surge Protector (multiple sockets power strip)
   - [MSS510](https://www.meross.com/product/23/article/): Smart WiFi single pole switch
+  - [MSS550](https://www.meross.com/product/37/article/): Smart WiFi 2 way switch
   - [MSS620](https://www.meross.com/product/94/article/): Smart Wi-Fi Indoor/Outdoor Plug
   - [MSS710](https://www.meross.com/product/21/article/): Smart WiFi DIY switch
 - Lights
