@@ -8,6 +8,7 @@ from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
+from xmlrpc.client import Boolean
 import aiohttp
 import async_timeout
 import asyncio
@@ -89,6 +90,16 @@ def build_payload(
             },
             mc.KEY_PAYLOAD: payload
         }
+
+
+def get_namespacekey(namespace: str) -> str:
+    """
+    return the 'well known' key for the provided namespace
+    which is used as the root key of the associated payload
+    """
+    if namespace in mc.PAYLOAD_GET:
+        return next(iter(mc.PAYLOAD_GET[namespace]))
+    return namespace.split('.')[-1].lower()
 
 
 def build_default_payload_get(namespace: str) -> dict:

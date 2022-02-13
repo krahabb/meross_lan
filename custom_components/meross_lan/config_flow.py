@@ -138,6 +138,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         api = self.hass.data.get(DOMAIN)
         if api is not None:
             if api.has_device(self._host, self._macaddress):
+                LOGGER.debug("ignoring dhcp discovery for %s: already configured", self._host)
                 return self.async_abort(reason='already_configured')
 
         try:
@@ -169,6 +170,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception as e:
             if LOGGER.isEnabledFor(DEBUG):
                 LOGGER.debug("Error (%s) identifying meross device (host:%s)", str(e), self._host)
+            if isinstance(e, AbortFlow):
+                # we might have 'correctly' identified an already configured entry
+                return self.async_abort(reason='already_configured')
             # forgive and continue if we cant discover the device...let the user work it out
 
         return await self.async_step_user()

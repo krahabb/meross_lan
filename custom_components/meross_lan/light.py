@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 from typing import Union, Tuple
 
 from homeassistant.components.light import (
@@ -7,6 +8,7 @@ from homeassistant.components.light import (
     ATTR_BRIGHTNESS, ATTR_HS_COLOR, ATTR_COLOR_TEMP,
     ATTR_RGB_COLOR, ATTR_EFFECT,
 )
+
 
 # back-forward compatibility hell
 try:
@@ -38,7 +40,7 @@ except:
 
 import homeassistant.util.color as color_util
 
-from .merossclient import const as mc
+from .merossclient import MerossDeviceDescriptor, const as mc
 from .meross_device import MerossDevice
 from .meross_entity import (
     _MerossToggle,
@@ -47,6 +49,7 @@ from .meross_entity import (
     ENTITY_CATEGORY_CONFIG,
 )
 from .const import DND_ID
+from .helpers import LOGGER
 
 """
     map light Temperature effective range to HA mired(s):
@@ -91,7 +94,7 @@ def _sat_1_100(value) -> int:
         return int(value)
 
 
-class MerossLanLight(_MerossToggle, LightEntity):
+class MLLight(_MerossToggle, LightEntity):
     """
     light entity for Meross bulbs and any device supporting light api
     (identified from devices carrying 'light' node in SYSTEM_ALL payload)
@@ -109,8 +112,14 @@ class MerossLanLight(_MerossToggle, LightEntity):
     _attr_brightness = None
     _attr_effect: str | None = None
 
+    _usetogglex = False
 
-    def __init__(self, device: MerossDevice, id: object, p_togglex):
+    def __init__(
+        self,
+        device: MerossDevice,
+        payload: dict,
+        entitykey: str = None,
+        namespace: str = mc.NS_APPLIANCE_CONTROL_LIGHT):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
         # with msl120j (fw 3.1.4) I've discovered that any 'light' payload sent will turn on the light
@@ -119,21 +128,24 @@ class MerossLanLight(_MerossToggle, LightEntity):
         # does that.
         # we'll use a 'conservative' approach here where we always toggle by togglex (if presented in digest)
         # and kindly ignore any 'onoff' in the 'light' payload (except digest didn't presented togglex)
-        self._usetogglex = False
+        channel = payload.get(mc.KEY_CHANNEL, 0)
+        descr = device.descriptor
+        p_togglex = descr.digest.get(mc.KEY_TOGGLEX)
         if isinstance(p_togglex, list):
             for t in p_togglex:
-                if t.get(mc.KEY_CHANNEL) == id:
+                if t.get(mc.KEY_CHANNEL) == channel:
                     self._usetogglex = True
                     break
         elif isinstance(p_togglex, dict):
-            self._usetogglex = (p_togglex.get(mc.KEY_CHANNEL) == id)
+            self._usetogglex = (p_togglex.get(mc.KEY_CHANNEL) == channel)
 
+        # try to not collide with super.namespace
+        self._namespace_light = namespace
         # in case we're not using togglex fallback to toggle but..the light could
         # be switchable by 'onoff' field in light payload itself..(to be investigated)
         super().__init__(
-            device, id, None,
-            mc.NS_APPLIANCE_CONTROL_TOGGLEX if self._usetogglex else mc.NS_APPLIANCE_CONTROL_TOGGLE,
-            mc.KEY_TOGGLEX if self._usetogglex else mc.KEY_TOGGLE)
+            device, channel, entitykey, None,
+            mc.NS_APPLIANCE_CONTROL_TOGGLEX if self._usetogglex else None)
         """
         self._light = {
 			#"onoff": 0,
@@ -148,13 +160,19 @@ class MerossLanLight(_MerossToggle, LightEntity):
         """
         self._light = dict()
 
-        self._capacity = device.descriptor.ability.get(
-            mc.NS_APPLIANCE_CONTROL_LIGHT, {}).get(
+        """
+        capacity is set in abilities when using mc.NS_APPLIANCE_CONTROL_LIGHT
+        """
+        if mc.NS_APPLIANCE_CONTROL_LIGHT in descr.ability:
+            self._capacity = descr.ability[mc.NS_APPLIANCE_CONTROL_LIGHT].get(
                 mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE)
+        else:# we might be using a diffuser light (mod100)
+            self._capacity = mc.LIGHT_CAPACITY_RGB_LUMINANCE
 
         if SUPPORT_BRIGHTNESS:
             # these will be removed in 2021.10
-            self._attr_supported_features = (SUPPORT_BRIGHTNESS if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE else 0)\
+            self._attr_supported_features = \
+                (SUPPORT_BRIGHTNESS if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE else 0)\
                 | (SUPPORT_COLOR if self._capacity & mc.LIGHT_CAPACITY_RGB else 0)\
                 | (SUPPORT_COLOR_TEMP if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE else 0)
 
@@ -268,70 +286,90 @@ class MerossLanLight(_MerossToggle, LightEntity):
         else:
             light[mc.KEY_ONOFF] = 1
 
+        def _ack_callback():
+            self._parse_light(light)
+
         self.device.request(
-            namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
-            method=mc.METHOD_SET,
-            payload={mc.KEY_LIGHT: light})
+            self._namespace_light,
+            mc.METHOD_SET,
+            {mc.KEY_LIGHT: light},
+            _ack_callback)
         #87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
             if self.device.descriptor.firmware.get(mc.KEY_VERSION) == '2.1.2':
                 self.device.request(
-                    namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
-                    method=mc.METHOD_SET,
-                    payload={mc.KEY_LIGHT: light})
+                    self._namespace_light,
+                    mc.METHOD_SET,
+                    {mc.KEY_LIGHT: light})
 
 
     async def async_turn_off(self, **kwargs) -> None:
-
         if self._usetogglex:
             # we suppose we have to 'toggle(x)'
             await super().async_turn_off(**kwargs)
         else:
+            def _ack_callback():
+                self._light[mc.KEY_ONOFF] = 1
+                self.update_onoff(0)
+
             self.device.request(
-                namespace=mc.NS_APPLIANCE_CONTROL_LIGHT,
-                method=mc.METHOD_SET,
-                payload={mc.KEY_LIGHT: { mc.KEY_CHANNEL: self.id, mc.KEY_ONOFF: 0}})
+                self._namespace_light,
+                mc.METHOD_SET,
+                {mc.KEY_LIGHT: { mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}},
+                _ack_callback)
 
 
-    def update_light(self, light: dict) -> None:
-        """
-        update light entity state with fresh data from the device
-        """
-        if self._light != light:
-            self._light = light
+    def _parse_light(self, payload: dict) -> None:
+        if (self._light != payload) or not self.available:
+            self._light = payload
 
-            capacity = light.get(mc.KEY_CAPACITY, 0)
+            onoff = payload.get(mc.KEY_ONOFF)
+            if onoff is not None:
+                self._attr_state = STATE_ON if onoff else STATE_OFF
+
             self._attr_color_mode = COLOR_MODE_UNKNOWN
 
-            if mc.KEY_EFFECT in light:
-                self._attr_effect = self.device.effect_dict_ids.get(light[mc.KEY_EFFECT], None)
-            else:
-                self._attr_effect = None
-
-            if capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+            if mc.KEY_LUMINANCE in payload:
                 self._attr_color_mode = COLOR_MODE_BRIGHTNESS
-                self._attr_brightness = light.get(mc.KEY_LUMINANCE, 0) * 255 // 100
+                self._attr_brightness = payload[mc.KEY_LUMINANCE] * 255 // 100
             else:
                 self._attr_brightness = None
 
-            if capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
+            if mc.KEY_TEMPERATURE in payload:
                 self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-                self._attr_color_temp = ((100 - light.get(mc.KEY_TEMPERATURE, 0)) / 99) * \
+                self._attr_color_temp = ((100 - payload[mc.KEY_TEMPERATURE]) / 99) * \
                     (self.max_mireds - self.min_mireds) + self.min_mireds
             else:
                 self._attr_color_temp = None
 
-            if capacity & mc.LIGHT_CAPACITY_RGB:
+            if mc.KEY_RGB in payload:
                 self._attr_color_mode = COLOR_MODE_RGB
-                self._attr_rgb_color = _int_to_rgb(light.get(mc.KEY_RGB, 0))
+                self._attr_rgb_color = _int_to_rgb(payload[mc.KEY_RGB])
                 self._attr_hs_color = color_util.color_RGB_to_hs(*self._attr_rgb_color)
             else:
                 self._attr_rgb_color = None
                 self._attr_hs_color = None
 
-            onoff = light.get(mc.KEY_ONOFF)
-            if onoff is not None:
-                self._attr_state = STATE_ON if onoff else STATE_OFF
+            if mc.KEY_CAPACITY in payload:
+                # despite of previous parsing, use capacity
+                # value to effectively set this light color mode
+                # this key is not present for instance in mod100 lights
+                capacity = payload[mc.KEY_CAPACITY]
+                if capacity & mc.LIGHT_CAPACITY_RGB:
+                    self._attr_color_mode = COLOR_MODE_RGB
+                elif capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
+                    self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+                elif capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+                    self._attr_color_mode = COLOR_MODE_BRIGHTNESS
+
+            if mc.KEY_MODE in payload:
+                # this key appears in mod100 payloads..what is it for?
+                pass
+
+            if mc.KEY_EFFECT in payload:
+                self._attr_effect = self.device.effect_dict_ids.get(payload[mc.KEY_EFFECT], None)
+            else:
+                self._attr_effect = None
 
             if self.hass and self.enabled and ((onoff is not None) or (self._attr_state is STATE_ON)):
                 # since the light payload could be processed before the relative 'togglex'
@@ -355,12 +393,10 @@ class MerossLanLight(_MerossToggle, LightEntity):
 
 
 
-class MerossLanDNDLight(_MerossToggle, LightEntity):
+class MLDNDLightEntity(_MerossToggle, LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)
-    This is a different representation (user can choose from configuration UI)
-    of the same DND feature implemented through MerossLanDND(switch)
     """
     PLATFORM = PLATFORM_LIGHT
 
@@ -368,7 +404,7 @@ class MerossLanDNDLight(_MerossToggle, LightEntity):
 
 
     def __init__(self, device: MerossDevice):
-        super().__init__(device, DND_ID, mc.KEY_DNDMODE, None, None)
+        super().__init__(device, None, DND_ID, mc.KEY_DNDMODE, None)
 
 
     @property
@@ -382,7 +418,7 @@ class MerossLanDNDLight(_MerossToggle, LightEntity):
 
 
     @property
-    def entity_category(self) -> str | None:
+    def entity_category(self):
         return ENTITY_CATEGORY_CONFIG
 
 
@@ -411,7 +447,56 @@ class MerossLanDNDLight(_MerossToggle, LightEntity):
 
 
     def update_onoff(self, onoff) -> None:
-        """
-        intercept base update_onoff to invert the dndmode flag/state
-        """
         self.update_state(STATE_OFF if onoff else STATE_ON)
+
+
+
+class LightMixin:
+    """
+    add to MerossDevice when creating actual device in setup
+    in order to provide NS_APPLIANCE_CONTROL_LIGHT and
+    NS_APPLIANCE_CONTROL_LIGHT_EFFECT capability
+    """
+
+    effect_dict_ids: dict[int, str] = dict()
+    effect_dict_names: dict[str, int] = dict()
+    effect_list: list[str] = list()
+
+
+    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry) -> None:
+        super().__init__(api, descriptor, entry)
+
+        if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in descriptor.ability:
+            self.polling_dictionary.add(mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT)
+
+
+    def _init_light(self, payload: dict):
+        MLLight(self, payload)
+
+
+    def _handle_Appliance_Control_Light(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        self._parse__generic(mc.KEY_LIGHT, payload.get(mc.KEY_LIGHT))
+
+
+    def _handle_Appliance_Control_Light_Effect(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        effect_dict_ids = dict()
+        for p_effect in payload.get(mc.KEY_EFFECT, []):
+            effect_dict_ids[int(p_effect[mc.KEY_ID_])] = p_effect[mc.KEY_EFFECTNAME]
+        if effect_dict_ids != self.effect_dict_ids:
+            effect_dict_names = dict()
+            effect_list = list()
+            for _id, _name in effect_dict_ids.items():
+                effect_list.append(_name)
+                effect_dict_names[_name] = _id
+            self.effect_dict_ids = effect_dict_ids
+            self.effect_dict_names = effect_dict_names
+            self.effect_list = effect_list
+            for entity in self.entities:
+                if isinstance(entity, MLLight):
+                    entity.update_effect_list()
+
+
+    def _parse_light(self, payload: dict):
+        self._parse__generic(mc.KEY_LIGHT, payload)

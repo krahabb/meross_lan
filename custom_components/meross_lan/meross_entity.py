@@ -2,27 +2,31 @@
  Base-Common behaviour for all Meross-LAN entities
 
  actual HA custom platform entities will be derived like this:
- MerossLanSwitch(_MerossToggle, SwitchEntity)
+ MLSwitch(_MerossToggle, SwitchEntity)
 
  we also try to 'commonize' HA core symbols import in order to better manage
  versioning
 """
 from __future__ import annotations
 
+from functools import partial
+
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers import device_registry as dr
 from homeassistant.const import (
     STATE_ON, STATE_OFF,
 )
-try:# 2021.11 new symbols
-    from homeassistant.const import ENTITY_CATEGORY_CONFIG
+try:# 2022.2 new symbols
+    from homeassistant.helpers.entity import EntityCategory
+    ENTITY_CATEGORY_CONFIG = EntityCategory.CONFIG
 except:
     ENTITY_CATEGORY_CONFIG = 'config'
 
 
-from .merossclient import const as mc, get_productnameuuid
+from .merossclient import const as mc, get_namespacekey, get_productnameuuid
 from .helpers import LOGGER
 from .const import CONF_DEVICE_ID, DOMAIN
+
 
 
 class MerossFakeEntity:
@@ -44,15 +48,17 @@ class _MerossEntity:
     def __init__(
         self,
         device: "MerossDevice",
-        _id: object,
-        device_class: str,
+        channel: object,
+        entitykey: str = None,
+        device_class: str = None,
         subdevice: 'MerossSubDevice' = None
         ):
         self.device = device
-        self.id = _id
+        self.channel = channel
         self._attr_device_class = device_class
         self.subdevice = subdevice
-        device.entities[_id] = self
+        self.id = channel if entitykey is None else entitykey if channel is None else f"{channel}_{entitykey}"
+        device.entities[self.id] = self
         async_add_devices = device.platforms.setdefault(self.PLATFORM)
         if async_add_devices is not None:
             async_add_devices([self])
@@ -183,36 +189,44 @@ class _MerossEntity:
 
 class _MerossToggle(_MerossEntity):
 
-    def __init__(self, device: 'MerossDevice', _id: object, device_class: str, toggle_ns: str, toggle_key: str):
-        super().__init__(device, _id, device_class)
-        self._toggle_ns = toggle_ns
-        self._toggle_key = toggle_key
+
+    def __init__(
+        self,
+        device: 'MerossDevice',
+        channel: object,
+        entitykey: str,
+        device_class: str,
+        namespace: str):
+        super().__init__(device, channel, entitykey, device_class)
+        self.namespace = namespace
+        self.key = None if namespace is None else get_namespacekey(namespace)
 
 
     async def async_turn_on(self, **kwargs) -> None:
-        def _ack_callback():
-            self.update_state(STATE_ON)
-
-        self.device.request(
-            self._toggle_ns,
-            mc.METHOD_SET,
-            {self._toggle_key: {mc.KEY_CHANNEL: self.id, mc.KEY_ONOFF: 1}},
-            _ack_callback
-        )
+        self._request(1)
 
 
     async def async_turn_off(self, **kwargs) -> None:
+        self._request(0)
+
+
+    def _request(self, onoff):
         def _ack_callback():
-            self.update_state(STATE_OFF)
+            self.update_onoff(onoff)
 
         self.device.request(
-            self._toggle_ns,
+            self.namespace,
             mc.METHOD_SET,
-            {self._toggle_key: {mc.KEY_CHANNEL: self.id, mc.KEY_ONOFF: 0}},
-            _ack_callback
-        )
+            {self.key: {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}},
+            _ack_callback)
 
 
+    def _parse_toggle(self, payload: dict):
+        self.update_onoff(payload.get(mc.KEY_ONOFF))
+
+
+    def _parse_togglex(self, payload: dict):
+        self.update_onoff(payload.get(mc.KEY_ONOFF))
 
 
 """

@@ -4,7 +4,7 @@ import logging
 import os
 import socket
 import math
-from typing import  Callable, Dict, List
+from typing import  Callable, Dict, List, Set
 from time import strftime, time
 from io import TextIOWrapper
 from json import (
@@ -24,6 +24,7 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 from .merossclient import (
     const as mc,  # mEROSS cONST
     MerossDeviceDescriptor, MerossHttpClient,
+    get_namespacekey,
     get_replykey, build_default_payload_get,
 )
 from .meross_entity import MerossFakeEntity
@@ -67,7 +68,9 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_HUB_REPORT, # disconnects
     mc.NS_APPLIANCE_HUB_SUBDEVICELIST, # disconnects
     mc.NS_APPLIANCE_MCU_UPGRADE, # disconnects
-    mc.NS_APPLIANCE_MCU_HP110_PREVIEW # disconnects
+    mc.NS_APPLIANCE_MCU_HP110_PREVIEW, # disconnects
+    mc.NS_APPLIANCE_MCU_FIRMWARE, # disconnects
+    mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK # disconnects
 )
 
 TRACE_KEYS_OBFUSCATE = (
@@ -174,8 +177,8 @@ class MerossDevice:
         For Hub(s) too NS_ALL is very 'partial' (at least MTS100 state is not fully exposed)
         """
         self.polling_period = CONF_POLLING_PERIOD_DEFAULT
-        self.polling_dictionary: List[str] = list()
-        self.polling_dictionary.append(mc.NS_APPLIANCE_SYSTEM_ALL)
+        self.polling_dictionary: Set[str] = set()
+        self.polling_dictionary.add(mc.NS_APPLIANCE_SYSTEM_ALL)
         """
         self.platforms: dict()
         when we build an entity we also add the relative platform name here
@@ -187,6 +190,20 @@ class MerossDevice:
         """
         self.platforms: Dict[str, Callable] = {}
         """
+        Message handling is actually very hybrid:
+        when a message (device reply or originated) is received it gets routed to the
+        device instance in 'receive'. Here, it was traditionally parsed with a
+        switch structure against the different expected namespaces.
+        Now the architecture, while still in place, is being moved to handler methods
+        which are looked up by inspecting self for a proper '_handler_{namespace}' signature
+        This signature could be added at runtime or (better I guess) could be added by
+        dedicated mixin classes used to build the actual device class when the device is setup
+        (see __init__.MerossApi.build_device)
+        The handlers dictionary is anyway parsed first and could override a build-time handler.
+        The dicionary keys are Meross namespaces matched against when the message enters the handling
+        """
+        self.handlers: Dict[str, Callable] = {}
+        """
         misc callbacks
         """
         self.unsub_entry_update_listener: Callable = None
@@ -194,11 +211,19 @@ class MerossDevice:
 
         self._set_config_entry(entry.data)
 
-        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in self.descriptor.ability:
-            #from .switch import MerossLanDND
-            from .light import MerossLanDNDLight
-            #self.entity_dnd = MerossLanDND(self)
-            self.entity_dnd = MerossLanDNDLight(self)
+        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
+            from .light import MLDNDLightEntity
+            self.entity_dnd = MLDNDLightEntity(self)
+
+        for key, payload in descriptor.digest.items():
+            # _init_xxxx methods provided by mixins
+            _init = getattr(self, f"_init_{key}", None)
+            if _init is not None:
+                if isinstance(payload, list):
+                    for p in payload:
+                        _init(p)
+                else:
+                    _init(payload)
 
         """
         warning: would the response be processed after this object is fully init?
@@ -287,77 +312,102 @@ class MerossDevice:
         if not self._online:
             self._set_online(namespace)
 
-        if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
-            self._parse_all(payload)
-            if self.needsave is True:
-                self.needsave = False
-                self._save_config_entry(payload)
-            if self.entity_dnd.enabled:
-                """
-                this is to optimize polling: when on MQTT we're only requesting/receiving
-                when coming online and 'DND' will then work by pushes. While on HTTP we'll
-                always call right after receiving 'ALL' which is the general status update
-                """
-                self.request_get(mc.NS_APPLIANCE_SYSTEM_DNDMODE)
+        handler = self.handlers.get(namespace)
+        if handler is not None:
+            handler(namespace, method, payload, header)
             return True
 
-        if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLEX:
-            if method == mc.METHOD_SETACK:
-                # SETACK doesnt carry payload :(
-                # on MQTT this is a pain since we dont have a setack callback
-                # system in place and we're not sure this SETACK is for us
-                pass
-            else:
-                self._parse_togglex(payload.get(mc.KEY_TOGGLEX))
+        handler = getattr(self, f"_handle_{namespace.replace('.', '_')}", None)
+        if handler is not None:
+            handler(namespace, method, payload, header)
             return True
-
-        if namespace == mc.NS_APPLIANCE_SYSTEM_DNDMODE:
-            if method == mc.METHOD_SETACK:
-                # SETACK doesnt carry payload :(
-                # on MQTT this is a pain since we dont have a setack callback
-                # system in place and we're not sure this SETACK is for us
-                pass
-            else:
-                dndmode = payload.get(mc.KEY_DNDMODE)
-                if isinstance(dndmode, dict):
-                    self.entity_dnd.update_onoff(dndmode.get(mc.KEY_MODE))
-            return True
-
-        if namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
-            # this is part of initial flow over MQTT
-            # we'll try to set the correct time in order to avoid
-            # having NTP opened to setup the device
-            # Note: I actually see this NS only on mss310 plugs
-            # (msl120j bulb doesnt have it)
-            if method == mc.METHOD_PUSH:
-                self.mqtt_request(
-                    mc.NS_APPLIANCE_SYSTEM_CLOCK,
-                    mc.METHOD_PUSH,
-                    { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: int(epoch)}}
-                )
-            return True
-
-        if namespace == mc.NS_APPLIANCE_SYSTEM_TIME:
-            if method == mc.METHOD_PUSH:
-                self.descriptor.update_time(payload.get(mc.KEY_TIME, {}))
-            return True
-
-        if namespace == mc.NS_APPLIANCE_CONTROL_BIND:
-            """
-            this transaction was observed on a trace from a msh300hk
-            the device keeps sending 'SET'-'Bind' so I'm trying to
-            kindly answer a 'SETACK'
-            assumption is we're working on mqtt
-            """
-            if method == mc.METHOD_SET:
-                self.mqtt_request(
-                    mc.NS_APPLIANCE_CONTROL_BIND,
-                    mc.METHOD_SETACK,
-                    {},
-                    header[mc.KEY_MESSAGEID]
-                )
 
         return False
+
+
+    def _handle_generic(self,
+        namespace: str, method: str, payload: dict, header: dict):
+        """
+        This is a basic implementation for dynamic protocol handlers
+        since most of the payloads just need to extract a key and
+        pass along to entities
+        """
+        key = get_namespacekey(namespace)
+        self._parse__generic(key, payload.get(key))
+
+
+    def _handle_Appliance_System_All(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        self._parse_all(payload)
+        if self.needsave is True:
+            self.needsave = False
+            self._save_config_entry(payload)
+        if self.entity_dnd.enabled:
+            """
+            this is to optimize polling: when on MQTT we're only requesting/receiving
+            when coming online and 'DND' will then work by pushes. While on HTTP we'll
+            always call right after receiving 'ALL' which is the general status update
+            """
+            self.request_get(mc.NS_APPLIANCE_SYSTEM_DNDMODE)
+
+
+    def _handle_Appliance_System_DNDMode(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        if isinstance(dndmode := payload.get(mc.KEY_DNDMODE), dict):
+            self.entity_dnd.update_onoff(dndmode.get(mc.KEY_MODE))
+
+
+    def _handle_Appliance_System_Clock(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        # this is part of initial flow over MQTT
+        # we'll try to set the correct time in order to avoid
+        # having NTP opened to setup the device
+        # Note: I actually see this NS only on mss310 plugs
+        # (msl120j bulb doesnt have it)
+        if method == mc.METHOD_PUSH:
+            self.mqtt_request(
+                mc.NS_APPLIANCE_SYSTEM_CLOCK,
+                mc.METHOD_PUSH,
+                { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: int(time())}}
+            )
+
+
+    def _handle_Appliance_System_Time(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        if method == mc.METHOD_PUSH:
+            self.descriptor.update_time(payload.get(mc.KEY_TIME, {}))
+
+
+    def _handle_Appliance_Control_Bind(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        """
+        this transaction was observed on a trace from a msh300hk
+        the device keeps sending 'SET'-'Bind' so I'm trying to
+        kindly answer a 'SETACK'
+        assumption is we're working on mqtt
+        """
+        if method == mc.METHOD_SET:
+            self.mqtt_request(
+                mc.NS_APPLIANCE_CONTROL_BIND,
+                mc.METHOD_SETACK,
+                {},
+                header[mc.KEY_MESSAGEID]
+            )
+
+
+    def _parse__generic(self, key: str, payload, entitykey: str = None):
+        if isinstance(payload, dict):
+            entity = self.entities[
+                payload[mc.KEY_CHANNEL]
+                if entitykey is None
+                else  f"{payload[mc.KEY_CHANNEL]}_{entitykey}"
+                ]
+            parser = getattr(entity, f"_parse_{key}", None)
+            if parser is not None:
+                parser(payload)
+        elif isinstance(payload, list):
+            for p in payload:
+                self._parse__generic(key, p, entitykey)
 
 
     def mqtt_receive(
@@ -621,14 +671,6 @@ class MerossDevice:
                 self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
 
 
-    def _parse_togglex(self, payload) -> None:
-        if isinstance(payload, dict):
-            self.entities[payload.get(mc.KEY_CHANNEL, 0)].update_onoff(payload.get(mc.KEY_ONOFF))
-        elif isinstance(payload, list):
-            for p in payload:
-                self._parse_togglex(p)
-
-
     def _parse_all(self, payload: dict) -> None:
         """
         called internally when we receive an NS_SYSTEM_ALL
@@ -676,6 +718,13 @@ class MerossDevice:
             _parse = getattr(self, f"_parse_{key}", None)
             if _parse is not None:
                 _parse(value)
+        # older firmwares (MSS110 with 1.1.28) look like
+        # carrying 'control' instead of 'digest'
+        if isinstance(p_control := descr.all.get(mc.KEY_CONTROL), dict):
+            for key, value in p_control.items():
+                _parse = getattr(self, f"_parse_{key}", None)
+                if _parse is not None:
+                    _parse(value)
 
 
     def _config_timestamp(self, epoch, device_timedelta):

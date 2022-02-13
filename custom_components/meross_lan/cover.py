@@ -14,6 +14,8 @@ from homeassistant.components.cover import (
 from homeassistant.core import HassJob, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 
+from helpers import LOGGER
+
 from .merossclient import const as mc
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
 from .const import (
@@ -39,13 +41,13 @@ async def async_unload_entry(hass: object, config_entry: object) -> bool:
     return platform_unload_entry(hass, config_entry, PLATFORM_COVER)
 
 
-class MerossLanGarage(_MerossEntity, CoverEntity):
+class MLGarage(_MerossEntity, CoverEntity):
 
     PLATFORM = PLATFORM_COVER
 
-    def __init__(self, device: 'MerossDevice', id: object):
-        super().__init__(device, id, DEVICE_CLASS_GARAGE)
-        self._payload = {mc.KEY_STATE: {mc.KEY_CHANNEL: id, mc.KEY_OPEN: 0 } }
+    def __init__(self, device: 'MerossDevice', channel: object):
+        super().__init__(device, channel, None, DEVICE_CLASS_GARAGE)
+        self._payload = {mc.KEY_STATE: {mc.KEY_CHANNEL: channel, mc.KEY_OPEN: 0 } }
         self._transition_duration = (PARAM_GARAGEDOOR_TRANSITION_MAXDURATION + PARAM_GARAGEDOOR_TRANSITION_MINDURATION) / 2
         self._transition_start = 0
         self._transition_end_job = HassJob(self._transition_end_callback)
@@ -120,19 +122,21 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
         super().set_unavailable()
 
 
-    def _set_open(self, open, execute) -> None:
+    def _parse_state(self, payload: dict) -> None:
         now = time()
+        open = payload.get(mc.KEY_OPEN)
+        execute = payload.get(mc.KEY_EXECUTE)
         self._open = open
 
         if execute:
             if self._open_pending == open:
-                self.device.log(DEBUG, 0, "MerossLanGarage(%s): ignoring start of ghost transition", self.name)
+                self.device.log(DEBUG, 0, "MLGarage(%s): ignoring start of ghost transition", self.name)
                 #continue processing after this
             elif self._open_pending is not None:
                 if self._transition_unsub is not None:
                     self._transition_unsub()
                     self._transition_unsub = None
-                    self.device.log(WARNING, 0, "MerossLanGarage(%s): re-starting an overlapped transition ", self.name)
+                    self.device.log(WARNING, 0, "MLGarage(%s): re-starting an overlapped transition ", self.name)
                 self._start_transition()
                 self._state_lastupdate = now
                 return
@@ -173,7 +177,7 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
                     elif self._transition_duration < PARAM_GARAGEDOOR_TRANSITION_MINDURATION:
                         self._transition_duration = PARAM_GARAGEDOOR_TRANSITION_MINDURATION
                     self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = self._transition_duration
-                    self.device.log(DEBUG, 0, "MerossLanGarage(%s): updated transition_duration to %d sec", self.name, self._transition_duration)
+                    self.device.log(DEBUG, 0, "MLGarage(%s): updated transition_duration to %d sec", self.name, self._transition_duration)
                     self._cancel_transition()
                     self.update_state(STATE_CLOSED)
 
@@ -258,12 +262,29 @@ class MerossLanGarage(_MerossEntity, CoverEntity):
 
 
 
-class MerossLanRollerShutter(_MerossEntity, CoverEntity):
+class GarageMixin:
+
+
+    def _init_garageDoor(self, payload: dict):
+        MLGarage(self, payload[mc.KEY_CHANNEL])
+
+
+    def _handle_Appliance_GarageDoor_State(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        self._parse__generic(mc.KEY_STATE, payload.get(mc.KEY_STATE))
+
+
+    def _parse_garageDoor(self, payload):
+        self._parse__generic(mc.KEY_STATE, payload)
+
+
+
+class MLRollerShutter(_MerossEntity, CoverEntity):
 
     PLATFORM = PLATFORM_COVER
 
-    def __init__(self, device: 'MerossDevice', id: object):
-        super().__init__(device, id, DEVICE_CLASS_SHUTTER)
+    def __init__(self, device: 'MerossDevice', channel: object):
+        super().__init__(device, channel, None, DEVICE_CLASS_SHUTTER)
         self._position_native = None # as reported by the device
         self._signalOpen: int = 30000 # msec to fully open (config'd on device)
         self._signalClose: int = 30000 # msec to fully close (config'd on device)
@@ -345,9 +366,9 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
 
     def _request(self, command, timeout = None):
-        self.device.log(DEBUG, 0, "MerossLanShutter(0): _request(%s, %s)", str(command), str(timeout))
+        self.device.log(DEBUG, 0, "MLRollerShutter(0): _request(%s, %s)", str(command), str(timeout))
         def _ack_callback():
-            self.device.log(DEBUG, 0, "MerossLanShutter(0): _ack_callback")
+            self.device.log(DEBUG, 0, "MLRollerShutter(0): _ack_callback")
             if timeout is not None:
                 self._position_endtime = time() + timeout
                 self._stop_unsub = async_track_point_in_utc_time(
@@ -366,7 +387,7 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
             self.device.async_http_request(
                 mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
                 mc.METHOD_SET,
-                {mc.KEY_POSITION: {mc.KEY_CHANNEL: self.id, mc.KEY_POSITION: command}},
+                {mc.KEY_POSITION: {mc.KEY_CHANNEL: self.channel, mc.KEY_POSITION: command}},
                 _ack_callback
             )
         )
@@ -379,7 +400,8 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
         super().set_unavailable()
 
 
-    def _set_rollerposition(self, position) -> None:
+    def _parse_position(self, payload: dict):
+        position = payload.get(mc.KEY_POSITION)
         if position != self._position_native:
             self._position_native = position
             self._attr_extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
@@ -387,8 +409,9 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
                 self.async_write_ha_state()
 
 
-    def _set_rollerstate(self, state) -> None:
-        self.device.log(DEBUG, 0, "MerossLanShutter(0): _set_rollerstate(%s)", str(state))
+    def _parse_state(self, payload: dict):
+        state = payload.get(mc.KEY_STATE)
+        self.device.log(DEBUG, 0, "MLRollerShutter(0): _set_rollerstate(%s)", str(state))
         epoch = time()
         if self._attr_state == STATE_OPENING:
             self._position_timed = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)
@@ -431,16 +454,17 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
             self._transition_callback(None)
 
 
-    def _set_rollerconfig(self, signalopen: int, signalclose: int) -> None:
-        self._signalOpen = signalopen # time to fully open cover in msec
-        self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = signalopen
-        self._signalClose = signalclose # time to fully close cover in msec
-        self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = signalclose
+    def _parse_config(self, payload: dict) -> None:
+        # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
+        self._signalOpen = payload.get(mc.KEY_SIGNALOPEN) # time to fully open cover in msec
+        self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
+        self._signalClose = payload.get(mc.KEY_SIGNALCLOSE) # time to fully close cover in msec
+        self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
 
 
     @callback
     def _transition_callback(self, _now: datetime) -> None:
-        self.device.log(DEBUG, 0, "MerossLanShutter(0): _transition_callback")
+        self.device.log(DEBUG, 0, "MLRollerShutter(0): _transition_callback")
         self._transition_unsub = async_track_point_in_utc_time(
             self.hass,
             self._transition_job,
@@ -450,7 +474,7 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
 
     def _transition_cancel(self):
-        self.device.log(DEBUG, 0, "MerossLanShutter(0): _transition_cancel")
+        self.device.log(DEBUG, 0, "MLRollerShutter(0): _transition_cancel")
         if self._transition_unsub is not None:
             self._transition_unsub()
             self._transition_unsub = None
@@ -458,14 +482,49 @@ class MerossLanRollerShutter(_MerossEntity, CoverEntity):
 
     @callback
     def _stop_callback(self, _now: datetime) -> None:
-        self.device.log(DEBUG, 0, "MerossLanShutter(0): _stop_callback")
+        self.device.log(DEBUG, 0, "MLRollerShutter(0): _stop_callback")
         self._stop_unsub = None
         self._request(-1)
 
 
     def _stop_cancel(self):
-        self.device.log(DEBUG, 0, "MerossLanShutter(0): _stop_cancel")
+        self.device.log(DEBUG, 0, "MLRollerShutter(0): _stop_cancel")
         self._position_endtime = None
         if self._stop_unsub is not None:
             self._stop_unsub()
             self._stop_unsub = None
+
+
+
+class RollerShutterMixin:
+
+
+    def __init__(self, api, descriptor, entry):
+        super().__init__(api, descriptor, entry)
+
+        try:
+            # looks like digest (in NS_ALL) doesn't carry state
+            # so we're not implementing _init_xxx and _parse_xxx methods here
+            MLRollerShutter(self, 0)
+            self.polling_dictionary.add(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
+            self.polling_dictionary.add(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
+            self.polling_dictionary.add(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG)
+
+        except Exception as e:
+            LOGGER.warning("RollerShutterMixin(%s) init exception:(%s)", self.device_id, str(e))
+
+
+    def _handle_Appliance_RollerShutter_Position(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        self._parse__generic(mc.KEY_POSITION, payload.get(mc.KEY_POSITION))
+
+
+    def _handle_Appliance_RollerShutter_State(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        self._parse__generic(mc.KEY_STATE, payload.get(mc.KEY_STATE))
+
+
+    def _handle_Appliance_RollerShutter_Config(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        self._parse__generic(mc.KEY_CONFIG, payload.get(mc.KEY_CONFIG))
+

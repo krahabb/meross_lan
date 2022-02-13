@@ -48,6 +48,9 @@ NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
 NS_APPLIANCE_CONTROL_LIGHT_EFFECT = "Appliance.Control.Light.Effect"
 # Humidifier abilities
 NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
+# Unknown abilities
+NS_APPLIANCE_CONTROL_PHYSICALLOCK = "Appliance.Control.PhysicalLock"
+
 # Garage door opener
 NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
 # Roller shutter
@@ -81,12 +84,28 @@ NS_APPLIANCE_HUB_MTS100_SCHEDULE = 'Appliance.Hub.Mts100.Schedule'
 NS_APPLIANCE_HUB_MTS100_SCHEDULEB = 'Appliance.Hub.Mts100.ScheduleB'
 NS_APPLIANCE_HUB_MTS100_TIMESYNC = 'Appliance.Hub.Mts100.TimeSync'
 # Smart cherub HP110A
-NS_APPLIANCE_MCU_UPGRADE = 'Appliance.Mcu.Upgrade'
 NS_APPLIANCE_MCU_HP110_FIRMWARE = 'Appliance.Mcu.Hp110.Firmware'
 NS_APPLIANCE_MCU_HP110_FAVORITE = 'Appliance.Mcu.Hp110.Favorite'
 NS_APPLIANCE_MCU_HP110_PREVIEW = 'Appliance.Mcu.Hp110.Preview'
 NS_APPLIANCE_MCU_HP110_LOCK = 'Appliance.Mcu.Hp110.Lock'
 NS_APPLIANCE_CONTROL_MP3 = "Appliance.Control.Mp3"
+# MTS200 smart thermostat
+NS_APPLIANCE_CONTROL_THERMOSTAT_MODE = 'Appliance.Control.Thermostat.Mode'
+NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION = 'Appliance.Control.Thermostat.Calibration'
+NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE = 'Appliance.Control.Thermostat.DeadZone'
+NS_APPLIANCE_CONTROL_THERMOSTAT_FROST = 'Appliance.Control.Thermostat.Frost'
+NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT = 'Appliance.Control.Thermostat.Overheat'
+NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED = 'Appliance.Control.Thermostat.WindowOpened'
+NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE = 'Appliance.Control.Thermostat.Schedule'
+NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION = 'Appliance.Control.Thermostat.HoldAction'
+# MOD100 diffuser
+NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY = 'Appliance.Control.Diffuser.Spray'
+NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT = 'Appliance.Control.Diffuser.Light'
+NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR = 'Appliance.Control.Diffuser.Sensor'
+
+
+NS_APPLIANCE_MCU_FIRMWARE = 'Appliance.Mcu.Firmware'
+NS_APPLIANCE_MCU_UPGRADE = 'Appliance.Mcu.Upgrade'
 
 # misc keys for json payloads
 KEY_HEADER = 'header'
@@ -184,6 +203,15 @@ KEY_ECONOMY = 'economy'
 KEY_HEATING = 'heating'
 KEY_AWAY = 'away'
 KEY_OPENWINDOW = 'openWindow'
+KEY_THERMOSTAT = 'thermostat'
+KEY_CURRENTTEMP = 'currentTemp'
+KEY_HEATTEMP = 'heatTemp'
+KEY_COOLTEMP = 'coolTemp'
+KEY_ECOTEMP = 'ecoTemp'
+KEY_MANUALTEMP = 'manualTemp'
+KEY_TARGETTEMP = 'targetTemp'
+KEY_WINDOWOPENED = 'windowOpened'
+KEY_DIFFUSER = 'diffuser'
 KEY_DNDMODE = 'DNDMode'
 KEY_ADJUST = 'adjust'
 KEY_NONCE = 'nonce'
@@ -198,10 +226,14 @@ PAYLOAD_GET = {
     NS_APPLIANCE_SYSTEM_DNDMODE: { KEY_DNDMODE: {} },
     NS_APPLIANCE_DIGEST_TRIGGERX: { KEY_DIGEST: [] },
     NS_APPLIANCE_DIGEST_TIMERX: { KEY_DIGEST: [] },
+    NS_APPLIANCE_CONTROL_TOGGLEX : { KEY_TOGGLEX: [] },
+    NS_APPLIANCE_CONTROL_TOGGLE : { KEY_TOGGLE: [] },
     NS_APPLIANCE_CONTROL_CONSUMPTIONX: { KEY_CONSUMPTIONX: [] },
     NS_APPLIANCE_CONTROL_ELECTRICITY: { KEY_ELECTRICITY: {} },
     NS_APPLIANCE_CONTROL_TRIGGERX: { KEY_TRIGGERX: {} },
     NS_APPLIANCE_CONTROL_TIMERX: { KEY_TIMERX: {} },
+    NS_APPLIANCE_CONTROL_LIGHT : { KEY_LIGHT: {} },
+    NS_APPLIANCE_CONTROL_SPRAY : { KEY_SPRAY: {} },
     NS_APPLIANCE_ROLLERSHUTTER_POSITION: { KEY_POSITION: [] },
     NS_APPLIANCE_ROLLERSHUTTER_STATE: { KEY_STATE: [] },
     NS_APPLIANCE_ROLLERSHUTTER_CONFIG: { KEY_CONFIG: [] },
@@ -210,8 +242,9 @@ PAYLOAD_GET = {
     NS_APPLIANCE_HUB_MTS100_ALL: { KEY_ALL: [] },
     NS_APPLIANCE_HUB_MTS100_SCHEDULEB: { KEY_SCHEDULE: [] },
     NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST: { KEY_ADJUST: [] }, # unconfirmed but 'motoradjust' is wrong for sure
+    NS_APPLIANCE_CONTROL_THERMOSTAT_MODE: { KEY_MODE: [] },
+    NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED: { KEY_WINDOWOPENED: [] },
 }
-
 # error codes as reported by Meross device protocol
 ERROR_INVALIDKEY = 5001
 
@@ -239,31 +272,64 @@ ROLLERSHUTTER_STATE_IDLE = 0
 ROLLERSHUTTER_STATE_OPENING = 1
 ROLLERSHUTTER_STATE_CLOSING = 2
 
-# well known device types
+# mts100 (and the likes..) valves mode
+MTS100_MODE_CUSTOM = 0
+MTS100_MODE_HEAT = 1
+MTS100_MODE_COOL = 2
+MTS100_MODE_ECO = 4
+MTS100_MODE_AUTO = 3
+
+# I don't have an MTS200 to test so these are inferred from a user trace
+MTS200_MODE_HEAT = 0
+MTS200_MODE_COOL = 1
+MTS200_MODE_ECO = 2
+MTS200_MODE_AUTO = 3
+MTS200_MODE_CUSTOM = 4
+
+# well known device types and classes
+# when registering type names put the CLASS name
+# after the corresponding (specialized) TYPE name
+# so we'll correctly find a defined TYPE name
+# by best effort matching on the iteration
+# if no type defined the class definition can
+# provide a general device description
+# see how TYPE_NAME_MAP is used in code
 TYPE_UNKNOWN = 'unknown'
+TYPE_NAME_MAP = OrderedDict()
+
+CLASS_MSH = 'msh'
 TYPE_MSH300 = 'msh300' # WiFi Hub
-TYPE_MS100 = 'ms100' # Smart temp/humidity sensor over Hub
+TYPE_NAME_MAP[CLASS_MSH] = "Smart Hub"
+
+CLASS_MSS = 'mss'
+TYPE_MSS310 = 'mss310' # smart plug with energy meter
+TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
+TYPE_NAME_MAP[CLASS_MSS] = "Smart Switch"
+
+CLASS_MSL = 'msl'
+TYPE_MSL100 = 'msl100' # smart bulb
+TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"
+TYPE_MSL120 = 'msl120' # smart bulb with color/temp
+TYPE_NAME_MAP[TYPE_MSL120] = "Smart RGB Bulb"
+TYPE_NAME_MAP[CLASS_MSL] = "Smart Light"
+
+CLASS_MTS = 'mts'
 TYPE_MTS100 = 'mts100' # Smart thermostat over hub
 TYPE_MTS100V3 = 'mts100v3' # Smart thermostat over hub
 TYPE_MTS150 = 'mts150' # Smart thermostat over hub
-TYPE_MSS310 = 'mss310' # smart plug with energy meter
-TYPE_MSL100 = 'msl100' # smart bulb
-TYPE_MSL120 = 'msl120' # smart bulb with color/temp
-
-# common device type classes
-CLASS_MSH = 'msh'
-CLASS_MSS = 'mss'
-CLASS_MSL = 'msl'
-CLASS_MTS = 'mts'
-TYPE_NAME_MAP = OrderedDict()
-TYPE_NAME_MAP[TYPE_MSL120] = "Smart RGB Bulb"
-TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"
-TYPE_NAME_MAP[CLASS_MSL] = "Smart Light"
-TYPE_NAME_MAP[CLASS_MSH] = "Smart Hub"
-TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
-TYPE_NAME_MAP[CLASS_MSS] = "Smart Switch"
+TYPE_MTS200 = 'mts200' # Smart thermostat over wifi
 TYPE_NAME_MAP[CLASS_MTS] = "Smart Thermostat"
+
+CLASS_MOD = 'mod'
+TYPE_MOD100 = 'mod100' # smart humidifier
+TYPE_NAME_MAP[CLASS_MOD] = "Smart Humidifier"
+
+# do not register class 'ms' since it is rather
+# unusual naming and could issue collissions with mss or msl
+# just set the known type
+TYPE_MS100 = 'ms100' # Smart temp/humidity sensor over Hub
 TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
+
 """
     GP constant strings
 """

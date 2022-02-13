@@ -1,4 +1,5 @@
 from __future__ import annotations
+from functools import partial
 
 from homeassistant.components.humidifier import (
     DOMAIN as PLATFORM_HUMIDIFIER,
@@ -43,8 +44,10 @@ class MerossLanSpray(_MerossEntity, HumidifierEntity):
     _spray_mode: int | None = None
 
 
-    def __init__(self, device: 'MerossDevice', id: object):
-        super().__init__(device, id, DEVICE_CLASS_HUMIDIFIER)
+    def __init__(self, device: 'MerossDevice', channel: object):
+        super().__init__(device, channel, None, DEVICE_CLASS_HUMIDIFIER)
+        #device.handlers[mc.NS_APPLIANCE_CONTROL_SPRAY] = device._handle_generic
+        #setattr(device, "_parse_spray", partial(device._parse__generic, mc.KEY_SPRAY))
 
 
     @property
@@ -80,7 +83,7 @@ class MerossLanSpray(_MerossEntity, HumidifierEntity):
         self.device.request(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
-            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.id, mc.KEY_MODE: spray_mode}},
+            {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: spray_mode}},
             _ack_callback
         )
 
@@ -94,3 +97,7 @@ class MerossLanSpray(_MerossEntity, HumidifierEntity):
                 self._spray_mode = spray_mode
                 if self.hass and self.enabled:
                     self.async_write_ha_state()
+
+
+    def _parse_spray(self, payload: dict) -> None:
+        self.update_mode(payload.get(mc.KEY_MODE))

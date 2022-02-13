@@ -3,10 +3,10 @@ from homeassistant.helpers import config_validation as cv
 
 from .merossclient import MerossDeviceDescriptor, const as mc  # mEROSS cONST
 from .meross_device import MerossDevice
-from .cover import MerossLanGarage, MerossLanRollerShutter
+from .cover import MLGarage, MLRollerShutter
 from .helpers import LOGGER
 
-
+"""
 class MerossDeviceGarage(MerossDevice):
 
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
@@ -52,26 +52,11 @@ class MerossDeviceGarage(MerossDevice):
         elif isinstance(payload, list):
             for p in payload:
                 self._parse_garageDoor(p)
+"""
 
-
-
+"""
 class MerossDeviceShutter(MerossDevice):
 
-    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(api, descriptor, entry)
-
-        try:
-            # atm we're not sure we can detect this in 'digest' payload
-            # looks like mrs100 just exposes abilities and we'll have to poll
-            # related NS
-            if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in descriptor.ability:
-                MerossLanRollerShutter(self, 0)
-                self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
-                self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
-                self.polling_dictionary.append(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG)
-
-        except Exception as e:
-            LOGGER.warning("MerossDeviceShutter(%s) init exception:(%s)", self.device_id, str(e))
 
 
     def receive(
@@ -90,13 +75,7 @@ class MerossDeviceShutter(MerossDevice):
             return True
 
         if namespace == mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION:
-            if method == mc.METHOD_SETACK:
-                """
-                the SETACK PAYLOAD is empty so no info to extract but we'll use it
-                as a trigger to request status update so to refresh movement state
-                code moved to _ack_callback in MerossLanRollerShutter
-                """
-            else:
+            if method != mc.METHOD_SETACK:
                 self._parse_rollershutter_position(payload.get(mc.KEY_POSITION))
             return True
 
@@ -108,7 +87,7 @@ class MerossDeviceShutter(MerossDevice):
 
     def entry_option_setup(self, config_schema: dict):
         super().entry_option_setup(config_schema)
-        shutter: MerossLanRollerShutter = self.entities[0]
+        shutter: MLRollerShutter = self.entities[0]
         config_schema[
             vol.Optional(
                 mc.KEY_SIGNALOPEN,
@@ -125,7 +104,7 @@ class MerossDeviceShutter(MerossDevice):
 
     def entry_option_update(self, user_input: dict):
         super().entry_option_update(user_input)
-        shutter: MerossLanRollerShutter = self.entities[0]
+        shutter: MLRollerShutter = self.entities[0]
         signalopen = user_input.get(mc.KEY_SIGNALOPEN, shutter._signalOpen / 1000) * 1000
         signalclose = user_input.get(mc.KEY_SIGNALCLOSE, shutter._signalClose / 1000) * 1000
         if (signalopen != shutter._signalOpen) or (signalclose != shutter._signalClose):
@@ -170,3 +149,4 @@ class MerossDeviceShutter(MerossDevice):
         elif isinstance(p_config, list):
             for p in p_config:
                 self._parse_rollershutter_config(p)
+"""
