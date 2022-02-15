@@ -48,8 +48,8 @@ class MerossDeviceHub(MerossDevice):
         super().__init__(api, descriptor, entry)
         self.subdevices: Dict[any, MerossSubDevice] = {}
         self._lastupdate_battery = 0
-        self._lastupdate_sensor = 0
-        self._lastupdate_mts100 = 0
+        self._lastupdate_sensor = None
+        self._lastupdate_mts100 = None
         """
             invoke platform(s) async_setup_entry
             in order to be able to eventually add entities when they 'pop up'
@@ -235,13 +235,20 @@ class MerossDeviceHub(MerossDevice):
     def _request_updates(self, epoch, namespace):
         super()._request_updates(epoch, namespace)
         """
-        we just ask for updates when something pops online (_lastupdate_sensor == 0)
+        we just ask for updates when something pops online (_lastupdate_xxxx == 0)
         relying on push (over MQTT) or base polling updates (only HTTP) for any other changes
+        if _lastupdate_xxxx is None then it means that device class is not present in the hub
+        and we totally skip the request. This is especially true since I've discovered hubs
+        don't expose the full set of namespaces until a real subdevice type is binded.
+        If this is the case we would ask a namespace which is not supported at the moment
+        (see #167)
         """
-        if (self._lastupdate_sensor == 0) or ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
-            self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ALL)
-        if (self._lastupdate_mts100 == 0) or ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
-            self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ALL)
+        if self._lastupdate_sensor is not None:
+            if (self._lastupdate_sensor == 0) or ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
+                self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ALL)
+        if self._lastupdate_mts100 is not None:
+            if (self._lastupdate_mts100 == 0) or ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
+                self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ALL)
         if ((epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
             self.request_get(mc.NS_APPLIANCE_HUB_BATTERY)
 
@@ -263,39 +270,28 @@ class MerossSubDevice:
     def online(self) -> bool:
         return self._online
 
+
     @property
     def name(self) -> str:
         return get_productnameuuid(self.type, self.id)
 
-    def _setonline(self, status) -> None:
-        if status == mc.STATUS_ONLINE:
-            if self._online is False:
-                self._online = True
-                """
-                here we should request updates for all entities but
-                there could be some 'light' race conditions
-                since when the device (hub) comes online it requests itself
-                a full update and this could be the case.
-                If instead this online status change is due to the single
-                subdevice coming online then we'll just wait for the next
-                polling cycle by setting the battery update trigger..
-                sensors are instead being updated in this call stack
-                """
-                self.hub._lastupdate_battery = 0
-                self.hub._lastupdate_sensor = 0
-                self.hub._lastupdate_mts100 = 0
-        else:
-            if self._online is True:
-                self._online = False
-                for entity in self.hub.entities.values():
-                    # not every entity in hub is a 'subdevice' entity
-                    if getattr(entity, "subdevice", None) is self:
-                        entity.set_unavailable()
+
+    def _setonline(self) -> None:
+        """
+        here we should request updates for all entities but
+        there could be some 'light' race conditions
+        since when the device (hub) comes online it requests itself
+        a full update and this could be the case.
+        If instead this online status change is due to the single
+        subdevice coming online then we'll just wait for the next
+        polling cycle by setting the battery update trigger..
+        """
+        self.hub._lastupdate_battery = 0
 
 
     def update_digest(self, p_digest: dict) -> None:
         self.p_digest = p_digest
-        self._setonline(p_digest.get(mc.KEY_STATUS))
+        self._parse_online(p_digest)
 
 
     def _parse_all(self, p_all: dict) -> None:
@@ -320,7 +316,7 @@ class MerossSubDevice:
         the value by 10 since that's a correct eurhystic for them (so far..)
         """
         self.p_subdevice = p_all # warning: digest here could be a generic 'sensor' payload
-        self._setonline(p_all.get(mc.KEY_ONLINE, {}).get(mc.KEY_STATUS))
+        self._parse_online(p_all.get(mc.KEY_ONLINE, {}))
 
         if self._online:
             for p_key, p_value in p_all.items():
@@ -341,7 +337,19 @@ class MerossSubDevice:
 
 
     def _parse_online(self, p_online: dict) -> None:
-        self._setonline(p_online.get(mc.KEY_STATUS))
+        if mc.KEY_STATUS in p_online:
+            if p_online[mc.KEY_STATUS] == mc.STATUS_ONLINE:
+                if self._online is False:
+                    self._online = True
+                    self._setonline()
+            else:
+                if self._online is True:
+                    self._online = False
+                    for entity in self.hub.entities.values():
+                        # not every entity in hub is a 'subdevice' entity
+                        if getattr(entity, "subdevice", None) is self:
+                            entity.set_unavailable()
+
 
 
     def _parse_adjust(self, p_adjust: dict) -> None:
@@ -367,26 +375,27 @@ class MS100SubDevice(MerossSubDevice):
             '', DEVICE_CLASS_HUMIDITY, 100, -20, 20, 1)
 
 
+    def _setonline(self) -> None:
+        super()._setonline()
+        self.hub._lastupdate_sensor = 0
+
+
     def update_digest(self, p_digest: dict) -> None:
         super().update_digest(p_digest)
         if self._online:
             p_ms100 = p_digest.get(mc.TYPE_MS100)
             if isinstance(p_ms100, dict):
                 # beware! it happens some keys are missing sometimes!!!
-                value = p_ms100.get(mc.KEY_LATESTTEMPERATURE)
-                if isinstance(value, int):
+                if isinstance(value := p_ms100.get(mc.KEY_LATESTTEMPERATURE), int):
                     self.sensor_temperature.update_state(value / 10)
-                value = p_ms100.get(mc.KEY_LATESTHUMIDITY)
-                if isinstance(value, int):
+                if isinstance(value := p_ms100.get(mc.KEY_LATESTHUMIDITY), int):
                     self.sensor_humidity.update_state(value / 10)
 
 
     def _parse_tempHum(self, p_temphum: dict) -> None:
-        value = p_temphum.get(mc.KEY_LATESTTEMPERATURE)
-        if isinstance(value, int):
+        if isinstance(value := p_temphum.get(mc.KEY_LATESTTEMPERATURE), int):
             self.sensor_temperature.update_state(value / 10)
-        value = p_temphum.get(mc.KEY_LATESTHUMIDITY)
-        if isinstance(value, int):
+        if isinstance(value := p_temphum.get(mc.KEY_LATESTHUMIDITY), int):
             self.sensor_humidity.update_state(value / 10)
 
 
@@ -416,6 +425,12 @@ class MTS100SubDevice(MerossSubDevice):
             self.climate, PRESET_SLEEP)
         self.number_adjust_away_temperature = Mts100SetPointNumber(
             self.climate, PRESET_AWAY)
+
+
+    def _setonline(self) -> None:
+        super()._setonline()
+        self.hub._lastupdate_mts100 = 0
+
 
     def _parse_all(self, p_all: dict) -> None:
         super()._parse_all(p_all)
