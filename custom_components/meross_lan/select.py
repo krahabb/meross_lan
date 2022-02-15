@@ -62,9 +62,8 @@ class MLSpray(_MerossToggle, SelectEntity):
         self,
         device: 'MerossDevice',
         channel: object,
-        entitykey: str = None,
-        namespace: str = mc.NS_APPLIANCE_CONTROL_SPRAY):
-        super().__init__(device, channel, entitykey, mc.KEY_SPRAY, namespace)
+        namespace: str):
+        super().__init__(device, channel, mc.KEY_SPRAY, mc.KEY_SPRAY, namespace)
 
 
     async def async_select_option(self, option: str) -> None:
@@ -112,12 +111,12 @@ class SprayMixin:
 
     def _init_spray(self, payload: dict):
         #spray = [{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]
-        MLSpray(self, payload.get(mc.KEY_CHANNEL, 0))
+        MLSpray(self, payload.get(mc.KEY_CHANNEL, 0), mc.NS_APPLIANCE_CONTROL_SPRAY)
 
 
     def _handle_Appliance_Control_Spray(self, namespace: str, method: str, payload: dict, header: dict):
-        self._parse__generic(mc.KEY_SPRAY, payload.get(mc.KEY_SPRAY))
+        self._parse_spray(payload.get(mc.KEY_SPRAY))
 
 
     def _parse_spray(self, payload: dict):
-        self._parse__generic(mc.KEY_SPRAY, payload)
+        self._parse__generic(mc.KEY_SPRAY, payload, mc.KEY_SPRAY)

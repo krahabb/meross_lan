@@ -21,11 +21,11 @@ class DiffuserMixin:
         light = payload.get(mc.KEY_LIGHT)
         if isinstance(light, list):
             for l in light:
-                MLLight(self, l, mc.KEY_LIGHT, mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT)
+                MLLight(self, l, mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT)
         spray = payload.get(mc.KEY_SPRAY)
         if isinstance(spray, list):
             for s in spray:
-                MLSpray(self, s.get(mc.KEY_CHANNEL, 0), mc.KEY_SPRAY, mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY)
+                MLSpray(self, s.get(mc.KEY_CHANNEL, 0), mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY)
         """
         it looks by the trace we have so far temp and hum are reporting fake (0) values
         if payload.get(mc.KEY_TYPE) == mc.TYPE_MOD100:
@@ -66,7 +66,7 @@ class DiffuserMixin:
 
 
     def _parse_diffuser_light(self, payload: dict):
-        self._parse__generic(mc.KEY_LIGHT, payload, mc.KEY_LIGHT)
+        self._parse__generic(mc.KEY_LIGHT, payload)
 
 
     def _parse_diffuser(self, payload: dict):

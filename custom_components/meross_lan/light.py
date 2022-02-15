@@ -118,8 +118,7 @@ class MLLight(_MerossToggle, LightEntity):
         self,
         device: MerossDevice,
         payload: dict,
-        entitykey: str = None,
-        namespace: str = mc.NS_APPLIANCE_CONTROL_LIGHT):
+        namespace: str):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
         # with msl120j (fw 3.1.4) I've discovered that any 'light' payload sent will turn on the light
@@ -144,7 +143,7 @@ class MLLight(_MerossToggle, LightEntity):
         # in case we're not using togglex fallback to toggle but..the light could
         # be switchable by 'onoff' field in light payload itself..(to be investigated)
         super().__init__(
-            device, channel, entitykey, None,
+            device, channel, None, None,
             mc.NS_APPLIANCE_CONTROL_TOGGLEX if self._usetogglex else None)
         """
         self._light = {
@@ -167,28 +166,36 @@ class MLLight(_MerossToggle, LightEntity):
             self._capacity = descr.ability[mc.NS_APPLIANCE_CONTROL_LIGHT].get(
                 mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE)
         else:# we might be using a diffuser light (mod100)
-            self._capacity = mc.LIGHT_CAPACITY_RGB_LUMINANCE
-
-        if SUPPORT_BRIGHTNESS:
-            # these will be removed in 2021.10
-            self._attr_supported_features = \
-                (SUPPORT_BRIGHTNESS if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE else 0)\
-                | (SUPPORT_COLOR if self._capacity & mc.LIGHT_CAPACITY_RGB else 0)\
-                | (SUPPORT_COLOR_TEMP if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE else 0)
+            self._capacity = None
 
         if COLOR_MODE_BRIGHTNESS:
             # new color_mode support from 2021.4.0
             self._attr_supported_color_modes = set()
-            if self._capacity & mc.LIGHT_CAPACITY_RGB:
+            if self._capacity is None:
+                # MOD100 lacks 'capacity' key and looks like supporting rgb
                 self._attr_supported_color_modes.add(COLOR_MODE_RGB)
-                self._attr_supported_color_modes.add(COLOR_MODE_HS)
-            if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
-                self._attr_supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
-            if not self._attr_supported_color_modes:
-                if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
-                    self._attr_supported_color_modes.add(COLOR_MODE_BRIGHTNESS)
-                else:
-                    self._attr_supported_color_modes.add(COLOR_MODE_ONOFF)
+            else:
+                if self._capacity & mc.LIGHT_CAPACITY_RGB:
+                    self._attr_supported_color_modes.add(COLOR_MODE_RGB)
+                    self._attr_supported_color_modes.add(COLOR_MODE_HS)
+                if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
+                    self._attr_supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
+                if not self._attr_supported_color_modes:
+                    if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+                        self._attr_supported_color_modes.add(COLOR_MODE_BRIGHTNESS)
+                    else:
+                        self._attr_supported_color_modes.add(COLOR_MODE_ONOFF)
+        elif SUPPORT_BRIGHTNESS:
+            # these will be removed in 2021.10
+            if self._capacity is None:
+                # MOD100 lacks 'capacity' key and looks like supporting rgb
+                self._attr_supported_color_modes.add(COLOR_MODE_RGB)
+                self._attr_supported_features = SUPPORT_BRIGHTNESS|SUPPORT_COLOR
+            else:
+                self._attr_supported_features = \
+                    (SUPPORT_BRIGHTNESS if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE else 0)\
+                    | (SUPPORT_COLOR if self._capacity & mc.LIGHT_CAPACITY_RGB else 0)\
+                    | (SUPPORT_COLOR_TEMP if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE else 0)
 
 
     @property
@@ -237,20 +244,20 @@ class MLLight(_MerossToggle, LightEntity):
 
 
     async def async_turn_on(self, **kwargs) -> None:
-
         light = dict(self._light)
-        capacity = 0
+        # we need to preserve actual capacity in case HA tells to just toggle
+        capacity = light.get(mc.KEY_CAPACITY, 0)
         # Color is taken from either of these 2 values, but not both.
-        if ATTR_HS_COLOR in kwargs:
-            h, s = kwargs[ATTR_HS_COLOR]
-            light[mc.KEY_RGB] = _rgb_to_int(color_util.color_hs_to_RGB(h, s))
-            light.pop(mc.KEY_TEMPERATURE, None)
-            capacity |= mc.LIGHT_CAPACITY_RGB
-        elif ATTR_RGB_COLOR in kwargs:
-            rgb = kwargs[ATTR_RGB_COLOR]
+        if (ATTR_HS_COLOR in kwargs) or (ATTR_RGB_COLOR in kwargs):
+            if ATTR_HS_COLOR in kwargs:
+                h, s = kwargs[ATTR_HS_COLOR]
+                rgb = color_util.color_hs_to_RGB(h, s)
+            else:
+                rgb = kwargs[ATTR_RGB_COLOR]
             light[mc.KEY_RGB] = _rgb_to_int(rgb)
             light.pop(mc.KEY_TEMPERATURE, None)
             capacity |= mc.LIGHT_CAPACITY_RGB
+            capacity &= ~mc.LIGHT_CAPACITY_TEMPERATURE
         elif ATTR_COLOR_TEMP in kwargs:
             # map mireds: min_mireds -> 100 - max_mireds -> 1
             mired = kwargs[ATTR_COLOR_TEMP]
@@ -259,12 +266,18 @@ class MLLight(_MerossToggle, LightEntity):
             light[mc.KEY_TEMPERATURE] = _sat_1_100(temperature) # meross wants temp between 1-100
             light.pop(mc.KEY_RGB, None)
             capacity |= mc.LIGHT_CAPACITY_TEMPERATURE
+            capacity &= ~mc.LIGHT_CAPACITY_RGB
 
-        if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
-            # Brightness must always be set, so take previous luminance if not explicitly set now.
+        # Brightness must always be set in payload
+        if ATTR_BRIGHTNESS in kwargs:
+            light[mc.KEY_LUMINANCE] = _sat_1_100(kwargs[ATTR_BRIGHTNESS] * 100 // 255)
+        else:
+            if mc.KEY_LUMINANCE not in light:
+                light[mc.KEY_LUMINANCE] = 100
+
+        if self._capacity is not None:
             capacity |= mc.LIGHT_CAPACITY_LUMINANCE
-            if ATTR_BRIGHTNESS in kwargs:
-                light[mc.KEY_LUMINANCE] = _sat_1_100(kwargs[ATTR_BRIGHTNESS] * 100 // 255)
+            light[mc.KEY_CAPACITY] = capacity
 
         if ATTR_EFFECT in kwargs:
             effect_id = self.device.effect_dict_names.get(kwargs[ATTR_EFFECT], None)
@@ -274,8 +287,6 @@ class MLLight(_MerossToggle, LightEntity):
                 light.pop(mc.KEY_EFFECT, None)
         else:
             light.pop(mc.KEY_EFFECT, None)
-
-        light[mc.KEY_CAPACITY] = capacity
 
         if self._usetogglex:
             # since lights could be repeatedtly 'async_turn_on' when changing attributes
@@ -309,7 +320,6 @@ class MLLight(_MerossToggle, LightEntity):
             await super().async_turn_off(**kwargs)
         else:
             def _ack_callback():
-                self._light[mc.KEY_ONOFF] = 1
                 self.update_onoff(0)
 
             self.device.request(
@@ -319,7 +329,27 @@ class MLLight(_MerossToggle, LightEntity):
                 _ack_callback)
 
 
+    def update_onoff(self, onoff) -> None:
+        self._light[mc.KEY_ONOFF] = onoff
+        self.update_state(STATE_ON if onoff else STATE_OFF)
+
+
+    def update_effect_list(self):
+        """
+        the list of available effects was changed (context at device level)
+        so we'll just tell HA to update the state
+        """
+        if self.device.effect_list:
+            self._attr_supported_features = self._attr_supported_features | SUPPORT_EFFECT
+        else:
+            self._attr_supported_features = self._attr_supported_features & ~SUPPORT_EFFECT
+        if self.hass and self.enabled:
+            self.async_write_ha_state()
+
+
     def _parse_light(self, payload: dict) -> None:
+        if not payload:
+            return
         if (self._light != payload) or not self.available:
             self._light = payload
 
@@ -377,19 +407,6 @@ class MLLight(_MerossToggle, LightEntity):
                 # when the togglex will arrive, the _light (attributes) will be already set
                 # and HA will save a consistent state (hopefully..we'll see)
                 self.async_write_ha_state()
-
-
-    def update_effect_list(self):
-        """
-        the list of available effects was changed (context at device level)
-        so we'll just tell HA to update the state
-        """
-        if self.device.effect_list:
-            self._attr_supported_features = self._attr_supported_features | SUPPORT_EFFECT
-        else:
-            self._attr_supported_features = self._attr_supported_features & ~SUPPORT_EFFECT
-        if self.hass and self.enabled:
-            self.async_write_ha_state()
 
 
 
@@ -471,12 +488,12 @@ class LightMixin:
 
 
     def _init_light(self, payload: dict):
-        MLLight(self, payload)
+        MLLight(self, payload, mc.NS_APPLIANCE_CONTROL_LIGHT)
 
 
     def _handle_Appliance_Control_Light(self,
     namespace: str, method: str, payload: dict, header: dict):
-        self._parse__generic(mc.KEY_LIGHT, payload.get(mc.KEY_LIGHT))
+        self._parse_light(payload.get(mc.KEY_LIGHT))
 
 
     def _handle_Appliance_Control_Light_Effect(self,
