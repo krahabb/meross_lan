@@ -27,11 +27,11 @@ class MerossDevice:
         with open(tracefile, 'r') as f:
             for line in f:
                 columns = line.split('\t')
-                rxtx = columns[1]
-                protocol = columns[2]
-                method = columns[3]
-                namespace = columns[4]
-                data = columns[5]
+                #rxtx = columns[1]
+                protocol = columns[-4]
+                method = columns[-3]
+                namespace = columns[-2]
+                data = columns[-1]
 
                 if method == mc.METHOD_GETACK:
                     if protocol == 'auto':
