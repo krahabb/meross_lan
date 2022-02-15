@@ -14,10 +14,11 @@ from homeassistant.components.cover import (
 from homeassistant.core import HassJob, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 
-from helpers import LOGGER
+from .helpers import LOGGER
 
 from .merossclient import const as mc
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
+from .number import MLNumber
 from .const import (
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
@@ -285,6 +286,8 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
 
     def __init__(self, device: 'MerossDevice', channel: object):
         super().__init__(device, channel, None, DEVICE_CLASS_SHUTTER)
+        self._number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
+        self._number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         self._position_native = None # as reported by the device
         self._signalOpen: int = 30000 # msec to fully open (config'd on device)
         self._signalClose: int = 30000 # msec to fully close (config'd on device)
@@ -456,10 +459,14 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
 
     def _parse_config(self, payload: dict) -> None:
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
-        self._signalOpen = payload.get(mc.KEY_SIGNALOPEN) # time to fully open cover in msec
-        self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
-        self._signalClose = payload.get(mc.KEY_SIGNALCLOSE) # time to fully close cover in msec
-        self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
+        if mc.KEY_SIGNALOPEN in payload:
+            self._signalOpen = payload[mc.KEY_SIGNALOPEN] # time to fully open cover in msec
+            self._number_signalOpen.update_state(self._signalOpen / 1000)
+            self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
+        if mc.KEY_SIGNALCLOSE in payload:
+            self._signalClose = payload[mc.KEY_SIGNALCLOSE] # time to fully close cover in msec
+            self._number_signalClose.update_state(self._signalClose / 1000)
+            self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
 
 
     @callback
@@ -494,6 +501,53 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
             self._stop_unsub()
             self._stop_unsub = None
 
+
+
+class MLRollerShutterConfigNumber(MLNumber):
+    """
+    Helper entity to configure MRS open/close duration
+    """
+    def __init__(self, cover: MLRollerShutter, key: str):
+        self._cover = cover
+        self._key = key
+        super().__init__(cover.device, cover.channel, f"config_{key}")
+
+
+    @property
+    def name(self) -> str:
+        return f"{self._cover.name} - {self._key}"
+
+
+    @property
+    def step(self) -> float:
+        return 1
+
+    @property
+    def min_value(self) -> float:
+        return 1
+
+    @property
+    def max_value(self) -> float:
+        return 60
+
+
+    async def async_set_value(self, value: float) -> None:
+        config = {
+            mc.KEY_CHANNEL: self.channel,
+            mc.KEY_SIGNALOPEN: self._cover._signalOpen,
+            mc.KEY_SIGNALCLOSE: self._cover._signalClose
+            }
+        config[self._key] = int(value * 1000)
+
+        def _ack_callback():
+            self._cover._parse_config(config)
+
+        self.device.request(
+            mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG,
+            mc.METHOD_SET,
+            { mc.KEY_CONFIG: [config] },
+            _ack_callback
+        )
 
 
 class RollerShutterMixin:
