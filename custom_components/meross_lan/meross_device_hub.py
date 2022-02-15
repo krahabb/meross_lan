@@ -407,10 +407,7 @@ class MTS100SubDevice(MerossSubDevice):
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100) -> None:
         super().__init__(hub, p_digest, _type)
-        from .devices.mts100 import (
-            Mts100Climate, Mts100SetPointNumber,
-            PRESET_COMFORT, PRESET_SLEEP, PRESET_AWAY
-        )
+        from .devices.mts100 import Mts100Climate
         self.climate = Mts100Climate(self)
         self.binary_sensor_window = MLBinarySensor.build_for_subdevice(
             self, DEVICE_CLASS_WINDOW)
@@ -419,12 +416,6 @@ class MTS100SubDevice(MerossSubDevice):
         self.number_adjust_temperature = MLHubAdjustNumber(
             self, mc.KEY_TEMPERATURE, mc.NS_APPLIANCE_HUB_MTS100_ADJUST,
             '', DEVICE_CLASS_TEMPERATURE, 100, -5, 5, 0.1)
-        self.number_adjust_comfort_temperature = Mts100SetPointNumber(
-            self.climate, PRESET_COMFORT)
-        self.number_adjust_sleep_temperature = Mts100SetPointNumber(
-            self.climate, PRESET_SLEEP)
-        self.number_adjust_away_temperature = Mts100SetPointNumber(
-            self.climate, PRESET_AWAY)
 
 
     def _setonline(self) -> None:
@@ -471,11 +462,11 @@ class MTS100SubDevice(MerossSubDevice):
         climate.update_modes()
 
         if isinstance(_t := p_temperature.get(mc.KEY_COMFORT), int):
-            self.number_adjust_comfort_temperature.update_value(_t)
+            climate.number_comfort_temperature.update_state(_t / 10)
         if isinstance(_t := p_temperature.get(mc.KEY_ECONOMY), int):
-            self.number_adjust_sleep_temperature.update_value(_t)
+            climate.number_sleep_temperature.update_state(_t / 10)
         if isinstance(_t := p_temperature.get(mc.KEY_AWAY), int):
-            self.number_adjust_away_temperature.update_value(_t)
+            climate.number_away_temperature.update_state(_t / 10)
 
         if mc.KEY_OPENWINDOW in p_temperature:
             self.binary_sensor_window.update_onoff(p_temperature[mc.KEY_OPENWINDOW])

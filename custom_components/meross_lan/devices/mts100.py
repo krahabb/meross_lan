@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 from ..climate import (
-    MtsClimate,
+    MtsClimate, MtsSetPointNumber,
     PRESET_OFF, PRESET_CUSTOM, PRESET_COMFORT, PRESET_SLEEP, PRESET_AWAY, PRESET_AUTO,
     ATTR_TEMPERATURE,
-)
-from ..number import (
-    MtsSetPointNumber,
 )
 from ..merossclient import const as mc  # mEROSS cONST
 
@@ -46,6 +43,12 @@ class Mts100Climate(MtsClimate):
 
     def __init__(self, subdevice: 'MerossSubDevice'):
         super().__init__(subdevice.hub, subdevice.id, None, None, subdevice)
+        self.number_comfort_temperature = Mts100SetPointNumber(
+            self, PRESET_COMFORT)
+        self.number_sleep_temperature = Mts100SetPointNumber(
+            self, PRESET_SLEEP)
+        self.number_away_temperature = Mts100SetPointNumber(
+            self, PRESET_AWAY)
 
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
@@ -121,8 +124,3 @@ class Mts100SetPointNumber(MtsSetPointNumber):
                 ]
             },
         )
-
-
-    def update_value(self, value):
-        self.update_state(value / 10)
-

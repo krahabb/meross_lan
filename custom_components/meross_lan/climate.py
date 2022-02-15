@@ -12,13 +12,17 @@ from homeassistant.components.climate.const import (
 from homeassistant.const import (
     TEMP_CELSIUS,
     ATTR_TEMPERATURE,
+    DEVICE_CLASS_TEMPERATURE,
 )
 
+from .merossclient import const as mc  # mEROSS cONST
 from .meross_entity import (
     _MerossEntity,
     platform_setup_entry, platform_unload_entry
 )
-from .merossclient import const as mc  # mEROSS cONST
+from .number import (
+    MLNumber,
+)
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -170,3 +174,46 @@ class MtsClimate(_MerossEntity, ClimateEntity):
 
     async def _async_turn_onoff(self, onoff) -> None:
         raise NotImplementedError()
+
+
+
+class MtsSetPointNumber(MLNumber):
+    """
+    Helper entity to configure MTS (thermostats) setpoints
+    AKA: Heat(comfort) - Cool(sleep) - Eco(away)
+    """
+    PRESET_TO_ICON_MAP = {
+        PRESET_COMFORT: 'mdi:sun-thermometer',
+        PRESET_SLEEP: 'mdi:power-sleep',
+        PRESET_AWAY: 'mdi:bag-checked',
+    }
+
+    def __init__(self, climate: MtsClimate, preset_mode: str):
+        self._climate = climate
+        self._preset_mode = preset_mode
+        self._key = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
+        self._attr_icon = self.PRESET_TO_ICON_MAP[preset_mode]
+        super().__init__(
+            climate.device,
+            climate.channel,
+            f"config_{mc.KEY_TEMPERATURE}_{self._key}",
+            DEVICE_CLASS_TEMPERATURE,
+            climate.subdevice
+        )
+
+    @property
+    def name(self) -> str:
+        return f"{self._climate.name} - {self._preset_mode} {DEVICE_CLASS_TEMPERATURE}"
+
+    @property
+    def step(self) -> float:
+        return self._climate._attr_target_temperature_step
+
+    @property
+    def min_value(self) -> float:
+        return self._climate._attr_min_temp
+
+    @property
+    def max_value(self) -> float:
+        return self._climate._attr_max_temp
+

@@ -1,26 +1,17 @@
 from __future__ import annotations
 
-from homeassistant.const import (
-    DEVICE_CLASS_TEMPERATURE,
-)
 from homeassistant.components.number import (
     DOMAIN as PLATFORM_NUMBER,
     NumberEntity,
 )
-from homeassistant.components.number.const import (
-    DEFAULT_MIN_VALUE, DEFAULT_MAX_VALUE, DEFAULT_STEP,
-)
 
+from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 from .meross_entity import (
     _MerossEntity,
     platform_setup_entry, platform_unload_entry,
     ENTITY_CATEGORY_CONFIG,
 )
-from .climate import (
-    MtsClimate,
-    PRESET_COMFORT, PRESET_SLEEP, PRESET_AWAY,
-)
-from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
+
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -35,38 +26,10 @@ class MLNumber(_MerossEntity, NumberEntity):
     PLATFORM = PLATFORM_NUMBER
 
 
-    def __init__(
-        self,
-        device,
-        channel: object,
-        entitykey: str,
-        min_value: float = DEFAULT_MIN_VALUE,
-        max_value: float = DEFAULT_MAX_VALUE,
-        step: float = DEFAULT_STEP,
-        device_class: str = None,
-        subdevice = None
-        ):
-        super().__init__(device, channel, entitykey, device_class, subdevice)
-        self._attr_min_value = min_value
-        self._attr_max_value = max_value
-        self._attr_step = step
-
-
     @property
     def entity_category(self):
         return ENTITY_CATEGORY_CONFIG
 
-    @property
-    def min_value(self) -> float:
-        return self._attr_min_value
-
-    @property
-    def max_value(self) -> float:
-        return self._attr_max_value
-
-    @property
-    def step(self) -> float:
-        return self._attr_step
 
     @property
     def value(self) -> float | None:
@@ -94,13 +57,13 @@ class MLHubAdjustNumber(MLNumber):
         self._namespace_key = get_namespacekey(namespace)
         self._label = label
         self._multiplier = multiplier
+        self._attr_min_value = min_value
+        self._attr_max_value = max_value
+        self._attr_step = step
         super().__init__(
             subdevice.hub,
             subdevice.id,
             f"config_{self._namespace_key}_{key}",
-            min_value,
-            max_value,
-            step,
             device_class,
             subdevice)
 
@@ -128,55 +91,3 @@ class MLHubAdjustNumber(MLNumber):
 
     def update_value(self, value):
         self.update_state(value / self._multiplier)
-
-
-
-class MtsSetPointNumber(_MerossEntity, NumberEntity):
-    """
-    Helper entity to configure MTS (thermostats) setpoints
-    AKA: Heat(comfort) - Cool(sleep) - Eco(away)
-    """
-    PLATFORM = PLATFORM_NUMBER
-
-    PRESET_TO_ICON_MAP = {
-        PRESET_COMFORT: 'mdi:sun-thermometer',
-        PRESET_SLEEP: 'mdi:power-sleep',
-        PRESET_AWAY: 'mdi:bag-checked',
-    }
-
-    def __init__(self, climate: MtsClimate, preset_mode: str):
-        self._climate = climate
-        self._preset_mode = preset_mode
-        self._key = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
-        self._attr_icon = self.PRESET_TO_ICON_MAP[preset_mode]
-        super().__init__(
-            climate.device,
-            climate.channel,
-            f"config_{mc.KEY_TEMPERATURE}_{self._key}",
-            DEVICE_CLASS_TEMPERATURE,
-            climate.subdevice
-        )
-
-    @property
-    def entity_category(self):
-        return ENTITY_CATEGORY_CONFIG
-
-    @property
-    def name(self) -> str:
-        return f"{self._climate.name} - {self._preset_mode} {DEVICE_CLASS_TEMPERATURE}"
-
-    @property
-    def step(self) -> float:
-        return self._climate._attr_target_temperature_step
-
-    @property
-    def min_value(self) -> float:
-        return self._climate._attr_min_temp
-
-    @property
-    def max_value(self) -> float:
-        return self._climate._attr_max_temp
-
-    @property
-    def value(self) -> float | None:
-        return self._attr_state

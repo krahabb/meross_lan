@@ -2,12 +2,9 @@ from __future__ import annotations
 
 
 from ..climate import (
-    MtsClimate,
+    MtsClimate, MtsSetPointNumber,
     PRESET_OFF, PRESET_CUSTOM, PRESET_COMFORT, PRESET_SLEEP, PRESET_AWAY, PRESET_AUTO,
     ATTR_TEMPERATURE,
-)
-from ..number import (
-    MtsSetPointNumber,
 )
 from ..binary_sensor import (
     MLBinarySensor,
@@ -146,11 +143,11 @@ class Mts200Climate(MtsClimate):
         if isinstance(_t := payload.get(mc.KEY_MAX), int):
             self._attr_max_temp = _t / 10
         if isinstance(_t := payload.get(mc.KEY_HEATTEMP), int):
-            self.number_comfort_temperature.update_value(_t)
+            self.number_comfort_temperature.update_state(_t / 10)
         if isinstance(_t := payload.get(mc.KEY_COOLTEMP), int):
-            self.number_sleep_temperature.update_value(_t)
+            self.number_sleep_temperature.update_state(_t / 10)
         if isinstance(_t := payload.get(mc.KEY_ECOTEMP), int):
-            self.number_away_temperature.update_value(_t)
+            self.number_away_temperature.update_state(_t / 10)
         self.update_modes()
 
 
@@ -170,10 +167,6 @@ class Mts200SetPointNumber(MtsSetPointNumber):
             mc.METHOD_SET,
             {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, self._key: int(value * 10)}]} # the device rounds down ?!
         )
-
-
-    def update_value(self, value):
-        self.update_state(value / 10)
 
 
 
