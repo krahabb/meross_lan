@@ -40,7 +40,11 @@ You can also manually add your device by adding a new integration entry and prov
 
 When configuring a device entry you'll have the option to set:
 - host address: this is available when manually adding a device or when a device is discovered via DHCP: provide the ip address or a valid network host name. When you set the ip address, ensure it is 'stable' and not changing between re-boots else the integration will 'loose' access to the device
-- device key: this is used to sign messages according to the official Meross protocol behaviour. Provide the same key you used to re-configure your appliance or, in case you're side-communicating and/or don't know the key leave it empty: this way the HTTP stack will be instructed to 'hack' the protocol by using a simple trick
+- key selection mode: this option allows you to specify some 'helpful' behaviours when configuring the device key. Whatever 'mode' you select you should always set a proper key in the next configuration field since that is the one meross_lan will use. The 'mode' field is only an hint to meross_lan on how to process the key validation/configuration
+  - User set: this mode allows you to set the (non empty) key and meross_lan will accept it with no further actions (except checking it is valid by querying the device)
+  - Hack mode: this mode allows meross_lan to accept an empty key. Setting an empty key will try to use an hack to communicate with the device. This works or not depending on many factors and you could experience random issues due to the algorithm not always working. Be aware and use it only as a last resort!
+  - Cloud retrieval: this mode will automatically check the preset key (if present) and, in case of failure or empty, bring you to a Meross cloud login form which will automatically retrieve the device key from your account (username and password needed)
+- device key: this is used to sign messages according to the official Meross protocol behaviour. This should be prefilled with a known key from other devices if you already configured any before. If you need or want to use the 'Hack mode', leave it empty
 
 These other options are available once the device is setup the first time. To access them just access the integration configuration UI:
 - protocol: the software is able to communicate both over http directly to the device or through an mqtt broker. When you configure an entry by ip address (either manually or dhcp discovered) it usually 'prefers' to talk http for obvious reasons but can nevertheless automatically switch to mqtt if it recognizes it is available (by 'sensing' mqtt messages flowing through). If you set 'Auto' (or leave empty/unconfigured) you'll have this automatic 'failover' switch in both directions (HTTP <-> MQTT) trying to always ensure the best available transport to communicate. If you force it (either HTTP or MQTT) no automatic protocol switching will occur and the integration will only talk that protocol for that configuration entry (some minor exceptions are in place at the moment and some commands are tried over HTTP first anyway)
@@ -53,26 +57,30 @@ These other options are available once the device is setup the first time. To ac
 Most of this software has been developed and tested on my owned Meross devices which, over the time, are slowly expanding. I have tried to make it the more optimistic and generalistic as possible based on the work from [@albertogeniola] and [@bytespider] so it should work with most of the hardware out there but I did not test anything other than mines. There are some user reports confirming it works with other devices and the 'official' complete list is here (keep in mind some firmware versions might work while other not: this is the 'hell' of hw & sw):
 
 - Switches
-  - [MSS110](https://www.meross.com/product/2/article/): Smart Wifi plug mini
+  - [MSS110](https://www.meross.com/Detail/58/Smart%20Wi-Fi%20Plug%20Mini): Smart Wifi plug mini
   - [MSS210](https://www.meross.com/Detail/3/Smart%20Wi-Fi%20Plug): Smart Wifi plug
-  - [MSS310](https://www.meross.com/product/38/article/): power plug with metering capabilties
-  - [MSS425](https://www.meross.com/product/16/article/): Smart WiFi Surge Protector (multiple sockets power strip)
-  - [MSS510](https://www.meross.com/product/23/article/): Smart WiFi single pole switch
-  - [MSS550](https://www.meross.com/product/37/article/): Smart WiFi 2 way switch
-  - [MSS620](https://www.meross.com/product/94/article/): Smart Wi-Fi Indoor/Outdoor Plug
-  - [MSS710](https://www.meross.com/product/21/article/): Smart WiFi DIY switch
+  - [MSS310](https://www.meross.com/Detail/38/Smart%20Wi-Fi%20Plug%20with%20Energy%20Monitor): power plug with metering capabilties
+  - [MSS425](https://www.meross.com/Detail/16/Smart%20Wi-Fi%20Surge%20Protector): Smart WiFi Surge Protector (multiple sockets power strip)
+  - [MSS510](https://www.meross.com/Detail/23/Smart%20Wi-Fi%20Single%20Pole%20Switch): Smart WiFi single pole switch
+  - [MSS550](https://www.meross.com/Detail/24/Smart%20Wi-Fi%203-Way%20Switch): Smart WiFi 2 way switch
+  - [MSS620](https://www.meross.com/Detail/20/Smart%20Wi-Fi%20Indoor-Outdoor%20Plug): Smart WiFi Indoor/Outdoor Plug
+  - [MSS710](https://www.meross.com/Detail/21/Smart%20Wi-Fi%20Switch): Smart WiFi DIY switch
 - Lights
   - [MSL100](https://www.meross.com/product/4/article/): Smart bulb with dimmable light
   - [MSL120](https://www.meross.com/product/28/article/): Smart RGB bulb with dimmable light
+  - [MSL320](https://www.meross.com/Detail/86/Smart%20Wi-Fi%20Light%20Strip): Smart Wifi Light Strip
 - Hub
   - [MSH300](https://www.meross.com/Detail/50/Smart%20Wi-Fi%20Hub): Smart WiFi Hub
 - Sensors
   - [MS100](https://www.meross.com/Detail/46/Smart%20Temperature%20and%20Humidity%20Sensor): Smart Temperature/Humidity Sensor
 - Thermostats
   - [MTS100](https://www.meross.com/Detail/30/Smart%20Thermostat%20Valve): Smart Thermostat Valve
+  - [MTS200](https://www.meross.com/Detail/116/Smart%20Wi-Fi%20Thermostat) [experimental]: Smart Wifi Thermostat
 - Covers
-  - [MRS100](https://www.meross.com/product/91/article/): Smart Wi-Fi Roller Shutter Timer
-  - [MSG100](https://www.meross.com/product/29/article/): Smart Wi-Fi Garage Door Opener
+  - [MRS100](https://www.meross.com/product/91/article/): Smart WiFi Roller Shutter
+  - [MSG100](https://www.meross.com/product/29/article/): Smart WiFi Garage Door Opener
+- Humidifiers
+  - [MOD100](https://www.meross.com/Detail/93/Smart%20Wi-Fi%20Essential%20Oil%20Diffuser) [experimental]: Smart WiFi Essential Oil Diffuser
 
 
 ## Features
@@ -82,9 +90,9 @@ It also features an automatic protocol switching capability so, if you have your
 
 If you have the MSH300 Hub working with this integration, every new subdevice (thermostat or sensor) can be automatically discovered once the subdevice is paired with the hub. When the hub is configured in this integration you don't need to switch back and forth to/from the Meross app in order to 'bind' new devices: just pair the thermostat or sensor to the hub by using the subdevice pairing procedure (fast double press on the hub).
 
-DND mode (status/presence light on switches) is also supported through a switch entity. This entity is by default disabled when setting up the integration so, if you want/need to control that, be sure to show the disabled entities or access it through the 'Device' panel in HA and enable it. Also, bear in mind it works the opposite than a light: if you want to turn off the status light please turn on the DND mode switch (it's do-not-disturb mode!).
+DND mode (status/presence light) is supported through a light entity. This entity is marked as a 'configuration entity' in HA terms and is by default visible in the device page in HA UI. If you want to access it in your lovelace cards you have to manually add it. When the device is in 'do-not-disturb' mode the light will be switched off so the device doesn't pollute your home environment!
 
-I'm sorry to not be able to write a complete wiki at the moment in order to better explain some procedures or share my knowledge about the devices but time is constrained and writing knowledge bases is always consuming (and sligthly boring I admit). I'm still working on some features and I've put a big effort trying to ensure a frictionless working of this software so I hope you can make use of it without deeper explanations. Something will come, slowly, but if you have any urgent issue or question I will be happy to help (and maybe this will speed up the documentation :).
+In general, many device configuration options available in Meross app are not supported in meross_lan though some are. As an example, the thermostats preset temperatures (for heat, cool, eco/away) are accessible in HA/meross_lan exactly as if you were to set them manually on the device or via the app. These, and any other supported configuration options, are available as configuration entities (so they're not added to the default lovelace dashboard) and you can access them by going to the relevant device page in HA Configuration -> Devices
 
 ## Service
 
