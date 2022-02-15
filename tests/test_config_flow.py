@@ -85,7 +85,7 @@ async def test_user_config_flow_mqtt(hass, fixture_mqtt_is_loaded):
 
     # Check that the config flow shows the user form as the first step
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "device"
 
 
 async def test_user_config_flow_no_mqtt(hass, fixture_mqtt_is_not_loaded):
@@ -97,7 +97,7 @@ async def test_user_config_flow_no_mqtt(hass, fixture_mqtt_is_not_loaded):
 
     # Check that the config flow shows the user form as the first step
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "device"
 
 
 async def test_mqttdiscovery_config_flow(hass, fixture_mqtt_is_loaded):
@@ -108,7 +108,7 @@ async def test_mqttdiscovery_config_flow(hass, fixture_mqtt_is_loaded):
     )
 
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result["step_id"] == "device"
+    assert result["step_id"] == "finalize"
 
 
     result = await hass.config_entries.flow.async_configure(
@@ -133,7 +133,7 @@ async def test_dhcpdiscovery_config_flow(hass):
     )
 
     assert result["type"] == data_entry_flow.RESULT_TYPE_FORM
-    assert result["step_id"] == "user"
+    assert result["step_id"] == "device"
 
     """
     for this to work we'd need to mock a bit of aioclient

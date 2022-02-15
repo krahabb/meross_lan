@@ -7,7 +7,8 @@
       "no_devices_found": "[%key:common::config_flow::abort::no_devices_found%]"
     },
     "error": {
-      "invalid_key": "Key error: proceed to retrieve from Meross account",
+      "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
+      "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
       "already_configured_device": "[%key:common::config_flow::abort::already_configured_device%]",
       "cannot_connect": "Unable to connect",
       "invalid_auth": "Authentication error"
@@ -17,8 +18,6 @@
         "title": "Meross LAN",
         "description": "Setup meross device",
         "data": {
-          "host": "Device host address",
-          "key": "Device key"
         }
       },
       "hub": {
@@ -28,7 +27,16 @@
           "key": "Device key"
         }
       },
-      "retrievekey": {
+      "device": {
+        "title": "Meross LAN",
+        "description": "Setup meross device",
+        "data": {
+          "host": "Device host address",
+          "keymode": "Key selection mode",
+          "key": "Device key"
+        }
+      },
+      "cloudkey": {
         "title": "Device key retrieve",
         "description": "Login to your Meross account to retrieve the device key",
         "data": {
@@ -36,7 +44,7 @@
           "password": "Meross password"
         }
       },
-      "device": {
+      "finalize": {
         "title": "Device configuration",
         "description": "Type: {device_type}\nUUID: {device_id}",
         "data": {
@@ -57,6 +65,8 @@
         "title": "Device configuration",
         "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
         "data": {
+          "host": "Device host address",
+          "keymode": "Key selection mode",
           "key": "Device key",
           "protocol": "Connection protocol",
           "polling_period": "Polling period",

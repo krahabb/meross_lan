@@ -14,7 +14,6 @@ CONF_DEVICE_ID = hac.CONF_DEVICE_ID
 CONF_KEY = 'key'
 CONF_CLOUD_KEY = 'cloud_key' # device key eventually retrieved from Meross account
 CONF_PAYLOAD = hac.CONF_PAYLOAD
-CONF_DEVICE_TYPE = "device_type"
 CONF_HOST = hac.CONF_HOST
 
 CONF_PROTOCOL = hac.CONF_PROTOCOL # protocol used to communicate with device
