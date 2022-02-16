@@ -21,7 +21,7 @@ from .meross_entity import (
     platform_setup_entry, platform_unload_entry
 )
 from .number import (
-    MLNumber,
+    MLConfigNumber,
 )
 
 
@@ -177,7 +177,7 @@ class MtsClimate(_MerossEntity, ClimateEntity):
 
 
 
-class MtsSetPointNumber(MLNumber):
+class MtsSetPointNumber(MLConfigNumber):
     """
     Helper entity to configure MTS (thermostats) setpoints
     AKA: Heat(comfort) - Cool(sleep) - Eco(away)

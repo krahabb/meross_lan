@@ -18,7 +18,8 @@ from .helpers import LOGGER
 
 from .merossclient import const as mc
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
-from .number import MLNumber
+from .number import MLConfigNumber
+from .switch import MLConfigSwitch
 from .const import (
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
@@ -124,6 +125,7 @@ class MLGarage(_MerossEntity, CoverEntity):
 
 
     def _parse_state(self, payload: dict) -> None:
+        #{"channel": 0, "open": 1, "lmTime": 0, "execute": 1}
         now = time()
         open = payload.get(mc.KEY_OPEN)
         execute = payload.get(mc.KEY_EXECUTE)
@@ -262,8 +264,85 @@ class MLGarage(_MerossEntity, CoverEntity):
         self._open_pending = None
 
 
+class MLGarageConfigNumber(MLConfigNumber):
+    """
+    Helper entity to configure MRS open/close duration
+    """
+    multiplier = 1000
+
+    # these are ok for 2 of the 3 config numbers
+    # customize those when instantiating
+    _attr_min_value = 1
+    _attr_max_value = 60
+    _attr_step = 1
+
+    def __init__(self, device, key: str):
+        self._key = key
+        super().__init__(device, None, f"config_{key}")
+
+
+    @property
+    def name(self) -> str:
+        return f"{super().name} - {self._key}"
+
+
+    async def async_set_value(self, value: float) -> None:
+        config = dict(self.device.garageDoor_config)
+        config[self._key] = int(value * self.multiplier)
+
+        def _ack_callback():
+            self.device.garageDoor_config[self._key] = config[self._key]
+
+        self.device.request(
+            mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
+            mc.METHOD_SET,
+            { mc.KEY_CONFIG: config },
+            _ack_callback
+        )
+
+
+class MLGarageConfigSwitch(MLConfigSwitch):
+
+
+    def __init__(self, device, key: str):
+        self._key = key
+        super().__init__(device, None, f"config_{key}", None, None)
+
+
+    @property
+    def name(self) -> str:
+        return f"{super().name} - {self._key}"
+
+
+    def request_onoff(self, onoff):
+        config = dict(self.device.garageDoor_config)
+        config[self._key] = onoff
+
+        def _ack_callback():
+            self.device.garageDoor_config[self._key] = config[self._key]
+
+        self.device.request(
+            mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
+            mc.METHOD_SET,
+            { mc.KEY_CONFIG: config },
+            _ack_callback
+        )
+
+
 
 class GarageMixin:
+
+    def __init__(self, api, descriptor, entry) -> None:
+        super().__init__(api, descriptor, entry)
+        if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in descriptor.ability:
+            self.garageDoor_config =  {}
+            self.config_signalDuration = MLGarageConfigNumber(self, mc.KEY_SIGNALDURATION)
+            self.config_signalDuration._attr_step = 0.1 # 100 msec step in UI
+            self.config_signalDuration._attr_min_value = 0.1 # 100 msec minimum duration
+            self.config_buzzerEnable = MLGarageConfigSwitch(self, mc.KEY_BUZZERENABLE)
+            self.config_doorOpenDuration = MLGarageConfigNumber(self, mc.KEY_DOOROPENDURATION)
+            self.config_doorCloseDuration = MLGarageConfigNumber(self, mc.KEY_DOORCLOSEDURATION)
+            self.polling_dictionary.add(mc.NS_APPLIANCE_GARAGEDOOR_CONFIG)
 
 
     def _init_garageDoor(self, payload: dict):
@@ -273,6 +352,24 @@ class GarageMixin:
     def _handle_Appliance_GarageDoor_State(self,
     namespace: str, method: str, payload: dict, header: dict):
         self._parse__generic(mc.KEY_STATE, payload.get(mc.KEY_STATE))
+
+
+    def _handle_Appliance_GarageDoor_Config(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        #{"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
+        # no channel here ?!..need to parse the manual way
+        payload = payload.get(mc.KEY_CONFIG)
+        if isinstance(payload, dict):
+            self.garageDoor_config.update(payload)
+            if mc.KEY_SIGNALDURATION in payload:
+                self.config_signalDuration.update_value(payload[mc.KEY_SIGNALDURATION])
+            if mc.KEY_BUZZERENABLE in payload:
+                self.config_buzzerEnable.update_onoff(payload[mc.KEY_BUZZERENABLE])
+            if mc.KEY_DOOROPENDURATION in payload:
+                self.config_doorOpenDuration.update_value(payload[mc.KEY_DOOROPENDURATION])
+            if mc.KEY_DOORCLOSEDURATION in payload:
+                self.config_doorCloseDuration.update_value(payload[mc.KEY_DOORCLOSEDURATION])
+        return
 
 
     def _parse_garageDoor(self, payload):
@@ -339,37 +436,37 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
 
 
     async def async_open_cover(self, **kwargs) -> None:
-        self._request(100)
+        self.request_position(100)
 
 
     async def async_close_cover(self, **kwargs) -> None:
-        self._request(0)
+        self.request_position(0)
 
 
     async def async_set_cover_position(self, **kwargs):
         if ATTR_POSITION in kwargs:
             position = kwargs[ATTR_POSITION]
             if self.is_position_native:
-                self._request(position)
+                self.request_position(position)
             else:
                 if position > self._position_timed:
-                    self._request(
+                    self.request_position(
                         100,
                         ((position - self._position_timed) * self._signalOpen) / 100000
                     )
                 elif position < self._position_timed:
-                    self._request(
+                    self.request_position(
                         0,
                         ((self._position_timed - position) * self._signalClose) / 100000
                     )
 
 
     async def async_stop_cover(self, **kwargs):
-        self._request(-1)
+        self.request_position(-1)
 
 
-    def _request(self, command, timeout = None):
-        self.device.log(DEBUG, 0, "MLRollerShutter(0): _request(%s, %s)", str(command), str(timeout))
+    def request_position(self, command, timeout = None):
+        self.device.log(DEBUG, 0, "MLRollerShutter(0): request_position(%s, %s)", str(command), str(timeout))
         def _ack_callback():
             self.device.log(DEBUG, 0, "MLRollerShutter(0): _ack_callback")
             if timeout is not None:
@@ -450,7 +547,7 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
         if self._position_endtime is not None:
             # in case our _close_calback has not been called or failed
             if epoch >= self._position_endtime:
-                self._request(-1)
+                self.request_position(-1)
 
         if self._transition_unsub is None:
             # ensure we 'follow' cover movement
@@ -461,11 +558,11 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
         if mc.KEY_SIGNALOPEN in payload:
             self._signalOpen = payload[mc.KEY_SIGNALOPEN] # time to fully open cover in msec
-            self._number_signalOpen.update_state(self._signalOpen / 1000)
+            self._number_signalOpen.update_value(self._signalOpen)
             self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
         if mc.KEY_SIGNALCLOSE in payload:
             self._signalClose = payload[mc.KEY_SIGNALCLOSE] # time to fully close cover in msec
-            self._number_signalClose.update_state(self._signalClose / 1000)
+            self._number_signalClose.update_value(self._signalClose)
             self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
 
 
@@ -491,7 +588,7 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
     def _stop_callback(self, _now: datetime) -> None:
         self.device.log(DEBUG, 0, "MLRollerShutter(0): _stop_callback")
         self._stop_unsub = None
-        self._request(-1)
+        self.request_position(-1)
 
 
     def _stop_cancel(self):
@@ -503,10 +600,16 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
 
 
 
-class MLRollerShutterConfigNumber(MLNumber):
+class MLRollerShutterConfigNumber(MLConfigNumber):
     """
     Helper entity to configure MRS open/close duration
     """
+    multiplier = 1000
+
+    _attr_min_value = 1
+    _attr_max_value = 60
+    _attr_step = 1
+
     def __init__(self, cover: MLRollerShutter, key: str):
         self._cover = cover
         self._key = key
@@ -516,19 +619,6 @@ class MLRollerShutterConfigNumber(MLNumber):
     @property
     def name(self) -> str:
         return f"{self._cover.name} - {self._key}"
-
-
-    @property
-    def step(self) -> float:
-        return 1
-
-    @property
-    def min_value(self) -> float:
-        return 1
-
-    @property
-    def max_value(self) -> float:
-        return 60
 
 
     async def async_set_value(self, value: float) -> None:
@@ -548,6 +638,7 @@ class MLRollerShutterConfigNumber(MLNumber):
             { mc.KEY_CONFIG: [config] },
             _ack_callback
         )
+
 
 
 class RollerShutterMixin:

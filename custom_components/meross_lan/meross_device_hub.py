@@ -369,10 +369,10 @@ class MS100SubDevice(MerossSubDevice):
         self.sensor_humidity = MLSensor.build_for_subdevice(self, DEVICE_CLASS_HUMIDITY)
         self.number_adjust_temperature = MLHubAdjustNumber(
             self, mc.KEY_TEMPERATURE, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST,
-            '', DEVICE_CLASS_TEMPERATURE, 100, -5, 5, 0.1)
+            '', DEVICE_CLASS_TEMPERATURE, -5, 5, 0.1)
         self.number_adjust_humidity = MLHubAdjustNumber(
             self, mc.KEY_HUMIDITY, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST,
-            '', DEVICE_CLASS_HUMIDITY, 100, -20, 20, 1)
+            '', DEVICE_CLASS_HUMIDITY, -20, 20, 1)
 
 
     def _setonline(self) -> None:
@@ -415,7 +415,7 @@ class MTS100SubDevice(MerossSubDevice):
             self, DEVICE_CLASS_TEMPERATURE)
         self.number_adjust_temperature = MLHubAdjustNumber(
             self, mc.KEY_TEMPERATURE, mc.NS_APPLIANCE_HUB_MTS100_ADJUST,
-            '', DEVICE_CLASS_TEMPERATURE, 100, -5, 5, 0.1)
+            '', DEVICE_CLASS_TEMPERATURE, -5, 5, 0.1)
 
 
     def _setonline(self) -> None:

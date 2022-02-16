@@ -116,6 +116,17 @@ class ToggleMixin:
         self._parse__generic(mc.KEY_TOGGLE, payload)
 
 
+class MLConfigSwitch(_MerossToggle, SwitchEntity):
+    """
+    configuration switch
+    """
+    PLATFORM = PLATFORM_SWITCH
+
+    @property
+    def entity_category(self):
+        return ENTITY_CATEGORY_CONFIG
+
+
 """
 class MLDNDSwitch(_MerossToggle, SwitchEntity):
     "

@@ -203,14 +203,17 @@ class _MerossToggle(_MerossEntity):
 
 
     async def async_turn_on(self, **kwargs) -> None:
-        self._request(1)
+        self.request_onoff(1)
 
 
     async def async_turn_off(self, **kwargs) -> None:
-        self._request(0)
+        self.request_onoff(0)
 
 
-    def _request(self, onoff):
+    def request_onoff(self, onoff):
+        # this is the meross executor code
+        # override for switches not implemented
+        # by a toggle like api
         def _ack_callback():
             self.update_onoff(onoff)
 

@@ -53,6 +53,7 @@ NS_APPLIANCE_CONTROL_PHYSICALLOCK = "Appliance.Control.PhysicalLock"
 
 # Garage door opener
 NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
+NS_APPLIANCE_GARAGEDOOR_CONFIG = "Appliance.GarageDoor.Config"
 # Roller shutter
 NS_APPLIANCE_ROLLERSHUTTER_STATE = 'Appliance.RollerShutter.State'
 NS_APPLIANCE_ROLLERSHUTTER_POSITION = 'Appliance.RollerShutter.Position'
@@ -188,8 +189,12 @@ KEY_GARAGEDOOR = 'garageDoor'
 KEY_STATE = 'state'
 KEY_POSITION = 'position'
 KEY_CONFIG = 'config'
-KEY_SIGNALOPEN = 'signalOpen'
-KEY_SIGNALCLOSE = 'signalClose'
+KEY_SIGNALOPEN = 'signalOpen'# rollershutter config
+KEY_SIGNALCLOSE = 'signalClose'# rollershutter config
+KEY_SIGNALDURATION = 'signalDuration'# garageDoor config
+KEY_BUZZERENABLE = 'buzzerEnable'# garageDoor config
+KEY_DOOROPENDURATION = 'doorOpenDuration'# garageDoor config
+KEY_DOORCLOSEDURATION = 'doorCloseDuration'# garageDoor config
 KEY_OPEN = 'open'
 KEY_EXECUTE = 'execute'
 KEY_MODE = 'mode'

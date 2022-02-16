@@ -4,6 +4,15 @@ from homeassistant.components.number import (
     DOMAIN as PLATFORM_NUMBER,
     NumberEntity,
 )
+try:
+    from homeassistant.components.number import NumberMode
+    NUMBERMODE_AUTO = NumberMode.AUTO
+    NUMBERMODE_BOX = NumberMode.BOX
+    NUMBERMODE_SLIDER = NumberMode.SLIDER
+except:
+    NUMBERMODE_AUTO = "auto"
+    NUMBERMODE_BOX = "box"
+    NUMBERMODE_SLIDER = "slider"
 
 from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 from .meross_entity import (
@@ -21,10 +30,13 @@ async def async_unload_entry(hass: object, config_entry: object) -> bool:
     return platform_unload_entry(hass, config_entry, PLATFORM_NUMBER)
 
 
-class MLNumber(_MerossEntity, NumberEntity):
+class MLConfigNumber(_MerossEntity, NumberEntity):
 
     PLATFORM = PLATFORM_NUMBER
 
+    multiplier = 1
+
+    _attr_mode = NUMBERMODE_BOX
 
     @property
     def entity_category(self):
@@ -36,9 +48,13 @@ class MLNumber(_MerossEntity, NumberEntity):
         return self._attr_state
 
 
+    def update_value(self, value):
+        self.update_state(value / self.multiplier)
 
-class MLHubAdjustNumber(MLNumber):
 
+class MLHubAdjustNumber(MLConfigNumber):
+
+    multiplier = 100
 
     def __init__(
         self,
@@ -47,7 +63,6 @@ class MLHubAdjustNumber(MLNumber):
         namespace: str,
         label: str,
         device_class: str,
-        multiplier: float,
         min_value: float,
         max_value: float,
         step: float
@@ -56,7 +71,6 @@ class MLHubAdjustNumber(MLNumber):
         self._namespace = namespace
         self._namespace_key = get_namespacekey(namespace)
         self._label = label
-        self._multiplier = multiplier
         self._attr_min_value = min_value
         self._attr_max_value = max_value
         self._attr_step = step
@@ -82,12 +96,10 @@ class MLHubAdjustNumber(MLNumber):
                 self._namespace_key: [
                     {
                         mc.KEY_ID: self.subdevice.id,
-                        self._key: int(value * self._multiplier)
+                        self._key: int(value * self.multiplier)
                     }
                 ]
             },
         )
 
 
-    def update_value(self, value):
-        self.update_state(value / self._multiplier)
