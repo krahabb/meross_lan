@@ -102,7 +102,7 @@ I find it a bit frustrating that the HA service infrastructure does not allow to
 
 ## Troubleshooting
 
-In order to help troubleshoot issues there is a tracing feature (available since 2.0.2) which dumps the protocol exchange and other debug messages to a text (TAB separated) file without the need and the mess of going through the HA (debug) log. This trace is available 'per device' and you can activate it from the integration configuration UI. Once activated it will start recording for 10 minutes (or maximum 64Kb whichever comes first) and then will stop automatically. If needed you can also stop it manually at any time while in progress by just entering the configuration UI and deselecting the checkbox. The trace(s) will be saved under 'custom_components/meross_lan/traces'. The trace feature takes care of obfuscating some 'sensitive' (like mac(s), Ip(s), and userId(s)) data fields extracted by the protocol. I've taken care of hiding those informations I guess would be nice to, but if you're concerned and find something 'leaking' from my masking please let me know so I can eventually proceed to mask those other infos (For example I didn't take care of some WiFi related message payloads which could carry very sensitive info since my code is not using them in any way at the moment).
+Check the [wiki](https://github.com/krahabb/meross_lan/wiki/Diagnostics) for detailed informations on how to gather diagnostics data for meross_lan devices
 
 ## References
 
