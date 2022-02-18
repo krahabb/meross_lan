@@ -115,6 +115,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 device.unsub_updatecoordinator_listener()
                 device.unsub_updatecoordinator_listener = None
             api.devices.pop(device_id)
+            device.shutdown()
 
         #when removing the last configentry do a complete cleanup
         if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):

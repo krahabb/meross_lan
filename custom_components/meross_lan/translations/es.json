@@ -76,9 +76,8 @@
                     "protocol": "Protocolo de conexión",
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
-                    "signalOpen": "Tiempo de apertura (seg)",
-                    "signalClose": "Tiempo de cierre (seg)",
-                    "trace": "Activar el modo debug (durante 10 min)",
+                    "trace": "Activar el modo debug",
+                    "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
                 }

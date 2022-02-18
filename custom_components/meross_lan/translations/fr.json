@@ -76,9 +76,8 @@
           "protocol": "Protocole de connexion",
           "polling_period": "Période de requête",
           "timezone": "Fuseau horaire de l'appareil",
-          "signalOpen": "Temps d'ouverture (sec)",
-          "signalClose": "Temps de fermeture (sec)",
-          "trace": "Activer le traçage de l'appareil (pendant 10 min)",
+          "trace": "Activer le traçage de l'appareil",
+          "trace_timeout": "Debug tracing duration (sec)",
           "all": "Appliance.System.All",
           "ability": "Appliance.System.Ability"
         }

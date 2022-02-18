@@ -28,13 +28,17 @@ from .merossclient import (
     get_replykey, build_default_payload_get,
 )
 from .meross_entity import MerossFakeEntity
-from .helpers import LOGGER, LOGGER_trap, mqtt_is_connected
+from .helpers import (
+    LOGGER, LOGGER_trap,
+    obfuscate, deobfuscate,
+    mqtt_is_connected,
+)
 from .const import (
     DOMAIN, DND_ID,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_HOST, CONF_TIMESTAMP,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT, CONF_POLLING_PERIOD_MIN,
     CONF_PROTOCOL, CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
-    CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE,
+    CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE, CONF_TRACE_TIMEOUT_DEFAULT,
     PARAM_HEARTBEAT_PERIOD, PARAM_TIMEZONE_CHECK_PERIOD, PARAM_TIMESTAMP_TOLERANCE,
 )
 
@@ -73,41 +77,8 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK # disconnects
 )
 
-TRACE_KEYS_OBFUSCATE = (
-    mc.KEY_UUID, mc.KEY_MACADDRESS, mc.KEY_WIFIMAC, mc.KEY_INNERIP,
-    mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_USERID, mc.KEY_TOKEN
-)
-
 TRACE_DIRECTION_RX = 'RX'
 TRACE_DIRECTION_TX = 'TX'
-
-def _obfuscate(payload: dict) -> dict:
-    """
-    payload: input-output gets modified by blanking sensistive keys
-    returns: a dict with the original mapped obfuscated keys
-    parses the input payload and 'hides' (obfuscates) some sensitive keys.
-    returns the mapping of the obfuscated keys in 'obfuscated' so to re-set them in _deobfuscate
-    this function is recursive
-    """
-    obfuscated = dict()
-    for key, value in payload.items():
-        if isinstance(value, dict):
-            o = _obfuscate(value)
-            if o:
-                obfuscated[key] = o
-        elif key in TRACE_KEYS_OBFUSCATE:
-            obfuscated[key] = value
-            payload[key] = '#' * len(str(value))
-
-    return obfuscated
-
-def _deobfuscate(payload: dict, obfuscated: dict):
-    for key, value in obfuscated.items():
-        if isinstance(value, dict):
-            _deobfuscate(payload[key], value)
-        else:
-            payload[key] = value
-
 
 TIMEZONES_SET = None
 
@@ -155,6 +126,8 @@ class MerossDevice:
         self.lastmqtt = 0 # means we recently received an mqtt message
         self.hasmqtt = False # hasmqtt means it is somehow available to communicate over mqtt
         self._trace_file: TextIOWrapper = None
+        self._trace_future: asyncio.Future = None
+        self._trace_data: list = None
         self._trace_endtime = 0
         self._trace_ability_iter = None
         """
@@ -238,6 +211,15 @@ class MerossDevice:
     def __del__(self):
         LOGGER.debug("MerossDevice(%s) destroy", self.device_id)
         return
+
+
+    def shutdown(self):
+        """
+            called when the config entry is unloaded
+            we'll try to clear everything here
+        """
+        if self._trace_file:
+            self._trace_close()
 
 
     @property
@@ -623,20 +605,9 @@ class MerossDevice:
         """
         if self._trace_file is not None:
             self._trace_close()
-        _trace_endtime = config_entry.data.get(CONF_TRACE, 0)
-        if _trace_endtime > time():
-            try:
-                tracedir = hass.config.path('custom_components', DOMAIN, CONF_TRACE_DIRECTORY)
-                os.makedirs(tracedir, exist_ok=True)
-                self._trace_file = open(os.path.join(tracedir, CONF_TRACE_FILENAME.format(self.descriptor.type, int(_trace_endtime))), 'w')
-                self._trace_endtime = _trace_endtime
-                self._trace(self.descriptor.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
-                self._trace(self.descriptor.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK)
-                self._trace_ability_iter = iter(self.descriptor.ability)
-                self._trace_ability()
-            except Exception as e:
-                LOGGER.warning("MerossDevice(%s) error while creating trace file (%s)", self.device_id, str(e))
-
+        endtime = config_entry.data.get(CONF_TRACE, 0)
+        if endtime > time():
+            self._trace_open(endtime)
         #await hass.config_entries.async_reload(config_entry.entry_id)
 
 
@@ -912,6 +883,42 @@ class MerossDevice:
             self.polling_period = CONF_POLLING_PERIOD_MIN
 
 
+    def get_dignostics_trace(self, trace_timeout) -> asyncio.Future:
+        """
+        invoked by the diagnostics callback:
+        here we set the device to start tracing the classical way (in file)
+        but we also fill in a dict which will set back as the result of the
+        Future we're returning to dignostics
+        """
+        if self._trace_future is not None:
+            # avoid re-entry..keep going the running trace
+            return self._trace_future
+        if self._trace_file is not None:
+            self._trace_close()
+        loop = asyncio.get_running_loop()
+        self._trace_future = loop.create_future()
+        self._trace_data = list()
+        self._trace_data.append(['time','rxtx','protocol','method','namespace','data'])
+        self._trace_open(time() + (trace_timeout or CONF_TRACE_TIMEOUT_DEFAULT))
+        return self._trace_future
+
+
+    def _trace_open(self, endtime):
+        try:
+            tracedir = self.api.hass.config.path('custom_components', DOMAIN, CONF_TRACE_DIRECTORY)
+            os.makedirs(tracedir, exist_ok=True)
+            self._trace_file = open(os.path.join(tracedir, CONF_TRACE_FILENAME.format(self.descriptor.type, int(endtime))), 'w')
+            self._trace_endtime = endtime
+            self._trace(self.descriptor.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
+            self._trace(self.descriptor.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK)
+            self._trace_ability_iter = iter(self.descriptor.ability)
+            self._trace_ability()
+        except Exception as e:
+            LOGGER.warning("MerossDevice(%s) error while creating trace file (%s)", self.device_id, str(e))
+            if self._trace_file is not None:
+                self._trace_close()
+
+
     def _trace_close(self):
         try:
             self._trace_file.close()
@@ -919,6 +926,11 @@ class MerossDevice:
             LOGGER.warning("MerossDevice(%s) error while closing trace file (%s)", self.device_id, str(e))
         self._trace_file = None
         self._trace_ability_iter = None
+        if self._trace_future is not None:
+            self._trace_future.set_result(self._trace_data)
+            self._trace_future = None
+        self._trace_data = None
+
 
     @callback
     def _trace_ability(self, *args):
@@ -950,22 +962,25 @@ class MerossDevice:
         ):
         if self._trace_file is not None:
             now = time()
-            if now > self._trace_endtime:
+            if (now > self._trace_endtime) or \
+                (self._trace_file.tell() > CONF_TRACE_MAXSIZE):
                 self._trace_close()
                 return
 
             if isinstance(data, dict):
-                obfuscated = _obfuscate(data)
+                obfuscated = obfuscate(data)
 
             try:
-                self._trace_file.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
-                    + rxtx + '\t' + protocol + '\t' + method + '\t' + namespace + '\t' \
-                    + (json_dumps(data) if isinstance(data, dict) else data) + '\r\n')
-                if self._trace_file.tell() > CONF_TRACE_MAXSIZE:
-                    self._trace_close()
+                texttime = strftime('%Y/%m/%d - %H:%M:%S')
+                textdata = json_dumps(data) if isinstance(data, dict) else data
+                columns = [texttime, rxtx, protocol, method, namespace, textdata]
+                self._trace_file.write('\t'.join(columns) + '\r\n')
+                if self._trace_data is not None:
+                    columns[5] = data # better have json for dignostic trace
+                    self._trace_data.append(columns)
             except Exception as e:
                 LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
                 self._trace_close()
 
             if isinstance(data, dict):
-                _deobfuscate(data, obfuscated)
+                deobfuscate(data, obfuscated)

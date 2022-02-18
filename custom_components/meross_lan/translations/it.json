@@ -76,9 +76,8 @@
                     "protocol": "Protocollo",
                     "polling_period": "Intervallo di aggiornamento",
                     "timezone": "Zona oraria",
-                    "signalOpen": "Durata apertura (sec)",
-                    "signalClose": "Durata chiusura (sec)",
-                    "trace": "Attiva il debug tracing (per 10 min)",
+                    "trace": "Attiva il debug tracing",
+                    "trace_timeout": "Durata debug tracing (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
                 }

@@ -79,9 +79,8 @@
                     "protocol": "Protokol připojení",
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
-                    "signalOpen": "Časový limit pro otevření krytu (sekundy)",
-                    "signalClose": "Časový limit pro zavření krytu (sekundy)",
-                    "trace": "Zapnout ladění zařízení (po dobu 10 minut)",
+                    "trace": "Zapnout ladění zařízení",
+                    "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
                 }

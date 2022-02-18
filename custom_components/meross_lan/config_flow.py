@@ -27,7 +27,7 @@ from .const import (
     CONF_PAYLOAD,
     CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT,
-    CONF_TRACE, CONF_TRACE_TIMEOUT,
+    CONF_TRACE, CONF_TRACE_TIMEOUT, CONF_TRACE_TIMEOUT_DEFAULT,
 )
 
 # helper conf keys not persisted to config
@@ -320,10 +320,11 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
             self.device_id = data.get(CONF_DEVICE_ID)
             self._host = data.get(CONF_HOST) # null for devices discovered over mqtt
             self._key = data.get(CONF_KEY)
+            self._cloud_key = data.get(CONF_CLOUD_KEY) # null for non cloud keys
             self._protocol = data.get(CONF_PROTOCOL)
             self._polling_period = data.get(CONF_POLLING_PERIOD)
             self._trace = data.get(CONF_TRACE, 0) > time()
-            self._cloud_key = data.get(CONF_CLOUD_KEY) # null for non cloud keys
+            self._trace_timeout = data.get(CONF_TRACE_TIMEOUT)
 
 
     async def async_step_init(self, user_input=None):
@@ -369,6 +370,7 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
             self._protocol = user_input.get(CONF_PROTOCOL)
             self._polling_period = user_input.get(CONF_POLLING_PERIOD)
             self._trace = user_input.get(CONF_TRACE)
+            self._trace_timeout = user_input.get(CONF_TRACE_TIMEOUT, CONF_TRACE_TIMEOUT_DEFAULT)
             try:
                 if self._host is not None:
                     _keymode = user_input[CONF_KEYMODE]
@@ -389,7 +391,8 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
                 data[CONF_KEY] = self._key
                 data[CONF_PROTOCOL] = self._protocol
                 data[CONF_POLLING_PERIOD] = self._polling_period
-                data[CONF_TRACE] = time() + CONF_TRACE_TIMEOUT if self._trace else 0
+                data[CONF_TRACE] = (time() + self._trace_timeout) if self._trace else 0
+                data[CONF_TRACE_TIMEOUT] = self._trace_timeout
                 self.hass.config_entries.async_update_entry(self._config_entry, data=data)
                 if device is not None:
                     try:
@@ -456,6 +459,13 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
                 description={ DESCR: self._trace}
                 )
             ] = bool
+        config_schema[
+            vol.Optional(
+                CONF_TRACE_TIMEOUT,
+                default=CONF_TRACE_TIMEOUT_DEFAULT,
+                description={ DESCR: self._trace_timeout}
+                )
+            ] = cv.positive_int
 
 
         return self.async_show_form(

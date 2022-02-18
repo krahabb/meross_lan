@@ -76,9 +76,8 @@
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
                     "timezone": "Device time zone",
-                    "signalOpen": "Cover open timeout (sec)",
-                    "signalClose": "Cover close timeout (sec)",
-                    "trace": "Activate device debug tracing (for 10 min)",
+                    "trace": "Activate device debug tracing",
+                    "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
                 }

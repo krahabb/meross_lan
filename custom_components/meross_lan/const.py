@@ -31,7 +31,8 @@ CONF_POLLING_PERIOD_MIN = 5
 CONF_POLLING_PERIOD_DEFAULT = 30
 
 CONF_TRACE = 'trace' # create a file with device info and communication tracing (only CONF_TRACE_TIMEOUT seconds then shut off)
-CONF_TRACE_TIMEOUT = 600 # when starting a trace stop it and close the file after .. secs
+CONF_TRACE_TIMEOUT = 'trace_timeout'
+CONF_TRACE_TIMEOUT_DEFAULT = 600 # when starting a trace stop it and close the file after .. secs
 CONF_TRACE_MAXSIZE = 65536 # or when MAXSIZE exceeded
 CONF_TRACE_DIRECTORY = 'traces' # folder where to store traces
 CONF_TRACE_FILENAME = '{}-{}.csv' # filename format: device_type-device_id.csv

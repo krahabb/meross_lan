@@ -76,9 +76,8 @@
                     "protocol": "Verbindungsart",
                     "polling_period": "Abfragerate",
                     "timezone": "Gerätezeitzone",
-                    "signalOpen": "Öffnungszeit (Sek.)",
-                    "signalClose": "Verschlusszeit (Sek.)",
-                    "trace": "Debugmodus aktivieren (für 10 Min.)",
+                    "trace": "Debugmodus aktivieren",
+                    "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
                 }

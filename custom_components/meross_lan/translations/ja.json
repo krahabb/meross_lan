@@ -76,9 +76,8 @@
                     "protocol": "接続プロトコル",
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
-                    "signalOpen": "開封時間 (秒)",
-                    "signalClose": "終了時間 (秒)",
-                    "trace": "デバイスのデバグトレースを開始する (10分間)",
+                    "trace": "デバイスのデバグトレースを開始する",
+                    "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
                 }

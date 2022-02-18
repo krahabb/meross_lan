@@ -4,6 +4,8 @@
 import logging
 from time import time
 
+from .merossclient import const as mc
+
 LOGGER = logging.getLogger(__name__[:-8]) #get base custom_component name for logging
 _trap_dict = dict()
 
@@ -22,6 +24,48 @@ def LOGGER_trap(level, timeout, msg, *args):
 
     LOGGER.log(level, msg, *args)
     _trap_dict[trap_key] = epoch
+
+
+"""
+    obfuscation:
+    call obfuscate on a paylod (dict) to remove well-known sensitive
+    keys (list in OBFUSCATE_KEYS). The returned dictionary contains a
+    copy of original values and need to be used a gain when calling
+    deobfuscate on the previously obfuscated payload
+"""
+OBFUSCATE_KEYS = (
+    mc.KEY_UUID, mc.KEY_MACADDRESS, mc.KEY_WIFIMAC, mc.KEY_INNERIP,
+    mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_USERID, mc.KEY_TOKEN
+)
+
+
+def obfuscate(payload: dict) -> dict:
+    """
+    payload: input-output gets modified by blanking sensistive keys
+    returns: a dict with the original mapped obfuscated keys
+    parses the input payload and 'hides' (obfuscates) some sensitive keys.
+    returns the mapping of the obfuscated keys in 'obfuscated' so to re-set them in _deobfuscate
+    this function is recursive
+    """
+    obfuscated = dict()
+    for key, value in payload.items():
+        if isinstance(value, dict):
+            o = obfuscate(value)
+            if o:
+                obfuscated[key] = o
+        elif key in OBFUSCATE_KEYS:
+            obfuscated[key] = value
+            payload[key] = '#' * len(str(value))
+
+    return obfuscated
+
+
+def deobfuscate(payload: dict, obfuscated: dict):
+    for key, value in obfuscated.items():
+        if isinstance(value, dict):
+            deobfuscate(payload[key], value)
+        else:
+            payload[key] = value
 
 
 """
