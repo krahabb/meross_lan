@@ -25,6 +25,9 @@ from .const import (
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
 
+POSITION_FULLY_CLOSED = 0
+POSITION_FULLY_OPENED = 100
+
 # garagedoor extra attributes
 NOTIFICATION_ID_TIMEOUT = 'garagedoor_timeout'
 EXTRA_ATTR_TRANSITION_DURATION = 'transition_duration'
@@ -388,7 +391,7 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
         self._position_native = None # as reported by the device
         self._signalOpen: int = 30000 # msec to fully open (config'd on device)
         self._signalClose: int = 30000 # msec to fully close (config'd on device)
-        self._position_timed: int = 50 # estimated based on timings
+        self._position_timed = None # estimate based on timings
         self._position_start = None # set when when we're controlling a timed position
         self._position_starttime = None # epoch of transition start
         self._position_endtime = None # epoch of 'target position reached'
@@ -436,17 +439,21 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
 
 
     async def async_open_cover(self, **kwargs) -> None:
-        self.request_position(100)
+        self.request_position(POSITION_FULLY_OPENED)
 
 
     async def async_close_cover(self, **kwargs) -> None:
-        self.request_position(0)
+        self.request_position(POSITION_FULLY_CLOSED)
 
 
     async def async_set_cover_position(self, **kwargs):
         if ATTR_POSITION in kwargs:
             position = kwargs[ATTR_POSITION]
-            if self.is_position_native:
+            if self.is_position_native\
+                or (position == POSITION_FULLY_OPENED)\
+                or (position == POSITION_FULLY_CLOSED):
+                # ensure a full 'untimed' run when asked for
+                # fully opened/closed (#170)
                 self.request_position(position)
             else:
                 if position > self._position_timed:
@@ -511,30 +518,32 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
 
     def _parse_state(self, payload: dict):
         state = payload.get(mc.KEY_STATE)
-        self.device.log(DEBUG, 0, "MLRollerShutter(0): _set_rollerstate(%s)", str(state))
+        self.device.log(DEBUG, 0, "MLRollerShutter(0): _parse_state(%s)", str(state))
         epoch = time()
         if self._attr_state == STATE_OPENING:
             self._position_timed = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)
-            if self._position_timed > 100:
-                self._position_timed = 100
+            if self._position_timed > POSITION_FULLY_OPENED:
+                self._position_timed = POSITION_FULLY_OPENED
             if (state == mc.ROLLERSHUTTER_STATE_OPENING) and self.hass and self.enabled:
                 self.async_write_ha_state()
 
         elif self._attr_state == STATE_CLOSING:
             self._position_timed = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)
-            if self._position_timed < 0:
-                self._position_timed = 0
+            if self._position_timed < POSITION_FULLY_CLOSED:
+                self._position_timed = POSITION_FULLY_CLOSED
             if (state == mc.ROLLERSHUTTER_STATE_CLOSING) and self.hass and self.enabled:
                 self.async_write_ha_state()
 
         if state == mc.ROLLERSHUTTER_STATE_OPENING:
             if self._attr_state != STATE_OPENING:
-                self._position_start = self._position_timed
+                self._position_start = self._position_timed\
+                    if self._position_timed is not None else POSITION_FULLY_CLOSED
                 self._position_starttime = epoch
                 self.update_state(STATE_OPENING)
         elif state == mc.ROLLERSHUTTER_STATE_CLOSING:
             if self._attr_state != STATE_CLOSING:
-                self._position_start = self._position_timed
+                self._position_start = self._position_timed\
+                    if self._position_timed is not None else POSITION_FULLY_OPENED
                 self._position_starttime = epoch
                 self.update_state(STATE_CLOSING)
         else: # state == mc.ROLLERSHUTTER_STATE_IDLE:
