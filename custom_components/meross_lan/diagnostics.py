@@ -1,3 +1,4 @@
+from copy import deepcopy
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.components.diagnostics import REDACTED
 
@@ -43,7 +44,7 @@ async def _async_get_diagnostics(hass, entry: ConfigEntry):
         deviceclass = type(device).__name__
 
     trace_timeout = entry.data.get(CONF_TRACE_TIMEOUT)
-    payload = dict(entry.data.get(CONF_PAYLOAD)) #copy to avoid obfuscation of entry.data
+    payload = deepcopy(entry.data.get(CONF_PAYLOAD)) #copy to avoid obfuscating entry.data
     obfuscate(payload)
 
     data = {
@@ -58,7 +59,7 @@ async def _async_get_diagnostics(hass, entry: ConfigEntry):
         "deviceclass": deviceclass,
         "disabled_by": entry.disabled_by,
         "disabled_polling": entry.pref_disable_polling,
-        CONF_TRACE: await device.get_dignostics_trace(trace_timeout) if device is not None else None
+        CONF_TRACE: (await device.get_diagnostics_trace(trace_timeout)) if device is not None else None
     }
 
     return data

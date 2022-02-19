@@ -883,7 +883,7 @@ class MerossDevice:
             self.polling_period = CONF_POLLING_PERIOD_MIN
 
 
-    def get_dignostics_trace(self, trace_timeout) -> asyncio.Future:
+    def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
         """
         invoked by the diagnostics callback:
         here we set the device to start tracing the classical way (in file)
