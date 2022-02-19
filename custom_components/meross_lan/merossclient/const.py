@@ -329,6 +329,12 @@ CLASS_MOD = 'mod'
 TYPE_MOD100 = 'mod100' # smart humidifier
 TYPE_NAME_MAP[CLASS_MOD] = "Smart Humidifier"
 
+CLASS_MSG = 'msg'
+TYPE_NAME_MAP[CLASS_MSG] = "Smart Garage Door"
+
+CLASS_MRS = 'mrs'
+TYPE_NAME_MAP[CLASS_MRS] = "Smart Roller Shutter"
+
 # do not register class 'ms' since it is rather
 # unusual naming and could issue collissions with mss or msl
 # just set the known type
