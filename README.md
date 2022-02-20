@@ -8,7 +8,7 @@
 This [homeassistant](https://www.home-assistant.io/) integration allows you to control your *Meross* devices all over your LAN without any need for cloud connectivity. It supports communication through your own MQTT broker (or any other configured through the homeassistant mqtt integration) or directly via HTTP.
 
 These are the two main use cases:
-- Keep your devices paired with the offical Meross App (and cloud infrastructure) and communicate directly to them via HTTP. This will allow for greater flexibility and less configuration pain since you don't have to setup and configure the MQTT pairing of these devices. The integration will just 'side-communicate' over HTTP to the devices and poll them for status updates. (This is different from https://github.com/albertogeniola/meross-homeassistant since my componenent does not talk to the Meross Cloud service so it doesn't use credentials or any)
+- Keep your devices paired with the offical Meross App (and cloud infrastructure) and communicate directly to them via HTTP. This will allow for greater flexibility and less configuration pain since you don't have to setup and configure the MQTT pairing of these devices. The integration will just 'side-communicate' over HTTP to the devices and poll them for status updates. (This is different from https://github.com/albertogeniola/meross-homeassistant since this componenent does not talk to the Meross Cloud service so it doesn't use credentials - except for key retrieval - nor it suffers from throttling or banning)
 - Bind your devices to your 'private' MQTT broker so to completely disconnect them from the Meross infrastructure and interact only locally (The procedure for MQTT binding is here: https://github.com/bytespider/Meross/wiki/MQTT or better, you can use the pairer app from @albertogeniola at https://github.com/albertogeniola/meross_pair )
 
 HAVE FUN! 😎
@@ -36,7 +36,7 @@ Once installed and restarted your Meross devices should be automatically discove
 
 If you are using the 'MQTT way' you can help the discovery process by adding the 'MQTT Hub' feature of this integration (This was needed in the previous versions while you should be able to skip this step if the dhcp discovery works fine). If you need, just go to your homeassistant `Configuration -> Integrations` and add the Meross LAN by looking through the list of available ones. Here you can configure the device key used to sign the messages exchanged: this need to be the same key used when re-binding your hardware else the integration will not be able to discover new devices (dhcp discovery should instead work anyway: the key will be asked and set when configuring every single appliance).
 
-You can also manually add your device by adding a new integration entry and providing the host address.
+You can also manually add your device by adding a new integration entry and providing the host address and device key.
 
 When configuring a device entry you'll have the option to set:
 - host address: this is available when manually adding a device or when a device is discovered via DHCP: provide the ip address or a valid network host name. When you set the ip address, ensure it is 'stable' and not changing between re-boots else the integration will 'loose' access to the device
@@ -97,9 +97,8 @@ In general, many device configuration options available in Meross app are not su
 
 ## Service
 
-There is a service (since version 0.0.4) exposed to simplify communication with the device and play with it a bit. It basically requires the needed informations to setup a command request and send it over MQTT or HTTP without the hassle of signatures and timestamps computations. You can check it in the 'Developer Tools' of the HA instance, everything should be enough self-explanatory there.
+There is a service 'meross_lan.request' exposed to simplify communication with the device and play with it a bit. It basically requires the needed informations to setup a command request and send it over MQTT or HTTP without the hassle of signatures and timestamps computations. You can check it in the 'Developer Tools' of the HA instance, everything should be enough self-explanatory there.
 I find it a bit frustrating that the HA service infrastructure does not allow to return anything from a service invocation so, the eventual reply from the device will get 'lost' in the mqtt flow. I've personally played a bit with the MQTT integration configuration pane to listen and see the mqtt responses from my devices but it's somewhat a pain unless you have a big screen to play with (or multiple monitors for the matter). Nevertheless you can use the service wherever you like to maybe invoke features at the device level or dig into it's configuration.
-*WARNING*: the service name has changed from 'mqtt_publish' to 'request' to accomodate the more general protocol support
 
 ## Troubleshooting
 
