@@ -3,11 +3,13 @@ import logging
 from typing import Any, Optional, Union
 from uuid import uuid4
 from hashlib import md5
+from base64 import b64encode
 from time import time
 from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
+from xmlrpc.client import Boolean
 import aiohttp
 import async_timeout
 import asyncio
@@ -91,6 +93,16 @@ def build_payload(
         }
 
 
+def get_namespacekey(namespace: str) -> str:
+    """
+    return the 'well known' key for the provided namespace
+    which is used as the root key of the associated payload
+    """
+    if namespace in mc.PAYLOAD_GET:
+        return next(iter(mc.PAYLOAD_GET[namespace]))
+    return namespace.split('.')[-1].lower()
+
+
 def build_default_payload_get(namespace: str) -> dict:
     """
     when we query a device 'namespace' with a GET method the request payload
@@ -137,6 +149,28 @@ def get_productnameuuid(type: str, uuid: str) -> str:
 def get_productnametype(type: str) -> str:
     name = get_productname(type)
     return f"{name} ({type})" if name is not type else type
+
+
+async def async_get_cloud_key(username, password, session: aiohttp.client.ClientSession = None) -> str:
+    session = session or aiohttp.ClientSession()
+    timestamp = int(time())
+    nonce = uuid4().hex
+    params = '{"email": "'+username+'", "password": "'+password+'"}'
+    params = b64encode(params.encode('utf-8')).decode('ascii')
+    sign = md5(("23x17ahWarFH6w29" + str(timestamp) + nonce + params).encode('utf-8')).hexdigest()
+    with async_timeout.timeout(10):
+        response = await session.post(
+            url=mc.MEROSS_API_LOGIN_URL,
+            json={
+                mc.KEY_TIMESTAMP: timestamp,
+                mc.KEY_NONCE: nonce,
+                mc.KEY_PARAMS: params,
+                mc.KEY_SIGN: sign
+            }
+        )
+        response.raise_for_status()
+    json: dict = await response.json()
+    return json.get(mc.KEY_DATA, {}).get(mc.KEY_KEY)
 
 
 class MerossDeviceDescriptor:

@@ -7,19 +7,17 @@
             "single_instance_allowed": "Ya esta configurada la Integración. Solo se puede configurar una vez."
         },
         "error": {
-            "invalid_key": "Error clave: proceda a recuperar la cuenta de Meross",
+            "invalid_key": "Error clave: seleccione 'Cloud retrieve' para obtener de Meross",
+            "invalid_nullkey": "Error clave: seleccione 'Hack mode' para permitir la clave vacía",
             "already_configured_device": "Este dispositivo ya esta configurado",
             "cannot_connect": "No es posible conectarse",
             "invalid_auth": "Error de autenticación"
-          },
+        },
         "step": {
             "user": {
                 "title": "Meross LAN",
                 "description": "Configurar un dispositivo meross",
-                "data": {
-                    "host": "Dirección IP del dispositivo",
-                    "key": "Clave de dispositivo"
-                }
+                "data": {}
             },
             "hub": {
                 "title": "Concentrador Meross LAN MQTT",
@@ -28,7 +26,16 @@
                     "key": "Clave de dispositivo"
                 }
             },
-            "retrievekey": {
+            "device": {
+                "title": "Meross LAN",
+                "description": "Configurar un dispositivo meross",
+                "data": {
+                    "host": "Dirección IP del dispositivo",
+                    "keymode": "Modo de selección de clave",
+                    "key": "Clave de dispositivo"
+                }
+            },
+            "cloudkey": {
                 "title": "Recuperar clave de dispositivo",
                 "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
                 "data": {
@@ -36,15 +43,21 @@
                     "password": "Contraseña de Meross"
                 }
             },
-            "device": {
+            "finalize": {
                 "title": "Cónfiguración de dispositivo",
                 "description": "Tipo: {device_type}\nUUID: {device_id}",
-                "data": {
-                }
+                "data": {}
             }
         }
     },
     "options": {
+        "error": {
+            "invalid_key": "Error clave: seleccione 'Cloud retrieve' para obtener de Meross",
+            "invalid_nullkey": "Error clave: seleccione 'Hack mode' para permitir la clave vacía",
+            "already_configured_device": "Este dispositivo ya esta configurado",
+            "cannot_connect": "No es posible conectarse",
+            "invalid_auth": "Error de autenticación"
+        },
         "step": {
             "hub": {
                 "title": "Concentrador Meross LAN MQTT",
@@ -57,17 +70,24 @@
                 "title": "Cónfiguración de dispositivo",
                 "description": "Tipo: {device_type}\nUUID: {device_id}\nDirección IP: {host}\n\n{payload}",
                 "data": {
+                    "host": "Dirección IP del dispositivo",
+                    "keymode": "Modo de selección de clave",
                     "key": "Clave de dispositivo",
                     "protocol": "Protocolo de conexión",
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
-                    "voltageRatio": "Ratio de voltaje",
-                    "electricityRatio": "Ratio de electricidad",
-                    "signalOpen": "Tiempo de apertura (seg)",
-                    "signalClose": "Tiempo de cierre (seg)",
-                    "trace": "Activar el modo debug (durante 10 min)",
+                    "trace": "Activar el modo debug",
+                    "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
+                }
+            },
+            "cloudkey": {
+                "title": "Recuperar clave de dispositivo",
+                "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
+                "data": {
+                    "username": "Nombre de usuario de Meross",
+                    "password": "Contraseña de Meross"
                 }
             }
         }

@@ -2,11 +2,11 @@
 from typing import Callable, Dict, Optional, Union
 from time import time
 from datetime import datetime, timedelta
+from logging import WARNING, INFO
 from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
-from aiohttp.client_exceptions import ClientConnectionError
 from homeassistant.config_entries import ConfigEntry, SOURCE_DISCOVERY
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components.mqtt.const import MQTT_DISCONNECTED
@@ -14,19 +14,15 @@ from homeassistant.helpers import device_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_point_in_utc_time
-from homeassistant.helpers.update_coordinator import (
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from . import merossclient
 from .merossclient import (
     const as mc, KeyType,
     MerossDeviceDescriptor, MerossHttpClient,
-    build_default_payload_get,
+    build_payload, build_default_payload_get, get_replykey,
 )
 from .meross_device import MerossDevice
-from logging import WARNING, INFO
 from .helpers import (
     LOGGER, LOGGER_trap,
     mqtt_publish, mqtt_is_connected,
@@ -119,6 +115,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 device.unsub_updatecoordinator_listener()
                 device.unsub_updatecoordinator_listener = None
             api.devices.pop(device_id)
+            device.shutdown()
 
         #when removing the last configentry do a complete cleanup
         if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
@@ -148,6 +145,7 @@ class MerossApi:
         self.hass = hass
         self.key = None
         self.cloud_key = None
+        self.deviceclasses: Dict[str, object] = {}
         self.devices: Dict[str, MerossDevice] = {}
         self.discovering: Dict[str, dict] = {}
         self.mqtt_subscribing = False # guard for asynchronous mqtt sub registration
@@ -223,7 +221,7 @@ class MerossApi:
                             LOGGER_trap(INFO, 14400, "Ignoring discovery for device_id: %s (ConfigEntry is in progress)", device_id)
                             return
 
-                    replykey = merossclient.get_replykey(header, self.key)
+                    replykey = get_replykey(header, self.key)
                     if replykey != self.key:
                         LOGGER_trap(WARNING, 300, "Meross discovery key error for device_id: %s", device_id)
                         if self.key is not None:# we're using a fixed key in discovery so ignore this device
@@ -310,22 +308,71 @@ class MerossApi:
         but some devices (i.e. Hub) need a (radically?) different behaviour
         """
         descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD, {}))
-        if (mc.KEY_HUB in descriptor.digest):
-            from .meross_device_hub import MerossDeviceHub
-            device = MerossDeviceHub(self, descriptor, entry)
-        elif (mc.KEY_LIGHT in descriptor.digest):
-            from .meross_device_bulb import MerossDeviceBulb
-            device = MerossDeviceBulb(self, descriptor, entry)
-        elif (mc.KEY_GARAGEDOOR in descriptor.digest):
-            from .meross_device_cover import MerossDeviceGarage
-            device = MerossDeviceGarage(self, descriptor, entry)
-        elif (mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in descriptor.ability):
-            from .meross_device_cover import MerossDeviceShutter
-            device = MerossDeviceShutter(self, descriptor, entry)
-        else:
-            from .meross_device_switch import MerossDeviceSwitch
-            device = MerossDeviceSwitch(self, descriptor, entry)
+        ability = descriptor.ability
+        digest = descriptor.digest
 
+        if (mc.KEY_HUB in digest):
+            from .meross_device_hub import MerossDeviceHub
+            class_base = MerossDeviceHub
+        else:
+            class_base = MerossDevice
+
+        mixin_classes = list()
+        # put Toggle(X) mixin at the top of the class hierarchy
+        # since the toggle feature could be related to a more
+        # specialized entity than switch (see light for example)
+        # this way the __init__ for toggle entity will be called
+        # later and could check if a more specialized entity is
+        # already in place for the very same channel
+        if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
+            from .switch import ToggleXMixin
+            mixin_classes.append(ToggleXMixin)
+        elif mc.NS_APPLIANCE_CONTROL_TOGGLE in ability:
+            # toggle is older and superseded by togglex
+            # so no need to handle it in case
+            from .switch import ToggleMixin
+            mixin_classes.append(ToggleMixin)
+        if mc.KEY_LIGHT in digest:
+            from .light import LightMixin
+            mixin_classes.append(LightMixin)
+        if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
+            from .sensor import ElectricityMixin
+            mixin_classes.append(ElectricityMixin)
+        if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
+            from .sensor import ConsumptionMixin
+            mixin_classes.append(ConsumptionMixin)
+        if mc.KEY_SPRAY in digest:
+            from .select import SprayMixin
+            mixin_classes.append(SprayMixin)
+        if mc.KEY_GARAGEDOOR in digest:
+            from .cover import GarageMixin
+            mixin_classes.append(GarageMixin)
+        if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
+            from .cover import RollerShutterMixin
+            mixin_classes.append(RollerShutterMixin)
+        if mc.KEY_THERMOSTAT in digest:
+            from .devices.mts200 import ThermostatMixin
+            mixin_classes.append(ThermostatMixin)
+        if mc.KEY_DIFFUSER in digest:
+            from .devices.mod100 import DiffuserMixin
+            mixin_classes.append(DiffuserMixin)
+
+
+        # We must be careful when ordering the mixin and leave MerossDevice as last class.
+        # Messing up with that will cause MRO to not resolve inheritance correctly.
+        # see https://github.com/albertogeniola/MerossIot/blob/0.4.X.X/meross_iot/device_factory.py
+        mixin_classes.append(class_base)
+        # build a label to cache the set
+        class_name = ''
+        for m in mixin_classes:
+            class_name = class_name + m.__name__
+        if class_name in self.deviceclasses:
+            class_type = self.deviceclasses[class_name]
+        else:
+            class_type = type(class_name, tuple(mixin_classes), {})
+            self.deviceclasses[class_name] = class_type
+
+        device = class_type(self, descriptor, entry)
         self.devices[device_id] = device
         self.update_polling_period()
 
@@ -358,7 +405,7 @@ class MerossApi:
         mqtt_publish(
             self.hass,
             mc.TOPIC_REQUEST.format(device_id),
-            json_dumps(merossclient.build_payload(
+            json_dumps(build_payload(
                 namespace, method, payload, key,
                 mc.TOPIC_RESPONSE.format(device_id), messageid))
             )

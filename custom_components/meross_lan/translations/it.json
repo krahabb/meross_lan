@@ -7,19 +7,17 @@
             "single_instance_allowed": "Già configurato. E' possibile aggiungere solo una configurazione."
         },
         "error": {
-            "invalid_key": "Chiave errata: procedi per recuperare dall'account Meross",
+            "invalid_key": "Chiave errata: usa 'Cloud retrieve' per recuperare dall'account Meross",
+            "invalid_nullkey": "Chiave errata: usa 'Hack mode' per consentire un valore vuoto",
             "already_configured_device": "Il dispositivo è già configurato",
             "cannot_connect": "Impossibile connettersi",
             "invalid_auth": "Errore di autenticazione"
-          },
+        },
         "step": {
             "user": {
                 "title": "Meross LAN",
                 "description": "Configurazione dispositivo",
-                "data": {
-                    "host": "Indirizzo dispositivo",
-                    "key": "Chiave dispositivo"
-                }
+                "data": {}
             },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
@@ -28,7 +26,16 @@
                     "key": "Chiave dispositivo"
                 }
             },
-            "retrievekey": {
+            "device": {
+                "title": "Meross LAN",
+                "description": "Configurazione dispositivo",
+                "data": {
+                    "host": "Indirizzo dispositivo",
+                    "keymode": "Selezione chiave",
+                    "key": "Chiave dispositivo"
+                }
+            },
+            "cloudkey": {
                 "title": "Recupera chiave dispositivo",
                 "description": "Accedi al tuo account Meross per recuperare",
                 "data": {
@@ -36,15 +43,21 @@
                     "password": "Meross password"
                 }
             },
-            "device": {
+            "finalize": {
                 "title": "Configurazione dispositivo",
                 "description": "Tipo: {device_type}\nUUID: {device_id}",
-                "data": {
-                }
+                "data": {}
             }
         }
     },
     "options": {
+        "error": {
+            "invalid_key": "Chiave errata: usa 'Cloud retrieve' per recuperare dall'account Meross",
+            "invalid_nullkey": "Chiave errata: usa 'Hack mode' per consentire un valore vuoto",
+            "already_configured_device": "Il dispositivo è già configurato",
+            "cannot_connect": "Impossibile connettersi",
+            "invalid_auth": "Errore di autenticazione"
+        },
         "step": {
             "hub": {
                 "title": "Meross LAN MQTT Hub",
@@ -57,17 +70,24 @@
                 "title": "Configurazione dispositivo",
                 "description": "Tipo: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
                 "data": {
+                    "host": "Indirizzo dispositivo",
+                    "keymode": "Selezione chiave",
                     "key": "Chiave dispositivo",
                     "protocol": "Protocollo",
                     "polling_period": "Intervallo di aggiornamento",
                     "timezone": "Zona oraria",
-                    "voltageRatio": "voltageRatio",
-                    "electricityRatio": "electricityRatio",
-                    "signalOpen": "Durata apertura (sec)",
-                    "signalClose": "Durata chiusura (sec)",
-                    "trace": "Attiva il debug tracing (per 10 min)",
+                    "trace": "Attiva il debug tracing",
+                    "trace_timeout": "Durata debug tracing (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
+                }
+            },
+            "cloudkey": {
+                "title": "Recupera chiave dispositivo",
+                "description": "Accedi al tuo account Meross per recuperare",
+                "data": {
+                    "username": "Meross login",
+                    "password": "Meross password"
                 }
             }
         }

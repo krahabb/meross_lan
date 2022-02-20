@@ -1,71 +1,95 @@
 {
   "title": "Meross LAN",
   "config": {
-    "flow_title": "Meross {device_type}",
-    "abort": {
-      "single_instance_allowed": "[%key:common::config_flow::abort::single_instance_allowed%]",
-      "no_devices_found": "[%key:common::config_flow::abort::no_devices_found%]"
-    },
-    "error": {
-      "invalid_key": "Key error: proceed to retrieve from Meross account",
-      "already_configured_device": "[%key:common::config_flow::abort::already_configured_device%]",
-      "cannot_connect": "Unable to connect",
-      "invalid_auth": "Authentication error"
-    },
-    "step": {
-      "user": {
-        "title": "Meross LAN",
-        "description": "Setup meross device",
-        "data": {
-          "host": "Device host address",
-          "key": "Device key"
-        }
+      "flow_title": "Meross {device_type}",
+      "abort": {
+          "no_devices_found": "No devices found on the network",
+          "single_instance_allowed": "Already configured. Only a single configuration possible."
       },
-      "hub": {
-        "title": "Meross LAN MQTT Hub",
-        "description": "Configure global Meross LAN settings",
-        "data": {
-          "key": "Device key"
-        }
+      "error": {
+          "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
+          "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
+          "already_configured_device": "Device is already configured",
+          "cannot_connect": "Unable to connect",
+          "invalid_auth": "Authentication error"
       },
-      "retrievekey": {
-        "title": "Device key retrieve",
-        "description": "Login to your Meross account to retrieve the device key",
-        "data": {
-          "username": "Meross login",
-          "password": "Meross password"
-        }
-      },
-      "device": {
-        "title": "Device configuration",
-        "description": "Type: {device_type}\nUUID: {device_id}",
-        "data": {
-        }
+      "step": {
+          "user": {
+              "title": "Meross LAN",
+              "description": "Setup meross device",
+              "data": {}
+          },
+          "hub": {
+              "title": "Meross LAN MQTT Hub",
+              "description": "Configure global Meross LAN settings",
+              "data": {
+                  "key": "Device key"
+              }
+          },
+          "device": {
+              "title": "Meross LAN",
+              "description": "Setup meross device",
+              "data": {
+                  "host": "Device host address",
+                  "keymode": "Key selection mode",
+                  "key": "Device key"
+              }
+          },
+          "cloudkey": {
+              "title": "Device key retrieve",
+              "description": "Login to your Meross account to retrieve the device key",
+              "data": {
+                  "username": "Meross login",
+                  "password": "Meross password"
+              }
+          },
+          "finalize": {
+              "title": "Device configuration",
+              "description": "Type: {device_type}\nUUID: {device_id}",
+              "data": {}
+          }
       }
-    }
   },
   "options": {
-    "step": {
-      "hub": {
-        "title": "Meross LAN MQTT Hub",
-        "description": "Configure global Meross LAN settings",
-        "data": {
-          "key": "Device key"
-        }
+      "error": {
+          "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
+          "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
+          "already_configured_device": "Device is already configured",
+          "cannot_connect": "Unable to connect",
+          "invalid_auth": "Authentication error"
       },
-      "device": {
-        "title": "Device configuration",
-        "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
-        "data": {
-          "key": "Device key",
-          "protocol": "Connection protocol",
-          "polling_period": "Polling period",
-          "time_zone": "Device time zone",
-          "trace": "Activate device debug tracing (for 10 min)",
-          "all": "Appliance.System.All",
-          "ability": "Appliance.System.Ability"
-        }
+      "step": {
+          "hub": {
+              "title": "Meross LAN MQTT Hub",
+              "description": "Configure global Meross LAN settings",
+              "data": {
+                  "key": "Device key"
+              }
+          },
+          "device": {
+              "title": "Device configuration",
+              "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
+              "data": {
+                  "host": "Device host address",
+                  "keymode": "Key selection mode",
+                  "key": "Device key",
+                  "protocol": "Connection protocol",
+                  "polling_period": "Polling period",
+                  "timezone": "Device time zone",
+                  "trace": "Activate device debug tracing",
+                  "trace_timeout": "Debug tracing duration (sec)",
+                  "all": "Appliance.System.All",
+                  "ability": "Appliance.System.Ability"
+              }
+          },
+          "cloudkey": {
+              "title": "Device key retrieve",
+              "description": "Login to your Meross account to retrieve the device key",
+              "data": {
+                  "username": "Meross login",
+                  "password": "Meross password"
+              }
+          }
       }
-    }
   }
 }

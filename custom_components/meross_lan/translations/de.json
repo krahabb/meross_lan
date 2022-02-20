@@ -7,19 +7,17 @@
             "single_instance_allowed": "Das Gerät ist bereits vorhanden. Jedes Gerät kann nur ein mal konfiguriert werden."
         },
         "error": {
-            "invalid_key": "Geräteschlüssel fehlerhaft: Fortfahren um den Schlüssel aus den Meross Account zu übertragen",
+            "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
+            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
             "already_configured_device": "Das Gerät ist bereits vorhanden",
             "cannot_connect": "Verbindung nicht möglich",
             "invalid_auth": "Fehlerhafte Zugangsdaten"
-          },
+        },
         "step": {
             "user": {
                 "title": "Meross LAN",
                 "description": "Meross Gerät einrichten",
-                "data": {
-                    "host": "IP-Adresse des Geräts",
-                    "key": "Geräteschlüssel"
-                }
+                "data": {}
             },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
@@ -28,7 +26,16 @@
                     "key": "Geräteschlüssel"
                 }
             },
-            "retrievekey": {
+            "device": {
+                "title": "Meross LAN",
+                "description": "Meross Gerät einrichten",
+                "data": {
+                    "host": "IP-Adresse des Geräts",
+                    "keymode": "Schlüsselauswahlmodus",
+                    "key": "Geräteschlüssel"
+                }
+            },
+            "cloudkey": {
                 "title": "Geräteschlüssel übertragen",
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {
@@ -36,15 +43,21 @@
                     "password": "Meross Passwort"
                 }
             },
-            "device": {
+            "finalize": {
                 "title": "Gerätekonfiguration",
                 "description": "Typ: {device_type}\nUUID: {device_id}",
-                "data": {
-                }
+                "data": {}
             }
         }
     },
     "options": {
+        "error": {
+            "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
+            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
+            "already_configured_device": "Das Gerät ist bereits vorhanden",
+            "cannot_connect": "Verbindung nicht möglich",
+            "invalid_auth": "Fehlerhafte Zugangsdaten"
+        },
         "step": {
             "hub": {
                 "title": "Meross LAN MQTT Hub",
@@ -57,17 +70,24 @@
                 "title": "Gerätekonfiguration",
                 "description": "Typ: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
                 "data": {
+                    "host": "IP-Adresse des Geräts",
+                    "keymode": "Schlüsselauswahlmodus",
                     "key": "Geräteschlüssel",
                     "protocol": "Verbindungsart",
                     "polling_period": "Abfragerate",
                     "timezone": "Gerätezeitzone",
-                    "voltageRatio": "Spannung",
-                    "electricityRatio": "Strom",
-                    "signalOpen": "Öffnungszeit (Sek.)",
-                    "signalClose": "Verschlusszeit (Sek.)",
-                    "trace": "Debugmodus aktivieren (für 10 Min.)",
+                    "trace": "Debugmodus aktivieren",
+                    "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
+                }
+            },
+            "cloudkey": {
+                "title": "Geräteschlüssel übertragen",
+                "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
+                "data": {
+                    "username": "Meross Benutzername",
+                    "password": "Meross Passwort"
                 }
             }
         }

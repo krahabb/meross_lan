@@ -7,7 +7,8 @@
       "single_instance_allowed": "Déjà configuré. Une seule configuration possible."
     },
     "error": {
-      "invalid_key": "Erreur de clé: procédez à la récupération à partir de la connexion Meross",
+      "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
+      "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
       "already_configured_device": "Déjà configuré. Un seul appareil possible.",
       "cannot_connect": "Pas de connect",
       "invalid_auth": "Authentication"
@@ -16,10 +17,7 @@
       "user": {
         "title": "Meross LAN",
         "description": "Découvrir l'appareil",
-        "data": {
-          "host": "Adresse",
-          "key": "Clé"
-        }
+        "data": {}
       },
       "hub": {
         "title": "Meross LAN MQTT Hub",
@@ -28,7 +26,16 @@
           "key": "Clé"
         }
       },
-      "retrievekey": {
+      "device": {
+        "title": "Meross LAN",
+        "description": "Découvrir l'appareil",
+        "data": {
+          "host": "Adresse",
+          "keymode": "Mode de sélection de clé",
+          "key": "Clé"
+        }
+      },
+      "cloudkey": {
         "title": "Récupérer la clé de l'appareil",
         "description": "Connectez-vous à votre compte Meross pour récupérer la clé",
         "data": {
@@ -36,7 +43,7 @@
           "password": "Mot de passe Meross"
         }
       },
-      "device": {
+      "finalize": {
         "title": "Configuration de l'appareil",
         "description": "Type: {device_type}\nUUID: {device_id}",
         "data": {}
@@ -44,6 +51,13 @@
     }
   },
   "options": {
+    "error": {
+      "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
+      "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
+      "already_configured_device": "Déjà configuré. Un seul appareil possible.",
+      "cannot_connect": "Pas de connect",
+      "invalid_auth": "Authentication"
+    },
     "step": {
       "hub": {
         "title": "Meross LAN MQTT Hub",
@@ -56,17 +70,24 @@
         "title": "Configuration de l'appareil",
         "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
         "data": {
+          "host": "Adresse",
+          "keymode": "Mode de sélection de clé",
           "key": "Clé",
           "protocol": "Protocole de connexion",
           "polling_period": "Période de requête",
           "timezone": "Fuseau horaire de l'appareil",
-          "voltageRatio": "voltageRatio",
-          "electricityRatio": "electricityRatio",
-          "signalOpen": "Temps d'ouverture (sec)",
-          "signalClose": "Temps de fermeture (sec)",
-          "trace": "Activer le traçage de l'appareil (pendant 10 min)",
+          "trace": "Activer le traçage de l'appareil",
+          "trace_timeout": "Debug tracing duration (sec)",
           "all": "Appliance.System.All",
           "ability": "Appliance.System.Ability"
+        }
+      },
+      "cloudkey": {
+        "title": "Récupérer la clé de l'appareil",
+        "description": "Connectez-vous à votre compte Meross pour récupérer la clé",
+        "data": {
+          "username": "Nom d'utilisateur Meross",
+          "password": "Mot de passe Meross"
         }
       }
     }

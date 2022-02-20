@@ -7,19 +7,17 @@
             "single_instance_allowed": "すでに構成済みです。 構成は一つだけ可能です。"
         },
         "error": {
-            "invalid_key": "キーエラー：Merossアカウントからの取得に進みます",
+            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
             "already_configured_device": "可能なデバイスは1つだけ",
             "cannot_connect": "接続できません",
             "invalid_auth": "認証エラー"
-          },
+        },
         "step": {
             "user": {
                 "title": "Meross LAN",
                 "description": "Meross デバイスのセットアップ",
-                "data": {
-                    "host": "デバイスのホストアドレス",
-                    "key": "デバイスキー"
-                }
+                "data": {}
             },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
@@ -28,7 +26,16 @@
                     "key": "デバイスキー"
                 }
             },
-            "retrievekey": {
+            "device": {
+                "title": "Meross LAN",
+                "description": "Meross デバイスのセットアップ",
+                "data": {
+                    "host": "デバイスのホストアドレス",
+                    "keymode": "Key selection mode",
+                    "key": "デバイスキー"
+                }
+            },
+            "cloudkey": {
                 "title": "デバイスキーの取得",
                 "description": "Merossアカウントにログインして、デバイスキーを取得します",
                 "data": {
@@ -36,15 +43,21 @@
                     "password": "メロスパスワード"
                 }
             },
-            "device": {
+            "finalize": {
                 "title": "デバイス設定",
                 "description": "Type: {device_type}\nUUID: {device_id}",
-                "data": {
-                }
+                "data": {}
             }
         }
     },
     "options": {
+        "error": {
+            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
+            "already_configured_device": "可能なデバイスは1つだけ",
+            "cannot_connect": "接続できません",
+            "invalid_auth": "認証エラー"
+        },
         "step": {
             "hub": {
                 "title": "Meross LAN MQTT Hub",
@@ -57,17 +70,24 @@
                 "title": "デバイス設定",
                 "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
                 "data": {
+                    "host": "デバイスのホストアドレス",
+                    "keymode": "Key selection mode",
                     "key": "デバイスキー",
                     "protocol": "接続プロトコル",
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
-                    "voltageRatio": "voltageRatio",
-                    "electricityRatio": "electricityRatio",
-                    "signalOpen": "開封時間 (秒)",
-                    "signalClose": "終了時間 (秒)",
-                    "trace": "デバイスのデバグトレースを開始する (10分間)",
+                    "trace": "デバイスのデバグトレースを開始する",
+                    "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
+                }
+            },
+            "cloudkey": {
+                "title": "デバイスキーの取得",
+                "description": "Merossアカウントにログインして、デバイスキーを取得します",
+                "data": {
+                    "username": "メロスログイン",
+                    "password": "メロスパスワード"
                 }
             }
         }

@@ -4,18 +4,23 @@ from homeassistant.components.number import (
     DOMAIN as PLATFORM_NUMBER,
     NumberEntity,
 )
-from homeassistant.components.number.const import (
-    DEFAULT_MIN_VALUE,
-    DEFAULT_MAX_VALUE,
-    DEFAULT_STEP,
-)
+try:
+    from homeassistant.components.number import NumberMode
+    NUMBERMODE_AUTO = NumberMode.AUTO
+    NUMBERMODE_BOX = NumberMode.BOX
+    NUMBERMODE_SLIDER = NumberMode.SLIDER
+except:
+    NUMBERMODE_AUTO = "auto"
+    NUMBERMODE_BOX = "box"
+    NUMBERMODE_SLIDER = "slider"
 
-from .merossclient import const as mc  # mEROSS cONST
+from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 from .meross_entity import (
     _MerossEntity,
     platform_setup_entry, platform_unload_entry,
     ENTITY_CATEGORY_CONFIG,
 )
+
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -25,51 +30,31 @@ async def async_unload_entry(hass: object, config_entry: object) -> bool:
     return platform_unload_entry(hass, config_entry, PLATFORM_NUMBER)
 
 
-class MerossLanNumber(_MerossEntity, NumberEntity):
+class MLConfigNumber(_MerossEntity, NumberEntity):
 
     PLATFORM = PLATFORM_NUMBER
 
+    multiplier = 1
 
-    def __init__(
-        self,
-        device: "MerossDevice",
-        _id: object,
-        min_value: float = DEFAULT_MIN_VALUE,
-        max_value: float = DEFAULT_MAX_VALUE,
-        step: float = DEFAULT_STEP,
-        device_class: str = None,
-        subdevice: "MerossSubDevice" = None
-        ):
-        super().__init__(device, _id, device_class, subdevice)
-        self._attr_min_value = min_value
-        self._attr_max_value = max_value
-        self._attr_step = step
-
+    _attr_mode = NUMBERMODE_BOX
 
     @property
-    def entity_category(self) -> str | None:
+    def entity_category(self):
         return ENTITY_CATEGORY_CONFIG
 
-    @property
-    def min_value(self) -> float:
-        return self._attr_min_value
-
-    @property
-    def max_value(self) -> float:
-        return self._attr_max_value
-
-    @property
-    def step(self) -> float:
-        return self._attr_step
 
     @property
     def value(self) -> float | None:
         return self._attr_state
 
 
+    def update_value(self, value):
+        self.update_state(value / self.multiplier)
 
-class MerossLanHubAdjustNumber(MerossLanNumber):
 
+class MLHubAdjustNumber(MLConfigNumber):
+
+    multiplier = 100
 
     def __init__(
         self,
@@ -78,22 +63,21 @@ class MerossLanHubAdjustNumber(MerossLanNumber):
         namespace: str,
         label: str,
         device_class: str,
-        multiplier: float,
         min_value: float,
         max_value: float,
         step: float
         ):
         self._key = key
         self._namespace = namespace
-        self._namespace_key = namespace.split('.')[-1].lower()
+        self._namespace_key = get_namespacekey(namespace)
         self._label = label
-        self._multiplier = multiplier
+        self._attr_min_value = min_value
+        self._attr_max_value = max_value
+        self._attr_step = step
         super().__init__(
             subdevice.hub,
-            f"{subdevice.id}_config_{self._namespace_key}_{key}",
-            min_value,
-            max_value,
-            step,
+            subdevice.id,
+            f"config_{self._namespace_key}_{key}",
             device_class,
             subdevice)
 
@@ -112,12 +96,10 @@ class MerossLanHubAdjustNumber(MerossLanNumber):
                 self._namespace_key: [
                     {
                         mc.KEY_ID: self.subdevice.id,
-                        self._key: int(value * self._multiplier)
+                        self._key: int(value * self.multiplier)
                     }
                 ]
             },
         )
 
 
-    def update_value(self, value):
-        self.update_state(value / self._multiplier)

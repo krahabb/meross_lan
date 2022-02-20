@@ -4,7 +4,7 @@ import logging
 import os
 import socket
 import math
-from typing import  Callable, Dict, List
+from typing import  Callable, Dict, List, Set
 from time import strftime, time
 from io import TextIOWrapper
 from json import (
@@ -24,16 +24,21 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 from .merossclient import (
     const as mc,  # mEROSS cONST
     MerossDeviceDescriptor, MerossHttpClient,
+    get_namespacekey,
     get_replykey, build_default_payload_get,
 )
 from .meross_entity import MerossFakeEntity
-from .helpers import LOGGER, LOGGER_trap, mqtt_is_connected
+from .helpers import (
+    LOGGER, LOGGER_trap,
+    obfuscate, deobfuscate,
+    mqtt_is_connected,
+)
 from .const import (
     DOMAIN, DND_ID,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_HOST, CONF_TIMESTAMP,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT, CONF_POLLING_PERIOD_MIN,
     CONF_PROTOCOL, CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
-    CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE,
+    CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE, CONF_TRACE_TIMEOUT_DEFAULT,
     PARAM_HEARTBEAT_PERIOD, PARAM_TIMEZONE_CHECK_PERIOD, PARAM_TIMESTAMP_TOLERANCE,
 )
 
@@ -67,44 +72,13 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_HUB_REPORT, # disconnects
     mc.NS_APPLIANCE_HUB_SUBDEVICELIST, # disconnects
     mc.NS_APPLIANCE_MCU_UPGRADE, # disconnects
-    mc.NS_APPLIANCE_MCU_HP110_PREVIEW # disconnects
-)
-
-TRACE_KEYS_OBFUSCATE = (
-    mc.KEY_UUID, mc.KEY_MACADDRESS, mc.KEY_WIFIMAC, mc.KEY_INNERIP,
-    mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_USERID, mc.KEY_TOKEN
+    mc.NS_APPLIANCE_MCU_HP110_PREVIEW, # disconnects
+    mc.NS_APPLIANCE_MCU_FIRMWARE, # disconnects
+    mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK # disconnects
 )
 
 TRACE_DIRECTION_RX = 'RX'
 TRACE_DIRECTION_TX = 'TX'
-
-def _obfuscate(payload: dict) -> dict:
-    """
-    payload: input-output gets modified by blanking sensistive keys
-    returns: a dict with the original mapped obfuscated keys
-    parses the input payload and 'hides' (obfuscates) some sensitive keys.
-    returns the mapping of the obfuscated keys in 'obfuscated' so to re-set them in _deobfuscate
-    this function is recursive
-    """
-    obfuscated = dict()
-    for key, value in payload.items():
-        if isinstance(value, dict):
-            o = _obfuscate(value)
-            if o:
-                obfuscated[key] = o
-        elif key in TRACE_KEYS_OBFUSCATE:
-            obfuscated[key] = value
-            payload[key] = '#' * len(str(value))
-
-    return obfuscated
-
-def _deobfuscate(payload: dict, obfuscated: dict):
-    for key, value in obfuscated.items():
-        if isinstance(value, dict):
-            _deobfuscate(payload[key], value)
-        else:
-            payload[key] = value
-
 
 TIMEZONES_SET = None
 
@@ -152,6 +126,8 @@ class MerossDevice:
         self.lastmqtt = 0 # means we recently received an mqtt message
         self.hasmqtt = False # hasmqtt means it is somehow available to communicate over mqtt
         self._trace_file: TextIOWrapper = None
+        self._trace_future: asyncio.Future = None
+        self._trace_data: list = None
         self._trace_endtime = 0
         self._trace_ability_iter = None
         """
@@ -174,8 +150,8 @@ class MerossDevice:
         For Hub(s) too NS_ALL is very 'partial' (at least MTS100 state is not fully exposed)
         """
         self.polling_period = CONF_POLLING_PERIOD_DEFAULT
-        self.polling_dictionary: List[str] = list()
-        self.polling_dictionary.append(mc.NS_APPLIANCE_SYSTEM_ALL)
+        self.polling_dictionary: Set[str] = set()
+        self.polling_dictionary.add(mc.NS_APPLIANCE_SYSTEM_ALL)
         """
         self.platforms: dict()
         when we build an entity we also add the relative platform name here
@@ -187,6 +163,20 @@ class MerossDevice:
         """
         self.platforms: Dict[str, Callable] = {}
         """
+        Message handling is actually very hybrid:
+        when a message (device reply or originated) is received it gets routed to the
+        device instance in 'receive'. Here, it was traditionally parsed with a
+        switch structure against the different expected namespaces.
+        Now the architecture, while still in place, is being moved to handler methods
+        which are looked up by inspecting self for a proper '_handler_{namespace}' signature
+        This signature could be added at runtime or (better I guess) could be added by
+        dedicated mixin classes used to build the actual device class when the device is setup
+        (see __init__.MerossApi.build_device)
+        The handlers dictionary is anyway parsed first and could override a build-time handler.
+        The dicionary keys are Meross namespaces matched against when the message enters the handling
+        """
+        self.handlers: Dict[str, Callable] = {}
+        """
         misc callbacks
         """
         self.unsub_entry_update_listener: Callable = None
@@ -194,11 +184,19 @@ class MerossDevice:
 
         self._set_config_entry(entry.data)
 
-        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in self.descriptor.ability:
-            #from .switch import MerossLanDND
-            from .light import MerossLanDNDLight
-            #self.entity_dnd = MerossLanDND(self)
-            self.entity_dnd = MerossLanDNDLight(self)
+        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
+            from .light import MLDNDLightEntity
+            self.entity_dnd = MLDNDLightEntity(self)
+
+        for key, payload in descriptor.digest.items():
+            # _init_xxxx methods provided by mixins
+            _init = getattr(self, f"_init_{key}", None)
+            if _init is not None:
+                if isinstance(payload, list):
+                    for p in payload:
+                        _init(p)
+                else:
+                    _init(payload)
 
         """
         warning: would the response be processed after this object is fully init?
@@ -213,6 +211,15 @@ class MerossDevice:
     def __del__(self):
         LOGGER.debug("MerossDevice(%s) destroy", self.device_id)
         return
+
+
+    def shutdown(self):
+        """
+            called when the config entry is unloaded
+            we'll try to clear everything here
+        """
+        if self._trace_file:
+            self._trace_close()
 
 
     @property
@@ -287,77 +294,102 @@ class MerossDevice:
         if not self._online:
             self._set_online(namespace)
 
-        if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
-            self._parse_all(payload)
-            if self.needsave is True:
-                self.needsave = False
-                self._save_config_entry(payload)
-            if self.entity_dnd.enabled:
-                """
-                this is to optimize polling: when on MQTT we're only requesting/receiving
-                when coming online and 'DND' will then work by pushes. While on HTTP we'll
-                always call right after receiving 'ALL' which is the general status update
-                """
-                self.request_get(mc.NS_APPLIANCE_SYSTEM_DNDMODE)
+        handler = self.handlers.get(namespace)
+        if handler is not None:
+            handler(namespace, method, payload, header)
             return True
 
-        if namespace == mc.NS_APPLIANCE_CONTROL_TOGGLEX:
-            if method == mc.METHOD_SETACK:
-                # SETACK doesnt carry payload :(
-                # on MQTT this is a pain since we dont have a setack callback
-                # system in place and we're not sure this SETACK is for us
-                pass
-            else:
-                self._parse_togglex(payload.get(mc.KEY_TOGGLEX))
+        handler = getattr(self, f"_handle_{namespace.replace('.', '_')}", None)
+        if handler is not None:
+            handler(namespace, method, payload, header)
             return True
-
-        if namespace == mc.NS_APPLIANCE_SYSTEM_DNDMODE:
-            if method == mc.METHOD_SETACK:
-                # SETACK doesnt carry payload :(
-                # on MQTT this is a pain since we dont have a setack callback
-                # system in place and we're not sure this SETACK is for us
-                pass
-            else:
-                dndmode = payload.get(mc.KEY_DNDMODE)
-                if isinstance(dndmode, dict):
-                    self.entity_dnd.update_onoff(dndmode.get(mc.KEY_MODE))
-            return True
-
-        if namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
-            # this is part of initial flow over MQTT
-            # we'll try to set the correct time in order to avoid
-            # having NTP opened to setup the device
-            # Note: I actually see this NS only on mss310 plugs
-            # (msl120j bulb doesnt have it)
-            if method == mc.METHOD_PUSH:
-                self.mqtt_request(
-                    mc.NS_APPLIANCE_SYSTEM_CLOCK,
-                    mc.METHOD_PUSH,
-                    { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: int(epoch)}}
-                )
-            return True
-
-        if namespace == mc.NS_APPLIANCE_SYSTEM_TIME:
-            if method == mc.METHOD_PUSH:
-                self.descriptor.update_time(payload.get(mc.KEY_TIME, {}))
-            return True
-
-        if namespace == mc.NS_APPLIANCE_CONTROL_BIND:
-            """
-            this transaction was observed on a trace from a msh300hk
-            the device keeps sending 'SET'-'Bind' so I'm trying to
-            kindly answer a 'SETACK'
-            assumption is we're working on mqtt
-            """
-            if method == mc.METHOD_SET:
-                self.mqtt_request(
-                    mc.NS_APPLIANCE_CONTROL_BIND,
-                    mc.METHOD_SETACK,
-                    {},
-                    header[mc.KEY_MESSAGEID]
-                )
 
         return False
+
+
+    def _handle_generic(self,
+        namespace: str, method: str, payload: dict, header: dict):
+        """
+        This is a basic implementation for dynamic protocol handlers
+        since most of the payloads just need to extract a key and
+        pass along to entities
+        """
+        key = get_namespacekey(namespace)
+        self._parse__generic(key, payload.get(key))
+
+
+    def _handle_Appliance_System_All(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        self._parse_all(payload)
+        if self.needsave is True:
+            self.needsave = False
+            self._save_config_entry(payload)
+        if self.entity_dnd.enabled:
+            """
+            this is to optimize polling: when on MQTT we're only requesting/receiving
+            when coming online and 'DND' will then work by pushes. While on HTTP we'll
+            always call right after receiving 'ALL' which is the general status update
+            """
+            self.request_get(mc.NS_APPLIANCE_SYSTEM_DNDMODE)
+
+
+    def _handle_Appliance_System_DNDMode(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        if isinstance(dndmode := payload.get(mc.KEY_DNDMODE), dict):
+            self.entity_dnd.update_onoff(dndmode.get(mc.KEY_MODE))
+
+
+    def _handle_Appliance_System_Clock(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        # this is part of initial flow over MQTT
+        # we'll try to set the correct time in order to avoid
+        # having NTP opened to setup the device
+        # Note: I actually see this NS only on mss310 plugs
+        # (msl120j bulb doesnt have it)
+        if method == mc.METHOD_PUSH:
+            self.mqtt_request(
+                mc.NS_APPLIANCE_SYSTEM_CLOCK,
+                mc.METHOD_PUSH,
+                { mc.KEY_CLOCK: { mc.KEY_TIMESTAMP: int(time())}}
+            )
+
+
+    def _handle_Appliance_System_Time(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        if method == mc.METHOD_PUSH:
+            self.descriptor.update_time(payload.get(mc.KEY_TIME, {}))
+
+
+    def _handle_Appliance_Control_Bind(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        """
+        this transaction was observed on a trace from a msh300hk
+        the device keeps sending 'SET'-'Bind' so I'm trying to
+        kindly answer a 'SETACK'
+        assumption is we're working on mqtt
+        """
+        if method == mc.METHOD_SET:
+            self.mqtt_request(
+                mc.NS_APPLIANCE_CONTROL_BIND,
+                mc.METHOD_SETACK,
+                {},
+                header[mc.KEY_MESSAGEID]
+            )
+
+
+    def _parse__generic(self, key: str, payload, entitykey: str = None):
+        if isinstance(payload, dict):
+            entity = self.entities[
+                payload[mc.KEY_CHANNEL]
+                if entitykey is None
+                else  f"{payload[mc.KEY_CHANNEL]}_{entitykey}"
+                ]
+            parser = getattr(entity, f"_parse_{key}", None)
+            if parser is not None:
+                parser(payload)
+        elif isinstance(payload, list):
+            for p in payload:
+                self._parse__generic(key, p, entitykey)
 
 
     def mqtt_receive(
@@ -573,20 +605,9 @@ class MerossDevice:
         """
         if self._trace_file is not None:
             self._trace_close()
-        _trace_endtime = config_entry.data.get(CONF_TRACE, 0)
-        if _trace_endtime > time():
-            try:
-                tracedir = hass.config.path('custom_components', DOMAIN, CONF_TRACE_DIRECTORY)
-                os.makedirs(tracedir, exist_ok=True)
-                self._trace_file = open(os.path.join(tracedir, CONF_TRACE_FILENAME.format(self.descriptor.type, int(_trace_endtime))), 'w')
-                self._trace_endtime = _trace_endtime
-                self._trace(self.descriptor.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
-                self._trace(self.descriptor.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK)
-                self._trace_ability_iter = iter(self.descriptor.ability)
-                self._trace_ability()
-            except Exception as e:
-                LOGGER.warning("MerossDevice(%s) error while creating trace file (%s)", self.device_id, str(e))
-
+        endtime = config_entry.data.get(CONF_TRACE, 0)
+        if endtime > time():
+            self._trace_open(endtime)
         #await hass.config_entries.async_reload(config_entry.entry_id)
 
 
@@ -619,14 +640,6 @@ class MerossDevice:
             if (epoch - self.lastrequest) > self._retry_period:
                 self._retry_period = self._retry_period + self.polling_period
                 self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
-
-
-    def _parse_togglex(self, payload) -> None:
-        if isinstance(payload, dict):
-            self.entities[payload.get(mc.KEY_CHANNEL, 0)].update_onoff(payload.get(mc.KEY_ONOFF))
-        elif isinstance(payload, list):
-            for p in payload:
-                self._parse_togglex(p)
 
 
     def _parse_all(self, payload: dict) -> None:
@@ -676,6 +689,13 @@ class MerossDevice:
             _parse = getattr(self, f"_parse_{key}", None)
             if _parse is not None:
                 _parse(value)
+        # older firmwares (MSS110 with 1.1.28) look like
+        # carrying 'control' instead of 'digest'
+        if isinstance(p_control := descr.all.get(mc.KEY_CONTROL), dict):
+            for key, value in p_control.items():
+                _parse = getattr(self, f"_parse_{key}", None)
+                if _parse is not None:
+                    _parse(value)
 
 
     def _config_timestamp(self, epoch, device_timedelta):
@@ -863,6 +883,42 @@ class MerossDevice:
             self.polling_period = CONF_POLLING_PERIOD_MIN
 
 
+    def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
+        """
+        invoked by the diagnostics callback:
+        here we set the device to start tracing the classical way (in file)
+        but we also fill in a dict which will set back as the result of the
+        Future we're returning to dignostics
+        """
+        if self._trace_future is not None:
+            # avoid re-entry..keep going the running trace
+            return self._trace_future
+        if self._trace_file is not None:
+            self._trace_close()
+        loop = asyncio.get_running_loop()
+        self._trace_future = loop.create_future()
+        self._trace_data = list()
+        self._trace_data.append(['time','rxtx','protocol','method','namespace','data'])
+        self._trace_open(time() + (trace_timeout or CONF_TRACE_TIMEOUT_DEFAULT))
+        return self._trace_future
+
+
+    def _trace_open(self, endtime):
+        try:
+            tracedir = self.api.hass.config.path('custom_components', DOMAIN, CONF_TRACE_DIRECTORY)
+            os.makedirs(tracedir, exist_ok=True)
+            self._trace_file = open(os.path.join(tracedir, CONF_TRACE_FILENAME.format(self.descriptor.type, int(endtime))), 'w')
+            self._trace_endtime = endtime
+            self._trace(self.descriptor.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
+            self._trace(self.descriptor.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK)
+            self._trace_ability_iter = iter(self.descriptor.ability)
+            self._trace_ability()
+        except Exception as e:
+            LOGGER.warning("MerossDevice(%s) error while creating trace file (%s)", self.device_id, str(e))
+            if self._trace_file is not None:
+                self._trace_close()
+
+
     def _trace_close(self):
         try:
             self._trace_file.close()
@@ -870,6 +926,11 @@ class MerossDevice:
             LOGGER.warning("MerossDevice(%s) error while closing trace file (%s)", self.device_id, str(e))
         self._trace_file = None
         self._trace_ability_iter = None
+        if self._trace_future is not None:
+            self._trace_future.set_result(self._trace_data)
+            self._trace_future = None
+        self._trace_data = None
+
 
     @callback
     def _trace_ability(self, *args):
@@ -901,22 +962,25 @@ class MerossDevice:
         ):
         if self._trace_file is not None:
             now = time()
-            if now > self._trace_endtime:
+            if (now > self._trace_endtime) or \
+                (self._trace_file.tell() > CONF_TRACE_MAXSIZE):
                 self._trace_close()
                 return
 
             if isinstance(data, dict):
-                obfuscated = _obfuscate(data)
+                obfuscated = obfuscate(data)
 
             try:
-                self._trace_file.write(strftime('%Y/%m/%d - %H:%M:%S\t') \
-                    + rxtx + '\t' + protocol + '\t' + method + '\t' + namespace + '\t' \
-                    + (json_dumps(data) if isinstance(data, dict) else data) + '\r\n')
-                if self._trace_file.tell() > CONF_TRACE_MAXSIZE:
-                    self._trace_close()
+                texttime = strftime('%Y/%m/%d - %H:%M:%S')
+                textdata = json_dumps(data) if isinstance(data, dict) else data
+                columns = [texttime, rxtx, protocol, method, namespace, textdata]
+                self._trace_file.write('\t'.join(columns) + '\r\n')
+                if self._trace_data is not None:
+                    columns[5] = data # better have json for dignostic trace
+                    self._trace_data.append(columns)
             except Exception as e:
                 LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
                 self._trace_close()
 
             if isinstance(data, dict):
-                _deobfuscate(data, obfuscated)
+                deobfuscate(data, obfuscated)

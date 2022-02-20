@@ -7,7 +7,8 @@
             "single_instance_allowed": "Konfigurace již existuje. Více konfigurací není podporováno."
         },
         "error": {
-            "invalid_key": "Neplatný klíč: Obnovte klíč z účtu Meross",
+            "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
             "already_configured_device": "Zařízení již bylo konfigurováno",
             "cannot_connect": "Pokus o připojení se nezdařil",
             "invalid_auth": "Ověření selhalo"
@@ -17,8 +18,6 @@
                 "title": "Meross LAN",
                 "description": "Nastavení zařízení Meross",
                 "data": {
-                    "host": "Adresa hostitele zařízení",
-                    "key": "Klíč zařízení",
                     "Required": "Povinné pole"
                 }
             },
@@ -29,7 +28,17 @@
                     "key": "Klíč zařízení"
                 }
             },
-            "retrievekey": {
+            "device": {
+                "title": "Meross LAN",
+                "description": "Nastavení zařízení Meross",
+                "data": {
+                    "host": "Adresa hostitele zařízení",
+                    "keymode": "Key selection mode",
+                    "key": "Klíč zařízení",
+                    "Required": "Povinné pole"
+                }
+            },
+            "cloudkey": {
                 "title": "Obnova klíče zařízení",
                 "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
                 "data": {
@@ -37,7 +46,7 @@
                     "password": "Heslo k účtu Meross"
                 }
             },
-            "device": {
+            "finalize": {
                 "title": "Konfigurace zařízení",
                 "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}",
                 "data": {}
@@ -45,6 +54,13 @@
         }
     },
     "options": {
+        "error": {
+            "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
+            "already_configured_device": "Zařízení již bylo konfigurováno",
+            "cannot_connect": "Pokus o připojení se nezdařil",
+            "invalid_auth": "Ověření selhalo"
+        },
         "step": {
             "hub": {
                 "title": "Centrum Meross LAN MQTT",
@@ -57,17 +73,24 @@
                 "title": "Konfigurace zařízení",
                 "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}\nHostitel: {host}\n\n{payload}",
                 "data": {
+                    "host": "Adresa hostitele zařízení",
+                    "keymode": "Key selection mode",
                     "key": "Klíč zařízení",
                     "protocol": "Protokol připojení",
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
-                    "voltageRatio": "voltageRatio",
-                    "electricityRatio": "electricityRatio",
-                    "signalOpen": "Časový limit pro otevření krytu (sekundy)",
-                    "signalClose": "Časový limit pro zavření krytu (sekundy)",
-                    "trace": "Zapnout ladění zařízení (po dobu 10 minut)",
+                    "trace": "Zapnout ladění zařízení",
+                    "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
+                }
+            },
+            "cloudkey": {
+                "title": "Obnova klíče zařízení",
+                "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
+                "data": {
+                    "username": "Uživatelské jméno účtu Meross",
+                    "password": "Heslo k účtu Meross"
                 }
             }
         }

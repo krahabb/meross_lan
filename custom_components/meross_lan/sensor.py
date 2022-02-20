@@ -1,22 +1,32 @@
 from __future__ import annotations
-from datetime import datetime
+import logging
+from time import localtime
+from datetime import datetime, timedelta, timezone
 
 from homeassistant.helpers.typing import StateType
 from homeassistant.components.sensor import (
     DOMAIN as PLATFORM_SENSOR,
 )
+
 try:
     from homeassistant.components.sensor import SensorEntity
+    try:
+        from homeassistant.components.sensor import SensorStateClass
+        STATE_CLASS_MEASUREMENT = SensorStateClass.MEASUREMENT
+        STATE_CLASS_TOTAL_INCREASING = SensorStateClass.TOTAL_INCREASING
+    except:
+        try:
+            from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
+        except:
+            STATE_CLASS_MEASUREMENT = None
+        try:
+            from homeassistant.components.sensor import STATE_CLASS_TOTAL_INCREASING
+        except:
+            STATE_CLASS_TOTAL_INCREASING = STATE_CLASS_MEASUREMENT
 except:#someone still pre 2021.5.0 ?
     from homeassistant.helpers.entity import Entity as SensorEntity
-try:
-    from homeassistant.components.sensor import STATE_CLASS_MEASUREMENT
-except:#someone still pre 2021.8.0 ?
     STATE_CLASS_MEASUREMENT = None
-try:
-    from homeassistant.components.sensor import STATE_CLASS_TOTAL_INCREASING
-except:#someone still pre 2021.9.0 ?
-    STATE_CLASS_TOTAL_INCREASING = STATE_CLASS_MEASUREMENT
+    STATE_CLASS_TOTAL_INCREASING = None
 
 from homeassistant.const import (
     DEVICE_CLASS_POWER, POWER_WATT,
@@ -42,12 +52,14 @@ except:#someone still pre 2021.8.0 ?
     ELECTRIC_POTENTIAL_VOLT = VOLT
 
 
-
+from .merossclient import MerossDeviceDescriptor, const as mc  # mEROSS cONST
 from .meross_entity import (
     _MerossEntity,
     platform_setup_entry,
     platform_unload_entry,
 )
+from .const import PARAM_ENERGY_UPDATE_PERIOD
+
 
 CLASS_TO_UNIT_MAP = {
     DEVICE_CLASS_POWER: POWER_WATT,
@@ -70,22 +82,34 @@ async def async_unload_entry(hass: object, config_entry: object) -> bool:
 
 
 
-class MerossLanSensor(_MerossEntity, SensorEntity):
+class MLSensor(_MerossEntity, SensorEntity):
 
     PLATFORM = PLATFORM_SENSOR
 
     _attr_state_class: str | None = STATE_CLASS_MEASUREMENT
-    _attr_last_reset: datetime | None = None # Deprecated, to be removed in 2021.11
+    _attr_last_reset: datetime | None = None
     _attr_native_unit_of_measurement: str | None
 
-    def __init__(self, device: "MerossDevice", _id: object, device_class: str, subdevice: "MerossSubDevice" = None):
-        super().__init__(device, _id, device_class, subdevice)
+    def __init__(
+        self,
+        device: "MerossDevice",
+        channel: object,
+        entitykey: str,
+        device_class: str,
+        subdevice: "MerossSubDevice"):
+        super().__init__(device, channel, entitykey, device_class, subdevice)
         self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(device_class)
 
 
     @staticmethod
+    def build_for_device(device: "MerossDevice", device_class: str):
+        return MLSensor(device, None, device_class, device_class, None)
+
+
+    @staticmethod
     def build_for_subdevice(subdevice: "MerossSubDevice", device_class: str):
-        return MerossLanSensor(subdevice.hub, f"{subdevice.id}_{device_class}", device_class, subdevice)
+        #return MerossLanSensor(subdevice.hub, f"{subdevice.id}_{device_class}", device_class, subdevice)
+        return MLSensor(subdevice.hub, subdevice.id, device_class, device_class, subdevice)
 
 
     @property
@@ -123,3 +147,115 @@ class MerossLanSensor(_MerossEntity, SensorEntity):
             # let the core implementation manage unit conversions
             return SensorEntity.state.__get__(self)
         return self._attr_state
+
+
+
+class ElectricityMixin:
+
+
+    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry) -> None:
+        super().__init__(api, descriptor, entry)
+        self._sensor_power = MLSensor.build_for_device(self, DEVICE_CLASS_POWER)
+        self._sensor_current = MLSensor.build_for_device(self, DEVICE_CLASS_CURRENT)
+        self._sensor_voltage = MLSensor.build_for_device(self, DEVICE_CLASS_VOLTAGE)
+
+
+    def _handle_Appliance_Control_Electricity(
+        self,
+        namespace: str,
+        method: str,
+        payload: dict,
+        header: dict
+    ) -> None:
+        electricity = payload.get(mc.KEY_ELECTRICITY)
+        self._sensor_power.update_state(electricity.get(mc.KEY_POWER) / 1000)
+        self._sensor_current.update_state(electricity.get(mc.KEY_CURRENT) / 1000)
+        self._sensor_voltage.update_state(electricity.get(mc.KEY_VOLTAGE) / 10)
+
+
+    def _request_updates(self, epoch, namespace):
+        super()._request_updates(epoch, namespace)
+        # we're not checking context namespace since it should be very unusual
+        # to enter here with one of those following
+        if self._sensor_power.enabled or self._sensor_voltage.enabled or self._sensor_current.enabled:
+            self.request_get(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
+
+
+
+class ConsumptionMixin:
+
+
+    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry) -> None:
+        super().__init__(api, descriptor, entry)
+        self._sensor_energy = MLSensor.build_for_device(self, DEVICE_CLASS_ENERGY)
+        self._sensor_energy._attr_state_class = STATE_CLASS_TOTAL_INCREASING
+        self._energy_lastupdate = 0
+        self._energy_last_reset = 0 # store the last 'device time' we passed onto to _attr_last_reset
+
+
+    def _handle_Appliance_Control_ConsumptionX(
+        self,
+        namespace: str,
+        method: str,
+        payload: dict,
+        header: dict
+    ) -> None:
+        self._energy_lastupdate = self.lastupdate
+        days = payload.get(mc.KEY_CONSUMPTIONX)
+        days_len = len(days)
+        if days_len < 1:
+            if STATE_CLASS_TOTAL_INCREASING == STATE_CLASS_MEASUREMENT:
+                self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(0)
+            self._sensor_energy.update_state(0)
+            return True
+        # we'll look through the device array values to see
+        # data timestamped (in device time) after last midnight
+        # since we usually reset this around midnight localtime
+        # the device timezone should be aligned else it will roundtrip
+        # against it's own midnight and we'll see a delayed 'sawtooth'
+        st = localtime()
+        dt = datetime(
+            st.tm_year, st.tm_mon, st.tm_mday,
+            tzinfo=timezone(timedelta(seconds=st.tm_gmtoff), st.tm_zone)
+        )
+        timestamp_last_reset = dt.timestamp() - self.device_timedelta
+        self.log(
+            logging.DEBUG, 0,
+            "MerossDevice(%s) Energy: device midnight = %d",
+            self.device_id, timestamp_last_reset
+        )
+        def get_timestamp(day):
+            return day.get(mc.KEY_TIME)
+        days = sorted(days, key=get_timestamp, reverse=True)
+        day_last:dict = days[0]
+        if day_last.get(mc.KEY_TIME) < timestamp_last_reset:
+            return True
+        if days_len > 1:
+            timestamp_last_reset = days[1].get(mc.KEY_TIME)
+        if self._energy_last_reset != timestamp_last_reset:
+            # we 'cache' timestamp_last_reset so we don't 'jitter' _attr_last_reset
+            # should device_timedelta change (and it will!)
+            # this is not really working until days_len is >= 2
+            self._energy_last_reset = timestamp_last_reset
+            # we'll add .5 (sec) to the device last reading since the reset
+            # occurs right after that
+            # update the entity last_reset only for a 'corner case'
+            # when the feature was initially added (2021.8) and
+            # STATE_CLASS_TOTAL_INCREASING was not defined yet
+            if STATE_CLASS_TOTAL_INCREASING == STATE_CLASS_MEASUREMENT:
+                self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(
+                    timestamp_last_reset + self.device_timedelta + .5
+                )
+                self.log(
+                    logging.DEBUG, 0,
+                    "MerossDevice(%s) Energy: update last_reset to %s",
+                    self.device_id, self._sensor_energy._attr_last_reset.isoformat()
+                )
+        self._sensor_energy.update_state(day_last.get(mc.KEY_VALUE))
+
+
+    def _request_updates(self, epoch, namespace):
+        super()._request_updates(epoch, namespace)
+        if self._sensor_energy.enabled:
+            if ((epoch - self._energy_lastupdate) > PARAM_ENERGY_UPDATE_PERIOD):
+                self.request_get(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)
