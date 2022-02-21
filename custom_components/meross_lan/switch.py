@@ -88,12 +88,8 @@ class ToggleMixin:
 
     def __init__(self, api, descriptor, entry) -> None:
         super().__init__(api, descriptor, entry)
-        # This is an euristhic for legacy firmwares or
-        # so when we cannot init any entity from system.all.digest
-        # we then guess we should have at least a switch
-
         # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
-        # but have 'control'
+        # but have 'control' and the toggle payload looks like not carrying 'channel'
         p_control = descriptor.all.get(mc.KEY_CONTROL)
         if p_control:
             p_toggle = p_control.get(mc.KEY_TOGGLE)
@@ -109,11 +105,17 @@ class ToggleMixin:
 
     def _handle_Appliance_Control_Toggle(self,
     namespace: str, method: str, payload: dict, header: dict):
-        self._parse__generic(mc.KEY_TOGGLE, payload.get(mc.KEY_TOGGLE))
+        self._parse_toggle(payload.get(mc.KEY_TOGGLE))
 
 
     def _parse_toggle(self, payload: dict):
-        self._parse__generic(mc.KEY_TOGGLE, payload)
+        """
+        toggle doesn't have channel (#172)
+        """
+        if isinstance(payload, dict):
+            entity: MLSwitch = self.entities[payload.get(mc.KEY_CHANNEL, 0)]
+            entity._parse_toggle(payload)
+
 
 
 class MLConfigSwitch(_MerossToggle, SwitchEntity):
