@@ -35,7 +35,8 @@ def LOGGER_trap(level, timeout, msg, *args):
 """
 OBFUSCATE_KEYS = (
     mc.KEY_UUID, mc.KEY_MACADDRESS, mc.KEY_WIFIMAC, mc.KEY_INNERIP,
-    mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_USERID, mc.KEY_TOKEN
+    mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_SECONDSERVER, mc.KEY_SECONDPORT,
+    mc.KEY_USERID, mc.KEY_TOKEN,
 )
 
 

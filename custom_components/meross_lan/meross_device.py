@@ -7,10 +7,8 @@ import math
 from typing import  Callable, Dict, List, Set
 from time import strftime, time
 from io import TextIOWrapper
-from json import (
-    dumps as json_dumps,
-    loads as json_loads,
-)
+from json import dumps as json_dumps
+from copy import deepcopy
 import voluptuous as vol
 from enum import Enum
 
@@ -379,6 +377,10 @@ class MerossDevice:
 
     def _parse__generic(self, key: str, payload, entitykey: str = None):
         if isinstance(payload, dict):
+            # we'll use an 'unsafe' access to payload[mc.KEY_CHANNEL]
+            # so to better diagnose issues with non-standard payloads
+            # we were previously using a safer approach but that could hide
+            # unforeseen behaviours
             entity = self.entities[
                 payload[mc.KEY_CHANNEL]
                 if entitykey is None
@@ -968,11 +970,17 @@ class MerossDevice:
                 return
 
             if isinstance(data, dict):
-                obfuscated = obfuscate(data)
+                # we'll eventually make a deepcopy since data
+                # might be retained by the _trace_data list
+                # and carry over the deobfuscation (which we'll skip now)
+                data = deepcopy(data)
+                obfuscate(data)
+                textdata = json_dumps(data)
+            else:
+                textdata = data
 
             try:
                 texttime = strftime('%Y/%m/%d - %H:%M:%S')
-                textdata = json_dumps(data) if isinstance(data, dict) else data
                 columns = [texttime, rxtx, protocol, method, namespace, textdata]
                 self._trace_file.write('\t'.join(columns) + '\r\n')
                 if self._trace_data is not None:
@@ -981,6 +989,3 @@ class MerossDevice:
             except Exception as e:
                 LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
                 self._trace_close()
-
-            if isinstance(data, dict):
-                deobfuscate(data, obfuscated)
