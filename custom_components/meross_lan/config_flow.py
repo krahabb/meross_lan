@@ -374,8 +374,11 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
             try:
                 if self._host is not None:
                     _keymode = user_input[CONF_KEYMODE]
-                    if self._key is None and _keymode != CONF_KEYMODE_HACK:
-                        raise ConfigError("invalid_nullkey")
+                    if self._key is None:
+                        if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
+                            return await self.async_step_cloudkey()
+                        elif _keymode != CONF_KEYMODE_HACK:
+                            raise ConfigError("invalid_nullkey")
                     _discovery_info = await _http_discovery(self.hass, self._host, self._key)
                     _descriptor = MerossDeviceDescriptor(_discovery_info.get(CONF_PAYLOAD, {}))
                     if self.device_id != _descriptor.uuid:
