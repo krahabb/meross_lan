@@ -7,6 +7,8 @@ from homeassistant.components.light import (
     ATTR_RGB_COLOR, ATTR_EFFECT,
 )
 
+from .helpers import reverse_lookup
+
 
 # back-forward compatibility hell
 try:
@@ -98,7 +100,16 @@ class MLLightBase(_MerossToggle, LightEntity):
     """
     PLATFORM = PLATFORM_LIGHT
 
-    _light : dict
+    """
+    internal copy of the actual meross light state
+    """
+    _light: dict
+
+    """
+    if the device supports effects, we'll map these to effect names
+    to interact with HA api
+    """
+    _light_effect_map: dict = dict()
 
 
     def update_onoff(self, onoff) -> None:
@@ -235,11 +246,6 @@ class MLLight(MLLightBase):
                 | (SUPPORT_COLOR_TEMP if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE else 0)
 
 
-    @property
-    def effect_list(self) -> list[str] | None:
-        return self.device.effect_list
-
-
     async def async_turn_on(self, **kwargs) -> None:
         light = dict(self._light)
         # we need to preserve actual capacity in case HA tells to just toggle
@@ -276,9 +282,9 @@ class MLLight(MLLightBase):
         light[mc.KEY_CAPACITY] = capacity
 
         if ATTR_EFFECT in kwargs:
-            effect_id = self.device.effect_dict_names.get(kwargs[ATTR_EFFECT], None)
-            if effect_id is not None:
-                light[mc.KEY_EFFECT] = effect_id
+            effect = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
+            if effect is not None:
+                light[mc.KEY_EFFECT] = effect
             else:
                 light.pop(mc.KEY_EFFECT, None)
         else:
@@ -316,15 +322,18 @@ class MLLight(MLLightBase):
                 _ack_callback)
 
 
-    def update_effect_list(self):
+    def update_effect_map(self, light_effect_map: dict):
         """
         the list of available effects was changed (context at device level)
         so we'll just tell HA to update the state
         """
-        if self.device.effect_list:
+        self._light_effect_map = light_effect_map
+        if light_effect_map:
             self._attr_supported_features = self._attr_supported_features | SUPPORT_EFFECT
+            self._attr_effect_list = list(light_effect_map.values())
         else:
             self._attr_supported_features = self._attr_supported_features & ~SUPPORT_EFFECT
+            self._attr_effect_list = None
         if self.hass and self.enabled:
             self.async_write_ha_state()
 
@@ -343,7 +352,7 @@ class MLLight(MLLightBase):
                 self._attr_color_mode = COLOR_MODE_BRIGHTNESS
 
         if mc.KEY_EFFECT in payload:
-            self._attr_effect = self.device.effect_dict_ids.get(payload[mc.KEY_EFFECT], None)
+            self._attr_effect = self._light_effect_map.get(payload[mc.KEY_EFFECT])
         else:
             self._attr_effect = None
 
@@ -413,10 +422,7 @@ class LightMixin:
     in order to provide NS_APPLIANCE_CONTROL_LIGHT and
     NS_APPLIANCE_CONTROL_LIGHT_EFFECT capability
     """
-
-    effect_dict_ids: dict[object, str] = dict() # map effect.Id to effect.Name
-    effect_dict_names: dict[str, object] = dict() # (reverse) map effect.Name to effect.Id
-    effect_list: list[str] = list() # list of effect names for HA UI
+    light_effect_map: dict[object, str] = dict() # map effect.Id to effect.Name
 
 
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry) -> None:
@@ -437,21 +443,14 @@ class LightMixin:
 
     def _handle_Appliance_Control_Light_Effect(self,
     namespace: str, method: str, payload: dict, header: dict):
-        effect_dict_ids = dict()
+        light_effect_map = dict()
         for p_effect in payload.get(mc.KEY_EFFECT, []):
-            effect_dict_ids[p_effect[mc.KEY_ID_]] = p_effect[mc.KEY_EFFECTNAME]
-        if effect_dict_ids != self.effect_dict_ids:
-            effect_dict_names = dict()
-            effect_list = list()
-            for _id, _name in effect_dict_ids.items():
-                effect_list.append(_name)
-                effect_dict_names[_name] = _id
-            self.effect_dict_ids = effect_dict_ids
-            self.effect_dict_names = effect_dict_names
-            self.effect_list = effect_list
-            for entity in self.entities:
+            light_effect_map[p_effect[mc.KEY_ID_]] = p_effect[mc.KEY_EFFECTNAME]
+        if light_effect_map != self.light_effect_map:
+            self.light_effect_map = light_effect_map
+            for entity in self.entities.values():
                 if isinstance(entity, MLLight):
-                    entity.update_effect_list()
+                    entity.update_effect_map(light_effect_map)
 
 
     def _parse_light(self, payload: dict):

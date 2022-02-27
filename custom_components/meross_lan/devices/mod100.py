@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from ..merossclient import const as mc  # mEROSS cONST
-
 from ..light import (
     MLLightBase,
     COLOR_MODE_RGB, COLOR_MODE_UNKNOWN,
@@ -15,6 +14,8 @@ from ..select import (
     OPTION_SPRAY_MODE_OFF, OPTION_SPRAY_MODE_CONTINUOUS, OPTION_SPRAY_MODE_ECO,
 )
 #from ..sensor import MLSensor, DEVICE_CLASS_TEMPERATURE, DEVICE_CLASS_HUMIDITY
+from ..helpers import reverse_lookup
+
 
 
 class MLDiffuserLight(MLLightBase):
@@ -46,12 +47,12 @@ class MLDiffuserLight(MLLightBase):
         """
         self._light = dict()
 
-        self._light_mode_map = {
+        self._light_effect_map = {
             mc.DIFFUSER_LIGHT_MODE_RAINBOW: "Rainbow",
             mc.DIFFUSER_LIGHT_MODE_COLOR: "Color",
             mc.DIFFUSER_LIGHT_MODE_TEMPERATURE: "Temperature",
         }
-        self._attr_effect_list = list(self._light_mode_map.values())
+        self._attr_effect_list = list(self._light_effect_map.values())
 
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -72,10 +73,9 @@ class MLDiffuserLight(MLLightBase):
 
         if ATTR_EFFECT in kwargs:
             effect = kwargs[ATTR_EFFECT]
-            for _mode, _effect in self._light_mode_map.items():
-                if _effect == effect:
-                    light[mc.KEY_MODE] = _mode
-                    break
+            mode = reverse_lookup(self._light_effect_map, effect)
+            if mode is not None:
+                light[mc.KEY_MODE] = mode
             else:
                 if mc.KEY_MODE not in light:
                     light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
@@ -102,11 +102,11 @@ class MLDiffuserLight(MLLightBase):
         if mc.KEY_MODE in payload:
             # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
             mode = payload[mc.KEY_MODE]
-            self._attr_effect = self._light_mode_map.get(mode)
+            self._attr_effect = self._light_effect_map.get(mode)
             if self._attr_effect is None:
                 self._attr_effect = "mode_" + str(mode)
-                self._light_mode_map[mode] = self._attr_effect
-                self._attr_effect_list = list(self._light_mode_map.values())
+                self._light_effect_map[mode] = self._attr_effect
+                self._attr_effect_list = list(self._light_effect_map.values())
 
 
 

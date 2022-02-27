@@ -35,6 +35,16 @@ def clamp(_value, _min, _max):
         return _value
 
 
+def reverse_lookup(map: dict, value):
+    """
+    lookup the values in map (dict) and return
+    the corresponding key
+    """
+    for _key, _value in map.items():
+        if _value == value:
+            return _key
+    return None
+
 
 """
     obfuscation:

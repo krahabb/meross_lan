@@ -1,4 +1,5 @@
 from __future__ import annotations
+import imp
 
 from homeassistant.components.media_player import (
     DOMAIN as PLATFORM_MEDIA_PLAYER,
@@ -20,6 +21,7 @@ from .meross_entity import (
     _MerossEntity,
     platform_setup_entry, platform_unload_entry,
 )
+from .light import MLLight, SUPPORT_EFFECT
 from .helpers import LOGGER, clamp
 
 
@@ -28,7 +30,6 @@ async def async_setup_entry(hass: object, config_entry: object, async_add_device
 
 async def async_unload_entry(hass: object, config_entry: object) -> bool:
     return platform_unload_entry(hass, config_entry, PLATFORM_MEDIA_PLAYER)
-
 
 
 
@@ -184,9 +185,23 @@ class Mp3Mixin:
             # so we're not implementing _init_xxx and _parse_xxx methods here
             MLMp3Player(self, 0)
             self.polling_dictionary.add(mc.NS_APPLIANCE_CONTROL_MP3)
-
+            # cherub light entity should be there...
+            light: MLLight = self.entities.get(0)
+            if light is not None:
+                light._light_effect_map = dict(mc.HP110A_LIGHT_EFFECT_MAP)
+                light._attr_effect_list = list(mc.HP110A_LIGHT_EFFECT_MAP.values())
+                light._attr_supported_features = light._attr_supported_features | SUPPORT_EFFECT
         except Exception as e:
             LOGGER.warning("Mp3Mixin(%s) init exception:(%s)", self.device_id, str(e))
+
+
+    def _init_light(self, payload: dict):
+        """
+        This mixin is higher in inheritance chain than LightMixin
+        so we're intercepting MLLight instantiation
+        """
+        super()._init_light(payload)
+
 
 
     def _handle_Appliance_Control_Mp3(self,
