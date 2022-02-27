@@ -221,6 +221,10 @@ KEY_WINDOWOPENED = 'windowOpened'
 KEY_DIFFUSER = 'diffuser'
 KEY_DNDMODE = 'DNDMode'
 KEY_ADJUST = 'adjust'
+KEY_MP3 = 'mp3'
+KEY_SONG = 'song'
+KEY_MUTE = 'mute'
+KEY_VOLUME = 'volume'
 KEY_NONCE = 'nonce'
 KEY_KEY = 'key'
 KEY_DATA = 'data'
@@ -302,6 +306,29 @@ DIFFUSER_LIGHT_MODE_RAINBOW = 0 # color modes taken from 'homebridge-meross' plu
 DIFFUSER_LIGHT_MODE_COLOR = 1
 DIFFUSER_LIGHT_MODE_TEMPERATURE = 2
 
+# cherub machine
+HP110A_LIGHT_EFFECT_MAP = {
+    0: 'Color',
+    1: 'Scene 1',
+    2: 'Scene 2',
+    3: 'Scene 3',
+    4: 'Scene 4',
+}
+HP110A_MP3_SONG_MIN = 1
+HP110A_MP3_SONG_MAX = 11
+HP110A_MP3_SONG_MAP = {
+    1: 'Cicada Chirping',
+    2: 'Rain Sound',
+    3: 'Ripple Sound',
+    4: 'Birdsong',
+    5: 'Lullaby',
+    6: 'Fan Sound',
+    7: 'Crystal Ball',
+    8: 'Music Box',
+    9: 'White Noise',
+    10: 'Thunder',
+    11: 'Ocean Wave',
+}
 
 # well known device types and classes
 # when registering type names put the CLASS name
@@ -352,6 +379,9 @@ TYPE_NAME_MAP[CLASS_MRS] = "Smart Roller Shutter"
 # just set the known type
 TYPE_MS100 = 'ms100' # Smart temp/humidity sensor over Hub
 TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
+
+TYPE_HP110A = 'hp110'
+TYPE_NAME_MAP[TYPE_HP110A] = "Smart Cherub Baby Machine"
 
 """
     GP constant strings

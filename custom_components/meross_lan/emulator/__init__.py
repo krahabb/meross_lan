@@ -250,6 +250,16 @@ class MerossDevice:
 
         return mc.METHOD_SETACK, {}
 
+
+    def _SET_Appliance_Control_Mp3(self, header, payload):
+        if mc.NS_APPLIANCE_CONTROL_MP3 not in self.namespaces:
+            raise Exception(f"{mc.NS_APPLIANCE_CONTROL_MP3} not supported in namespaces")
+        mp3 = self.namespaces[mc.NS_APPLIANCE_CONTROL_MP3]
+        mp3[mc.KEY_MP3].update(payload[mc.KEY_MP3])
+        return mc.METHOD_SETACK, {}
+
+
+
 def run(argv):
     """
     self running python app entry point

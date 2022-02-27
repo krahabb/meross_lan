@@ -356,7 +356,9 @@ class MerossApi:
         if mc.KEY_DIFFUSER in digest:
             from .devices.mod100 import DiffuserMixin
             mixin_classes.append(DiffuserMixin)
-
+        if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
+            from .media_player import Mp3Mixin
+            mixin_classes.append(Mp3Mixin)
 
         # We must be careful when ordering the mixin and leave MerossDevice as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.

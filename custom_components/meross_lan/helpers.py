@@ -26,6 +26,16 @@ def LOGGER_trap(level, timeout, msg, *args):
     _trap_dict[trap_key] = epoch
 
 
+def clamp(_value, _min, _max):
+    if _value >= _max:
+        return _max
+    elif _value <= _min:
+        return _min
+    else:
+        return _value
+
+
+
 """
     obfuscation:
     call obfuscate on a paylod (dict) to remove well-known sensitive
