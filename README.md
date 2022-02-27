@@ -32,7 +32,10 @@ Restart HA to let it play.
 
 ## Setup
 
-Once installed and restarted your Meross devices should be automatically discovered by the 'dhcp' integration and will then pop-up in your integrations panel ready to be configured (the exact timing will depend since the dhcp discovery has different strategies but a simple boot of the device should be sufficient even if not necessary).
+Once installed and restarted, your Meross devices should be automatically discovered by the 'dhcp' integration and will then pop-up in your integrations panel ready to be configured (the exact timing will depend since the dhcp discovery has different strategies but a simple boot of the device should be sufficient even if not necessary). 
+
+> ℹ️ If device(s) are not automatically discovered, try powering them off for 10s and then powering them back on. A notification that new devices have been discovered should appear in `notifications`.
+
 
 If you are using the 'MQTT way' you can help the discovery process by adding the 'MQTT Hub' feature of this integration (This was needed in the previous versions while you should be able to skip this step if the dhcp discovery works fine). If you need, just go to your homeassistant `Configuration -> Integrations` and add the Meross LAN by looking through the list of available ones. Here you can configure the device key used to sign the messages exchanged: this need to be the same key used when re-binding your hardware else the integration will not be able to discover new devices (dhcp discovery should instead work anyway: the key will be asked and set when configuring every single appliance).
 
