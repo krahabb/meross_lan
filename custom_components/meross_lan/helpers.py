@@ -26,6 +26,26 @@ def LOGGER_trap(level, timeout, msg, *args):
     _trap_dict[trap_key] = epoch
 
 
+def clamp(_value, _min, _max):
+    if _value >= _max:
+        return _max
+    elif _value <= _min:
+        return _min
+    else:
+        return _value
+
+
+def reverse_lookup(map: dict, value):
+    """
+    lookup the values in map (dict) and return
+    the corresponding key
+    """
+    for _key, _value in map.items():
+        if _value == value:
+            return _key
+    return None
+
+
 """
     obfuscation:
     call obfuscate on a paylod (dict) to remove well-known sensitive
@@ -35,7 +55,8 @@ def LOGGER_trap(level, timeout, msg, *args):
 """
 OBFUSCATE_KEYS = (
     mc.KEY_UUID, mc.KEY_MACADDRESS, mc.KEY_WIFIMAC, mc.KEY_INNERIP,
-    mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_USERID, mc.KEY_TOKEN
+    mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_SECONDSERVER, mc.KEY_SECONDPORT,
+    mc.KEY_USERID, mc.KEY_TOKEN,
 )
 
 

@@ -85,8 +85,10 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MRS100](https://www.meross.com/product/91/article/): Smart WiFi Roller Shutter
   - [MSG100](https://www.meross.com/product/29/article/): Smart WiFi Garage Door Opener
 - Humidifiers
+  - [MSXH0](https://www.meross.com/Detail/47/Smart%20Wi-Fi%20Humidifier) [experimental]: Smart WiFi Humidifier
   - [MOD100](https://www.meross.com/Detail/93/Smart%20Wi-Fi%20Essential%20Oil%20Diffuser) [experimental]: Smart WiFi Essential Oil Diffuser
-
+- Smart Cherub Baby Machine
+  - [HP110A](https://www.meross.com/product/53/article/) [experimental]: Smart Cherub Baby Machine
 
 ## Features
 
@@ -96,6 +98,8 @@ It also features an automatic protocol switching capability so, if you have your
 If you have the MSH300 Hub working with this integration, every new subdevice (thermostat or sensor) can be automatically discovered once the subdevice is paired with the hub. When the hub is configured in this integration you don't need to switch back and forth to/from the Meross app in order to 'bind' new devices: just pair the thermostat or sensor to the hub by using the subdevice pairing procedure (fast double press on the hub).
 
 DND mode (status/presence light) is supported through a light entity. This entity is marked as a 'configuration entity' in HA terms and is by default visible in the device page in HA UI. If you want to access it in your lovelace cards you have to manually add it. When the device is in 'do-not-disturb' mode the light will be switched off so the device doesn't pollute your home environment!
+
+Wifi signal strength is available for every meross wifi device and could be accessed on the device page. It is refreshed every 5 minutes.
 
 In general, many device configuration options available in Meross app are not supported in meross_lan though some are. As an example, the thermostats preset temperatures (for heat, cool, eco/away) are accessible in HA/meross_lan exactly as if you were to set them manually on the device or via the app. These, and any other supported configuration options, are available as configuration entities (so they're not added to the default lovelace dashboard) and you can access them by going to the relevant device page in HA Configuration -> Devices
 

@@ -45,6 +45,7 @@ CONF_TIMESTAMP = mc.KEY_TIMESTAMP # this is a 'fake' conf param we'll add to con
 PARAM_UNAVAILABILITY_TIMEOUT = 20  # number of seconds since last inquiry to consider the device unavailable
 PARAM_HEARTBEAT_PERIOD = 295 # whatever the connection state periodically inquire the device is there
 PARAM_ENERGY_UPDATE_PERIOD = 55 # read energy consumption only every ... second
+PARAM_SIGNAL_UPDATE_PERIOD = 295 # read energy consumption only every ... second
 PARAM_HUBBATTERY_UPDATE_PERIOD = 3595 # read battery levels only every ... second
 PARAM_HUBSENSOR_UPDATE_PERIOD = 55
 PARAM_TIMEZONE_CHECK_PERIOD = 604800 # 1 week before retrying timezone updates

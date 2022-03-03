@@ -332,6 +332,11 @@ class MerossApi:
             # so no need to handle it in case
             from .switch import ToggleMixin
             mixin_classes.append(ToggleMixin)
+        # check MP3 before light since (HP110A) LightMixin
+        # need to be overriden a bit for effect list
+        if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
+            from .media_player import Mp3Mixin
+            mixin_classes.append(Mp3Mixin)
         if mc.KEY_LIGHT in digest:
             from .light import LightMixin
             mixin_classes.append(LightMixin)
@@ -341,6 +346,9 @@ class MerossApi:
         if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
             from .sensor import ConsumptionMixin
             mixin_classes.append(ConsumptionMixin)
+        if mc.NS_APPLIANCE_SYSTEM_RUNTIME in ability:
+            from .sensor import RuntimeMixin
+            mixin_classes.append(RuntimeMixin)
         if mc.KEY_SPRAY in digest:
             from .select import SprayMixin
             mixin_classes.append(SprayMixin)
@@ -356,7 +364,6 @@ class MerossApi:
         if mc.KEY_DIFFUSER in digest:
             from .devices.mod100 import DiffuserMixin
             mixin_classes.append(DiffuserMixin)
-
 
         # We must be careful when ordering the mixin and leave MerossDevice as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.

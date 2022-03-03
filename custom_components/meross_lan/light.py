@@ -1,6 +1,4 @@
 from __future__ import annotations
-import logging
-from typing import Union, Tuple
 
 from homeassistant.components.light import (
     DOMAIN as PLATFORM_LIGHT,
@@ -8,6 +6,8 @@ from homeassistant.components.light import (
     ATTR_BRIGHTNESS, ATTR_HS_COLOR, ATTR_COLOR_TEMP,
     ATTR_RGB_COLOR, ATTR_EFFECT,
 )
+
+from .helpers import reverse_lookup
 
 
 # back-forward compatibility hell
@@ -19,10 +19,11 @@ try:
         SUPPORT_EFFECT
     )
 except:
+    # should HA remove any we guess SUPPORT_EFFECT still valued at 4
     SUPPORT_BRIGHTNESS = 0
     SUPPORT_COLOR = 0
     SUPPORT_COLOR_TEMP = 0
-    SUPPORT_EFFECT = 0
+    SUPPORT_EFFECT = 4
 
 try:
     from homeassistant.components.light import (
@@ -49,7 +50,6 @@ from .meross_entity import (
     ENTITY_CATEGORY_CONFIG,
 )
 from .const import DND_ID
-from .helpers import LOGGER
 
 """
     map light Temperature effective range to HA mired(s):
@@ -69,7 +69,7 @@ async def async_unload_entry(hass: object, config_entry: object) -> bool:
     return platform_unload_entry(hass, config_entry, PLATFORM_LIGHT)
 
 
-def _rgb_to_int(rgb: Union[tuple, dict, int]) -> int:  # pylint: disable=unsubscriptable-object
+def _rgb_to_int(rgb) -> int:
     if isinstance(rgb, int):
         return rgb
     elif isinstance(rgb, tuple):
@@ -82,7 +82,7 @@ def _rgb_to_int(rgb: Union[tuple, dict, int]) -> int:  # pylint: disable=unsubsc
         raise ValueError("Invalid value for RGB!")
     return (red << 16) + (green << 8) + blue
 
-def _int_to_rgb(rgb: int) -> Tuple[int, int, int]:
+def _int_to_rgb(rgb: int):
     return (rgb & 16711680) >> 16, (rgb & 65280) >> 8, (rgb & 255)
 
 def _sat_1_100(value) -> int:
@@ -94,31 +94,94 @@ def _sat_1_100(value) -> int:
         return int(value)
 
 
-class MLLight(_MerossToggle, LightEntity):
+class MLLightBase(_MerossToggle, LightEntity):
+    """
+    base 'abstract' class for meross light entities
+    """
+    PLATFORM = PLATFORM_LIGHT
+
+    """
+    internal copy of the actual meross light state
+    """
+    _light: dict
+
+    """
+    if the device supports effects, we'll map these to effect names
+    to interact with HA api
+    """
+    _light_effect_map: dict = dict()
+
+
+    def update_onoff(self, onoff) -> None:
+        self._light[mc.KEY_ONOFF] = onoff
+        self.update_state(STATE_ON if onoff else STATE_OFF)
+
+
+    def _inherited_parse_light(self, payload: dict):
+        """
+        allow inherited implementations to refine light payload parsing
+        """
+        pass
+
+
+    def _parse_light(self, payload: dict):
+        if not payload:
+            return
+        if (self._light != payload) or not self.available:
+            self._light = payload
+
+            onoff = payload.get(mc.KEY_ONOFF)
+            if onoff is not None:
+                self._attr_state = STATE_ON if onoff else STATE_OFF
+
+            self._attr_color_mode = COLOR_MODE_UNKNOWN
+
+            if mc.KEY_LUMINANCE in payload:
+                self._attr_color_mode = COLOR_MODE_BRIGHTNESS
+                self._attr_brightness = payload[mc.KEY_LUMINANCE] * 255 // 100
+            else:
+                self._attr_brightness = None
+
+            if mc.KEY_TEMPERATURE in payload:
+                self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+                self._attr_color_temp = ((100 - payload[mc.KEY_TEMPERATURE]) / 99) * \
+                    (self.max_mireds - self.min_mireds) + self.min_mireds
+            else:
+                self._attr_color_temp = None
+
+            if mc.KEY_RGB in payload:
+                self._attr_color_mode = COLOR_MODE_RGB
+                self._attr_rgb_color = _int_to_rgb(payload[mc.KEY_RGB])
+                self._attr_hs_color = color_util.color_RGB_to_hs(*self._attr_rgb_color)
+            else:
+                self._attr_rgb_color = None
+                self._attr_hs_color = None
+
+            self._inherited_parse_light(payload)
+
+            if self.hass and self.enabled and ((onoff is not None) or (self._attr_state is STATE_ON)):
+                # since the light payload could be processed before the relative 'togglex'
+                # here we'll flush only when the lamp is 'on' to avoid intra-updates to HA states.
+                # when the togglex will arrive, the _light (attributes) will be already set
+                # and HA will save a consistent state (hopefully..we'll see)
+                self.async_write_ha_state()
+
+
+
+class MLLight(MLLightBase):
     """
     light entity for Meross bulbs and any device supporting light api
     (identified from devices carrying 'light' node in SYSTEM_ALL payload)
     """
-    PLATFORM = PLATFORM_LIGHT
-
     _attr_max_mireds = MSLANY_MIRED_MAX
     _attr_min_mireds = MSLANY_MIRED_MIN
-    _attr_supported_features = 0
-    _attr_supported_color_modes = {}
-    _attr_color_mode = None
-    _attr_rgb_color: tuple[int, int, int] | None = None
-    _attr_hs_color: tuple[float, float] | None = None
-    _attr_color_temp = None
-    _attr_brightness = None
-    _attr_effect: str | None = None
 
     _usetogglex = False
 
     def __init__(
         self,
         device: MerossDevice,
-        payload: dict,
-        namespace: str):
+        payload: dict):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
         # with msl120j (fw 3.1.4) I've discovered that any 'light' payload sent will turn on the light
@@ -138,8 +201,6 @@ class MLLight(_MerossToggle, LightEntity):
         elif isinstance(p_togglex, dict):
             self._usetogglex = (p_togglex.get(mc.KEY_CHANNEL) == channel)
 
-        # try to not collide with super.namespace
-        self._namespace_light = namespace
         # in case we're not using togglex fallback to toggle but..the light could
         # be switchable by 'onoff' field in light payload itself..(to be investigated)
         super().__init__(
@@ -158,89 +219,31 @@ class MLLight(_MerossToggle, LightEntity):
 		}
         """
         self._light = dict()
-
         """
         capacity is set in abilities when using mc.NS_APPLIANCE_CONTROL_LIGHT
         """
-        if mc.NS_APPLIANCE_CONTROL_LIGHT in descr.ability:
-            self._capacity = descr.ability[mc.NS_APPLIANCE_CONTROL_LIGHT].get(
-                mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE)
-        else:# we might be using a diffuser light (mod100)
-            self._capacity = None
+        self._capacity = descr.ability[mc.NS_APPLIANCE_CONTROL_LIGHT].get(
+            mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE)
 
         if COLOR_MODE_BRIGHTNESS:
             # new color_mode support from 2021.4.0
             self._attr_supported_color_modes = set()
-            if self._capacity is None:
-                # MOD100 lacks 'capacity' key and looks like supporting rgb
+            if self._capacity & mc.LIGHT_CAPACITY_RGB:
                 self._attr_supported_color_modes.add(COLOR_MODE_RGB)
-            else:
-                if self._capacity & mc.LIGHT_CAPACITY_RGB:
-                    self._attr_supported_color_modes.add(COLOR_MODE_RGB)
-                    self._attr_supported_color_modes.add(COLOR_MODE_HS)
-                if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
-                    self._attr_supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
-                if not self._attr_supported_color_modes:
-                    if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
-                        self._attr_supported_color_modes.add(COLOR_MODE_BRIGHTNESS)
-                    else:
-                        self._attr_supported_color_modes.add(COLOR_MODE_ONOFF)
+                self._attr_supported_color_modes.add(COLOR_MODE_HS)
+            if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
+                self._attr_supported_color_modes.add(COLOR_MODE_COLOR_TEMP)
+            if not self._attr_supported_color_modes:
+                if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+                    self._attr_supported_color_modes.add(COLOR_MODE_BRIGHTNESS)
+                else:
+                    self._attr_supported_color_modes.add(COLOR_MODE_ONOFF)
         elif SUPPORT_BRIGHTNESS:
             # these will be removed in 2021.10
-            if self._capacity is None:
-                # MOD100 lacks 'capacity' key and looks like supporting rgb
-                self._attr_supported_color_modes.add(COLOR_MODE_RGB)
-                self._attr_supported_features = SUPPORT_BRIGHTNESS|SUPPORT_COLOR
-            else:
-                self._attr_supported_features = \
-                    (SUPPORT_BRIGHTNESS if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE else 0)\
-                    | (SUPPORT_COLOR if self._capacity & mc.LIGHT_CAPACITY_RGB else 0)\
-                    | (SUPPORT_COLOR_TEMP if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE else 0)
-
-
-    @property
-    def supported_features(self):
-        return self._attr_supported_features
-
-
-    @property
-    def supported_color_modes(self):
-        return self._attr_supported_color_modes
-
-
-    @property
-    def color_mode(self):
-        return self._attr_color_mode
-
-
-    @property
-    def brightness(self):
-        return self._attr_brightness
-
-
-    @property
-    def rgb_color(self):
-        return self._attr_rgb_color
-
-
-    @property
-    def hs_color(self):
-        return self._attr_hs_color
-
-
-    @property
-    def color_temp(self):
-        return self._attr_color_temp
-
-
-    @property
-    def effect_list(self) -> list[str] | None:
-        return self.device.effect_list
-
-
-    @property
-    def effect(self) -> str | None:
-        return self._attr_effect
+            self._attr_supported_features = \
+                (SUPPORT_BRIGHTNESS if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE else 0)\
+                | (SUPPORT_COLOR if self._capacity & mc.LIGHT_CAPACITY_RGB else 0)\
+                | (SUPPORT_COLOR_TEMP if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE else 0)
 
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -275,14 +278,13 @@ class MLLight(_MerossToggle, LightEntity):
             if mc.KEY_LUMINANCE not in light:
                 light[mc.KEY_LUMINANCE] = 100
 
-        if self._capacity is not None:
-            capacity |= mc.LIGHT_CAPACITY_LUMINANCE
-            light[mc.KEY_CAPACITY] = capacity
+        capacity |= mc.LIGHT_CAPACITY_LUMINANCE
+        light[mc.KEY_CAPACITY] = capacity
 
         if ATTR_EFFECT in kwargs:
-            effect_id = self.device.effect_dict_names.get(kwargs[ATTR_EFFECT], None)
-            if effect_id is not None:
-                light[mc.KEY_EFFECT] = effect_id
+            effect = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
+            if effect is not None:
+                light[mc.KEY_EFFECT] = effect
             else:
                 light.pop(mc.KEY_EFFECT, None)
         else:
@@ -300,18 +302,11 @@ class MLLight(_MerossToggle, LightEntity):
         def _ack_callback():
             self._parse_light(light)
 
-        self.device.request(
-            self._namespace_light,
-            mc.METHOD_SET,
-            {mc.KEY_LIGHT: light},
-            _ack_callback)
+        self.device.request_light(light, _ack_callback)
         #87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
             if self.device.descriptor.firmware.get(mc.KEY_VERSION) == '2.1.2':
-                self.device.request(
-                    self._namespace_light,
-                    mc.METHOD_SET,
-                    {mc.KEY_LIGHT: light})
+                self.device.request_light(light, _ack_callback)
 
 
     async def async_turn_off(self, **kwargs) -> None:
@@ -322,91 +317,44 @@ class MLLight(_MerossToggle, LightEntity):
             def _ack_callback():
                 self.update_onoff(0)
 
-            self.device.request(
-                self._namespace_light,
-                mc.METHOD_SET,
-                {mc.KEY_LIGHT: { mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}},
+            self.device.request_light(
+                { mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0 },
                 _ack_callback)
 
 
-    def update_onoff(self, onoff) -> None:
-        self._light[mc.KEY_ONOFF] = onoff
-        self.update_state(STATE_ON if onoff else STATE_OFF)
-
-
-    def update_effect_list(self):
+    def update_effect_map(self, light_effect_map: dict):
         """
         the list of available effects was changed (context at device level)
         so we'll just tell HA to update the state
         """
-        if self.device.effect_list:
+        self._light_effect_map = light_effect_map
+        if light_effect_map:
             self._attr_supported_features = self._attr_supported_features | SUPPORT_EFFECT
+            self._attr_effect_list = list(light_effect_map.values())
         else:
             self._attr_supported_features = self._attr_supported_features & ~SUPPORT_EFFECT
+            self._attr_effect_list = None
         if self.hass and self.enabled:
             self.async_write_ha_state()
 
 
-    def _parse_light(self, payload: dict) -> None:
-        if not payload:
-            return
-        if (self._light != payload) or not self.available:
-            self._light = payload
-
-            onoff = payload.get(mc.KEY_ONOFF)
-            if onoff is not None:
-                self._attr_state = STATE_ON if onoff else STATE_OFF
-
-            self._attr_color_mode = COLOR_MODE_UNKNOWN
-
-            if mc.KEY_LUMINANCE in payload:
-                self._attr_color_mode = COLOR_MODE_BRIGHTNESS
-                self._attr_brightness = payload[mc.KEY_LUMINANCE] * 255 // 100
-            else:
-                self._attr_brightness = None
-
-            if mc.KEY_TEMPERATURE in payload:
-                self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-                self._attr_color_temp = ((100 - payload[mc.KEY_TEMPERATURE]) / 99) * \
-                    (self.max_mireds - self.min_mireds) + self.min_mireds
-            else:
-                self._attr_color_temp = None
-
-            if mc.KEY_RGB in payload:
+    def _inherited_parse_light(self, payload: dict):
+        if mc.KEY_CAPACITY in payload:
+            # despite of previous parsing, use capacity
+            # value to effectively set this light color mode
+            # this key is not present for instance in mod100 lights
+            capacity = payload[mc.KEY_CAPACITY]
+            if capacity & mc.LIGHT_CAPACITY_RGB:
                 self._attr_color_mode = COLOR_MODE_RGB
-                self._attr_rgb_color = _int_to_rgb(payload[mc.KEY_RGB])
-                self._attr_hs_color = color_util.color_RGB_to_hs(*self._attr_rgb_color)
-            else:
-                self._attr_rgb_color = None
-                self._attr_hs_color = None
+            elif capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
+                self._attr_color_mode = COLOR_MODE_COLOR_TEMP
+            elif capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+                self._attr_color_mode = COLOR_MODE_BRIGHTNESS
 
-            if mc.KEY_CAPACITY in payload:
-                # despite of previous parsing, use capacity
-                # value to effectively set this light color mode
-                # this key is not present for instance in mod100 lights
-                capacity = payload[mc.KEY_CAPACITY]
-                if capacity & mc.LIGHT_CAPACITY_RGB:
-                    self._attr_color_mode = COLOR_MODE_RGB
-                elif capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
-                    self._attr_color_mode = COLOR_MODE_COLOR_TEMP
-                elif capacity & mc.LIGHT_CAPACITY_LUMINANCE:
-                    self._attr_color_mode = COLOR_MODE_BRIGHTNESS
-
-            if mc.KEY_MODE in payload:
-                # this key appears in mod100 payloads..what is it for?
-                pass
-
-            if mc.KEY_EFFECT in payload:
-                self._attr_effect = self.device.effect_dict_ids.get(payload[mc.KEY_EFFECT], None)
-            else:
-                self._attr_effect = None
-
-            if self.hass and self.enabled and ((onoff is not None) or (self._attr_state is STATE_ON)):
-                # since the light payload could be processed before the relative 'togglex'
-                # here we'll flush only when the lamp is 'on' to avoid intra-updates to HA states.
-                # when the togglex will arrive, the _light (attributes) will be already set
-                # and HA will save a consistent state (hopefully..we'll see)
-                self.async_write_ha_state()
+        if mc.KEY_EFFECT in payload:
+            self._attr_effect = self._light_effect_map.get(payload[mc.KEY_EFFECT])
+        else:
+            self._attr_effect = None
 
 
 
@@ -474,10 +422,7 @@ class LightMixin:
     in order to provide NS_APPLIANCE_CONTROL_LIGHT and
     NS_APPLIANCE_CONTROL_LIGHT_EFFECT capability
     """
-
-    effect_dict_ids: dict[int, str] = dict()
-    effect_dict_names: dict[str, int] = dict()
-    effect_list: list[str] = list()
+    light_effect_map: dict[object, str] = dict() # map effect.Id to effect.Name
 
 
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry) -> None:
@@ -488,7 +433,7 @@ class LightMixin:
 
 
     def _init_light(self, payload: dict):
-        MLLight(self, payload, mc.NS_APPLIANCE_CONTROL_LIGHT)
+        MLLight(self, payload)
 
 
     def _handle_Appliance_Control_Light(self,
@@ -498,22 +443,23 @@ class LightMixin:
 
     def _handle_Appliance_Control_Light_Effect(self,
     namespace: str, method: str, payload: dict, header: dict):
-        effect_dict_ids = dict()
+        light_effect_map = dict()
         for p_effect in payload.get(mc.KEY_EFFECT, []):
-            effect_dict_ids[int(p_effect[mc.KEY_ID_])] = p_effect[mc.KEY_EFFECTNAME]
-        if effect_dict_ids != self.effect_dict_ids:
-            effect_dict_names = dict()
-            effect_list = list()
-            for _id, _name in effect_dict_ids.items():
-                effect_list.append(_name)
-                effect_dict_names[_name] = _id
-            self.effect_dict_ids = effect_dict_ids
-            self.effect_dict_names = effect_dict_names
-            self.effect_list = effect_list
-            for entity in self.entities:
+            light_effect_map[p_effect[mc.KEY_ID_]] = p_effect[mc.KEY_EFFECTNAME]
+        if light_effect_map != self.light_effect_map:
+            self.light_effect_map = light_effect_map
+            for entity in self.entities.values():
                 if isinstance(entity, MLLight):
-                    entity.update_effect_list()
+                    entity.update_effect_map(light_effect_map)
 
 
     def _parse_light(self, payload: dict):
         self._parse__generic(mc.KEY_LIGHT, payload)
+
+
+    def request_light(self, payload, callback):
+        self.request(
+            mc.NS_APPLIANCE_CONTROL_LIGHT,
+            mc.METHOD_SET,
+            { mc.KEY_LIGHT: payload },
+            callback)

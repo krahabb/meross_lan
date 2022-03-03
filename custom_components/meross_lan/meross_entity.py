@@ -19,8 +19,10 @@ from homeassistant.const import (
 try:# 2022.2 new symbols
     from homeassistant.helpers.entity import EntityCategory
     ENTITY_CATEGORY_CONFIG = EntityCategory.CONFIG
+    ENTITY_CATEGORY_DIAGNOSTIC = EntityCategory.DIAGNOSTIC
 except:
     ENTITY_CATEGORY_CONFIG = 'config'
+    ENTITY_CATEGORY_DIAGNOSTIC = 'diagnostic'
 
 
 from .merossclient import const as mc, get_namespacekey, get_productnameuuid
