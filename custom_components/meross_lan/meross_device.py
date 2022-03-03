@@ -98,6 +98,9 @@ MAP_CONF_PROTOCOL = {
 
 class MerossDevice:
 
+    entity_dnd = MerossFakeEntity
+
+
     def __init__(
         self,
         api: object,
@@ -113,7 +116,6 @@ class MerossDevice:
         self._online = False
         self.needsave = False # while parsing ns.ALL code signals to persist ConfigEntry
         self._retry_period = 0 # used to try reconnect when falling offline
-        self.entity_dnd = MerossFakeEntity
         self.device_timestamp: int = 0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
