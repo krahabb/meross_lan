@@ -44,12 +44,14 @@ TRICK = False
 
 class MerossDeviceHub(MerossDevice):
 
+    _lastupdate_battery = 0
+    _lastupdate_sensor = None
+    _lastupdate_mts100 = None
+
+
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry) -> None:
         super().__init__(api, descriptor, entry)
         self.subdevices: Dict[any, MerossSubDevice] = {}
-        self._lastupdate_battery = 0
-        self._lastupdate_sensor = None
-        self._lastupdate_mts100 = None
         """
             invoke platform(s) async_setup_entry
             in order to be able to eventually add entities when they 'pop up'
