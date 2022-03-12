@@ -13,6 +13,8 @@ from homeassistant.components.cover import (
 )
 from homeassistant.core import HassJob, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
+from homeassistant.components.recorder import history
+from homeassistant.util.dt import utcnow
 
 from .helpers import LOGGER
 
@@ -83,6 +85,22 @@ class MLGarage(_MerossEntity, CoverEntity):
     @property
     def is_closed(self):
         return self._attr_state == STATE_CLOSED
+
+
+    async def async_added_to_hass(self) -> None:
+        """
+        we're trying to recover the '_transition_duration' from previous state
+        """
+        last_state = history.get_state(self.hass, utcnow(), self.entity_id)
+        if last_state:
+            _attr = last_state.attributes
+            if EXTRA_ATTR_TRANSITION_DURATION in _attr:
+                # restore anyway besides PARAM_RESTORESTATE_TIMEOUT
+                # since this is no harm and unlikely to change
+                # better than defaulting to a pseudo-random value
+                self._transition_duration = _attr[EXTRA_ATTR_TRANSITION_DURATION]
+                self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = self._transition_duration
+        #await super().async_added_to_hass() super is empty..dont call
 
 
     async def async_open_cover(self, **kwargs) -> None:
@@ -444,8 +462,6 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
         we're trying to recover the 'timed' position from previous state
         if it happens it wasn't updated too far in time
         """
-        from homeassistant.components.recorder import history
-        from homeassistant.util.dt import utcnow
         _now = utcnow()
         last_state = history.get_state(self.hass, _now, self.entity_id)
         if last_state:
