@@ -7,7 +7,7 @@ from homeassistant.components.cover import (
     DOMAIN as PLATFORM_COVER,
     CoverEntity,
     DEVICE_CLASS_GARAGE, DEVICE_CLASS_SHUTTER,
-    ATTR_POSITION,
+    ATTR_POSITION, ATTR_CURRENT_POSITION,
     SUPPORT_OPEN, SUPPORT_CLOSE, SUPPORT_SET_POSITION, SUPPORT_STOP,
     STATE_OPEN, STATE_OPENING, STATE_CLOSED, STATE_CLOSING
 )
@@ -23,6 +23,7 @@ from .switch import MLConfigSwitch
 from .const import (
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
+    PARAM_RESTORESTATE_TIMEOUT,
 )
 
 POSITION_FULLY_CLOSED = 0
@@ -436,6 +437,33 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
     @property
     def is_position_native(self) -> bool:
         return self._position_timed is None
+
+
+    async def async_added_to_hass(self) -> None:
+        """
+        we're trying to recover the 'timed' position from previous state
+        if it happens it wasn't updated too far in time
+        """
+        from homeassistant.components.recorder import history
+        from homeassistant.util.dt import utcnow
+        _now = utcnow()
+        last_state = history.get_state(self.hass, _now, self.entity_id)
+        if last_state:
+            _attr = last_state.attributes
+            if EXTRA_ATTR_DURATION_OPEN in _attr:
+                # restore anyway besides PARAM_RESTORESTATE_TIMEOUT
+                # since this is no harm and unlikely to change
+                # better than defaulting to a pseudo-random (30000) value
+                self._signalOpen = _attr[EXTRA_ATTR_DURATION_OPEN]
+                self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
+            if EXTRA_ATTR_DURATION_CLOSE in _attr:
+                self._signalClose = _attr[EXTRA_ATTR_DURATION_CLOSE]
+                self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
+            if ATTR_CURRENT_POSITION in _attr:
+                delta = _now.timestamp() - (last_state.last_updated or last_state.last_changed).timestamp()
+                if delta < PARAM_RESTORESTATE_TIMEOUT:
+                    self._position_timed = _attr[ATTR_CURRENT_POSITION]
+        #await super().async_added_to_hass() super is empty..dont call
 
 
     async def async_open_cover(self, **kwargs) -> None:
