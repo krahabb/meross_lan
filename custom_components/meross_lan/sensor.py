@@ -7,6 +7,7 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.components.sensor import (
     DOMAIN as PLATFORM_SENSOR,
 )
+from homeassistant.util.dt import now
 
 try:
     from homeassistant.components.sensor import SensorEntity
@@ -210,9 +211,9 @@ class ConsumptionMixin:
         days_len = len(days)
         if days_len < 1:
             if STATE_CLASS_TOTAL_INCREASING == STATE_CLASS_MEASUREMENT:
-                self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(0)
+                self._sensor_energy._attr_last_reset = now()
             self._sensor_energy.update_state(0)
-            return True
+            return
         # we'll look through the device array values to see
         # data timestamped (in device time) after last midnight
         # since we usually reset this around midnight localtime
@@ -234,7 +235,7 @@ class ConsumptionMixin:
         days = sorted(days, key=get_timestamp, reverse=True)
         day_last:dict = days[0]
         if day_last.get(mc.KEY_TIME) < timestamp_lastreset:
-            return True
+            return
         if days_len > 1:
             timestamp_lastreset = days[1].get(mc.KEY_TIME)
         if self._lastreset_energy != timestamp_lastreset:
