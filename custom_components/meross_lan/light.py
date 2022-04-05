@@ -204,7 +204,7 @@ class MLLight(MLLightBase):
         # in case we're not using togglex fallback to toggle but..the light could
         # be switchable by 'onoff' field in light payload itself..(to be investigated)
         super().__init__(
-            device, channel, None, None,
+            device, channel, None, None, None,
             mc.NS_APPLIANCE_CONTROL_TOGGLEX if self._usetogglex else None)
         """
         self._light = {
@@ -369,7 +369,7 @@ class MLDNDLightEntity(_MerossToggle, LightEntity):
 
 
     def __init__(self, device: MerossDevice):
-        super().__init__(device, None, DND_ID, mc.KEY_DNDMODE, None)
+        super().__init__(device, None, DND_ID, mc.KEY_DNDMODE, None, None)
 
 
     @property

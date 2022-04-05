@@ -9,8 +9,6 @@
 """
 from __future__ import annotations
 
-from functools import partial
-
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers import device_registry as dr
 from homeassistant.const import (
@@ -198,8 +196,10 @@ class _MerossToggle(_MerossEntity):
         channel: object,
         entitykey: str,
         device_class: str,
-        namespace: str):
-        super().__init__(device, channel, entitykey, device_class)
+        subdevice: 'MerossSubDevice',
+        namespace: str,
+        ):
+        super().__init__(device, channel, entitykey, device_class, subdevice)
         self.namespace = namespace
         self.key = None if namespace is None else get_namespacekey(namespace)
 

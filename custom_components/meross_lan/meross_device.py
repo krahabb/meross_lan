@@ -69,6 +69,7 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_HUB_EXCEPTION, # disconnects
     mc.NS_APPLIANCE_HUB_REPORT, # disconnects
     mc.NS_APPLIANCE_HUB_SUBDEVICELIST, # disconnects
+    mc.NS_APPLIANCE_HUB_PAIRSUBDEV, # disconnects
     mc.NS_APPLIANCE_MCU_UPGRADE, # disconnects
     mc.NS_APPLIANCE_MCU_HP110_PREVIEW, # disconnects
     mc.NS_APPLIANCE_MCU_FIRMWARE, # disconnects

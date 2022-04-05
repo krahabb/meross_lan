@@ -328,7 +328,7 @@ class MLGarageConfigSwitch(MLConfigSwitch):
 
     def __init__(self, device, key: str):
         self._key = key
-        super().__init__(device, None, f"config_{key}", None, None)
+        super().__init__(device, None, f"config_{key}", None, None, None)
 
 
     @property
@@ -467,18 +467,13 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
         if last_state:
             _attr = last_state.attributes
             if EXTRA_ATTR_DURATION_OPEN in _attr:
-                # restore anyway besides PARAM_RESTORESTATE_TIMEOUT
-                # since this is no harm and unlikely to change
-                # better than defaulting to a pseudo-random (30000) value
                 self._signalOpen = _attr[EXTRA_ATTR_DURATION_OPEN]
                 self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
             if EXTRA_ATTR_DURATION_CLOSE in _attr:
                 self._signalClose = _attr[EXTRA_ATTR_DURATION_CLOSE]
                 self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
             if ATTR_CURRENT_POSITION in _attr:
-                delta = _now.timestamp() - (last_state.last_updated or last_state.last_changed).timestamp()
-                if delta < PARAM_RESTORESTATE_TIMEOUT:
-                    self._position_timed = _attr[ATTR_CURRENT_POSITION]
+                self._position_timed = _attr[ATTR_CURRENT_POSITION]
         #await super().async_added_to_hass() super is empty..dont call
 
 

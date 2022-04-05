@@ -3,8 +3,14 @@ from __future__ import annotations
 from homeassistant.components.switch import (
     DOMAIN as PLATFORM_SWITCH,
     SwitchEntity,
-    DEVICE_CLASS_OUTLET
 )
+try:
+    from homeassistant.components.switch import SwitchDeviceClass
+    DEVICE_CLASS_OUTLET = SwitchDeviceClass.OUTLET
+    DEVICE_CLASS_SWITCH = SwitchDeviceClass.SWITCH
+except:
+    from homeassistant.components.switch import DEVICE_CLASS_OUTLET, DEVICE_CLASS_SWITCH
+
 
 from .merossclient import const as mc  # mEROSS cONST
 from .meross_entity import (
@@ -13,7 +19,6 @@ from .meross_entity import (
     STATE_OFF, STATE_ON,
     ENTITY_CATEGORY_CONFIG,
 )
-from .const import DND_ID
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -31,8 +36,49 @@ class MLSwitch(_MerossToggle, SwitchEntity):
     PLATFORM = PLATFORM_SWITCH
 
 
-    def __init__(self, device: 'MerossDevice', channel: object, namespace: str):
-        super().__init__(device, channel, None, DEVICE_CLASS_OUTLET, namespace)
+    """def __init__(
+        self,
+        device: 'MerossDevice',
+        channel: object,
+        entitykey: str,
+        device_class: str,
+        subdevice: 'MerossSubDevice',
+        namespace: str
+        ):
+        super().__init__(device, channel, entitykey, device_class, namespace)
+
+    #def __init__(self, device: 'MerossDevice', channel: object, namespace: str):
+    #    super().__init__(device, channel, None, DEVICE_CLASS_OUTLET, namespace)
+    """
+
+    @staticmethod
+    def build_for_device(device: "MerossDevice", channel: object, namespace: str):
+        return MLSwitch(device, channel, None, DEVICE_CLASS_OUTLET, None, namespace)
+
+
+
+class MLHubSwitch(MLSwitch):
+
+    def __init__(
+        self,
+        subdevice: 'MerossSubDevice'
+        ):
+        super().__init__(subdevice.hub, subdevice.id, None, DEVICE_CLASS_SWITCH, subdevice, mc.NS_APPLIANCE_HUB_TOGGLEX)
+
+
+    def request_onoff(self, onoff):
+        # this is the meross executor code
+        # override for switches not implemented
+        # by a toggle like api
+        def _ack_callback():
+            self.update_onoff(onoff)
+
+        self.device.request(
+            mc.NS_APPLIANCE_HUB_TOGGLEX,
+            mc.METHOD_SET,
+            {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.channel, mc.KEY_ONOFF: onoff}]},
+            _ack_callback)
+
 
 
 class ToggleXMixin:
@@ -47,14 +93,14 @@ class ToggleXMixin:
             for t in togglex:
                 channel = t.get(mc.KEY_CHANNEL)
                 if channel not in self.entities:
-                    MLSwitch(
+                    MLSwitch.build_for_device(
                         self,
                         channel,
                         mc.NS_APPLIANCE_CONTROL_TOGGLEX)
         elif isinstance(togglex, dict):
             channel = togglex.get(mc.KEY_CHANNEL)
             if channel not in self.entities:
-                MLSwitch(
+                MLSwitch.build_for_device(
                     self,
                     channel,
                     mc.NS_APPLIANCE_CONTROL_TOGGLEX)
@@ -64,7 +110,7 @@ class ToggleXMixin:
         # edit: I guess ToggleX firmwares and on already support
         # system.all.digest status broadcast
         if not self.entities:
-            MLSwitch(self, 0, mc.NS_APPLIANCE_CONTROL_TOGGLEX)
+            MLSwitch.build_for_device(self, 0, mc.NS_APPLIANCE_CONTROL_TOGGLEX)
 
 
     """
@@ -94,13 +140,13 @@ class ToggleMixin:
         if p_control:
             p_toggle = p_control.get(mc.KEY_TOGGLE)
             if isinstance(p_toggle, dict):
-                MLSwitch(
+                MLSwitch.build_for_device(
                     self,
                     p_toggle.get(mc.KEY_CHANNEL, 0),
                     mc.NS_APPLIANCE_CONTROL_TOGGLE)
 
         if not self.entities:
-            MLSwitch(self, 0, mc.NS_APPLIANCE_CONTROL_TOGGLE)
+            MLSwitch.build_for_device(self, 0, mc.NS_APPLIANCE_CONTROL_TOGGLE)
 
 
     def _handle_Appliance_Control_Toggle(self,
@@ -118,7 +164,7 @@ class ToggleMixin:
 
 
 
-class MLConfigSwitch(_MerossToggle, SwitchEntity):
+class MLConfigSwitch(MLSwitch):
     """
     configuration switch
     """
