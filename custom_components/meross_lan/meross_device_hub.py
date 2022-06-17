@@ -85,20 +85,18 @@ class MerossDeviceHub(MerossDevice):
 
     def _handle_Appliance_Hub_Sensor_All(self,
     namespace: str, method: str, payload: dict, header: dict):
-        self._lastupdate_sensor = self.lastupdate
-        self._subdevice_parse(payload, mc.KEY_ALL)
-        self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
+        if self._subdevice_parse(payload, mc.KEY_ALL):
+            self._lastupdate_sensor = self.lastupdate
+            self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
 
 
     def _handle_Appliance_Hub_Sensor_TempHum(self,
     namespace: str, method: str, payload: dict, header: dict):
-        self._lastupdate_sensor = self.lastupdate
         self._subdevice_parse(payload, mc.KEY_TEMPHUM)
 
 
     def _handle_Appliance_Hub_Sensor_Smoke(self,
     namespace: str, method: str, payload: dict, header: dict):
-        self._lastupdate_sensor = self.lastupdate
         self._subdevice_parse(payload, mc.KEY_SMOKEALARM)
 
 
@@ -112,9 +110,9 @@ class MerossDeviceHub(MerossDevice):
 
     def _handle_Appliance_Hub_Mts100_All(self,
     namespace: str, method: str, payload: dict, header: dict):
-        self._lastupdate_mts100 = self.lastupdate
-        self._subdevice_parse(payload, mc.KEY_ALL)
-        self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
+        if self._subdevice_parse(payload, mc.KEY_ALL):
+            self._lastupdate_mts100 = self.lastupdate
+            self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
 
 
     def _handle_Appliance_Hub_Mts100_Mode(self,
@@ -185,7 +183,8 @@ class MerossDeviceHub(MerossDevice):
         return deviceclass(self, p_subdevice)
 
 
-    def _subdevice_parse(self, payload: dict, key: str) -> None:
+    def _subdevice_parse(self, payload: dict, key: str) -> int:
+        count = 0
         if isinstance(p_subdevices := payload.get(key), list):
             for p_subdevice in p_subdevices:
                 p_id = p_subdevice.get(mc.KEY_ID)
@@ -201,7 +200,8 @@ class MerossDeviceHub(MerossDevice):
                     method = getattr(subdevice, f"_parse_{key}", None)
                     if method is not None:
                         method(p_subdevice)
-
+                        count += 1
+        return count
 
     def _parse_hub(self, p_hub: dict) -> None:
         """
