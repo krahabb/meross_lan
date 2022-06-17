@@ -13,10 +13,8 @@ from homeassistant.components.cover import (
 )
 from homeassistant.core import HassJob, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
-from homeassistant.components.recorder import history
-from homeassistant.util.dt import utcnow
 
-from .helpers import LOGGER
+from .helpers import LOGGER, get_entity_last_state
 
 from .merossclient import const as mc
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
@@ -91,15 +89,18 @@ class MLGarage(_MerossEntity, CoverEntity):
         """
         we're trying to recover the '_transition_duration' from previous state
         """
-        last_state = history.get_state(self.hass, utcnow(), self.entity_id)
-        if last_state:
-            _attr = last_state.attributes
-            if EXTRA_ATTR_TRANSITION_DURATION in _attr:
-                # restore anyway besides PARAM_RESTORESTATE_TIMEOUT
-                # since this is no harm and unlikely to change
-                # better than defaulting to a pseudo-random value
-                self._transition_duration = _attr[EXTRA_ATTR_TRANSITION_DURATION]
-                self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = self._transition_duration
+        try:
+            if last_state := await get_entity_last_state(self.hass, self.entity_id):
+                _attr = last_state.attributes
+                if EXTRA_ATTR_TRANSITION_DURATION in _attr:
+                    # restore anyway besides PARAM_RESTORESTATE_TIMEOUT
+                    # since this is no harm and unlikely to change
+                    # better than defaulting to a pseudo-random value
+                    self._transition_duration = _attr[EXTRA_ATTR_TRANSITION_DURATION]
+                    self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = self._transition_duration
+        except Exception as e:
+            self.device.log(WARNING, 0, "MLGarage(%s): error(%s) while trying to restore previous state", self.name, str(e))
+
         #await super().async_added_to_hass() super is empty..dont call
 
 
@@ -462,18 +463,20 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
         we're trying to recover the 'timed' position from previous state
         if it happens it wasn't updated too far in time
         """
-        _now = utcnow()
-        last_state = history.get_state(self.hass, _now, self.entity_id)
-        if last_state:
-            _attr = last_state.attributes
-            if EXTRA_ATTR_DURATION_OPEN in _attr:
-                self._signalOpen = _attr[EXTRA_ATTR_DURATION_OPEN]
-                self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
-            if EXTRA_ATTR_DURATION_CLOSE in _attr:
-                self._signalClose = _attr[EXTRA_ATTR_DURATION_CLOSE]
-                self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
-            if ATTR_CURRENT_POSITION in _attr:
-                self._position_timed = _attr[ATTR_CURRENT_POSITION]
+        try:
+            if last_state := await get_entity_last_state(self.hass, self.entity_id):
+                _attr = last_state.attributes
+                if EXTRA_ATTR_DURATION_OPEN in _attr:
+                    self._signalOpen = _attr[EXTRA_ATTR_DURATION_OPEN]
+                    self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
+                if EXTRA_ATTR_DURATION_CLOSE in _attr:
+                    self._signalClose = _attr[EXTRA_ATTR_DURATION_CLOSE]
+                    self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
+                if ATTR_CURRENT_POSITION in _attr:
+                    self._position_timed = _attr[ATTR_CURRENT_POSITION]
+        except Exception as e:
+            self.device.log(WARNING, 0, "MLRollerShutter(%s): error(%s) while trying to restore previous state", self.name, str(e))
+
         #await super().async_added_to_hass() super is empty..dont call
 
 
