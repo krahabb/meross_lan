@@ -28,7 +28,7 @@
             },
             "device": {
                 "title": "Meross LAN",
-                "description": "Configurar un dispositivo meross",
+                "description": "Configurar un dispositivo meross\nTipo: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Dirección IP del dispositivo",
                     "keymode": "Modo de selección de clave",
@@ -68,7 +68,7 @@
             },
             "device": {
                 "title": "Cónfiguración de dispositivo",
-                "description": "Tipo: {device_type}\nUUID: {device_id}\nDirección IP: {host}\n\n{payload}",
+                "description": "Tipo: {device_type}\nUUID: {device_id}\nDirección IP: {host}",
                 "data": {
                     "host": "Dirección IP del dispositivo",
                     "keymode": "Modo de selección de clave",

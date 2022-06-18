@@ -28,10 +28,10 @@
             },
             "device": {
                 "title": "Meross LAN",
-                "description": "Meross デバイスのセットアップ",
+                "description": "Meross デバイスのセットアップ\nタイップ: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "デバイスのホストアドレス",
-                    "keymode": "Key selection mode",
+                    "keymode": "キー selection mode",
                     "key": "デバイスキー"
                 }
             },
@@ -45,7 +45,7 @@
             },
             "finalize": {
                 "title": "デバイス設定",
-                "description": "Type: {device_type}\nUUID: {device_id}",
+                "description": "タイップ: {device_type}\nUUID: {device_id}",
                 "data": {}
             }
         }
@@ -68,7 +68,7 @@
             },
             "device": {
                 "title": "デバイス設定",
-                "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
+                "description": "タイップ: {device_type}\nUUID: {device_id}\nホストアドレス: {host}",
                 "data": {
                     "host": "デバイスのホストアドレス",
                     "keymode": "Key selection mode",

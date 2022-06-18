@@ -100,6 +100,10 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
     _key: str = None
     _cloud_key: str = None
     _keyerror: bool = False
+    _placeholders = {
+        CONF_DEVICE_TYPE: "",
+        CONF_DEVICE_ID: "",
+        }
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
@@ -181,7 +185,11 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_KEYMODE, description={ DESCR: _keymode }): vol.In(CONF_KEYMODE_OPTIONS),
             vol.Optional(CONF_KEY, description={ DESCR: self._key}): str,
             }
-        return self.async_show_form(step_id="device", data_schema=vol.Schema(config_schema), errors=errors)
+        return self.async_show_form(
+            step_id="device",
+            data_schema=vol.Schema(config_schema),
+            errors=errors,
+            description_placeholders=self._placeholders)
 
 
     async def async_step_discovery(self, discovery_info: DiscoveryInfoType):
@@ -270,21 +278,24 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
 
 
     async def async_step_finalize(self, user_input=None):
-        data = self._discovery_info
         if user_input is None:
-            config_schema = {}
             return self.async_show_form(
                 step_id="finalize",
-                data_schema=vol.Schema(config_schema),
+                data_schema=vol.Schema({}),
                 description_placeholders=self._placeholders
             )
-        return self.async_create_entry(title=self._descriptor.type + " " + self._device_id, data=data)
+        return self.async_create_entry(title=self._descriptor.type + " " + self._device_id, data=self._discovery_info)
 
 
     async def _async_set_info(self, discovery_info: DiscoveryInfoType) -> None:
         self._discovery_info = discovery_info
         self._descriptor = MerossDeviceDescriptor(discovery_info.get(CONF_PAYLOAD, {}))
         self._device_id = self._descriptor.uuid
+        self._placeholders = {
+            CONF_DEVICE_TYPE: get_productnametype(self._descriptor.type),
+            CONF_DEVICE_ID: self._device_id,
+            }
+        self.context["title_placeholders"] = self._placeholders
         await self.async_set_unique_id(self._device_id)
         self._abort_if_unique_id_configured()
 
@@ -297,13 +308,6 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
         else:
             discovery_info.pop(CONF_CLOUD_KEY, None)
 
-        self._placeholders = {
-            CONF_DEVICE_TYPE: get_productnametype(self._descriptor.type),
-            CONF_DEVICE_ID: self._device_id,
-            CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
-            }
-
-        self.context["title_placeholders"] = self._placeholders
         return
 
 
@@ -477,8 +481,7 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
             description_placeholders={
                 CONF_DEVICE_TYPE: get_productnametype(device.descriptor.type) if device is not None else "",
                 CONF_DEVICE_ID: self.device_id,
-                CONF_HOST: self._host or "MQTT",
-                CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
+                CONF_HOST: self._host or "MQTT"
             },
             errors=errors
         )
