@@ -182,6 +182,8 @@ class MtsSetPointNumber(MLConfigNumber):
     Helper entity to configure MTS (thermostats) setpoints
     AKA: Heat(comfort) - Cool(sleep) - Eco(away)
     """
+    multiplier = 10
+
     PRESET_TO_ICON_MAP = {
         PRESET_COMFORT: 'mdi:sun-thermometer',
         PRESET_SLEEP: 'mdi:power-sleep',
@@ -202,18 +204,22 @@ class MtsSetPointNumber(MLConfigNumber):
         )
 
     @property
-    def name(self) -> str:
+    def name(self):
         return f"{self._climate.name} - {self._preset_mode} {DEVICE_CLASS_TEMPERATURE}"
 
     @property
-    def step(self) -> float:
-        return self._climate._attr_target_temperature_step
+    def native_max_value(self):
+        return self._climate._attr_max_temp
 
     @property
-    def min_value(self) -> float:
+    def native_min_value(self):
         return self._climate._attr_min_temp
 
     @property
-    def max_value(self) -> float:
-        return self._climate._attr_max_temp
+    def native_step(self):
+        return self._climate._attr_target_temperature_step
+
+    @property
+    def native_unit_of_measurement(self):
+        return TEMP_CELSIUS
 

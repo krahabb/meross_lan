@@ -384,7 +384,7 @@ class MerossSubDevice:
                 continue
             number:MLHubAdjustNumber
             if (number := getattr(self, f"number_adjust_{p_key}", None)) is not None:
-                number.update_value(p_value)
+                number.update_native_value(p_value)
 
 
     def _parse_togglex(self, p_togglex: dict) -> None:
@@ -489,11 +489,11 @@ class MTS100SubDevice(MerossSubDevice):
         climate.update_modes()
 
         if isinstance(_t := p_temperature.get(mc.KEY_COMFORT), int):
-            climate.number_comfort_temperature.update_state(_t / 10)
+            climate.number_comfort_temperature.update_native_value(_t)
         if isinstance(_t := p_temperature.get(mc.KEY_ECONOMY), int):
-            climate.number_sleep_temperature.update_state(_t / 10)
+            climate.number_sleep_temperature.update_native_value(_t)
         if isinstance(_t := p_temperature.get(mc.KEY_AWAY), int):
-            climate.number_away_temperature.update_state(_t / 10)
+            climate.number_away_temperature.update_native_value(_t)
 
         if mc.KEY_OPENWINDOW in p_temperature:
             self.binary_sensor_window.update_onoff(p_temperature[mc.KEY_OPENWINDOW])

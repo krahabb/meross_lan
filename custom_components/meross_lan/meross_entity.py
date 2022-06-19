@@ -123,11 +123,6 @@ class _MerossEntity:
     def device_class(self) -> str | None:
         return self._attr_device_class
 
-    """ moved to sensor to comply with HA development
-    @property
-    def unit_of_measurement(self) -> str | None:
-        return self._attr_unit_of_measurement
-    """
 
     @property
     def should_poll(self) -> bool:
@@ -143,11 +138,12 @@ class _MerossEntity:
     def assumed_state(self) -> bool:
         return False
 
-
+    """
+    avoid overriding state since it is mostly declared final in HA platforms
     @property
     def state(self) -> StateType:
         return self._attr_state
-
+    """
 
     async def async_added_to_hass(self) -> None:
         return

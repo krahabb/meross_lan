@@ -11,6 +11,9 @@ from homeassistant.components.cover import (
     SUPPORT_OPEN, SUPPORT_CLOSE, SUPPORT_SET_POSITION, SUPPORT_STOP,
     STATE_OPEN, STATE_OPENING, STATE_CLOSED, STATE_CLOSING
 )
+from homeassistant.const import (
+    TIME_SECONDS,
+)
 from homeassistant.core import HassJob, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 
@@ -295,9 +298,11 @@ class MLGarageConfigNumber(MLConfigNumber):
 
     # these are ok for 2 of the 3 config numbers
     # customize those when instantiating
-    _attr_min_value = 1
-    _attr_max_value = 60
-    _attr_step = 1
+    _attr_native_max_value = 60
+    _attr_native_min_value = 1
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = TIME_SECONDS
+
 
     def __init__(self, device, key: str):
         self._key = key
@@ -309,7 +314,7 @@ class MLGarageConfigNumber(MLConfigNumber):
         return f"{super().name} - {self._key}"
 
 
-    async def async_set_value(self, value: float) -> None:
+    async def async_set_native_value(self, value: float):
         config = dict(self.device.garageDoor_config)
         config[self._key] = int(value * self.multiplier)
 
@@ -360,8 +365,8 @@ class GarageMixin:
         if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in descriptor.ability:
             self.garageDoor_config =  {}
             self.config_signalDuration = MLGarageConfigNumber(self, mc.KEY_SIGNALDURATION)
-            self.config_signalDuration._attr_step = 0.1 # 100 msec step in UI
-            self.config_signalDuration._attr_min_value = 0.1 # 100 msec minimum duration
+            self.config_signalDuration._attr_native_step = 0.1 # 100 msec step in UI
+            self.config_signalDuration._attr_native_min_value = 0.1 # 100 msec minimum duration
             self.config_buzzerEnable = MLGarageConfigSwitch(self, mc.KEY_BUZZERENABLE)
             self.config_doorOpenDuration = MLGarageConfigNumber(self, mc.KEY_DOOROPENDURATION)
             self.config_doorCloseDuration = MLGarageConfigNumber(self, mc.KEY_DOORCLOSEDURATION)
@@ -385,13 +390,13 @@ class GarageMixin:
         if isinstance(payload, dict):
             self.garageDoor_config.update(payload)
             if mc.KEY_SIGNALDURATION in payload:
-                self.config_signalDuration.update_value(payload[mc.KEY_SIGNALDURATION])
+                self.config_signalDuration.update_native_value(payload[mc.KEY_SIGNALDURATION])
             if mc.KEY_BUZZERENABLE in payload:
                 self.config_buzzerEnable.update_onoff(payload[mc.KEY_BUZZERENABLE])
             if mc.KEY_DOOROPENDURATION in payload:
-                self.config_doorOpenDuration.update_value(payload[mc.KEY_DOOROPENDURATION])
+                self.config_doorOpenDuration.update_native_value(payload[mc.KEY_DOOROPENDURATION])
             if mc.KEY_DOORCLOSEDURATION in payload:
-                self.config_doorCloseDuration.update_value(payload[mc.KEY_DOORCLOSEDURATION])
+                self.config_doorCloseDuration.update_native_value(payload[mc.KEY_DOORCLOSEDURATION])
         return
 
 
@@ -609,11 +614,11 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
         if mc.KEY_SIGNALOPEN in payload:
             self._signalOpen = payload[mc.KEY_SIGNALOPEN] # time to fully open cover in msec
-            self._number_signalOpen.update_value(self._signalOpen)
+            self._number_signalOpen.update_native_value(self._signalOpen)
             self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
         if mc.KEY_SIGNALCLOSE in payload:
             self._signalClose = payload[mc.KEY_SIGNALCLOSE] # time to fully close cover in msec
-            self._number_signalClose.update_value(self._signalClose)
+            self._number_signalClose.update_native_value(self._signalClose)
             self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
 
 
@@ -657,9 +662,11 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     """
     multiplier = 1000
 
-    _attr_min_value = 1
-    _attr_max_value = 60
-    _attr_step = 1
+    _attr_native_max_value = 60
+    _attr_native_min_value = 1
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = TIME_SECONDS
+
 
     def __init__(self, cover: MLRollerShutter, key: str):
         self._cover = cover
@@ -668,11 +675,11 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
 
 
     @property
-    def name(self) -> str:
+    def name(self):
         return f"{self._cover.name} - {self._key}"
 
 
-    async def async_set_value(self, value: float) -> None:
+    async def async_set_native_value(self, value: float):
         config = {
             mc.KEY_CHANNEL: self.channel,
             mc.KEY_SIGNALOPEN: self._cover._signalOpen,
