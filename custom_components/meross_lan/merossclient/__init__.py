@@ -9,10 +9,11 @@ from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
-from xmlrpc.client import Boolean
-import aiohttp
-import async_timeout
 import asyncio
+import async_timeout
+import aiohttp
+
+
 from yarl import URL
 
 from . import const as mc
@@ -53,6 +54,12 @@ class MerossSignatureError(MerossProtocolError):
     """
     def __init__(self):
         super().__init__("Signature error")
+
+
+class MerossApiError(MerossProtocolError):
+    """
+    signals an error when connecting to the public API endpoint
+    """
 
 
 def build_payload(
@@ -170,7 +177,10 @@ async def async_get_cloud_key(username, password, session: aiohttp.client.Client
         )
         response.raise_for_status()
     json: dict = await response.json()
-    return json.get(mc.KEY_DATA, {}).get(mc.KEY_KEY)
+    key = json.get(mc.KEY_DATA, {}).get(mc.KEY_KEY)
+    if key is None:
+        raise MerossApiError(json[mc.KEY_INFO])
+    return key
 
 
 class MerossDeviceDescriptor:
