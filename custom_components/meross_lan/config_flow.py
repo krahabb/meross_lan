@@ -90,7 +90,7 @@ class CloudKeyMixin:
                 _err = e.reason
             except Exception as e:
                 errors[CONF_ERROR] = ERR_CANNOT_CONNECT
-                _err = str(e)
+                _err = str(e) or type(e).__name__
             return self.async_show_form(
                 step_id="cloudkey",
                 data_schema=vol.Schema({

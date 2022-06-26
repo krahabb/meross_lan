@@ -177,10 +177,20 @@ async def async_get_cloud_key(username, password, session: aiohttp.client.Client
         )
         response.raise_for_status()
     json: dict = await response.json()
-    key = json.get(mc.KEY_DATA, {}).get(mc.KEY_KEY)
-    if key is None:
-        raise MerossApiError(json[mc.KEY_INFO])
-    return key
+    try:
+        data = json[mc.KEY_DATA]
+        if data:
+            key = data[mc.KEY_KEY]
+            if key:
+                return key
+    except:
+        pass
+    # key not present for any reason
+    if isinstance(info := json.get(mc.KEY_INFO), str):
+        raise MerossApiError(info)
+    # fallback to raise the entire response
+    raise MerossApiError(json_dumps(json))
+
 
 
 class MerossDeviceDescriptor:
@@ -232,6 +242,8 @@ class MerossDeviceDescriptor:
         self.system[mc.KEY_TIME] = p_time
         self.time = p_time
         self.timezone = p_time.get(mc.KEY_TIMEZONE)
+
+
 
 class MerossHttpClient:
 
