@@ -5,13 +5,26 @@ from homeassistant.components.media_player import (
     DOMAIN as PLATFORM_MEDIA_PLAYER,
     MediaPlayerEntity, MediaPlayerDeviceClass,
 )
-from homeassistant.components.media_player.const import (
-    SUPPORT_TURN_ON, SUPPORT_TURN_OFF,
-    SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET, SUPPORT_VOLUME_STEP,
-    SUPPORT_NEXT_TRACK, SUPPORT_PREVIOUS_TRACK,
-    SUPPORT_PAUSE, SUPPORT_PLAY, SUPPORT_STOP,
-    MEDIA_TYPE_MUSIC,
-)
+try:
+    from homeassistant.components.media_player.const import (
+        MEDIA_TYPE_MUSIC,
+        MediaPlayerEntityFeature,
+    )
+    SUPPORT_VOLUME_MUTE = MediaPlayerEntityFeature.VOLUME_MUTE
+    SUPPORT_VOLUME_SET = MediaPlayerEntityFeature.VOLUME_SET
+    SUPPORT_VOLUME_STEP = MediaPlayerEntityFeature.VOLUME_STEP
+    SUPPORT_NEXT_TRACK = MediaPlayerEntityFeature.NEXT_TRACK
+    SUPPORT_PREVIOUS_TRACK = MediaPlayerEntityFeature.PREVIOUS_TRACK
+    SUPPORT_PLAY = MediaPlayerEntityFeature.PLAY
+    SUPPORT_STOP = MediaPlayerEntityFeature.STOP
+except:# fallback (pre 2022.5)
+    from homeassistant.components.media_player.const import (
+        MEDIA_TYPE_MUSIC,
+        SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET, SUPPORT_VOLUME_STEP,
+        SUPPORT_NEXT_TRACK, SUPPORT_PREVIOUS_TRACK,
+        SUPPORT_PLAY, SUPPORT_STOP,
+    )
+    
 from homeassistant.const import (
     STATE_IDLE, STATE_OFF, STATE_PLAYING,
 )

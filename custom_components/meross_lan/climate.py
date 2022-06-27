@@ -4,11 +4,26 @@ from homeassistant.components.climate import (
     DOMAIN as PLATFORM_CLIMATE,
     ClimateEntity,
 )
-from homeassistant.components.climate.const import (
-    PRESET_AWAY, PRESET_COMFORT, PRESET_SLEEP, SUPPORT_PRESET_MODE, SUPPORT_TARGET_TEMPERATURE,
-    CURRENT_HVAC_HEAT, CURRENT_HVAC_IDLE, CURRENT_HVAC_OFF,
-    HVAC_MODE_AUTO, HVAC_MODE_HEAT, HVAC_MODE_OFF,
-)
+try:
+    from homeassistant.components.climate.const import (
+        ClimateEntityFeature, HVACMode, HVACAction,
+        PRESET_AWAY, PRESET_COMFORT, PRESET_SLEEP,
+    )
+    SUPPORT_PRESET_MODE = ClimateEntityFeature.PRESET_MODE
+    SUPPORT_TARGET_TEMPERATURE = ClimateEntityFeature.TARGET_TEMPERATURE
+    HVAC_MODE_AUTO = HVACMode.AUTO
+    HVAC_MODE_HEAT = HVACMode.HEAT
+    HVAC_MODE_OFF = HVACMode.OFF
+    CURRENT_HVAC_HEAT = HVACAction.HEATING
+    CURRENT_HVAC_IDLE = HVACAction.IDLE
+    CURRENT_HVAC_OFF = HVACAction.OFF
+except:# fallback (pre 2022.5)
+    from homeassistant.components.climate.const import (
+        PRESET_AWAY, PRESET_COMFORT, PRESET_SLEEP, SUPPORT_PRESET_MODE, SUPPORT_TARGET_TEMPERATURE,
+        CURRENT_HVAC_HEAT, CURRENT_HVAC_IDLE, CURRENT_HVAC_OFF,
+        HVAC_MODE_AUTO, HVAC_MODE_HEAT, HVAC_MODE_OFF,
+    )
+
 from homeassistant.const import (
     TEMP_CELSIUS,
     ATTR_TEMPERATURE,

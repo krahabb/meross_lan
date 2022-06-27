@@ -6,11 +6,24 @@ from logging import DEBUG, INFO, WARNING
 from homeassistant.components.cover import (
     DOMAIN as PLATFORM_COVER,
     CoverEntity,
-    DEVICE_CLASS_GARAGE, DEVICE_CLASS_SHUTTER,
     ATTR_POSITION, ATTR_CURRENT_POSITION,
-    SUPPORT_OPEN, SUPPORT_CLOSE, SUPPORT_SET_POSITION, SUPPORT_STOP,
     STATE_OPEN, STATE_OPENING, STATE_CLOSED, STATE_CLOSING
 )
+try:
+    from homeassistant.components.cover import CoverDeviceClass, CoverEntityFeature
+    DEVICE_CLASS_GARAGE = CoverDeviceClass.GARAGE
+    DEVICE_CLASS_SHUTTER = CoverDeviceClass.SHUTTER
+    SUPPORT_OPEN = CoverEntityFeature.OPEN
+    SUPPORT_CLOSE = CoverEntityFeature.CLOSE
+    SUPPORT_SET_POSITION = CoverEntityFeature.SET_POSITION
+    SUPPORT_STOP = CoverEntityFeature.STOP
+except:# fallback (pre 2022.5)
+    from homeassistant.components.cover import (
+        DEVICE_CLASS_GARAGE, DEVICE_CLASS_SHUTTER,
+        SUPPORT_OPEN, SUPPORT_CLOSE,
+        SUPPORT_SET_POSITION, SUPPORT_STOP,
+    )
+
 from homeassistant.const import (
     TIME_SECONDS,
 )
