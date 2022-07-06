@@ -162,7 +162,7 @@ async def async_get_cloud_key(username, password, session: aiohttp.client.Client
     session = session or aiohttp.ClientSession()
     timestamp = int(time())
     nonce = uuid4().hex
-    params = '{"email": "'+username+'", "password": "'+password+'"}'
+    params = json_dumps({"email": username, "password": password})
     params = b64encode(params.encode('utf-8')).decode('ascii')
     sign = md5(("23x17ahWarFH6w29" + str(timestamp) + nonce + params).encode('utf-8')).hexdigest()
     with async_timeout.timeout(10):
