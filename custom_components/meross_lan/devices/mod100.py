@@ -35,6 +35,7 @@ class MLDiffuserLight(MLLightBase):
             payload.get(mc.KEY_CHANNEL, 0),
             None,
             None,
+            None,
             None)
         """
         self._light = {

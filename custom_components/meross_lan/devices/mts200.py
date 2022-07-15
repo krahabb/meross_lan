@@ -143,11 +143,11 @@ class Mts200Climate(MtsClimate):
         if isinstance(_t := payload.get(mc.KEY_MAX), int):
             self._attr_max_temp = _t / 10
         if isinstance(_t := payload.get(mc.KEY_HEATTEMP), int):
-            self.number_comfort_temperature.update_state(_t / 10)
+            self.number_comfort_temperature.update_native_value(_t)
         if isinstance(_t := payload.get(mc.KEY_COOLTEMP), int):
-            self.number_sleep_temperature.update_state(_t / 10)
+            self.number_sleep_temperature.update_native_value(_t)
         if isinstance(_t := payload.get(mc.KEY_ECOTEMP), int):
-            self.number_away_temperature.update_state(_t / 10)
+            self.number_away_temperature.update_native_value(_t)
         self.update_modes()
 
 
@@ -161,11 +161,11 @@ class Mts200SetPointNumber(MtsSetPointNumber):
     """
     customize MtsSetPointNumber to interact with Mts200 family valves
     """
-    async def async_set_value(self, value: float) -> None:
+    async def async_set_native_value(self, value: float):
         self.device.request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
-            {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, self._key: int(value * 10)}]} # the device rounds down ?!
+            {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, self._key: int(value * self.multiplier)}]} # the device rounds down ?!
         )
 
 

@@ -4,11 +4,26 @@ from homeassistant.components.climate import (
     DOMAIN as PLATFORM_CLIMATE,
     ClimateEntity,
 )
-from homeassistant.components.climate.const import (
-    PRESET_AWAY, PRESET_COMFORT, PRESET_SLEEP, SUPPORT_PRESET_MODE, SUPPORT_TARGET_TEMPERATURE,
-    CURRENT_HVAC_HEAT, CURRENT_HVAC_IDLE, CURRENT_HVAC_OFF,
-    HVAC_MODE_AUTO, HVAC_MODE_HEAT, HVAC_MODE_OFF,
-)
+try:
+    from homeassistant.components.climate.const import (
+        ClimateEntityFeature, HVACMode, HVACAction,
+        PRESET_AWAY, PRESET_COMFORT, PRESET_SLEEP,
+    )
+    SUPPORT_PRESET_MODE = ClimateEntityFeature.PRESET_MODE
+    SUPPORT_TARGET_TEMPERATURE = ClimateEntityFeature.TARGET_TEMPERATURE
+    HVAC_MODE_AUTO = HVACMode.AUTO
+    HVAC_MODE_HEAT = HVACMode.HEAT
+    HVAC_MODE_OFF = HVACMode.OFF
+    CURRENT_HVAC_HEAT = HVACAction.HEATING
+    CURRENT_HVAC_IDLE = HVACAction.IDLE
+    CURRENT_HVAC_OFF = HVACAction.OFF
+except:# fallback (pre 2022.5)
+    from homeassistant.components.climate.const import (
+        PRESET_AWAY, PRESET_COMFORT, PRESET_SLEEP, SUPPORT_PRESET_MODE, SUPPORT_TARGET_TEMPERATURE,
+        CURRENT_HVAC_HEAT, CURRENT_HVAC_IDLE, CURRENT_HVAC_OFF,
+        HVAC_MODE_AUTO, HVAC_MODE_HEAT, HVAC_MODE_OFF,
+    )
+
 from homeassistant.const import (
     TEMP_CELSIUS,
     ATTR_TEMPERATURE,
@@ -182,6 +197,8 @@ class MtsSetPointNumber(MLConfigNumber):
     Helper entity to configure MTS (thermostats) setpoints
     AKA: Heat(comfort) - Cool(sleep) - Eco(away)
     """
+    multiplier = 10
+
     PRESET_TO_ICON_MAP = {
         PRESET_COMFORT: 'mdi:sun-thermometer',
         PRESET_SLEEP: 'mdi:power-sleep',
@@ -202,18 +219,22 @@ class MtsSetPointNumber(MLConfigNumber):
         )
 
     @property
-    def name(self) -> str:
+    def name(self):
         return f"{self._climate.name} - {self._preset_mode} {DEVICE_CLASS_TEMPERATURE}"
 
     @property
-    def step(self) -> float:
-        return self._climate._attr_target_temperature_step
+    def native_max_value(self):
+        return self._climate._attr_max_temp
 
     @property
-    def min_value(self) -> float:
+    def native_min_value(self):
         return self._climate._attr_min_temp
 
     @property
-    def max_value(self) -> float:
-        return self._climate._attr_max_temp
+    def native_step(self):
+        return self._climate._attr_target_temperature_step
+
+    @property
+    def native_unit_of_measurement(self):
+        return TEMP_CELSIUS
 

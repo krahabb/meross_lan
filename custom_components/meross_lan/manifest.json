@@ -10,8 +10,8 @@
     {"hostname": "*", "macaddress": "48E1E9*"},
     {"hostname": "*", "macaddress": "34298F1*"}
   ],
-  "dependencies": [],
+  "dependencies": ["recorder"],
   "after_dependencies": ["mqtt", "dhcp"],
   "codeowners": ["@krahabb"],
-  "version": "2.5.7"
+  "version": "2.6.1"
 }

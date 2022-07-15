@@ -9,8 +9,6 @@
 """
 from __future__ import annotations
 
-from functools import partial
-
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers import device_registry as dr
 from homeassistant.const import (
@@ -125,11 +123,6 @@ class _MerossEntity:
     def device_class(self) -> str | None:
         return self._attr_device_class
 
-    """ moved to sensor to comply with HA development
-    @property
-    def unit_of_measurement(self) -> str | None:
-        return self._attr_unit_of_measurement
-    """
 
     @property
     def should_poll(self) -> bool:
@@ -145,11 +138,12 @@ class _MerossEntity:
     def assumed_state(self) -> bool:
         return False
 
-
+    """
+    avoid overriding state since it is mostly declared final in HA platforms
     @property
     def state(self) -> StateType:
         return self._attr_state
-
+    """
 
     async def async_added_to_hass(self) -> None:
         return
@@ -198,8 +192,10 @@ class _MerossToggle(_MerossEntity):
         channel: object,
         entitykey: str,
         device_class: str,
-        namespace: str):
-        super().__init__(device, channel, entitykey, device_class)
+        subdevice: 'MerossSubDevice',
+        namespace: str,
+        ):
+        super().__init__(device, channel, entitykey, device_class, subdevice)
         self.namespace = namespace
         self.key = None if namespace is None else get_namespacekey(namespace)
 

@@ -67,9 +67,11 @@ NS_APPLIANCE_HUB_EXCEPTION = 'Appliance.Hub.Exception'
 NS_APPLIANCE_HUB_BATTERY = 'Appliance.Hub.Battery'
 NS_APPLIANCE_HUB_TOGGLEX = 'Appliance.Hub.ToggleX'
 NS_APPLIANCE_HUB_ONLINE = 'Appliance.Hub.Online'
+NS_APPLIANCE_HUB_PAIRSUBDEV = 'Appliance.Hub.PairSubDev'
 # miscellaneous
 NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST = 'Appliance.Hub.SubDevice.MotorAdjust'
-# MS100
+NS_APPLIANCE_HUB_SUBDEVICE_BEEP = 'Appliance.Hub.SubDevice.Beep'
+# MS100 and other sensors
 NS_APPLIANCE_HUB_SENSOR_ALL = 'Appliance.Hub.Sensor.All'
 NS_APPLIANCE_HUB_SENSOR_TEMPHUM = 'Appliance.Hub.Sensor.TempHum'
 NS_APPLIANCE_HUB_SENSOR_ALERT = 'Appliance.Hub.Sensor.Alert'
@@ -182,6 +184,8 @@ KEY_LATEST = 'latest'
 KEY_TEMPHUM = 'tempHum'
 KEY_LATESTTEMPERATURE = 'latestTemperature'
 KEY_LATESTHUMIDITY = 'latestHumidity'
+KEY_SMOKEALARM = 'smokeAlarm'
+KEY_INTERCONN = 'interConn'
 KEY_SCHEDULE = 'schedule'
 KEY_ELECTRICITY = 'electricity'
 KEY_POWER = 'power'
@@ -254,6 +258,7 @@ PAYLOAD_GET = {
     NS_APPLIANCE_ROLLERSHUTTER_CONFIG: { KEY_CONFIG: [] },
     NS_APPLIANCE_HUB_BATTERY: { KEY_BATTERY: [] },
     NS_APPLIANCE_HUB_SENSOR_ALL: { KEY_ALL: [] },
+    NS_APPLIANCE_HUB_SENSOR_SMOKE: { KEY_SMOKEALARM: [] }, # guessing: 'smoke' is wrong for sure
     NS_APPLIANCE_HUB_MTS100_ALL: { KEY_ALL: [] },
     NS_APPLIANCE_HUB_MTS100_SCHEDULEB: { KEY_SCHEDULE: [] },
     NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST: { KEY_ADJUST: [] }, # unconfirmed but 'motoradjust' is wrong for sure
@@ -385,6 +390,10 @@ TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
 
 TYPE_HP110A = 'hp110'
 TYPE_NAME_MAP[TYPE_HP110A] = "Smart Cherub Baby Machine"
+
+#this is how the GS559 smart smoke alarm is reported in digest.hub.subdevice
+TYPE_SMOKEALARM = KEY_SMOKEALARM
+TYPE_NAME_MAP[TYPE_SMOKEALARM] = "Smart Smoke Alarm"
 
 """
     GP constant strings

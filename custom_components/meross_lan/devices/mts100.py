@@ -111,7 +111,7 @@ class Mts100SetPointNumber(MtsSetPointNumber):
     """
     customize MtsSetPointNumber to interact with Mts100 family valves
     """
-    async def async_set_value(self, value: float) -> None:
+    async def async_set_native_value(self, value: float):
         self.device.request(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
@@ -119,7 +119,7 @@ class Mts100SetPointNumber(MtsSetPointNumber):
                 mc.KEY_TEMPERATURE: [
                     {
                         mc.KEY_ID: self.subdevice.id,
-                        self._key: int(value * 10)
+                        self._key: int(value * self.multiplier)
                     }
                 ]
             },

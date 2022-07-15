@@ -1,12 +1,28 @@
 from __future__ import annotations
 from functools import partial
 
-from homeassistant.components.humidifier import (
-    DOMAIN as PLATFORM_HUMIDIFIER,
-    DEVICE_CLASS_HUMIDIFIER,
-    HumidifierEntity
-)
-from homeassistant.components.humidifier.const import SUPPORT_MODES, MODE_ECO, MODE_NORMAL
+try:
+    from homeassistant.components.humidifier import (
+        DOMAIN as PLATFORM_HUMIDIFIER,
+        HumidifierDeviceClass,
+        HumidifierEntity,
+    )
+    from homeassistant.components.humidifier.const import (
+        HumidifierEntityFeature,
+        MODE_ECO, MODE_NORMAL,
+    )
+    DEVICE_CLASS_HUMIDIFIER = HumidifierDeviceClass.HUMIDIFIER
+    SUPPORT_MODES = HumidifierEntityFeature.MODES
+except:
+    from homeassistant.components.humidifier import (
+        DOMAIN as PLATFORM_HUMIDIFIER,
+        DEVICE_CLASS_HUMIDIFIER,
+        HumidifierEntity,
+    )
+    from homeassistant.components.humidifier.const import (
+        SUPPORT_MODES, MODE_ECO, MODE_NORMAL
+    )
+
 from homeassistant.const import STATE_OFF, STATE_ON
 
 from .merossclient import const as mc  # mEROSS cONST

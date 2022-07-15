@@ -9,10 +9,11 @@ from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
-from xmlrpc.client import Boolean
-import aiohttp
-import async_timeout
 import asyncio
+import async_timeout
+import aiohttp
+
+
 from yarl import URL
 
 from . import const as mc
@@ -53,6 +54,12 @@ class MerossSignatureError(MerossProtocolError):
     """
     def __init__(self):
         super().__init__("Signature error")
+
+
+class MerossApiError(MerossProtocolError):
+    """
+    signals an error when connecting to the public API endpoint
+    """
 
 
 def build_payload(
@@ -155,7 +162,7 @@ async def async_get_cloud_key(username, password, session: aiohttp.client.Client
     session = session or aiohttp.ClientSession()
     timestamp = int(time())
     nonce = uuid4().hex
-    params = '{"email": "'+username+'", "password": "'+password+'"}'
+    params = json_dumps({"email": username, "password": password})
     params = b64encode(params.encode('utf-8')).decode('ascii')
     sign = md5(("23x17ahWarFH6w29" + str(timestamp) + nonce + params).encode('utf-8')).hexdigest()
     with async_timeout.timeout(10):
@@ -170,7 +177,20 @@ async def async_get_cloud_key(username, password, session: aiohttp.client.Client
         )
         response.raise_for_status()
     json: dict = await response.json()
-    return json.get(mc.KEY_DATA, {}).get(mc.KEY_KEY)
+    try:
+        data = json[mc.KEY_DATA]
+        if data:
+            key = data[mc.KEY_KEY]
+            if key:
+                return key
+    except:
+        pass
+    # key not present for any reason
+    if isinstance(info := json.get(mc.KEY_INFO), str):
+        raise MerossApiError(info)
+    # fallback to raise the entire response
+    raise MerossApiError(json_dumps(json))
+
 
 
 class MerossDeviceDescriptor:
@@ -222,6 +242,8 @@ class MerossDeviceDescriptor:
         self.system[mc.KEY_TIME] = p_time
         self.time = p_time
         self.timezone = p_time.get(mc.KEY_TIMEZONE)
+
+
 
 class MerossHttpClient:
 

@@ -30,7 +30,7 @@
             },
             "device": {
                 "title": "Meross LAN",
-                "description": "Nastavení zařízení Meross",
+                "description": "Nastavení zařízení Meross\nTyp: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Adresa hostitele zařízení",
                     "keymode": "Key selection mode",
@@ -71,7 +71,7 @@
             },
             "device": {
                 "title": "Konfigurace zařízení",
-                "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}\nHostitel: {host}\n\n{payload}",
+                "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}\nHostitel: {host}",
                 "data": {
                     "host": "Adresa hostitele zařízení",
                     "keymode": "Key selection mode",

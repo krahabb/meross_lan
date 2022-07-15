@@ -28,7 +28,7 @@
             },
             "device": {
                 "title": "Meross LAN",
-                "description": "Meross Gerät einrichten",
+                "description": "Meross Gerät einrichten\nTyp: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "IP-Adresse des Geräts",
                     "keymode": "Schlüsselauswahlmodus",
@@ -68,7 +68,7 @@
             },
             "device": {
                 "title": "Gerätekonfiguration",
-                "description": "Typ: {device_type}\nUUID: {device_id}\nHost: {host}\n\n{payload}",
+                "description": "Typ: {device_type}\nUUID: {device_id}\nHost: {host}",
                 "data": {
                     "host": "IP-Adresse des Geräts",
                     "keymode": "Schlüsselauswahlmodus",

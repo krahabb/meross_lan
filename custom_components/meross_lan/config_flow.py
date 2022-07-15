@@ -4,7 +4,9 @@ from logging import DEBUG
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import (
+    CONF_PASSWORD, CONF_USERNAME, CONF_ERROR,
+)
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.helpers import config_validation as cv
@@ -15,6 +17,7 @@ from .merossclient import (
     MerossHttpClient,
     MerossDeviceDescriptor,
     MerossKeyError,
+    MerossApiError,
     const as mc,
     get_productnametype, async_get_cloud_key,
 )
@@ -43,6 +46,13 @@ CONF_KEYMODE_OPTIONS = {
 }
 
 DESCR = 'suggested_value'
+ERR_BASE = 'base'
+ERR_CANNOT_CONNECT = 'cannot_connect'
+ERR_INVALID_KEY = 'invalid_key'
+ERR_INVALID_NULL_KEY = 'invalid_nullkey'
+ERR_DEVICE_ID_MISMATCH = 'device_id_mismatch'
+ERR_ALREADY_CONFIGURED_DEVICE = 'already_configured_device'
+ERR_INVALID_AUTH = 'invalid_auth'
 
 
 async def _http_discovery(hass, host, key) -> dict:
@@ -75,20 +85,29 @@ class CloudKeyMixin:
                     username, password, async_get_clientsession(self.hass))
                 self._key = self._cloud_key
                 return await self.async_step_device()
+            except MerossApiError as e:
+                errors[CONF_ERROR] = ERR_INVALID_AUTH
+                _err = e.reason
             except Exception as e:
-                errors["base"] = "cannot_connect"
+                errors[CONF_ERROR] = ERR_CANNOT_CONNECT
+                _err = str(e) or type(e).__name__
+            return self.async_show_form(
+                step_id="cloudkey",
+                data_schema=vol.Schema({
+                        vol.Required(CONF_USERNAME, description={ DESCR: username }): str,
+                        vol.Required(CONF_PASSWORD, description={ DESCR: password }): str,
+                        vol.Optional(CONF_ERROR, description={ DESCR: _err }): str
+                        }),
+                errors=errors)
 
         else:
-            username = ""
-            password = ""
-
-        return self.async_show_form(
-            step_id="cloudkey",
-            data_schema=vol.Schema({
-                vol.Required(CONF_USERNAME, description={ DESCR: username }): str,
-                vol.Required(CONF_PASSWORD, description={ DESCR: password }): str
-                }),
-            errors=errors)
+            return self.async_show_form(
+                step_id="cloudkey",
+                data_schema=vol.Schema({
+                    vol.Required(CONF_USERNAME): str,
+                    vol.Required(CONF_PASSWORD): str
+                    })
+                )
 
 
 
@@ -100,6 +119,10 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
     _key: str = None
     _cloud_key: str = None
     _keyerror: bool = False
+    _placeholders = {
+        CONF_DEVICE_TYPE: "",
+        CONF_DEVICE_ID: "",
+        }
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
@@ -155,7 +178,7 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
                     if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
                         return await self.async_step_cloudkey()
                     elif _keymode != CONF_KEYMODE_HACK:
-                        raise ConfigError("invalid_nullkey")
+                        raise ConfigError(ERR_INVALID_NULL_KEY)
                 """
                 when the key is non-null we'll give it a try and eventually
                 go to cloud retrieve if the user selected so
@@ -164,24 +187,28 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
                 await self._async_set_info(_discovery_info)
                 return await self.async_step_finalize()
             except ConfigError as e:
-                errors["base"] = e.reason
+                errors[ERR_BASE] = e.reason
             except MerossKeyError as e:
                 self._cloud_key = None
                 if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
                     return await self.async_step_cloudkey()
-                errors["base"] = "invalid_key"
+                errors[CONF_KEYMODE] = ERR_INVALID_KEY
             except AbortFlow as e:
-                errors["base"] = "already_configured_device"
+                errors[ERR_BASE] = ERR_ALREADY_CONFIGURED_DEVICE
             except Exception as e:
                 LOGGER.warning("Error (%s) configuring meross device (host:%s)", str(e), self._host)
-                errors["base"] = "cannot_connect"
+                errors[ERR_BASE] = ERR_CANNOT_CONNECT
 
         config_schema = {
             vol.Required(CONF_HOST, description={ DESCR: self._host}): str,
             vol.Required(CONF_KEYMODE, description={ DESCR: _keymode }): vol.In(CONF_KEYMODE_OPTIONS),
             vol.Optional(CONF_KEY, description={ DESCR: self._key}): str,
             }
-        return self.async_show_form(step_id="device", data_schema=vol.Schema(config_schema), errors=errors)
+        return self.async_show_form(
+            step_id="device",
+            data_schema=vol.Schema(config_schema),
+            errors=errors,
+            description_placeholders=self._placeholders)
 
 
     async def async_step_discovery(self, discovery_info: DiscoveryInfoType):
@@ -270,21 +297,24 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
 
 
     async def async_step_finalize(self, user_input=None):
-        data = self._discovery_info
         if user_input is None:
-            config_schema = {}
             return self.async_show_form(
                 step_id="finalize",
-                data_schema=vol.Schema(config_schema),
+                data_schema=vol.Schema({}),
                 description_placeholders=self._placeholders
             )
-        return self.async_create_entry(title=self._descriptor.type + " " + self._device_id, data=data)
+        return self.async_create_entry(title=self._descriptor.type + " " + self._device_id, data=self._discovery_info)
 
 
     async def _async_set_info(self, discovery_info: DiscoveryInfoType) -> None:
         self._discovery_info = discovery_info
         self._descriptor = MerossDeviceDescriptor(discovery_info.get(CONF_PAYLOAD, {}))
         self._device_id = self._descriptor.uuid
+        self._placeholders = {
+            CONF_DEVICE_TYPE: get_productnametype(self._descriptor.type),
+            CONF_DEVICE_ID: self._device_id,
+            }
+        self.context["title_placeholders"] = self._placeholders
         await self.async_set_unique_id(self._device_id)
         self._abort_if_unique_id_configured()
 
@@ -297,13 +327,6 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
         else:
             discovery_info.pop(CONF_CLOUD_KEY, None)
 
-        self._placeholders = {
-            CONF_DEVICE_TYPE: get_productnametype(self._descriptor.type),
-            CONF_DEVICE_ID: self._device_id,
-            CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
-            }
-
-        self.context["title_placeholders"] = self._placeholders
         return
 
 
@@ -378,11 +401,11 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
                         if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
                             return await self.async_step_cloudkey()
                         elif _keymode != CONF_KEYMODE_HACK:
-                            raise ConfigError("invalid_nullkey")
+                            raise ConfigError(ERR_INVALID_NULL_KEY)
                     _discovery_info = await _http_discovery(self.hass, self._host, self._key)
                     _descriptor = MerossDeviceDescriptor(_discovery_info.get(CONF_PAYLOAD, {}))
                     if self.device_id != _descriptor.uuid:
-                        raise ConfigError("device_id_mismatch")
+                        raise ConfigError(ERR_DEVICE_ID_MISMATCH)
 
                 data = dict(self._config_entry.data)
                 if self._host is not None:
@@ -408,11 +431,11 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
                 self._cloud_key = None
                 if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
                     return await self.async_step_cloudkey()
-                errors["base"] = "invalid_key"
+                errors[CONF_KEYMODE] = ERR_INVALID_KEY
             except ConfigError as e:
-                errors["base"] = e.reason
+                errors[ERR_BASE] = e.reason
             except Exception as e:
-                errors["base"] = "cannot_connect"
+                errors[ERR_BASE] = ERR_CANNOT_CONNECT
 
         config_schema = dict()
         if self._host is not None:
@@ -477,8 +500,7 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
             description_placeholders={
                 CONF_DEVICE_TYPE: get_productnametype(device.descriptor.type) if device is not None else "",
                 CONF_DEVICE_ID: self.device_id,
-                CONF_HOST: self._host or "MQTT",
-                CONF_PAYLOAD: ""#json.dumps(data.get(CONF_PAYLOAD, {}))
+                CONF_HOST: self._host or "MQTT"
             },
             errors=errors
         )

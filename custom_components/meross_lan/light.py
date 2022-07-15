@@ -12,12 +12,19 @@ from .helpers import reverse_lookup
 
 # back-forward compatibility hell
 try:
-    from homeassistant.components.light import (
-        SUPPORT_BRIGHTNESS,
-        SUPPORT_COLOR,
-        SUPPORT_COLOR_TEMP,
-        SUPPORT_EFFECT
-    )
+    try:
+        from homeassistant.components.light import LightEntityFeature
+        SUPPORT_BRIGHTNESS = 0
+        SUPPORT_COLOR = 0
+        SUPPORT_COLOR_TEMP = 0
+        SUPPORT_EFFECT = LightEntityFeature.EFFECT
+    except:
+        from homeassistant.components.light import (
+            SUPPORT_BRIGHTNESS,
+            SUPPORT_COLOR,
+            SUPPORT_COLOR_TEMP,
+            SUPPORT_EFFECT
+        )
 except:
     # should HA remove any we guess SUPPORT_EFFECT still valued at 4
     SUPPORT_BRIGHTNESS = 0
@@ -26,12 +33,21 @@ except:
     SUPPORT_EFFECT = 4
 
 try:
-    from homeassistant.components.light import (
-        COLOR_MODE_UNKNOWN, COLOR_MODE_ONOFF, COLOR_MODE_BRIGHTNESS,
-        COLOR_MODE_HS, COLOR_MODE_RGB, COLOR_MODE_COLOR_TEMP,
-    )
+    try:
+        from homeassistant.components.light import ColorMode
+        COLOR_MODE_UNKNOWN = ColorMode.UNKNOWN
+        COLOR_MODE_ONOFF = ColorMode.ONOFF
+        COLOR_MODE_BRIGHTNESS = ColorMode.BRIGHTNESS
+        COLOR_MODE_HS = ColorMode.HS
+        COLOR_MODE_RGB = ColorMode.RGB
+        COLOR_MODE_COLOR_TEMP = ColorMode.COLOR_TEMP
+    except:
+        from homeassistant.components.light import (
+            COLOR_MODE_UNKNOWN, COLOR_MODE_ONOFF, COLOR_MODE_BRIGHTNESS,
+            COLOR_MODE_HS, COLOR_MODE_RGB, COLOR_MODE_COLOR_TEMP,
+        )
 except:
-    COLOR_MODE_UNKNOWN = ''
+    COLOR_MODE_UNKNOWN = ''# leave empty so we don't use color_modes
     COLOR_MODE_ONOFF = COLOR_MODE_UNKNOWN
     COLOR_MODE_BRIGHTNESS = COLOR_MODE_UNKNOWN
     COLOR_MODE_HS = COLOR_MODE_UNKNOWN
@@ -204,7 +220,7 @@ class MLLight(MLLightBase):
         # in case we're not using togglex fallback to toggle but..the light could
         # be switchable by 'onoff' field in light payload itself..(to be investigated)
         super().__init__(
-            device, channel, None, None,
+            device, channel, None, None, None,
             mc.NS_APPLIANCE_CONTROL_TOGGLEX if self._usetogglex else None)
         """
         self._light = {
@@ -369,7 +385,7 @@ class MLDNDLightEntity(_MerossToggle, LightEntity):
 
 
     def __init__(self, device: MerossDevice):
-        super().__init__(device, None, DND_ID, mc.KEY_DNDMODE, None)
+        super().__init__(device, None, DND_ID, mc.KEY_DNDMODE, None, None)
 
 
     @property
