@@ -1,5 +1,4 @@
 {
-  "title": "Meross LAN",
   "config": {
     "flow_title": "Meross {device_type}",
     "abort": {
