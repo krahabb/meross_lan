@@ -26,7 +26,6 @@
                 }
             },
             "device": {
-                "title": "Meross LAN",
                 "description": "Configurar un dispositivo meross\nTipo: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Dirección IP del dispositivo",

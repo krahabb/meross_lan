@@ -26,7 +26,6 @@
         }
       },
       "device": {
-        "title": "Meross LAN",
         "description": "Découvrir l'appareil\nType: {device_type}\nUUID: {device_id}",
         "data": {
           "host": "Adresse",
