@@ -15,7 +15,6 @@
         },
         "step": {
             "user": {
-                "title": "Meross LAN",
                 "description": "Meross Gerät einrichten",
                 "data": {}
             },
@@ -27,7 +26,6 @@
                 }
             },
             "device": {
-                "title": "Meross LAN",
                 "description": "Meross Gerät einrichten\nTyp: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "IP-Adresse des Geräts",

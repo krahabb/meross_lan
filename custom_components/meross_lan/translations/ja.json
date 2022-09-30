@@ -15,7 +15,6 @@
         },
         "step": {
             "user": {
-                "title": "Meross LAN",
                 "description": "Meross デバイスのセットアップ",
                 "data": {}
             },
@@ -27,7 +26,6 @@
                 }
             },
             "device": {
-                "title": "Meross LAN",
                 "description": "Meross デバイスのセットアップ\nタイップ: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "デバイスのホストアドレス",

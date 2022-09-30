@@ -15,7 +15,6 @@
         },
         "step": {
             "user": {
-                "title": "Meross LAN",
                 "description": "Nastavení zařízení Meross",
                 "data": {
                     "Required": "Povinné pole"
@@ -29,7 +28,6 @@
                 }
             },
             "device": {
-                "title": "Meross LAN",
                 "description": "Nastavení zařízení Meross\nTyp: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Adresa hostitele zařízení",

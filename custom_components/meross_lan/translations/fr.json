@@ -15,7 +15,6 @@
     },
     "step": {
       "user": {
-        "title": "Meross LAN",
         "description": "Découvrir l'appareil",
         "data": {}
       },
