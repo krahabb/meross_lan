@@ -1,5 +1,4 @@
 {
-    "title": "Meross LAN",
     "config": {
         "flow_title": "Meross {device_type}",
         "abort": {
@@ -15,7 +14,6 @@
         },
         "step": {
             "user": {
-                "title": "Meross LAN",
                 "description": "Meross デバイスのセットアップ",
                 "data": {}
             },
@@ -27,7 +25,6 @@
                 }
             },
             "device": {
-                "title": "Meross LAN",
                 "description": "Meross デバイスのセットアップ\nタイップ: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "デバイスのホストアドレス",

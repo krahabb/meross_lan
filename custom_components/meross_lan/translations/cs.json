@@ -1,5 +1,4 @@
 {
-    "title": "Meross LAN",
     "config": {
         "flow_title": "Meross {device_type}",
         "abort": {
@@ -15,7 +14,6 @@
         },
         "step": {
             "user": {
-                "title": "Meross LAN",
                 "description": "Nastavení zařízení Meross",
                 "data": {
                     "Required": "Povinné pole"
@@ -29,7 +27,6 @@
                 }
             },
             "device": {
-                "title": "Meross LAN",
                 "description": "Nastavení zařízení Meross\nTyp: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Adresa hostitele zařízení",

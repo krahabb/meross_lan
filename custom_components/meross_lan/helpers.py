@@ -97,28 +97,34 @@ def deobfuscate(payload: dict, obfuscated: dict):
 """
 MQTT helpers
 """
-from homeassistant.components.mqtt import DATA_MQTT
-
 def mqtt_is_loaded(hass) -> bool:
     """
     check if any MQTT is configured
     """
+    from homeassistant.components.mqtt import DATA_MQTT
     return hass.data.get(DATA_MQTT) is not None
+
 
 def mqtt_is_connected(hass) -> bool:
     """
     check if MQTT communication is available
     """
-    mqtt = hass.data.get(DATA_MQTT)
-    return mqtt.connected if mqtt is not None else False
+    from homeassistant.components.mqtt import is_connected
+    return is_connected(hass)
+
 
 def mqtt_publish(hass, topic, payload):
     """
     friendly 'publish' to bypass official core/mqtt interface variations
     this could be dangerous on compatibility but the ongoing api changes (2021.12.0)
     are a bit too much to follow with a clean backward compatible code
+    EDIT 2022-09-29:
+    following recent issues (#213 - HA core 2022.9.6) this code is reverted
+    to using the official api for the mqtt component. In doing so we're likely
+    breaking compatibility with pre 2021.12.0
     """
-    hass.async_create_task(hass.data[DATA_MQTT].async_publish(topic, payload, 0, False))
+    from homeassistant.components.mqtt import publish
+    publish(hass, topic, payload)
 
 
 """

@@ -228,7 +228,7 @@ class MerossDeviceHub(MerossDevice):
                 # now we're left with non-existent (removed) subdevices
                 self.needsave = True
                 for p_id in subdevices_actual:
-                    subdevice = self.subdevices.pop(p_id)
+                    subdevice = self.subdevices.get(p_id)
                     self.log(logging.WARNING, 0, "removing subdevice %s(%s) - configuration will be reloaded in 15 sec", subdevice.type, p_id)
                 """
                 before reloading we have to be sure configentry data were persisted

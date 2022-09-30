@@ -13,5 +13,5 @@
   "dependencies": ["recorder"],
   "after_dependencies": ["mqtt", "dhcp"],
   "codeowners": ["@krahabb"],
-  "version": "2.6.1"
+  "version": "2.6.2"
 }
