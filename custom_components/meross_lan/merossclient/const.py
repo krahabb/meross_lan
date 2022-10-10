@@ -356,6 +356,10 @@ TYPE_NAME_MAP[CLASS_MSH] = "Smart Hub"
 CLASS_MSS = 'mss'
 TYPE_MSS310 = 'mss310' # smart plug with energy meter
 TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
+TYPE_MSS560 = "mss560"
+TYPE_NAME_MAP[TYPE_MSS560] = "Smart Dimmer Switch"
+TYPE_MSS570 = "mss570"
+TYPE_NAME_MAP[TYPE_MSS570] = TYPE_NAME_MAP[TYPE_MSS560]
 TYPE_NAME_MAP[CLASS_MSS] = "Smart Switch"
 
 CLASS_MSL = 'msl'

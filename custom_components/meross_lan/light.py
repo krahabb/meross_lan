@@ -192,7 +192,7 @@ class MLLight(MLLightBase):
     _attr_max_mireds = MSLANY_MIRED_MAX
     _attr_min_mireds = MSLANY_MIRED_MIN
 
-    _usetogglex = False
+    _hastogglex = False
 
     def __init__(
         self,
@@ -204,24 +204,28 @@ class MLLight(MLLightBase):
         # (disregarding any 'onoff' field inside).
         # The msl120j never 'pushes' an 'onoff' field in the light payload while msl120b (fw 2.1.16)
         # does that.
-        # we'll use a 'conservative' approach here where we always toggle by togglex (if presented in digest)
+        # we used a 'conservative' approach here where we always toggled by togglex (if presented in digest)
         # and kindly ignore any 'onoff' in the 'light' payload (except digest didn't presented togglex)
+        # also (issue #218) the newer mss560-570 dimmer switches are implemented as 'light' devices with ToggleX
+        # api and show a glitch when used this way (ToggleX + Light)
+        # we'll try implement a new command flow where we'll just use the 'Light' payload to turn on the device
+        # skipping the initial 'ToggleX' assuming this behaviour works on any fw
         channel = payload.get(mc.KEY_CHANNEL, 0)
         descr = device.descriptor
         p_togglex = descr.digest.get(mc.KEY_TOGGLEX)
         if isinstance(p_togglex, list):
             for t in p_togglex:
                 if t.get(mc.KEY_CHANNEL) == channel:
-                    self._usetogglex = True
+                    self._hastogglex = True
                     break
         elif isinstance(p_togglex, dict):
-            self._usetogglex = (p_togglex.get(mc.KEY_CHANNEL) == channel)
+            self._hastogglex = (p_togglex.get(mc.KEY_CHANNEL) == channel)
 
-        # in case we're not using togglex fallback to toggle but..the light could
-        # be switchable by 'onoff' field in light payload itself..(to be investigated)
         super().__init__(
             device, channel, None, None, None,
-            mc.NS_APPLIANCE_CONTROL_TOGGLEX if self._usetogglex else None)
+            mc.NS_APPLIANCE_CONTROL_TOGGLEX if self._hastogglex else None)
+
+
         """
         self._light = {
 			#"onoff": 0,
@@ -306,12 +310,14 @@ class MLLight(MLLightBase):
         else:
             light.pop(mc.KEY_EFFECT, None)
 
-        if self._usetogglex:
+        if self._hastogglex:
             # since lights could be repeatedtly 'async_turn_on' when changing attributes
-            # we avoid flooding the device with unnecessary messages
+            # we avoid flooding the device by sending togglex only once
             # this is probably unneeded since any light payload sent seems to turn on the light
-            if not self.is_on:
-                await super().async_turn_on(**kwargs)
+            # 2022-10-10: removing the (likely unnecessary) code to overcome glitching in mss570 (#218)
+            # if not self.is_on:
+            #    await super().async_turn_on(**kwargs)
+            pass
         else:
             light[mc.KEY_ONOFF] = 1
 
@@ -326,7 +332,7 @@ class MLLight(MLLightBase):
 
 
     async def async_turn_off(self, **kwargs) -> None:
-        if self._usetogglex:
+        if self._hastogglex:
             # we suppose we have to 'toggle(x)'
             await super().async_turn_off(**kwargs)
         else:
