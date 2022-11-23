@@ -236,6 +236,7 @@ KEY_NONCE = 'nonce'
 KEY_KEY = 'key'
 KEY_DATA = 'data'
 KEY_PARAMS = 'params'
+KEY_APISTATUS = 'apiStatus'
 
 # 'well-know' syntax for METHOD_GET
 PAYLOAD_GET = {
@@ -400,8 +401,49 @@ TYPE_SMOKEALARM = KEY_SMOKEALARM
 TYPE_NAME_MAP[TYPE_SMOKEALARM] = "Smart Smoke Alarm"
 
 """
+    Meross cloud HTTP api
+"""
+MEROSS_API_V1_URL = 'https://iot.meross.com/v1'
+MEROSS_API_LOGIN_PATH = '/Auth/Login'
+MEROSS_API_LOGOUT_PATH = '/Profile/Logout'
+
+APISTATUS_NO_ERROR = 0
+"""Not an error"""
+APISTATUS_MISSING_PASSWORD = 1001
+"""Wrong or missing password"""
+APISTATUS_UNEXISTING_ACCOUNT = 1002
+"""Account does not exist"""
+APISTATUS_DISABLED_OR_DELETED_ACCOUNT = 1003
+"""This account has been disabled or deleted"""
+APISTATUS_WRONG_CREDENTIALS = 1004
+"""Wrong email or password"""
+APISTATUS_INVALID_EMAIL = 1005
+"""Invalid email address"""
+APISTATUS_BAD_PASSWORD_FORMAT = 1006
+"""Bad password format"""
+APISTATUS_WRONG_EMAIL = 1008
+"""This email is not registered"""
+APISTATUS_TOKEN_INVALID = 1019
+"""Token expired"""
+APISTATUS_TOKEN_ERROR = 1022
+APISTATUS_TOKEN_EXPIRED = 1200
+APISTATUS_TOO_MANY_TOKENS = 1301
+APISTATUS_MAP = {
+    APISTATUS_NO_ERROR: "Not an error",
+    APISTATUS_MISSING_PASSWORD: "Wrong or missing password",
+    APISTATUS_UNEXISTING_ACCOUNT: "Account does not exist",
+    APISTATUS_DISABLED_OR_DELETED_ACCOUNT: "This account has been disabled or deleted",
+    APISTATUS_WRONG_CREDENTIALS: "Wrong email or password",
+    APISTATUS_INVALID_EMAIL: "Invalid email address",
+    APISTATUS_BAD_PASSWORD_FORMAT: "Bad password format",
+    APISTATUS_WRONG_EMAIL: "This email is not registered",
+    APISTATUS_TOKEN_INVALID: "Invalid Token",
+    APISTATUS_TOKEN_ERROR: "Token error",
+    APISTATUS_TOKEN_EXPIRED: "Token expired",
+    APISTATUS_TOO_MANY_TOKENS: "Too many tokens",
+}
+"""
     GP constant strings
 """
 MANUFACTURER = "Meross"
 MEROSS_MACADDRESS = '48:e1:e9:xx:xx:xx'
-MEROSS_API_LOGIN_URL = "https://iot.meross.com/v1/Auth/Login"
