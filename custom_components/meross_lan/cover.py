@@ -30,7 +30,7 @@ from homeassistant.const import (
 from homeassistant.core import HassJob, callback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 
-from .helpers import LOGGER, get_entity_last_state
+from .helpers import LOGGER, get_entity_last_state, versiontuple
 
 from .merossclient import const as mc
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
@@ -419,17 +419,18 @@ class GarageMixin:
 
 
 class MLRollerShutter(_MerossEntity, CoverEntity):
-
+    """
+    MRS100 SHUTTER ENTITY
+    """
     PLATFORM = PLATFORM_COVER
 
     def __init__(self, device: 'MerossDevice', channel: object):
         super().__init__(device, channel, None, DEVICE_CLASS_SHUTTER)
         self._number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self._number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
-        self._position_native = None # as reported by the device
         self._signalOpen: int = 30000 # msec to fully open (config'd on device)
         self._signalClose: int = 30000 # msec to fully close (config'd on device)
-        self._position_timed = None # estimate based on timings
+        self._position_native = None # as reported by the device
         self._position_start = None # set when when we're controlling a timed position
         self._position_starttime = None # epoch of transition start
         self._position_endtime = None # epoch of 'target position reached'
@@ -437,8 +438,16 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
         self._transition_job = HassJob(self._transition_callback) # job to follow transition
         self._stop_unsub = None
         self._stop_job = HassJob(self._stop_callback) # job to terminate transition
+        self._attr_current_cover_position: int | None = None
         self._attr_extra_state_attributes = dict()
 
+        # flag indicating the device position is reliable (#227)
+        # this will anyway be set in case we 'decode' a meaningful device position
+        try:
+            self._position_native_isgood = \
+                versiontuple(device.descriptor.firmware.get(mc.KEY_VERSION)) >= versiontuple('7.6.10')
+        except:
+            self._position_native_isgood = None
 
     @property
     def assumed_state(self) -> bool:
@@ -466,16 +475,6 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
         return self._attr_state == STATE_CLOSED
 
 
-    @property
-    def current_cover_position(self):
-        return self._position_timed if self._position_timed is not None else self._position_native
-
-
-    @property
-    def is_position_native(self) -> bool:
-        return self._position_timed is None
-
-
     async def async_added_to_hass(self) -> None:
         """
         we're trying to recover the 'timed' position from previous state
@@ -491,7 +490,7 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
                     self._signalClose = _attr[EXTRA_ATTR_DURATION_CLOSE]
                     self._attr_extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
                 if ATTR_CURRENT_POSITION in _attr:
-                    self._position_timed = _attr[ATTR_CURRENT_POSITION]
+                    self._attr_current_cover_position = _attr[ATTR_CURRENT_POSITION]
         except Exception as e:
             self.device.log(WARNING, 0, "MLRollerShutter(%s): error(%s) while trying to restore previous state", self.name, str(e))
 
@@ -499,41 +498,41 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
 
 
     async def async_open_cover(self, **kwargs) -> None:
-        self.request_position(POSITION_FULLY_OPENED)
+        self._request_position(POSITION_FULLY_OPENED)
 
 
     async def async_close_cover(self, **kwargs) -> None:
-        self.request_position(POSITION_FULLY_CLOSED)
+        self._request_position(POSITION_FULLY_CLOSED)
 
 
     async def async_set_cover_position(self, **kwargs):
         if ATTR_POSITION in kwargs:
             position = kwargs[ATTR_POSITION]
-            if self.is_position_native\
+            if self._position_native_isgood\
                 or (position == POSITION_FULLY_OPENED)\
                 or (position == POSITION_FULLY_CLOSED):
                 # ensure a full 'untimed' run when asked for
                 # fully opened/closed (#170)
-                self.request_position(position)
+                self._request_position(position)
             else:
-                if position > self._position_timed:
-                    self.request_position(
+                if position > self._attr_current_cover_position:
+                    self._request_position(
                         100,
-                        ((position - self._position_timed) * self._signalOpen) / 100000
+                        ((position - self._attr_current_cover_position) * self._signalOpen) / 100000
                     )
-                elif position < self._position_timed:
-                    self.request_position(
+                elif position < self._attr_current_cover_position:
+                    self._request_position(
                         0,
-                        ((self._position_timed - position) * self._signalClose) / 100000
+                        ((self._attr_current_cover_position - position) * self._signalClose) / 100000
                     )
 
 
     async def async_stop_cover(self, **kwargs):
-        self.request_position(-1)
+        self._request_position(-1)
 
 
-    def request_position(self, command, timeout = None):
-        self.device.log(DEBUG, 0, "MLRollerShutter(0): request_position(%s, %s)", str(command), str(timeout))
+    def _request_position(self, command, timeout = None):
+        self.device.log(DEBUG, 0, "MLRollerShutter(0): _request_position(%s, %s)", str(command), str(timeout))
         def _ack_callback():
             self.device.log(DEBUG, 0, "MLRollerShutter(0): _ack_callback")
             if timeout is not None:
@@ -563,60 +562,94 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
     def set_unavailable(self) -> None:
         self._transition_cancel()
         self._stop_cancel()
-        self._position_native = None
         super().set_unavailable()
 
 
     def _parse_position(self, payload: dict):
-        position = payload.get(mc.KEY_POSITION)
-        if position != self._position_native:
-            self._position_native = position
-            self._attr_extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
-            if self.hass and self.enabled:
-                self.async_write_ha_state()
+        """
+        legacy devices only reported 0 or 100 as position
+        so we used to store this as an extra attribute and perform
+        a trajectory calculation to emulate time based positioning
+        now (#227) we'll detect devices reporting 'actual' good
+        positioning and switch entity behaviour to trust this value
+        bypassing all of the 'time based' emulation
+        """
+        if isinstance(position := payload.get(mc.KEY_POSITION), int):
+            if self._position_native_isgood:
+                if position != self._attr_current_cover_position:
+                    self._attr_current_cover_position = position
+                    if self.hass and self.enabled:
+                        self.async_write_ha_state()
+            else:
+                if position != self._position_native:
+                    if (position > 0) and (position < 100):
+                        # detecting a device reporting 'good' positions
+                        self._position_native_isgood = True
+                        self._position_native = None
+                        self._attr_extra_state_attributes.pop(EXTRA_ATTR_POSITION_NATIVE, None)
+                        self._attr_current_cover_position = position
+                        if self.hass and self.enabled:
+                            self.async_write_ha_state()
+                    else:
+                        self._position_native = position
+                        self._attr_extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
+                        if self.hass and self.enabled:
+                            self.async_write_ha_state()
 
 
     def _parse_state(self, payload: dict):
         state = payload.get(mc.KEY_STATE)
         self.device.log(DEBUG, 0, "MLRollerShutter(0): _parse_state(%s)", str(state))
+        self.device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
         epoch = time()
-        if self._attr_state == STATE_OPENING:
-            self._position_timed = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)
-            if self._position_timed > POSITION_FULLY_OPENED:
-                self._position_timed = POSITION_FULLY_OPENED
-            if (state == mc.ROLLERSHUTTER_STATE_OPENING) and self.hass and self.enabled:
-                self.async_write_ha_state()
-
-        elif self._attr_state == STATE_CLOSING:
-            self._position_timed = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)
-            if self._position_timed < POSITION_FULLY_CLOSED:
-                self._position_timed = POSITION_FULLY_CLOSED
-            if (state == mc.ROLLERSHUTTER_STATE_CLOSING) and self.hass and self.enabled:
-                self.async_write_ha_state()
-
-        if state == mc.ROLLERSHUTTER_STATE_OPENING:
-            if self._attr_state != STATE_OPENING:
-                self._position_start = self._position_timed\
-                    if self._position_timed is not None else POSITION_FULLY_CLOSED
-                self._position_starttime = epoch
+        if self._position_native_isgood:
+            if state == mc.ROLLERSHUTTER_STATE_OPENING:
                 self.update_state(STATE_OPENING)
-        elif state == mc.ROLLERSHUTTER_STATE_CLOSING:
-            if self._attr_state != STATE_CLOSING:
-                self._position_start = self._position_timed\
-                    if self._position_timed is not None else POSITION_FULLY_OPENED
-                self._position_starttime = epoch
+            elif state == mc.ROLLERSHUTTER_STATE_CLOSING:
                 self.update_state(STATE_CLOSING)
-        else: # state == mc.ROLLERSHUTTER_STATE_IDLE:
-            self._stop_cancel()
-            self._transition_cancel()
-            self.update_state(STATE_OPEN if self.current_cover_position else STATE_CLOSED)
-            return
+            else: # state == mc.ROLLERSHUTTER_STATE_IDLE:
+                self._stop_cancel()
+                self._transition_cancel()
+                self.update_state(STATE_OPEN if self._attr_current_cover_position else STATE_CLOSED)
+                return
+        else:
+            if self._attr_state == STATE_OPENING:
+                self._attr_current_cover_position = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)
+                if self._attr_current_cover_position > POSITION_FULLY_OPENED:
+                    self._attr_current_cover_position = POSITION_FULLY_OPENED
+                if (state == mc.ROLLERSHUTTER_STATE_OPENING) and self.hass and self.enabled:
+                    self.async_write_ha_state()
+            elif self._attr_state == STATE_CLOSING:
+                self._attr_current_cover_position = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)
+                if self._attr_current_cover_position < POSITION_FULLY_CLOSED:
+                    self._attr_current_cover_position = POSITION_FULLY_CLOSED
+                if (state == mc.ROLLERSHUTTER_STATE_CLOSING) and self.hass and self.enabled:
+                    self.async_write_ha_state()
 
-        # here the cover is moving so...
+            if state == mc.ROLLERSHUTTER_STATE_OPENING:
+                if self._attr_state != STATE_OPENING:
+                    self._position_start = self._attr_current_cover_position\
+                        if self._attr_current_cover_position is not None else POSITION_FULLY_CLOSED
+                    self._position_starttime = epoch
+                    self.update_state(STATE_OPENING)
+            elif state == mc.ROLLERSHUTTER_STATE_CLOSING:
+                if self._attr_state != STATE_CLOSING:
+                    self._position_start = self._attr_current_cover_position\
+                        if self._attr_current_cover_position is not None else POSITION_FULLY_OPENED
+                    self._position_starttime = epoch
+                    self.update_state(STATE_CLOSING)
+            else: # state == mc.ROLLERSHUTTER_STATE_IDLE:
+                self._stop_cancel()
+                self._transition_cancel()
+                self.update_state(STATE_OPEN if self.current_cover_position else STATE_CLOSED)
+                return
+
+        # here the cover is moving
+
         if self._position_endtime is not None:
-            # in case our _close_calback has not been called or failed
+            # in case our _close_calback has not yet been called or failed
             if epoch >= self._position_endtime:
-                self.request_position(-1)
+                self._request_position(-1)
 
         if self._transition_unsub is None:
             # ensure we 'follow' cover movement
@@ -657,7 +690,7 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
     def _stop_callback(self, _now: datetime) -> None:
         self.device.log(DEBUG, 0, "MLRollerShutter(0): _stop_callback")
         self._stop_unsub = None
-        self.request_position(-1)
+        self._request_position(-1)
 
 
     def _stop_cancel(self):
@@ -722,7 +755,6 @@ class RollerShutterMixin:
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here
             MLRollerShutter(self, 0)
-            self.polling_dictionary.add(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
             self.polling_dictionary.add(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
             self.polling_dictionary.add(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG)
 

@@ -51,6 +51,13 @@ def reverse_lookup(_dict: dict, value):
     return None
 
 
+def versiontuple(version: str) -> tuple:
+    """
+    helper for version checking, comparisons, etc
+    """
+    return tuple(map(int, (version.split("."))))
+
+
 """
     obfuscation:
     call obfuscate on a paylod (dict) to remove well-known sensitive
