@@ -8,10 +8,11 @@
   "requirements": [],
   "dhcp": [
     {"hostname": "*", "macaddress": "48E1E9*"},
-    {"hostname": "*", "macaddress": "34298F1*"}
+    {"hostname": "*", "macaddress": "34298F1*"},
+    {"registered_devices": true}
   ],
   "dependencies": ["recorder"],
   "after_dependencies": ["mqtt", "dhcp"],
   "codeowners": ["@krahabb"],
-  "version": "2.6.3-alpha.0"
+  "version": "2.6.3-alpha.1"
 }

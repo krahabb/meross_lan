@@ -289,16 +289,13 @@ class MerossApi:
         #self.unsub_mqtt_connected = async_dispatcher_connect(self.hass, MQTT_CONNECTED, mqtt_connected)
 
 
-    def has_device(self, ipaddress: str, macaddress:str) -> bool:
+    def get_device_with_mac(self, macaddress:str) -> MerossDevice:
         # macaddress from dhcp discovery is already stripped/lower but...
         macaddress = macaddress.replace(':', '').lower()
         for device in self.devices.values():
-            if device.descriptor.innerIp == ipaddress:
-                return True
             if device.descriptor.macAddress.replace(':', '').lower() == macaddress:
-                return True
-        else:
-            return False
+                return device
+        return False
 
 
     def build_device(self, device_id: str, entry: ConfigEntry) -> MerossDevice:

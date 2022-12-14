@@ -27,7 +27,7 @@ from .helpers import LOGGER, mqtt_is_loaded
 from .const import (
     DOMAIN,
     CONF_HOST, CONF_DEVICE_ID, CONF_KEY, CONF_CLOUD_KEY,
-    CONF_PAYLOAD,
+    CONF_PAYLOAD, CONF_TIMESTAMP,
     CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT,
     CONF_TRACE, CONF_TRACE_TIMEOUT, CONF_TRACE_TIMEOUT_DEFAULT,
@@ -227,11 +227,32 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
         try:# not sure when discovery_info signature changed...we'll play it safe
             if isinstance(discovery_info, dhcp.DhcpServiceInfo):
                 self._host = discovery_info.ip
-                self._macaddress = discovery_info.macaddress
+                macaddress = discovery_info.macaddress
+            else:
+                self._host = discovery_info.get('ip')
+                macaddress = discovery_info.get('macaddress')
         except:
             self._host = discovery_info.get('ip')
-            self._macaddress = discovery_info.get('macaddress')
+            macaddress = discovery_info.get('macaddress')
 
+        macaddress = macaddress.replace(':', '').lower()
+        """
+        check if the device is already registered
+        """
+        try:
+            config_entries = self.hass.config_entries
+            for entry in config_entries.async_entries(DOMAIN):
+                descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD, {}))
+                if descriptor.macAddress.replace(':', '').lower() != macaddress:
+                    continue
+                data = dict(entry.data) # deepcopy? not needed: see CONF_TIMESTAMP
+                data[CONF_HOST] = self._host
+                data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
+                config_entries.async_update_entry(entry, data=data)
+                LOGGER.info("DHCP updated device ip address (%s) for device %s", self._host, descriptor.uuid)
+                return self.async_abort(reason='already_configured')
+        except Exception as e:
+            LOGGER.warning("DHCP update internal error: %s", str(e))
         """
         we'll update the unique_id for the flow when we'll have the device_id
         macaddress would have been a better choice since the beginning (...)
@@ -240,7 +261,7 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
         via our api and the dhcp integration keeps pushing us discoveries for
         the same device
         """
-        await self.async_set_unique_id(self._macaddress, raise_on_progress=True)
+        await self.async_set_unique_id(macaddress, raise_on_progress=True)
 
         """
         Check we already dont have the device registered.
@@ -249,8 +270,7 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
         """
         api = self.hass.data.get(DOMAIN)
         if api is not None:
-            if api.has_device(self._host, self._macaddress):
-                LOGGER.debug("ignoring dhcp discovery for %s: already configured", self._host)
+            if (device := api.get_device_with_mac(macaddress)):
                 return self.async_abort(reason='already_configured')
 
         try:
