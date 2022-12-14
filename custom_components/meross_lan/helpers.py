@@ -108,8 +108,16 @@ def mqtt_is_loaded(hass) -> bool:
     """
     check if any MQTT is configured
     """
-    from homeassistant.components.mqtt import DATA_MQTT
-    return hass.data.get(DATA_MQTT) is not None
+    try:
+        # implemented since 2022.9.x or so...
+        from homeassistant.components.mqtt.util import get_mqtt_data
+        if (mqtt_data := get_mqtt_data(hass, False)):
+            return mqtt_data.client is not None
+        return False
+    except:
+        # legacy config/client check
+        from homeassistant.components.mqtt import DATA_MQTT
+        return hass.data.get(DATA_MQTT) is not None
 
 
 def mqtt_is_connected(hass) -> bool:
