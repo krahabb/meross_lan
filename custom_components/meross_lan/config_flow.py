@@ -239,12 +239,13 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
             LOGGER.warning("DHCP update internal error: %s", str(error))
 
         # we'll update the unique_id for the flow when we'll have the device_id
-        # macaddress would have been a better choice since the beginning (...)
-        # but I don't want to mess with ConfigEntry versioning right now
         # Here this is needed in case we cannot correctly identify the device
         # via our api and the dhcp integration keeps pushing us discoveries for
         # the same device
-        await self.async_set_unique_id(macaddress, raise_on_progress=True)
+        # update 2022-12-19: adding DOMAIN prefix since macaddress alone might be set by other
+        # integrations and that would conflict with our unique_id likely raising issues
+        # on DHCP discovery not working in some configurations
+        await self.async_set_unique_id(DOMAIN + macaddress, raise_on_progress=True)
 
 
         # Check we already dont have the device registered.
