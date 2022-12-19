@@ -2,10 +2,9 @@ from copy import deepcopy
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.components.diagnostics import REDACTED
 
+from . import MerossApi
 from .helpers import obfuscate
-
 from .const import (
-    DOMAIN,
     CONF_DEVICE_ID, CONF_PAYLOAD,
     CONF_HOST, CONF_KEY, CONF_CLOUD_KEY,
     CONF_PROTOCOL, CONF_POLLING_PERIOD,
@@ -38,7 +37,7 @@ async def _async_get_diagnostics(hass, entry: ConfigEntry):
 
     device = None
     deviceclass = None
-    api = hass.data.get(DOMAIN)
+    api = MerossApi.peek(hass)
     if api is not None:# all of the meross_lan entries disabled?
         device = api.devices.get(device_id)
         deviceclass = type(device).__name__

@@ -11,8 +11,11 @@
     {"hostname": "*", "macaddress": "34298F1*"},
     {"registered_devices": true}
   ],
+  "mqtt": [
+    "/appliance/+/publish"
+  ],
   "dependencies": ["recorder"],
   "after_dependencies": ["mqtt", "dhcp"],
   "codeowners": ["@krahabb"],
-  "version": "2.6.3-alpha.1"
+  "version": "2.7.0-alpha.0"
 }

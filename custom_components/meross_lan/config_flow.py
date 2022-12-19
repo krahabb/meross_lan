@@ -11,7 +11,6 @@ from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.components import dhcp
 
 from .merossclient import (
     MerossHttpClient,
@@ -73,8 +72,9 @@ class ConfigError(Exception):
 
 
 class CloudKeyMixin:
-
+    """ Mixin providing cloud key retrieval for both Config and Option flows"""
     async def async_step_cloudkey(self, user_input=None):
+        """ manage the cloud login form to retrieve the device key"""
         errors = {}
 
         if user_input:
@@ -85,12 +85,13 @@ class CloudKeyMixin:
                     username, password, async_get_clientsession(self.hass))
                 self._key = self._cloud_key
                 return await self.async_step_device()
-            except MerossApiError as e:
+            except MerossApiError as error:
                 errors[CONF_ERROR] = ERR_INVALID_AUTH
-                _err = e.reason
-            except Exception as e:
+                _err = error.reason
+            except Exception as error:
                 errors[CONF_ERROR] = ERR_CANNOT_CONNECT
-                _err = str(e) or type(e).__name__
+                _err = str(error) or type(error).__name__
+
             return self.async_show_form(
                 step_id="cloudkey",
                 data_schema=vol.Schema({
@@ -100,14 +101,13 @@ class CloudKeyMixin:
                         }),
                 errors=errors)
 
-        else:
-            return self.async_show_form(
-                step_id="cloudkey",
-                data_schema=vol.Schema({
-                    vol.Required(CONF_USERNAME): str,
-                    vol.Required(CONF_PASSWORD): str
-                    })
-                )
+        return self.async_show_form(
+            step_id="cloudkey",
+            data_schema=vol.Schema({
+                vol.Required(CONF_USERNAME): str,
+                vol.Required(CONF_PASSWORD): str
+                })
+            )
 
 
 
@@ -127,6 +127,7 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
 
+
     @staticmethod
     def async_get_options_flow(config_entry):
         return OptionsFlowHandler(config_entry)
@@ -135,13 +136,8 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         """
         This is the entry point for user initiated flows
-        it is just 'smart' a selector for the proper config step
         """
-        # check we already configured the hub ..
-        if (DOMAIN not in self._async_current_ids()) and mqtt_is_loaded(self.hass):
-            return await self.async_step_hub()
-        # user starting a flow then: fill up the key if any
-        if (api := self.hass.data.get(DOMAIN)) is not None:
+        if (api := MerossApi.peek(self.hass)) is not None:
             if api.cloud_key is not None:
                 self._key = api.cloud_key
                 self._cloud_key = api.cloud_key
@@ -149,7 +145,7 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
 
 
     async def async_step_hub(self, user_input=None):
-        #right now this is only used to setup MQTT Hub feature to allow discovery and mqtt message sub/pub
+        """ configure the MQTT discovery device key"""
         if user_input == None:
             await self.async_set_unique_id(DOMAIN)
             self._abort_if_unique_id_configured()
@@ -159,7 +155,7 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
 
 
     async def async_step_device(self, user_input=None):
-
+        """ common device configuration"""
         errors = {}
 
         if user_input is None:
@@ -186,17 +182,17 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
                 _discovery_info = await _http_discovery(self.hass, self._host, self._key)
                 await self._async_set_info(_discovery_info)
                 return await self.async_step_finalize()
-            except ConfigError as e:
-                errors[ERR_BASE] = e.reason
-            except MerossKeyError as e:
+            except ConfigError as error:
+                errors[ERR_BASE] = error.reason
+            except MerossKeyError:
                 self._cloud_key = None
                 if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
                     return await self.async_step_cloudkey()
                 errors[CONF_KEYMODE] = ERR_INVALID_KEY
-            except AbortFlow as e:
+            except AbortFlow:
                 errors[ERR_BASE] = ERR_ALREADY_CONFIGURED_DEVICE
-            except Exception as e:
-                LOGGER.warning("Error (%s) configuring meross device (host:%s)", str(e), self._host)
+            except Exception as error:
+                LOGGER.warning("Error (%s) configuring meross device (host:%s)", str(error), self._host)
                 errors[ERR_BASE] = ERR_CANNOT_CONNECT
 
         config_schema = {
@@ -219,56 +215,42 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_finalize()
 
 
-    async def async_step_dhcp(self, discovery_info: object):
+    async def async_step_dhcp(self, discovery_info):
         """Handle a flow initialized by DHCP discovery."""
         if LOGGER.isEnabledFor(DEBUG):
             LOGGER.debug("received dhcp discovery: %s", str(discovery_info))
 
-        try:# not sure when discovery_info signature changed...we'll play it safe
-            if isinstance(discovery_info, dhcp.DhcpServiceInfo):
-                self._host = discovery_info.ip
-                macaddress = discovery_info.macaddress
-            else:
-                self._host = discovery_info.get('ip')
-                macaddress = discovery_info.get('macaddress')
-        except:
-            self._host = discovery_info.get('ip')
-            macaddress = discovery_info.get('macaddress')
-
-        macaddress = macaddress.replace(':', '').lower()
-        """
-        check if the device is already registered
-        """
+        self._host = discovery_info.ip
+        macaddress = discovery_info.macaddress.replace(':', '').lower()
+        # check if the device is already registered
         try:
-            config_entries = self.hass.config_entries
-            for entry in config_entries.async_entries(DOMAIN):
+            entries = self.hass.config_entries
+            for entry in entries.async_entries(DOMAIN):
                 descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD, {}))
                 if descriptor.macAddress.replace(':', '').lower() != macaddress:
                     continue
                 data = dict(entry.data) # deepcopy? not needed: see CONF_TIMESTAMP
                 data[CONF_HOST] = self._host
                 data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
-                config_entries.async_update_entry(entry, data=data)
+                entries.async_update_entry(entry, data=data)
                 LOGGER.info("DHCP updated device ip address (%s) for device %s", self._host, descriptor.uuid)
                 return self.async_abort(reason='already_configured')
-        except Exception as e:
-            LOGGER.warning("DHCP update internal error: %s", str(e))
-        """
-        we'll update the unique_id for the flow when we'll have the device_id
-        macaddress would have been a better choice since the beginning (...)
-        but I don't want to mess with ConfigEntry versioning right now
-        Here this is needed in case we cannot correctly identify the device
-        via our api and the dhcp integration keeps pushing us discoveries for
-        the same device
-        """
+        except Exception as error:
+            LOGGER.warning("DHCP update internal error: %s", str(error))
+
+        # we'll update the unique_id for the flow when we'll have the device_id
+        # macaddress would have been a better choice since the beginning (...)
+        # but I don't want to mess with ConfigEntry versioning right now
+        # Here this is needed in case we cannot correctly identify the device
+        # via our api and the dhcp integration keeps pushing us discoveries for
+        # the same device
         await self.async_set_unique_id(macaddress, raise_on_progress=True)
 
-        """
-        Check we already dont have the device registered.
-        This is probably overkill since the ConfigFlow will recognize
-        the duplicated unique_id sooner or later
-        """
-        api = self.hass.data.get(DOMAIN)
+
+        # Check we already dont have the device registered.
+        # This is a legacy (dead code) check since we've already
+        # looped through our config entries and updated the ip address there
+        api = MerossApi.peek(self.hass)
         if api is not None:
             if (device := api.get_device_with_mac(macaddress)):
                 return self.async_abort(reason='already_configured')
@@ -276,10 +258,8 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
         try:
             # try device identification so the user/UI has a good context to start with
             if api is not None:
-                """
-                we'll see if any previous device already used a 'cloud_key' retrieved
-                from meross api for cloud-paired devices and try it
-                """
+                # we'll see if any previous device already used a 'cloud_key' retrieved
+                # from meross api for cloud-paired devices and try it
                 _discovery_info = None
                 if api.cloud_key is not None:
                     try:
@@ -296,19 +276,17 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
                         pass
                 if _discovery_info is not None:
                     await self._async_set_info(_discovery_info)
-            """
-            we're now skipping key-hack discovery since devices on recent firmware
-            look like they really hate this hack...
-            if _discovery_info is None:
-                self._key = None # no other options: try empty key (which will eventually use the reply-hack)
-                _discovery_info = await self._http_discovery()
-            await self._async_set_info(_discovery_info)
-            """
-            # now just let the user edit/accept the host address even if identification was fine
-        except Exception as e:
+
+            # we're now skipping key-hack discovery since devices on recent firmware
+            # look like they really hate this hack...
+            # if _discovery_info is None:
+            #     self._key = None # no other options: try empty key (which will eventually use the reply-hack)
+            #     _discovery_info = await self._http_discovery()
+            # await self._async_set_info(_discovery_info)
+        except Exception as error:
             if LOGGER.isEnabledFor(DEBUG):
-                LOGGER.debug("Error (%s) identifying meross device (host:%s)", str(e), self._host)
-            if isinstance(e, AbortFlow):
+                LOGGER.debug("Error (%s) identifying meross device (host:%s)", str(error), self._host)
+            if isinstance(error, AbortFlow):
                 # we might have 'correctly' identified an already configured entry
                 return self.async_abort(reason='already_configured')
             # forgive and continue if we cant discover the device...let the user work it out
@@ -316,7 +294,35 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_device()
 
 
+    async def async_step_mqtt(self, discovery_info):
+        """manage the MQTT discovery flow"""
+        # this entry should only ever called once after startup
+        # when HA thinks we're interested in discovery.
+        # If our MerossApi is already running it will manage the discovery itself
+        # so this flow is only useful when MerossLan has no configuration yet
+        # and we leverage the default mqtt discovery to setup our manager
+        api = MerossApi.get(self.hass)
+        if api.mqtt_registered:
+            return self.async_abort(reason='already_configured')
+        # try setup the mqtt subscription
+        # this call might not register because of errors or because of an overlapping
+        # request from 'async_setup_entry' (we're preventing overlapped calls to MQTT
+        # subscription)
+        await api.async_mqtt_register()
+        if api.mqtt_registered:
+            # ok, now pass along the discovering mqtt message so our MerossApi state machine
+            # gets to work on this
+            await api.async_mqtt_receive(discovery_info)
+
+        # just in case, setup the MQTT Hub entry to enable the (default) device key configuration
+        # if the entry hub is already configured this will disable the discovery
+        # subscription (by returning 'already_configured') stopping any subsequent async_step_mqtt message:
+        # our MerossApi should already be in place
+        return await self.async_step_hub()
+
+
     async def async_step_finalize(self, user_input=None):
+        """just a recap form"""
         if user_input is None:
             return self.async_show_form(
                 step_id="finalize",
@@ -356,7 +362,7 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
         Manage device options configuration
     """
 
-    def __init__(self, config_entry):
+    def __init__(self, config_entry: config_entries.ConfigEntry):
         self._config_entry = config_entry
         if config_entry.unique_id != DOMAIN:
             data = config_entry.data
@@ -395,10 +401,14 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
 
 
     async def async_step_device(self, user_input=None):
+        """
+        general (common) device configuration allowing key set and
+        general parameters to be entered/modified
+        """
         errors = {}
 
-        api: MerossApi = self.hass.data.get(DOMAIN)
-        device: MerossDevice = api.devices.get(self.device_id)
+        api = MerossApi.peek(self.hass)
+        device = api.devices.get(self.device_id)
 
         if user_input is None:
             # this preset will force (if _host) a connection check
@@ -447,14 +457,14 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
                         pass # forgive any error
                 return self.async_create_entry(title=None, data=None)
 
-            except MerossKeyError as e:
+            except MerossKeyError:
                 self._cloud_key = None
                 if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
                     return await self.async_step_cloudkey()
                 errors[CONF_KEYMODE] = ERR_INVALID_KEY
-            except ConfigError as e:
-                errors[ERR_BASE] = e.reason
-            except Exception as e:
+            except ConfigError as error:
+                errors[ERR_BASE] = error.reason
+            except Exception:
                 errors[ERR_BASE] = ERR_CANNOT_CONNECT
 
         config_schema = dict()

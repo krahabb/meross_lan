@@ -124,8 +124,13 @@ def mqtt_is_connected(hass) -> bool:
     """
     check if MQTT communication is available
     """
-    from homeassistant.components.mqtt import is_connected
-    return is_connected(hass)
+    if mqtt_is_loaded(hass):
+        try:
+            from homeassistant.components.mqtt import is_connected
+            return is_connected(hass)
+        except:
+            pass
+    return False
 
 
 def mqtt_publish(hass, topic, payload):

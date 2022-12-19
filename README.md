@@ -32,17 +32,19 @@ Restart HA to let it play.
 
 ## Setup
 
-Once installed and restarted, your Meross devices should be automatically discovered by the 'dhcp' integration and will then pop-up in your integrations panel ready to be configured (the exact timing will depend since the dhcp discovery has different strategies but a simple boot of the device should be sufficient even if not necessary). 
+Once installed and restarted, your Meross devices should be automatically discovered by the 'dhcp' integration and will then pop-up in your integrations panel ready to be configured (the exact timing will depend since the dhcp discovery has different strategies but a simple boot of the device should be sufficient even if not necessary).
 
 > ℹ️ If device(s) are not automatically discovered, try powering them off for 10s and then powering them back on. A notification that new devices have been discovered should appear in `notifications`.
 
 
-If you are using the 'MQTT way' you can help the discovery process by adding the 'MQTT Hub' feature of this integration (This was needed in the previous versions while you should be able to skip this step if the dhcp discovery works fine). If you need, just go to your homeassistant `Configuration -> Integrations` and add the Meross LAN by looking through the list of available ones. Here you can configure the device key used to sign the messages exchanged: this need to be the same key used when re-binding your hardware else the integration will not be able to discover new devices (dhcp discovery should instead work anyway: the key will be asked and set when configuring every single appliance).
+If you are using the 'MQTT way' devices will be automatically discovered when they publish any MQTT message topic.
+If you set a non-empty device key when binding your devices to your private broker, you must configure it in the 'MQTT Hub' configuration entry (this will popup too in the discovered integrations). Once the mqtt hub entry is properly set with the correct key, devices should be automatically discovered
+
 
 You can also manually add your device by adding a new integration entry and providing the host address and device key.
 
 When configuring a device entry you'll have the option to set:
-- host address: this is available when manually adding a device or when a device is discovered via DHCP: provide the ip address or a valid network host name. When you set the ip address, ensure it is 'stable' and not changing between re-boots else the integration will 'loose' access to the device
+- host address: this is available when manually adding a device or when a device is discovered via DHCP: provide the ip address or a valid network host name. When you set the ip address, try to ensure it is 'stable' and not changing between re-boots else the integration could 'loose' access to the device. Starting from version 2.7.0 any dynamic ip change should be recognized by meross_lan so you don't have to manually fix this anymore.
 - key selection mode: this option allows you to specify some 'helpful' behaviours when configuring the device key. Whatever 'mode' you select you should always set a proper key in the next configuration field since that is the one meross_lan will use. The 'mode' field is only an hint to meross_lan on how to process the key validation/configuration
   - User set: this mode allows you to set the (non empty) key and meross_lan will accept it with no further actions (except checking it is valid by querying the device)
   - Hack mode: this mode allows meross_lan to accept an empty key. Setting an empty key will try to use an hack to communicate with the device. This works or not depending on many factors and you could experience random issues due to the algorithm not always working. Be aware and use it only as a last resort!
