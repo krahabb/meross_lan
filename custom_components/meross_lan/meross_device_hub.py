@@ -22,6 +22,7 @@ from .climate import PLATFORM_CLIMATE
 from .binary_sensor import PLATFORM_BINARY_SENSOR, MLBinarySensor, DEVICE_CLASS_WINDOW
 from .number import PLATFORM_NUMBER, MLHubAdjustNumber
 from .switch import PLATFORM_SWITCH, MLHubSwitch
+from .calendar import PLATFORM_CALENDAR
 from .helpers import LOGGER
 from .const import (
     DOMAIN,
@@ -31,20 +32,18 @@ from .const import (
 
 
 WELL_KNOWN_TYPE_MAP: Dict[str, Callable] = dict({
+    # typical entries (they're added on SubDevice declaration)
+    # mc.TYPE_MS100: MS100SubDevice,
+    # mc.TYPE_MTS100: MTS100SubDevice,
 })
-"""
-{
-    mc.TYPE_MS100: MS100SubDevice,
-    mc.TYPE_MTS100: MTS100SubDevice,
-    ...
-}
-"""
 
 #REMOVE
 TRICK = False
 
 class MerossDeviceHub(MerossDevice):
-
+    """
+    Specialized MerossDevice for smart hub(s) like MSH300
+    """
     _lastupdate_battery = 0
     _lastupdate_sensor = None
     _lastupdate_mts100 = None
@@ -53,16 +52,15 @@ class MerossDeviceHub(MerossDevice):
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry) -> None:
         super().__init__(api, descriptor, entry)
         self.subdevices: Dict[any, MerossSubDevice] = {}
-        """
-            invoke platform(s) async_setup_entry
-            in order to be able to eventually add entities when they 'pop up'
-            in the hub (see also self.async_add_sensors)
-        """
+        # invoke platform(s) async_setup_entry
+        # in order to be able to eventually add entities when they 'pop up'
+        # in the hub (see also self.async_add_sensors)
         self.platforms[PLATFORM_SENSOR] = None
         self.platforms[PLATFORM_BINARY_SENSOR] = None
         self.platforms[PLATFORM_CLIMATE] = None
         self.platforms[PLATFORM_NUMBER] = None
         self.platforms[PLATFORM_SWITCH] = None
+        self.platforms[PLATFORM_CALENDAR] = None
 
         try:
             # we expect a well structured digest here since
@@ -132,6 +130,15 @@ class MerossDeviceHub(MerossDevice):
         else:
             self._subdevice_parse(payload, mc.KEY_ADJUST)
 
+
+    def _handle_Appliance_Hub_Mts100_ScheduleB(self,
+    namespace: str, method: str, payload: dict, header: dict):
+        if method == mc.METHOD_SETACK:
+            self.request_get(mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB)
+        else:
+            self._subdevice_parse(payload, mc.KEY_SCHEDULE)
+
+
     def _handle_Appliance_Hub_ToggleX(self,
     namespace: str, method: str, payload: dict, header: dict):
         self._subdevice_parse(payload, mc.KEY_TOGGLEX)
@@ -154,10 +161,8 @@ class MerossDeviceHub(MerossDevice):
 
 
     def _subdevice_build(self, p_subdevice: dict) -> MerossSubDevice:
-        """
-        parses the subdevice payload in 'digest' to look for a well-known type
-        and builds accordingly
-        """
+        # parses the subdevice payload in 'digest' to look for a well-known type
+        # and builds accordingly
         _type = None
         for p_key, p_value in p_subdevice.items():
             if isinstance(p_value, dict):
@@ -204,12 +209,10 @@ class MerossDeviceHub(MerossDevice):
         return count
 
     def _parse_hub(self, p_hub: dict) -> None:
-        """
-        This is usually called inside _parse_all as part of the digest parsing
-        Here we'll check the fresh subdevice list against the actual one and
-        eventually manage newly added subdevices or removed ones #119
-        telling the caller to persist the changed configuration (self.needsave)
-        """
+        # This is usually called inside _parse_all as part of the digest parsing
+        # Here we'll check the fresh subdevice list against the actual one and
+        # eventually manage newly added subdevices or removed ones #119
+        # telling the caller to persist the changed configuration (self.needsave)
         if isinstance(p_subdevices := p_hub.get(mc.KEY_SUBDEVICE), list):
             subdevices_actual: set = set(self.subdevices.keys())
             for p_digest in p_subdevices:
@@ -230,12 +233,10 @@ class MerossDeviceHub(MerossDevice):
                 for p_id in subdevices_actual:
                     subdevice = self.subdevices.get(p_id)
                     self.log(logging.WARNING, 0, "removing subdevice %s(%s) - configuration will be reloaded in 15 sec", subdevice.type, p_id)
-                """
-                before reloading we have to be sure configentry data were persisted
-                so we'll wait a bit..
-                also, we're not registering an unsub and we're not checking
-                for redundant invocations (playing a bit unsafe that is)
-                """
+                # before reloading we have to be sure configentry data were persisted
+                # so we'll wait a bit..
+                # also, we're not registering an unsub and we're not checking
+                # for redundant invocations (playing a bit unsafe that is)
                 hass = self.api.hass
                 async def setup_again(*_) -> None:
                     await hass.config_entries.async_reload(self.entry_id)
@@ -244,15 +245,13 @@ class MerossDeviceHub(MerossDevice):
 
     def _request_updates(self, epoch, namespace):
         super()._request_updates(epoch, namespace)
-        """
-        we just ask for updates when something pops online (_lastupdate_xxxx == 0)
-        relying on push (over MQTT) or base polling updates (only HTTP) for any other changes
-        if _lastupdate_xxxx is None then it means that device class is not present in the hub
-        and we totally skip the request. This is especially true since I've discovered hubs
-        don't expose the full set of namespaces until a real subdevice type is binded.
-        If this is the case we would ask a namespace which is not supported at the moment
-        (see #167)
-        """
+        # we just ask for updates when something pops online (_lastupdate_xxxx == 0)
+        # relying on push (over MQTT) or base polling updates (only HTTP) for any other changes
+        # if _lastupdate_xxxx is None then it means that device class is not present in the hub
+        # and we totally skip the request. This is especially true since I've discovered hubs
+        # don't expose the full set of namespaces until a real subdevice type is binded.
+        # If this is the case we would ask a namespace which is not supported at the moment
+        # (see #167)
         if self._lastupdate_sensor is not None:
             if (self._lastupdate_sensor == 0) or ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
                 self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ALL)
@@ -262,11 +261,9 @@ class MerossDeviceHub(MerossDevice):
         if ((epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
             self.request_get(mc.NS_APPLIANCE_HUB_BATTERY)
 
-        """
-        we also need to check for TOGGLEX state in case but this is not always needed:
-        for example, if we just have mts100-likes devices, their 'togglex' state is already carried by
-        NS_APPLIANCE_HUB_MTS100_ALL, or we may know some subdevices dont actually have togglex
-        """
+        # we also need to check for TOGGLEX state in case but this is not always needed:
+        # for example, if we just have mts100-likes devices, their 'togglex' state is already carried by
+        # NS_APPLIANCE_HUB_MTS100_ALL, or we may know some subdevices dont actually have togglex
         if mc.NS_APPLIANCE_HUB_TOGGLEX in self.descriptor.ability:
             if ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
                 _excluded = (mc.TYPE_MS100, mc.TYPE_MTS100, mc.TYPE_MTS100V3, mc.TYPE_MTS150)
@@ -274,6 +271,10 @@ class MerossDeviceHub(MerossDevice):
                     if subdevice.type not in _excluded:
                         self.request_get(mc.NS_APPLIANCE_HUB_TOGGLEX)
                         break
+
+        if mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in self.descriptor.ability:
+            if ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
+                self.request_get(mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB)
 
 
 
@@ -303,15 +304,13 @@ class MerossSubDevice:
 
 
     def _setonline(self) -> None:
-        """
-        here we should request updates for all entities but
-        there could be some 'light' race conditions
-        since when the device (hub) comes online it requests itself
-        a full update and this could be the case.
-        If instead this online status change is due to the single
-        subdevice coming online then we'll just wait for the next
-        polling cycle by setting the battery update trigger..
-        """
+        # here we should request updates for all entities but
+        # there could be some 'light' race conditions
+        # since when the device (hub) comes online it requests itself
+        # a full update and this could be the case.
+        # If instead this online status change is due to the single
+        # subdevice coming online then we'll just wait for the next
+        # polling cycle by setting the battery update trigger..
         self.hub._lastupdate_battery = 0
 
 
@@ -321,28 +320,26 @@ class MerossSubDevice:
 
 
     def _parse_all(self, p_all: dict) -> None:
-        """
-        typically parses NS_APPLIANCE_HUB_SENSOR_ALL:
-        generally speaking this payload has a couple of well-known keys
-        plus a set of sensor values like (MS100 example):
-        {
-            "id": "..."
-            "online: "..."
-            "temperature": {
-                "latest": value
-                ...
-            }
-            "humidity": {
-                "latest": value
-                ...
-            }
-        }
-        so we just extract generic sensors where we find 'latest'
-        Luckily enough the key names in Meross will behave consistently in HA
-        at least for 'temperature' and 'humidity' (so far..) also, we divide
-        the value by 10 since that's a correct eurhystic for them (so far..).
-        Specialized subdevices might totally override this...
-        """
+        # typically parses NS_APPLIANCE_HUB_SENSOR_ALL:
+        # generally speaking this payload has a couple of well-known keys
+        # plus a set of sensor values like (MS100 example):
+        # {
+        #     "id": "..."
+        #     "online: "..."
+        #     "temperature": {
+        #         "latest": value
+        #         ...
+        #     }
+        #     "humidity": {
+        #         "latest": value
+        #         ...
+        #     }
+        # }
+        # so we just extract generic sensors where we find 'latest'
+        # Luckily enough the key names in Meross will behave consistently in HA
+        # at least for 'temperature' and 'humidity' (so far..) also, we divide
+        # the value by 10 since that's a correct eurhystic for them (so far..).
+        # Specialized subdevices might totally override this...
         self._parse_online(p_all.get(mc.KEY_ONLINE, {}))
 
         if self._online:
@@ -434,8 +431,9 @@ class MTS100SubDevice(MerossSubDevice):
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100) -> None:
         super().__init__(hub, p_digest, _type)
-        from .devices.mts100 import Mts100Climate
+        from .devices.mts100 import Mts100Climate, Mts100Schedule
         self.climate = Mts100Climate(self)
+        self.schedule = Mts100Schedule(self.climate)
         self.binary_sensor_window = MLBinarySensor.build_for_subdevice(
             self, DEVICE_CLASS_WINDOW)
         self.sensor_temperature = MLSensor.build_for_subdevice(
@@ -455,6 +453,8 @@ class MTS100SubDevice(MerossSubDevice):
 
         climate = self.climate
 
+        climate.scheduleBMode = p_all.get(mc.KEY_SCHEDULEBMODE)
+
         if isinstance(p_mode := p_all.get(mc.KEY_MODE), dict):
             climate._mts_mode = p_mode.get(mc.KEY_STATE)
 
@@ -465,12 +465,14 @@ class MTS100SubDevice(MerossSubDevice):
             self._parse_temperature(p_temperature)
         else:
             climate.update_modes()
+            self.schedule.update_climate_modes()
 
 
     def _parse_mode(self, p_mode: dict) -> None:
         climate = self.climate
         climate._mts_mode = p_mode.get(mc.KEY_STATE)
         climate.update_modes()
+        self.schedule.update_climate_modes()
 
 
     def _parse_temperature(self, p_temperature: dict) -> None:
@@ -487,6 +489,7 @@ class MTS100SubDevice(MerossSubDevice):
         if mc.KEY_HEATING in p_temperature:
             climate._mts_heating = p_temperature[mc.KEY_HEATING]
         climate.update_modes()
+        self.schedule.update_climate_modes()
 
         if isinstance(_t := p_temperature.get(mc.KEY_COMFORT), int):
             climate.number_comfort_temperature.update_native_value(_t)
@@ -503,6 +506,11 @@ class MTS100SubDevice(MerossSubDevice):
         climate = self.climate
         climate._mts_onoff = p_togglex.get(mc.KEY_ONOFF)
         climate.update_modes()
+        self.schedule.update_climate_modes()
+
+
+    def _parse_schedule(self, p_schedule: dict) -> None:
+        self.schedule._parse_schedule(p_schedule)
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100] = MTS100SubDevice

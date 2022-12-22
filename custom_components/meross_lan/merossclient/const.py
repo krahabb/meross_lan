@@ -187,6 +187,8 @@ KEY_LATESTHUMIDITY = 'latestHumidity'
 KEY_SMOKEALARM = 'smokeAlarm'
 KEY_INTERCONN = 'interConn'
 KEY_SCHEDULE = 'schedule'
+KEY_SCHEDULEBMODE = 'scheduleBMode'
+KEY_SCHEDULEUNITTIME = 'scheduleUnitTime'
 KEY_ELECTRICITY = 'electricity'
 KEY_POWER = 'power'
 KEY_CURRENT = 'current'
@@ -282,6 +284,7 @@ LIGHT_CAPACITY_TEMPERATURE = 2
 LIGHT_CAPACITY_LUMINANCE = 4
 LIGHT_CAPACITY_RGB_LUMINANCE = 5
 LIGHT_CAPACITY_TEMPERATURE_LUMINANCE = 6
+LIGHT_CAPACITY_EFFECT = 8 # not tested but looks like msl320 carries this flag
 
 # spray mode enums
 SPRAY_MODE_OFF = 0

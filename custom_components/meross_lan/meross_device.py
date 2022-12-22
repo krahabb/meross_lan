@@ -6,13 +6,14 @@ import socket
 import math
 from typing import  Callable, Dict, List, Set
 from time import strftime, time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from io import TextIOWrapper
 from json import dumps as json_dumps
 from copy import deepcopy
 import voluptuous as vol
 from enum import Enum
 
-from datetime import datetime
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntries, ConfigEntry
@@ -98,7 +99,9 @@ MAP_CONF_PROTOCOL = {
 
 
 class MerossDevice:
-
+    """
+    Generic protocol handler class managing the physical device stack/state
+    """
     entity_dnd = MerossFakeEntity
 
 
@@ -131,55 +134,42 @@ class MerossDevice:
         self._trace_data: list = None
         self._trace_endtime = 0
         self._trace_ability_iter = None
-        """
-        self.entities: dict()
-        is a collection of all of the instanced entities
-        they're generally built here during __init__ and will be registered
-        in platforms(s) async_setup_entry with HA
-        """
+        # This is a collection of all of the instanced entities
+        # they're generally built here during __init__ and will be registered
+        # in platforms(s) async_setup_entry with HA
         self.entities: Dict[object, '_MerossEntity'] = dict()  # pylint: disable=undefined-variable
-
-        """
-        This is mainly for HTTP based devices: we build a dictionary of what we think could be
-        useful to asynchronously poll so the actual polling cycle doesnt waste time in checks
-        TL:DR we'll try to solve everything with just NS_SYS_ALL since it usually carries the full state
-        in a single transaction. Also (see #33) the multiplug mss425 doesnt publish the full switch list state
-        through NS_CNTRL_TOGGLEX (not sure if it's the firmware or the dialect)
-        Even if some devices don't carry significant state in NS_ALL we'll poll it anyway even if bulky
-        since it carries also timing informations and whatever
-        As far as we know rollershutter digest doesnt report state..so we'll add requests for that
-        For Hub(s) too NS_ALL is very 'partial' (at least MTS100 state is not fully exposed)
-        """
+        # This is mainly for HTTP based devices: we build a dictionary of what we think could be
+        # useful to asynchronously poll so the actual polling cycle doesnt waste time in checks
+        # TL:DR we'll try to solve everything with just NS_SYS_ALL since it usually carries the full state
+        # in a single transaction. Also (see #33) the multiplug mss425 doesnt publish the full switch list state
+        # through NS_CNTRL_TOGGLEX (not sure if it's the firmware or the dialect)
+        # Even if some devices don't carry significant state in NS_ALL we'll poll it anyway even if bulky
+        # since it carries also timing informations and whatever
+        # As far as we know rollershutter digest doesnt report state..so we'll add requests for that
+        # For Hub(s) too NS_ALL is very 'partial' (at least MTS100 state is not fully exposed)
         self.polling_period = CONF_POLLING_PERIOD_DEFAULT
         self.polling_dictionary: Set[str] = set()
         self.polling_dictionary.add(mc.NS_APPLIANCE_SYSTEM_ALL)
-        """
-        self.platforms: dict()
-        when we build an entity we also add the relative platform name here
-        so that the async_setup_entry for the integration will be able to forward
-        the setup to the appropriate platform.
-        The item value here will be set to the async_add_entities callback
-        during the corresponding platform async_setup_entry so to be able
-        to dynamically add more entities should they 'pop-up' (Hub only?)
-        """
+        # when we build an entity we also add the relative platform name here
+        # so that the async_setup_entry for the integration will be able to forward
+        # the setup to the appropriate platform.
+        # The item value here will be set to the async_add_entities callback
+        # during the corresponding platform async_setup_entry so to be able
+        # to dynamically add more entities should they 'pop-up' (Hub only?)
         self.platforms: Dict[str, Callable] = {}
-        """
-        Message handling is actually very hybrid:
-        when a message (device reply or originated) is received it gets routed to the
-        device instance in 'receive'. Here, it was traditionally parsed with a
-        switch structure against the different expected namespaces.
-        Now the architecture, while still in place, is being moved to handler methods
-        which are looked up by inspecting self for a proper '_handler_{namespace}' signature
-        This signature could be added at runtime or (better I guess) could be added by
-        dedicated mixin classes used to build the actual device class when the device is setup
-        (see __init__.MerossApi.build_device)
-        The handlers dictionary is anyway parsed first and could override a build-time handler.
-        The dicionary keys are Meross namespaces matched against when the message enters the handling
-        """
+        # Message handling is actually very hybrid:
+        # when a message (device reply or originated) is received it gets routed to the
+        # device instance in 'receive'. Here, it was traditionally parsed with a
+        # switch structure against the different expected namespaces.
+        # Now the architecture, while still in place, is being moved to handler methods
+        # which are looked up by inspecting self for a proper '_handler_{namespace}' signature
+        # This signature could be added at runtime or (better I guess) could be added by
+        # dedicated mixin classes used to build the actual device class when the device is setup
+        # (see __init__.MerossApi.build_device)
+        # The handlers dictionary is anyway parsed first and could override a build-time handler.
+        # The dicionary keys are Meross namespaces matched against when the message enters the handling
         self.handlers: Dict[str, Callable] = {}
-        """
-        misc callbacks
-        """
+        # misc callbacks
         self.unsub_entry_update_listener: Callable = None
         self.unsub_updatecoordinator_listener: Callable = None
 
@@ -199,13 +189,11 @@ class MerossDevice:
                 else:
                     _init(payload)
 
-        """
-        warning: would the response be processed after this object is fully init?
-        It should if I get all of this async stuff right
-        also: !! IMPORTANT !! don't send any other message during init process
-        else the responses could overlap and 'fuck' a bit the offline -> online transition
-        causing that code to request a new NS_APPLIANCE_SYSTEM_ALL
-        """
+        # warning: would the response be processed after this object is fully init?
+        # It should if I get all of this async stuff right
+        # also: !! IMPORTANT !! don't send any other message during init process
+        # else the responses could overlap and 'fuck' a bit the offline -> online transition
+        # causing that code to request a new NS_APPLIANCE_SYSTEM_ALL
         self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
 
 
@@ -229,7 +217,27 @@ class MerossDevice:
 
 
     @property
+    def tzname(self) -> str:
+        return self.descriptor.timezone
+
+
+    @property
+    def tzinfo(self) -> tzinfo:
+        tz_name = self.descriptor.timezone
+        try:
+            return ZoneInfo(tz_name) if tz_name else timezone.utc
+        except Exception as error:
+            self.log(
+                logging.WARNING, 14400,
+                "MerossDevice(%s) unable to load timezone info for %s - check your python environment",
+                self.device_id, tz_name
+            )
+            return timezone.utc
+
+
+    @property
     def online(self) -> bool:
+        """ evaluates and report the actual online state of the device"""
         if self._online:
             #evaluate device MQTT availability by checking lastrequest got answered in less than polling_period
             if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < (self.polling_period - 2)):
@@ -254,12 +262,13 @@ class MerossDevice:
         header: dict
     ) -> bool:
         """
-        we'll use the device timestamp to 'align' our time to the device one
-        this is useful for metered plugs reporting timestamped energy consumption
-        and we want to 'translate' this timings in our (local) time.
-        We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
-        we'll always be a bit late in processing
+        default (received) message handling entry point
         """
+        # we'll use the device timestamp to 'align' our time to the device one
+        # this is useful for metered plugs reporting timestamped energy consumption
+        # and we want to 'translate' this timings in our (local) time.
+        # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
+        # we'll always be a bit late in processing
         epoch = time()
         self.device_timestamp = int(header.get(mc.KEY_TIMESTAMP, epoch))
         device_timedelta = epoch - self.device_timestamp
@@ -267,14 +276,12 @@ class MerossDevice:
             self._config_timestamp(epoch, device_timedelta)
         else:
             self.device_timedelta = 0
-        """
-        every time we receive a response we save it's 'replykey':
-        that would be the same as our self.key (which it is compared against in 'get_replykey')
-        if it's good else it would be the device message header to be used in
-        a reply scheme where we're going to 'fool' the device by using its own hashes
-        if our config allows for that (our self.key is 'None' which means empty key or auto-detect)
-        Update: this key trick actually doesnt work on MQTT (but works on HTTP)
-        """
+        # every time we receive a response we save it's 'replykey':
+        # that would be the same as our self.key (which it is compared against in 'get_replykey')
+        # if it's good else it would be the device message header to be used in
+        # a reply scheme where we're going to 'fool' the device by using its own hashes
+        # if our config allows for that (our self.key is 'None' which means empty key or auto-detect)
+        # Update: this key trick actually doesnt work on MQTT (but works on HTTP)
         self.replykey = get_replykey(header, self.key)
         if self.key and (self.replykey != self.key):
             self.log(
@@ -599,7 +606,6 @@ class MerossDevice:
         self.api.update_polling_period()
         _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)
         if _httpclient is not None:
-            # this is actually unneeded since OptionsFlow doesnt allow editing CONF_HOST ;)
             if self._host:
                 _httpclient.host = self._host
             _httpclient.key = self.key

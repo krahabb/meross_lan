@@ -58,6 +58,8 @@ class _MerossEntity:
         self._attr_device_class = device_class
         self.subdevice = subdevice
         self.id = channel if entitykey is None else entitykey if channel is None else f"{channel}_{entitykey}"
+        assert (self.id is not None) and (device.entities.get(self.id) is None),\
+        "provide a unique (channel, entitykey) in order to correctly identify this entity inside device.entities"
         device.entities[self.id] = self
         async_add_devices = device.platforms.setdefault(self.PLATFORM)
         if async_add_devices is not None:
