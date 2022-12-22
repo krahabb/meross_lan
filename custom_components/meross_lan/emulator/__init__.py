@@ -214,6 +214,26 @@ class MerossDevice:
         return mc.METHOD_SETACK, {}
 
 
+    def _SET_Appliance_Control_Light(self, header, payload):
+        # need to override basic handler since lights turning on/off is tricky between
+        # various firmwares: some supports onoff in light payload some use the togglex
+        p_light = payload[mc.KEY_LIGHT]
+        support_onoff_in_light = mc.KEY_ONOFF in self.p_all_digest[mc.KEY_LIGHT]
+        # generally speaking set_light always turns on, unless the payload carries onoff = 0 and
+        # the device is not using togglex
+        if support_onoff_in_light:
+            onoff = p_light.get(mc.KEY_ONOFF, 1)
+            p_light[mc.KEY_ONOFF] = onoff
+        else:
+            onoff = 1
+            p_light.pop(mc.KEY_ONOFF)
+        if mc.KEY_TOGGLEX in self.p_all_digest:
+            # fixed channel 0..that is..
+            self.p_all_digest[mc.KEY_TOGGLEX][0][mc.KEY_ONOFF] = onoff
+        self.p_all_digest[mc.KEY_LIGHT].update(p_light)
+        return mc.METHOD_SETACK, {}
+
+
     def _SET_Appliance_Control_Thermostat_Mode(self, header, payload):
         p_digest_mode_list = self.p_all_digest[mc.KEY_THERMOSTAT][mc.KEY_MODE]
         p_digest_windowopened_list = dict()

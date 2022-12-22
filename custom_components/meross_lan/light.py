@@ -129,7 +129,8 @@ class MLLightBase(_MerossToggle, LightEntity):
 
 
     def update_onoff(self, onoff) -> None:
-        self._light[mc.KEY_ONOFF] = onoff
+        if mc.KEY_ONOFF in self._light:
+            self._light[mc.KEY_ONOFF] = onoff
         self.update_state(STATE_ON if onoff else STATE_OFF)
 
 
@@ -297,18 +298,21 @@ class MLLight(MLLightBase):
         else:
             if mc.KEY_LUMINANCE not in light:
                 light[mc.KEY_LUMINANCE] = 100
-
         capacity |= mc.LIGHT_CAPACITY_LUMINANCE
-        light[mc.KEY_CAPACITY] = capacity
 
         if ATTR_EFFECT in kwargs:
             effect = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
             if effect is not None:
                 light[mc.KEY_EFFECT] = effect
+                capacity |= mc.LIGHT_CAPACITY_EFFECT
             else:
                 light.pop(mc.KEY_EFFECT, None)
+                capacity &= ~mc.LIGHT_CAPACITY_EFFECT
         else:
             light.pop(mc.KEY_EFFECT, None)
+            capacity &= ~mc.LIGHT_CAPACITY_EFFECT
+
+        light[mc.KEY_CAPACITY] = capacity
 
         if self._hastogglex:
             # since lights could be repeatedtly 'async_turn_on' when changing attributes
