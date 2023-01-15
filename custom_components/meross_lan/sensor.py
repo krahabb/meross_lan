@@ -73,7 +73,6 @@ CLASS_TO_UNIT_MAP = {
     DEVICE_CLASS_TEMPERATURE: TEMP_CELSIUS,
     DEVICE_CLASS_HUMIDITY: PERCENTAGE,
     DEVICE_CLASS_BATTERY: PERCENTAGE,
-    DEVICE_CLASS_SIGNAL_STRENGTH: PERCENTAGE,
 }
 
 CORE_HAS_NATIVE_UNIT = hasattr(SensorEntity, 'native_unit_of_measurement')
@@ -113,7 +112,6 @@ class MLSensor(_MerossEntity, SensorEntity):
 
     @staticmethod
     def build_for_subdevice(subdevice: "MerossSubDevice", device_class: str):
-        #return MerossLanSensor(subdevice.hub, f"{subdevice.id}_{device_class}", device_class, subdevice)
         return MLSensor(subdevice.hub, subdevice.id, device_class, device_class, subdevice)
 
 
@@ -280,8 +278,12 @@ class RuntimeMixin:
 
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry) -> None:
         super().__init__(api, descriptor, entry)
-        self._sensor_runtime = MLSensor.build_for_device(self, DEVICE_CLASS_SIGNAL_STRENGTH)
+        # DEVICE_CLASS_SIGNAL_STRENGTH is now 'forcing' dB or dBm as unit
+        # so we drop the device_class (none) but we let the 'entitykey' parameter
+        # to keep the same value so the entity id inside HA remains stable (#239)
+        self._sensor_runtime = MLSensor(self, None, DEVICE_CLASS_SIGNAL_STRENGTH, None, None)
         self._sensor_runtime._attr_entity_category = ENTITY_CATEGORY_DIAGNOSTIC
+        self._sensor_runtime._attr_native_unit_of_measurement = PERCENTAGE
 
 
     def _handle_Appliance_System_Runtime(self,
