@@ -46,6 +46,7 @@ request:
           options:
             - "SET"
             - "GET"
+            - "PUSH"
     namespace:
       name: Namespace
       description: The namespace for the request
@@ -91,7 +92,7 @@ request:
             - "Appliance.Hub.Mts100.Mode"
     key:
       name: Key
-      description: The key used to encrypt message signatures
+      description: The key used to encrypt message signatures (unneeded if device already configured)
       required: false
       advanced: false
       selector:

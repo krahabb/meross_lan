@@ -94,14 +94,37 @@ class MerossApi:
 
         @callback
         def _request(service_call):
-            self.request(
-                device_id=service_call.data.get(CONF_DEVICE_ID),
-                namespace=service_call.data.get(mc.KEY_NAMESPACE),
-                method=service_call.data.get(mc.KEY_METHOD),
-                payload=json_loads(service_call.data.get(mc.KEY_PAYLOAD, "{}")),
-                key=service_call.data.get(CONF_KEY, self.key),
-                host=service_call.data.get(CONF_HOST)
-            )
+            device_id = service_call.data.get(CONF_DEVICE_ID)
+            namespace = service_call.data.get(mc.KEY_NAMESPACE)
+            method = service_call.data.get(mc.KEY_METHOD)
+            payload = json_loads(service_call.data.get(mc.KEY_PAYLOAD, "{}"))
+            key = service_call.data.get(CONF_KEY, self.key)
+            host = service_call.data.get(CONF_HOST)
+
+            if device_id is not None:
+                device = self.devices.get(device_id)
+                if device is not None:
+                    device.request(namespace, method, payload)
+                    return
+                # device not registered (yet?) try direct MQTT
+                if (self.unsub_mqtt_subscribe is not None) and mqtt_is_connected(self.hass):
+                    self.mqtt_publish(device_id, namespace, method, payload, key)
+                    return
+                if host is None:
+                    LOGGER.warning("MerossApi: cannot execute service call on %s - missing MQTT connectivity or device not registered", device_id)
+                    return
+            elif host is None:
+                LOGGER.warning("MerossApi: cannot execute service call (missing device_id and host)")
+                return
+            # host is not None
+            for device in self.devices.values():
+                if device.host == host:
+                    device.request(namespace, method, payload)
+                    return
+
+            self.hass.async_create_task(
+                self.async_http_request(host, namespace, method, payload, key, None)
+                )
             return
 
         hass.services.async_register(DOMAIN, SERVICE_REQUEST, _request)
@@ -428,7 +451,7 @@ class MerossApi:
         device_id: str,
         namespace: str,
         method: str,
-        payload: dict = {},
+        payload: dict,
         key: Union[dict, Optional[str]] = None, # pylint: disable=unsubscriptable-object
         host: str = None,
         callback_or_device: Union[Callable, MerossDevice] = None # pylint: disable=unsubscriptable-object
