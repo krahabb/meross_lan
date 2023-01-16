@@ -102,7 +102,7 @@ NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT = 'Appliance.Control.Thermostat.Overhea
 NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED = 'Appliance.Control.Thermostat.WindowOpened'
 NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE = 'Appliance.Control.Thermostat.Schedule'
 NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION = 'Appliance.Control.Thermostat.HoldAction'
-# MOD100 diffuser
+# MOD100-MOD150 diffuser
 NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY = 'Appliance.Control.Diffuser.Spray'
 NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT = 'Appliance.Control.Diffuser.Light'
 NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR = 'Appliance.Control.Diffuser.Sensor'
@@ -382,6 +382,7 @@ TYPE_NAME_MAP[CLASS_MTS] = "Smart Thermostat"
 
 CLASS_MOD = 'mod'
 TYPE_MOD100 = 'mod100' # smart humidifier
+TYPE_MOD150 = 'mod150' # smart humidifier (looks the same as mod100...maybe HK version tho)
 TYPE_NAME_MAP[CLASS_MOD] = "Smart Humidifier"
 
 CLASS_MSG = 'msg'

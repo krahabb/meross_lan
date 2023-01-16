@@ -3,7 +3,7 @@ from __future__ import annotations
 from ..merossclient import const as mc  # mEROSS cONST
 from ..light import (
     MLLightBase,
-    COLOR_MODE_RGB, COLOR_MODE_UNKNOWN,
+    COLOR_MODE_RGB,
     SUPPORT_BRIGHTNESS, SUPPORT_COLOR, SUPPORT_EFFECT,
     ATTR_RGB_COLOR, ATTR_BRIGHTNESS, ATTR_EFFECT,
     _rgb_to_int,
@@ -13,7 +13,7 @@ from ..select import (
     MLSpray,
     OPTION_SPRAY_MODE_OFF, OPTION_SPRAY_MODE_CONTINUOUS, OPTION_SPRAY_MODE_ECO,
 )
-#from ..sensor import MLSensor, DEVICE_CLASS_TEMPERATURE, DEVICE_CLASS_HUMIDITY
+from ..sensor import MLSensor, DEVICE_CLASS_TEMPERATURE, DEVICE_CLASS_HUMIDITY
 from ..helpers import reverse_lookup
 
 
@@ -141,12 +141,12 @@ class DiffuserMixin:
                     self,
                     s.get(mc.KEY_CHANNEL, 0),
                     self.SPRAY_MODE_MAP)
-        """
-        it looks by the trace we have so far temp and hum are reporting fake (0) values
-        if payload.get(mc.KEY_TYPE) == mc.TYPE_MOD100:
-            self._sensor_temperature = MerossLanSensor(self, DEVICE_CLASS_TEMPERATURE, DEVICE_CLASS_TEMPERATURE)
-            self._sensor_humidity = MerossLanSensor(self, DEVICE_CLASS_HUMIDITY, DEVICE_CLASS_HUMIDITY)
-        """
+        if mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR in self.descriptor.ability:
+            # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
+            # are supporting correct values so we implement them (#243)
+            self._sensor_temperature = MLSensor.build_for_device(self, DEVICE_CLASS_TEMPERATURE)
+            self._sensor_humidity = MLSensor.build_for_device(self, DEVICE_CLASS_HUMIDITY)
+            self.polling_dictionary.add(mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR)
 
     def _handle_Appliance_Control_Diffuser_Light(self,
     namespace: str, method: str, payload: dict, header: dict):
@@ -173,7 +173,10 @@ class DiffuserMixin:
             "temperature": {"value": 0, "lmTime": 0}
         }
         """
-        return
+        if isinstance(humidity := payload.get(mc.KEY_HUMIDITY), dict):
+            self._sensor_humidity.update_state(humidity.get(mc.KEY_VALUE) / 10)
+        if isinstance(temperature := payload.get(mc.KEY_TEMPERATURE), dict):
+            self._sensor_temperature.update_state(temperature.get(mc.KEY_VALUE) / 10)
 
 
     def _parse_diffuser_light(self, payload: dict):
