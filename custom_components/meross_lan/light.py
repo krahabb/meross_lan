@@ -303,6 +303,8 @@ class MLLight(MLLightBase):
         if ATTR_EFFECT in kwargs:
             effect = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
             if effect is not None:
+                if isinstance(effect, str) and effect.isdigit():
+                    effect = int(effect)
                 light[mc.KEY_EFFECT] = effect
                 capacity |= mc.LIGHT_CAPACITY_EFFECT
             else:
@@ -377,10 +379,26 @@ class MLLight(MLLightBase):
             elif capacity & mc.LIGHT_CAPACITY_LUMINANCE:
                 self._attr_color_mode = COLOR_MODE_BRIGHTNESS
 
+        self._attr_effect = None
         if mc.KEY_EFFECT in payload:
-            self._attr_effect = self._light_effect_map.get(payload[mc.KEY_EFFECT])
-        else:
-            self._attr_effect = None
+            # here effect might be an int while our map keys might be 'str formatted'
+            # so we'll use a flexible (robust? dumb?) approach here in mapping
+            effect = payload[mc.KEY_EFFECT]
+            if effect in self._light_effect_map:
+                self._attr_effect = self._light_effect_map.get(effect)
+            elif isinstance(effect, int):
+                for key, value in self._light_effect_map.items():
+                    if isinstance(key, str) and key.isdigit():
+                        if int(key) == effect:
+                            self._attr_effect = value
+                            break
+                else:
+                    # we didnt find the effect even with effectId int casting
+                    # so we hope it's positional....
+                    effects = self._light_effect_map.values()
+                    if effect < len(effects):
+                        self._attr_effect = effects[effect]
+
 
 
 
