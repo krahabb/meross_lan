@@ -81,82 +81,69 @@ class MerossDeviceHub(MerossDevice):
             LOGGER.warning("MerossDeviceHub(%s) init exception:(%s)", self.device_id, str(e))
 
 
-    def _handle_Appliance_Hub_Sensor_All(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Hub_Sensor_All(self, header: dict, payload: dict):
         if self._subdevice_parse(payload, mc.KEY_ALL):
             self._lastupdate_sensor = self.lastupdate
             self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
 
 
-    def _handle_Appliance_Hub_Sensor_TempHum(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Hub_Sensor_TempHum(self, header: dict, payload: dict):
         self._subdevice_parse(payload, mc.KEY_TEMPHUM)
 
 
-    def _handle_Appliance_Hub_Sensor_Smoke(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Hub_Sensor_Smoke(self, header: dict, payload: dict):
         self._subdevice_parse(payload, mc.KEY_SMOKEALARM)
 
 
-    def _handle_Appliance_Hub_Sensor_Adjust(self,
-    namespace: str, method: str, payload: dict, header: dict):
-        if method == mc.METHOD_SETACK:
+    def _handle_Appliance_Hub_Sensor_Adjust(self, header: dict, payload: dict):
+        if header[mc.KEY_METHOD] == mc.METHOD_SETACK:
             self.request_get(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
         else:
             self._subdevice_parse(payload, mc.KEY_ADJUST)
 
 
-    def _handle_Appliance_Hub_Mts100_All(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Hub_Mts100_All(self, header: dict, payload: dict):
         if self._subdevice_parse(payload, mc.KEY_ALL):
             self._lastupdate_mts100 = self.lastupdate
             self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
 
 
-    def _handle_Appliance_Hub_Mts100_Mode(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Hub_Mts100_Mode(self, header: dict, payload: dict):
         self._subdevice_parse(payload, mc.KEY_MODE)
 
 
-    def _handle_Appliance_Hub_Mts100_Temperature(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Hub_Mts100_Temperature(self, header: dict, payload: dict):
         self._subdevice_parse(payload, mc.KEY_TEMPERATURE)
 
 
-    def _handle_Appliance_Hub_Mts100_Adjust(self,
-    namespace: str, method: str, payload: dict, header: dict):
-        if method == mc.METHOD_SETACK:
+    def _handle_Appliance_Hub_Mts100_Adjust(self, header: dict, payload: dict):
+        if header[mc.KEY_METHOD] == mc.METHOD_SETACK:
             self.request_get(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
         else:
             self._subdevice_parse(payload, mc.KEY_ADJUST)
 
 
-    def _handle_Appliance_Hub_Mts100_ScheduleB(self,
-    namespace: str, method: str, payload: dict, header: dict):
-        if method == mc.METHOD_SETACK:
+    def _handle_Appliance_Hub_Mts100_ScheduleB(self, header: dict, payload: dict):
+        if header[mc.KEY_METHOD] == mc.METHOD_SETACK:
             self.request_get(mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB)
         else:
             self._subdevice_parse(payload, mc.KEY_SCHEDULE)
 
 
-    def _handle_Appliance_Hub_ToggleX(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Hub_ToggleX(self, header: dict, payload: dict):
         self._subdevice_parse(payload, mc.KEY_TOGGLEX)
 
 
-    def _handle_Appliance_Hub_Battery(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Hub_Battery(self, header: dict, payload: dict):
         self._lastupdate_battery = self.lastupdate
         self._subdevice_parse(payload, mc.KEY_BATTERY)
 
 
-    def _handle_Appliance_Hub_Online(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Hub_Online(self, header: dict, payload: dict):
         self._subdevice_parse(payload, mc.KEY_ONLINE)
 
 
-    def _handle_Appliance_Digest_Hub(self,
-            namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
         self._parse_hub(payload.get(mc.KEY_HUB))
 
 

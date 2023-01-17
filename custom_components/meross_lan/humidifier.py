@@ -62,8 +62,6 @@ class MerossLanSpray(_MerossEntity, HumidifierEntity):
 
     def __init__(self, device: 'MerossDevice', channel: object):
         super().__init__(device, channel, None, DEVICE_CLASS_HUMIDIFIER)
-        #device.handlers[mc.NS_APPLIANCE_CONTROL_SPRAY] = device._handle_generic
-        #setattr(device, "_parse_spray", partial(device._parse__generic, mc.KEY_SPRAY))
 
 
     @property

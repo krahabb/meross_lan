@@ -435,7 +435,7 @@ class MLDNDLightEntity(_MerossToggle, LightEntity):
         def _ack_callback():
             self.update_state(STATE_ON)
 
-        await self.device.async_http_request(
+        self.device.request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},
@@ -447,7 +447,7 @@ class MLDNDLightEntity(_MerossToggle, LightEntity):
         def _ack_callback():
             self.update_state(STATE_OFF)
 
-        await self.device.async_http_request(
+        self.device.request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},
@@ -480,13 +480,11 @@ class LightMixin:
         MLLight(self, payload)
 
 
-    def _handle_Appliance_Control_Light(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Light(self, header: dict, payload: dict):
         self._parse_light(payload.get(mc.KEY_LIGHT))
 
 
-    def _handle_Appliance_Control_Light_Effect(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
         light_effect_map = dict()
         for p_effect in payload.get(mc.KEY_EFFECT, []):
             light_effect_map[p_effect[mc.KEY_ID_]] = p_effect[mc.KEY_EFFECTNAME]

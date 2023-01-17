@@ -131,7 +131,7 @@ class SprayMixin:
             self.SPRAY_MODE_MAP)
 
 
-    def _handle_Appliance_Control_Spray(self, namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Spray(self, header: dict, payload: dict):
         self._parse_spray(payload.get(mc.KEY_SPRAY))
 
 

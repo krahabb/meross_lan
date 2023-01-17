@@ -89,7 +89,7 @@ class Mts100Climate(MtsClimate):
                     self._mts_mode = mode
                     self.update_modes()
 
-                await self.device.async_http_request(
+                self.device.request(
                     mc.NS_APPLIANCE_HUB_MTS100_MODE,
                     mc.METHOD_SET,
                     {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
@@ -110,7 +110,7 @@ class Mts100Climate(MtsClimate):
 
         # when sending a temp this way the device will automatically
         # exit auto mode if needed
-        await self.device.async_http_request(
+        self.device.request(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
             {mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.id, key: int(t * 10)}]}, # the device rounds down ?!
@@ -125,7 +125,7 @@ class Mts100Climate(MtsClimate):
         #same as DND: force http request to get a consistent acknowledge
         #the device will PUSH anyway a state update when the valve actually switches
         #but this way we'll update the UI consistently right after setting mode
-        await self.device.async_http_request(
+        self.device.request(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
             mc.METHOD_SET,
             {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: onoff}]},

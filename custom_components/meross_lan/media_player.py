@@ -24,7 +24,7 @@ except:# fallback (pre 2022.5)
         SUPPORT_NEXT_TRACK, SUPPORT_PREVIOUS_TRACK,
         SUPPORT_PLAY, SUPPORT_STOP,
     )
-    
+
 from homeassistant.const import (
     STATE_IDLE, STATE_OFF, STATE_PLAYING,
 )
@@ -217,8 +217,7 @@ class Mp3Mixin:
 
 
 
-    def _handle_Appliance_Control_Mp3(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Mp3(self, header: dict, payload: dict):
         """
         {"mp3": {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}}
         """

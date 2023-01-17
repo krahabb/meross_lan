@@ -163,13 +163,7 @@ class ElectricityMixin:
         self._sensor_voltage = MLSensor.build_for_device(self, DEVICE_CLASS_VOLTAGE)
 
 
-    def _handle_Appliance_Control_Electricity(
-        self,
-        namespace: str,
-        method: str,
-        payload: dict,
-        header: dict
-    ) -> None:
+    def _handle_Appliance_Control_Electricity(self, header: dict, payload: dict):
         electricity = payload.get(mc.KEY_ELECTRICITY)
         self._sensor_power.update_state(electricity.get(mc.KEY_POWER) / 1000)
         self._sensor_current.update_state(electricity.get(mc.KEY_CURRENT) / 1000)
@@ -197,13 +191,7 @@ class ConsumptionMixin:
         self._sensor_energy._attr_state_class = STATE_CLASS_TOTAL_INCREASING
 
 
-    def _handle_Appliance_Control_ConsumptionX(
-        self,
-        namespace: str,
-        method: str,
-        payload: dict,
-        header: dict
-    ) -> None:
+    def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
         self._lastupdate_energy = self.lastupdate
         days = payload.get(mc.KEY_CONSUMPTIONX)
         days_len = len(days)
@@ -286,8 +274,7 @@ class RuntimeMixin:
         self._sensor_runtime._attr_native_unit_of_measurement = PERCENTAGE
 
 
-    def _handle_Appliance_System_Runtime(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
         self._lastupdate_runtime = self.lastupdate
         if isinstance(runtime := payload.get(mc.KEY_RUNTIME), dict):
             self._sensor_runtime.update_state(runtime.get(mc.KEY_SIGNAL))

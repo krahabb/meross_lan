@@ -69,7 +69,7 @@ class Mts200Climate(MtsClimate):
                     self._mts_mode = mode
                     self.update_modes()
 
-                await self.device.async_http_request(
+                self.device.request(
                     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
                     mc.METHOD_SET,
                     {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}]},
@@ -88,7 +88,7 @@ class Mts200Climate(MtsClimate):
             self._attr_target_temperature = t
             self.update_modes()
 
-        await self.device.async_http_request(
+        self.device.request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
             {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, key: int(t * 10)}]}, # the device rounds down ?!
@@ -103,7 +103,7 @@ class Mts200Climate(MtsClimate):
         #same as DND: force http request to get a consistent acknowledge
         #the device will PUSH anyway a state update when the valve actually switches
         #but this way we'll update the UI consistently right after setting mode
-        await self.device.async_http_request(
+        self.device.Request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
             {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}]},
@@ -180,13 +180,11 @@ class ThermostatMixin:
                 Mts200Climate(self, m[mc.KEY_CHANNEL])
 
 
-    def _handle_Appliance_Control_Thermostat_Mode(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Thermostat_Mode(self, header: dict, payload: dict):
         self._parse_thermostat_mode(payload.get(mc.KEY_MODE))
 
 
-    def _handle_Appliance_Control_Thermostat_windowOpened(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Thermostat_windowOpened(self, header: dict, payload: dict):
         self._parse_thermostat_windowOpened(payload.get(mc.KEY_WINDOWOPENED))
 
 

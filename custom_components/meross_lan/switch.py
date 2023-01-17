@@ -121,8 +121,7 @@ class ToggleXMixin:
             MLSwitch(self, channel, mc.NS_APPLIANCE_CONTROL_TOGGLEX)
     """
 
-    def _handle_Appliance_Control_ToggleX(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_ToggleX(self, header: dict, payload: dict):
         self._parse__generic(mc.KEY_TOGGLEX, payload.get(mc.KEY_TOGGLEX))
 
 
@@ -149,8 +148,7 @@ class ToggleMixin:
             MLSwitch.build_for_device(self, 0, mc.NS_APPLIANCE_CONTROL_TOGGLE)
 
 
-    def _handle_Appliance_Control_Toggle(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Toggle(self, header: dict, payload: dict):
         self._parse_toggle(payload.get(mc.KEY_TOGGLE))
 
 
@@ -173,51 +171,3 @@ class MLConfigSwitch(MLSwitch):
     @property
     def entity_category(self):
         return ENTITY_CATEGORY_CONFIG
-
-
-"""
-class MLDNDSwitch(_MerossToggle, SwitchEntity):
-    "
-    Do Not Disturb mode for devices supporting it (i.e. comfort lights on switches)
-    "
-    PLATFORM = PLATFORM_SWITCH
-
-
-    def __init__(self, device: 'MerossDevice'):
-        super().__init__(device, None, DND_ID, mc.KEY_DNDMODE, None)
-
-
-    @property
-    def entity_category(self) -> str | None:
-        return ENTITY_CATEGORY_CONFIG
-
-
-    async def async_turn_on(self, **kwargs) -> None:
-
-        def _ack_callback():
-            self.update_state(STATE_ON)
-
-        # WARNING: on MQTT we'll loose the ack callback since
-        # it's not (yet) implemented and the option to correctly
-        # update the state will be loosed since the ack payload is empty
-        # right now 'force' http proto even tho that could be disabled in config
-        await self.device.async_http_request(
-            mc.NS_APPLIANCE_SYSTEM_DNDMODE,
-            mc.METHOD_SET,
-            {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},
-            _ack_callback
-        )
-
-
-    async def async_turn_off(self, **kwargs) -> None:
-
-        def _ack_callback():
-            self.update_state(STATE_OFF)
-
-        await self.device.async_http_request(
-            mc.NS_APPLIANCE_SYSTEM_DNDMODE,
-            mc.METHOD_SET,
-            {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},
-            _ack_callback
-        )
-"""

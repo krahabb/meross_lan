@@ -148,13 +148,11 @@ class DiffuserMixin:
             self._sensor_humidity = MLSensor.build_for_device(self, DEVICE_CLASS_HUMIDITY)
             self.polling_dictionary.add(mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR)
 
-    def _handle_Appliance_Control_Diffuser_Light(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Diffuser_Light(self, header: dict, payload: dict):
         self._parse_diffuser_light(payload.get(mc.KEY_LIGHT))
 
 
-    def _handle_Appliance_Control_Diffuser_Spray(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Diffuser_Spray(self, header: dict, payload: dict):
         """
         {
             "type": "mod100",
@@ -164,8 +162,7 @@ class DiffuserMixin:
         self._parse_diffuser_spray(payload.get(mc.KEY_SPRAY))
 
 
-    def _handle_Appliance_Control_Diffuser_Sensor(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Diffuser_Sensor(self, header: dict, payload: dict):
         """
         {
             "type": "mod100",

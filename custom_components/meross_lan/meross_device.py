@@ -4,16 +4,16 @@ import logging
 import os
 import socket
 import math
-from typing import  Callable, Dict, List, Set
+from typing import  Callable, Dict, Set
+from enum import Enum
 from time import strftime, time
 from datetime import datetime, timezone
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 from io import TextIOWrapper
 from json import dumps as json_dumps
 from copy import deepcopy
 import voluptuous as vol
-from enum import Enum
-
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntries, ConfigEntry
@@ -29,11 +29,11 @@ from .merossclient import (
 from .meross_entity import MerossFakeEntity
 from .helpers import (
     LOGGER, LOGGER_trap,
-    obfuscate, deobfuscate,
+    obfuscate,
     mqtt_is_connected,
 )
 from .const import (
-    DOMAIN, DND_ID,
+    DOMAIN,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_HOST, CONF_TIMESTAMP,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT, CONF_POLLING_PERIOD_MIN,
     CONF_PROTOCOL, CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
@@ -96,6 +96,22 @@ MAP_CONF_PROTOCOL = {
     CONF_OPTION_MQTT: Protocol.MQTT,
     CONF_OPTION_HTTP: Protocol.HTTP
 }
+
+class _MQTTTransaction:
+
+    namespace: str
+    method: str
+    response_callback: Callable
+    messageid: str
+    request_time: int
+
+    def __init__(self, namespace, method, response_callback):
+        self.namespace = namespace
+        self.method = method
+        self.response_callback = response_callback
+        self.request_time = time()
+        self.messageid = uuid4().hex
+
 
 
 class MerossDevice:
@@ -168,7 +184,11 @@ class MerossDevice:
         # (see __init__.MerossApi.build_device)
         # The handlers dictionary is anyway parsed first and could override a build-time handler.
         # The dicionary keys are Meross namespaces matched against when the message enters the handling
-        self.handlers: Dict[str, Callable] = {}
+        # self.handlers: Dict[str, Callable] = {}
+        # The list of pending MQTT requests (SET or GET) which are waiting their SETACK (or GETACK)
+        # in order to complete the transaction
+        self._mqtt_transactions: Dict[str, _MQTTTransaction] = {}
+
         # misc callbacks
         self.unsub_entry_update_listener: Callable = None
         self.unsub_updatecoordinator_listener: Callable = None
@@ -254,13 +274,7 @@ class MerossDevice:
         return False
 
 
-    def receive(
-        self,
-        namespace: str,
-        method: str,
-        payload: dict,
-        header: dict
-    ) -> bool:
+    def receive(self, header: dict, payload: dict) -> bool:
         """
         default (received) message handling entry point
         """
@@ -290,7 +304,8 @@ class MerossDevice:
                 self.device_id
             )
 
-        if method == mc.METHOD_ERROR:
+        namespace = header[mc.KEY_NAMESPACE]
+        if header[mc.KEY_METHOD] == mc.METHOD_ERROR:
             self.log(
                 logging.WARNING, 14400,
                 "MerossDevice(%s) protocol error: namespace = '%s' payload = '%s'",
@@ -302,32 +317,31 @@ class MerossDevice:
         if not self._online:
             self._set_online(namespace)
 
-        handler = self.handlers.get(namespace)
-        if handler is not None:
-            handler(namespace, method, payload, header)
-            return True
+        # disable this code: it is no use so far....
+        # handler = self.handlers.get(namespace)
+        # if handler is not None:
+        #     handler(header, payload)
+        #     return True
 
         handler = getattr(self, f"_handle_{namespace.replace('.', '_')}", None)
         if handler is not None:
-            handler(namespace, method, payload, header)
+            handler(header, payload)
             return True
 
         return False
 
 
-    def _handle_generic(self,
-        namespace: str, method: str, payload: dict, header: dict):
+    def _handle_generic(self, header: dict, payload: dict):
         """
         This is a basic implementation for dynamic protocol handlers
         since most of the payloads just need to extract a key and
         pass along to entities
         """
-        key = get_namespacekey(namespace)
+        key = get_namespacekey(header[mc.KEY_NAMESPACE])
         self._parse__generic(key, payload.get(key))
 
 
-    def _handle_Appliance_System_All(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_System_All(self, header: dict, payload: dict):
         self._parse_all(payload)
         if self.needsave is True:
             self.needsave = False
@@ -341,20 +355,18 @@ class MerossDevice:
             self.request_get(mc.NS_APPLIANCE_SYSTEM_DNDMODE)
 
 
-    def _handle_Appliance_System_DNDMode(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
         if isinstance(dndmode := payload.get(mc.KEY_DNDMODE), dict):
             self.entity_dnd.update_onoff(dndmode.get(mc.KEY_MODE))
 
 
-    def _handle_Appliance_System_Clock(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_System_Clock(self, header: dict, payload: dict):
         # this is part of initial flow over MQTT
         # we'll try to set the correct time in order to avoid
         # having NTP opened to setup the device
         # Note: I actually see this NS only on mss310 plugs
         # (msl120j bulb doesnt have it)
-        if method == mc.METHOD_PUSH:
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
             self.mqtt_request(
                 mc.NS_APPLIANCE_SYSTEM_CLOCK,
                 mc.METHOD_PUSH,
@@ -362,25 +374,24 @@ class MerossDevice:
             )
 
 
-    def _handle_Appliance_System_Time(self,
-    namespace: str, method: str, payload: dict, header: dict):
-        if method == mc.METHOD_PUSH:
+    def _handle_Appliance_System_Time(self, header: dict, payload: dict):
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
             self.descriptor.update_time(payload.get(mc.KEY_TIME, {}))
 
 
-    def _handle_Appliance_Control_Bind(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_Control_Bind(self, header: dict, payload: dict):
         """
         this transaction was observed on a trace from a msh300hk
         the device keeps sending 'SET'-'Bind' so I'm trying to
         kindly answer a 'SETACK'
         assumption is we're working on mqtt
         """
-        if method == mc.METHOD_SET:
+        if header[mc.KEY_METHOD] == mc.METHOD_SET:
             self.mqtt_request(
                 mc.NS_APPLIANCE_CONTROL_BIND,
                 mc.METHOD_SETACK,
                 {},
+                None,
                 header[mc.KEY_MESSAGEID]
             )
 
@@ -404,20 +415,23 @@ class MerossDevice:
                 self._parse__generic(key, p, entitykey)
 
 
-    def mqtt_receive(
-        self,
-        namespace: str,
-        method: str,
-        payload: dict,
-        header: dict
-    ) -> None:
+    def mqtt_receive(self, header: dict, payload: dict):
         if self.conf_protocol is Protocol.HTTP:
             return # even if mqtt parsing is no harming we want a 'consistent' HTTP only behaviour
         self.hasmqtt = True
-        self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_RX)
+        if self._trace_file is not None:
+            self._trace(payload, header[mc.KEY_NAMESPACE], header[mc.KEY_METHOD], CONF_OPTION_MQTT, TRACE_DIRECTION_RX)
         if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
             self.switch_protocol(Protocol.MQTT) # will reset 'lastmqtt'
-        self.receive(namespace, method, payload, header)
+        messageid = header[mc.KEY_MESSAGEID]
+        if messageid in self._mqtt_transactions:
+            mqtt_transaction = self._mqtt_transactions[messageid]
+            if (mqtt_transaction.namespace == header[mc.KEY_NAMESPACE]) and \
+                    (mc.METHOD_ACK_MAP.get(mqtt_transaction.method) == header[mc.KEY_METHOD]):
+                self._mqtt_transactions.pop(messageid)
+                mqtt_transaction.response_callback()
+
+        self.receive(header, payload)
         # self.lastmqtt is checked against to see if we have to request a full state update
         # when coming online. Set it last so we know (inside self.receive) that we're
         # eventually coming from offline
@@ -425,7 +439,7 @@ class MerossDevice:
         self.lastmqtt = self.lastupdate
 
 
-    def mqtt_disconnected(self) -> None:
+    def mqtt_disconnected(self):
         if self.curr_protocol is Protocol.MQTT:
             if self.conf_protocol is Protocol.AUTO:
                 self.switch_protocol(Protocol.HTTP)
@@ -434,8 +448,15 @@ class MerossDevice:
                 self._set_offline()
 
 
-    def mqtt_request(self, namespace: str, method: str, payload: dict, messageid: str = None):
-        self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_TX)
+    def mqtt_request(self,
+            namespace: str, method: str, payload: dict, response_callback: Callable = None,
+            messageid: str = None):
+        if self._trace_file is not None:
+            self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_TX)
+        if response_callback is not None:
+            transaction = _MQTTTransaction(namespace, method, response_callback)
+            self._mqtt_transactions[transaction.messageid] = transaction
+            messageid = transaction.messageid
         self.api.mqtt_publish(
             self.device_id,
             namespace,
@@ -446,7 +467,9 @@ class MerossDevice:
         )
 
 
-    async def async_http_request(self, namespace: str, method: str, payload: dict, callback: Callable = None):
+    async def async_http_request(self,
+        namespace: str, method: str, payload: dict, response_callback: Callable = None):
+
         try:
             _httpclient:MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)
             if _httpclient is None:
@@ -456,7 +479,8 @@ class MerossDevice:
             for attempt in range(3):
                 # since we get 'random' connection errors, this is a retry attempts loop
                 # until we get it done. We'd want to break out early on specific events tho (Timeouts)
-                self._trace(payload, namespace, method, CONF_OPTION_HTTP, TRACE_DIRECTION_TX)
+                if self._trace_file is not None:
+                    self._trace(payload, namespace, method, CONF_OPTION_HTTP, TRACE_DIRECTION_TX)
                 try:
                     response = await _httpclient.async_request(namespace, method, payload)
                     break
@@ -474,7 +498,7 @@ class MerossDevice:
                         mqtt_is_connected(self.api.hass)
                     ):
                         self.switch_protocol(Protocol.MQTT)
-                        self.mqtt_request(namespace, method, payload)
+                        self.mqtt_request(namespace, method, payload, response_callback)
                         return
                     elif isinstance(e, TimeoutError):
                         self._set_offline()
@@ -485,14 +509,12 @@ class MerossDevice:
                 return
 
             r_header = response[mc.KEY_HEADER]
-            r_namespace = r_header[mc.KEY_NAMESPACE]
-            r_method = r_header[mc.KEY_METHOD]
-            r_payload = response[mc.KEY_PAYLOAD]
-            self._trace(r_payload, r_namespace, r_method, CONF_OPTION_HTTP, TRACE_DIRECTION_RX)
-            if (callback is not None) and (r_method == mc.METHOD_SETACK):
+            if self._trace_file is not None:
+                self._trace(response[mc.KEY_PAYLOAD], r_header[mc.KEY_NAMESPACE], r_header[mc.KEY_METHOD], CONF_OPTION_HTTP, TRACE_DIRECTION_RX)
+            if (response_callback is not None) and (r_header[mc.KEY_METHOD] == mc.METHOD_SETACK):
                 #we're actually only using this for SET->SETACK command confirmation
-                callback()
-            self.receive(r_namespace, r_method, r_payload, r_header)
+                response_callback()
+            self.receive(r_header, response[mc.KEY_PAYLOAD])
         except Exception as e:
             self.log(
                 logging.WARNING, 14400,
@@ -501,7 +523,7 @@ class MerossDevice:
             )
 
 
-    def request(self, namespace: str, method: str, payload: dict, callback: Callable = None):
+    def request(self, namespace: str, method: str, payload: dict, response_callback: Callable = None):
         """
             route the request through MQTT or HTTP to the physical device.
             callback will be called on successful replies and actually implemented
@@ -513,7 +535,7 @@ class MerossDevice:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
             if mqtt_is_connected(self.api.hass):
-                self.mqtt_request(namespace, method, payload)
+                self.mqtt_request(namespace, method, payload, response_callback)
                 return
             # MQTT not connected
             if self.conf_protocol is Protocol.MQTT:
@@ -523,7 +545,7 @@ class MerossDevice:
 
         # curr_protocol is HTTP
         self.api.hass.async_create_task(
-            self.async_http_request(namespace, method, payload, callback)
+            self.async_http_request(namespace, method, payload, response_callback)
             )
 
 
@@ -550,7 +572,8 @@ class MerossDevice:
             LOGGER_trap(level, timeout, msg, *args)
         else:
             LOGGER.log(level, msg, *args)
-        self._trace(msg % args, logging.getLevelName(level), 'LOG')
+        if self._trace_file is not None:
+            self._trace(msg % args, logging.getLevelName(level), 'LOG')
 
 
     def entry_option_setup(self, config_schema: dict):
@@ -966,35 +989,35 @@ class MerossDevice:
     def _trace(
         self,
         data: str | dict,
-        namespace: str = '',
-        method: str = '',
+        namespace: str,
+        method: str,
         protocol = CONF_OPTION_AUTO,
         rxtx = ''
         ):
-        if self._trace_file is not None:
-            now = time()
-            if (now > self._trace_endtime) or \
-                (self._trace_file.tell() > CONF_TRACE_MAXSIZE):
-                self._trace_close()
-                return
+        # expect self._trace_file is not None:
+        now = time()
+        if (now > self._trace_endtime) or \
+            (self._trace_file.tell() > CONF_TRACE_MAXSIZE):
+            self._trace_close()
+            return
 
-            if isinstance(data, dict):
-                # we'll eventually make a deepcopy since data
-                # might be retained by the _trace_data list
-                # and carry over the deobfuscation (which we'll skip now)
-                data = deepcopy(data)
-                obfuscate(data)
-                textdata = json_dumps(data)
-            else:
-                textdata = data
+        if isinstance(data, dict):
+            # we'll eventually make a deepcopy since data
+            # might be retained by the _trace_data list
+            # and carry over the deobfuscation (which we'll skip now)
+            data = deepcopy(data)
+            obfuscate(data)
+            textdata = json_dumps(data)
+        else:
+            textdata = data
 
-            try:
-                texttime = strftime('%Y/%m/%d - %H:%M:%S')
-                columns = [texttime, rxtx, protocol, method, namespace, textdata]
-                self._trace_file.write('\t'.join(columns) + '\r\n')
-                if self._trace_data is not None:
-                    columns[5] = data # better have json for dignostic trace
-                    self._trace_data.append(columns)
-            except Exception as e:
-                LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
-                self._trace_close()
+        try:
+            texttime = strftime('%Y/%m/%d - %H:%M:%S')
+            columns = [texttime, rxtx, protocol, method, namespace, textdata]
+            self._trace_file.write('\t'.join(columns) + '\r\n')
+            if self._trace_data is not None:
+                columns[5] = data # better have json for dignostic trace
+                self._trace_data.append(columns)
+        except Exception as e:
+            LOGGER.warning("MerossDevice(%s) error while writing to trace file (%s)", self.device_id, str(e))
+            self._trace_close()

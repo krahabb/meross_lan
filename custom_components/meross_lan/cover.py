@@ -390,13 +390,11 @@ class GarageMixin:
         MLGarage(self, payload[mc.KEY_CHANNEL])
 
 
-    def _handle_Appliance_GarageDoor_State(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_GarageDoor_State(self, header: dict, payload: dict):
         self._parse__generic(mc.KEY_STATE, payload.get(mc.KEY_STATE))
 
 
-    def _handle_Appliance_GarageDoor_Config(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_GarageDoor_Config(self, header: dict, payload: dict):
         #{"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
         # no channel here ?!..need to parse the manual way
         payload = payload.get(mc.KEY_CONFIG)
@@ -545,17 +543,11 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
             self.device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
 
         self._stop_cancel()
-        # WARNING: on MQTT we'll loose the ack callback since
-        # it's not (yet) implemented and the option to correctly
-        # update the state will be loosed since the ack payload is empty
-        # right now 'force' http proto even tho that could be disabled in config
-        self.hass.async_create_task(
-            self.device.async_http_request(
-                mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
-                mc.METHOD_SET,
-                {mc.KEY_POSITION: {mc.KEY_CHANNEL: self.channel, mc.KEY_POSITION: command}},
-                _ack_callback
-            )
+        self.device.request(
+            mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            mc.METHOD_SET,
+            {mc.KEY_POSITION: {mc.KEY_CHANNEL: self.channel, mc.KEY_POSITION: command}},
+            _ack_callback
         )
 
 
@@ -762,17 +754,14 @@ class RollerShutterMixin:
             LOGGER.warning("RollerShutterMixin(%s) init exception:(%s)", self.device_id, str(e))
 
 
-    def _handle_Appliance_RollerShutter_Position(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_RollerShutter_Position(self, header: dict, payload: dict):
         self._parse__generic(mc.KEY_POSITION, payload.get(mc.KEY_POSITION))
 
 
-    def _handle_Appliance_RollerShutter_State(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_RollerShutter_State(self, header: dict, payload: dict):
         self._parse__generic(mc.KEY_STATE, payload.get(mc.KEY_STATE))
 
 
-    def _handle_Appliance_RollerShutter_Config(self,
-    namespace: str, method: str, payload: dict, header: dict):
+    def _handle_Appliance_RollerShutter_Config(self, header: dict, payload: dict):
         self._parse__generic(mc.KEY_CONFIG, payload.get(mc.KEY_CONFIG))
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Callable, Dict, Optional, Union
 from time import time
 from datetime import datetime, timedelta
-from logging import WARNING, INFO
+from logging import WARNING, INFO, DEBUG
 from json import (
     dumps as json_dumps,
     loads as json_loads,
@@ -156,15 +156,12 @@ class MerossApi:
     async def async_mqtt_receive(self, msg):
         """ global MQTT discovery (for unregistered) and routing (for registered devices)"""
         try:
-            mqttpayload = json_loads(msg.payload)
-            header = mqttpayload.get(mc.KEY_HEADER)
-            method = header.get(mc.KEY_METHOD)
-            namespace = header.get(mc.KEY_NAMESPACE)
-            payload = mqttpayload.get(mc.KEY_PAYLOAD)
+            message = json_loads(msg.payload)
+            header = message[mc.KEY_HEADER]
             device_id = msg.topic.split("/")[2]
-            LOGGER.debug("MerossApi: MQTT RECV device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
-            device = self.devices.get(device_id)
-            if device == None:
+            if LOGGER.isEnabledFor(DEBUG):
+                LOGGER.debug("MerossApi: MQTT RECV device_id:(%s) method:(%s) namespace:(%s)", device_id, header[mc.KEY_METHOD], header[mc.KEY_NAMESPACE])
+            if (device := self.devices.get(device_id)) is None:
                 # lookout for any disabled/ignored entry
                 mqtt_entry_present = False
                 for domain_entry in self.hass.config_entries.async_entries(DOMAIN):
@@ -202,7 +199,7 @@ class MerossApi:
                         return
 
                 discovered = self.discovering.get(device_id)
-                if discovered == None:
+                if discovered is None:
                     # new device discovered: try to determine the capabilities
                     self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, replykey)
                     epoch = time()
@@ -218,9 +215,10 @@ class MerossApi:
                         )
 
                 else:
-                    if method == mc.METHOD_GETACK:
+                    if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
+                        namespace = header[mc.KEY_NAMESPACE]
                         if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
-                            discovered[mc.NS_APPLIANCE_SYSTEM_ALL] = payload
+                            discovered[mc.NS_APPLIANCE_SYSTEM_ALL] = message[mc.KEY_PAYLOAD]
                             self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ABILITY, replykey)
                             discovered[MerossApi.KEY_REQUESTTIME] = time()
                             return
@@ -229,6 +227,7 @@ class MerossApi:
                                 self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, replykey)
                                 discovered[MerossApi.KEY_REQUESTTIME] = time()
                                 return
+                            payload = message[mc.KEY_PAYLOAD]
                             payload.update(discovered[mc.NS_APPLIANCE_SYSTEM_ALL])
                             self.discovering.pop(device_id)
                             if (len(self.discovering) == 0) and self.unsub_discovery_callback:
@@ -246,7 +245,7 @@ class MerossApi:
                             return
 
             else:
-                device.mqtt_receive(namespace, method, payload, header)
+                device.mqtt_receive(header, message[mc.KEY_PAYLOAD])
 
         except Exception as error:
             LOGGER.debug("MerossApi: async_mqtt_receive exception:(%s) payload:(%s)", str(error), str(msg))
@@ -433,13 +432,10 @@ class MerossApi:
 
             response = await _httpclient.async_request(namespace, method, payload)
             r_header = response[mc.KEY_HEADER]
-            r_namespace = r_header[mc.KEY_NAMESPACE]
-            r_method = r_header[mc.KEY_METHOD]
             if callback_or_device is not None:
                 if isinstance(callback_or_device, MerossDevice):
-                    callback_or_device.receive( r_namespace, r_method,
-                        response[mc.KEY_PAYLOAD], r_header)
-                elif (r_method == mc.METHOD_SETACK):
+                    callback_or_device.receive(r_header, response[mc.KEY_PAYLOAD])
+                elif (r_header[mc.KEY_METHOD] == mc.METHOD_SETACK):
                     #we're actually only using this for SET->SETACK command confirmation
                     callback_or_device()
 
