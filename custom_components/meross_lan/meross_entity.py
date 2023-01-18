@@ -10,7 +10,8 @@
 from __future__ import annotations
 
 from homeassistant.helpers.typing import StateType
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
+from homeassistant.helpers.entity import Entity
 from homeassistant.const import (
     STATE_ON, STATE_OFF,
 )
@@ -44,6 +45,8 @@ class _MerossEntity:
     PLATFORM: str
 
     _attr_state: StateType = None
+    _attr_device_class: str | None
+    _attr_name: str | None = None
 
     def __init__(
         self,
@@ -53,9 +56,20 @@ class _MerossEntity:
         device_class: str = None,
         subdevice: 'MerossSubDevice' = None
         ):
+        """
+        - channel: historically used to create an unique id for this entity inside the device
+        and also related to the physical channel used in various api for some kind of entities.
+        For entities in subdevices (hub paired devices) the channel is usually the Id of the
+        subdevice itself since 'HA wise' and 'meross_lan wise' we still group the entities under
+        the same (hub) device
+        - entitykey: is added to provide additional 'uniqueness' should the device have multiple
+        entities for the same channel and usually equal to device_class (but might not be)
+        - device_class: used by HA to set some soft 'class properties' for the entity
+        """
         self.device = device
         self.channel = channel
         self._attr_device_class = device_class
+        self._attr_name = self._attr_name or device_class or entitykey
         self.subdevice = subdevice
         self.id = channel if entitykey is None else entitykey if channel is None else f"{channel}_{entitykey}"
         assert (self.id is not None) and (device.entities.get(self.id) is None),\
@@ -87,14 +101,23 @@ class _MerossEntity:
 
 
     @property
+    def has_entity_name(self) -> bool:
+        return True
+
+
+    @property
     def name(self) -> str:
+        if hasattr(Entity, "has_entity_name"):
+            # newer api...return just the 'local' name
+            return self._attr_name
+        # compatibility layer....
         if (subdevice := self.subdevice) is not None:
-            if self._attr_device_class is not None:
-                return f"{subdevice.name} - {self._attr_device_class}"
+            if self._attr_name is not None:
+                return f"{subdevice.name} - {self._attr_name}"
             else:
                 return subdevice.name
-        if self._attr_device_class:
-            return f"{self.device.descriptor.productname} - {self._attr_device_class}"
+        if self._attr_name is not None:
+            return f"{self.device.descriptor.productname} - {self._attr_name}"
         return self.device.descriptor.productname
 
 
@@ -113,7 +136,7 @@ class _MerossEntity:
         _desc = self.device.descriptor
         return {
             "identifiers": {(DOMAIN, self.device.device_id)},
-            "connections": {(dr.CONNECTION_NETWORK_MAC, _desc.macAddress)},
+            "connections": {(CONNECTION_NETWORK_MAC, _desc.macAddress)},
             "manufacturer": mc.MANUFACTURER,
             "name": _desc.productname,
             "model": _desc.productmodel,

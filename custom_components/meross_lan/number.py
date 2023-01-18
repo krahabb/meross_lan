@@ -147,7 +147,6 @@ class MLHubAdjustNumber(MLConfigNumber):
         subdevice: "MerossSubDevice",
         key: str,
         namespace: str,
-        label: str,
         device_class: str,
         min_value: float,
         max_value: float,
@@ -156,22 +155,17 @@ class MLHubAdjustNumber(MLConfigNumber):
         self._key = key
         self._namespace = namespace
         self._namespace_key = get_namespacekey(namespace)
-        self._label = label
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
         self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(device_class)
+        self._attr_name = f"Adjust {device_class}"
         super().__init__(
             subdevice.hub,
             subdevice.id,
             f"config_{self._namespace_key}_{key}",
             device_class,
             subdevice)
-
-
-    @property
-    def name(self) -> str:
-        return f"{self.subdevice.name} - adjust {self._label} {self._attr_device_class}"
 
 
     async def async_set_native_value(self, value: float):

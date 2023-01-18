@@ -210,6 +210,7 @@ class MtsSetPointNumber(MLConfigNumber):
         self._preset_mode = preset_mode
         self._key = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
         self._attr_icon = self.PRESET_TO_ICON_MAP[preset_mode]
+        self._attr_name = f"{preset_mode} {DEVICE_CLASS_TEMPERATURE}"
         super().__init__(
             climate.device,
             climate.channel,
@@ -218,9 +219,6 @@ class MtsSetPointNumber(MLConfigNumber):
             climate.subdevice
         )
 
-    @property
-    def name(self):
-        return f"{self._climate.name} - {self._preset_mode} {DEVICE_CLASS_TEMPERATURE}"
 
     @property
     def native_max_value(self):

@@ -319,12 +319,8 @@ class MLGarageConfigNumber(MLConfigNumber):
 
     def __init__(self, device, key: str):
         self._key = key
+        self._attr_name = key
         super().__init__(device, None, f"config_{key}")
-
-
-    @property
-    def name(self) -> str:
-        return f"{super().name} - {self._key}"
 
 
     async def async_set_native_value(self, value: float):
@@ -347,12 +343,8 @@ class MLGarageConfigSwitch(MLConfigSwitch):
 
     def __init__(self, device, key: str):
         self._key = key
+        self._attr_name = key
         super().__init__(device, None, f"config_{key}", None, None, None)
-
-
-    @property
-    def name(self) -> str:
-        return f"{super().name} - {self._key}"
 
 
     def request_onoff(self, onoff):
@@ -709,12 +701,8 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     def __init__(self, cover: MLRollerShutter, key: str):
         self._cover = cover
         self._key = key
+        self._attr_name = key
         super().__init__(cover.device, cover.channel, f"config_{key}")
-
-
-    @property
-    def name(self):
-        return f"{self._cover.name} - {self._key}"
 
 
     async def async_set_native_value(self, value: float):
