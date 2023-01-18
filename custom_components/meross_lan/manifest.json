@@ -1,6 +1,7 @@
 {
   "domain": "meross_lan",
   "name": "Meross LAN",
+  "integration_type": "hub",
   "config_flow": true,
   "iot_class": "local_polling",
   "documentation": "https://github.com/krahabb/meross_lan",
