@@ -664,6 +664,17 @@ class MerossDevice:
                 return
             self.lastpoll = math.floor(epoch)
             self._request_updates(epoch, None)
+            # also eventually cleanup the mqtt stale callbacks
+            if self._mqtt_transactions:
+                _mqtt_transaction_stale_list: list = None
+                for _mqtt_transaction in self._mqtt_transactions.values():
+                    if (epoch - _mqtt_transaction.request_time) > 15:
+                        if _mqtt_transaction_stale_list is None:
+                            _mqtt_transaction_stale_list = list()
+                        _mqtt_transaction_stale_list.append(_mqtt_transaction.messageid)
+                if _mqtt_transaction_stale_list is not None:
+                    for messageid in _mqtt_transaction_stale_list:
+                        self._mqtt_transactions.pop(messageid)
 
         else:# offline
             # when we 'stall' offline while on MQTT eventually retrigger HTTP
