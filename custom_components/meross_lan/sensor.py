@@ -272,6 +272,7 @@ class RuntimeMixin:
         self._sensor_runtime = MLSensor(self, None, DEVICE_CLASS_SIGNAL_STRENGTH, None, None)
         self._sensor_runtime._attr_entity_category = ENTITY_CATEGORY_DIAGNOSTIC
         self._sensor_runtime._attr_native_unit_of_measurement = PERCENTAGE
+        self._sensor_runtime._attr_icon = 'mdi:wifi'
 
 
     def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
