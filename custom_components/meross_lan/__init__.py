@@ -345,6 +345,10 @@ class MerossApi:
         if mc.KEY_DIFFUSER in digest:
             from .devices.mod100 import DiffuserMixin
             mixin_classes.append(DiffuserMixin)
+        if mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS in ability:
+            from .number import ScreenBrightnessMixin
+            mixin_classes.append(ScreenBrightnessMixin)
+
 
         # We must be careful when ordering the mixin and leave MerossDevice as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.

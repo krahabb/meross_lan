@@ -226,4 +226,3 @@ class ThermostatMixin:
             _parse = getattr(self, f"_parse_thermostat_{key}", None)
             if _parse is not None:
                 _parse(value)
-

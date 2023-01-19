@@ -14,6 +14,10 @@ except:
     NUMBERMODE_BOX = "box"
     NUMBERMODE_SLIDER = "slider"
 
+from homeassistant.const import (
+    PERCENTAGE,
+)
+
 CORE_HAS_NATIVE_UNIT = hasattr(NumberEntity, 'native_unit_of_measurement')
 
 from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
@@ -23,6 +27,7 @@ from .meross_entity import (
     ENTITY_CATEGORY_CONFIG,
 )
 from .sensor import CLASS_TO_UNIT_MAP
+from .helpers import LOGGER
 
 
 async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
@@ -182,4 +187,68 @@ class MLHubAdjustNumber(MLConfigNumber):
             },
         )
 
+
+
+class MLScreenBrightnessNumber(MLConfigNumber):
+
+    _attr_native_max_value = 100
+    _attr_native_min_value = 0
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_icon = 'mdi:brightness-percent'
+
+
+    def __init__(self, device: "MerossDevice", channel: object, key: str):
+        self._key = key
+        self._attr_name = f"Screen brightness ({key})"
+        super().__init__(device, channel, f"screenbrightness_{key}")
+
+
+    async def async_set_native_value(self, value: float):
+        payload = {
+            mc.KEY_CHANNEL: self.channel,
+            mc.KEY_OPERATION: self.device._number_brightness_operation.native_value,
+            mc.KEY_STANDBY: self.device._number_brightness_standby.native_value
+            }
+        payload[self._key] = value
+
+        def _ack_callback():
+            self.update_native_value(value)
+
+        self.device.request(
+            mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
+            mc.METHOD_SET,
+            { mc.KEY_BRIGHTNESS: [ payload ] },
+            _ack_callback
+        )
+
+
+
+class ScreenBrightnessMixin:
+
+
+    def __init__(self, api, descriptor, entry):
+        super().__init__(api, descriptor, entry)
+
+        try:
+            # the 'ScreenBrightnessMixin' actually doesnt have a clue of how many  entities
+            # are controllable since the digest payload doesnt carry anything (like MerossShutter)
+            # So we're not implementing _init_xxx and _parse_xxx methods here and
+            # we'll just add a couple of number entities to control 'active' and 'standby' brightness
+            # on channel 0 which will likely be the only one available
+            self._number_brightness_operation = MLScreenBrightnessNumber(self, 0, mc.KEY_OPERATION)
+            self._number_brightness_standby = MLScreenBrightnessNumber(self, 0, mc.KEY_STANDBY)
+            self.polling_dictionary.add(mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS)
+
+        except Exception as e:
+            LOGGER.warning("ScreenBrightnessMixin(%s) init exception:(%s)", self.device_id, str(e))
+
+
+    def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
+        p_channels = payload.get(mc.KEY_BRIGHTNESS)
+        for p_channel in p_channels:
+            if p_channel.get(mc.KEY_CHANNEL) == 0:
+                self._number_brightness_operation.update_native_value(p_channel[mc.KEY_OPERATION])
+                self._number_brightness_standby.update_native_value(p_channel[mc.KEY_STANDBY])
+                break
 

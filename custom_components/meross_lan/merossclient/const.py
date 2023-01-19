@@ -111,7 +111,8 @@ NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION = 'Appliance.Control.Thermostat.HoldA
 NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY = 'Appliance.Control.Diffuser.Spray'
 NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT = 'Appliance.Control.Diffuser.Light'
 NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR = 'Appliance.Control.Diffuser.Sensor'
-
+# screen brigtness (actually seen on MTS200)
+NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS = 'Appliance.Control.Screen.Brightness'
 
 NS_APPLIANCE_MCU_FIRMWARE = 'Appliance.Mcu.Firmware'
 NS_APPLIANCE_MCU_UPGRADE = 'Appliance.Mcu.Upgrade'
@@ -235,6 +236,9 @@ KEY_WINDOWOPENED = 'windowOpened'
 KEY_DIFFUSER = 'diffuser'
 KEY_DNDMODE = 'DNDMode'
 KEY_ADJUST = 'adjust'
+KEY_BRIGHTNESS = 'brightness'
+KEY_OPERATION = 'operation'
+KEY_STANDBY = 'standby'
 KEY_MP3 = 'mp3'
 KEY_SONG = 'song'
 KEY_MUTE = 'mute'
@@ -272,6 +276,7 @@ PAYLOAD_GET = {
     NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST: { KEY_ADJUST: [] }, # unconfirmed but 'motoradjust' is wrong for sure
     NS_APPLIANCE_CONTROL_THERMOSTAT_MODE: { KEY_MODE: [] },
     NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED: { KEY_WINDOWOPENED: [] },
+    NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: { KEY_BRIGHTNESS: [ { KEY_CHANNEL: 0 }] },
 }
 # error codes as reported by Meross device protocol
 ERROR_INVALIDKEY = 5001
