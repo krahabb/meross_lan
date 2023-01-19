@@ -1,5 +1,5 @@
 """An Http API Client to interact with meross devices"""
-import logging
+from logging import Logger, getLogger
 from typing import Any, Optional, Union
 from uuid import uuid4
 from hashlib import md5
@@ -9,8 +9,12 @@ from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
-import asyncio
-import async_timeout
+from asyncio import (
+    TimeoutError as asyncio_TimeoutError
+)
+from async_timeout import (
+    timeout as async_timeout_timeout
+)
 import aiohttp
 
 
@@ -165,7 +169,7 @@ async def async_httpapi_post(urlpath: str, data: object, token: str = None, sess
     params = json_dumps(data, ensure_ascii=False)
     params = b64encode(params.encode('utf-8')).decode('ascii')
     sign = md5(("23x17ahWarFH6w29" + str(timestamp) + nonce + params).encode('utf-8')).hexdigest()
-    with async_timeout.timeout(10):
+    with async_timeout_timeout(10):
         response = await session.post(
             url=mc.MEROSS_API_V1_URL + urlpath,
             json={
@@ -268,14 +272,14 @@ class MerossHttpClient:
                 host: str,
                 key: str = None,
                 session: aiohttp.client.ClientSession = None,
-                logger: logging.Logger = None
+                logger: Logger = None
                 ):
         self._host = host
         self._requesturl = URL(f"http://{host}/config")
         self.key = key
         self.replykey = None
         self._session = session or aiohttp.ClientSession()
-        self._logger = logger or logging.getLogger(__name__)
+        self._logger = logger or getLogger(__name__)
 
 
     @property
@@ -293,20 +297,18 @@ class MerossHttpClient:
         timeout = 1
         try:
             data = json_dumps(data)
-            """
-            since device HTTP service sometimes timeouts with no apparent
-            reason we're using an increasing timeout loop to try recover
-            when this timeout is transient
-            """
+            # since device HTTP service sometimes timeouts with no apparent
+            # reason we're using an increasing timeout loop to try recover
+            # when this timeout is transient
             while True:
                 try:
-                    with async_timeout.timeout(timeout):
+                    with async_timeout_timeout(timeout):
                         response = await self._session.post(
                             url=self._requesturl,
                             data=data
                         )
                     break
-                except asyncio.TimeoutError as e:
+                except asyncio_TimeoutError as e:
                     if timeout < self.timeout:
                         timeout = timeout * 2
                     else:

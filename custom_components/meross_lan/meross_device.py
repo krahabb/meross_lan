@@ -1,6 +1,14 @@
 from __future__ import annotations
-import asyncio
-import logging
+from logging import (
+    WARNING, INFO, DEBUG,
+    getLevelName as logging_getLevelName,
+)
+from asyncio import (
+    TimeoutError as asyncio_TimeoutError,
+    Future as asyncio_Future,
+    sleep as asyncio_sleep,
+    get_running_loop as asyncio_get_running_loop
+)
 import os
 import socket
 import math
@@ -146,7 +154,7 @@ class MerossDevice:
         self.lastmqtt = 0 # means we recently received an mqtt message
         self.hasmqtt = False # hasmqtt means it is somehow available to communicate over mqtt
         self._trace_file: TextIOWrapper = None
-        self._trace_future: asyncio.Future = None
+        self._trace_future: asyncio_Future = None
         self._trace_data: list = None
         self._trace_endtime = 0
         self._trace_ability_iter = None
@@ -248,7 +256,7 @@ class MerossDevice:
             return ZoneInfo(tz_name) if tz_name else timezone.utc
         except Exception as error:
             self.log(
-                logging.WARNING, 14400,
+                WARNING, 14400,
                 "MerossDevice(%s) unable to load timezone info for %s - check your python environment",
                 self.device_id, tz_name
             )
@@ -257,21 +265,7 @@ class MerossDevice:
 
     @property
     def online(self) -> bool:
-        """ evaluates and report the actual online state of the device"""
-        if self._online:
-            #evaluate device MQTT availability by checking lastrequest got answered in less than polling_period
-            if (self.lastupdate > self.lastrequest) or ((time() - self.lastrequest) < (self.polling_period - 2)):
-                return True
-            # when we 'fall' offline while on MQTT eventually retrigger HTTP.
-            # the reverse is not needed since we switch HTTP -> MQTT right-away
-            # when HTTP fails (see async_http_request)
-            if (self.curr_protocol is Protocol.MQTT) and (self.conf_protocol is Protocol.AUTO):
-                self.switch_protocol(Protocol.HTTP)
-                return True
-
-            self._set_offline()
-
-        return False
+        return self._online
 
 
     def receive(self, header: dict, payload: dict) -> bool:
@@ -299,7 +293,7 @@ class MerossDevice:
         self.replykey = get_replykey(header, self.key)
         if self.key and (self.replykey != self.key):
             self.log(
-                logging.WARNING, 14400,
+                WARNING, 14400,
                 "MerossDevice(%s) received signature error (incorrect key?)",
                 self.device_id
             )
@@ -307,7 +301,7 @@ class MerossDevice:
         namespace = header[mc.KEY_NAMESPACE]
         if header[mc.KEY_METHOD] == mc.METHOD_ERROR:
             self.log(
-                logging.WARNING, 14400,
+                WARNING, 14400,
                 "MerossDevice(%s) protocol error: namespace = '%s' payload = '%s'",
                 self.device_id, namespace, json_dumps(payload)
             )
@@ -488,9 +482,9 @@ class MerossDevice:
                     if (not self._online):
                         raise e # manage this error on the external handler
                     self.log(
-                        logging.INFO, 0,
-                        "MerossDevice(%s) client connection attempt(%s) error in async_http_request: %s",
-                        self.device_id, str(attempt), str(e) or type(e).__name__
+                        INFO, 0,
+                        "MerossDevice(%s) %s in async_http_request attemp(%s): %s",
+                        self.device_id, type(e).__name__, str(attempt), str(e)
                     )
                     if (
                         (self.conf_protocol is Protocol.AUTO) and
@@ -500,12 +494,11 @@ class MerossDevice:
                         self.switch_protocol(Protocol.MQTT)
                         self.mqtt_request(namespace, method, payload, response_callback)
                         return
-                    elif isinstance(e, TimeoutError):
+                    elif isinstance(e, asyncio_TimeoutError):
                         self._set_offline()
                         return
-                    await asyncio.sleep(0.1)# wait a bit before re-issuing request
+                    await asyncio_sleep(0.1)# wait a bit before re-issuing request
             else:
-                self._set_offline()
                 return
 
             r_header = response[mc.KEY_HEADER]
@@ -517,9 +510,9 @@ class MerossDevice:
             self.receive(r_header, response[mc.KEY_PAYLOAD])
         except Exception as e:
             self.log(
-                logging.WARNING, 14400,
-                "MerossDevice(%s) error in async_http_request: %s",
-                self.device_id, str(e) or type(e).__name__
+                WARNING, 14400,
+                "MerossDevice(%s) %s in async_http_request: %s",
+                self.device_id, type(e).__name__, str(e)
             )
 
 
@@ -559,7 +552,7 @@ class MerossDevice:
 
     def switch_protocol(self, protocol: Protocol) -> None:
         self.log(
-            logging.INFO, 0,
+            INFO, 0,
             "MerossDevice(%s) switching protocol to %s",
             self.device_id, protocol.name
         )
@@ -573,7 +566,7 @@ class MerossDevice:
         else:
             LOGGER.log(level, msg, *args)
         if self._trace_file is not None:
-            self._trace(msg % args, logging.getLevelName(level), 'LOG')
+            self._trace(msg % args, logging_getLevelName(level), 'LOG')
 
 
     def entry_option_setup(self, config_schema: dict):
@@ -648,21 +641,34 @@ class MerossDevice:
     @callback
     def updatecoordinator_listener(self):
         epoch = time()
-        """
-        this is a bit rude: we'll keep sending 'heartbeats'
-        to check if the device is still there
-        !!this is mainly for MQTT mode since in HTTP we'll more or less poll
-        unless the device went offline so we started skipping polling updates
-        """
+        # the caller frequency might be higher than the configured for
+        # this device
+        if (epoch - self.lastpoll) < self.polling_period:
+            return
+        self.lastpoll = math.floor(epoch)
+
+        # this is a bit rude: we'll keep sending 'heartbeats'
+        # to check if the device is still there
+        # !!this is mainly for MQTT mode since in HTTP we'll more or less poll
+        # unless the device went offline so we started skipping polling updates
         if ((epoch - self.lastrequest) > PARAM_HEARTBEAT_PERIOD) \
             and ((epoch - self.lastupdate) > PARAM_HEARTBEAT_PERIOD):
             self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
             return
 
-        if self.online:
-            if (epoch - self.lastpoll) < self.polling_period:
+        if self._online:
+            # evaluate device availability by checking lastrequest got answered in less than polling_period
+            if (self.lastupdate > self.lastrequest) or ((epoch - self.lastrequest) < (self.polling_period - 2)):
+                pass
+            # when we 'fall' offline while on MQTT eventually retrigger HTTP.
+            # the reverse is not needed since we switch HTTP -> MQTT right-away
+            # when HTTP fails (see async_http_request)
+            elif (self.curr_protocol is Protocol.MQTT) and (self.conf_protocol is Protocol.AUTO):
+                self.switch_protocol(Protocol.HTTP)
+            else:
+                self._set_offline()
                 return
-            self.lastpoll = math.floor(epoch)
+
             self._request_updates(epoch, None)
             # also eventually cleanup the mqtt stale callbacks
             if self._mqtt_transactions:
@@ -677,9 +683,6 @@ class MerossDevice:
                         self._mqtt_transactions.pop(messageid)
 
         else:# offline
-            # when we 'stall' offline while on MQTT eventually retrigger HTTP
-            # the reverse is not needed since we switch HTTP -> MQTT right-away
-            # when HTTP fails (see async_http_request)
             if (self.curr_protocol is Protocol.MQTT) and (self.conf_protocol is Protocol.AUTO):
                 self.switch_protocol(Protocol.HTTP)
             if (epoch - self.lastrequest) > self._retry_period:
@@ -766,7 +769,7 @@ class MerossDevice:
         if (epoch - self.device_timedelta_log_epoch) > 604800: # 1 week lockout
             self.device_timedelta_log_epoch = epoch
             self.log(
-                logging.WARNING, 0,
+                WARNING, 0,
                 "MerossDevice(%s) has incorrect timestamp: %d seconds behind HA",
                 self.device_id, int(self.device_timedelta)
         )
@@ -816,7 +819,7 @@ class MerossDevice:
                     ])
                 except Exception as e:
                     self.log(
-                        logging.WARNING, 0,
+                        WARNING, 0,
                         "MerossDevice(%s) error while building timezone info (%s)",
                         self.device_id, str(e)
                     )
@@ -847,7 +850,7 @@ class MerossDevice:
 
     def _set_offline(self) -> None:
         self.log(
-            logging.DEBUG, 0,
+            DEBUG, 0,
             "MerossDevice(%s) going offline!",
             self.device_id
         )
@@ -865,7 +868,7 @@ class MerossDevice:
             so to decide what to refresh (see 'updatecoordinator_listener')
         """
         self.log(
-            logging.DEBUG, 0,
+            DEBUG, 0,
             "MerossDevice(%s) back online!",
             self.device_id
         )
@@ -898,7 +901,7 @@ class MerossDevice:
                 entries.async_update_entry(entry, data=data)
         except Exception as e:
             self.log(
-                logging.WARNING, 0,
+                WARNING, 0,
                 "MerossDevice(%s) error while updating ConfigEntry (%s)",
                 self.device_id, str(e)
             )
@@ -928,7 +931,7 @@ class MerossDevice:
             self.polling_period = CONF_POLLING_PERIOD_MIN
 
 
-    def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
+    def get_diagnostics_trace(self, trace_timeout) -> asyncio_Future:
         """
         invoked by the diagnostics callback:
         here we set the device to start tracing the classical way (in file)
@@ -940,8 +943,7 @@ class MerossDevice:
             return self._trace_future
         if self._trace_file is not None:
             self._trace_close()
-        loop = asyncio.get_running_loop()
-        self._trace_future = loop.create_future()
+        self._trace_future = asyncio_get_running_loop().create_future()
         self._trace_data = list()
         self._trace_data.append(['time','rxtx','protocol','method','namespace','data'])
         self._trace_open(time() + (trace_timeout or CONF_TRACE_TIMEOUT_DEFAULT))
