@@ -1,5 +1,6 @@
 from __future__ import annotations
-import logging
+
+from logging import DEBUG
 from time import localtime
 from datetime import datetime, timedelta, timezone
 
@@ -212,7 +213,7 @@ class ConsumptionMixin:
         )
         timestamp_lastreset = dt.timestamp() - self.device_timedelta
         self.log(
-            logging.DEBUG, 0,
+            DEBUG, 0,
             "MerossDevice(%s) Energy: device midnight = %d",
             self.device_id, timestamp_lastreset
         )
@@ -239,7 +240,7 @@ class ConsumptionMixin:
                     timestamp_lastreset + self.device_timedelta + .5
                 )
                 self.log(
-                    logging.DEBUG, 0,
+                    DEBUG, 0,
                     "MerossDevice(%s) Energy: update last_reset to %s",
                     self.device_id, self._sensor_energy._attr_last_reset.isoformat()
                 )

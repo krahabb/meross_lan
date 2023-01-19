@@ -1,6 +1,6 @@
 from __future__ import annotations
-import logging
 
+from logging import WARNING
 from typing import Callable, Dict
 
 from homeassistant.const import (
@@ -219,7 +219,7 @@ class MerossDeviceHub(MerossDevice):
                 self.needsave = True
                 for p_id in subdevices_actual:
                     subdevice = self.subdevices.get(p_id)
-                    self.log(logging.WARNING, 0, "removing subdevice %s(%s) - configuration will be reloaded in 15 sec", subdevice.type, p_id)
+                    self.log(WARNING, 0, "removing subdevice %s(%s) - configuration will be reloaded in 15 sec", subdevice.type, p_id)
                 # before reloading we have to be sure configentry data were persisted
                 # so we'll wait a bit..
                 # also, we're not registering an unsub and we're not checking

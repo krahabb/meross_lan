@@ -1,14 +1,14 @@
 """
     Helpers!
 """
-import logging
+from logging import getLogger
 from functools import partial
 from time import time
 from homeassistant.util.dt import utcnow
 
 from .merossclient import const as mc
 
-LOGGER = logging.getLogger(__name__[:-8]) #get base custom_component name for logging
+LOGGER = getLogger(__name__[:-8]) #get base custom_component name for logging
 _TRAP_DICT = dict()
 
 def LOGGER_trap(level, timeout, msg, *args):

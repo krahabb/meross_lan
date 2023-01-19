@@ -1,7 +1,7 @@
 from __future__ import annotations
 from time import time
 from datetime import datetime
-from logging import DEBUG, INFO, WARNING
+from logging import DEBUG, WARNING
 
 from homeassistant.components.cover import (
     DOMAIN as PLATFORM_COVER,
