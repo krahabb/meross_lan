@@ -193,7 +193,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 
     _attr_native_max_value = 100
     _attr_native_min_value = 0
-    _attr_native_step = 1
+    _attr_native_step = 12.5
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_icon = 'mdi:brightness-percent'
 
