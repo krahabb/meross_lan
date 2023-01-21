@@ -21,7 +21,7 @@ from .sensor import PLATFORM_SENSOR, MLSensor
 from .climate import PLATFORM_CLIMATE
 from .binary_sensor import PLATFORM_BINARY_SENSOR, MLBinarySensor, DEVICE_CLASS_WINDOW
 from .number import PLATFORM_NUMBER, MLHubAdjustNumber
-from .switch import PLATFORM_SWITCH, MLHubSwitch
+from .switch import PLATFORM_SWITCH, MLSwitch, DEVICE_CLASS_SWITCH
 from .calendar import PLATFORM_CALENDAR
 from .helpers import LOGGER
 from .const import (
@@ -373,7 +373,15 @@ class MerossSubDevice:
 
     def _parse_togglex(self, p_togglex: dict) -> None:
         if self.switch_togglex is None:
-            self.switch_togglex = MLHubSwitch(self)
+            self.switch_togglex = MLSwitch(
+                    self.hub,
+                    self.id, None,
+                    DEVICE_CLASS_SWITCH,
+                    self,
+                    mc.NS_APPLIANCE_HUB_TOGGLEX
+            )
+            self.switch_togglex.key_channel = mc.KEY_ID
+
         self.switch_togglex._parse_togglex(p_togglex)
 
 

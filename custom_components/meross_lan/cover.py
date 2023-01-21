@@ -33,9 +33,13 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 from .helpers import LOGGER, get_entity_last_state, versiontuple
 
 from .merossclient import const as mc
-from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
+from .meross_entity import (
+    _MerossEntity,
+    platform_setup_entry, platform_unload_entry,
+    EntityCategory,
+)
 from .number import MLConfigNumber
-from .switch import MLConfigSwitch
+from .switch import MLSwitch
 from .const import (
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
@@ -338,8 +342,9 @@ class MLGarageConfigNumber(MLConfigNumber):
         )
 
 
-class MLGarageConfigSwitch(MLConfigSwitch):
+class MLGarageConfigSwitch(MLSwitch):
 
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, device, key: str):
         self._key = key

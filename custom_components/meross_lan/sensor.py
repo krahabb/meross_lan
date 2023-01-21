@@ -59,7 +59,7 @@ from .merossclient import MerossDeviceDescriptor, const as mc  # mEROSS cONST
 from .meross_entity import (
     _MerossEntity,
     platform_setup_entry, platform_unload_entry,
-    ENTITY_CATEGORY_CONFIG, ENTITY_CATEGORY_DIAGNOSTIC,
+    EntityCategory,
 )
 from .const import (
     PARAM_ENERGY_UPDATE_PERIOD, PARAM_SIGNAL_UPDATE_PERIOD,
@@ -271,7 +271,7 @@ class RuntimeMixin:
         # so we drop the device_class (none) but we let the 'entitykey' parameter
         # to keep the same value so the entity id inside HA remains stable (#239)
         self._sensor_runtime = MLSensor(self, None, DEVICE_CLASS_SIGNAL_STRENGTH, None, None)
-        self._sensor_runtime._attr_entity_category = ENTITY_CATEGORY_DIAGNOSTIC
+        self._sensor_runtime._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._sensor_runtime._attr_native_unit_of_measurement = PERCENTAGE
         self._sensor_runtime._attr_icon = 'mdi:wifi'
 

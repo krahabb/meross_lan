@@ -17,7 +17,6 @@ from .meross_entity import (
     _MerossToggle,
     platform_setup_entry, platform_unload_entry,
     STATE_OFF, STATE_ON,
-    ENTITY_CATEGORY_CONFIG,
 )
 
 
@@ -36,48 +35,9 @@ class MLSwitch(_MerossToggle, SwitchEntity):
     PLATFORM = PLATFORM_SWITCH
 
 
-    """def __init__(
-        self,
-        device: 'MerossDevice',
-        channel: object,
-        entitykey: str,
-        device_class: str,
-        subdevice: 'MerossSubDevice',
-        namespace: str
-        ):
-        super().__init__(device, channel, entitykey, device_class, namespace)
-
-    #def __init__(self, device: 'MerossDevice', channel: object, namespace: str):
-    #    super().__init__(device, channel, None, DEVICE_CLASS_OUTLET, namespace)
-    """
-
     @staticmethod
     def build_for_device(device: "MerossDevice", channel: object, namespace: str):
         return MLSwitch(device, channel, None, DEVICE_CLASS_OUTLET, None, namespace)
-
-
-
-class MLHubSwitch(MLSwitch):
-
-    def __init__(
-        self,
-        subdevice: 'MerossSubDevice'
-        ):
-        super().__init__(subdevice.hub, subdevice.id, None, DEVICE_CLASS_SWITCH, subdevice, mc.NS_APPLIANCE_HUB_TOGGLEX)
-
-
-    def request_onoff(self, onoff):
-        # this is the meross executor code
-        # override for switches not implemented
-        # by a toggle like api
-        def _ack_callback():
-            self.update_onoff(onoff)
-
-        self.device.request(
-            mc.NS_APPLIANCE_HUB_TOGGLEX,
-            mc.METHOD_SET,
-            {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.channel, mc.KEY_ONOFF: onoff}]},
-            _ack_callback)
 
 
 
@@ -159,15 +119,3 @@ class ToggleMixin:
         if isinstance(payload, dict):
             entity: MLSwitch = self.entities[payload.get(mc.KEY_CHANNEL, 0)]
             entity._parse_toggle(payload)
-
-
-
-class MLConfigSwitch(MLSwitch):
-    """
-    configuration switch
-    """
-    PLATFORM = PLATFORM_SWITCH
-
-    @property
-    def entity_category(self):
-        return ENTITY_CATEGORY_CONFIG

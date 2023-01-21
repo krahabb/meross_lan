@@ -16,7 +16,7 @@ from ..calendar import (
     EVENT_START, EVENT_END, EVENT_SUMMARY,
     EVENT_UID, EVENT_RECURRENCE_ID, EVENT_RRULE,
 )
-from ..meross_entity import ENTITY_CATEGORY_CONFIG
+from ..meross_entity import EntityCategory
 from ..merossclient import const as mc  # mEROSS cONST
 from ..helpers import clamp
 
@@ -208,6 +208,8 @@ class Mts100ScheduleEntry:
 
 class Mts100Schedule(MLCalendar):
 
+    _attr_entity_category = EntityCategory.CONFIG
+
 
     def __init__(self, climate: Mts100Climate):
         super().__init__(climate.device, climate.id, mc.KEY_SCHEDULE, None, climate.subdevice)
@@ -338,11 +340,6 @@ class Mts100Schedule(MLCalendar):
     @property
     def supported_features(self) -> int:
         return CalendarEntityFeature.CREATE_EVENT | CalendarEntityFeature.DELETE_EVENT
-
-
-    @property
-    def entity_category(self) -> int:
-        return ENTITY_CATEGORY_CONFIG
 
 
     @property

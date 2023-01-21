@@ -17,12 +17,10 @@ from homeassistant.const import (
 )
 try:# 2022.2 new symbols
     from homeassistant.helpers.entity import EntityCategory
-    ENTITY_CATEGORY_CONFIG = EntityCategory.CONFIG
-    ENTITY_CATEGORY_DIAGNOSTIC = EntityCategory.DIAGNOSTIC
 except:
-    ENTITY_CATEGORY_CONFIG = 'config'
-    ENTITY_CATEGORY_DIAGNOSTIC = 'diagnostic'
-
+    class EntityCategory:
+        CONFIG = "config"
+        DIAGNOSTIC = "diagnostic"
 
 from .merossclient import const as mc, get_namespacekey, get_productnameuuid
 from .helpers import LOGGER
@@ -47,6 +45,7 @@ class _MerossEntity:
     _attr_state: StateType = None
     _attr_device_class: str | None
     _attr_name: str | None = None
+    _attr_entity_category: EntityCategory | None = None
 
     def __init__(
         self,
@@ -150,6 +149,11 @@ class _MerossEntity:
 
 
     @property
+    def entity_category(self) -> EntityCategory | None:
+        return self._attr_entity_category
+
+
+    @property
     def should_poll(self) -> bool:
         return False
 
@@ -210,6 +214,12 @@ class _MerossEntity:
 
 class _MerossToggle(_MerossEntity):
 
+    # customize the request payload for differen
+    # devices api. see 'request_onoff' to see how
+    namespace: str
+    key_namespace: str
+    key_channel: str = mc.KEY_CHANNEL
+    key_onoff: str = mc.KEY_ONOFF
 
     def __init__(
         self,
@@ -222,7 +232,7 @@ class _MerossToggle(_MerossEntity):
         ):
         super().__init__(device, channel, entitykey, device_class, subdevice)
         self.namespace = namespace
-        self.key = None if namespace is None else get_namespacekey(namespace)
+        self.key_namespace = None if namespace is None else get_namespacekey(namespace)
 
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -243,16 +253,16 @@ class _MerossToggle(_MerossEntity):
         self.device.request(
             self.namespace,
             mc.METHOD_SET,
-            {self.key: {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}},
+            {self.key_namespace: {self.key_channel: self.channel, self.key_onoff: onoff}},
             _ack_callback)
 
 
     def _parse_toggle(self, payload: dict):
-        self.update_onoff(payload.get(mc.KEY_ONOFF))
+        self.update_onoff(payload.get(self.key_onoff))
 
 
     def _parse_togglex(self, payload: dict):
-        self.update_onoff(payload.get(mc.KEY_ONOFF))
+        self.update_onoff(payload.get(self.key_onoff))
 
 
 """

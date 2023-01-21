@@ -63,7 +63,7 @@ from .meross_entity import (
     _MerossToggle,
     platform_setup_entry, platform_unload_entry,
     STATE_ON, STATE_OFF,
-    ENTITY_CATEGORY_CONFIG,
+    EntityCategory,
 )
 from .const import DND_ID
 
@@ -226,19 +226,6 @@ class MLLight(MLLightBase):
             device, channel, None, None, None,
             mc.NS_APPLIANCE_CONTROL_TOGGLEX if self._hastogglex else None)
 
-
-        """
-        self._light = {
-			#"onoff": 0,
-			"capacity": CAPACITY_LUMINANCE,
-			"channel": channel,
-			#"rgb": 16753920,
-			#"temperature": 100,
-			"luminance": 100,
-			"transform": 0,
-            "gradual": 0
-		}
-        """
         self._light = dict()
         """
         capacity is set in abilities when using mc.NS_APPLIANCE_CONTROL_LIGHT
@@ -410,7 +397,7 @@ class MLDNDLightEntity(_MerossToggle, LightEntity):
     PLATFORM = PLATFORM_LIGHT
 
     _attr_supported_color_modes = { COLOR_MODE_ONOFF }
-
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, device: MerossDevice):
         super().__init__(device, None, DND_ID, mc.KEY_DNDMODE, None, None)
@@ -424,11 +411,6 @@ class MLDNDLightEntity(_MerossToggle, LightEntity):
     @property
     def color_mode(self):
         return COLOR_MODE_ONOFF
-
-
-    @property
-    def entity_category(self):
-        return ENTITY_CATEGORY_CONFIG
 
 
     async def async_turn_on(self, **kwargs) -> None:

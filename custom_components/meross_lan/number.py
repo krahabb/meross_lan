@@ -24,7 +24,7 @@ from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 from .meross_entity import (
     _MerossEntity,
     platform_setup_entry, platform_unload_entry,
-    ENTITY_CATEGORY_CONFIG,
+    EntityCategory,
 )
 from .sensor import CLASS_TO_UNIT_MAP
 from .helpers import LOGGER
@@ -43,6 +43,8 @@ if CORE_HAS_NATIVE_UNIT:
 
         PLATFORM = PLATFORM_NUMBER
 
+        _attr_entity_category = EntityCategory.CONFIG
+
         multiplier = 1
 
         _attr_mode = NUMBERMODE_BOX
@@ -51,10 +53,6 @@ if CORE_HAS_NATIVE_UNIT:
         _attr_native_step: float
         _attr_native_unit_of_measurement: str | None
 
-
-        @property
-        def entity_category(self):
-            return ENTITY_CATEGORY_CONFIG
 
         @property
         def native_max_value(self):
@@ -87,6 +85,8 @@ else:
 
         PLATFORM = PLATFORM_NUMBER
 
+        _attr_entity_category = EntityCategory.CONFIG
+
         multiplier = 1
 
         _attr_mode = NUMBERMODE_BOX
@@ -95,10 +95,6 @@ else:
         _attr_native_step: float
         _attr_native_unit_of_measurement: str | None
 
-
-        @property
-        def entity_category(self):
-            return ENTITY_CATEGORY_CONFIG
 
         @property
         def native_max_value(self):
