@@ -2,7 +2,7 @@
 from homeassistant.components.binary_sensor import (
     DOMAIN as PLATFORM_BINARY_SENSOR,
     BinarySensorEntity,
-    DEVICE_CLASS_WINDOW,
+    DEVICE_CLASS_WINDOW, DEVICE_CLASS_PROBLEM,
 )
 
 from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
