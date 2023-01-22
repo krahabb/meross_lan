@@ -493,7 +493,7 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
                 CONF_PROTOCOL,
                 description={ DESCR: self._protocol}
                 )
-            ] = vol.In(CONF_PROTOCOL_OPTIONS)
+            ] = vol.In(CONF_PROTOCOL_OPTIONS.keys())
         config_schema[
             vol.Optional(
                 CONF_POLLING_PERIOD,

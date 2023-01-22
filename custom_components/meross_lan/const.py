@@ -17,14 +17,14 @@ CONF_PAYLOAD = hac.CONF_PAYLOAD
 CONF_HOST = hac.CONF_HOST
 
 CONF_PROTOCOL = hac.CONF_PROTOCOL # protocol used to communicate with device
-CONF_OPTION_AUTO = 'auto'
-CONF_OPTION_MQTT = 'mqtt'
-CONF_OPTION_HTTP = 'http'
-CONF_PROTOCOL_OPTIONS = (
-    CONF_OPTION_AUTO, # best-effort: tries whatever to connect
-    CONF_OPTION_MQTT,
-    CONF_OPTION_HTTP
-)
+CONF_PROTOCOL_AUTO = 'auto' # 'best effort' behaviour
+CONF_PROTOCOL_MQTT = 'mqtt'
+CONF_PROTOCOL_HTTP = 'http'
+CONF_PROTOCOL_OPTIONS = {
+    CONF_PROTOCOL_AUTO: CONF_PROTOCOL_AUTO,
+    CONF_PROTOCOL_MQTT: CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_HTTP: CONF_PROTOCOL_HTTP
+}
 
 CONF_POLLING_PERIOD = 'polling_period' # general device state polling or whatever
 CONF_POLLING_PERIOD_MIN = 5

@@ -30,7 +30,7 @@ from .helpers import (
 )
 from .const import (
     DOMAIN, SERVICE_REQUEST,
-    CONF_HOST, CONF_PROTOCOL, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
+    CONF_HOST, CONF_PROTOCOL, CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT,
     CONF_DEVICE_ID, CONF_KEY, CONF_CLOUD_KEY, CONF_PAYLOAD,
     CONF_POLLING_PERIOD_DEFAULT,
     PARAM_UNAVAILABILITY_TIMEOUT,PARAM_HEARTBEAT_PERIOD,
@@ -542,7 +542,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     LOGGER.debug("async_setup_entry entry_id = %s", entry.entry_id)
     api = MerossApi.get(hass)
     device_id = entry.data.get(CONF_DEVICE_ID)
-    if (device_id is None) or (entry.data.get(CONF_PROTOCOL) != CONF_OPTION_HTTP):
+    if (device_id is None) or (entry.data.get(CONF_PROTOCOL) != CONF_PROTOCOL_HTTP):
         """
         this is the MQTT Hub entry or a device which could/should use MQTT
         so we'll (try) register mqtt subscription for our topics
@@ -555,7 +555,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     here we need to be sure to delay load this entry until mqtt is in place (at least for those
     directly requiring MQTT)
     """
-    if (device_id is None) or (entry.data.get(CONF_PROTOCOL) == CONF_OPTION_MQTT):
+    if (device_id is None) or (entry.data.get(CONF_PROTOCOL) == CONF_PROTOCOL_MQTT):
         if not api.mqtt_registered:
             raise ConfigEntryNotReady("MQTT unavailable")
 

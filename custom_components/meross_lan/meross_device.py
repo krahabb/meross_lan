@@ -13,7 +13,6 @@ import os
 import socket
 import math
 from typing import  Callable, Dict, Set
-from enum import Enum
 from time import strftime, time
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -44,7 +43,7 @@ from .const import (
     DOMAIN,
     CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD, CONF_HOST, CONF_TIMESTAMP,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT, CONF_POLLING_PERIOD_MIN,
-    CONF_PROTOCOL, CONF_OPTION_AUTO, CONF_OPTION_HTTP, CONF_OPTION_MQTT,
+    CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS, CONF_PROTOCOL_AUTO, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP,
     CONF_TRACE, CONF_TRACE_DIRECTORY, CONF_TRACE_FILENAME, CONF_TRACE_MAXSIZE, CONF_TRACE_TIMEOUT_DEFAULT,
     PARAM_HEARTBEAT_PERIOD, PARAM_TIMEZONE_CHECK_PERIOD, PARAM_TIMESTAMP_TOLERANCE,
 )
@@ -90,20 +89,6 @@ TRACE_DIRECTION_TX = 'TX'
 
 TIMEZONES_SET = None
 
-class Protocol(Enum):
-    """
-    Describes the protocol selection behaviour in order to connect to devices
-    """
-    AUTO = 0 # 'best effort' behaviour
-    MQTT = 1
-    HTTP = 2
-
-
-MAP_CONF_PROTOCOL = {
-    CONF_OPTION_AUTO: Protocol.AUTO,
-    CONF_OPTION_MQTT: Protocol.MQTT,
-    CONF_OPTION_HTTP: Protocol.HTTP
-}
 
 class _MQTTTransaction:
 
@@ -254,7 +239,7 @@ class MerossDevice:
         tz_name = self.descriptor.timezone
         try:
             return ZoneInfo(tz_name) if tz_name else timezone.utc
-        except Exception as error:
+        except Exception:
             self.log(
                 WARNING, 14400,
                 "MerossDevice(%s) unable to load timezone info for %s - check your python environment",
@@ -268,7 +253,7 @@ class MerossDevice:
         return self._online
 
 
-    def receive(self, header: dict, payload: dict) -> bool:
+    def receive(self, header: dict, payload: dict, protocol) -> bool:
         """
         default (received) message handling entry point
         """
@@ -284,6 +269,13 @@ class MerossDevice:
             self._config_timestamp(epoch, device_timedelta)
         else:
             self.device_timedelta = 0
+
+        namespace = header[mc.KEY_NAMESPACE]
+        method = header[mc.KEY_METHOD]
+
+        if self._trace_file is not None:
+            self._trace(payload, namespace, method, protocol, TRACE_DIRECTION_RX)
+
         # every time we receive a response we save it's 'replykey':
         # that would be the same as our self.key (which it is compared against in 'get_replykey')
         # if it's good else it would be the device message header to be used in
@@ -298,8 +290,7 @@ class MerossDevice:
                 self.device_id
             )
 
-        namespace = header[mc.KEY_NAMESPACE]
-        if header[mc.KEY_METHOD] == mc.METHOD_ERROR:
+        if method == mc.METHOD_ERROR:
             self.log(
                 WARNING, 14400,
                 "MerossDevice(%s) protocol error: namespace = '%s' payload = '%s'",
@@ -325,6 +316,23 @@ class MerossDevice:
         return False
 
 
+    def _parse__generic(self, key: str, payload, entitykey: str = None):
+        if isinstance(payload, dict):
+            # we'll use an 'unsafe' access to payload[mc.KEY_CHANNEL]
+            # so to better diagnose issues with non-standard payloads
+            # we were previously using a safer approach but that could hide
+            # unforeseen behaviours
+            entity = self.entities[
+                payload[mc.KEY_CHANNEL]
+                if entitykey is None
+                else  f"{payload[mc.KEY_CHANNEL]}_{entitykey}"
+                ]
+            getattr(entity, f"_parse_{key}", entity._parse_undefined)(payload)
+        elif isinstance(payload, list):
+            for p in payload:
+                self._parse__generic(key, p, entitykey)
+
+
     def _handle_generic(self, header: dict, payload: dict):
         """
         This is a basic implementation for dynamic protocol handlers
@@ -335,17 +343,37 @@ class MerossDevice:
         self._parse__generic(key, payload.get(key))
 
 
+    def _parse__generic_array(self, key: str, payload, entitykey: str = None):
+        # optimized version for well-known payloads which carry channel structs
+        # play it safe for empty (None) payloads
+        for channel_payload in payload or []:
+            entity = self.entities[
+                channel_payload[mc.KEY_CHANNEL]
+                if entitykey is None
+                else  f"{channel_payload[mc.KEY_CHANNEL]}_{entitykey}"
+                ]
+            getattr(entity, f"_parse_{key}", entity._parse_undefined)(channel_payload)
+
+
+    def _handle_generic_array(self, header: dict, payload: dict):
+        """
+        This is a basic implementation for dynamic protocol handlers
+        since most of the payloads just need to extract a key and
+        pass along to entities
+        """
+        key = get_namespacekey(header[mc.KEY_NAMESPACE])
+        self._parse__generic_array(key, payload.get(key))
+
+
     def _handle_Appliance_System_All(self, header: dict, payload: dict):
         self._parse_all(payload)
         if self.needsave is True:
             self.needsave = False
             self._save_config_entry(payload)
         if self.entity_dnd.enabled:
-            """
-            this is to optimize polling: when on MQTT we're only requesting/receiving
-            when coming online and 'DND' will then work by pushes. While on HTTP we'll
-            always call right after receiving 'ALL' which is the general status update
-            """
+            # this is to optimize polling: when on MQTT we're only requesting/receiving
+            # when coming online and 'DND' will then work by pushes. While on HTTP we'll
+            # always call right after receiving 'ALL' which is the general status update
             self.request_get(mc.NS_APPLIANCE_SYSTEM_DNDMODE)
 
 
@@ -390,33 +418,12 @@ class MerossDevice:
             )
 
 
-    def _parse__generic(self, key: str, payload, entitykey: str = None):
-        if isinstance(payload, dict):
-            # we'll use an 'unsafe' access to payload[mc.KEY_CHANNEL]
-            # so to better diagnose issues with non-standard payloads
-            # we were previously using a safer approach but that could hide
-            # unforeseen behaviours
-            entity = self.entities[
-                payload[mc.KEY_CHANNEL]
-                if entitykey is None
-                else  f"{payload[mc.KEY_CHANNEL]}_{entitykey}"
-                ]
-            parser = getattr(entity, f"_parse_{key}", None)
-            if parser is not None:
-                parser(payload)
-        elif isinstance(payload, list):
-            for p in payload:
-                self._parse__generic(key, p, entitykey)
-
-
     def mqtt_receive(self, header: dict, payload: dict):
-        if self.conf_protocol is Protocol.HTTP:
+        if self.conf_protocol is CONF_PROTOCOL_HTTP:
             return # even if mqtt parsing is no harming we want a 'consistent' HTTP only behaviour
         self.hasmqtt = True
-        if self._trace_file is not None:
-            self._trace(payload, header[mc.KEY_NAMESPACE], header[mc.KEY_METHOD], CONF_OPTION_MQTT, TRACE_DIRECTION_RX)
-        if (self.pref_protocol is Protocol.MQTT) and (self.curr_protocol is Protocol.HTTP):
-            self.switch_protocol(Protocol.MQTT) # will reset 'lastmqtt'
+        if (self.pref_protocol is CONF_PROTOCOL_MQTT) and (self.curr_protocol is CONF_PROTOCOL_HTTP):
+            self.switch_protocol(CONF_PROTOCOL_MQTT) # will reset 'lastmqtt'
         messageid = header[mc.KEY_MESSAGEID]
         if messageid in self._mqtt_transactions:
             mqtt_transaction = self._mqtt_transactions[messageid]
@@ -425,7 +432,7 @@ class MerossDevice:
                 self._mqtt_transactions.pop(messageid)
                 mqtt_transaction.response_callback()
 
-        self.receive(header, payload)
+        self.receive(header, payload, CONF_PROTOCOL_MQTT)
         # self.lastmqtt is checked against to see if we have to request a full state update
         # when coming online. Set it last so we know (inside self.receive) that we're
         # eventually coming from offline
@@ -434,10 +441,10 @@ class MerossDevice:
 
 
     def mqtt_disconnected(self):
-        if self.curr_protocol is Protocol.MQTT:
-            if self.conf_protocol is Protocol.AUTO:
-                self.switch_protocol(Protocol.HTTP)
-            # conf_protocol should be Protocol.MQTT:
+        if self.curr_protocol is CONF_PROTOCOL_MQTT:
+            if self.conf_protocol is CONF_PROTOCOL_AUTO:
+                self.switch_protocol(CONF_PROTOCOL_HTTP)
+            # conf_protocol should be CONF_PROTOCOL_MQTT:
             elif self._online:
                 self._set_offline()
 
@@ -446,7 +453,7 @@ class MerossDevice:
             namespace: str, method: str, payload: dict, response_callback: Callable = None,
             messageid: str = None):
         if self._trace_file is not None:
-            self._trace(payload, namespace, method, CONF_OPTION_MQTT, TRACE_DIRECTION_TX)
+            self._trace(payload, namespace, method, CONF_PROTOCOL_MQTT, TRACE_DIRECTION_TX)
         if response_callback is not None:
             transaction = _MQTTTransaction(namespace, method, response_callback)
             self._mqtt_transactions[transaction.messageid] = transaction
@@ -474,7 +481,7 @@ class MerossDevice:
                 # since we get 'random' connection errors, this is a retry attempts loop
                 # until we get it done. We'd want to break out early on specific events tho (Timeouts)
                 if self._trace_file is not None:
-                    self._trace(payload, namespace, method, CONF_OPTION_HTTP, TRACE_DIRECTION_TX)
+                    self._trace(payload, namespace, method, CONF_PROTOCOL_HTTP, TRACE_DIRECTION_TX)
                 try:
                     response = await _httpclient.async_request(namespace, method, payload)
                     break
@@ -483,15 +490,15 @@ class MerossDevice:
                         raise e # manage this error on the external handler
                     self.log(
                         INFO, 0,
-                        "MerossDevice(%s) %s in async_http_request attemp(%s): %s",
+                        "MerossDevice(%s) %s in async_http_request attempt(%s): %s",
                         self.device_id, type(e).__name__, str(attempt), str(e)
                     )
                     if (
-                        (self.conf_protocol is Protocol.AUTO) and
+                        (self.conf_protocol is CONF_PROTOCOL_AUTO) and
                         self.lastmqtt and
                         mqtt_is_connected(self.api.hass)
                     ):
-                        self.switch_protocol(Protocol.MQTT)
+                        self.switch_protocol(CONF_PROTOCOL_MQTT)
                         self.mqtt_request(namespace, method, payload, response_callback)
                         return
                     elif isinstance(e, asyncio_TimeoutError):
@@ -502,12 +509,10 @@ class MerossDevice:
                 return
 
             r_header = response[mc.KEY_HEADER]
-            if self._trace_file is not None:
-                self._trace(response[mc.KEY_PAYLOAD], r_header[mc.KEY_NAMESPACE], r_header[mc.KEY_METHOD], CONF_OPTION_HTTP, TRACE_DIRECTION_RX)
             if (response_callback is not None) and (r_header[mc.KEY_METHOD] == mc.METHOD_SETACK):
                 #we're actually only using this for SET->SETACK command confirmation
                 response_callback()
-            self.receive(r_header, response[mc.KEY_PAYLOAD])
+            self.receive(r_header, response[mc.KEY_PAYLOAD], CONF_PROTOCOL_HTTP)
         except Exception as e:
             self.log(
                 WARNING, 14400,
@@ -524,17 +529,17 @@ class MerossDevice:
             confirmation/status updates
         """
         self.lastrequest = time()
-        if self.curr_protocol is Protocol.MQTT:
+        if self.curr_protocol is CONF_PROTOCOL_MQTT:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
             if mqtt_is_connected(self.api.hass):
                 self.mqtt_request(namespace, method, payload, response_callback)
                 return
             # MQTT not connected
-            if self.conf_protocol is Protocol.MQTT:
+            if self.conf_protocol is CONF_PROTOCOL_MQTT:
                 return
             # protocol is AUTO
-            self.switch_protocol(Protocol.HTTP)
+            self.switch_protocol(CONF_PROTOCOL_HTTP)
 
         # curr_protocol is HTTP
         self.api.hass.async_create_task(
@@ -550,11 +555,11 @@ class MerossDevice:
         )
 
 
-    def switch_protocol(self, protocol: Protocol) -> None:
+    def switch_protocol(self, protocol) -> None:
         self.log(
             INFO, 0,
             "MerossDevice(%s) switching protocol to %s",
-            self.device_id, protocol.name
+            self.device_id, protocol
         )
         self.lastmqtt = 0 # reset so we'll need a new mqtt message to ensure mqtt availability
         self.curr_protocol = protocol
@@ -663,8 +668,8 @@ class MerossDevice:
             # when we 'fall' offline while on MQTT eventually retrigger HTTP.
             # the reverse is not needed since we switch HTTP -> MQTT right-away
             # when HTTP fails (see async_http_request)
-            elif (self.curr_protocol is Protocol.MQTT) and (self.conf_protocol is Protocol.AUTO):
-                self.switch_protocol(Protocol.HTTP)
+            elif (self.curr_protocol is CONF_PROTOCOL_MQTT) and (self.conf_protocol is CONF_PROTOCOL_AUTO):
+                self.switch_protocol(CONF_PROTOCOL_HTTP)
             else:
                 self._set_offline()
                 return
@@ -683,8 +688,8 @@ class MerossDevice:
                         self._mqtt_transactions.pop(messageid)
 
         else:# offline
-            if (self.curr_protocol is Protocol.MQTT) and (self.conf_protocol is Protocol.AUTO):
-                self.switch_protocol(Protocol.HTTP)
+            if (self.curr_protocol is CONF_PROTOCOL_MQTT) and (self.conf_protocol is CONF_PROTOCOL_AUTO):
+                self.switch_protocol(CONF_PROTOCOL_HTTP)
             if (epoch - self.lastrequest) > self._retry_period:
                 self._retry_period = self._retry_period + self.polling_period
                 self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
@@ -913,19 +918,17 @@ class MerossDevice:
         """
         self._host = data.get(CONF_HOST)
         self.key = data.get(CONF_KEY)
-        self.conf_protocol = MAP_CONF_PROTOCOL.get(data.get(CONF_PROTOCOL), Protocol.AUTO)
-        if self.conf_protocol == Protocol.AUTO:
-            self.pref_protocol = Protocol.HTTP if self._host else Protocol.MQTT
+        self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(data.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO)
+        if self.conf_protocol is CONF_PROTOCOL_AUTO:
+            self.pref_protocol = CONF_PROTOCOL_HTTP if self._host else CONF_PROTOCOL_MQTT
         else:
             self.pref_protocol = self.conf_protocol
-        """
-        When using Protocol.AUTO we try to use our 'preferred' (pref_protocol)
-        and eventually fallback (curr_protocol) until some good news allow us
-        to retry pref_protocol
-        """
+        # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
+        # and eventually fallback (curr_protocol) until some good news allow us
+        # to retry pref_protocol
         self.curr_protocol = self.pref_protocol
         self.lastmqtt = 0 # reset mqtt availability indicator
-        self.hasmqtt = (self.conf_protocol != Protocol.HTTP) and (self.hasmqtt or (self.pref_protocol == Protocol.MQTT))
+        self.hasmqtt = (self.conf_protocol is not CONF_PROTOCOL_HTTP) and (self.hasmqtt or (self.pref_protocol is CONF_PROTOCOL_MQTT))
         self.polling_period = data.get(CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT)
         if self.polling_period < CONF_POLLING_PERIOD_MIN:
             self.polling_period = CONF_POLLING_PERIOD_MIN
@@ -1004,7 +1007,7 @@ class MerossDevice:
         data: str | dict,
         namespace: str,
         method: str,
-        protocol = CONF_OPTION_AUTO,
+        protocol = CONF_PROTOCOL_AUTO,
         rxtx = ''
         ):
         # expect self._trace_file is not None:

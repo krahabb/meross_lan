@@ -121,8 +121,6 @@ class MLGarage(_MerossEntity, CoverEntity):
         except Exception as e:
             self.device.log(WARNING, 0, "MLGarage(%s): error(%s) while trying to restore previous state", self.name, str(e))
 
-        #await super().async_added_to_hass() super is empty..dont call
-
 
     async def async_open_cover(self, **kwargs) -> None:
         self.request(1)
@@ -488,8 +486,6 @@ class MLRollerShutter(_MerossEntity, CoverEntity):
                     self._attr_current_cover_position = _attr[ATTR_CURRENT_POSITION]
         except Exception as e:
             self.device.log(WARNING, 0, "MLRollerShutter(%s): error(%s) while trying to restore previous state", self.name, str(e))
-
-        #await super().async_added_to_hass() super is empty..dont call
 
 
     async def async_open_cover(self, **kwargs) -> None:

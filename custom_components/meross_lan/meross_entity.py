@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.entity import Entity
@@ -38,7 +40,7 @@ class MerossFakeEntity:
 
 
 # pylint: disable=no-member
-class _MerossEntity:
+class _MerossEntity(Entity if TYPE_CHECKING else object):
 
     PLATFORM: str
 
@@ -68,7 +70,8 @@ class _MerossEntity:
         self.device = device
         self.channel = channel
         self._attr_device_class = device_class
-        self._attr_name = self._attr_name or device_class or entitykey
+        if self._attr_name is None:
+            self._attr_name = entitykey or device_class
         self.subdevice = subdevice
         self.id = channel if entitykey is None else entitykey if channel is None else f"{channel}_{entitykey}"
         assert (self.id is not None) and (device.entities.get(self.id) is None),\
@@ -83,16 +86,6 @@ class _MerossEntity:
         LOGGER.debug("MerossEntity(%s) destroy", self.unique_id)
         return
 
-    """
-    @abstractmethod
-    @property
-    def enabled(self):
-        pass
-
-    @abstractmethod
-    def async_write_ha_state(self):
-        pass
-    """
 
     @property
     def unique_id(self):
@@ -167,20 +160,6 @@ class _MerossEntity:
     def assumed_state(self) -> bool:
         return False
 
-    """
-    avoid overriding state since it is mostly declared final in HA platforms
-    @property
-    def state(self) -> StateType:
-        return self._attr_state
-    """
-
-    async def async_added_to_hass(self) -> None:
-        return
-
-
-    async def async_will_remove_from_hass(self) -> None:
-        return
-
 
     def update_state(self, state: str):
         if self._attr_state != state:
@@ -198,10 +177,15 @@ class _MerossEntity:
         return (self.registry_entry.name if self.registry_entry is not None else None) or self.name
 
 
-    """
-    even though these are toggle/binary_sensor properties
-    we provide a base-implement-all
-    """
+    def _parse_undefined(self, payload):
+        # this is a default handler for any message (in protocol routing)
+        # for which we haven't defined a specific handler (see MerossDevice._parse__generic)
+        pass
+
+
+    # even though these are toggle/binary_sensor properties
+    # we provide a base-implement-all
+
     @property
     def is_on(self) -> bool:
         return self._attr_state == STATE_ON

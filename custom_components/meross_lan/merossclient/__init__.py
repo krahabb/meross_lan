@@ -108,10 +108,12 @@ def get_namespacekey(namespace: str) -> str:
     """
     return the 'well known' key for the provided namespace
     which is used as the root key of the associated payload
+    This is usually the camelCase of the last split of the namespace
     """
     if namespace in mc.PAYLOAD_GET:
         return next(iter(mc.PAYLOAD_GET[namespace]))
-    return namespace.split('.')[-1].lower()
+    key = namespace.split('.')[-1]
+    return key[0].lower() + key[1:]
 
 
 def build_default_payload_get(namespace: str) -> dict:
@@ -218,6 +220,8 @@ class MerossDeviceDescriptor:
         device descriptor
     """
     all = dict()
+    ability: dict
+    digest: dict
 
     _dynamicattrs = {
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),
