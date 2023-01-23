@@ -163,9 +163,7 @@ class Mts200Climate(MtsClimate):
         def _ack_callback():
             self._mts_onoff = onoff
             self.update_modes()
-        #same as DND: force http request to get a consistent acknowledge
-        #the device will PUSH anyway a state update when the valve actually switches
-        #but this way we'll update the UI consistently right after setting mode
+
         self.device.request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
