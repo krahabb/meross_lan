@@ -125,7 +125,6 @@ class MerossDevice:
         self.api = api
         self.descriptor = descriptor
         self.entry_id = entry.entry_id
-        self.replykey = None
         self._online = False
         self.needsave = False # while parsing ns.ALL code signals to persist ConfigEntry
         self._retry_period = 0 # used to try reconnect when falling offline
@@ -217,8 +216,8 @@ class MerossDevice:
 
     def shutdown(self):
         """
-            called when the config entry is unloaded
-            we'll try to clear everything here
+        called when the config entry is unloaded
+        we'll try to clear everything here
         """
         if self._trace_file:
             self._trace_close()
@@ -276,14 +275,7 @@ class MerossDevice:
         if self._trace_file is not None:
             self._trace(payload, namespace, method, protocol, TRACE_DIRECTION_RX)
 
-        # every time we receive a response we save it's 'replykey':
-        # that would be the same as our self.key (which it is compared against in 'get_replykey')
-        # if it's good else it would be the device message header to be used in
-        # a reply scheme where we're going to 'fool' the device by using its own hashes
-        # if our config allows for that (our self.key is 'None' which means empty key or auto-detect)
-        # Update: this key trick actually doesnt work on MQTT (but works on HTTP)
-        self.replykey = get_replykey(header, self.key)
-        if self.key and (self.replykey != self.key):
+        if get_replykey(header, self.key) is not self.key:
             self.log(
                 WARNING, 14400,
                 "MerossDevice(%s) received signature error (incorrect key?)",
@@ -326,7 +318,7 @@ class MerossDevice:
                 payload[mc.KEY_CHANNEL]
                 if entitykey is None
                 else  f"{payload[mc.KEY_CHANNEL]}_{entitykey}"
-                ]
+            ]
             getattr(entity, f"_parse_{key}", entity._parse_undefined)(payload)
         elif isinstance(payload, list):
             for p in payload:
@@ -351,7 +343,7 @@ class MerossDevice:
                 channel_payload[mc.KEY_CHANNEL]
                 if entitykey is None
                 else  f"{channel_payload[mc.KEY_CHANNEL]}_{entitykey}"
-                ]
+            ]
             getattr(entity, f"_parse_{key}", entity._parse_undefined)(channel_payload)
 
 
@@ -523,10 +515,10 @@ class MerossDevice:
 
     def request(self, namespace: str, method: str, payload: dict, response_callback: Callable = None):
         """
-            route the request through MQTT or HTTP to the physical device.
-            callback will be called on successful replies and actually implemented
-            only when HTTPing SET requests. On MQTT we rely on async PUSH and SETACK to manage
-            confirmation/status updates
+        route the request through MQTT or HTTP to the physical device.
+        callback will be called on successful replies and actually implemented
+        only when HTTPing SET requests. On MQTT we rely on async PUSH and SETACK to manage
+        confirmation/status updates
         """
         self.lastrequest = time()
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
@@ -544,7 +536,7 @@ class MerossDevice:
         # curr_protocol is HTTP
         self.api.hass.async_create_task(
             self.async_http_request(namespace, method, payload, response_callback)
-            )
+        )
 
 
     def request_get(self, namespace: str) -> None:
@@ -602,8 +594,8 @@ class MerossDevice:
                 vol.Optional(
                     mc.KEY_TIMEZONE,
                     description={"suggested_value": self.descriptor.timezone}
-                    )
-                ] = TIMEZONES_SET
+                )
+            ] = TIMEZONES_SET
 
 
     def entry_option_update(self, user_input: dict):
@@ -613,7 +605,7 @@ class MerossDevice:
         (this is actually called in sequence with entry_update_listener
         just the latter is async)
         """
-        if self.hasmqtt and (mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability):
+        if self._online and self.hasmqtt and (mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability):
             self._config_timezone(int(time()), user_input.get(mc.KEY_TIMEZONE))
 
 
@@ -630,17 +622,18 @@ class MerossDevice:
             if self._host:
                 _httpclient.host = self._host
             _httpclient.key = self.key
-        """
-        We'll activate debug tracing only when the user turns it on in OptionsFlowHandler so we usually
-        don't care about it on startup ('_set_config_entry'). When updating ConfigEntry
-        we always reset the timeout and so the trace will (eventually) restart
-        """
+        # We'll activate debug tracing only when the user turns it on in OptionsFlowHandler so we usually
+        # don't care about it on startup ('_set_config_entry'). When updating ConfigEntry
+        # we always reset the timeout and so the trace will (eventually) restart
         if self._trace_file is not None:
             self._trace_close()
         endtime = config_entry.data.get(CONF_TRACE, 0)
         if endtime > time():
             self._trace_open(endtime)
-        #await hass.config_entries.async_reload(config_entry.entry_id)
+        # config_entry update might come from DHCP or OptionsFlowHandler address update
+        # so we'll eventually retry querying the device
+        if not self._online:
+            self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
 
 
     @callback
@@ -777,7 +770,7 @@ class MerossDevice:
                 WARNING, 0,
                 "MerossDevice(%s) has incorrect timestamp: %d seconds behind HA",
                 self.device_id, int(self.device_timedelta)
-        )
+            )
 
 
     def _config_timezone(self, epoch, timezone) -> None:
@@ -813,13 +806,13 @@ class MerossDevice:
                     _transition_info = tz_local._transition_info[idx-1]
                     timerules.append([
                         int(tz_local._utc_transition_times[idx-1].timestamp()),
-                        int(_transition_info[0].total_seconds()),
+                            int(_transition_info[0].total_seconds()),
                         1 if _transition_info[1].total_seconds() else 0
                     ])
                     _transition_info = tz_local._transition_info[idx]
                     timerules.append([
-                        int(tz_local._utc_transition_times[idx].timestamp()),
-                        int(_transition_info[0].total_seconds()),
+                            int(tz_local._utc_transition_times[idx].timestamp()),
+                            int(_transition_info[0].total_seconds()),
                         1 if _transition_info[1].total_seconds() else 0
                     ])
                 except Exception as e:
@@ -868,9 +861,9 @@ class MerossDevice:
 
     def _set_online(self, namespace: str) -> None:
         """
-            When coming back online allow for a refresh
-            also in inheriteds. Pass received namespace along
-            so to decide what to refresh (see 'updatecoordinator_listener')
+        When coming back online allow for a refresh
+        also in inheriteds. Pass received namespace along
+        so to decide what to refresh (see 'updatecoordinator_listener')
         """
         self.log(
             DEBUG, 0,
@@ -917,7 +910,7 @@ class MerossDevice:
         common properties read from ConfigEntry on __init__ or when a configentry updates
         """
         self._host = data.get(CONF_HOST)
-        self.key = data.get(CONF_KEY)
+        self.key = data.get(CONF_KEY) or '' # prevent key-hack at any rate
         self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(data.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO)
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             self.pref_protocol = CONF_PROTOCOL_HTTP if self._host else CONF_PROTOCOL_MQTT
@@ -1009,7 +1002,7 @@ class MerossDevice:
         method: str,
         protocol = CONF_PROTOCOL_AUTO,
         rxtx = ''
-        ):
+    ):
         # expect self._trace_file is not None:
         now = time()
         if (now > self._trace_endtime) or \

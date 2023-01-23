@@ -13,10 +13,6 @@
             "invalid_auth": "Fehlerhafte Zugangsdaten"
         },
         "step": {
-            "user": {
-                "description": "Meross Gerät einrichten",
-                "data": {}
-            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Allgemeine Meross LAN Einstellungen",
@@ -28,8 +24,15 @@
                 "description": "Meross Gerät einrichten\nTyp: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "IP-Adresse des Geräts",
-                    "keymode": "Schlüsselauswahlmodus",
                     "key": "Geräteschlüssel"
+                }
+            },
+            "keyerror": {
+                "title": "Geräteschlüsselfehler",
+                "description": "Der bereitgestellte Schlüssel ist falsch. Wähle eine Option",
+                "menu_options": {
+                    "cloudkey": "Aus der Meross-Cloud abrufen",
+                    "device": "Wiederholen"
                 }
             },
             "cloudkey": {
@@ -68,7 +71,6 @@
                 "description": "Typ: {device_type}\nUUID: {device_id}\nHost: {host}",
                 "data": {
                     "host": "IP-Adresse des Geräts",
-                    "keymode": "Schlüsselauswahlmodus",
                     "key": "Geräteschlüssel",
                     "protocol": "Verbindungsart",
                     "polling_period": "Abfragerate",
@@ -77,6 +79,14 @@
                     "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
+                }
+            },
+            "keyerror": {
+                "title": "Geräteschlüsselfehler",
+                "description": "Der bereitgestellte Schlüssel ist falsch. Wähle eine Option",
+                "menu_options": {
+                    "cloudkey": "Aus der Meross-Cloud abrufen",
+                    "device": "Wiederholen"
                 }
             },
             "cloudkey": {

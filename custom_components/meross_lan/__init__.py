@@ -52,6 +52,11 @@ class MerossApi:
         """helper to get the singleton"""
         return hass.data.get(DOMAIN)
 
+    @staticmethod
+    def peek_device(hass: HomeAssistant, device_id:str) -> MerossDevice | None:
+        if (api := hass.data.get(DOMAIN)) is not None:
+            return api.devices.get(device_id)
+        return None
 
     @staticmethod
     def get(hass: HomeAssistant) -> "MerossApi" | None:
@@ -193,7 +198,7 @@ class MerossApi:
                     )
 
                 replykey = get_replykey(header, self.key)
-                if replykey != self.key:
+                if replykey is not self.key:
                     LOGGER_trap(WARNING, 300, "Meross discovery key error for device_id: %s", device_id)
                     if self.key is not None:# we're using a fixed key in discovery so ignore this device
                         return
@@ -491,7 +496,7 @@ class MerossApi:
 
     @callback
     async def entry_update_listener(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-        self.key = config_entry.data.get(CONF_KEY)
+        self.key = config_entry.data.get(CONF_KEY) or ''
 
 
     @callback
@@ -561,7 +566,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     if device_id is None:
         # this is the MQTT Hub entry
-        api.key = entry.data.get(CONF_KEY)  # could be 'None' : if so defaults to "" but allows key reply trick
+        api.key = entry.data.get(CONF_KEY) or ''
         api.unsub_entry_update_listener = entry.add_update_listener(api.entry_update_listener)
     else:
         #device related entry

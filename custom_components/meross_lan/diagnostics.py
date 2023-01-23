@@ -35,13 +35,8 @@ async def _async_get_diagnostics(hass, entry: ConfigEntry):
             "disabled_polling": entry.pref_disable_polling,
         }
 
-    device = None
-    deviceclass = None
-    api = MerossApi.peek(hass)
-    if api is not None:# all of the meross_lan entries disabled?
-        device = api.devices.get(device_id)
-        deviceclass = type(device).__name__
-
+    device = MerossApi.peek_device(hass, device_id)
+    deviceclass = type(device).__name__ if device is not None else None
     trace_timeout = entry.data.get(CONF_TRACE_TIMEOUT)
     payload = deepcopy(entry.data.get(CONF_PAYLOAD)) #copy to avoid obfuscating entry.data
     obfuscate(payload)

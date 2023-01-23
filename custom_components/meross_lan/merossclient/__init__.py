@@ -1,5 +1,5 @@
 """An Http API Client to interact with meross devices"""
-from logging import Logger, getLogger
+from logging import Logger, getLogger, DEBUG
 from typing import Any, Optional, Union
 from uuid import uuid4
 from hashlib import md5
@@ -137,13 +137,10 @@ def get_replykey(header: dict, key:KeyType = None) -> KeyType:
     the 'reply scheme' hack doesnt work on mqtt but works on http: this code will be left since it works if the key is correct
     anyway and could be reused in a future attempt
     """
-    if isinstance(key, dict):
-        # no way! we're already keying as replykey workflow
-        return header
-
-    sign = md5((header[mc.KEY_MESSAGEID] + (key or "") + str(header[mc.KEY_TIMESTAMP])).encode('utf-8')).hexdigest()
-    if sign == header[mc.KEY_SIGN]:
-        return key
+    if isinstance(key, str):
+        sign = md5((header[mc.KEY_MESSAGEID] + key + str(header[mc.KEY_TIMESTAMP])).encode('utf-8')).hexdigest()
+        if sign == header[mc.KEY_SIGN]:
+            return key
 
     return header
 
@@ -280,7 +277,7 @@ class MerossHttpClient:
                 ):
         self._host = host
         self._requesturl = URL(f"http://{host}/config")
-        self.key = key
+        self.key = key # key == None for hack-mode
         self.replykey = None
         self._session = session or aiohttp.ClientSession()
         self._logger = logger or getLogger(__name__)
@@ -320,31 +317,35 @@ class MerossHttpClient:
 
             response.raise_for_status()
             text_body = await response.text()
-            self._logger.debug("MerossHttpClient(%s): HTTP Response (%s)", self._host, text_body)
+            if self._logger.isEnabledFor(DEBUG):
+                self._logger.debug("MerossHttpClient(%s): HTTP Response (%s)", self._host, text_body)
             json_body:dict = json_loads(text_body)
-            self.replykey = get_replykey(json_body.get(mc.KEY_HEADER), self.key)
+            if self.key is None:
+                self.replykey = get_replykey(json_body.get(mc.KEY_HEADER), self.key)
         except Exception as e:
             self.replykey = None # reset the key hack since it could became stale
-            self._logger.debug("MerossHttpClient(%s): HTTP Exception (%s)", self._host, str(e) or type(e).__name__)
+            if self._logger.isEnabledFor(DEBUG):
+                self._logger.debug("MerossHttpClient(%s): HTTP %s (%s)", self._host, type(e).__name__, str(e))
             raise e
 
         return json_body
 
 
     async def async_request(self, namespace: str, method: str, payload: dict) -> dict:
-
-        self._logger.debug("MerossHttpClient(%s): HTTP POST method:(%s) namespace:(%s)", self._host, method, namespace)
-
-        request: dict = build_payload(namespace, method, payload, self.key or self.replykey, mc.MANUFACTURER)
+        if self._logger.isEnabledFor(DEBUG):
+            self._logger.debug("MerossHttpClient(%s): HTTP POST method:(%s) namespace:(%s)", self._host, method, namespace)
+        key = self.key
+        request: dict = build_payload(
+            namespace, method, payload, self.replykey if key is None else key, mc.MANUFACTURER)
         response: dict = await self.async_request_raw(request)
-
         if response.get(mc.KEY_PAYLOAD, {}).get(mc.KEY_ERROR, {}).get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
-            if self.key:
+            if key is not None:
                 raise MerossKeyError(response.get(mc.KEY_PAYLOAD))
             #sign error... hack and fool
-            self._logger.debug(
-                "Key error on %s (%s:%s) -> retrying with key-reply hack",
-                self._host, method, namespace)
+            if self._logger.isEnabledFor(DEBUG):
+                self._logger.debug(
+                    "Key error on %s (%s:%s) -> retrying with key-reply hack",
+                    self._host, method, namespace)
             req_header = request[mc.KEY_HEADER]
             resp_header = response[mc.KEY_HEADER]
             req_header[mc.KEY_MESSAGEID] = resp_header[mc.KEY_MESSAGEID]
