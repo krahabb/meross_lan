@@ -1,5 +1,4 @@
-
-from typing import OrderedDict
+import collections
 
 # MQTT topics
 TOPIC_DISCOVERY = "/appliance/+/publish"
@@ -12,11 +11,16 @@ METHOD_GETACK = "GETACK"
 METHOD_SET = "SET"
 METHOD_SETACK = "SETACK"
 METHOD_ERROR = "ERROR"
-
+# map acknowledge to relative command method
 METHOD_ACK_MAP = {
     METHOD_GET: METHOD_GETACK,
     METHOD_SET: METHOD_SETACK,
 }
+# list methods usually carrying parsable state
+METHOD_PARSE_SET = (
+    METHOD_GETACK,
+    METHOD_PUSH,
+)
 
 NS_APPLIANCE_SYSTEM_ALL = "Appliance.System.All"
 NS_APPLIANCE_SYSTEM_ABILITY = "Appliance.System.Ability"
@@ -273,9 +277,11 @@ PAYLOAD_GET = {
     NS_APPLIANCE_CONTROL_LIGHT : { KEY_LIGHT: {} },
     NS_APPLIANCE_CONTROL_LIGHT_EFFECT : { KEY_EFFECT: [] },
     NS_APPLIANCE_CONTROL_SPRAY : { KEY_SPRAY: {} },
+    NS_APPLIANCE_CONTROL_MP3 : { KEY_MP3: {} },
     NS_APPLIANCE_ROLLERSHUTTER_POSITION: { KEY_POSITION: [] },
     NS_APPLIANCE_ROLLERSHUTTER_STATE: { KEY_STATE: [] },
     NS_APPLIANCE_ROLLERSHUTTER_CONFIG: { KEY_CONFIG: [] },
+    NS_APPLIANCE_GARAGEDOOR_CONFIG: { KEY_CONFIG: {} },
     NS_APPLIANCE_HUB_BATTERY: { KEY_BATTERY: [] },
     NS_APPLIANCE_HUB_SENSOR_ALL: { KEY_ALL: [] },
     NS_APPLIANCE_HUB_SENSOR_SMOKE: { KEY_SMOKEALARM: [] }, # guessing: 'smoke' is wrong for sure
@@ -292,6 +298,7 @@ PAYLOAD_GET = {
     NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION: { KEY_HOLDACTION: [ { KEY_CHANNEL: 0 }] },
     NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: { KEY_SENSOR: [ { KEY_CHANNEL: 0 }] },
     NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: { KEY_BRIGHTNESS: [ { KEY_CHANNEL: 0 }] },
+    NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: { KEY_SENSOR: {} },
 }
 # error codes as reported by Meross device protocol
 ERROR_INVALIDKEY = 5001
@@ -376,7 +383,7 @@ HP110A_MP3_SONG_MAP = {
 # provide a general device description
 # see how TYPE_NAME_MAP is used in code
 TYPE_UNKNOWN = 'unknown'
-TYPE_NAME_MAP = OrderedDict()
+TYPE_NAME_MAP = collections.OrderedDict()
 
 CLASS_MSH = 'msh'
 TYPE_MSH300 = 'msh300' # WiFi Hub

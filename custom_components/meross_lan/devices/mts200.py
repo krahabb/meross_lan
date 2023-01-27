@@ -1,6 +1,5 @@
 from __future__ import annotations
-
-from typing import TYPE_CHECKING, List
+import typing
 
 from ..climate import (
     MtsClimate, MtsSetPointNumber,
@@ -12,56 +11,43 @@ from ..sensor import MLSensor
 from ..binary_sensor import MLBinarySensor, DEVICE_CLASS_WINDOW, DEVICE_CLASS_PROBLEM
 from ..switch import MLSwitch, DEVICE_CLASS_SWITCH
 from ..meross_entity import EntityCategory
-from ..merossclient import const as mc, get_namespacekey
-if TYPE_CHECKING:
-    from ..meross_device import MerossDevice
+from ..merossclient import const as mc
 
+if typing.TYPE_CHECKING:
+    from ..meross_device import MerossDevice
 
 
 class Mts200SetPointNumber(MtsSetPointNumber):
     """
     customize MtsSetPointNumber to interact with Mts200 family valves
     """
-    async def async_set_native_value(self, value: float):
-        self.device.request(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
-            mc.METHOD_SET,
-            {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, self._key: int(value * self.multiplier)}]} # the device rounds down ?!
-        )
-
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
+    key_namespace = mc.KEY_MODE
 
 
 class Mts200OverheatThresholdNumber(MLConfigNumber):
     """
     customize MLConfigNumber to interact with overheat protection value
     """
-    multiplier = 10
-
     _attr_name = 'Overheat threshold'
     _attr_native_max_value = 70
     _attr_native_min_value = 20
     _attr_native_step = 0.5
     _attr_native_unit_of_measurement = TEMP_CELSIUS
 
-
-    async def async_set_native_value(self, value: float):
-        self.device.request(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
-            mc.METHOD_SET,
-            {mc.KEY_OVERHEAT: [{mc.KEY_CHANNEL: self.channel, mc.KEY_VALUE: int(value * self.multiplier)}]}
-        )
-
+    multiplier = 10
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
+    key_namespace = mc.KEY_OVERHEAT
+    key_value = mc.KEY_VALUE
 
 
 class Mts200ConfigSwitch(MLSwitch):
 
     _attr_entity_category = EntityCategory.CONFIG
 
-
     def __init__(self, climate: Mts200Climate, entitykey: str, namespace: str):
         self._attr_name = entitykey
         super().__init__(climate.device, climate.channel, entitykey, DEVICE_CLASS_SWITCH, None, namespace)
-
 
 
 class Mts200Climate(MtsClimate):
@@ -74,7 +60,6 @@ class Mts200Climate(MtsClimate):
         mc.MTS200_MODE_ECO: PRESET_AWAY,
         mc.MTS200_MODE_AUTO: PRESET_AUTO
     }
-
     # reverse map
     PRESET_TO_MTS_MODE_MAP = {
         PRESET_CUSTOM: mc.MTS200_MODE_CUSTOM,
@@ -83,7 +68,6 @@ class Mts200Climate(MtsClimate):
         PRESET_AWAY: mc.MTS200_MODE_ECO,
         PRESET_AUTO: mc.MTS200_MODE_AUTO
     }
-
     # when setting target temp we'll set an appropriate payload key
     # for the mts100 depending on current 'preset' mode.
     # if mts100 is in any of 'off', 'auto' we just set the 'custom'
@@ -97,7 +81,6 @@ class Mts200Climate(MtsClimate):
         PRESET_AWAY: mc.KEY_ECOTEMP,
         PRESET_AUTO: mc.KEY_MANUALTEMP
     }
-
 
     def __init__(self, device: 'MerossDevice', channel: object):
         super().__init__(device, channel, None, None, None)
@@ -120,19 +103,19 @@ class Mts200Climate(MtsClimate):
         self._externalsensor_temperature_sensor = MLSensor(
             device, channel, 'external sensor', DEVICE_CLASS_TEMPERATURE, None)
 
-
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
+    async def async_set_preset_mode(self, preset_mode: str):
         if preset_mode == PRESET_OFF:
-            await self._async_turn_onoff(0)
+            await self.async_request_onoff(0)
         else:
             mode = self.PRESET_TO_MTS_MODE_MAP.get(preset_mode)
             if mode is not None:
 
-                def _ack_callback():
-                    self._mts_mode = mode
-                    self.update_modes()
+                def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+                    if acknowledge:
+                        self._mts_mode = mode
+                        self.update_modes()
 
-                self.device.request(
+                await self.device.async_request(
                     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
                     mc.METHOD_SET,
                     {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}]},
@@ -140,37 +123,37 @@ class Mts200Climate(MtsClimate):
                 )
 
                 if not self._mts_onoff:
-                    await self._async_turn_onoff(1)
+                    await self.async_request_onoff(1)
 
-
-    async def async_set_temperature(self, **kwargs) -> None:
-        t = kwargs.get(ATTR_TEMPERATURE)
+    async def async_set_temperature(self, **kwargs):
+        t = kwargs[ATTR_TEMPERATURE]
         key = self.PRESET_TO_TEMPERATUREKEY_MAP[self._attr_preset_mode or PRESET_CUSTOM]
 
-        def _ack_callback():
-            self._attr_target_temperature = t
-            self.update_modes()
+        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+            if acknowledge:
+                self._attr_target_temperature = t
+                self.update_modes()
 
-        self.device.request(
+        await self.device.async_request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
-            {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, key: int(t * 10)}]}, # the device rounds down ?!
+            {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, key: int(t * 10)}]},
             _ack_callback
         )
 
+    async def async_request_onoff(self, onoff: int):
 
-    async def _async_turn_onoff(self, onoff) -> None:
-        def _ack_callback():
-            self._mts_onoff = onoff
-            self.update_modes()
+        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+            if acknowledge:
+                self._mts_onoff = onoff
+                self.update_modes()
 
-        self.device.request(
+        await self.device.async_request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
             {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}]},
             _ack_callback
         )
-
 
     def _parse_mode(self, payload: dict):
         """{
@@ -211,16 +194,13 @@ class Mts200Climate(MtsClimate):
             self._away_temperature_number.update_native_value(_t)
         self.update_modes()
 
-
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
         self._windowOpened_binary_sensor.update_onoff(payload.get(mc.KEY_STATUS))
 
-
     def _parse_sensor(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""
         self._sensorMode_switch.update_onoff(payload.get(mc.KEY_MODE))
-
 
     def _parse_overheat(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
@@ -239,61 +219,51 @@ class Mts200Climate(MtsClimate):
             self._externalsensor_temperature_sensor.update_state(payload[mc.KEY_CURRENTTEMP] / 10)
 
 
+class ThermostatMixin(MerossDevice if typing.TYPE_CHECKING else object): # pylint: disable=used-before-assignment
 
-class ThermostatMixin(MerossDevice if TYPE_CHECKING else object):
-
-
-    _polling_channels: list
-    _polling_namespaces = [
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
-        ]
-
+    _polling_payload: list
 
     def _init_thermostat(self, payload: dict):
-        self._polling_channels = list()
+        self._polling_payload = []
         mode = payload.get(mc.KEY_MODE)
         if isinstance(mode, list):
             for m in mode:
                 Mts200Climate(self, m[mc.KEY_CHANNEL])
-                self._polling_channels.append({ mc.KEY_CHANNEL: m[mc.KEY_CHANNEL] })
-
+                self._polling_payload.append({ mc.KEY_CHANNEL: m[mc.KEY_CHANNEL] })
+        if self._polling_payload:
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR in self.descriptor.ability:
+                self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR] = \
+                    { mc.KEY_SENSOR: self._polling_payload }
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT in self.descriptor.ability:
+                self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT] = \
+                    { mc.KEY_OVERHEAT: self._polling_payload }
 
     def _handle_Appliance_Control_Thermostat_Mode(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_MODE, payload.get(mc.KEY_MODE))
 
-
     def _handle_Appliance_Control_Thermostat_Calibration(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_CALIBRATION, payload.get(mc.KEY_CALIBRATION))
-
 
     def _handle_Appliance_Control_Thermostat_DeadZone(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_DEADZONE, payload.get(mc.KEY_DEADZONE))
 
-
     def _handle_Appliance_Control_Thermostat_Frost(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_FROST, payload.get(mc.KEY_FROST))
-
 
     def _handle_Appliance_Control_Thermostat_Overheat(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_OVERHEAT, payload.get(mc.KEY_OVERHEAT))
 
-
     def _handle_Appliance_Control_Thermostat_windowOpened(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_WINDOWOPENED, payload.get(mc.KEY_WINDOWOPENED))
-
 
     def _handle_Appliance_Control_Thermostat_Schedule(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_SCHEDULE, payload.get(mc.KEY_SCHEDULE))
 
-
     def _handle_Appliance_Control_Thermostat_HoldAction(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_HOLDACTION, payload.get(mc.KEY_HOLDACTION))
 
-
     def _handle_Appliance_Control_Thermostat_Sensor(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_SENSOR, payload.get(mc.KEY_SENSOR))
-
 
     def _parse_thermostat(self, payload: dict):
         """
@@ -323,13 +293,3 @@ class ThermostatMixin(MerossDevice if TYPE_CHECKING else object):
         """
         for key, value in payload.items():
             self._parse__generic_array(key, value)
-        # here we're in the context of processing an NS_ALL so
-        # and this should happen regularly on HTTP polled devices and
-        # when coming online on MQTT. We'll use this as a 'smart' poll
-        # strategy for the other relevant namespaces
-        for namespace in self._polling_namespaces:
-            self.request(
-                namespace,
-                mc.METHOD_GET,
-                { get_namespacekey(namespace) : self._polling_channels }
-            )

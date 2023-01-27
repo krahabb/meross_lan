@@ -1,12 +1,19 @@
 from __future__ import annotations
+import typing
 
+from . import meross_entity as me
 from .helpers import LOGGER
 
+if typing.TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.config_entries import ConfigEntry
 
-try:# to look for calendar platform in HA core
+try:  # to look for calendar platform in HA core
     from homeassistant.components.calendar import (
         DOMAIN as PLATFORM_CALENDAR,
-        CalendarEntity, CalendarEvent, CalendarEntityFeature,
+        CalendarEntity,
+        CalendarEvent,  # type: ignore
+        CalendarEntityFeature,  # type: ignore
         EVENT_DESCRIPTION,
         EVENT_END,
         EVENT_RECURRENCE_ID,
@@ -16,26 +23,34 @@ try:# to look for calendar platform in HA core
         EVENT_SUMMARY,
         EVENT_UID,
     )
-    from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
 
-    async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
-        platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_CALENDAR)
+    async def async_setup_entry(
+        hass: 'HomeAssistant', config_entry: 'ConfigEntry', async_add_devices
+    ):
+        me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_CALENDAR)
 
-    async def async_unload_entry(hass: object, config_entry: object) -> bool:
-        return platform_unload_entry(hass, config_entry, PLATFORM_CALENDAR)
+    async def async_unload_entry(hass: 'HomeAssistant', config_entry: 'ConfigEntry'):
+        return me.platform_unload_entry(hass, config_entry, PLATFORM_CALENDAR)
 
-except:# implement a fallback by using a sensor
-    LOGGER.warning("Missing 'calendar' entity type. Please update HA to latest version"
-        " to fully support thermostat schedule feature")
+except:  # implement a fallback by using a sensor
+    LOGGER.warning(
+        "Missing 'calendar' entity type. Please update HA to latest version"
+        " to fully support thermostat schedule feature"
+    )
     # we just mock some placeholder symbols hoping for the best...
-    from homeassistant.components.sensor import DOMAIN as PLATFORM_CALENDAR, SensorEntity as CalendarEntity
+    from homeassistant.components.sensor import (
+        DOMAIN as PLATFORM_CALENDAR,
+        SensorEntity as CalendarEntity,
+    )
     from enum import IntEnum
-    from .meross_entity import _MerossEntity
+
     class CalendarEvent:
         pass
+
     class CalendarEntityFeature(IntEnum):
         CREATE_EVENT = 1
         DELETE_EVENT = 2
+
     # rfc5545 fields
     EVENT_UID = "uid"
     EVENT_START = "dtstart"
@@ -48,6 +63,6 @@ except:# implement a fallback by using a sensor
     EVENT_RRULE = "rrule"
 
 
-class MLCalendar(_MerossEntity, CalendarEntity):
+class MLCalendar(me.MerossEntity, CalendarEntity):  # type: ignore
 
     PLATFORM = PLATFORM_CALENDAR

@@ -12,7 +12,7 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
 
     descriptor = MerossEmulatorDescriptor(tracefile, uuid)
 
-    mixin_classes = list()
+    mixin_classes = []
 
     if mc.KEY_THERMOSTAT in descriptor.digest:
         from .mixins.thermostat import ThermostatMixin # pylint: disable=import-outside-toplevel

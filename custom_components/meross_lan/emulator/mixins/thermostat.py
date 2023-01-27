@@ -1,16 +1,16 @@
-from typing import TYPE_CHECKING
+import typing
 from ..emulator import MerossEmulator # pylint: disable=relative-beyond-top-level
 from ...merossclient import const as mc # pylint: disable=relative-beyond-top-level
 
 
 
-class ThermostatMixin(MerossEmulator if TYPE_CHECKING else object):
+class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
 
     def _SET_Appliance_Control_Thermostat_Mode(self, header, payload):
         p_digest = self.descriptor.digest
         p_digest_mode_list = p_digest[mc.KEY_THERMOSTAT][mc.KEY_MODE]
-        p_digest_windowopened_list = dict()
+        p_digest_windowopened_list = {}
         p_mode_list = payload[mc.KEY_MODE]
         for p_mode in p_mode_list:
             channel = p_mode[mc.KEY_CHANNEL]

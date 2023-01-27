@@ -1,4 +1,5 @@
 from __future__ import annotations
+import typing
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from logging import WARNING
@@ -16,9 +17,12 @@ from ..calendar import (
     EVENT_START, EVENT_END, EVENT_SUMMARY,
     EVENT_UID, EVENT_RECURRENCE_ID, EVENT_RRULE,
 )
-from ..meross_entity import EntityCategory
+from .. import meross_entity as me
 from ..merossclient import const as mc  # mEROSS cONST
 from ..helpers import clamp
+
+if typing.TYPE_CHECKING:
+    from ..meross_device_hub import MerossSubDevice
 
 
 class Mts100Climate(MtsClimate):
@@ -31,7 +35,6 @@ class Mts100Climate(MtsClimate):
         mc.MTS100_MODE_ECO: PRESET_AWAY,
         mc.MTS100_MODE_AUTO: PRESET_AUTO
     }
-
     PRESET_TO_MTS_MODE_MAP = {
         PRESET_CUSTOM: mc.MTS100_MODE_CUSTOM,
         PRESET_COMFORT: mc.MTS100_MODE_HEAT,
@@ -53,22 +56,13 @@ class Mts100Climate(MtsClimate):
         PRESET_AUTO: mc.KEY_CUSTOM
     }
 
-
     def __init__(self, subdevice: 'MerossSubDevice'):
         super().__init__(subdevice.hub, subdevice.id, None, None, subdevice)
-        self.number_comfort_temperature = Mts100SetPointNumber(
-            self, PRESET_COMFORT)
-        self.number_sleep_temperature = Mts100SetPointNumber(
-            self, PRESET_SLEEP)
-        self.number_away_temperature = Mts100SetPointNumber(
-            self, PRESET_AWAY)
-        self._attr_extra_state_attributes = dict()
-
+        self._attr_extra_state_attributes = {}
 
     @property
     def scheduleBMode(self):
         return self._attr_extra_state_attributes.get(mc.KEY_SCHEDULEBMODE)
-
 
     @scheduleBMode.setter
     def scheduleBMode(self, value):
@@ -77,19 +71,19 @@ class Mts100Climate(MtsClimate):
         else:
             self._attr_extra_state_attributes.pop(mc.KEY_SCHEDULEBMODE)
 
-
-    async def async_set_preset_mode(self, preset_mode: str) -> None:
+    async def async_set_preset_mode(self, preset_mode: str):
         if preset_mode == PRESET_OFF:
-            await self._async_turn_onoff(0)
+            await self.async_request_onoff(0)
         else:
             mode = self.PRESET_TO_MTS_MODE_MAP.get(preset_mode)
             if mode is not None:
 
-                def _ack_callback():
-                    self._mts_mode = mode
-                    self.update_modes()
+                def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+                    if acknowledge:
+                        self._mts_mode = mode
+                        self.update_modes()
 
-                self.device.request(
+                await self.device.async_request(
                     mc.NS_APPLIANCE_HUB_MTS100_MODE,
                     mc.METHOD_SET,
                     {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
@@ -97,35 +91,33 @@ class Mts100Climate(MtsClimate):
                 )
 
                 if not self._mts_onoff:
-                    await self._async_turn_onoff(1)
+                    await self.async_request_onoff(1)
 
-
-    async def async_set_temperature(self, **kwargs) -> None:
-        t = kwargs.get(ATTR_TEMPERATURE)
+    async def async_set_temperature(self, **kwargs):
+        t = kwargs[ATTR_TEMPERATURE]
         key = self.PRESET_TO_TEMPERATUREKEY_MAP[self._attr_preset_mode or PRESET_CUSTOM]
 
-        def _ack_callback():
-            self._attr_target_temperature = t
-            self.update_modes()
-
+        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+            if acknowledge:
+                self._attr_target_temperature = t
+                self.update_modes()
         # when sending a temp this way the device will automatically
         # exit auto mode if needed
-        self.device.request(
+        await self.device.async_request(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
             {mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.id, key: int(t * 10)}]}, # the device rounds down ?!
             _ack_callback
         )
 
+    async def async_request_onoff(self, onoff: int):
 
-    async def _async_turn_onoff(self, onoff) -> None:
-        def _ack_callback():
-            self._mts_onoff = onoff
-            self.update_modes()
-        #same as DND: force http request to get a consistent acknowledge
-        #the device will PUSH anyway a state update when the valve actually switches
-        #but this way we'll update the UI consistently right after setting mode
-        self.device.request(
+        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+            if acknowledge:
+                self._mts_onoff = onoff
+                self.update_modes()
+
+        await self.device.async_request(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
             mc.METHOD_SET,
             {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: onoff}]},
@@ -133,28 +125,16 @@ class Mts100Climate(MtsClimate):
         )
 
 
-
 class Mts100SetPointNumber(MtsSetPointNumber):
     """
     customize MtsSetPointNumber to interact with Mts100 family valves
     """
-    async def async_set_native_value(self, value: float):
-        self.device.request(
-            mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
-            mc.METHOD_SET,
-            {
-                mc.KEY_TEMPERATURE: [
-                    {
-                        mc.KEY_ID: self.subdevice.id,
-                        self._key: int(value * self.multiplier)
-                    }
-                ]
-            },
-        )
+    namespace = mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE
+    key_namespace = mc.KEY_TEMPERATURE
+    key_channel = mc.KEY_ID
 
 
-
-MTS100_SCHEDULE_WEEKDAY = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+MTS100_SCHEDULE_WEEKDAY = ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')
 MTS100_SCHEDULE_RRULE = "FREQ=WEEKLY"
 
 @dataclass
@@ -173,7 +153,6 @@ class Mts100ScheduleEntry:
     minutes_end: int
     day: datetime # base date of day used when querying this: used to calculate CalendarEvent
     data: list # actually points to the inner list in the native payload (not a copy)
-
 
     def get_event(self) -> CalendarEvent:
         """
@@ -205,11 +184,15 @@ class Mts100ScheduleEntry:
         )
 
 
-
 class Mts100Schedule(MLCalendar):
 
-    _attr_entity_category = EntityCategory.CONFIG
+    _attr_entity_category = me.EntityCategory.CONFIG
 
+    subdevice: MerossSubDevice
+
+    #ScheduleDict = Dict[str, list] # internal schedule dict type alias
+    _schedule: dict[str, list] | None
+    _attr_state: dict[str, list] | None # device internal scheduleB representation type hint
 
     def __init__(self, climate: Mts100Climate):
         super().__init__(climate.device, climate.id, mc.KEY_SCHEDULE, None, climate.subdevice)
@@ -220,19 +203,24 @@ class Mts100Schedule(MLCalendar):
         # self._attr_state carries the original unpacked schedule payload from the device representing
         # its effective state
         self._schedule = None
-        self._attr_extra_state_attributes = dict()
+        self._attr_extra_state_attributes = {}
+        # get the 'granularity' of the schedule entries i.e. the schedule duration
+        # must be a multiple of this time (in minutes)
         self._scheduleunittime = self.device.descriptor.ability.get(
                 mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, {}).get(
-                    mc.KEY_SCHEDULEUNITTIME
+                    mc.KEY_SCHEDULEUNITTIME, 0
                 )
         if self._scheduleunittime:
             self._attr_extra_state_attributes[mc.KEY_SCHEDULEUNITTIME] = self._scheduleunittime
         else:
             self._scheduleunittime = 15 # fallback to a reasonable defult for internal calculations
-
+        # number of schedules per day supported by the device. Mines default to 6
+        # but we're recovering the value by inspecting the device scheduleB payload.
+        # Also, this should be the same as scheduleBMode in Mts100Climate
+        self._schedule_entry_count = 0
 
     @property
-    def schedule(self) -> dict | None:
+    def schedule(self):
         if self._schedule is None:
             if state := self._attr_state:
                 # state = {
@@ -245,37 +233,49 @@ class Mts100Schedule(MLCalendar):
                 #   "sat": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
                 #   "sun": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
                 #   }
-                schedule = dict()
+                schedule = {}
                 for weekday in MTS100_SCHEDULE_WEEKDAY:
-                    weekday_state = state.get(weekday)
-                    # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
-                    weekday_schedule = list()
-                    current_entry = None
-                    for entry in weekday_state:
-                        if current_entry is None:
-                            # first step
-                            current_entry = entry
-                            continue
-                        if entry[1] == current_entry[1]: # same T: flatten out
-                            # create a copy anyway since we have to be sure not modifing original state
-                            current_entry = [current_entry[0] + entry[0], current_entry[1]]
-                        else:
+                    weekday_schedule = []
+                    if weekday in state:
+                        weekday_state = state[weekday]
+                        # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
+                        # recover the length and do a sanity check: we expect
+                        # the device schedules to be the same fixed length
+                        schedule_entry_count = len(weekday_state)
+                        if self._schedule_entry_count != schedule_entry_count:
+                            # this should fire only on first weekday scan
+                            if self._schedule_entry_count:
+                                self.device.log(
+                                    WARNING, 14400,
+                                    "Mts100Schedule(%s) unexpected device schedule entries count",
+                                    self.name
+                                )
+                            else:
+                                self._schedule_entry_count = schedule_entry_count
+                        current_entry = None
+                        for entry in weekday_state:
+                            if current_entry is None:
+                                # first step
+                                current_entry = entry
+                                continue
+                            if entry[1] == current_entry[1]: # same T: flatten out
+                                # create a copy anyway since we have to be sure not modifing original state
+                                current_entry = [current_entry[0] + entry[0], current_entry[1]]
+                            else:
+                                weekday_schedule.append(current_entry)
+                                current_entry = entry
+                        if current_entry:
                             weekday_schedule.append(current_entry)
-                            current_entry = entry
-                    if current_entry:
-                        weekday_schedule.append(current_entry)
                     schedule[weekday] = weekday_schedule
                 self._schedule = schedule
 
         return self._schedule
-
 
     def _get_event_entry(self, event_time: datetime) -> Mts100ScheduleEntry | None:
         """ event_time expressed in local time of the device (if it has any configured)"""
         schedule = self.schedule
         if not schedule:
             return None
-
         weekday_index = event_time.weekday()
         weekday_schedule = schedule.get(MTS100_SCHEDULE_WEEKDAY[weekday_index])
         if not weekday_schedule:
@@ -300,14 +300,13 @@ class Mts100Schedule(MLCalendar):
             schedule_index += 1
         return None
 
-
     def _get_next_event_entry(self, event_entry: Mts100ScheduleEntry) -> Mts100ScheduleEntry | None:
         try:
             schedule = self.schedule
             if not schedule:
                 return None
             weekday_index = event_entry.weekday_index
-            weekday_schedule = schedule.get(MTS100_SCHEDULE_WEEKDAY[weekday_index])
+            weekday_schedule: list = schedule[MTS100_SCHEDULE_WEEKDAY[weekday_index]]
             schedule_index = event_entry.index + 1
             if schedule_index < len(weekday_schedule):
                 event_day = event_entry.day
@@ -315,10 +314,9 @@ class Mts100Schedule(MLCalendar):
             else:
                 event_day = event_entry.day + timedelta(days=1)
                 weekday_index = event_day.weekday()
-                weekday_schedule = schedule.get(MTS100_SCHEDULE_WEEKDAY[weekday_index])
+                weekday_schedule = schedule[MTS100_SCHEDULE_WEEKDAY[weekday_index]]
                 schedule_index = 0
                 schedule_minutes_begin = 0
-
             schedule = weekday_schedule[schedule_index]
             return Mts100ScheduleEntry(
                 weekday_index=weekday_index,
@@ -336,11 +334,9 @@ class Mts100Schedule(MLCalendar):
             )
             return None
 
-
     @property
-    def supported_features(self) -> int:
+    def supported_features(self):
         return CalendarEntityFeature.CREATE_EVENT | CalendarEntityFeature.DELETE_EVENT
-
 
     @property
     def event(self) -> CalendarEvent | None:
@@ -351,7 +347,6 @@ class Mts100Schedule(MLCalendar):
                 return event_index.get_event()
         return None
 
-
     async def async_get_events(
         self,
         hass,
@@ -359,7 +354,7 @@ class Mts100Schedule(MLCalendar):
         end_date: datetime,
     ) -> list[CalendarEvent]:
         """Return calendar events within a datetime range."""
-        events = list()
+        events = []
         event_entry = self._get_event_entry(start_date.astimezone(self.device.tzinfo))
         while event_entry is not None:
             event = event_entry.get_event()
@@ -375,15 +370,16 @@ class Mts100Schedule(MLCalendar):
                 )
                 break
             event_entry = self._get_next_event_entry(event_entry)
-
         return events
-
 
     async def async_create_event(self, **kwargs):
         try:
             schedule = self.schedule
             if not schedule:
                 raise Exception("Internal state unavailable")
+            # get the number of maximum entries for the day from device state
+            if self._schedule_entry_count < 1:
+                raise Exception("Not enough schedule space available")
             event_start:datetime = kwargs[EVENT_START]
             event_end:datetime = kwargs[EVENT_END]
             try:
@@ -413,6 +409,7 @@ class Mts100Schedule(MLCalendar):
             # recognize some basic recurrence scheme: typically the MTS100 has a weekly schedule
             # and that's by default but we let the user select a daily schedule to setup
             # the same entry among all of the week days
+            recurrencedays: tuple
             if rrule :=  kwargs.get(EVENT_RRULE):
                 rule_parts = dict(s.split("=", 1) for s in rrule.split(";"))
                 if not (freq := rule_parts.get("FREQ")):
@@ -424,17 +421,14 @@ class Mts100Schedule(MLCalendar):
                 elif freq == 'WEEKLY':
                     if len(rule_parts) > 1:
                         raise Exception("Weekly recurrence too complex")
-                    recurrencedays = [MTS100_SCHEDULE_WEEKDAY[event_start.weekday()]]
+                    recurrencedays = (MTS100_SCHEDULE_WEEKDAY[event_start.weekday()],)
                 else:
                     raise Exception(f"Invalid frequency for rule: {rrule}")
             else:
-                recurrencedays = [MTS100_SCHEDULE_WEEKDAY[event_start.weekday()]]
+                recurrencedays = (MTS100_SCHEDULE_WEEKDAY[event_start.weekday()],)
 
             for weekday in recurrencedays:
-                weekday_schedule:list = schedule[weekday]
-                schedule_count = len(self._attr_state[weekday]) # number of maximum entries for the day
-                if schedule_count < 1:
-                    raise Exception("Not enough schedule space available")
+                weekday_schedule = schedule[weekday]
                 schedule_minutes_begin = 0
                 schedule_index = 0
                 schedule_index_insert = None
@@ -500,7 +494,7 @@ class Mts100Schedule(MLCalendar):
                 # at this point our schedule is set but might have too many events in it
                 # (total schedules entry need to be less than so we'll reparse and kindly coalesce some events
                 assert schedule_index_insert is not None, "New event was not added"
-                while (len(weekday_schedule) > schedule_count):
+                while (len(weekday_schedule) > self._schedule_entry_count):
                     # note that len(weekday_schedule) will always be >= 2 since we floored schedule_count
                     if schedule_index_insert > 1:
                         # remove event before if not inserted as first or second
@@ -523,16 +517,15 @@ class Mts100Schedule(MLCalendar):
                     # end while (len(weekday_schedule) > schedule_count):
 
                 # end for weekday
-            self.request_schedule()
+            await self.async_request_schedule()
 
         except Exception as error:
             self.device.log(
                 WARNING, 0,
-                "Mts100Schedule(%s) error in async_create_event: %s",
-                self.name, str(error)
+                "Mts100Schedule(%s) %s in async_create_event: %s",
+                self.name, type(error).__name__, str(error)
             )
-            raise HomeAssistantError(str(error)) from error
-
+            raise HomeAssistantError(f"{type(error).__name__} {str(error)}") from error
 
     async def async_delete_event(
         self,
@@ -545,12 +538,12 @@ class Mts100Schedule(MLCalendar):
             if not schedule:
                 raise Exception("Internal state unavailable")
 
-            uid = uid.split('#')
-            weekday_schedule:list = schedule[uid[0]]
+            uid_split = uid.split('#')
+            weekday_schedule:list = schedule[uid_split[0]]
             # our schedule cannot be empty: it must fill the 24 hours
             if len(weekday_schedule) <= 1:
                 raise Exception("The daily schedule must contain at least one event")
-            schedule_index = int(uid[1])
+            schedule_index = int(uid_split[1])
             schedule_entry = weekday_schedule.pop(schedule_index)
             # we have to fill up the schedule by extending the preceding
             # or the following schedule_entry in order to keep the overall
@@ -561,10 +554,9 @@ class Mts100Schedule(MLCalendar):
             else:
                 # we removed the first so we'll add to the next (now first)
                 weekday_schedule[0][0] += schedule_entry[0]
-            self.request_schedule()
+            await self.async_request_schedule()
         except Exception as error:
             raise HomeAssistantError(str(error)) from error
-
 
     def _parse_schedule(self, payload: dict):
         # the payload we receive from the device might be partial
@@ -575,10 +567,11 @@ class Mts100Schedule(MLCalendar):
         else:
             self._attr_state = payload
         self._attr_extra_state_attributes[mc.KEY_SCHEDULE] = str(self._attr_state)
-        self._schedule = None # invalidate our internal representation
+        # invalidate our internal representation and flush
+        self._schedule = None
+        self._schedule_entry_count = 0
         if self.hass and self.enabled:
             self.async_write_ha_state()
-
 
     def update_climate_modes(self):
         # since our state/active event is dependent on climate mode
@@ -586,17 +579,16 @@ class Mts100Schedule(MLCalendar):
         if self.hass and self.enabled:
             self.async_write_ha_state()
 
-
-    def request_schedule(self):
+    async def async_request_schedule(self):
         if schedule := self.schedule:
-            payload = dict()
+            payload = {}
             # the time duration step (minimum interval) of the schedule intervals
             schedule_entry_unittime = self._scheduleunittime
             # unpack our schedule struct to be compliant with the device payload i.e.
             # the weekday_schedule must contain
             for weekday, weekday_schedule in schedule.items():
                 # our working schedule might contain less entries than requested by MTS
-                schedule_items_missing = len(self._attr_state[weekday]) - len(weekday_schedule)
+                schedule_items_missing = self._schedule_entry_count - len(weekday_schedule)
                 if schedule_items_missing < 0:
                     raise Exception("Inconsistent number of elements in the schedule")
                 if schedule_items_missing == 0:
@@ -604,7 +596,7 @@ class Mts100Schedule(MLCalendar):
                     continue
                 # we have to generate some 'filler' since the mts expects
                 # schedule_items_count in the weekday schedule
-                payload_weekday_schedule = list()
+                payload_weekday_schedule = []
                 for schedule_entry in weekday_schedule:
                     # schedule_entry[0] = duration
                     # schedule_entry[1] = setpoint
@@ -628,8 +620,18 @@ class Mts100Schedule(MLCalendar):
                 payload[weekday] = payload_weekday_schedule
 
             payload[mc.KEY_ID] = self.subdevice.id
-            self.device.request(
+
+            def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+                if not acknowledge:
+                    self.device.request(
+                        mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
+                        mc.METHOD_GET,
+                        { mc.KEY_SCHEDULE: [{ mc.KEY_ID: self.channel }] }
+                    )
+
+            await self.device.async_request(
                 mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
                 mc.METHOD_SET,
                 { mc.KEY_SCHEDULE: [ payload ] },
+                _ack_callback
             )
