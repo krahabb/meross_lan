@@ -17,9 +17,10 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .merossclient import (
     const as mc, KeyType,
-    MerossDeviceDescriptor, MerossHttpClient,
+    MerossDeviceDescriptor,
     build_payload, build_default_payload_get, get_replykey,
 )
+from .merossclient.httpclient import MerossHttpClient
 from .meross_device import MerossDevice
 
 from .helpers import (

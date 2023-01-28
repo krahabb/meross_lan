@@ -3,7 +3,6 @@ from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
-from typing import Tuple
 from aiohttp.web import (
     Request as web_Request,
     json_response as web_json_response,
@@ -65,7 +64,7 @@ class MerossEmulator:
         return web_json_response(data)
 
 
-    def _get_key_state(self, namespace: str) -> Tuple[str, dict]:
+    def _get_key_state(self, namespace: str) -> tuple[str, dict]:
         """
         general device state is usually carried in NS_ALL into the "digest" key
         and is also almost regularly keyed by using the camelCase of the last verb

@@ -25,11 +25,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .merossclient import (
     const as mc,  # mEROSS cONST
     MerossDeviceDescriptor,
-    MerossHttpClient,
     get_namespacekey,
     get_replykey,
     build_default_payload_get,
 )
+from .merossclient.httpclient import MerossHttpClient
 from .meross_entity import MerossFakeEntity
 from .helpers import (
     LOGGER,

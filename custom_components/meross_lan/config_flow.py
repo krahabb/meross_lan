@@ -14,14 +14,18 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .merossclient import (
+    const as mc,
     KeyType,
-    MerossHttpClient,
     MerossDeviceDescriptor,
     MerossKeyError,
-    MerossApiError,
-    const as mc,
-    get_productnametype, async_get_cloud_key,
+    get_productnametype,
 )
+from .merossclient.httpclient import MerossHttpClient
+from .merossclient.cloudapi import (
+    MerossApiError,
+    async_get_cloud_key,
+)
+
 from . import MerossApi
 from .helpers import LOGGER
 from .const import (

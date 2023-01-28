@@ -1,19 +1,10 @@
-"""An Http API Client to interact with meross devices"""
+"""
+    A collection of utilities to help managing the Meross device protocol
+"""
 from typing import Union
-from logging import Logger, getLogger, DEBUG
 from uuid import uuid4
 from hashlib import md5
-from base64 import b64encode
 from time import time
-from json import (
-    dumps as json_dumps,
-    loads as json_loads,
-)
-import asyncio
-import async_timeout
-import aiohttp
-
-from yarl import URL
 
 from . import const as mc
 
@@ -51,11 +42,6 @@ class MerossSignatureError(MerossProtocolError):
     def __init__(self):
         super().__init__("Signature error")
 
-
-class MerossApiError(MerossProtocolError):
-    """
-    signals an error when connecting to the public API endpoint
-    """
 
 def build_payload(
     namespace:str,
@@ -147,72 +133,6 @@ def get_productnametype(producttype: str) -> str:
     return f"{name} ({producttype})" if name is not producttype else producttype
 
 
-async def async_httpapi_post(
-        urlpath: str,
-        data: object,
-        token: str | None = None,
-        session: aiohttp.client.ClientSession | None = None
-    ) -> dict:
-    session = session or aiohttp.ClientSession()
-    timestamp = int(time())
-    nonce = uuid4().hex
-    params = json_dumps(data, ensure_ascii=False)
-    params = b64encode(params.encode('utf-8')).decode('ascii')
-    sign = md5(("23x17ahWarFH6w29" + str(timestamp) + nonce + params).encode('utf-8')).hexdigest()
-    with async_timeout.timeout(10):
-        response = await session.post(
-            url=mc.MEROSS_API_V1_URL + urlpath,
-            json={
-                mc.KEY_TIMESTAMP: timestamp,
-                mc.KEY_NONCE: nonce,
-                mc.KEY_PARAMS: params,
-                mc.KEY_SIGN: sign
-            },
-            headers= {"Authorization": "Basic " + token} if token else None
-        )
-        response.raise_for_status()
-    return await response.json()
-
-async def async_get_cloud_key(
-        username: str,
-        password: str,
-        session: aiohttp.client.ClientSession | None = None
-    ) -> str:
-    response = await async_httpapi_post(
-        mc.MEROSS_API_LOGIN_PATH,
-        {"email": username, "password": password},
-        session=session
-    )
-    try:
-        data = response[mc.KEY_DATA]
-        if data:
-            key = data[mc.KEY_KEY]
-            if key:
-                # everything good:
-                # kindly invalidate login token so to not exhaust our pool...
-                try:
-                    await async_httpapi_post(
-                        mc.MEROSS_API_LOGOUT_PATH,
-                        {},
-                        data[mc.KEY_TOKEN],
-                        session=session
-                    )
-                except:
-                    pass# don't care if any failure here: we have the key anyway
-                return key
-    except:
-        pass
-    # try to best-effort parse the api response code for hints on the error
-    if isinstance(apistatus := response.get(mc.KEY_APISTATUS), int):
-        if errormsg := mc.APISTATUS_MAP.get(apistatus):
-            raise MerossApiError(errormsg)
-    # 'info' sometimes carries useful msg
-    if info := response.get(mc.KEY_INFO):
-        raise MerossApiError(info)
-    # fallback to raise the entire response
-    raise MerossApiError(json_dumps(response))
-
-
 class MerossDeviceDescriptor:
     """
         Utility class to extract various info from Appliance.System.All
@@ -263,129 +183,3 @@ class MerossDeviceDescriptor:
         self.system[mc.KEY_TIME] = p_time
         self.time = p_time
         self.timezone = p_time.get(mc.KEY_TIMEZONE)
-
-
-class MerossHttpClient:
-
-    timeout = 5 # total timeout will be 1+2+4: check relaxation algorithm
-
-    def __init__(
-        self,
-        host: str,
-        key: KeyType = None,
-        session: aiohttp.client.ClientSession | None = None,
-        logger: Logger | None = None
-    ):
-        self._host = host
-        self._requesturl = URL(f"http://{host}/config")
-        self.key = key # key == None for hack-mode
-        self.replykey = None
-        self._session = session or aiohttp.ClientSession()
-        self._logger = logger or getLogger(__name__)
-
-    @property
-    def host(self):
-        return self._host
-
-    @host.setter
-    def host(self, value: str):
-        self._host = value
-        self._requesturl = URL(f"http://{value}/config")
-
-    async def async_request_raw(self, request: dict) -> dict:
-        timeout = 1
-        debugid = None
-        try:
-            if self._logger.isEnabledFor(DEBUG):
-                debugid = f"{self._host}:{id(request)}"
-                request_data = json_dumps(request)
-                self._logger.debug("MerossHttpClient(%s): HTTP Request (%s)", debugid, request_data)
-            else:
-                request_data = json_dumps(request)
-            # since device HTTP service sometimes timeouts with no apparent
-            # reason we're using an increasing timeout loop to try recover
-            # when this timeout is transient
-            while True:
-                try:
-                    with async_timeout.timeout(timeout):
-                        response = await self._session.post(
-                            url=self._requesturl,
-                            data=request_data
-                        )
-                    break
-                except asyncio.TimeoutError as e:
-                    if timeout < self.timeout:
-                        timeout = timeout * 2
-                    else:
-                        raise e
-
-            response.raise_for_status()
-            text_body = await response.text()
-            if debugid is not None:
-                self._logger.debug("MerossHttpClient(%s): HTTP Response (%s)", debugid, text_body)
-            json_body:dict = json_loads(text_body)
-            if self.key is None:
-                self.replykey = get_replykey(json_body[mc.KEY_HEADER], self.key)
-        except Exception as e:
-            self.replykey = None # reset the key hack since it could became stale
-            if debugid is not None:
-                self._logger.debug("MerossHttpClient(%s): HTTP %s (%s)", debugid, type(e).__name__, str(e))
-            raise e
-
-        return json_body
-
-    async def async_request(self, namespace: str, method: str, payload: dict) -> dict:
-        key = self.key
-        request: dict = build_payload(
-            namespace, method, payload, self.replykey if key is None else key, mc.MANUFACTURER)
-        response: dict = await self.async_request_raw(request)
-        if response.get(mc.KEY_PAYLOAD, {}).get(mc.KEY_ERROR, {}).get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
-            if key is not None:
-                raise MerossKeyError(response.get(mc.KEY_PAYLOAD))
-            #sign error... hack and fool
-            if self._logger.isEnabledFor(DEBUG):
-                self._logger.debug(
-                    "Key error on %s (%s:%s) -> retrying with key-reply hack",
-                    self._host, method, namespace)
-            req_header = request[mc.KEY_HEADER]
-            resp_header = response[mc.KEY_HEADER]
-            req_header[mc.KEY_MESSAGEID] = resp_header[mc.KEY_MESSAGEID]
-            req_header[mc.KEY_TIMESTAMP] = resp_header[mc.KEY_TIMESTAMP]
-            req_header[mc.KEY_SIGN] = resp_header[mc.KEY_SIGN]
-            try:
-                response = await self.async_request_raw(request)
-            except Exception:
-                # any error here is likely consequence of key-reply hack
-                # so we'll rethrow that (see #83 lacking invalid key message when configuring)
-                raise MerossKeyError(response.get(mc.KEY_PAYLOAD))
-
-        return response
-
-    async def async_request_strict(self, namespace: str, method: str, payload: dict) -> dict:
-        """
-        check the protocol layer is correct and no protocol ERROR
-        is being reported
-        """
-        response = await self.async_request(namespace, method, payload)
-        try:
-            r_header: dict = response[mc.KEY_HEADER]
-            r_namespace: str = r_header[mc.KEY_NAMESPACE]
-            r_method: str = r_header[mc.KEY_METHOD]
-            r_payload: dict = response[mc.KEY_PAYLOAD]
-        except Exception as e:
-            raise MerossProtocolError(e)
-
-        if r_method == mc.METHOD_ERROR:
-            if r_payload.get(mc.KEY_ERROR, {}).get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
-                raise MerossKeyError(r_payload)
-            else:
-                raise MerossProtocolError(r_payload)
-
-        return response
-
-    async def async_request_strict_get(self, namespace: str) -> dict:
-        return await self.async_request_strict(
-            namespace,
-            mc.METHOD_GET,
-            build_default_payload_get(namespace)
-        )
