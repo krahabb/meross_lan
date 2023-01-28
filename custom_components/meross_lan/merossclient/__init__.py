@@ -114,7 +114,8 @@ def build_default_payload_get(namespace: str) -> dict:
     if namespace in mc.PAYLOAD_GET:
         return mc.PAYLOAD_GET[namespace]
     split = namespace.split('.')
-    return { split[-1].lower(): [] if split[1] == 'Hub' else {} }
+    key = split[-1]
+    return { key[0].lower() + key[1:]: [] if split[1] == 'Hub' else {} }
 
 def get_replykey(header: dict, key:KeyType = None) -> KeyType:
     """
