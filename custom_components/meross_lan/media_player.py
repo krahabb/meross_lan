@@ -39,7 +39,7 @@ from homeassistant.const import (
 
 from .merossclient import const as mc  # mEROSS cONST
 from . import meross_entity as me
-from .light import MLLight, SUPPORT_EFFECT
+from .light import MLLight
 from .helpers import LOGGER, clamp
 
 if typing.TYPE_CHECKING:
@@ -175,11 +175,7 @@ class Mp3Mixin(
             # cherub light entity should be there...
             light: MLLight = self.entities.get(0)  # type: ignore
             if light is not None:
-                light._light_effect_map = dict(mc.HP110A_LIGHT_EFFECT_MAP)
-                light._attr_effect_list = list(mc.HP110A_LIGHT_EFFECT_MAP.values())
-                light._attr_supported_features = (
-                    light._attr_supported_features | SUPPORT_EFFECT
-                )
+                light.update_effect_map(mc.HP110A_LIGHT_EFFECT_MAP)
         except Exception as e:
             LOGGER.warning("Mp3Mixin(%s) init exception:(%s)", self.device_id, str(e))
 

@@ -26,6 +26,8 @@ class MLDiffuserLight(MLLightBase):
     """
     device: DiffuserMixin
 
+    _light_effect_map = mc.DIFFUSER_LIGHT_EFFECT_MAP
+    _attr_effect_list = list(_light_effect_map.values())
     _attr_supported_color_modes = {COLOR_MODE_RGB}
     _attr_supported_features = SUPPORT_EFFECT|SUPPORT_BRIGHTNESS|SUPPORT_COLOR
 
@@ -50,13 +52,6 @@ class MLDiffuserLight(MLLightBase):
 		}
         """
         self._light = {}
-
-        self._light_effect_map = {
-            mc.DIFFUSER_LIGHT_MODE_RAINBOW: "Rainbow",
-            mc.DIFFUSER_LIGHT_MODE_COLOR: "Color",
-            mc.DIFFUSER_LIGHT_MODE_TEMPERATURE: "Temperature",
-        }
-        self._attr_effect_list = list(self._light_effect_map.values())
 
     async def async_turn_on(self, **kwargs):
         light = dict(self._light)
@@ -109,7 +104,11 @@ class MLDiffuserLight(MLLightBase):
             mode = payload[mc.KEY_MODE]
             self._attr_effect = self._light_effect_map.get(mode)
             if self._attr_effect is None:
+                # we're missing the effect for this mode so the device firmware
+                # is newer than our knowledge. Lets make a copy of our _light_effect_map
+                # which is by design a class instance
                 self._attr_effect = "mode_" + str(mode)
+                self._light_effect_map = dict(self._light_effect_map)
                 self._light_effect_map[mode] = self._attr_effect
                 self._attr_effect_list = list(self._light_effect_map.values())
 

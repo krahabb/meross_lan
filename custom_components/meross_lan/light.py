@@ -69,6 +69,7 @@ from .helpers import reverse_lookup
 from .const import DND_ID
 
 if typing.TYPE_CHECKING:
+    from typing import Mapping
     from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
     from .meross_device import MerossDevice, ResponseCallbackType
@@ -125,7 +126,6 @@ class MLLightBase(me.MerossToggle, LightEntity):
     """
     base 'abstract' class for meross light entities
     """
-
     PLATFORM = PLATFORM_LIGHT
     """
     internal copy of the actual meross light state
@@ -133,9 +133,10 @@ class MLLightBase(me.MerossToggle, LightEntity):
     _light: dict
     """
     if the device supports effects, we'll map these to effect names
-    to interact with HA api
+    to interact with HA api. This dict contains the effect key value
+    used in the 'light' payload to the effect name
     """
-    _light_effect_map: dict = {}
+    _light_effect_map = {}
 
     def update_onoff(self, onoff):
         if mc.KEY_ONOFF in self._light:
@@ -369,14 +370,10 @@ class MLLight(MLLightBase):
         """
         self._light_effect_map = light_effect_map
         if light_effect_map:
-            self._attr_supported_features = (
-                self._attr_supported_features | SUPPORT_EFFECT
-            )
+            self._attr_supported_features |= SUPPORT_EFFECT
             self._attr_effect_list = list(light_effect_map.values())
         else:
-            self._attr_supported_features = (
-                self._attr_supported_features & ~SUPPORT_EFFECT
-            )
+            self._attr_supported_features &= ~SUPPORT_EFFECT
             self._attr_effect_list = None
         if self.hass and self.enabled:
             self.async_write_ha_state()
