@@ -63,16 +63,16 @@ def run(argv):
             uuidsub = uuidsub + 1
             _uuidsub = str(uuidsub)
             _uuid = uuid[:-len(_uuidsub)] + _uuidsub
-            for f in f[0].split('-'):
-                if f.startswith('K'):
-                    _key = f[1:].strip()
-                elif f.startswith('U'):
-                    _uuid = f[1:].strip()
+            for _f in f[0].split('-'):
+                if _f.startswith('K'):
+                    _key = _f[1:].strip()
+                elif _f.startswith('U'):
+                    _uuid = _f[1:].strip()
             emulator = build_emulator(fullpath, _uuid, _key)
             app.router.add_post(f"/{_uuid}/config", emulator.post_config)
     else:
         #device = MerossDevice("custom_components/meross_lan/traces/msh300-1638110082.csv")
-        emulator = build_emulator(tracefilepath, _uuid, _key)
+        emulator = build_emulator(tracefilepath, uuid, key)
         app.router.add_post("/config", emulator.post_config)
 
     return app
