@@ -217,7 +217,7 @@ class ConsumptionMixin(
             DEBUG,
             0,
             "MerossDevice(%s) Energy: device midnight = %d",
-            self.device_id,
+            self.name,
             timestamp_lastreset,
         )
 
@@ -248,7 +248,7 @@ class ConsumptionMixin(
                     DEBUG,
                     0,
                     "MerossDevice(%s) Energy: update last_reset to %s",
-                    self.device_id,
+                    self.name,
                     self._sensor_energy._attr_last_reset.isoformat(),
                 )
         self._sensor_energy.update_state(day_last.get(mc.KEY_VALUE))

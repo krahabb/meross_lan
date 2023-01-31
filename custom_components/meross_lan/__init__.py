@@ -10,7 +10,6 @@ from json import (
 from homeassistant.config_entries import ConfigEntry, SOURCE_DISCOVERY
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components.mqtt.const import MQTT_DISCONNECTED
-from homeassistant.helpers import device_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -231,19 +230,6 @@ class MerossApi:
 
         device = class_type(self, descriptor, entry)
         self.devices[device_id] = device
-        try:
-            # try block since this is not critical and api has recently changed
-            device_registry.async_get(self.hass).async_get_or_create(
-                config_entry_id = entry.entry_id,
-                connections = {(device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
-                identifiers = {(DOMAIN, device_id)},
-                manufacturer = mc.MANUFACTURER,
-                name = descriptor.productname,
-                model = descriptor.productmodel,
-                sw_version = descriptor.firmware.get(mc.KEY_VERSION)
-            )
-        except:
-            pass
         return device
 
     def schedule_async_callback(self, delay: float, target: Callable[[], Coroutine] , *args) -> TimerHandle:
