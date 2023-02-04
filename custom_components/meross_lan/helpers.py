@@ -1,15 +1,15 @@
 """
     Helpers!
 """
-import logging
+from logging import getLogger
 from functools import partial
 from time import time
 from homeassistant.util.dt import utcnow
 
 from .merossclient import const as mc
 
-LOGGER = logging.getLogger(__name__[:-8]) #get base custom_component name for logging
-_TRAP_DICT = dict()
+LOGGER = getLogger(__name__[:-8]) #get base custom_component name for logging
+_TRAP_DICT = {}
 
 def LOGGER_trap(level, timeout, msg, *args):
     """
@@ -51,6 +51,13 @@ def reverse_lookup(_dict: dict, value):
     return None
 
 
+def versiontuple(version: str):
+    """
+    helper for version checking, comparisons, etc
+    """
+    return tuple(map(int, (version.split("."))))
+
+
 """
     obfuscation:
     call obfuscate on a paylod (dict) to remove well-known sensitive
@@ -65,7 +72,7 @@ OBFUSCATE_KEYS = (
 )
 
 
-def obfuscate(payload: dict) -> dict:
+def obfuscate(payload: dict):
     """
     payload: input-output gets modified by blanking sensistive keys
     returns: a dict with the original mapped obfuscated keys
@@ -73,7 +80,7 @@ def obfuscate(payload: dict) -> dict:
     returns the mapping of the obfuscated keys in 'obfuscated' so to re-set them in _deobfuscate
     this function is recursive
     """
-    obfuscated = dict()
+    obfuscated = {}
     for key, value in payload.items():
         if isinstance(value, dict):
             o = obfuscate(value)
@@ -97,20 +104,33 @@ def deobfuscate(payload: dict, obfuscated: dict):
 """
 MQTT helpers
 """
-def mqtt_is_loaded(hass) -> bool:
+def mqtt_is_loaded(hass):
     """
     check if any MQTT is configured
     """
-    from homeassistant.components.mqtt import DATA_MQTT
-    return hass.data.get(DATA_MQTT) is not None
+    try:
+        # implemented since 2022.9.x or so...
+        from homeassistant.components.mqtt.util import get_mqtt_data
+        if (mqtt_data := get_mqtt_data(hass, False)):
+            return mqtt_data.client is not None
+        return False
+    except:
+        # legacy config/client check
+        from homeassistant.components.mqtt import DATA_MQTT
+        return hass.data.get(DATA_MQTT) is not None
 
 
-def mqtt_is_connected(hass) -> bool:
+def mqtt_is_connected(hass):
     """
     check if MQTT communication is available
     """
-    from homeassistant.components.mqtt import is_connected
-    return is_connected(hass)
+    if mqtt_is_loaded(hass):
+        try:
+            from homeassistant.components.mqtt import is_connected
+            return is_connected(hass)
+        except:
+            pass
+    return False
 
 
 def mqtt_publish(hass, topic, payload):
@@ -138,7 +158,7 @@ async def get_entity_last_state(hass, entity_id):
     restore transient state information when restarting HA
     """
     if hasattr(history, 'get_state'):# removed in 2022.6.x
-        return history.get_state(hass, utcnow(), entity_id)
+        return history.get_state(hass, utcnow(), entity_id) # type: ignore
 
     elif hasattr(history, 'get_last_state_changes'):
         """
@@ -153,11 +173,10 @@ async def get_entity_last_state(hass, entity_id):
                     1,
                     entity_id,
                 )
-            )
+            ) # type: ignore
         if entity_id in _last_state:
-            _last_state: list = _last_state[entity_id]
-            if _last_state:
-                return _last_state[0]
-
+            _last_entity_state: list = _last_state[entity_id]
+            if _last_entity_state:
+                return _last_entity_state[0]
 
     return None

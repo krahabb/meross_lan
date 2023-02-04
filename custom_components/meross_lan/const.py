@@ -17,27 +17,27 @@ CONF_PAYLOAD = hac.CONF_PAYLOAD
 CONF_HOST = hac.CONF_HOST
 
 CONF_PROTOCOL = hac.CONF_PROTOCOL # protocol used to communicate with device
-CONF_OPTION_AUTO = 'auto'
-CONF_OPTION_MQTT = 'mqtt'
-CONF_OPTION_HTTP = 'http'
-CONF_PROTOCOL_OPTIONS = (
-    CONF_OPTION_AUTO, # best-effort: tries whatever to connect
-    CONF_OPTION_MQTT,
-    CONF_OPTION_HTTP
-)
+CONF_PROTOCOL_AUTO = 'auto' # 'best effort' behaviour
+CONF_PROTOCOL_MQTT = 'mqtt'
+CONF_PROTOCOL_HTTP = 'http'
+CONF_PROTOCOL_OPTIONS = {
+    CONF_PROTOCOL_AUTO: CONF_PROTOCOL_AUTO,
+    CONF_PROTOCOL_MQTT: CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_HTTP: CONF_PROTOCOL_HTTP
+}
 
 CONF_POLLING_PERIOD = 'polling_period' # general device state polling or whatever
 CONF_POLLING_PERIOD_MIN = 5
 CONF_POLLING_PERIOD_DEFAULT = 30
 
-CONF_TRACE = 'trace' # create a file with device info and communication tracing (only CONF_TRACE_TIMEOUT seconds then shut off)
+CONF_TRACE = 'trace' # create a file with device info and communication tracing
 CONF_TRACE_TIMEOUT = 'trace_timeout'
 CONF_TRACE_TIMEOUT_DEFAULT = 600 # when starting a trace stop it and close the file after .. secs
 CONF_TRACE_MAXSIZE = 65536 # or when MAXSIZE exceeded
 CONF_TRACE_DIRECTORY = 'traces' # folder where to store traces
 CONF_TRACE_FILENAME = '{}-{}.csv' # filename format: device_type-device_id.csv
 
-CONF_TIMESTAMP = mc.KEY_TIMESTAMP # this is a 'fake' conf param we'll add to config_entry when we want to force flush to storage
+CONF_TIMESTAMP = mc.KEY_TIMESTAMP # this is a 'fake' conf used to force-flush
 
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)

@@ -13,12 +13,6 @@
             "invalid_auth": "Ověření selhalo"
         },
         "step": {
-            "user": {
-                "description": "Nastavení zařízení Meross",
-                "data": {
-                    "Required": "Povinné pole"
-                }
-            },
             "hub": {
                 "title": "Centrum Meross LAN MQTT",
                 "description": "Globální konfigurace nastavení Meross LAN",
@@ -30,9 +24,16 @@
                 "description": "Nastavení zařízení Meross\nTyp: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Adresa hostitele zařízení",
-                    "keymode": "Key selection mode",
                     "key": "Klíč zařízení",
                     "Required": "Povinné pole"
+                }
+            },
+            "keyerror": {
+                "title": "Chyba klíče zařízení",
+                "description": "Zadaný klíč je nesprávný. Vyberte možnost",
+                "menu_options": {
+                    "cloudkey": "Načíst z cloudu Meross",
+                    "device": "Zkuste to znovu"
                 }
             },
             "cloudkey": {
@@ -71,7 +72,6 @@
                 "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}\nHostitel: {host}",
                 "data": {
                     "host": "Adresa hostitele zařízení",
-                    "keymode": "Key selection mode",
                     "key": "Klíč zařízení",
                     "protocol": "Protokol připojení",
                     "polling_period": "Interval dotazování",
@@ -80,6 +80,14 @@
                     "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
+                }
+            },
+            "keyerror": {
+                "title": "Chyba klíče zařízení",
+                "description": "Zadaný klíč je nesprávný. Vyberte možnost",
+                "menu_options": {
+                    "cloudkey": "Načíst z cloudu Meross",
+                    "device": "Zkuste to znovu"
                 }
             },
             "cloudkey": {

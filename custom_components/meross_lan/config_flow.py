@@ -1,33 +1,37 @@
 """Config flow for Meross IoT local LAN integration."""
+import typing
 from time import time
 from logging import DEBUG
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.data_entry_flow import FlowHandler, AbortFlow
 from homeassistant.const import (
     CONF_PASSWORD, CONF_USERNAME, CONF_ERROR,
 )
-from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.typing import DiscoveryInfoType
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.components import dhcp
 
 from .merossclient import (
-    MerossHttpClient,
+    const as mc,
+    KeyType,
     MerossDeviceDescriptor,
     MerossKeyError,
-    MerossApiError,
-    const as mc,
-    get_productnametype, async_get_cloud_key,
+    get_productnametype,
 )
+from .merossclient.httpclient import MerossHttpClient
+from .merossclient.cloudapi import (
+    MerossApiError,
+    async_get_cloud_key,
+)
+
 from . import MerossApi
-from .meross_device import MerossDevice
-from .helpers import LOGGER, mqtt_is_loaded
+from .helpers import LOGGER
 from .const import (
     DOMAIN,
     CONF_HOST, CONF_DEVICE_ID, CONF_KEY, CONF_CLOUD_KEY,
-    CONF_PAYLOAD,
+    CONF_PAYLOAD, CONF_TIMESTAMP,
     CONF_PROTOCOL, CONF_PROTOCOL_OPTIONS,
     CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT,
     CONF_TRACE, CONF_TRACE_TIMEOUT, CONF_TRACE_TIMEOUT_DEFAULT,
@@ -35,16 +39,6 @@ from .const import (
 
 # helper conf keys not persisted to config
 CONF_DEVICE_TYPE = 'device_type'
-CONF_KEYMODE = 'keymode'
-CONF_KEYMODE_USER = 'user'
-CONF_KEYMODE_HACK = 'hack'
-CONF_KEYMODE_CLOUDRETRIEVE = 'cloud'
-CONF_KEYMODE_OPTIONS = {
-    CONF_KEYMODE_USER: "User set",
-    CONF_KEYMODE_HACK: "Hack mode",
-    CONF_KEYMODE_CLOUDRETRIEVE: "Cloud retrieve",
-}
-
 DESCR = 'suggested_value'
 ERR_BASE = 'base'
 ERR_CANNOT_CONNECT = 'cannot_connect'
@@ -55,9 +49,10 @@ ERR_ALREADY_CONFIGURED_DEVICE = 'already_configured_device'
 ERR_INVALID_AUTH = 'invalid_auth'
 
 
-async def _http_discovery(hass, host, key) -> dict:
-    c = MerossHttpClient(host, key, async_get_clientsession(hass), LOGGER)
-    payload: dict = (await c.async_request_strict_get(mc.NS_APPLIANCE_SYSTEM_ALL))[mc.KEY_PAYLOAD]
+async def _http_discovery(hass, host: str, key: KeyType) -> dict[str, object]:
+    # passing key=None would allow key-hack and we don't want it aymore
+    c = MerossHttpClient(host, key or '', async_get_clientsession(hass), LOGGER)
+    payload = (await c.async_request_strict_get(mc.NS_APPLIANCE_SYSTEM_ALL))[mc.KEY_PAYLOAD]
     payload.update((await c.async_request_strict_get(mc.NS_APPLIANCE_SYSTEM_ABILITY))[mc.KEY_PAYLOAD])
     return {
         CONF_HOST: host,
@@ -72,9 +67,25 @@ class ConfigError(Exception):
         self.reason = reason
 
 
-class CloudKeyMixin:
+class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
+    """ Mixin providing cloud key retrieval for both Config and Option flows"""
+    _device_id: str | None = None
+    _host: str | None = None
+    _key: str | None = None
+    _cloud_key: str | None = None
+    _placeholders = {
+        CONF_DEVICE_TYPE: '',
+        CONF_DEVICE_ID: '',
+    }
+
+    def show_keyerror(self):
+        return self.async_show_menu(
+            step_id="keyerror",
+            menu_options=["cloudkey", "device"]
+        )
 
     async def async_step_cloudkey(self, user_input=None):
+        """ manage the cloud login form to retrieve the device key"""
         errors = {}
 
         if user_input:
@@ -84,13 +95,14 @@ class CloudKeyMixin:
                 self._cloud_key = await async_get_cloud_key(
                     username, password, async_get_clientsession(self.hass))
                 self._key = self._cloud_key
-                return await self.async_step_device()
-            except MerossApiError as e:
+                return await self.async_step_device() # type: ignore
+            except MerossApiError as error:
                 errors[CONF_ERROR] = ERR_INVALID_AUTH
-                _err = e.reason
-            except Exception as e:
+                _err = error.reason
+            except Exception as error:
                 errors[CONF_ERROR] = ERR_CANNOT_CONNECT
-                _err = str(e) or type(e).__name__
+                _err = str(error) or type(error).__name__
+
             return self.async_show_form(
                 step_id="cloudkey",
                 data_schema=vol.Schema({
@@ -98,168 +110,126 @@ class CloudKeyMixin:
                         vol.Required(CONF_PASSWORD, description={ DESCR: password }): str,
                         vol.Optional(CONF_ERROR, description={ DESCR: _err }): str
                         }),
-                errors=errors)
+                errors=errors
+            )
 
-        else:
-            return self.async_show_form(
-                step_id="cloudkey",
-                data_schema=vol.Schema({
-                    vol.Required(CONF_USERNAME): str,
-                    vol.Required(CONF_PASSWORD): str
-                    })
-                )
+        return self.async_show_form(
+            step_id="cloudkey",
+            data_schema=vol.Schema({
+                vol.Required(CONF_USERNAME): str,
+                vol.Required(CONF_PASSWORD): str
+            })
+        )
 
 
-
-class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
-    _discovery_info: dict = None
-    _device_id: str = None
-    _host: str = None
-    _key: str = None
-    _cloud_key: str = None
-    _keyerror: bool = False
-    _placeholders = {
-        CONF_DEVICE_TYPE: "",
-        CONF_DEVICE_ID: "",
-        }
-
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL
+
+    _discovery_info: dict[str, object] | None = None
 
     @staticmethod
     def async_get_options_flow(config_entry):
         return OptionsFlowHandler(config_entry)
 
-
     async def async_step_user(self, user_input=None):
-        """
-        This is the entry point for user initiated flows
-        it is just 'smart' a selector for the proper config step
-        """
-        # check we already configured the hub ..
-        if (DOMAIN not in self._async_current_ids()) and mqtt_is_loaded(self.hass):
-            return await self.async_step_hub()
-        # user starting a flow then: fill up the key if any
-        if (api := self.hass.data.get(DOMAIN)) is not None:
+        if (api := MerossApi.peek(self.hass)) is not None:
             if api.cloud_key is not None:
                 self._key = api.cloud_key
                 self._cloud_key = api.cloud_key
         return await self.async_step_device()
 
-
     async def async_step_hub(self, user_input=None):
-        #right now this is only used to setup MQTT Hub feature to allow discovery and mqtt message sub/pub
-        if user_input == None:
+        """ configure the MQTT discovery device key"""
+        if user_input is None:
             await self.async_set_unique_id(DOMAIN)
             self._abort_if_unique_id_configured()
             config_schema = { vol.Optional(CONF_KEY): str }
             return self.async_show_form(step_id="hub", data_schema=vol.Schema(config_schema))
         return self.async_create_entry(title="MQTT Hub", data=user_input)
 
-
     async def async_step_device(self, user_input=None):
-
+        """ common device configuration"""
         errors = {}
 
-        if user_input is None:
-            _keymode = CONF_KEYMODE_CLOUDRETRIEVE
-        else:
+        if user_input is not None:
             self._host = user_input[CONF_HOST]
             self._key = user_input.get(CONF_KEY)
-            _keymode = user_input[CONF_KEYMODE]
-            """
-            The user might think that he needs to set cloudretrieve
-            even after having already retrieved the cloud key
-            this code safely skip re-routing again to async_step_cloudkey
-            """
             try:
-                if self._key is None:
-                    if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
-                        return await self.async_step_cloudkey()
-                    elif _keymode != CONF_KEYMODE_HACK:
-                        raise ConfigError(ERR_INVALID_NULL_KEY)
-                """
-                when the key is non-null we'll give it a try and eventually
-                go to cloud retrieve if the user selected so
-                """
                 _discovery_info = await _http_discovery(self.hass, self._host, self._key)
                 await self._async_set_info(_discovery_info)
-                return await self.async_step_finalize()
-            except ConfigError as e:
-                errors[ERR_BASE] = e.reason
-            except MerossKeyError as e:
+                return self.show_finalize()
+            except ConfigError as error:
+                errors[ERR_BASE] = error.reason
+            except MerossKeyError:
                 self._cloud_key = None
-                if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
-                    return await self.async_step_cloudkey()
-                errors[CONF_KEYMODE] = ERR_INVALID_KEY
-            except AbortFlow as e:
+                return self.show_keyerror()
+            except AbortFlow:
                 errors[ERR_BASE] = ERR_ALREADY_CONFIGURED_DEVICE
-            except Exception as e:
-                LOGGER.warning("Error (%s) configuring meross device (host:%s)", str(e), self._host)
+            except Exception as error:
+                LOGGER.warning("Error (%s) configuring meross device (host:%s)", str(error), self._host)
                 errors[ERR_BASE] = ERR_CANNOT_CONNECT
 
         config_schema = {
             vol.Required(CONF_HOST, description={ DESCR: self._host}): str,
-            vol.Required(CONF_KEYMODE, description={ DESCR: _keymode }): vol.In(CONF_KEYMODE_OPTIONS),
             vol.Optional(CONF_KEY, description={ DESCR: self._key}): str,
-            }
+        }
         return self.async_show_form(
             step_id="device",
             data_schema=vol.Schema(config_schema),
             errors=errors,
-            description_placeholders=self._placeholders)
-
+            description_placeholders=self._placeholders
+        )
 
     async def async_step_discovery(self, discovery_info: DiscoveryInfoType):
         """
         this is actually the entry point for devices discovered through our mqtt hub
         """
         await self._async_set_info(discovery_info)
-        return await self.async_step_finalize()
+        return self.show_finalize()
 
-
-    async def async_step_dhcp(self, discovery_info: object):
+    async def async_step_dhcp(self, discovery_info):
         """Handle a flow initialized by DHCP discovery."""
         if LOGGER.isEnabledFor(DEBUG):
             LOGGER.debug("received dhcp discovery: %s", str(discovery_info))
-
-        try:# not sure when discovery_info signature changed...we'll play it safe
-            if isinstance(discovery_info, dhcp.DhcpServiceInfo):
-                self._host = discovery_info.ip
-                self._macaddress = discovery_info.macaddress
-        except:
-            self._host = discovery_info.get('ip')
-            self._macaddress = discovery_info.get('macaddress')
-
-        """
-        we'll update the unique_id for the flow when we'll have the device_id
-        macaddress would have been a better choice since the beginning (...)
-        but I don't want to mess with ConfigEntry versioning right now
-        Here this is needed in case we cannot correctly identify the device
-        via our api and the dhcp integration keeps pushing us discoveries for
-        the same device
-        """
-        await self.async_set_unique_id(self._macaddress, raise_on_progress=True)
-
-        """
-        Check we already dont have the device registered.
-        This is probably overkill since the ConfigFlow will recognize
-        the duplicated unique_id sooner or later
-        """
-        api = self.hass.data.get(DOMAIN)
-        if api is not None:
-            if api.has_device(self._host, self._macaddress):
-                LOGGER.debug("ignoring dhcp discovery for %s: already configured", self._host)
+        self._host = discovery_info.ip
+        macaddress = discovery_info.macaddress.replace(':', '').lower()
+        # check if the device is already registered
+        try:
+            entries = self.hass.config_entries
+            for entry in entries.async_entries(DOMAIN):
+                descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD, {}))
+                if descriptor.macAddress.replace(':', '').lower() != macaddress:
+                    continue
+                data = dict(entry.data) # deepcopy? not needed: see CONF_TIMESTAMP
+                data[CONF_HOST] = self._host
+                data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
+                entries.async_update_entry(entry, data=data)
+                LOGGER.info("DHCP updated device ip address (%s) for device %s", self._host, descriptor.uuid)
                 return self.async_abort(reason='already_configured')
-
+        except Exception as error:
+            LOGGER.warning("DHCP update internal error: %s", str(error))
+        # we'll update the unique_id for the flow when we'll have the device_id
+        # Here this is needed in case we cannot correctly identify the device
+        # via our api and the dhcp integration keeps pushing us discoveries for
+        # the same device
+        # update 2022-12-19: adding DOMAIN prefix since macaddress alone might be set by other
+        # integrations and that would conflict with our unique_id likely raising issues
+        # on DHCP discovery not working in some configurations
+        await self.async_set_unique_id(DOMAIN + macaddress, raise_on_progress=True)
+        # Check we already dont have the device registered.
+        # This is a legacy (dead code) check since we've already
+        # looped through our config entries and updated the ip address there
+        api = MerossApi.peek(self.hass)
+        if api is not None:
+            if api.get_device_with_mac(macaddress) is not None:
+                return self.async_abort(reason='already_configured')
         try:
             # try device identification so the user/UI has a good context to start with
             if api is not None:
-                """
-                we'll see if any previous device already used a 'cloud_key' retrieved
-                from meross api for cloud-paired devices and try it
-                """
+                # we'll see if any previous device already used a 'cloud_key' retrieved
+                # from meross api for cloud-paired devices and try it
                 _discovery_info = None
                 if api.cloud_key is not None:
                     try:
@@ -268,52 +238,78 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
                         self._cloud_key = api.cloud_key # pass along so we'll save it in this entry too
                     except MerossKeyError:
                         pass
-                if (_discovery_info is None) and (api.key is not None):
+                if (_discovery_info is None) and (api.key is not None) and (api.key != api.cloud_key):
                     try:
                         _discovery_info = await _http_discovery(self.hass, self._host, api.key)
                         self._key = api.key
                     except MerossKeyError:
                         pass
                 if _discovery_info is not None:
-                    await self._async_set_info(_discovery_info)
-            """
-            we're now skipping key-hack discovery since devices on recent firmware
-            look like they really hate this hack...
-            if _discovery_info is None:
-                self._key = None # no other options: try empty key (which will eventually use the reply-hack)
-                _discovery_info = await self._http_discovery()
-            await self._async_set_info(_discovery_info)
-            """
-            # now just let the user edit/accept the host address even if identification was fine
-        except Exception as e:
+                    await self._async_set_info(_discovery_info) # type: ignore
+
+            # we're now skipping key-hack discovery since devices on recent firmware
+            # look like they really hate this hack...
+            # if _discovery_info is None:
+            #     self._key = None # no other options: try empty key (which will eventually use the reply-hack)
+            #     _discovery_info = await self._http_discovery()
+            # await self._async_set_info(_discovery_info)
+        except Exception as error:
             if LOGGER.isEnabledFor(DEBUG):
-                LOGGER.debug("Error (%s) identifying meross device (host:%s)", str(e), self._host)
-            if isinstance(e, AbortFlow):
+                LOGGER.debug("Error (%s) identifying meross device (host:%s)", str(error), self._host)
+            if isinstance(error, AbortFlow):
                 # we might have 'correctly' identified an already configured entry
                 return self.async_abort(reason='already_configured')
             # forgive and continue if we cant discover the device...let the user work it out
 
         return await self.async_step_device()
 
+    async def async_step_mqtt(self, discovery_info):
+        """manage the MQTT discovery flow"""
+        # this entry should only ever called once after startup
+        # when HA thinks we're interested in discovery.
+        # If our MerossApi is already running it will manage the discovery itself
+        # so this flow is only useful when MerossLan has no configuration yet
+        # and we leverage the default mqtt discovery to setup our manager
+        api = MerossApi.get(self.hass)
+        if api.mqtt_registered:
+            return self.async_abort(reason='already_configured')
+        # try setup the mqtt subscription
+        # this call might not register because of errors or because of an overlapping
+        # request from 'async_setup_entry' (we're preventing overlapped calls to MQTT
+        # subscription)
+        await api.async_mqtt_register()
+        if api.mqtt_registered:
+            # ok, now pass along the discovering mqtt message so our MerossApi state machine
+            # gets to work on this
+            await api.async_mqtt_receive(discovery_info)
+        # just in case, setup the MQTT Hub entry to enable the (default) device key configuration
+        # if the entry hub is already configured this will disable the discovery
+        # subscription (by returning 'already_configured') stopping any subsequent async_step_mqtt message:
+        # our MerossApi should already be in place
+        return await self.async_step_hub()
+
+    def show_finalize(self):
+        """just a recap form"""
+        return self.async_show_form(
+            step_id="finalize",
+            data_schema=vol.Schema({}),
+            description_placeholders=self._placeholders
+        )
 
     async def async_step_finalize(self, user_input=None):
-        if user_input is None:
-            return self.async_show_form(
-                step_id="finalize",
-                data_schema=vol.Schema({}),
-                description_placeholders=self._placeholders
-            )
-        return self.async_create_entry(title=self._descriptor.type + " " + self._device_id, data=self._discovery_info)
+        return self.async_create_entry(
+            title=f"{self._descriptor.type} {self._device_id}",
+            data=self._discovery_info # type: ignore
+        )
 
-
-    async def _async_set_info(self, discovery_info: DiscoveryInfoType) -> None:
+    async def _async_set_info(self, discovery_info: dict):
         self._discovery_info = discovery_info
         self._descriptor = MerossDeviceDescriptor(discovery_info.get(CONF_PAYLOAD, {}))
         self._device_id = self._descriptor.uuid
         self._placeholders = {
             CONF_DEVICE_TYPE: get_productnametype(self._descriptor.type),
             CONF_DEVICE_ID: self._device_id,
-            }
+        }
         self.context["title_placeholders"] = self._placeholders
         await self.async_set_unique_id(self._device_id)
         self._abort_if_unique_id_configured()
@@ -327,20 +323,16 @@ class ConfigFlow(CloudKeyMixin, config_entries.ConfigFlow, domain=DOMAIN):
         else:
             discovery_info.pop(CONF_CLOUD_KEY, None)
 
-        return
 
-
-
-class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
+class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
     """
         Manage device options configuration
     """
-
-    def __init__(self, config_entry):
+    def __init__(self, config_entry: config_entries.ConfigEntry):
         self._config_entry = config_entry
         if config_entry.unique_id != DOMAIN:
             data = config_entry.data
-            self.device_id = data.get(CONF_DEVICE_ID)
+            self._device_id = data.get(CONF_DEVICE_ID)
             self._host = data.get(CONF_HOST) # null for devices discovered over mqtt
             self._key = data.get(CONF_KEY)
             self._cloud_key = data.get(CONF_CLOUD_KEY) # null for non cloud keys
@@ -348,13 +340,15 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
             self._polling_period = data.get(CONF_POLLING_PERIOD)
             self._trace = data.get(CONF_TRACE, 0) > time()
             self._trace_timeout = data.get(CONF_TRACE_TIMEOUT)
-
+            self._placeholders = {
+                CONF_DEVICE_ID: self._device_id,
+                CONF_HOST: self._host or "MQTT"
+            }
 
     async def async_step_init(self, user_input=None):
         if self._config_entry.unique_id == DOMAIN:
             return await self.async_step_hub(user_input)
         return await self.async_step_device(user_input)
-
 
     async def async_step_hub(self, user_input=None):
 
@@ -362,7 +356,7 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
             data = dict(self._config_entry.data)
             data[CONF_KEY] = user_input.get(CONF_KEY)
             self.hass.config_entries.async_update_entry(self._config_entry, data=data)
-            return self.async_create_entry(title="", data=None)
+            return self.async_create_entry(title="", data=None) # type: ignore
 
         config_schema = {
             vol.Optional(
@@ -370,24 +364,16 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
                 description={ DESCR: self._config_entry.data.get(CONF_KEY) }
                 ): str
         }
-
         return self.async_show_form(step_id="hub", data_schema=vol.Schema(config_schema))
 
-
     async def async_step_device(self, user_input=None):
+        """
+        general (common) device configuration allowing key set and
+        general parameters to be entered/modified
+        """
         errors = {}
-
-        api: MerossApi = self.hass.data.get(DOMAIN)
-        device: MerossDevice = api.devices.get(self.device_id)
-
-        if user_input is None:
-            # this preset will force (if _host) a connection check
-            # and start the cloud retrieval in case the key fails
-            # whatever the actual key is (None or set)
-            # this is the default but the user could anyway choose KEYMODE_HACK or so
-            # but he has to do that consciously
-            _keymode = CONF_KEYMODE_CLOUDRETRIEVE
-        else:
+        device = MerossApi.peek_device(self.hass, self._device_id)
+        if user_input is not None:
             self._host = user_input.get(CONF_HOST)
             self._key = user_input.get(CONF_KEY)
             self._protocol = user_input.get(CONF_PROTOCOL)
@@ -396,15 +382,9 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
             self._trace_timeout = user_input.get(CONF_TRACE_TIMEOUT, CONF_TRACE_TIMEOUT_DEFAULT)
             try:
                 if self._host is not None:
-                    _keymode = user_input[CONF_KEYMODE]
-                    if self._key is None:
-                        if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
-                            return await self.async_step_cloudkey()
-                        elif _keymode != CONF_KEYMODE_HACK:
-                            raise ConfigError(ERR_INVALID_NULL_KEY)
                     _discovery_info = await _http_discovery(self.hass, self._host, self._key)
-                    _descriptor = MerossDeviceDescriptor(_discovery_info.get(CONF_PAYLOAD, {}))
-                    if self.device_id != _descriptor.uuid:
+                    _descriptor = MerossDeviceDescriptor(_discovery_info.get(CONF_PAYLOAD, {})) # type: ignore
+                    if self._device_id != _descriptor.uuid:
                         raise ConfigError(ERR_DEVICE_ID_MISMATCH)
 
                 data = dict(self._config_entry.data)
@@ -419,60 +399,48 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
                 data[CONF_POLLING_PERIOD] = self._polling_period
                 data[CONF_TRACE] = (time() + self._trace_timeout) if self._trace else 0
                 data[CONF_TRACE_TIMEOUT] = self._trace_timeout
-                self.hass.config_entries.async_update_entry(self._config_entry, data=data)
                 if device is not None:
                     try:
                         device.entry_option_update(user_input)
                     except:
                         pass # forgive any error
-                return self.async_create_entry(title=None, data=None)
+                self.hass.config_entries.async_update_entry(self._config_entry, data=data)
+                return self.async_create_entry(title=None, data=None) # type: ignore
 
-            except MerossKeyError as e:
+            except MerossKeyError:
                 self._cloud_key = None
-                if _keymode == CONF_KEYMODE_CLOUDRETRIEVE:
-                    return await self.async_step_cloudkey()
-                errors[CONF_KEYMODE] = ERR_INVALID_KEY
-            except ConfigError as e:
-                errors[ERR_BASE] = e.reason
-            except Exception as e:
+                return self.show_keyerror()
+            except ConfigError as error:
+                errors[ERR_BASE] = error.reason
+            except Exception:
                 errors[ERR_BASE] = ERR_CANNOT_CONNECT
 
-        config_schema = dict()
+        config_schema = {}
         if self._host is not None:
             config_schema[
                 vol.Required(
                     CONF_HOST,
                     description={ DESCR: self._host}
-                    )
-                ] = str
-            config_schema[
-                vol.Required(
-                    CONF_KEYMODE,
-                    description={ DESCR: _keymode}
-                    )
-                ] = vol.In(CONF_KEYMODE_OPTIONS)
+                )] = str
         config_schema[
             vol.Optional(
                 CONF_KEY,
                 description={ DESCR: self._key}
-                )
-            ] = str
+            )] = str
         config_schema[
             vol.Optional(
                 CONF_PROTOCOL,
                 description={ DESCR: self._protocol}
-                )
-            ] = vol.In(CONF_PROTOCOL_OPTIONS)
+            )] = vol.In(CONF_PROTOCOL_OPTIONS.keys())
         config_schema[
             vol.Optional(
                 CONF_POLLING_PERIOD,
-                default=CONF_POLLING_PERIOD_DEFAULT,
+                default=CONF_POLLING_PERIOD_DEFAULT, # type: ignore
                 description={ DESCR: self._polling_period}
-                )
-            ] = cv.positive_int
-
+            )] = cv.positive_int
         # setup device specific config right before last option
         if device is not None:
+            self._placeholders[CONF_DEVICE_TYPE] = get_productnametype(device.descriptor.type)
             try:
                 device.entry_option_setup(config_schema)
             except:
@@ -483,24 +451,17 @@ class OptionsFlowHandler(CloudKeyMixin, config_entries.OptionsFlow):
                 CONF_TRACE,
                 # CONF_TRACE contains the trace 'end' time epoch if set
                 description={ DESCR: self._trace}
-                )
-            ] = bool
+            )] = bool
         config_schema[
             vol.Optional(
                 CONF_TRACE_TIMEOUT,
-                default=CONF_TRACE_TIMEOUT_DEFAULT,
+                default=CONF_TRACE_TIMEOUT_DEFAULT, # type: ignore
                 description={ DESCR: self._trace_timeout}
-                )
-            ] = cv.positive_int
-
+            )] = cv.positive_int
 
         return self.async_show_form(
             step_id="device",
             data_schema=vol.Schema(config_schema),
-            description_placeholders={
-                CONF_DEVICE_TYPE: get_productnametype(device.descriptor.type) if device is not None else "",
-                CONF_DEVICE_ID: self.device_id,
-                CONF_HOST: self._host or "MQTT"
-            },
+            description_placeholders=self._placeholders,
             errors=errors
         )

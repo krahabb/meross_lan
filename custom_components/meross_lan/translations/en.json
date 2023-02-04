@@ -13,10 +13,6 @@
             "invalid_auth": "Authentication error"
         },
         "step": {
-            "user": {
-                "description": "Setup meross device",
-                "data": {}
-            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configure global Meross LAN settings",
@@ -28,8 +24,15 @@
                 "description": "Setup meross device\nType: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Device host address",
-                    "keymode": "Key selection mode",
                     "key": "Device key"
+                }
+            },
+            "keyerror": {
+                "title": "Device key error",
+                "description": "The provided key is wrong. Choose an option",
+                "menu_options": {
+                    "cloudkey": "Retrieve from Meross cloud",
+                    "device": "Retry"
                 }
             },
             "cloudkey": {
@@ -68,7 +71,6 @@
                 "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}",
                 "data": {
                     "host": "Device host address",
-                    "keymode": "Key selection mode",
                     "key": "Device key",
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
@@ -77,6 +79,14 @@
                     "trace_timeout": "Debug tracing duration (sec)",
                     "all": "Appliance.System.All",
                     "ability": "Appliance.System.Ability"
+                }
+            },
+            "keyerror": {
+                "title": "Device key error",
+                "description": "The provided key is wrong. Choose an option",
+                "menu_options": {
+                    "cloudkey": "Retrieve from Meross cloud",
+                    "device": "Retry"
                 }
             },
             "cloudkey": {

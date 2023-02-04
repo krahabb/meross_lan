@@ -1,8 +1,22 @@
 {
-    "python.linting.pylintEnabled": true,
     "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.linting.pylintArgs": [
+        "--disable=missing-function-docstring",
+        "--disable=missing-class-docstring",
+        "--disable=invalid-name",
+        "--disable=bare-except",
+        "--disable=broad-except"
+    ],
     "python.pythonPath": "/usr/local/bin/python",
     "files.associations": {
         "*.yaml": "home-assistant"
-    }
+    },
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportShadowedImports": "none"
+    },
+    "python.analysis.extraPaths": [
+        "./custom_components/meross_lan"
+    ]
 }

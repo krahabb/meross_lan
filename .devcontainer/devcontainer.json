@@ -1,12 +1,9 @@
 // See https://aka.ms/vscode-remote/devcontainer.json for format details.
 {
-	"image": "ludeeus/container:integration-debian",
+	"image": "ghcr.io/ludeeus/devcontainer/integration:stable",
 	"name": "Blueprint integration development",
 	"context": "..",
-	"appPort": [
-		"9123:8123",
-		"67:67/udp"
-	],
+	"runArgs": [ "--network=host" ],
 	"postCreateCommand": "container install",
 	"extensions": [
 		"ms-python.python",

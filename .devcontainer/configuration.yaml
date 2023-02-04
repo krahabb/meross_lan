@@ -1,7 +1,7 @@
 default_config:
 
 logger:
-  default: info
+  default: warning
   logs:
     custom_components.meross_lan: debug
 

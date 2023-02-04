@@ -1,5 +1,4 @@
-
-from typing import OrderedDict
+import collections
 
 # MQTT topics
 TOPIC_DISCOVERY = "/appliance/+/publish"
@@ -12,6 +11,16 @@ METHOD_GETACK = "GETACK"
 METHOD_SET = "SET"
 METHOD_SETACK = "SETACK"
 METHOD_ERROR = "ERROR"
+# map acknowledge to relative command method
+METHOD_ACK_MAP = {
+    METHOD_GET: METHOD_GETACK,
+    METHOD_SET: METHOD_SETACK,
+}
+# list methods usually carrying parsable state
+METHOD_PARSE_SET = (
+    METHOD_GETACK,
+    METHOD_PUSH,
+)
 
 NS_APPLIANCE_SYSTEM_ALL = "Appliance.System.All"
 NS_APPLIANCE_SYSTEM_ABILITY = "Appliance.System.Ability"
@@ -102,11 +111,13 @@ NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT = 'Appliance.Control.Thermostat.Overhea
 NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED = 'Appliance.Control.Thermostat.WindowOpened'
 NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE = 'Appliance.Control.Thermostat.Schedule'
 NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION = 'Appliance.Control.Thermostat.HoldAction'
-# MOD100 diffuser
+NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR = 'Appliance.Control.Thermostat.Sensor'
+# MOD100-MOD150 diffuser
 NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY = 'Appliance.Control.Diffuser.Spray'
 NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT = 'Appliance.Control.Diffuser.Light'
 NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR = 'Appliance.Control.Diffuser.Sensor'
-
+# screen brigtness (actually seen on MTS200)
+NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS = 'Appliance.Control.Screen.Brightness'
 
 NS_APPLIANCE_MCU_FIRMWARE = 'Appliance.Mcu.Firmware'
 NS_APPLIANCE_MCU_UPGRADE = 'Appliance.Mcu.Upgrade'
@@ -187,6 +198,8 @@ KEY_LATESTHUMIDITY = 'latestHumidity'
 KEY_SMOKEALARM = 'smokeAlarm'
 KEY_INTERCONN = 'interConn'
 KEY_SCHEDULE = 'schedule'
+KEY_SCHEDULEBMODE = 'scheduleBMode'
+KEY_SCHEDULEUNITTIME = 'scheduleUnitTime'
 KEY_ELECTRICITY = 'electricity'
 KEY_POWER = 'power'
 KEY_CURRENT = 'current'
@@ -225,9 +238,19 @@ KEY_ECOTEMP = 'ecoTemp'
 KEY_MANUALTEMP = 'manualTemp'
 KEY_TARGETTEMP = 'targetTemp'
 KEY_WINDOWOPENED = 'windowOpened'
+KEY_CALIBRATION = 'calibration'
+KEY_DEADZONE = 'deadZone'
+KEY_FROST = 'frost'
+KEY_OVERHEAT = 'overheat'
+KEY_HOLDACTION = 'holdAction'
+KEY_SENSOR = 'sensor'
+KEY_WARNING = 'warning'
 KEY_DIFFUSER = 'diffuser'
 KEY_DNDMODE = 'DNDMode'
 KEY_ADJUST = 'adjust'
+KEY_BRIGHTNESS = 'brightness'
+KEY_OPERATION = 'operation'
+KEY_STANDBY = 'standby'
 KEY_MP3 = 'mp3'
 KEY_SONG = 'song'
 KEY_MUTE = 'mute'
@@ -236,6 +259,7 @@ KEY_NONCE = 'nonce'
 KEY_KEY = 'key'
 KEY_DATA = 'data'
 KEY_PARAMS = 'params'
+KEY_APISTATUS = 'apiStatus'
 
 # 'well-know' syntax for METHOD_GET
 PAYLOAD_GET = {
@@ -253,9 +277,11 @@ PAYLOAD_GET = {
     NS_APPLIANCE_CONTROL_LIGHT : { KEY_LIGHT: {} },
     NS_APPLIANCE_CONTROL_LIGHT_EFFECT : { KEY_EFFECT: [] },
     NS_APPLIANCE_CONTROL_SPRAY : { KEY_SPRAY: {} },
+    NS_APPLIANCE_CONTROL_MP3 : { KEY_MP3: {} },
     NS_APPLIANCE_ROLLERSHUTTER_POSITION: { KEY_POSITION: [] },
     NS_APPLIANCE_ROLLERSHUTTER_STATE: { KEY_STATE: [] },
     NS_APPLIANCE_ROLLERSHUTTER_CONFIG: { KEY_CONFIG: [] },
+    NS_APPLIANCE_GARAGEDOOR_CONFIG: { KEY_CONFIG: {} },
     NS_APPLIANCE_HUB_BATTERY: { KEY_BATTERY: [] },
     NS_APPLIANCE_HUB_SENSOR_ALL: { KEY_ALL: [] },
     NS_APPLIANCE_HUB_SENSOR_SMOKE: { KEY_SMOKEALARM: [] }, # guessing: 'smoke' is wrong for sure
@@ -263,7 +289,16 @@ PAYLOAD_GET = {
     NS_APPLIANCE_HUB_MTS100_SCHEDULEB: { KEY_SCHEDULE: [] },
     NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST: { KEY_ADJUST: [] }, # unconfirmed but 'motoradjust' is wrong for sure
     NS_APPLIANCE_CONTROL_THERMOSTAT_MODE: { KEY_MODE: [] },
+    NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: { KEY_CALIBRATION: [ { KEY_CHANNEL: 0 }] },
+    NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: { KEY_DEADZONE: [ { KEY_CHANNEL: 0 }] },
+    NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: { KEY_FROST: [ { KEY_CHANNEL: 0 }] },
+    NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: { KEY_OVERHEAT: [ { KEY_CHANNEL: 0 }] },
     NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED: { KEY_WINDOWOPENED: [] },
+    NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: { KEY_SCHEDULE: [ { KEY_CHANNEL: 0 }] },
+    NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION: { KEY_HOLDACTION: [ { KEY_CHANNEL: 0 }] },
+    NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: { KEY_SENSOR: [ { KEY_CHANNEL: 0 }] },
+    NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: { KEY_BRIGHTNESS: [ { KEY_CHANNEL: 0 }] },
+    NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: { KEY_SENSOR: {} },
 }
 # error codes as reported by Meross device protocol
 ERROR_INVALIDKEY = 5001
@@ -281,6 +316,7 @@ LIGHT_CAPACITY_TEMPERATURE = 2
 LIGHT_CAPACITY_LUMINANCE = 4
 LIGHT_CAPACITY_RGB_LUMINANCE = 5
 LIGHT_CAPACITY_TEMPERATURE_LUMINANCE = 6
+LIGHT_CAPACITY_EFFECT = 8 # not tested but looks like msl320 carries this flag
 
 # spray mode enums
 SPRAY_MODE_OFF = 0
@@ -313,6 +349,11 @@ DIFFUSER_SPRAY_MODE_FULL = 1
 DIFFUSER_LIGHT_MODE_RAINBOW = 0 # color modes taken from 'homebridge-meross' plugin
 DIFFUSER_LIGHT_MODE_COLOR = 1
 DIFFUSER_LIGHT_MODE_TEMPERATURE = 2
+DIFFUSER_LIGHT_EFFECT_MAP = {
+    DIFFUSER_LIGHT_MODE_RAINBOW: "Rainbow",
+    DIFFUSER_LIGHT_MODE_COLOR: "Color",
+    DIFFUSER_LIGHT_MODE_TEMPERATURE: "Temperature",
+}
 
 # cherub machine
 HP110A_LIGHT_EFFECT_MAP = {
@@ -347,7 +388,7 @@ HP110A_MP3_SONG_MAP = {
 # provide a general device description
 # see how TYPE_NAME_MAP is used in code
 TYPE_UNKNOWN = 'unknown'
-TYPE_NAME_MAP = OrderedDict()
+TYPE_NAME_MAP = collections.OrderedDict()
 
 CLASS_MSH = 'msh'
 TYPE_MSH300 = 'msh300' # WiFi Hub
@@ -356,6 +397,10 @@ TYPE_NAME_MAP[CLASS_MSH] = "Smart Hub"
 CLASS_MSS = 'mss'
 TYPE_MSS310 = 'mss310' # smart plug with energy meter
 TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
+TYPE_MSS560 = "mss560"
+TYPE_NAME_MAP[TYPE_MSS560] = "Smart Dimmer Switch"
+TYPE_MSS570 = "mss570"
+TYPE_NAME_MAP[TYPE_MSS570] = TYPE_NAME_MAP[TYPE_MSS560]
 TYPE_NAME_MAP[CLASS_MSS] = "Smart Switch"
 
 CLASS_MSL = 'msl'
@@ -374,6 +419,7 @@ TYPE_NAME_MAP[CLASS_MTS] = "Smart Thermostat"
 
 CLASS_MOD = 'mod'
 TYPE_MOD100 = 'mod100' # smart humidifier
+TYPE_MOD150 = 'mod150' # smart humidifier (looks the same as mod100...maybe HK version tho)
 TYPE_NAME_MAP[CLASS_MOD] = "Smart Humidifier"
 
 CLASS_MSG = 'msg'
@@ -396,8 +442,49 @@ TYPE_SMOKEALARM = KEY_SMOKEALARM
 TYPE_NAME_MAP[TYPE_SMOKEALARM] = "Smart Smoke Alarm"
 
 """
+    Meross cloud HTTP api
+"""
+MEROSS_API_V1_URL = 'https://iot.meross.com/v1'
+MEROSS_API_LOGIN_PATH = '/Auth/Login'
+MEROSS_API_LOGOUT_PATH = '/Profile/Logout'
+
+APISTATUS_NO_ERROR = 0
+"""Not an error"""
+APISTATUS_MISSING_PASSWORD = 1001
+"""Wrong or missing password"""
+APISTATUS_UNEXISTING_ACCOUNT = 1002
+"""Account does not exist"""
+APISTATUS_DISABLED_OR_DELETED_ACCOUNT = 1003
+"""This account has been disabled or deleted"""
+APISTATUS_WRONG_CREDENTIALS = 1004
+"""Wrong email or password"""
+APISTATUS_INVALID_EMAIL = 1005
+"""Invalid email address"""
+APISTATUS_BAD_PASSWORD_FORMAT = 1006
+"""Bad password format"""
+APISTATUS_WRONG_EMAIL = 1008
+"""This email is not registered"""
+APISTATUS_TOKEN_INVALID = 1019
+"""Token expired"""
+APISTATUS_TOKEN_ERROR = 1022
+APISTATUS_TOKEN_EXPIRED = 1200
+APISTATUS_TOO_MANY_TOKENS = 1301
+APISTATUS_MAP = {
+    APISTATUS_NO_ERROR: "Not an error",
+    APISTATUS_MISSING_PASSWORD: "Wrong or missing password",
+    APISTATUS_UNEXISTING_ACCOUNT: "Account does not exist",
+    APISTATUS_DISABLED_OR_DELETED_ACCOUNT: "This account has been disabled or deleted",
+    APISTATUS_WRONG_CREDENTIALS: "Wrong email or password",
+    APISTATUS_INVALID_EMAIL: "Invalid email address",
+    APISTATUS_BAD_PASSWORD_FORMAT: "Bad password format",
+    APISTATUS_WRONG_EMAIL: "This email is not registered",
+    APISTATUS_TOKEN_INVALID: "Invalid Token",
+    APISTATUS_TOKEN_ERROR: "Token error",
+    APISTATUS_TOKEN_EXPIRED: "Token expired",
+    APISTATUS_TOO_MANY_TOKENS: "Too many tokens",
+}
+"""
     GP constant strings
 """
 MANUFACTURER = "Meross"
 MEROSS_MACADDRESS = '48:e1:e9:xx:xx:xx'
-MEROSS_API_LOGIN_URL = "https://iot.meross.com/v1/Auth/Login"

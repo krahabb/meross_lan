@@ -6,3 +6,4 @@ venv
 *.secret
 *.user
 traces
+.DS_Store

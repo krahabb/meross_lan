@@ -1,6 +1,7 @@
 {
   "domain": "meross_lan",
   "name": "Meross LAN",
+  "integration_type": "hub",
   "config_flow": true,
   "iot_class": "local_polling",
   "documentation": "https://github.com/krahabb/meross_lan",
@@ -8,10 +9,14 @@
   "requirements": [],
   "dhcp": [
     {"hostname": "*", "macaddress": "48E1E9*"},
-    {"hostname": "*", "macaddress": "34298F1*"}
+    {"hostname": "*", "macaddress": "34298F1*"},
+    {"registered_devices": true}
+  ],
+  "mqtt": [
+    "/appliance/+/publish"
   ],
   "dependencies": ["recorder"],
   "after_dependencies": ["mqtt", "dhcp"],
   "codeowners": ["@krahabb"],
-  "version": "2.6.2"
+  "version": "3.0.0"
 }

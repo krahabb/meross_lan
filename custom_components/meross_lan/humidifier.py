@@ -1,5 +1,5 @@
 from __future__ import annotations
-from functools import partial
+import typing
 
 try:
     from homeassistant.components.humidifier import (
@@ -9,8 +9,10 @@ try:
     )
     from homeassistant.components.humidifier.const import (
         HumidifierEntityFeature,
-        MODE_ECO, MODE_NORMAL,
+        MODE_ECO,
+        MODE_NORMAL,
     )
+
     DEVICE_CLASS_HUMIDIFIER = HumidifierDeviceClass.HUMIDIFIER
     SUPPORT_MODES = HumidifierEntityFeature.MODES
 except:
@@ -20,20 +22,30 @@ except:
         HumidifierEntity,
     )
     from homeassistant.components.humidifier.const import (
-        SUPPORT_MODES, MODE_ECO, MODE_NORMAL
+        SUPPORT_MODES,
+        MODE_ECO,
+        MODE_NORMAL,
     )
 
 from homeassistant.const import STATE_OFF, STATE_ON
 
 from .merossclient import const as mc  # mEROSS cONST
-from .meross_entity import _MerossEntity, platform_setup_entry, platform_unload_entry
+from . import meross_entity as me
+
+if typing.TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.config_entries import ConfigEntry
+    from .meross_device import MerossDevice
 
 
-async def async_setup_entry(hass: object, config_entry: object, async_add_devices):
-    platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_HUMIDIFIER)
+async def async_setup_entry(
+    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+):
+    me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_HUMIDIFIER)
 
-async def async_unload_entry(hass: object, config_entry: object) -> bool:
-    return platform_unload_entry(hass, config_entry, PLATFORM_HUMIDIFIER)
+
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry):
+    return me.platform_unload_entry(hass, config_entry, PLATFORM_HUMIDIFIER)
 
 
 MODE_CONTINUOUS = MODE_NORMAL
@@ -41,70 +53,63 @@ MODE_INTERMITTENT = MODE_ECO
 
 MODE_TO_SPRAY_MODE_MAP = {
     MODE_CONTINUOUS: mc.SPRAY_MODE_CONTINUOUS,
-    MODE_INTERMITTENT: mc.SPRAY_MODE_INTERMITTENT
+    MODE_INTERMITTENT: mc.SPRAY_MODE_INTERMITTENT,
 }
 
 SPRAY_MODE_TO_MODE_MAP = {
     mc.SPRAY_MODE_CONTINUOUS: MODE_CONTINUOUS,
-    mc.SPRAY_MODE_INTERMITTENT: MODE_INTERMITTENT
+    mc.SPRAY_MODE_INTERMITTENT: MODE_INTERMITTENT,
 }
 
-class MerossLanSpray(_MerossEntity, HumidifierEntity):
+
+class MerossLanSpray(me.MerossEntity, HumidifierEntity):
 
     PLATFORM = PLATFORM_HUMIDIFIER
 
     _attr_available_modes: list[str] = list(MODE_TO_SPRAY_MODE_MAP.keys())
-    #_attr_max_humidity: int = DEFAULT_MAX_HUMIDITY
-    #_attr_min_humidity: int = DEFAULT_MAX_HUMIDITY
+    # _attr_max_humidity: int = DEFAULT_MAX_HUMIDITY
+    # _attr_min_humidity: int = DEFAULT_MAX_HUMIDITY
 
     _spray_mode: int | None = None
 
-
     def __init__(self, device: 'MerossDevice', channel: object):
         super().__init__(device, channel, None, DEVICE_CLASS_HUMIDIFIER)
-        #device.handlers[mc.NS_APPLIANCE_CONTROL_SPRAY] = device._handle_generic
-        #setattr(device, "_parse_spray", partial(device._parse__generic, mc.KEY_SPRAY))
-
 
     @property
-    def supported_features(self) -> int | None:
+    def supported_features(self):
         return SUPPORT_MODES
 
-
     @property
-    def mode(self) -> str | None:
-        return SPRAY_MODE_TO_MODE_MAP.get(self._spray_mode)
+    def mode(self):
+        return SPRAY_MODE_TO_MODE_MAP.get(self._spray_mode)  # type: ignore
 
+    async def async_turn_on(self, **kwargs):
+        await self.async_request_spray(self._spray_mode or mc.SPRAY_MODE_CONTINUOUS)
 
-    async def async_turn_on(self, **kwargs) -> None:
-        self._internal_set_mode(self._spray_mode or mc.SPRAY_MODE_CONTINUOUS)
+    async def async_turn_off(self, **kwargs):
+        await self.async_request_spray(mc.SPRAY_MODE_OFF)
 
-
-    async def async_turn_off(self, **kwargs) -> None:
-        self._internal_set_mode(mc.SPRAY_MODE_OFF)
-
-
-    async def async_set_humidity(self, humidity: int) -> None:
+    async def async_set_humidity(self, humidity: int):
         pass
 
+    async def async_set_mode(self, mode: str):
+        await self.async_request_spray(
+            MODE_TO_SPRAY_MODE_MAP.get(mode, mc.SPRAY_MODE_CONTINUOUS)
+        )
 
-    async def async_set_mode(self, mode: str) -> None:
-        self._internal_set_mode(MODE_TO_SPRAY_MODE_MAP.get(mode, mc.SPRAY_MODE_CONTINUOUS))
+    async def async_request_spray(self, spray_mode: int):
+        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+            if acknowledge:
+                self.update_mode(spray_mode)
 
-
-    def _internal_set_mode(self, spray_mode: int) -> None:
-        def _ack_callback():
-            self.update_mode(spray_mode)
-
-        self.device.request(
+        await self.device.async_request(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
             {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: spray_mode}},
-            _ack_callback
+            _ack_callback,
         )
 
-
-    def update_mode(self, spray_mode: int) -> None:
+    def update_mode(self, spray_mode: int | None):
         if spray_mode == mc.SPRAY_MODE_OFF:
             self.update_state(STATE_OFF)
         else:
@@ -114,6 +119,5 @@ class MerossLanSpray(_MerossEntity, HumidifierEntity):
                 if self.hass and self.enabled:
                     self.async_write_ha_state()
 
-
-    def _parse_spray(self, payload: dict) -> None:
+    def _parse_spray(self, payload: dict):
         self.update_mode(payload.get(mc.KEY_MODE))

@@ -13,10 +13,6 @@
       "invalid_auth": "Authentication"
     },
     "step": {
-      "user": {
-        "description": "Découvrir l'appareil",
-        "data": {}
-      },
       "hub": {
         "title": "Meross LAN MQTT Hub",
         "description": "Configurer les paramètres LAN globaux de Meross",
@@ -28,8 +24,15 @@
         "description": "Découvrir l'appareil\nType: {device_type}\nUUID: {device_id}",
         "data": {
           "host": "Adresse",
-          "keymode": "Mode de sélection de clé",
           "key": "Clé"
+        }
+      },
+      "keyerror": {
+        "title": "Erreur de clé de périphérique",
+        "description": "La clé fournie est erronée. Choisis une option",
+        "menu_options": {
+          "cloudkey": "Récupérer depuis le cloud Meross",
+          "device": "Retenter"
         }
       },
       "cloudkey": {
@@ -68,7 +71,6 @@
         "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}",
         "data": {
           "host": "Adresse",
-          "keymode": "Mode de sélection de clé",
           "key": "Clé",
           "protocol": "Protocole de connexion",
           "polling_period": "Période de requête",
@@ -77,6 +79,14 @@
           "trace_timeout": "Debug tracing duration (sec)",
           "all": "Appliance.System.All",
           "ability": "Appliance.System.Ability"
+        }
+      },
+      "keyerror": {
+        "title": "Erreur de clé de périphérique",
+        "description": "La clé fournie est erronée. Choisis une option",
+        "menu_options": {
+          "cloudkey": "Récupérer depuis le cloud Meross",
+          "device": "Retenter"
         }
       },
       "cloudkey": {
