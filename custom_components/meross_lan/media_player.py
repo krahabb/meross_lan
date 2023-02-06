@@ -161,7 +161,7 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
 
 
 class Mp3Mixin(
-    LightMixin, MerossDevice if typing.TYPE_CHECKING else object
+    LightMixin if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
     def __init__(self, api, descriptor, entry):
         super().__init__(api, descriptor, entry)
