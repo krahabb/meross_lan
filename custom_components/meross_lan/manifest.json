@@ -15,8 +15,7 @@
   "mqtt": [
     "/appliance/+/publish"
   ],
-  "dependencies": ["recorder"],
   "after_dependencies": ["mqtt", "dhcp"],
   "codeowners": ["@krahabb"],
-  "version": "3.0.1"
+  "version": "3.0.2"
 }
