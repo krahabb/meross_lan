@@ -11,7 +11,7 @@ from custom_components.meross_lan import emulator
 
 from .const import MOCK_DEVICE_UUID, MOCK_KEY
 
-TRACES_PATH = "./custom_components/meross_lan/traces/emulator/"
+TRACES_PATH = "./emulator_traces/"
 TRACES_MAP = {
     "mts200": "mts200b-1674112759-U0123456789012345678901234567890C-Kpippo.csv"
 }

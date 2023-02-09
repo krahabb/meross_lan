@@ -1,0 +1,2232 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2022.2.9",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.9.7",
+    "docker": true,
+    "arch": "aarch64",
+    "timezone": "Europe/Madrid",
+    "os_name": "Linux",
+    "os_version": "5.10.92-v8",
+    "supervisor": "2022.01.1",
+    "host_os": "Home Assistant OS 7.4",
+    "docker_version": "20.10.9",
+    "chassis": "embedded",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "visonic": {
+      "version": "0.6.13.0",
+      "requirements": [
+        "pyserial_asyncio==0.4"
+      ]
+    },
+    "hacs": {
+      "version": "1.22.0",
+      "requirements": [
+        "aiogithubapi>=21.11.0"
+      ]
+    },
+    "localtuya": {
+      "version": "3.2.1",
+      "requirements": []
+    },
+    "config_editor": {
+      "version": "3.0",
+      "requirements": []
+    },
+    "meross_lan": {
+      "version": "2.5.4",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "config_flow": true,
+    "iot_class": "local_polling",
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "requirements": [],
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      }
+    ],
+    "dependencies": [],
+    "after_dependencies": [
+      "mqtt",
+      "dhcp"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "version": "2.5.4",
+    "is_built_in": false
+  },
+  "data": {
+    "host": "**REDACTED**",
+    "key": "**REDACTED**",
+    "cloud_key": null,
+    "protocol": null,
+    "polling_period": 30,
+    "trace_timeout": 300,
+    "device_id": "**REDACTED**",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "mss210",
+            "subType": "us",
+            "version": "1.0.0",
+            "chipType": "MT7688",
+            "uuid": "################################",
+            "macAddress": "#################"
+          },
+          "firmware": {
+            "version": "1.1.12",
+            "compileTime": "2018-12-17 11:01:45",
+            "wifiMac": "#################",
+            "innerIp": "############",
+            "server": "####################",
+            "port": "###",
+            "secondServer": "mqtt-eu-2.meross.com",
+            "secondPort": 443,
+            "userId": "#####"
+          },
+          "time": {
+            "timestamp": 1645391266,
+            "timezone": "Europe/Madrid",
+            "timeRule": [
+              [
+                1553994000,
+                7200,
+                1
+              ],
+              [
+                1572138000,
+                3600,
+                0
+              ],
+              [
+                1585443600,
+                7200,
+                1
+              ],
+              [
+                1603587600,
+                3600,
+                0
+              ],
+              [
+                1616893200,
+                7200,
+                1
+              ],
+              [
+                1635642000,
+                3600,
+                0
+              ],
+              [
+                1648342800,
+                7200,
+                1
+              ],
+              [
+                1667091600,
+                3600,
+                0
+              ],
+              [
+                1679792400,
+                7200,
+                1
+              ],
+              [
+                1698541200,
+                3600,
+                0
+              ],
+              [
+                1711846800,
+                7200,
+                1
+              ],
+              [
+                1729990800,
+                3600,
+                0
+              ],
+              [
+                1743296400,
+                7200,
+                1
+              ],
+              [
+                1761440400,
+                3600,
+                0
+              ],
+              [
+                1774746000,
+                7200,
+                1
+              ],
+              [
+                1792890000,
+                3600,
+                0
+              ],
+              [
+                1806195600,
+                7200,
+                1
+              ],
+              [
+                1824944400,
+                3600,
+                0
+              ],
+              [
+                1837645200,
+                7200,
+                1
+              ],
+              [
+                1856394000,
+                3600,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 1
+          }
+        },
+        "control": {
+          "toggle": {
+            "onoff": 0,
+            "lmTime": 1645391086
+          },
+          "trigger": [],
+          "timer": []
+        }
+      },
+      "payloadVersion": 1,
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.Control.Toggle": {},
+        "Appliance.Control.Timer": {
+          "sunOffsetSupport": 1
+        },
+        "Appliance.Control.Trigger": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {}
+      }
+    },
+    "deviceclass": "ToggleMixinMerossDevice",
+    "disabled_by": null,
+    "disabled_polling": false,
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2022/02/21 - 10:52:27",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "mss210",
+              "subType": "us",
+              "version": "1.0.0",
+              "chipType": "MT7688",
+              "uuid": "1806221438054525132934298f11f42f",
+              "macAddress": "34:29:8f:11:f4:2f"
+            },
+            "firmware": {
+              "version": "1.1.12",
+              "compileTime": "2018-12-17 11:01:45",
+              "wifiMac": "e4:ab:89:2a:0d:eb",
+              "innerIp": "192.168.0.16",
+              "server": "mqtt-eu-2.meross.com",
+              "port": 443,
+              "secondServer": "mqtt-eu-2.meross.com",
+              "secondPort": 443,
+              "userId": 98016
+            },
+            "time": {
+              "timestamp": 1645437139,
+              "timezone": "Europe/Madrid",
+              "timeRule": [
+                [
+                  1553994000,
+                  7200,
+                  1
+                ],
+                [
+                  1572138000,
+                  3600,
+                  0
+                ],
+                [
+                  1585443600,
+                  7200,
+                  1
+                ],
+                [
+                  1603587600,
+                  3600,
+                  0
+                ],
+                [
+                  1616893200,
+                  7200,
+                  1
+                ],
+                [
+                  1635642000,
+                  3600,
+                  0
+                ],
+                [
+                  1648342800,
+                  7200,
+                  1
+                ],
+                [
+                  1667091600,
+                  3600,
+                  0
+                ],
+                [
+                  1679792400,
+                  7200,
+                  1
+                ],
+                [
+                  1698541200,
+                  3600,
+                  0
+                ],
+                [
+                  1711846800,
+                  7200,
+                  1
+                ],
+                [
+                  1729990800,
+                  3600,
+                  0
+                ],
+                [
+                  1743296400,
+                  7200,
+                  1
+                ],
+                [
+                  1761440400,
+                  3600,
+                  0
+                ],
+                [
+                  1774746000,
+                  7200,
+                  1
+                ],
+                [
+                  1792890000,
+                  3600,
+                  0
+                ],
+                [
+                  1806195600,
+                  7200,
+                  1
+                ],
+                [
+                  1824944400,
+                  3600,
+                  0
+                ],
+                [
+                  1837645200,
+                  7200,
+                  1
+                ],
+                [
+                  1856394000,
+                  3600,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1
+            }
+          },
+          "control": {
+            "toggle": {
+              "onoff": 0,
+              "lmTime": 1645391086
+            },
+            "trigger": [],
+            "timer": []
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:27",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.Control.Toggle": {},
+          "Appliance.Control.Timer": {
+            "sunOffsetSupport": 1
+          },
+          "Appliance.Control.Trigger": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:27",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:27",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:32",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Position",
+        {
+          "position": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:32",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Position",
+        {
+          "position": {
+            "longitude": 0,
+            "latitude": 0
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:37",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Toggle",
+        {
+          "toggle": []
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:37",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Toggle",
+        {
+          "toggle": {
+            "onoff": 0,
+            "lmTime": 1645391086
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:37",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:52:42",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Timer",
+        {
+          "timer": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:42",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Timer",
+        {
+          "timer": []
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Trigger",
+        {
+          "trigger": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:47",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Trigger",
+        {
+          "trigger": []
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:50",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:50",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437169,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:52:50",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:53:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:53:20",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437199,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:53:20",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:53:50",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:53:50",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437229,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:53:50",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:54:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:54:20",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437259,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:54:20",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:54:50",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:54:50",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437289,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:54:50",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:55:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:55:20",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437319,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:55:20",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:55:50",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:55:50",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437349,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:55:50",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:56:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:56:20",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437379,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:56:20",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:56:50",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:56:50",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437409,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:56:50",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ],
+      [
+        "2022/02/21 - 10:57:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/02/21 - 10:57:20",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mss210",
+                "subType": "us",
+                "version": "1.0.0",
+                "chipType": "MT7688",
+                "uuid": "1806221438054525132934298f11f42f",
+                "macAddress": "34:29:8f:11:f4:2f"
+              },
+              "firmware": {
+                "version": "1.1.12",
+                "compileTime": "2018-12-17 11:01:45",
+                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "innerIp": "192.168.0.16",
+                "server": "mqtt-eu-2.meross.com",
+                "port": 443,
+                "secondServer": "mqtt-eu-2.meross.com",
+                "secondPort": 443,
+                "userId": 98016
+              },
+              "time": {
+                "timestamp": 1645437439,
+                "timezone": "Europe/Madrid",
+                "timeRule": [
+                  [
+                    1553994000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1572138000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1585443600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1603587600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1616893200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "control": {
+              "toggle": {
+                "onoff": 0,
+                "lmTime": 1645391086
+              },
+              "trigger": [],
+              "timer": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/02/21 - 10:57:20",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(1806221438054525132934298f11f42f) error in async_http_request: 'channel'"
+      ]
+    ]
+  }
+}
