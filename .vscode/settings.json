@@ -2,11 +2,6 @@
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": true,
     "python.linting.pylintArgs": [
-        "--disable=missing-function-docstring",
-        "--disable=missing-class-docstring",
-        "--disable=invalid-name",
-        "--disable=bare-except",
-        "--disable=broad-except"
     ],
     "python.pythonPath": "/usr/local/bin/python",
     "files.associations": {
@@ -18,5 +13,10 @@
     },
     "python.analysis.extraPaths": [
         "./custom_components/meross_lan"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": [
+        "."
     ]
 }

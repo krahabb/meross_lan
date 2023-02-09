@@ -3,6 +3,7 @@ pythonenv*
 venv
 .venv
 .coverage
+coverage.xml
 *.secret
 *.user
 traces
