@@ -42,10 +42,6 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_NUMBER)
 
 
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    return me.platform_unload_entry(hass, config_entry, PLATFORM_NUMBER)
-
-
 if CORE_HAS_NATIVE_UNIT:
     # implement 'new' (2022.6) style NumberEntity
     PatchedNumberEntity = NumberEntity  # type: ignore

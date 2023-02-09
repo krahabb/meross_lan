@@ -29,9 +29,6 @@ try:  # to look for calendar platform in HA core
     ):
         me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_CALENDAR)
 
-    async def async_unload_entry(hass: 'HomeAssistant', config_entry: 'ConfigEntry'):
-        return me.platform_unload_entry(hass, config_entry, PLATFORM_CALENDAR)
-
 except:  # implement a fallback by using a sensor
     LOGGER.warning(
         "Missing 'calendar' entity type. Please update HA to latest version"

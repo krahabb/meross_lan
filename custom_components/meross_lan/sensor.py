@@ -91,10 +91,6 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_SENSOR)
 
 
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    return me.platform_unload_entry(hass, config_entry, PLATFORM_SENSOR)
-
-
 class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
 
     PLATFORM = PLATFORM_SENSOR

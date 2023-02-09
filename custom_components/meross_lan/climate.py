@@ -62,10 +62,6 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_CLIMATE)
 
 
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    return me.platform_unload_entry(hass, config_entry, PLATFORM_CLIMATE)
-
-
 PRESET_OFF = "off"
 PRESET_CUSTOM = "custom"
 # PRESET_COMFORT = 'heat'

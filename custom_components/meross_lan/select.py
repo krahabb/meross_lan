@@ -30,9 +30,6 @@ try:  # to look for select platform in HA core (available since some 2021.xx...)
     ):
         me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_SELECT)
 
-    async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-        return me.platform_unload_entry(hass, config_entry, PLATFORM_SELECT)
-
 except:  # implement a fallback by using a plain old switch
     LOGGER.warning(
         "Missing 'select' entity type. Please update HA to latest version"

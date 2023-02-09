@@ -91,10 +91,6 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_LIGHT)
 
 
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    return me.platform_unload_entry(hass, config_entry, PLATFORM_LIGHT)
-
-
 def _rgb_to_int(rgb) -> int:
     if isinstance(rgb, int):
         return rgb
