@@ -16,6 +16,7 @@
     "/appliance/+/publish"
   ],
   "after_dependencies": ["mqtt", "dhcp"],
+  "loggers": ["custom_components.meross_lan"],
   "codeowners": ["@krahabb"],
   "version": "3.0.2"
 }
