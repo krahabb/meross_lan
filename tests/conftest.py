@@ -14,8 +14,9 @@
 #
 # See here for more info: https://docs.pytest.org/en/latest/fixture.html (note that
 # pytest includes fixtures OOB which you can use as defined on this page)
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
+from homeassistant.core import callback
 import pytest
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -25,6 +26,7 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     yield
+
 
 # This fixture is used to prevent HomeAssistant from attempting to create and dismiss persistent
 # notifications. These calls would fail without this fixture since the persistent_notification
@@ -38,34 +40,35 @@ def skip_notifications_fixture():
         yield
 
 
-# This fixture, when used, will result in calls to async_get_data to return None. To have the call
-# return a value, we would add the `return_value=<VALUE_TO_RETURN>` parameter to the patch call.
-@pytest.fixture(name="bypass_get_data")
-def bypass_get_data_fixture():
-    """Skip calls to get data from API."""
+class MQTTMock:
+    mqtt_is_connected: Mock
+    mqtt_publish: Mock
+    async_subscribe: Mock
+
+
+@pytest.fixture()
+def mqtt_patch():
+
+    @callback
+    def _unsub_mqtt_subscribe():
+        pass
+
     with patch(
-        #"custom_components.integration_blueprint.IntegrationBlueprintApiClient.async_get_data"
-        "custom_components.meross_lan.MerossDevice.triggerupdate"
-    ):
-        yield
-
-# In this fixture, we are forcing calls to async_get_data to raise an Exception. This is useful
-# for exception handling.
-@pytest.fixture(name="error_on_get_data")
-def error_get_data_fixture():
-    """Simulate error when retrieving data from API."""
-    with patch(
-        #"custom_components.integration_blueprint.IntegrationBlueprintApiClient.async_get_data"
-        "custom_components.meross_lan.MerossDevice.triggerupdate",
-        side_effect=Exception,
-    ):
-        yield
+        "homeassistant.components.mqtt.is_connected"
+    ) as mqtt_is_connected, patch(
+        "homeassistant.components.mqtt.publish"
+    ) as mqtt_publish, patch(
+        "homeassistant.components.mqtt.async_subscribe",
+        return_value = _unsub_mqtt_subscribe
+    ) as async_subscribe:
+        mock = MQTTMock()
+        mock.mqtt_is_connected = mqtt_is_connected
+        mock.mqtt_publish = mqtt_publish
+        mock.async_subscribe = async_subscribe
+        yield mock
 
 
-@pytest.fixture(name="bypass_mqtt_subscribe")
-def bypass_mqtt_subscribe_fixture():
-    with patch(
-        "homeassistant.components.mqtt.async_subscribe"
-    ):
-        yield
-
+@pytest.fixture()
+def mqtt_available(mqtt_patch: MQTTMock):
+    mqtt_patch.mqtt_is_connected.return_value = True
+    return mqtt_patch
