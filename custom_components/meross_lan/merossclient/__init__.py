@@ -141,8 +141,17 @@ class MerossDeviceDescriptor:
     all = {}
     ability: dict
     digest: dict
-    time: dict | None
+    system: dict
+    hardware: dict
+    firmware: dict
+    type: str
+    uuid: str
+    macAddress: str
+    innerIp: str | None
+    time: dict
     timezone: str | None
+    productname: str
+    productmodel: str
 
     _dynamicattrs = {
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),

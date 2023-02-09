@@ -9,7 +9,10 @@ from .emulator import MerossEmulator
 
 
 def build_emulator(tracefile, uuid, key) -> MerossEmulator:
-
+    """
+    Given a supported 'tracefile' (either a legacy trace .csv or a diagnostic .json)
+    parse it and build the appropriate emulator instance with the give 'uuid' and 'key'
+    """
     descriptor = MerossEmulatorDescriptor(tracefile, uuid)
 
     mixin_classes = []
@@ -28,6 +31,41 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
     return class_type(descriptor, key)
 
 
+def generate_emulators(tracespath: str, defaultuuid: str, defaultkey: str):
+    """
+    This function is a generator.
+    Scans the directory for supported files and build all the emulators
+    the filename, if correctly formatted, should contain the device uuid
+    and key to use for the emulator. If not, we'll use the 'defaultuuid' and/or
+    'defaultkey' when instantiating the emulator. This allows for supporting
+    basic plain filenames which don't contain any info but also, will make
+    it difficult to understand which device is which
+    """
+    uuidsub = 0
+    for f in os.listdir(tracespath):
+        fullpath = os.path.join(tracespath, f)
+        #expect only valid csv or json files
+        f = f.split('.')
+        if f[-1] not in ('csv','txt','json'):
+            continue
+
+        # filename could be formatted to carry device definitions parameters:
+        # format the filename like 'xxxwhatever-Kdevice_key-Udevice_id'
+        # this way, parameters will be 'binded' to that trace in an easy way
+        key = defaultkey
+        uuid = None
+        for _f in f[0].split('-'):
+            if _f.startswith('K'):
+                key = _f[1:].strip()
+            elif _f.startswith('U'):
+                uuid = _f[1:].strip()
+        if uuid is None:
+            uuidsub = uuidsub + 1
+            _uuidsub = str(uuidsub)
+            uuid = defaultuuid[:-len(_uuidsub)] + _uuidsub
+        yield build_emulator(fullpath, uuid, key)
+
+
 def run(argv):
     """
     self running python app entry point
@@ -36,6 +74,7 @@ def run(argv):
     """
     key = ''
     uuid = '01234567890123456789001122334455'
+    tracefilepath = '.'
     for arg in argv:
         arg: str
         if arg.startswith('-K'):
@@ -48,30 +87,9 @@ def run(argv):
     app = web.Application()
 
     if os.path.isdir(tracefilepath):
-        uuidsub = 0
-        for f in os.listdir(tracefilepath):
-            fullpath = os.path.join(tracefilepath, f)
-            #expect only valid csv files
-            f = f.split('.')
-            if f[-1] not in ('csv','txt','json'):
-                continue
-
-            # filename could be formatted to carry device definitions parameters:
-            # format the filename like 'xxxwhatever-Kdevice_key-Udevice_id'
-            # this way, parameters will be 'binded' to that trace in an easy way
-            _key = key
-            uuidsub = uuidsub + 1
-            _uuidsub = str(uuidsub)
-            _uuid = uuid[:-len(_uuidsub)] + _uuidsub
-            for _f in f[0].split('-'):
-                if _f.startswith('K'):
-                    _key = _f[1:].strip()
-                elif _f.startswith('U'):
-                    _uuid = _f[1:].strip()
-            emulator = build_emulator(fullpath, _uuid, _key)
-            app.router.add_post(f"/{_uuid}/config", emulator.post_config)
+        for emulator in generate_emulators(tracefilepath, uuid, key):
+            app.router.add_post(f"/{emulator.descriptor.uuid}/config", emulator.post_config)
     else:
-        #device = MerossDevice("custom_components/meross_lan/traces/msh300-1638110082.csv")
         emulator = build_emulator(tracefilepath, uuid, key)
         app.router.add_post("/config", emulator.post_config)
 
