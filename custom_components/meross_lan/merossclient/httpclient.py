@@ -70,7 +70,7 @@ class MerossHttpClient:
             # when this timeout is transient
             while True:
                 try:
-                    with async_timeout.timeout(timeout):
+                    async with async_timeout.timeout(timeout):
                         response = await self._session.post(
                             url=self._requesturl,
                             data=request_data
