@@ -36,7 +36,6 @@ from .helpers import (
     LOGGER,
     LOGGER_trap,
     obfuscate,
-    mqtt_is_connected,
 )
 from .const import (
     DOMAIN,
@@ -566,7 +565,7 @@ class MerossDevice:
                     if (
                         (self.conf_protocol is CONF_PROTOCOL_AUTO)
                         and self.lastmqtt
-                        and mqtt_is_connected(self.api.hass)
+                        and self.api.mqtt_is_connected()
                     ):
                         self.switch_protocol(CONF_PROTOCOL_MQTT)
                         self.mqtt_request(namespace, method, payload, response_callback)
@@ -613,7 +612,7 @@ class MerossDevice:
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
-            if mqtt_is_connected(self.api.hass):
+            if self.api.mqtt_is_connected():
                 self.mqtt_request(namespace, method, payload, response_callback)
                 return
             # MQTT not connected
@@ -644,7 +643,7 @@ class MerossDevice:
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
-            if mqtt_is_connected(self.api.hass):
+            if self.api.mqtt_is_connected():
                 self.mqtt_request(namespace, method, payload, response_callback)
                 return
             # MQTT not connected
@@ -852,7 +851,7 @@ class MerossDevice:
         descr.update(payload)
         # persist changes to configentry only when relevant properties change
         newaddr = descr.innerIp
-        if oldaddr != newaddr:
+        if newaddr and (oldaddr != newaddr):
             # check the new innerIp is good since we have random blanks in the wild (#90)
             try:
                 socket.inet_aton(newaddr)

@@ -9,7 +9,6 @@ from json import (
 )
 from homeassistant.config_entries import ConfigEntry, SOURCE_DISCOVERY
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.components.mqtt.const import MQTT_DISCONNECTED
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -24,7 +23,6 @@ from .meross_device import MerossDevice
 
 from .helpers import (
     LOGGER, LOGGER_trap,
-    mqtt_publish, mqtt_is_connected,
 )
 from .const import (
     DOMAIN, SERVICE_REQUEST,
@@ -36,7 +34,14 @@ from .const import (
 if typing.TYPE_CHECKING:
     from typing import Callable, Coroutine
     from asyncio import TimerHandle
+    from homeassistant.components.mqtt import (
+        publish as mqtt_publish,
+    )
     from .meross_device import ResponseCallbackType
+else:
+    # In order to avoid a static dependency we resolve these
+    # at runtime only when mqtt is actually needed in code
+    mqtt_publish = None
 
 
 class MerossApi:
@@ -52,9 +57,9 @@ class MerossApi:
     deviceclasses: dict[str, type]
     devices: dict[str, MerossDevice]
     discovering: dict[str, dict]
-    mqtt_subscribing: bool
     unsub_mqtt_subscribe: Callable | None
     unsub_mqtt_disconnected: Callable | None
+    unsub_mqtt_connected: Callable | None
     unsub_entry_update_listener: Callable | None
     unsub_discovery_callback: TimerHandle | None
 
@@ -85,11 +90,13 @@ class MerossApi:
         self.deviceclasses = {}
         self.devices = {}
         self.discovering = {}
-        self.mqtt_subscribing = False # guard for asynchronous mqtt sub registration
         self.unsub_mqtt_subscribe = None
         self.unsub_mqtt_disconnected = None
+        self.unsub_mqtt_connected = None
         self.unsub_entry_update_listener = None
         self.unsub_discovery_callback = None
+        self._mqtt_subscribing = False # guard for asynchronous mqtt sub registration
+        self._mqtt_is_connected = False # cache mqtt broker connection status
 
         @callback
         def _request(service_call):
@@ -105,7 +112,7 @@ class MerossApi:
                     device.request(namespace, method, payload)
                     return
                 # device not registered (yet?) try direct MQTT
-                if (self.unsub_mqtt_subscribe is not None) and mqtt_is_connected(self.hass):
+                if self._mqtt_is_connected:
                     self.mqtt_publish(device_id, namespace, method, payload, key)
                     return
                 if host is None:
@@ -126,6 +133,9 @@ class MerossApi:
         return
 
     def shutdown(self):
+        if self.unsub_mqtt_connected is not None:
+            self.unsub_mqtt_connected()
+            self.unsub_mqtt_connected = None
         if self.unsub_mqtt_disconnected is not None:
             self.unsub_mqtt_disconnected()
             self.unsub_mqtt_disconnected = None
@@ -241,9 +251,11 @@ class MerossApi:
     def schedule_callback(self, delay: float, target: Callable, *args) -> TimerHandle:
         return self.hass.loop.call_later(delay, target, *args)
 
-    @property
-    def mqtt_registered(self):
+    def mqtt_is_subscribed(self):
         return self.unsub_mqtt_subscribe is not None
+
+    def mqtt_is_connected(self):
+        return self._mqtt_is_connected
 
     @callback
     async def async_mqtt_receive(self, msg):
@@ -343,20 +355,29 @@ class MerossApi:
         """
         subscribe to the general meross mqtt 'publish' topic
         """
-        if (self.unsub_mqtt_subscribe is None) and (not self.mqtt_subscribing):
-            self.mqtt_subscribing = True
+        if (self.unsub_mqtt_subscribe is None) and (not self._mqtt_subscribing):
+            self._mqtt_subscribing = True
             try:
                 @callback
-                def mqtt_disconnected():
+                def _mqtt_connected():
+                    self._mqtt_is_connected = True
+
+                @callback
+                def _mqtt_disconnected():
                     for device in self.devices.values():
                         device.mqtt_disconnected()
+                    self._mqtt_is_connected = False
 
-                self.unsub_mqtt_subscribe = await self.hass.components.mqtt.async_subscribe(mc.TOPIC_DISCOVERY, self.async_mqtt_receive)
-                self.unsub_mqtt_disconnected = async_dispatcher_connect(self.hass, MQTT_DISCONNECTED, mqtt_disconnected)
-                #self.unsub_mqtt_connected = async_dispatcher_connect(self.hass, MQTT_CONNECTED, mqtt_connected)
+                from homeassistant.components import mqtt
+                global mqtt_publish
+                mqtt_publish = mqtt.publish
+                self.unsub_mqtt_subscribe = await mqtt.async_subscribe(self.hass, mc.TOPIC_DISCOVERY, self.async_mqtt_receive)
+                self.unsub_mqtt_disconnected = async_dispatcher_connect(self.hass, mqtt.MQTT_DISCONNECTED, _mqtt_disconnected)
+                self.unsub_mqtt_connected = async_dispatcher_connect(self.hass, mqtt.MQTT_CONNECTED, _mqtt_connected)
+                self._mqtt_is_connected = mqtt.is_connected(self.hass)
             except:
                 pass
-            self.mqtt_subscribing = False
+            self._mqtt_subscribing = False
 
     def mqtt_publish(self,
         device_id: str,
@@ -428,7 +449,6 @@ class MerossApi:
         send a request with an 'adaptable protocol' behaviour i.e. use MQTT if the
         api is registered with the mqtt service else fallback to HTTP
         """
-        #LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
         if (self.unsub_mqtt_subscribe is None) or (device_id is None):
             if host is None:
                 if device_id is None:
@@ -439,6 +459,9 @@ class MerossApi:
                     LOGGER.warning("MerossApi: cannot call async_http_request (device_id(%s) not found)", device_id)
                     return
                 host = device.host
+                if host is None:
+                    LOGGER.warning("MerossApi: cannot call async_http_request on device with no host set")
+                    return
             self.hass.async_create_task(
                 self.async_http_request(host, namespace, method, payload, key, callback_or_device)
             )
@@ -461,7 +484,6 @@ class MerossApi:
         if len(discovering := self.discovering) == 0:
             return
 
-        _mqtt_is_connected = mqtt_is_connected(self.hass)
         epoch = time()
         for device_id, discovered in discovering.copy().items():
             if (epoch - discovered.get(MerossApi.KEY_STARTTIME, 0)) > PARAM_HEARTBEAT_PERIOD:
@@ -469,7 +491,7 @@ class MerossApi:
                 discovering.pop(device_id)
                 continue
             if (
-                _mqtt_is_connected and
+                self._mqtt_is_connected and
                 ((epoch - discovered.get(MerossApi.KEY_REQUESTTIME, 0)) > PARAM_UNAVAILABILITY_TIMEOUT)
             ):
                 if discovered.get(mc.NS_APPLIANCE_SYSTEM_ALL) is None:
@@ -507,7 +529,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     directly requiring MQTT)
     """
     if (device_id is None) or (entry.data.get(CONF_PROTOCOL) == CONF_PROTOCOL_MQTT):
-        if not api.mqtt_registered:
+        if not api.mqtt_is_subscribed():
             raise ConfigEntryNotReady("MQTT unavailable")
 
     if device_id is None:

@@ -271,14 +271,14 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
         # so this flow is only useful when MerossLan has no configuration yet
         # and we leverage the default mqtt discovery to setup our manager
         api = MerossApi.get(self.hass)
-        if api.mqtt_registered:
+        if api.mqtt_is_subscribed():
             return self.async_abort(reason='already_configured')
         # try setup the mqtt subscription
         # this call might not register because of errors or because of an overlapping
         # request from 'async_setup_entry' (we're preventing overlapped calls to MQTT
         # subscription)
         await api.async_mqtt_register()
-        if api.mqtt_registered:
+        if api.mqtt_is_subscribed():
             # ok, now pass along the discovering mqtt message so our MerossApi state machine
             # gets to work on this
             await api.async_mqtt_receive(discovery_info)
