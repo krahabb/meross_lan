@@ -1,7 +1,8 @@
+""""""
+from __future__ import annotations
 import typing
 from ..emulator import MerossEmulator # pylint: disable=relative-beyond-top-level
 from ...merossclient import const as mc # pylint: disable=relative-beyond-top-level
-
 
 
 class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):

@@ -1,3 +1,15 @@
+"""
+    Emulator module: implementation for an emulator class able to
+    simulate the real protocol stack working on a device. This can be used to
+    setup an http server representing a connection to a physical device for
+    testing purposes (or for fun).
+    The emulator is implemented as a 'generic' protocol parser which uses
+    the grammar from a trace/diagnostic to setup the proper response
+    Somewhere, here and there, some hardcoded behavior is implemented to
+    reach an higher state of functionality since at the core, the emulator
+    is just a 'reply' service of what's inside a trace
+"""
+from __future__ import annotations
 import os
 
 from aiohttp import web
@@ -86,11 +98,16 @@ def run(argv):
 
     app = web.Application()
 
+    def make_post_handler(emulator: MerossEmulator):
+        async def _callback(request: web.Request) -> web.Response:
+            return web.json_response(emulator.handle(await request.text()))
+        return _callback
+
     if os.path.isdir(tracefilepath):
         for emulator in generate_emulators(tracefilepath, uuid, key):
-            app.router.add_post(f"/{emulator.descriptor.uuid}/config", emulator.post_config)
+            app.router.add_post(f"/{emulator.descriptor.uuid}/config", make_post_handler(emulator))
     else:
         emulator = build_emulator(tracefilepath, uuid, key)
-        app.router.add_post("/config", emulator.post_config)
+        app.router.add_post("/config", make_post_handler(emulator))
 
     return app
