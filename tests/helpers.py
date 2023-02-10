@@ -31,17 +31,6 @@ def generate_emulator(model: str):
     )
 
 
-class WebRequestProxy:
-    """used to wrap http request data when forwarding to the MerossEmulator"""
-
-    def __init__(self, data):
-        self.data = data
-
-    async def json(self):
-        import json
-        return json.loads(self.data)
-
-
 @contextmanager
 def emulator_mock(model: str, aioclient_mock: 'AiohttpClientMocker'):
 
@@ -49,8 +38,8 @@ def emulator_mock(model: str, aioclient_mock: 'AiohttpClientMocker'):
         _emulator = generate_emulator(model)
 
         async def _handle_http_request(method, url, data):
-            response = await _emulator.post_config(WebRequestProxy(data))  # type: ignore pylint: disable=no-member
-            return AiohttpClientMockResponse(method, url, text=response.text)
+            response = _emulator.handle(data) # pylint: disable=no-member
+            return AiohttpClientMockResponse(method, url, json=response)
 
         # we'll use the uuid so we can mock multiple at the same time
         # and the aioclient_mock will route accordingly

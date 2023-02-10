@@ -29,7 +29,7 @@ from custom_components.meross_lan.sensor import RuntimeMixin
 
 from .conftest import MQTTMock
 from .const import MOCK_DEVICE_IP, MOCK_HUB_CONFIG, MOCK_POLLING_PERIOD
-from .helpers import WebRequestProxy, generate_emulators
+from .helpers import generate_emulators
 
 
 # We can pass fixtures as defined in conftest.py to tell pytest to use the fixture
@@ -83,9 +83,9 @@ async def test_device_entry(
     async def _handle_http_request(method, url, data):
         # simulate time passes else the device will fall offline
         frozen_time.tick(delta=0.1)
-        response = await emulator.post_config(WebRequestProxy(data))  # type: ignore
+        response = emulator.handle(data)
         frozen_time.tick(delta=0.1)
-        return AiohttpClientMockResponse(method, url, text=response.text)
+        return AiohttpClientMockResponse(method, url, json=response)
 
     aioclient_mock.post(
         f"http://{MOCK_DEVICE_IP}/config",
