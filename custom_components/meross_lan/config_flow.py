@@ -1,4 +1,5 @@
-"""Config flow for Meross IoT local LAN integration."""
+"""Config flow for Meross LAN integration."""
+from __future__ import annotations
 import typing
 from time import time
 from logging import DEBUG

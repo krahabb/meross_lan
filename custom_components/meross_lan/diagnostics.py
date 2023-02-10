@@ -1,3 +1,4 @@
+from __future__ import annotations
 import typing
 from copy import deepcopy
 from homeassistant.components.diagnostics import REDACTED

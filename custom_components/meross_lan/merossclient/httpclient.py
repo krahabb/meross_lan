@@ -2,6 +2,7 @@
     Implementation for an async (aiohttp.ClientSession) http client
     for Meross devices.
 """
+from __future__ import annotations
 from logging import Logger, getLogger, DEBUG
 from json import (
     dumps as json_dumps,

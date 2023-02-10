@@ -1,3 +1,4 @@
+from __future__ import annotations
 from uuid import uuid4
 from hashlib import md5
 from base64 import b64encode
