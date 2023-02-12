@@ -60,6 +60,7 @@ from .const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_TIMEZONE_CHECK_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
+    PARAM_TRACING_ABILITY_POLL_TIMEOUT,
 )
 
 ResponseCallbackType = typing.Callable[[bool, dict, dict], None]
@@ -1068,6 +1069,7 @@ class MerossDevice:
 
     def _trace_open(self, endtime):
         try:
+            LOGGER.debug("MerossDevice(%s): start tracing", self.name)
             tracedir = self.api.hass.config.path(
                 "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
             )
@@ -1126,7 +1128,7 @@ class MerossDevice:
                 if ability not in TRACE_ABILITY_EXCLUDE:
                     self.request_get(ability)
                     break
-            self.api.schedule_callback(2, self._trace_ability)
+            self.api.schedule_callback(PARAM_TRACING_ABILITY_POLL_TIMEOUT, self._trace_ability)
         except:  # finished ?!
             self._trace_ability_iter = None
 

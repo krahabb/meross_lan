@@ -54,3 +54,4 @@ PARAM_TIMEZONE_CHECK_PERIOD = 604800 # 1 week before retrying timezone updates
 PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
 PARAM_TIMESTAMP_TOLERANCE = 5 # max device timestamp diff against our and trigger warning and (eventually) fix it
+PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2 # used to delay the iteration of abilities while tracing
