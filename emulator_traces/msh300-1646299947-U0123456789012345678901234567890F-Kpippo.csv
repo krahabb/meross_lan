@@ -1,0 +1,43 @@
+2022/03/03 - 10:27:27		auto	GETACK	Appliance.System.All	{"system": {"hardware": {"type": "msh300", "subType": "un", "version": "4.0.0", "chipType": "mt7686", "uuid": "################################", "macAddress": "#################"}, "firmware": {"version": "4.1.26", "compileTime": "2020/11/07 16:29:31 GMT +08:00", "wifiMac": "#################", "innerIp": "############", "server": "###########", "port": "####", "userId": "#"}, "time": {"timestamp": 1646298722, "timezone": "Europe/Rome", "timeRule": [[1635634800, 3600, 0], [1648339200, 7200, 1]]}, "online": {"status": 1}}, "digest": {"hub": {"hubId": -381895630, "mode": 0, "subdevice": [{"id": "120027D21C19", "status": 2}, {"id": "01008C11", "status": 2, "scheduleBMode": 6}, {"id": "0100783A", "status": 1, "scheduleBMode": 6, "onoff": 1, "lastActiveTime": 1646298556, "mts100v3": {"mode": 1}}]}}}
+2022/03/03 - 10:27:27		auto	GETACK	Appliance.System.Ability	{"Appliance.Config.Key": {}, "Appliance.Config.WifiList": {}, "Appliance.Config.Wifi": {}, "Appliance.Config.Trace": {}, "Appliance.System.All": {}, "Appliance.System.Hardware": {}, "Appliance.System.Firmware": {}, "Appliance.System.Debug": {}, "Appliance.System.Online": {}, "Appliance.System.Time": {}, "Appliance.System.Ability": {}, "Appliance.System.Runtime": {}, "Appliance.System.Report": {}, "Appliance.System.Position": {}, "Appliance.System.DNDMode": {}, "Appliance.Control.Multiple": {"maxCmdNum": 5}, "Appliance.Control.Bind": {}, "Appliance.Control.Unbind": {}, "Appliance.Control.Upgrade": {}, "Appliance.Digest.Hub": {}, "Appliance.Hub.Online": {}, "Appliance.Hub.ToggleX": {}, "Appliance.Hub.Exception": {}, "Appliance.Hub.SubdeviceList": {}, "Appliance.Hub.Report": {}, "Appliance.Hub.Battery": {}, "Appliance.Hub.Mts100.All": {}, "Appliance.Hub.Mts100.TimeSync": {}, "Appliance.Hub.Mts100.Mode": {}, "Appliance.Hub.Mts100.Temperature": {}, "Appliance.Hub.Mts100.Adjust": {}, "Appliance.Hub.Mts100.Schedule": {"scheduleUnitTime": 30}, "Appliance.Hub.Mts100.ScheduleB": {"scheduleUnitTime": 15}, "Appliance.Hub.Sensor.All": {}, "Appliance.Hub.Sensor.Latest": {}, "Appliance.Hub.Sensor.TempHum": {}, "Appliance.Hub.Sensor.Adjust": {}, "Appliance.Hub.Sensor.Alert": {}}
+2022/03/03 - 10:27:27	TX	mqtt	GET	Appliance.System.Runtime	{"runtime": {}}
+2022/03/03 - 10:27:27	RX	mqtt	GETACK	Appliance.System.Runtime	{"runtime": {"signal": 100}}
+2022/03/03 - 10:27:32	TX	mqtt	GET	Appliance.System.Position	{"position": {}}
+2022/03/03 - 10:27:32	RX	mqtt	GETACK	Appliance.System.Position	{"position": {"longitude": 0, "latitude": 0}}
+2022/03/03 - 10:27:37	TX	mqtt	GET	Appliance.Digest.Hub	{"hub": {}}
+2022/03/03 - 10:27:37	RX	mqtt	GETACK	Appliance.Digest.Hub	{"hub": {"hubId": -381895630, "mode": 0, "subdevice": [{"id": "120027D21C19", "status": 2}, {"id": "01008C11", "status": 2, "scheduleBMode": 6}, {"id": "0100783A", "status": 1, "scheduleBMode": 6, "onoff": 1, "lastActiveTime": 1646299642, "mts100v3": {"mode": 2}}]}}
+2022/03/03 - 10:27:46	TX	mqtt	GET	Appliance.Hub.Online	{"online": []}
+2022/03/03 - 10:27:46	RX	mqtt	GETACK	Appliance.Hub.Online	{"online": [{"id": "120027D21C19", "status": 2, "lastActiveTime": 0}, {"id": "01008C11", "status": 2, "lastActiveTime": 0}, {"id": "0100783A", "status": 1, "lastActiveTime": 1646299642}]}
+2022/03/03 - 10:27:51	TX	mqtt	GET	Appliance.Hub.ToggleX	{"togglex": []}
+2022/03/03 - 10:27:51	RX	mqtt	GETACK	Appliance.Hub.ToggleX	{"togglex": [{"id": "0100783A", "onoff": 1}]}
+2022/03/03 - 10:27:56	TX	mqtt	GET	Appliance.Hub.Battery	{"battery": []}
+2022/03/03 - 10:27:57	RX	mqtt	GETACK	Appliance.Hub.Battery	{"battery": [{"id": "0100783A", "value": 75}]}
+2022/03/03 - 10:28:01	TX	mqtt	GET	Appliance.Hub.Mts100.All	{"all": []}
+2022/03/03 - 10:28:02	RX	mqtt	GETACK	Appliance.Hub.Mts100.All	{"all": [{"id": "01008C11", "scheduleBMode": 6, "online": {"status": 2}}, {"id": "0100783A", "scheduleBMode": 6, "online": {"status": 1, "lastActiveTime": 1646299642}, "togglex": {"onoff": 1}, "timeSync": {"state": 1}, "mode": {"state": 2}, "temperature": {"room": 120, "currentSet": 180, "custom": 225, "comfort": 240, "economy": 180, "max": 350, "min": 50, "heating": 1, "away": 120, "openWindow": 0}}]}
+2022/03/03 - 10:28:02	TX	mqtt	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2022/03/03 - 10:28:03	RX	mqtt	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "0100783A", "temperature": 0}]}
+2022/03/03 - 10:28:06	TX	mqtt	GET	Appliance.Hub.Mts100.TimeSync	{"timesync": []}
+2022/03/03 - 10:28:06	RX	mqtt	GETACK	Appliance.Hub.Mts100.TimeSync	{"timeSync": [{"id": "0100783A", "state": 1}]}
+2022/03/03 - 10:28:11	TX	mqtt	GET	Appliance.Hub.Mts100.Mode	{"mode": []}
+2022/03/03 - 10:28:11	RX	mqtt	GETACK	Appliance.Hub.Mts100.Mode	{"mode": [{"id": "0100783A", "state": 2}]}
+2022/03/03 - 10:28:16	TX	mqtt	GET	Appliance.Hub.Mts100.Temperature	{"temperature": []}
+2022/03/03 - 10:28:16	RX	mqtt	GETACK	Appliance.Hub.Mts100.Temperature	{"temperature": [{"id": "0100783A", "room": 120, "currentSet": 180, "custom": 225, "comfort": 240, "economy": 180, "max": 350, "min": 50, "heating": 1, "away": 120, "openWindow": 0}]}
+2022/03/03 - 10:28:21	TX	mqtt	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2022/03/03 - 10:28:21	RX	mqtt	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "0100783A", "temperature": 0}]}
+2022/03/03 - 10:28:26	TX	mqtt	GET	Appliance.Hub.Mts100.Schedule	{"schedule": []}
+2022/03/03 - 10:28:26	RX	mqtt	GETACK	Appliance.Hub.Mts100.Schedule	{"schedule": []}
+2022/03/03 - 10:28:31	TX	mqtt	GET	Appliance.Hub.Mts100.ScheduleB	{"schedule": []}
+2022/03/03 - 10:28:31	RX	mqtt	GETACK	Appliance.Hub.Mts100.ScheduleB	{"schedule": [{"id": "0100783A", "mon": [[390, 75], [90, 125], [300, 50], [300, 50], [240, 125], [120, 75]], "tue": [[390, 75], [90, 125], [300, 50], [300, 50], [240, 125], [120, 75]], "wed": [[390, 75], [90, 125], [300, 50], [300, 50], [240, 125], [120, 75]], "thu": [[390, 75], [90, 125], [300, 50], [300, 50], [240, 125], [120, 75]], "fri": [[390, 75], [90, 125], [300, 50], [300, 50], [240, 125], [120, 75]], "sat": [[390, 75], [90, 125], [300, 125], [300, 50], [240, 125], [120, 75]], "sun": [[390, 75], [90, 125], [300, 125], [300, 50], [240, 125], [120, 75]]}]}
+2022/03/03 - 10:28:36	TX	mqtt	GET	Appliance.Hub.Sensor.All	{"all": []}
+2022/03/03 - 10:28:36	RX	mqtt	GETACK	Appliance.Hub.Sensor.All	{"all": [{"id": "120027D21C19", "online": {"status": 2}}]}
+2022/03/03 - 10:28:36	TX	mqtt	GET	Appliance.Hub.Sensor.Adjust	{"adjust": []}
+2022/03/03 - 10:28:37	RX	mqtt	GETACK	Appliance.Hub.Sensor.Adjust	{"adjust": []}
+2022/03/03 - 10:28:41	TX	mqtt	GET	Appliance.Hub.Sensor.Latest	{"latest": []}
+2022/03/03 - 10:28:41	RX	mqtt	GETACK	Appliance.Hub.Sensor.Latest	{"latest": []}
+2022/03/03 - 10:28:46	TX	mqtt	GET	Appliance.Hub.Sensor.TempHum	{"temphum": []}
+2022/03/03 - 10:28:46	RX	mqtt	GETACK	Appliance.Hub.Sensor.TempHum	{"tempHum": []}
+2022/03/03 - 10:28:51	TX	mqtt	GET	Appliance.Hub.Sensor.Adjust	{"adjust": []}
+2022/03/03 - 10:28:51	RX	mqtt	GETACK	Appliance.Hub.Sensor.Adjust	{"adjust": []}
+2022/03/03 - 10:28:56	TX	mqtt	GET	Appliance.Hub.Sensor.Alert	{"alert": []}
+2022/03/03 - 10:28:56	RX	mqtt	GETACK	Appliance.Hub.Sensor.Alert	{"alert": []}
+2022/03/03 - 10:29:56	RX	mqtt	PUSH	Appliance.Hub.SubdeviceList	{"subdeviceList": {"subdevice": [{"id": "120027D21C19", "status": 1, "time": 1623423242, "hardware": "0000", "firmware": "0000"}, {"id": "01008C11", "status": 0, "time": 0}, {"id": "0100783A", "status": 0, "time": 0}], "needReply": 1}}

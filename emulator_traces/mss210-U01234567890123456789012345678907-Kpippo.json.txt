@@ -274,19 +274,19 @@
               "subType": "us",
               "version": "1.0.0",
               "chipType": "MT7688",
-              "uuid": "1806221438054525132934298f11f42f",
-              "macAddress": "34:29:8f:11:f4:2f"
+              "uuid": "################################",
+              "macAddress": "#################"
             },
             "firmware": {
               "version": "1.1.12",
               "compileTime": "2018-12-17 11:01:45",
-              "wifiMac": "e4:ab:89:2a:0d:eb",
+              "wifiMac": "#################",
               "innerIp": "192.168.0.16",
               "server": "mqtt-eu-2.meross.com",
               "port": 443,
               "secondServer": "mqtt-eu-2.meross.com",
               "secondPort": 443,
-              "userId": 98016
+              "userId": ""
             },
             "time": {
               "timestamp": 1645437139,
@@ -581,19 +581,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437169,
@@ -748,19 +748,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437199,
@@ -915,19 +915,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437229,
@@ -1082,19 +1082,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437259,
@@ -1249,19 +1249,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437289,
@@ -1416,19 +1416,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437319,
@@ -1583,19 +1583,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437349,
@@ -1750,19 +1750,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437379,
@@ -1917,19 +1917,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437409,
@@ -2084,19 +2084,19 @@
                 "subType": "us",
                 "version": "1.0.0",
                 "chipType": "MT7688",
-                "uuid": "1806221438054525132934298f11f42f",
-                "macAddress": "34:29:8f:11:f4:2f"
+                "uuid": "################################",
+                "macAddress": "#################"
               },
               "firmware": {
                 "version": "1.1.12",
                 "compileTime": "2018-12-17 11:01:45",
-                "wifiMac": "e4:ab:89:2a:0d:eb",
+                "wifiMac": "#################",
                 "innerIp": "192.168.0.16",
                 "server": "mqtt-eu-2.meross.com",
                 "port": 443,
                 "secondServer": "mqtt-eu-2.meross.com",
                 "secondPort": 443,
-                "userId": 98016
+                "userId": ""
               },
               "time": {
                 "timestamp": 1645437439,
