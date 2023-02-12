@@ -511,6 +511,18 @@ class MerossDevice:
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ):
+        self.api.hass.async_create_task(
+            self.async_mqtt_request(namespace, method, payload, response_callback, messageid)
+        )
+
+    async def async_mqtt_request(
+        self,
+        namespace: str,
+        method: str,
+        payload: dict,
+        response_callback: ResponseCallbackType | None = None,
+        messageid: str | None = None,
+    ):
         if self._trace_file is not None:
             self._trace(
                 payload, namespace, method, CONF_PROTOCOL_MQTT, TRACE_DIRECTION_TX
@@ -519,7 +531,7 @@ class MerossDevice:
             transaction = _MQTTTransaction(namespace, method, response_callback)
             self._mqtt_transactions[transaction.messageid] = transaction
             messageid = transaction.messageid
-        self.api.mqtt_publish(
+        await self.api.async_mqtt_publish(
             self.device_id, namespace, method, payload, self.key, messageid
         )
 
@@ -575,7 +587,7 @@ class MerossDevice:
                         and self.api.mqtt_is_connected()
                     ):
                         self.switch_protocol(CONF_PROTOCOL_MQTT)
-                        self.mqtt_request(namespace, method, payload, response_callback)
+                        await self.async_mqtt_request(namespace, method, payload, response_callback)
                         return
                     elif isinstance(e, asyncio.TimeoutError):
                         self._set_offline()
@@ -611,28 +623,8 @@ class MerossDevice:
         payload: dict,
         response_callback: ResponseCallbackType | None = None,
     ):
-        """
-        route the request through MQTT or HTTP to the physical device.
-        callback will be called on successful replies and actually implemented
-        only when HTTPing SET requests. On MQTT we rely on async PUSH and SETACK to manage
-        confirmation/status updates
-        """
-        self.lastrequest = time()
-        if self.curr_protocol is CONF_PROTOCOL_MQTT:
-            # only publish when mqtt component is really connected else we'd
-            # insanely dump lot of mqtt errors in log
-            if self.api.mqtt_is_connected():
-                self.mqtt_request(namespace, method, payload, response_callback)
-                return
-            # MQTT not connected
-            if self.conf_protocol is CONF_PROTOCOL_MQTT:
-                return
-            # protocol is AUTO
-            self.switch_protocol(CONF_PROTOCOL_HTTP)
-
-        # curr_protocol is HTTP
         self.api.hass.async_create_task(
-            self.async_http_request(namespace, method, payload, response_callback)
+            self.async_request(namespace, method, payload, response_callback)
         )
 
     async def async_request(
@@ -653,7 +645,7 @@ class MerossDevice:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
             if self.api.mqtt_is_connected():
-                self.mqtt_request(namespace, method, payload, response_callback)
+                await self.async_mqtt_request(namespace, method, payload, response_callback)
                 return
             # MQTT not connected
             if self.conf_protocol is CONF_PROTOCOL_MQTT:
@@ -845,7 +837,7 @@ class MerossDevice:
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
         if not self._online:
-            self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+            await self.async_request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
 
     def _parse_all(self, payload: dict):
         """

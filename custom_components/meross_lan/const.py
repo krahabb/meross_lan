@@ -5,8 +5,6 @@ from .merossclient import const as mc
 
 DOMAIN = "meross_lan"
 
-SERVICE_REQUEST = "request"
-
 DND_ID = 'dnd' # entity (sub)id for the switch representing DNDMode
 
 # ConfigEntry keys
@@ -38,6 +36,9 @@ CONF_TRACE_DIRECTORY = 'traces' # folder where to store traces
 CONF_TRACE_FILENAME = '{}-{}.csv' # filename format: device_type-device_id.csv
 
 CONF_TIMESTAMP = mc.KEY_TIMESTAMP # this is a 'fake' conf used to force-flush
+
+SERVICE_REQUEST = "request"
+CONF_NOTIFYRESPONSE = 'notifyresponse' # key used in service 'request' call
 
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)

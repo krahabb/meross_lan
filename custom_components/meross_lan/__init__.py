@@ -25,7 +25,7 @@ from .helpers import (
     LOGGER, LOGGER_trap,
 )
 from .const import (
-    DOMAIN, SERVICE_REQUEST,
+    CONF_NOTIFYRESPONSE, DOMAIN, SERVICE_REQUEST,
     CONF_HOST, CONF_PROTOCOL, CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT,
     CONF_DEVICE_ID, CONF_KEY, CONF_CLOUD_KEY, CONF_PAYLOAD,
     PARAM_UNAVAILABILITY_TIMEOUT,PARAM_HEARTBEAT_PERIOD,
@@ -36,12 +36,14 @@ if typing.TYPE_CHECKING:
     from asyncio import TimerHandle
     from homeassistant.components.mqtt import (
         publish as mqtt_publish,
+        async_publish as async_mqtt_publish
     )
     from .meross_device import ResponseCallbackType
 else:
     # In order to avoid a static dependency we resolve these
     # at runtime only when mqtt is actually needed in code
     mqtt_publish = None
+    async_mqtt_publish = None
 
 
 class MerossApi:
@@ -112,7 +114,7 @@ class MerossApi:
             host = service_call.data.get(CONF_HOST)
 
             def response_callback(acknowledge: bool, header: dict, payload: dict):
-                if service_call.data.get('notifyresponse'):
+                if service_call.data.get(CONF_NOTIFYRESPONSE):
                     self.hass.components.persistent_notification.async_create(
                         title="Meross LAN service response",
                         message=json_dumps(payload)
@@ -121,7 +123,7 @@ class MerossApi:
             if device_id is not None:
                 device = self.devices.get(device_id)
                 if device is not None:
-                    device.request(namespace, method, payload, response_callback)
+                    await device.async_request(namespace, method, payload, response_callback)
                     return
                 # device not registered (yet?) try direct MQTT
                 if self._mqtt_is_connected:
@@ -136,7 +138,7 @@ class MerossApi:
             # host is not None
             for device in self.devices.values():
                 if device.host == host:
-                    device.request(namespace, method, payload, response_callback)
+                    await device.async_request(namespace, method, payload, response_callback)
                     return
             self.hass.async_create_task(
                 self.async_http_request(host, namespace, method, payload, key, response_callback)
@@ -318,7 +320,7 @@ class MerossApi:
                 discovered = self.discovering.get(device_id)
                 if discovered is None:
                     # new device discovered: try to determine the capabilities
-                    self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, replykey)
+                    await self.async_mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, replykey)
                     epoch = time()
                     self.discovering[device_id] = {
                         MerossApi.KEY_STARTTIME: epoch,
@@ -334,12 +336,12 @@ class MerossApi:
                         namespace = header[mc.KEY_NAMESPACE]
                         if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
                             discovered[mc.NS_APPLIANCE_SYSTEM_ALL] = message[mc.KEY_PAYLOAD]
-                            self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ABILITY, replykey)
+                            await self.async_mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ABILITY, replykey)
                             discovered[MerossApi.KEY_REQUESTTIME] = time()
                             return
                         elif namespace == mc.NS_APPLIANCE_SYSTEM_ABILITY:
                             if discovered.get(mc.NS_APPLIANCE_SYSTEM_ALL) is None:
-                                self.mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, replykey)
+                                await self.async_mqtt_publish_get(device_id, mc.NS_APPLIANCE_SYSTEM_ALL, replykey)
                                 discovered[MerossApi.KEY_REQUESTTIME] = time()
                                 return
                             payload = message[mc.KEY_PAYLOAD]
@@ -381,8 +383,9 @@ class MerossApi:
                     self._mqtt_is_connected = False
 
                 from homeassistant.components import mqtt
-                global mqtt_publish
+                global mqtt_publish, async_mqtt_publish
                 mqtt_publish = mqtt.publish
+                async_mqtt_publish = mqtt.async_publish
                 self.unsub_mqtt_subscribe = await mqtt.async_subscribe(self.hass, mc.TOPIC_DISCOVERY, self.async_mqtt_receive)
                 self.unsub_mqtt_disconnected = async_dispatcher_connect(self.hass, mqtt.MQTT_DISCONNECTED, _mqtt_disconnected)
                 self.unsub_mqtt_connected = async_dispatcher_connect(self.hass, mqtt.MQTT_CONNECTED, _mqtt_connected)
@@ -408,12 +411,42 @@ class MerossApi:
                 mc.TOPIC_RESPONSE.format(device_id), messageid))
             )
 
+    async def async_mqtt_publish(self,
+        device_id: str,
+        namespace: str,
+        method: str,
+        payload: dict,
+        key: KeyType = None,
+        messageid: str | None = None
+    ):
+        LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
+        await async_mqtt_publish(
+            self.hass,
+            mc.TOPIC_REQUEST.format(device_id),
+            json_dumps(build_payload(
+                namespace, method, payload, key,
+                mc.TOPIC_RESPONSE.format(device_id), messageid))
+            )
+
     def mqtt_publish_get(self,
         device_id: str,
         namespace: str,
         key: KeyType = None
     ):
         self.mqtt_publish(
+            device_id,
+            namespace,
+            mc.METHOD_GET,
+            build_default_payload_get(namespace),
+            key
+        )
+
+    async def async_mqtt_publish_get(self,
+        device_id: str,
+        namespace: str,
+        key: KeyType = None
+    ):
+        await self.async_mqtt_publish(
             device_id,
             namespace,
             mc.METHOD_GET,

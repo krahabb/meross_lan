@@ -538,10 +538,10 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
             )
 
     async def async_open_cover(self, **kwargs):
-        self._request_position(POSITION_FULLY_OPENED)
+        await self.async_request_position(POSITION_FULLY_OPENED)
 
     async def async_close_cover(self, **kwargs):
-        self._request_position(POSITION_FULLY_CLOSED)
+        await self.async_request_position(POSITION_FULLY_CLOSED)
 
     async def async_set_cover_position(self, **kwargs):
         if ATTR_POSITION in kwargs:
@@ -553,10 +553,10 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
             ):
                 # ensure a full 'untimed' run when asked for
                 # fully opened/closed (#170)
-                self._request_position(position)
+                await self.async_request_position(position)
             else:
                 if position > self._attr_current_cover_position:
-                    self._request_position(
+                    await self.async_request_position(
                         POSITION_FULLY_OPENED,
                         (
                             (position - self._attr_current_cover_position)
@@ -565,7 +565,7 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
                         / 100000,
                     )
                 elif position < self._attr_current_cover_position:
-                    self._request_position(
+                    await self.async_request_position(
                         POSITION_FULLY_CLOSED,
                         (
                             (self._attr_current_cover_position - position)
@@ -575,13 +575,18 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
                     )
 
     async def async_stop_cover(self, **kwargs):
-        self._request_position(-1)
+        await self.async_request_position(-1)
 
-    def _request_position(self, position: int, timeout: float | None = None):
+    def request_position(self, position: int, timeout: float | None = None):
+        self.hass.async_create_task(
+            self.async_request_position(position, timeout)
+        )
+
+    async def async_request_position(self, position: int, timeout: float | None = None):
         self.device.log(
             DEBUG,
             0,
-            "MLRollerShutter(0): _request_position(%s, %s)",
+            "MLRollerShutter(0): async_request_position(%s, %s)",
             str(position),
             str(timeout),
         )
@@ -597,7 +602,7 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
                 self.device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
 
         self._stop_cancel()
-        self.device.request(
+        await self.device.async_request(
             mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
             mc.METHOD_SET,
             {
@@ -718,7 +723,7 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
         if self._position_endtime is not None:
             # in case our _close_calback has not yet been called or failed
             if epoch >= self._position_endtime:
-                self._request_position(-1)
+                self.request_position(-1)
 
         if self._transition_unsub is None:
             # ensure we 'follow' cover movement
@@ -761,7 +766,7 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
     def _stop_callback(self):
         self.device.log(DEBUG, 0, "MLRollerShutter(0): _stop_callback")
         self._stop_unsub = None
-        self._request_position(-1)
+        self.request_position(-1)
 
     def _stop_cancel(self):
         self.device.log(DEBUG, 0, "MLRollerShutter(0): _stop_cancel")
