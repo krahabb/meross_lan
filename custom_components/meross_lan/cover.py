@@ -482,7 +482,7 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
             self._position_native_isgood = versiontuple(
-                device.descriptor.firmware.get(mc.KEY_VERSION)
+                device.descriptor.firmware.get(mc.KEY_VERSION, "")
             ) >= versiontuple("7.6.10")
         except:
             self._position_native_isgood = None
