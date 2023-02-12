@@ -127,7 +127,7 @@ class MerossApi:
                     return
                 # device not registered (yet?) try direct MQTT
                 if self._mqtt_is_connected:
-                    self.mqtt_publish(device_id, namespace, method, payload, key)
+                    await self.async_mqtt_publish(device_id, namespace, method, payload, key)
                     return
                 if host is None:
                     LOGGER.warning("MerossApi: cannot execute service call on %s - missing MQTT connectivity or device not registered", device_id)
@@ -402,14 +402,9 @@ class MerossApi:
         key: KeyType = None,
         messageid: str | None = None
     ):
-        LOGGER.debug("MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)", device_id, method, namespace)
-        mqtt_publish(
-            self.hass,
-            mc.TOPIC_REQUEST.format(device_id),
-            json_dumps(build_payload(
-                namespace, method, payload, key,
-                mc.TOPIC_RESPONSE.format(device_id), messageid))
-            )
+        self.hass.async_create_task(
+            self.async_mqtt_publish(device_id, namespace, method, payload, key, messageid)
+        )
 
     async def async_mqtt_publish(self,
         device_id: str,

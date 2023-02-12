@@ -46,7 +46,7 @@ async def test_request_on_mqtt(hass: HomeAssistant, mqtt_patch: MQTTMock):
     )
     # this call, with no devices registered in configuration
     # will just try to publish on mqtt so we'll check the mock
-    mqtt_patch.mqtt_publish.assert_called_once_with(
+    mqtt_patch.mqtt_async_publish.assert_called_once_with(
         hass, mc.TOPIC_REQUEST.format(MOCK_DEVICE_UUID), ANY)
 
     assert await hass.config_entries.async_unload(config_entry.entry_id)
@@ -89,7 +89,7 @@ async def test_request_on_device(hass: HomeAssistant, mqtt_patch: MQTTMock, aioc
 
         # this call, should not be routed to mqtt since our device is
         # emulated in http
-        mqtt_patch.mqtt_publish.assert_not_called()
+        mqtt_patch.mqtt_async_publish.assert_not_called()
 
 
 async def test_request_notification(hass: HomeAssistant, mqtt_patch: MQTTMock, aioclient_mock):
@@ -123,4 +123,4 @@ async def test_request_notification(hass: HomeAssistant, mqtt_patch: MQTTMock, a
 
         # this call, should not be routed to mqtt since our device is
         # emulated in http
-        mqtt_patch.mqtt_publish.assert_not_called()
+        mqtt_patch.mqtt_async_publish.assert_not_called()

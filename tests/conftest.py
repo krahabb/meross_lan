@@ -49,15 +49,18 @@ def skip_notifications_fixture():
 
 class MQTTMock:
     mqtt_client: MqttMockHAClient
-    mqtt_publish: Mock
+    mqtt_async_publish: Mock
 
+    def async_publish(self, hass, topic: str, payload: str, *args, **kwargs):
+        pass
 
 @pytest.fixture()
 async def mqtt_patch(mqtt_mock_entry_no_yaml_config: MqttMockHAClientGenerator):
 
-    with patch("homeassistant.components.mqtt.publish") as mqtt_publish:
+    with patch("homeassistant.components.mqtt.async_publish") as mqtt_async_publish:
         context = MQTTMock()
         context.mqtt_client = await mqtt_mock_entry_no_yaml_config()
-        context.mqtt_publish = mqtt_publish
+        context.mqtt_async_publish = mqtt_async_publish
+        mqtt_async_publish.side_effect = context.async_publish
         yield context
 
