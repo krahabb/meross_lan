@@ -359,6 +359,11 @@ class MerossDevice:
         if not self._online:
             self.log(DEBUG, 0, "MerossDevice(%s) back online!", self.name)
             self._online = True
+            # Make sure we get the full device state to prevent switches stay 
+            # disabled because the device does not push any updates for the switch state
+            self.api.hass.async_create_task(
+                self.async_request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+            )
             self.api.hass.async_create_task(
                 self.async_request_updates(epoch, namespace)
             )
