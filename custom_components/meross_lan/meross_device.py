@@ -680,7 +680,7 @@ class MerossDevice:
         else, when MQTT is alive this will fire the requests only once when just switching online
         or when not listening any MQTT over the PARAM_HEARTBEAT_PERIOD
         """
-        if (epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD:
+        if ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD) or (namespace is not None):
             for _namespace, _payload in self.polling_dictionary.items():
                 if self._online:
                     if _namespace != namespace:
@@ -689,7 +689,7 @@ class MerossDevice:
                     # it might happen we detect a timeout when using HTTP
                     # and this is interpreted as a clear indication the
                     # device is offline (see async_http_request) so we break
-                    # the polling cycle and wait for a reconnect preocedure
+                    # the polling cycle and wait for a reconnect procedure
                     # without wasting execution time here
                     break
 
