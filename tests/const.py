@@ -5,6 +5,7 @@ from custom_components.meross_lan.merossclient import const as mc
 # Mock config data to be used across multiple tests
 MOCK_DEVICE_UUID = "01234567890123456789001122334455"
 MOCK_DEVICE_IP = '10.0.0.1'
+MOCK_MACADDRESS = '48:e1:e9:aa:bb:cc'
 MOCK_KEY = 'test_key'
 MOCK_HUB_CONFIG = {
     CONF_KEY: MOCK_KEY
@@ -18,3 +19,9 @@ MOCK_DEVICE_CONFIG = {
     }
 }
 MOCK_POLLING_PERIOD = 15.0
+
+EMULATOR_TRACES_PATH = "./emulator_traces/"
+EMULATOR_TRACES_MAP = {
+    mc.TYPE_MTS200: "mts200b-1674112759-U0123456789012345678901234567890C-Kpippo.csv",
+    mc.TYPE_MSS310: "mss310r-1676020598-U0123456789012345678901234567890E-Kpippo.csv",
+}

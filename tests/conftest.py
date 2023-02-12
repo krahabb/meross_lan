@@ -14,12 +14,19 @@
 #
 # See here for more info: https://docs.pytest.org/en/latest/fixture.html (note that
 # pytest includes fixtures OOB which you can use as defined on this page)
-from unittest.mock import Mock, patch
+from typing import Callable, Coroutine, Any
+from unittest.mock import Mock, MagicMock, patch
 
 from homeassistant.core import callback
 import pytest
 
 pytest_plugins = "pytest_homeassistant_custom_component"
+
+MqttMockPahoClient = MagicMock
+"""MagicMock for `paho.mqtt.client.Client`"""
+MqttMockHAClient = MagicMock
+"""MagicMock for `homeassistant.components.mqtt.MQTT`."""
+MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
 # This fixture enables loading custom integrations in all tests.
 # Remove to enable selective use of this fixture
@@ -41,34 +48,16 @@ def skip_notifications_fixture():
 
 
 class MQTTMock:
-    mqtt_is_connected: Mock
+    mqtt_client: MqttMockHAClient
     mqtt_publish: Mock
-    async_subscribe: Mock
 
 
 @pytest.fixture()
-def mqtt_patch():
+async def mqtt_patch(mqtt_mock_entry_no_yaml_config: MqttMockHAClientGenerator):
 
-    @callback
-    def _unsub_mqtt_subscribe():
-        pass
+    with patch("homeassistant.components.mqtt.publish") as mqtt_publish:
+        context = MQTTMock()
+        context.mqtt_client = await mqtt_mock_entry_no_yaml_config()
+        context.mqtt_publish = mqtt_publish
+        yield context
 
-    with patch(
-        "homeassistant.components.mqtt.is_connected"
-    ) as mqtt_is_connected, patch(
-        "homeassistant.components.mqtt.publish"
-    ) as mqtt_publish, patch(
-        "homeassistant.components.mqtt.async_subscribe",
-        return_value = _unsub_mqtt_subscribe
-    ) as async_subscribe:
-        mock = MQTTMock()
-        mock.mqtt_is_connected = mqtt_is_connected
-        mock.mqtt_publish = mqtt_publish
-        mock.async_subscribe = async_subscribe
-        yield mock
-
-
-@pytest.fixture()
-def mqtt_available(mqtt_patch: MQTTMock):
-    mqtt_patch.mqtt_is_connected.return_value = True
-    return mqtt_patch
