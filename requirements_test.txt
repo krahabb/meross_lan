@@ -2,4 +2,5 @@
 aiodiscover
 aiohttp-cors
 scapy
+janus
 pytest-homeassistant-custom-component
