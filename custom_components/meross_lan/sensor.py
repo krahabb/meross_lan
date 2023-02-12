@@ -206,7 +206,9 @@ class ConsumptionMixin(
             st.tm_year,
             st.tm_mon,
             st.tm_mday,
-            tzinfo=timezone(timedelta(seconds=st.tm_gmtoff), st.tm_zone),
+            tzinfo=timezone(
+                timedelta(seconds=st.tm_gmtoff), st.tm_zone
+            ) if st.tm_zone is not None else None,
         )
         timestamp_lastreset = dt.timestamp() - self.device_timedelta
         self.log(
