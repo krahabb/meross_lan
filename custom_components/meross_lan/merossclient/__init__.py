@@ -76,7 +76,7 @@ def build_payload(
                 #"from": "/appliance/9109182170548290882048e1e9522946/publish",
                 mc.KEY_TIMESTAMP: timestamp,
                 mc.KEY_TIMESTAMPMS: 0,
-                mc.KEY_SIGN: md5((messageid + (key or "") + str(timestamp)).encode('utf-8')).hexdigest()
+                mc.KEY_SIGN: md5((messageid + (key or "") + str(timestamp)).encode('utf-8'), usedforsecurity=False).hexdigest()
             },
             mc.KEY_PAYLOAD: payload
         }
