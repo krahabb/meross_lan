@@ -98,18 +98,30 @@ class MerossApi:
         self._mqtt_subscribing = False # guard for asynchronous mqtt sub registration
         self._mqtt_is_connected = False # cache mqtt broker connection status
 
-        @callback
-        def _request(service_call):
+        async def async_service_request(service_call):
             device_id = service_call.data.get(CONF_DEVICE_ID)
-            namespace = service_call.data.get(mc.KEY_NAMESPACE)
-            method = service_call.data.get(mc.KEY_METHOD)
-            payload = json_loads(service_call.data.get(mc.KEY_PAYLOAD, "{}"))
+            namespace = service_call.data[mc.KEY_NAMESPACE]
+            method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
+            if mc.KEY_PAYLOAD in service_call.data:
+                payload = json_loads(service_call.data[mc.KEY_PAYLOAD])
+            elif method == mc.METHOD_GET:
+                payload = build_default_payload_get(namespace)
+            else:
+                payload = {} # likely failing the request...
             key = service_call.data.get(CONF_KEY, self.key)
             host = service_call.data.get(CONF_HOST)
+
+            def response_callback(acknowledge: bool, header: dict, payload: dict):
+                if service_call.data.get('notifyresponse'):
+                    self.hass.components.persistent_notification.async_create(
+                        title="Meross LAN service response",
+                        message=json_dumps(payload)
+                    )
+
             if device_id is not None:
                 device = self.devices.get(device_id)
                 if device is not None:
-                    device.request(namespace, method, payload)
+                    device.request(namespace, method, payload, response_callback)
                     return
                 # device not registered (yet?) try direct MQTT
                 if self._mqtt_is_connected:
@@ -124,12 +136,12 @@ class MerossApi:
             # host is not None
             for device in self.devices.values():
                 if device.host == host:
-                    device.request(namespace, method, payload)
+                    device.request(namespace, method, payload, response_callback)
                     return
             self.hass.async_create_task(
-                self.async_http_request(host, namespace, method, payload, key, None)
+                self.async_http_request(host, namespace, method, payload, key, response_callback)
                 )
-        hass.services.async_register(DOMAIN, SERVICE_REQUEST, _request)
+        hass.services.async_register(DOMAIN, SERVICE_REQUEST, async_service_request)
         return
 
     def shutdown(self):
@@ -435,38 +447,6 @@ class MerossApi:
                     callback_or_device(r_header[mc.KEY_METHOD] != mc.METHOD_ERROR, r_header, response[mc.KEY_PAYLOAD])
         except Exception as e:
             LOGGER.warning("MerossApi: error in async_http_request(%s)", str(e) or type(e).__name__)
-
-    def request(self,
-        device_id: str,
-        namespace: str,
-        method: str,
-        payload: dict,
-        key: KeyType = None,
-        host: str | None = None,
-        callback_or_device: ResponseCallbackType | MerossDevice | None = None
-    ):
-        """
-        send a request with an 'adaptable protocol' behaviour i.e. use MQTT if the
-        api is registered with the mqtt service else fallback to HTTP
-        """
-        if (self.unsub_mqtt_subscribe is None) or (device_id is None):
-            if host is None:
-                if device_id is None:
-                    LOGGER.warning("MerossApi: cannot call async_http_request (missing device_id and host)")
-                    return
-                device = self.devices.get(device_id)
-                if device is None:
-                    LOGGER.warning("MerossApi: cannot call async_http_request (device_id(%s) not found)", device_id)
-                    return
-                host = device.host
-                if host is None:
-                    LOGGER.warning("MerossApi: cannot call async_http_request on device with no host set")
-                    return
-            self.hass.async_create_task(
-                self.async_http_request(host, namespace, method, payload, key, callback_or_device)
-            )
-        else:
-            self.mqtt_publish(device_id, namespace, method, payload, key)
 
     @callback
     async def entry_update_listener(self, hass: HomeAssistant, config_entry: ConfigEntry):

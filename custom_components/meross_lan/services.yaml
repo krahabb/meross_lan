@@ -37,7 +37,7 @@ request:
     method:
       name: Method
       description: The method to set in the message
-      required: true
+      required: false
       advanced: false
       example: "GET"
       default: "GET"
@@ -75,9 +75,12 @@ request:
             - "Appliance.Control.Electricity"
             - "Appliance.Control.Light"
             - "Appliance.Control.Spray"
+            - "Appliance.Control.PhysicalLock"
             - "Appliance.GarageDoor.State"
+            - "Appliance.GarageDoor.Config"
             - "Appliance.RollerShutter.State"
             - "Appliance.RollerShutter.Position"
+            - "Appliance.RollerShutter.Config"
             - "Appliance.Digest.Hub"
             - "Appliance.Hub.SubdeviceList"
             - "Appliance.Hub.Exception"
@@ -103,6 +106,14 @@ request:
       required: false
       advanced: false
       example: '{ "togglex": { "onoff": 0, "channel": 0 } }'
-      default: "{}"
+      default: '{}'
       selector:
         text:
+    notifyresponse:
+      name: Notify response
+      description: Forwards the device response to homeassistant persistent notifications
+      required: false
+      advanced: false
+      default: True
+      selector:
+        boolean:
