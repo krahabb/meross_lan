@@ -268,7 +268,7 @@ class MerossApi:
                 LOGGER.debug("MerossApi: MQTT RECV device_id:(%s) method:(%s) namespace:(%s)", device_id, header[mc.KEY_METHOD], header[mc.KEY_NAMESPACE])
             if (device := self.devices.get(device_id)) is None:
                 # lookout for any disabled/ignored entry
-                mqtt_entry_present = False
+                hub_entry_present = False
                 for domain_entry in self.hass.config_entries.async_entries(DOMAIN):
                     if (domain_entry.unique_id == device_id):
                         # entry already present...
@@ -281,16 +281,16 @@ class MerossApi:
                                 else "unknown"
                         LOGGER_trap(INFO, 14400, "Ignoring discovery for device_id: %s (ConfigEntry is %s)", device_id, msg_reason)
                         return
-                    mqtt_entry_present |= domain_entry.unique_id == DOMAIN
+                    hub_entry_present |= domain_entry.unique_id == DOMAIN
                 #also skip discovered integrations waiting in HA queue
                 for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN):
                     flow_unique_id = flow.get("context", {}).get("unique_id")
                     if (flow_unique_id == device_id):
                         LOGGER_trap(INFO, 14400, "Ignoring discovery for device_id: %s (ConfigEntry is in progress)", device_id)
                         return
-                    mqtt_entry_present |= flow_unique_id == DOMAIN
+                    hub_entry_present |= flow_unique_id == DOMAIN
 
-                if (not mqtt_entry_present):
+                if not hub_entry_present:
                     await self.hass.config_entries.flow.async_init(
                         DOMAIN,
                         context={ "source": "hub" },
