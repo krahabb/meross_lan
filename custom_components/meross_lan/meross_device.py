@@ -88,6 +88,8 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_SYSTEM_REPORT,
     mc.NS_APPLIANCE_SYSTEM_DEBUG,
     mc.NS_APPLIANCE_SYSTEM_CLOCK,
+    mc.NS_APPLIANCE_DIGEST_TRIGGERX,
+    mc.NS_APPLIANCE_DIGEST_TIMERX,
     mc.NS_APPLIANCE_CONFIG_KEY,
     mc.NS_APPLIANCE_CONFIG_WIFI,
     mc.NS_APPLIANCE_CONFIG_WIFIX,  # disconnects
@@ -97,6 +99,8 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_CONTROL_UNBIND,
     mc.NS_APPLIANCE_CONTROL_MULTIPLE,
     mc.NS_APPLIANCE_CONTROL_UPGRADE,  # disconnects
+    mc.NS_APPLIANCE_CONTROL_TRIGGERX,
+    mc.NS_APPLIANCE_CONTROL_TIMERX,
     mc.NS_APPLIANCE_HUB_EXCEPTION,  # disconnects
     mc.NS_APPLIANCE_HUB_REPORT,  # disconnects
     mc.NS_APPLIANCE_HUB_SUBDEVICELIST,  # disconnects
@@ -557,11 +561,13 @@ class MerossDevice:
                     self.log(
                         INFO,
                         0,
-                        "MerossDevice(%s) %s in async_http_request attempt(%s): %s",
+                        "MerossDevice(%s) %s(%s) in async_http_request %s %s attempt(%s)",
                         self.name,
                         type(e).__name__,
-                        str(attempt),
                         str(e),
+                        str(attempt),
+                        method,
+                        namespace
                     )
                     if (
                         (self.conf_protocol is CONF_PROTOCOL_AUTO)
@@ -590,10 +596,12 @@ class MerossDevice:
             self.log(
                 WARNING,
                 14400,
-                "MerossDevice(%s) %s in async_http_request: %s",
+                "MerossDevice(%s) %s(%s) in async_http_request %s %s",
                 self.name,
                 type(e).__name__,
                 str(e),
+                method,
+                namespace
             )
 
     def request(
