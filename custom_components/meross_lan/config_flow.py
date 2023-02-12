@@ -266,6 +266,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
 
     async def async_step_mqtt(self, discovery_info):
         """manage the MQTT discovery flow"""
+        await self.async_set_unique_id(DOMAIN)
         # this entry should only ever called once after startup
         # when HA thinks we're interested in discovery.
         # If our MerossApi is already running it will manage the discovery itself
@@ -405,7 +406,11 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                         device.entry_option_update(user_input)
                     except:
                         pass # forgive any error
+                # we're not following HA 'etiquette' and we're just updating the
+                # config_entry data with this dirty trick
                 self.hass.config_entries.async_update_entry(self._config_entry, data=data)
+                # return None in data so the async_update_entry is not called for the
+                # options to be updated
                 return self.async_create_entry(title=None, data=None) # type: ignore
 
             except MerossKeyError:
