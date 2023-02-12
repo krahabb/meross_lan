@@ -184,11 +184,12 @@ class MerossDeviceDescriptor:
         self.all = payload.get(mc.KEY_ALL, self.all)
         self.digest = self.all.get(mc.KEY_DIGEST, {})
         for key in MerossDeviceDescriptor._dynamicattrs.keys():
+            # don't use hasattr() or so to inspect else the whole
+            # dynamic attrs logic gets f...d
             try:
                 delattr(self, key)
-            except Exception:
-                continue
-
+            except:
+                pass
     def update_time(self, p_time: dict):
         self.system[mc.KEY_TIME] = p_time
         self.time = p_time
