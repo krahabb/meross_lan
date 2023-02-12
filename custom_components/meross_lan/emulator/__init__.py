@@ -14,7 +14,7 @@ import os
 
 from aiohttp import web
 
-from ..merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc
 
 from .descriptor import MerossEmulatorDescriptor
 from .emulator import MerossEmulator

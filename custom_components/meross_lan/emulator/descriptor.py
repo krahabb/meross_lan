@@ -9,7 +9,7 @@ from json import (
     loads as json_loads,
 )
 
-from ..merossclient import (
+from custom_components.meross_lan.merossclient import (
     MerossDeviceDescriptor,
     const as mc,
     get_namespacekey,

@@ -18,7 +18,7 @@ from json import (
     loads as json_loads,
 )
 
-from ..merossclient import (
+from custom_components.meross_lan.merossclient import (
     build_payload,
     const as mc,
     get_namespacekey,
