@@ -120,6 +120,17 @@ def get_replykey(header: dict, key:KeyType = None) -> KeyType:
 
     return header
 
+def get_element_by_key(payload: list, key: str, value: object) -> dict:
+    """
+    scans the payload(list) looking for the first item matching
+    the key value. Usually looking for the matching channel payload
+    inside list paylaods
+    """
+    for p in payload:
+        if p.get(key) == value:
+            return p
+    raise KeyError(f"No match for key '{key}' on value:'{value}'")
+
 def get_productname(producttype: str) -> str:
     for _type, _name in mc.TYPE_NAME_MAP.items():
         if producttype.startswith(_type):

@@ -111,11 +111,18 @@ class MerossEmulator:
         If the state is not stored in all->digest we'll search our namespace(s) list for
         state carried through our GETACK messages in the trace
         """
-        # quick lookup since state is saved in our namespaces
-        if (method == mc.METHOD_GET) and (namespace in self.descriptor.namespaces):
-            return mc.METHOD_GETACK, self.descriptor.namespaces[namespace]
+        try:
+            key, p_state = self._get_key_state(namespace)
+        except Exception as error:
+            # when the 'looking for state' euristic fails
+            # we might fallback to a static reply should it fit...
+            if (method == mc.METHOD_GET) and (namespace in self.descriptor.namespaces):
+                return mc.METHOD_GETACK, self.descriptor.namespaces[namespace]
+            raise error
+        
+        if method == mc.METHOD_GET:
+            return mc.METHOD_GETACK, { key: p_state }
 
-        key, p_state = self._get_key_state(namespace)
         if method != mc.METHOD_SET:
             # TODO.....
             raise Exception(f"{method} not supported in emulator")
