@@ -14,17 +14,26 @@
 #
 # See here for more info: https://docs.pytest.org/en/latest/fixture.html (note that
 # pytest includes fixtures OOB which you can use as defined on this page)
-from unittest.mock import patch
+from typing import Callable, Coroutine, Any
+from unittest.mock import Mock, MagicMock, patch
 
+from homeassistant.core import callback
 import pytest
 
 pytest_plugins = "pytest_homeassistant_custom_component"
+
+MqttMockPahoClient = MagicMock
+"""MagicMock for `paho.mqtt.client.Client`"""
+MqttMockHAClient = MagicMock
+"""MagicMock for `homeassistant.components.mqtt.MQTT`."""
+MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
 # This fixture enables loading custom integrations in all tests.
 # Remove to enable selective use of this fixture
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     yield
+
 
 # This fixture is used to prevent HomeAssistant from attempting to create and dismiss persistent
 # notifications. These calls would fail without this fixture since the persistent_notification
@@ -38,34 +47,20 @@ def skip_notifications_fixture():
         yield
 
 
-# This fixture, when used, will result in calls to async_get_data to return None. To have the call
-# return a value, we would add the `return_value=<VALUE_TO_RETURN>` parameter to the patch call.
-@pytest.fixture(name="bypass_get_data")
-def bypass_get_data_fixture():
-    """Skip calls to get data from API."""
-    with patch(
-        #"custom_components.integration_blueprint.IntegrationBlueprintApiClient.async_get_data"
-        "custom_components.meross_lan.MerossDevice.triggerupdate"
-    ):
-        yield
+class MQTTMock:
+    mqtt_client: MqttMockHAClient
+    mqtt_async_publish: Mock
 
-# In this fixture, we are forcing calls to async_get_data to raise an Exception. This is useful
-# for exception handling.
-@pytest.fixture(name="error_on_get_data")
-def error_get_data_fixture():
-    """Simulate error when retrieving data from API."""
-    with patch(
-        #"custom_components.integration_blueprint.IntegrationBlueprintApiClient.async_get_data"
-        "custom_components.meross_lan.MerossDevice.triggerupdate",
-        side_effect=Exception,
-    ):
-        yield
+    def async_publish(self, hass, topic: str, payload: str, *args, **kwargs):
+        pass
 
+@pytest.fixture()
+async def mqtt_patch(mqtt_mock_entry_no_yaml_config: MqttMockHAClientGenerator):
 
-@pytest.fixture(name="bypass_mqtt_subscribe")
-def bypass_mqtt_subscribe_fixture():
-    with patch(
-        "homeassistant.components.mqtt.async_subscribe"
-    ):
-        yield
+    with patch("homeassistant.components.mqtt.async_publish") as mqtt_async_publish:
+        context = MQTTMock()
+        context.mqtt_client = await mqtt_mock_entry_no_yaml_config()
+        context.mqtt_async_publish = mqtt_async_publish
+        mqtt_async_publish.side_effect = context.async_publish
+        yield context
 

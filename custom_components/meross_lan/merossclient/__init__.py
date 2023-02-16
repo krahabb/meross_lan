@@ -1,6 +1,7 @@
 """
     A collection of utilities to help managing the Meross device protocol
 """
+from __future__ import annotations
 from typing import Union
 from uuid import uuid4
 from hashlib import md5
@@ -75,7 +76,7 @@ def build_payload(
                 #"from": "/appliance/9109182170548290882048e1e9522946/publish",
                 mc.KEY_TIMESTAMP: timestamp,
                 mc.KEY_TIMESTAMPMS: 0,
-                mc.KEY_SIGN: md5((messageid + (key or "") + str(timestamp)).encode('utf-8')).hexdigest()
+                mc.KEY_SIGN: md5((messageid + (key or "") + str(timestamp)).encode('utf-8'), usedforsecurity=False).hexdigest()
             },
             mc.KEY_PAYLOAD: payload
         }
@@ -119,6 +120,17 @@ def get_replykey(header: dict, key:KeyType = None) -> KeyType:
 
     return header
 
+def get_element_by_key(payload: list, key: str, value: object) -> dict:
+    """
+    scans the payload(list) looking for the first item matching
+    the key value. Usually looking for the matching channel payload
+    inside list paylaods
+    """
+    for p in payload:
+        if p.get(key) == value:
+            return p
+    raise KeyError(f"No match for key '{key}' on value:'{value}'")
+
 def get_productname(producttype: str) -> str:
     for _type, _name in mc.TYPE_NAME_MAP.items():
         if producttype.startswith(_type):
@@ -141,8 +153,17 @@ class MerossDeviceDescriptor:
     all = {}
     ability: dict
     digest: dict
-    time: dict | None
+    system: dict
+    hardware: dict
+    firmware: dict
+    type: str
+    uuid: str
+    macAddress: str
+    innerIp: str | None
+    time: dict
     timezone: str | None
+    productname: str
+    productmodel: str
 
     _dynamicattrs = {
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),
@@ -174,11 +195,12 @@ class MerossDeviceDescriptor:
         self.all = payload.get(mc.KEY_ALL, self.all)
         self.digest = self.all.get(mc.KEY_DIGEST, {})
         for key in MerossDeviceDescriptor._dynamicattrs.keys():
+            # don't use hasattr() or so to inspect else the whole
+            # dynamic attrs logic gets f...d
             try:
                 delattr(self, key)
-            except Exception:
-                continue
-
+            except:
+                pass
     def update_time(self, p_time: dict):
         self.system[mc.KEY_TIME] = p_time
         self.time = p_time

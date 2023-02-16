@@ -1,0 +1,8102 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2022.11.4",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.10.7",
+    "docker": true,
+    "arch": "aarch64",
+    "timezone": "Europe/Berlin",
+    "os_name": "Linux",
+    "os_version": "5.15.61-v8",
+    "supervisor": "2022.10.2",
+    "host_os": "Home Assistant OS 9.3",
+    "docker_version": "20.10.18",
+    "chassis": "embedded",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "meross_lan": {
+      "version": "2.6.2",
+      "requirements": []
+    },
+    "tapo_control": {
+      "version": "4.1.3",
+      "requirements": [
+        "pytapo==2.5",
+        "onvif-zeep-async==1.2.0"
+      ]
+    },
+    "hacs": {
+      "version": "1.28.3",
+      "requirements": [
+        "aiogithubapi>=22.2.4"
+      ]
+    },
+    "meross_cloud": {
+      "version": "1.2.6",
+      "requirements": [
+        "meross_iot==0.4.5.0"
+      ]
+    },
+    "alexa_media": {
+      "version": "4.3.2",
+      "requirements": [
+        "alexapy==1.26.4",
+        "packaging>=20.3",
+        "wrapt>=1.12.1"
+      ]
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "config_flow": true,
+    "iot_class": "local_polling",
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "requirements": [],
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      }
+    ],
+    "dependencies": [
+      "recorder"
+    ],
+    "after_dependencies": [
+      "mqtt",
+      "dhcp"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "version": "2.6.2",
+    "is_built_in": false
+  },
+  "data": {
+    "host": "**REDACTED**",
+    "key": "**REDACTED**",
+    "cloud_key": "**REDACTED**",
+    "protocol": null,
+    "polling_period": null,
+    "trace_timeout": null,
+    "device_id": "**REDACTED**",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "mrs100",
+            "subType": "un",
+            "version": "7.0.0",
+            "chipType": "rtl8710cm",
+            "uuid": "################################",
+            "macAddress": "#################"
+          },
+          "firmware": {
+            "version": "7.6.10",
+            "homekitVersion": "4.1",
+            "compileTime": "2022/09/26-13:48:49",
+            "encrypt": 1,
+            "wifiMac": "#################",
+            "innerIp": "#############",
+            "server": "##################",
+            "port": "###",
+            "userId": "#######"
+          },
+          "time": {
+            "timestamp": 1668771624,
+            "timezone": "Europe/Berlin",
+            "timeRule": [
+              [
+                1648342800,
+                7200,
+                1
+              ],
+              [
+                1667091600,
+                3600,
+                0
+              ],
+              [
+                1679792400,
+                7200,
+                1
+              ],
+              [
+                1698541200,
+                3600,
+                0
+              ],
+              [
+                1711846800,
+                7200,
+                1
+              ],
+              [
+                1729990800,
+                3600,
+                0
+              ],
+              [
+                1743296400,
+                7200,
+                1
+              ],
+              [
+                1761440400,
+                3600,
+                0
+              ],
+              [
+                1774746000,
+                7200,
+                1
+              ],
+              [
+                1792890000,
+                3600,
+                0
+              ],
+              [
+                1806195600,
+                7200,
+                1
+              ],
+              [
+                1824944400,
+                3600,
+                0
+              ],
+              [
+                1837645200,
+                7200,
+                1
+              ],
+              [
+                1856394000,
+                3600,
+                0
+              ],
+              [
+                1869094800,
+                7200,
+                1
+              ],
+              [
+                1887843600,
+                3600,
+                0
+              ],
+              [
+                1901149200,
+                7200,
+                1
+              ],
+              [
+                1919293200,
+                3600,
+                0
+              ],
+              [
+                1932598800,
+                7200,
+                1
+              ],
+              [
+                1950742800,
+                3600,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "mnM5txXFxlvapoaV",
+            "who": 1
+          }
+        },
+        "digest": {
+          "triggerx": [],
+          "timerx": []
+        }
+      },
+      "payloadVersion": 1,
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Info": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 5
+        },
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Control.TimerX": {
+          "sunOffsetSupport": 1
+        },
+        "Appliance.Control.TriggerX": {},
+        "Appliance.RollerShutter.Position": {},
+        "Appliance.RollerShutter.State": {},
+        "Appliance.RollerShutter.Config": {},
+        "Appliance.RollerShutter.Adjust": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.Digest.TimerX": {}
+      }
+    },
+    "deviceclass": "RuntimeMixinRollerShutterMixinMerossDevice",
+    "disabled_by": null,
+    "disabled_polling": false,
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2022/11/23 - 18:21:06",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "mrs100",
+              "subType": "un",
+              "version": "7.0.0",
+              "chipType": "rtl8710cm",
+              "uuid": "################################",
+              "macAddress": "#################"
+            },
+            "firmware": {
+              "version": "7.6.10",
+              "homekitVersion": "4.1",
+              "compileTime": "2022/09/26-13:48:49",
+              "encrypt": 1,
+              "wifiMac": "#################",
+              "innerIp": "#############",
+              "server": "##################",
+              "port": "###",
+              "userId": "#######"
+            },
+            "time": {
+              "timestamp": 1669224048,
+              "timezone": "Europe/Berlin",
+              "timeRule": [
+                [
+                  1648342800,
+                  7200,
+                  1
+                ],
+                [
+                  1667091600,
+                  3600,
+                  0
+                ],
+                [
+                  1679792400,
+                  7200,
+                  1
+                ],
+                [
+                  1698541200,
+                  3600,
+                  0
+                ],
+                [
+                  1711846800,
+                  7200,
+                  1
+                ],
+                [
+                  1729990800,
+                  3600,
+                  0
+                ],
+                [
+                  1743296400,
+                  7200,
+                  1
+                ],
+                [
+                  1761440400,
+                  3600,
+                  0
+                ],
+                [
+                  1774746000,
+                  7200,
+                  1
+                ],
+                [
+                  1792890000,
+                  3600,
+                  0
+                ],
+                [
+                  1806195600,
+                  7200,
+                  1
+                ],
+                [
+                  1824944400,
+                  3600,
+                  0
+                ],
+                [
+                  1837645200,
+                  7200,
+                  1
+                ],
+                [
+                  1856394000,
+                  3600,
+                  0
+                ],
+                [
+                  1869094800,
+                  7200,
+                  1
+                ],
+                [
+                  1887843600,
+                  3600,
+                  0
+                ],
+                [
+                  1901149200,
+                  7200,
+                  1
+                ],
+                [
+                  1919293200,
+                  3600,
+                  0
+                ],
+                [
+                  1932598800,
+                  7200,
+                  1
+                ],
+                [
+                  1950742800,
+                  3600,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "mnM5txXFxlvapoaV",
+              "who": 1
+            }
+          },
+          "digest": {
+            "triggerx": [],
+            "timerx": []
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:06",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 5
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.TimerX": {
+            "sunOffsetSupport": 1
+          },
+          "Appliance.Control.TriggerX": {},
+          "Appliance.RollerShutter.Position": {},
+          "Appliance.RollerShutter.State": {},
+          "Appliance.RollerShutter.Config": {},
+          "Appliance.RollerShutter.Adjust": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.Digest.TimerX": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {
+              "model": "MRS100",
+              "sn": "700801220504583",
+              "category": 14,
+              "setupId": "E09J",
+              "setupCode": "363-43-891",
+              "uuid": "####################################",
+              "token": "####################################################################################################################################################################################################################################################################################################################################################################################################################################################################################"
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:11",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:16",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Position",
+        {
+          "position": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:16",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Position",
+        {
+          "position": {
+            "longitude": 0,
+            "latitude": 0
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224078,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:21",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.TimerX",
+        {
+          "timerx": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:21",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(2205132126726970080148e1e9929fc8) client connection attempt(0) error in async_http_request: Server disconnected"
+      ],
+      [
+        "2022/11/23 - 18:21:21",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.TimerX",
+        {
+          "timerx": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:21",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(2205132126726970080148e1e9929fc8) client connection attempt(1) error in async_http_request: Server disconnected"
+      ],
+      [
+        "2022/11/23 - 18:21:21",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.TimerX",
+        {
+          "timerx": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:22",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(2205132126726970080148e1e9929fc8) client connection attempt(2) error in async_http_request: Server disconnected"
+      ],
+      [
+        "2022/11/23 - 18:21:22",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(2205132126726970080148e1e9929fc8) going offline!"
+      ],
+      [
+        "2022/11/23 - 18:21:22",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:22",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:26",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.TriggerX",
+        {
+          "triggerx": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:26",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.TriggerX",
+        {}
+      ],
+      [
+        "2022/11/23 - 18:21:26",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(2205132126726970080148e1e9929fc8) back online!"
+      ],
+      [
+        "2022/11/23 - 18:21:26",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:26",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:26",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:26",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:26",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:26",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224085,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:27",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:27",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:27",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:21:27",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:27",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:27",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:27",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:27",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:27",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:36",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:21:36",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:36",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:41",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:41",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:46",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Adjust",
+        {
+          "adjust": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:46",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(2205132126726970080148e1e9929fc8) client connection attempt(0) error in async_http_request: Server disconnected"
+      ],
+      [
+        "2022/11/23 - 18:21:46",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Adjust",
+        {
+          "adjust": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:46",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(2205132126726970080148e1e9929fc8) client connection attempt(1) error in async_http_request: Server disconnected"
+      ],
+      [
+        "2022/11/23 - 18:21:46",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Adjust",
+        {
+          "adjust": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:46",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(2205132126726970080148e1e9929fc8) client connection attempt(2) error in async_http_request: Server disconnected"
+      ],
+      [
+        "2022/11/23 - 18:21:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(2205132126726970080148e1e9929fc8) going offline!"
+      ],
+      [
+        "2022/11/23 - 18:21:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224108,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(2205132126726970080148e1e9929fc8) back online!"
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:51",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.TriggerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:51",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.TriggerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:56",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.TimerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:21:56",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.TimerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224138,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224168,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:22:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224198,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224228,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:23:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224258,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): request_position(100, None)"
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": {
+            "channel": 0,
+            "position": 100
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.RollerShutter.Position",
+        {}
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _ack_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:47",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:47",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:47",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:48",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:48",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:48",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:48",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224288,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:50",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:50",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:50",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:50",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:51",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:51",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:51",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:51",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:52",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:52",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:52",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:53",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:53",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:53",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:54",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:54",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:55",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:55",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:55",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:55",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:56",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:56",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:56",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:56",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:57",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:57",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:57",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:57",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:58",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:58",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:24:59",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:24:59",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:59",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:24:59",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:00",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:00",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:01",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:02",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:02",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:03",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:03",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:03",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:03",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:04",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:04",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:04",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:04",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:05",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:05",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:05",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:05",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:06",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:06",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:07",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:07",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:07",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:07",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:08",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:08",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:09",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:09",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:09",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:09",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:10",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:10",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:10",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:10",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:11",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:11",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:11",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(1)"
+      ],
+      [
+        "2022/11/23 - 18:25:12",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:12",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:12",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:12",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:25:12",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:25:12",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224318,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224348,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 99
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:25:50",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:50",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:50",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:50",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:25:51",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:25:51",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:51",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:25:51",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:25:51",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:25:51",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224378,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 84
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224408,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 37
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:26:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): request_position(0, None)"
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": {
+            "channel": 0,
+            "position": 0
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.RollerShutter.Position",
+        {}
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _ack_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:03",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:27:04",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:04",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:04",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:04",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:27:05",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:05",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:05",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:05",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:27:06",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:06",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:27:07",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:07",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:07",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:07",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:27:08",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:08",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:27:09",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:09",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:09",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:09",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:27:10",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:10",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:10",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:10",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:27:11",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:27:11",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:11",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:27:11",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:27:11",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224438,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224468,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 52
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:27:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224498,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 71
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224528,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:28:59",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): request_position(0, 1.044)"
+      ],
+      [
+        "2022/11/23 - 18:28:59",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:28:59",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": {
+            "channel": 0,
+            "position": 0
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:00",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.RollerShutter.Position",
+        {}
+      ],
+      [
+        "2022/11/23 - 18:29:00",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _ack_callback"
+      ],
+      [
+        "2022/11/23 - 18:29:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:00",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:29:00",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:29:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:00",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(2)"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_callback"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): request_position(-1, None)"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": {
+            "channel": 0,
+            "position": -1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_callback"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.RollerShutter.Position",
+        {}
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _ack_callback"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:29:01",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "mrs100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "7.6.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/09/26-13:48:49",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "#############",
+                "server": "##################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1669224558,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    3600,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "mnM5txXFxlvapoaV",
+                "who": 1
+              }
+            },
+            "digest": {
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _parse_state(0)"
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _transition_cancel"
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 95
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 1
+          }
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1668771601,
+              "signalOpen": 28200,
+              "signalClose": 26100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/11/23 - 18:29:25",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): request_position(0, 4.698)"
+      ],
+      [
+        "2022/11/23 - 18:29:25",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MLRollerShutter(0): _stop_cancel"
+      ],
+      [
+        "2022/11/23 - 18:29:25",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": {
+            "channel": 0,
+            "position": 0
+          }
+        }
+      ]
+    ]
+  }
+}

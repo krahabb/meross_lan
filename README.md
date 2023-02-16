@@ -76,7 +76,7 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MS100](https://www.meross.com/Detail/46/Smart%20Temperature%20and%20Humidity%20Sensor): Smart Temperature/Humidity Sensor
 - Thermostats
   - [MTS100](https://www.meross.com/Detail/30/Smart%20Thermostat%20Valve): Smart Thermostat Valve
-  - [MTS200](https://www.meross.com/Detail/116/Smart%20Wi-Fi%20Thermostat) [experimental]: Smart Wifi Thermostat
+  - [MTS200](https://www.meross.com/Detail/116/Smart%20Wi-Fi%20Thermostat): Smart Wifi Thermostat
 - Covers
   - [MRS100](https://www.meross.com/product/91/article/): Smart WiFi Roller Shutter
   - [MSG100](https://www.meross.com/product/29/article/): Smart WiFi Garage Door Opener
@@ -101,8 +101,8 @@ In general, many device configuration options available in Meross app are not su
 
 ## Service
 
-There is a service 'meross_lan.request' exposed to simplify communication with the device and play with it a bit. It basically requires the needed informations to setup a command request and send it over MQTT or HTTP without the hassle of signatures and timestamps computations. You can check it in the 'Developer Tools' of the HA instance, everything should be enough self-explanatory there.
-I find it a bit frustrating that the HA service infrastructure does not allow to return anything from a service invocation so, the eventual reply from the device will get 'lost' in the mqtt flow. I've personally played a bit with the MQTT integration configuration pane to listen and see the mqtt responses from my devices but it's somewhat a pain unless you have a big screen to play with (or multiple monitors for the matter). Nevertheless you can use the service wherever you like to maybe invoke features at the device level or dig into it's configuration.
+There is a service called `meross_lan.request` exposed to simplify communication with the device and play with it a bit. It basically requires the needed informations to setup a command request and send it over MQTT or HTTP without the hassle of signatures and timestamps computations. You can check it in the 'Developer Tools' of the HA instance, everything should be enough self-explanatory there.
+Since version 3.0.2 the service allows you to publish the device response as a persistent_notification message in HA so you don't have to dig into logs in order to see the reply. The notification is optional and you have to add the `notifyresponse` key to the service call with a value of `true`
 
 ## Troubleshooting
 

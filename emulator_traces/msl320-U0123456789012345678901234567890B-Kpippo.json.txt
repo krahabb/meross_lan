@@ -1,0 +1,7447 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2022.12.7",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.10.7",
+    "docker": true,
+    "arch": "x86_64",
+    "timezone": "Europe/Lisbon",
+    "os_name": "Linux",
+    "os_version": "5.15.80",
+    "supervisor": "2022.11.2",
+    "host_os": "Home Assistant OS 9.4",
+    "docker_version": "20.10.19",
+    "chassis": "embedded",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "govee": {
+      "version": "0.2.2",
+      "requirements": [
+        "govee-api-laggat==0.2.2",
+        "dacite==1.6.0"
+      ]
+    },
+    "meross_lan": {
+      "version": "2.6.2",
+      "requirements": []
+    },
+    "hacs": {
+      "version": "1.28.4",
+      "requirements": [
+        "aiogithubapi>=22.2.4"
+      ]
+    },
+    "sonoff": {
+      "version": "3.3.1",
+      "requirements": [
+        "pycryptodome>=3.6.6"
+      ]
+    },
+    "pyscript": {
+      "version": "1.3.3",
+      "requirements": [
+        "croniter==1.3.4",
+        "watchdog==2.1.6"
+      ]
+    },
+    "xiaomi_cloud_map_extractor": {
+      "version": "v2.2.0",
+      "requirements": [
+        "pillow",
+        "pybase64",
+        "python-miio",
+        "requests",
+        "pycryptodome"
+      ]
+    },
+    "meross_cloud": {
+      "version": "1.2.6",
+      "requirements": [
+        "meross_iot==0.4.5.0"
+      ]
+    },
+    "alexa_media": {
+      "version": "4.3.2",
+      "requirements": [
+        "alexapy==1.26.4",
+        "packaging>=20.3",
+        "wrapt>=1.12.1"
+      ]
+    },
+    "alarmo": {
+      "version": "v1.9.7",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "config_flow": true,
+    "iot_class": "local_polling",
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "requirements": [],
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      }
+    ],
+    "dependencies": [
+      "recorder"
+    ],
+    "after_dependencies": [
+      "mqtt",
+      "dhcp"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "version": "2.6.2",
+    "is_built_in": false
+  },
+  "data": {
+    "host": "**REDACTED**",
+    "key": "**REDACTED**",
+    "cloud_key": "**REDACTED**",
+    "protocol": null,
+    "polling_period": null,
+    "trace_timeout": null,
+    "device_id": "**REDACTED**",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "msl320cpr",
+            "subType": "un",
+            "version": "4.0.0",
+            "chipType": "rtl8710cm",
+            "uuid": "################################",
+            "macAddress": "#################"
+          },
+          "firmware": {
+            "version": "4.3.5",
+            "homekitVersion": "4.1",
+            "compileTime": "2022/08/25-15:57:22",
+            "encrypt": 1,
+            "wifiMac": "#################",
+            "innerIp": "##############",
+            "server": "####################",
+            "port": "###",
+            "userId": "#######"
+          },
+          "time": {
+            "timestamp": 1670762076,
+            "timezone": "Europe/Lisbon",
+            "timeRule": [
+              [
+                1667091600,
+                0,
+                0
+              ],
+              [
+                1679792400,
+                3600,
+                1
+              ],
+              [
+                1698541200,
+                0,
+                0
+              ],
+              [
+                1711846800,
+                3600,
+                1
+              ],
+              [
+                1729990800,
+                0,
+                0
+              ],
+              [
+                1743296400,
+                3600,
+                1
+              ],
+              [
+                1761440400,
+                0,
+                0
+              ],
+              [
+                1774746000,
+                3600,
+                1
+              ],
+              [
+                1792890000,
+                0,
+                0
+              ],
+              [
+                1806195600,
+                3600,
+                1
+              ],
+              [
+                1824944400,
+                0,
+                0
+              ],
+              [
+                1837645200,
+                3600,
+                1
+              ],
+              [
+                1856394000,
+                0,
+                0
+              ],
+              [
+                1869094800,
+                3600,
+                1
+              ],
+              [
+                1887843600,
+                0,
+                0
+              ],
+              [
+                1901149200,
+                3600,
+                1
+              ],
+              [
+                1919293200,
+                0,
+                0
+              ],
+              [
+                1932598800,
+                3600,
+                1
+              ],
+              [
+                1950742800,
+                0,
+                0
+              ],
+              [
+                1964048400,
+                3600,
+                1
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "sZuTwgzBpBN2TMQI",
+            "who": 1
+          }
+        },
+        "digest": {
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 1,
+              "lmTime": 1670761931
+            }
+          ],
+          "triggerx": [],
+          "timerx": [],
+          "light": {
+            "capacity": 6,
+            "channel": 0,
+            "rgb": 16711680,
+            "temperature": 51,
+            "luminance": 49,
+            "transform": 0
+          }
+        }
+      },
+      "payloadVersion": 1,
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Info": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 5
+        },
+        "Appliance.Control.ToggleX": {},
+        "Appliance.Control.TimerX": {
+          "sunOffsetSupport": 1
+        },
+        "Appliance.Control.TriggerX": {},
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Control.Light": {
+          "capacity": 15
+        },
+        "Appliance.Control.Light.Effect": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.Digest.TimerX": {}
+      }
+    },
+    "deviceclass": "ToggleXMixinLightMixinRuntimeMixinMerossDevice",
+    "disabled_by": null,
+    "disabled_polling": false,
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2022/12/20 - 17:41:31",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "msl320cpr",
+              "subType": "un",
+              "version": "4.0.0",
+              "chipType": "rtl8710cm",
+              "uuid": "################################",
+              "macAddress": "#################"
+            },
+            "firmware": {
+              "version": "4.3.5",
+              "homekitVersion": "4.1",
+              "compileTime": "2022/08/25-15:57:22",
+              "encrypt": 1,
+              "wifiMac": "#################",
+              "innerIp": "##############",
+              "server": "####################",
+              "port": "###",
+              "userId": "#######"
+            },
+            "time": {
+              "timestamp": 1671558074,
+              "timezone": "Europe/Lisbon",
+              "timeRule": [
+                [
+                  1667091600,
+                  0,
+                  0
+                ],
+                [
+                  1679792400,
+                  3600,
+                  1
+                ],
+                [
+                  1698541200,
+                  0,
+                  0
+                ],
+                [
+                  1711846800,
+                  3600,
+                  1
+                ],
+                [
+                  1729990800,
+                  0,
+                  0
+                ],
+                [
+                  1743296400,
+                  3600,
+                  1
+                ],
+                [
+                  1761440400,
+                  0,
+                  0
+                ],
+                [
+                  1774746000,
+                  3600,
+                  1
+                ],
+                [
+                  1792890000,
+                  0,
+                  0
+                ],
+                [
+                  1806195600,
+                  3600,
+                  1
+                ],
+                [
+                  1824944400,
+                  0,
+                  0
+                ],
+                [
+                  1837645200,
+                  3600,
+                  1
+                ],
+                [
+                  1856394000,
+                  0,
+                  0
+                ],
+                [
+                  1869094800,
+                  3600,
+                  1
+                ],
+                [
+                  1887843600,
+                  0,
+                  0
+                ],
+                [
+                  1901149200,
+                  3600,
+                  1
+                ],
+                [
+                  1919293200,
+                  0,
+                  0
+                ],
+                [
+                  1932598800,
+                  3600,
+                  1
+                ],
+                [
+                  1950742800,
+                  0,
+                  0
+                ],
+                [
+                  1964048400,
+                  3600,
+                  1
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "sZuTwgzBpBN2TMQI",
+              "who": 1
+            }
+          },
+          "digest": {
+            "togglex": [
+              {
+                "channel": 0,
+                "onoff": 1,
+                "lmTime": 1671555048
+              }
+            ],
+            "triggerx": [],
+            "timerx": [],
+            "light": {
+              "capacity": 6,
+              "channel": 0,
+              "rgb": 16711680,
+              "temperature": 51,
+              "luminance": 50,
+              "transform": 0
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:31",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 5
+          },
+          "Appliance.Control.ToggleX": {},
+          "Appliance.Control.TimerX": {
+            "sunOffsetSupport": 1
+          },
+          "Appliance.Control.TriggerX": {},
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.Light": {
+            "capacity": 15
+          },
+          "Appliance.Control.Light.Effect": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.Digest.TimerX": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:31",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:31",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {
+              "model": "MSL320",
+              "sn": "908687220201923",
+              "category": 5,
+              "setupId": "VZZH",
+              "setupCode": "041-81-043",
+              "uuid": "####################################",
+              "token": "########################################################################################################################################################################################################################################"
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 76
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:41",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Position",
+        {
+          "position": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:41",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Position",
+        {
+          "position": {
+            "longitude": 0,
+            "latitude": 0
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558104,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:46",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:46",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ToggleX",
+        {
+          "channel": 0,
+          "togglex": {
+            "channel": 0,
+            "onoff": 1,
+            "lmTime": 1671555048
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:51",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.TimerX",
+        {
+          "timerx": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:51",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.TimerX",
+        {
+          "digest": {},
+          "timerx": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:56",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.TriggerX",
+        {
+          "triggerx": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:41:56",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.TriggerX",
+        {
+          "digest": {},
+          "triggerx": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light",
+        {
+          "light": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:01",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light",
+        {
+          "light": {
+            "capacity": 6,
+            "channel": 0,
+            "rgb": 16711680,
+            "temperature": 51,
+            "luminance": 50,
+            "transform": 0
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:11",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.TriggerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.TriggerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558134,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:16",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.TimerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:16",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.TimerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558164,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:42:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:43:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:43:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:43:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558194,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:43:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:43:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:43:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:43:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558224,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:43:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:44:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:44:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:44:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558254,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:44:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:44:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:44:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:44:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558284,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:44:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:45:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:45:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:45:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558314,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:45:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:45:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:45:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:45:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558344,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:45:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558374,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558404,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:46:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 70
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:47:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:47:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:47:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558434,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:47:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:47:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:47:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:47:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558464,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:47:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:48:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:48:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:48:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558494,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:48:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:48:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:48:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:48:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558524,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:48:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:49:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:49:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:49:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558554,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:49:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:49:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:49:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:49:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558584,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/12/20 - 17:49:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": [
+            {
+              "Id": "0000000000000000",
+              "effectName": "Night",
+              "iconName": "light_effect_icon_night",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16744192,
+                  "luminance": 30
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000001",
+              "effectName": "Reading",
+              "iconName": "light_effect_icon_read",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16752706,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000002",
+              "effectName": "Working",
+              "iconName": "light_effect_icon_work",
+              "enable": 0,
+              "mode": 0,
+              "speed": 10,
+              "member": [
+                {
+                  "rgb": 16756220,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000003",
+              "effectName": "Relaxing",
+              "iconName": "light_effect_icon_relax",
+              "enable": 0,
+              "mode": 2,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "0000000000000004",
+              "effectName": "Party",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 1,
+              "speed": 90,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65280,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 255,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16757760,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 65450,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711786,
+                  "luminance": 100
+                }
+              ]
+            },
+            {
+              "Id": "8e6ykbpjyu53f98p",
+              "effectName": "Colorful",
+              "iconName": "light_effect_icon_colorful",
+              "enable": 0,
+              "mode": 1,
+              "speed": 50,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16711906,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 4718847,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 59391,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 65337,
+                  "luminance": 75
+                },
+                {
+                  "rgb": 16772096,
+                  "luminance": 75
+                }
+              ]
+            },
+            {
+              "Id": "ndwrg3xrzbu0b7hf",
+              "effectName": "Pol\u00edcia",
+              "iconName": "light_effect_icon_party",
+              "enable": 0,
+              "mode": 2,
+              "speed": 100,
+              "member": [
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 3327,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 1023,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 16711680,
+                  "luminance": 100
+                },
+                {
+                  "rgb": 2303,
+                  "luminance": 100
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2022/12/20 - 17:50:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/12/20 - 17:50:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light.Effect",
+        {
+          "effect": []
+        }
+      ],
+      [
+        "2022/12/20 - 17:50:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msl320cpr",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.3.5",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/08/25-15:57:22",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1671558614,
+                "timezone": "Europe/Lisbon",
+                "timeRule": [
+                  [
+                    1667091600,
+                    0,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    0,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    0,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    3600,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    0,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    3600,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    0,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    3600,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    0,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    0,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    0,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    3600,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    0,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    3600,
+                    1
+                  ],
+                  [
+                    1950742800,
+                    0,
+                    0
+                  ],
+                  [
+                    1964048400,
+                    3600,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "sZuTwgzBpBN2TMQI",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1671555048
+                }
+              ],
+              "triggerx": [],
+              "timerx": [],
+              "light": {
+                "capacity": 6,
+                "channel": 0,
+                "rgb": 16711680,
+                "temperature": 51,
+                "luminance": 50,
+                "transform": 0
+              }
+            }
+          }
+        }
+      ]
+    ]
+  }
+}

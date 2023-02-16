@@ -1,14 +1,24 @@
+"""
+    Emulator:
+
+    Based off the knowledge inside the MerossEmulatorDescriptor
+    this class tries to reply to an incoming request by looking
+    at the vocabulary of known namespaces listed in the descriptor.
+    It is also able to manage a sort of state for commands accessing
+    data in the Apllication.System.All namespace at the 'digest' key
+    which are the majority.
+    If state is not available there it could be looked up in the specific
+    command carrying the message and so automatically managed too
+
+"""
+from __future__ import annotations
 from time import time
 from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
-from aiohttp.web import (
-    Request as web_Request,
-    json_response as web_json_response,
-)
 
-from ..merossclient import (
+from custom_components.meross_lan.merossclient import (
     build_payload,
     const as mc,
     get_namespacekey,
@@ -16,6 +26,7 @@ from ..merossclient import (
 )
 
 from .descriptor import MerossEmulatorDescriptor
+
 
 class MerossEmulator:
 
@@ -29,15 +40,16 @@ class MerossEmulator:
 
         print(f"Initialized {descriptor.productname} (model:{descriptor.productmodel})")
 
-
-    async def post_config(self, request: web_Request):
-        jsonrequest = await request.json()
+    #async def post_config(self, request: web_Request):
+    def handle(self, request: str) -> dict:
+        jsonrequest = json_loads(request)
         header:dict = jsonrequest[mc.KEY_HEADER]
         payload:dict = jsonrequest[mc.KEY_PAYLOAD]
         namespace:str = header[mc.KEY_NAMESPACE]
         method:str = header[mc.KEY_METHOD]
 
-        print(f"Emulator({self.descriptor.uuid}) RX: namespace={namespace} method={method} payload={json_dumps(payload)}")
+        print(f"Emulator({self.descriptor.uuid}) "
+              f"RX: namespace={namespace} method={method} payload={json_dumps(payload)}")
         try:
             if self.p_all_system_time is not None:
                 self.p_all_system_time[mc.KEY_TIMESTAMP] = int(time())
@@ -61,8 +73,7 @@ class MerossEmulator:
 
         data = build_payload(namespace, method, payload, self.key, mc.MANUFACTURER, header[mc.KEY_MESSAGEID])
         print(f"Emulator({self.descriptor.uuid}) TX: namespace={namespace} method={method} payload={json_dumps(payload)}")
-        return web_json_response(data)
-
+        return data
 
     def _get_key_state(self, namespace: str) -> tuple[str, dict]:
         """
@@ -94,18 +105,24 @@ class MerossEmulator:
 
         return key, p_digest[key]
 
-
     def _handler_default(self, method: str, namespace: str, payload: dict):
         """
         This is an euristhic to try parse a namespace carrying state stored in all->digest
         If the state is not stored in all->digest we'll search our namespace(s) list for
         state carried through our GETACK messages in the trace
         """
-        # quick lookup since state is saved in our namespaces
-        if (method == mc.METHOD_GET) and (namespace in self.descriptor.namespaces):
-            return mc.METHOD_GETACK, self.descriptor.namespaces[namespace]
+        try:
+            key, p_state = self._get_key_state(namespace)
+        except Exception as error:
+            # when the 'looking for state' euristic fails
+            # we might fallback to a static reply should it fit...
+            if (method == mc.METHOD_GET) and (namespace in self.descriptor.namespaces):
+                return mc.METHOD_GETACK, self.descriptor.namespaces[namespace]
+            raise error
+        
+        if method == mc.METHOD_GET:
+            return mc.METHOD_GETACK, { key: p_state }
 
-        key, p_state = self._get_key_state(namespace)
         if method != mc.METHOD_SET:
             # TODO.....
             raise Exception(f"{method} not supported in emulator")
@@ -134,15 +151,12 @@ class MerossEmulator:
 
         return mc.METHOD_SETACK, {}
 
-
     def _GET_Appliance_System_DNDMode(self, header, payload):
         return mc.METHOD_GETACK, self.p_dndmode
-
 
     def _SET_Appliance_System_DNDMode(self, header, payload):
         self.p_dndmode = payload
         return mc.METHOD_SETACK, {}
-
 
     def _get_control_key(self, key):
         p_control = self.descriptor.all.get(mc.KEY_CONTROL)
@@ -152,19 +166,16 @@ class MerossEmulator:
             raise Exception(f"{key} not present in control")
         return p_control[key]
 
-
     def _GET_Appliance_Control_Toggle(self, header, payload):
         # only acual example of this usage comes from legacy firmwares
         # carrying state in all->control
         return mc.METHOD_GETACK, { mc.KEY_TOGGLE: self._get_control_key(mc.KEY_TOGGLE) }
-
 
     def _SET_Appliance_Control_Toggle(self, header, payload):
         # only acual example of this usage comes from legacy firmwares
         # carrying state in all->control
         self._get_control_key(mc.KEY_TOGGLE)[mc.KEY_ONOFF] = payload[mc.KEY_TOGGLE][mc.KEY_ONOFF]
         return mc.METHOD_SETACK, {}
-
 
     def _SET_Appliance_Control_Light(self, header, payload):
         # need to override basic handler since lights turning on/off is tricky between
@@ -185,7 +196,6 @@ class MerossEmulator:
             p_digest[mc.KEY_TOGGLEX][0][mc.KEY_ONOFF] = onoff
         p_digest[mc.KEY_LIGHT].update(p_light)
         return mc.METHOD_SETACK, {}
-
 
     def _SET_Appliance_Control_Mp3(self, header, payload):
         if mc.NS_APPLIANCE_CONTROL_MP3 not in self.descriptor.namespaces:

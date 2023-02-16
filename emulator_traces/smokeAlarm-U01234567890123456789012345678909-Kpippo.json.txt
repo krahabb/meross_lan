@@ -1,0 +1,7002 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2022.3.7",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.9.9",
+    "docker": true,
+    "arch": "aarch64",
+    "timezone": "Europe/Berlin",
+    "os_name": "Linux",
+    "os_version": "5.10.103-v8",
+    "supervisor": "2022.03.5",
+    "host_os": "Home Assistant OS 7.6",
+    "docker_version": "20.10.9",
+    "chassis": "embedded",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "clean_up_snapshots_service": {
+      "version": "0.8.1",
+      "requirements": []
+    },
+    "webrtc": {
+      "version": "v2.2.0",
+      "requirements": []
+    },
+    "homematicip_local": {
+      "version": "1.0.3",
+      "requirements": [
+        "hahomematic==1.0.4"
+      ]
+    },
+    "smartthinq_sensors": {
+      "version": "0.12.12",
+      "requirements": [
+        "pycountry>=20.7.3",
+        "xmltodict>=0.12.0"
+      ]
+    },
+    "hacs": {
+      "version": "1.24.3",
+      "requirements": [
+        "aiogithubapi>=21.11.0"
+      ]
+    },
+    "tahoma": {
+      "version": "2.13.0",
+      "requirements": [
+        "pyoverkiz==1.3.6"
+      ]
+    },
+    "eufy_security": {
+      "version": "2.2.4",
+      "requirements": [
+        "websocket-client==1.1.0"
+      ]
+    },
+    "samsungtv_tizen": {
+      "version": "1.5.9",
+      "requirements": [
+        "websocket-client==0.56.0",
+        "wakeonlan==1.1.6",
+        "numpy==1.21.1"
+      ]
+    },
+    "alexa_media": {
+      "version": "3.11.0",
+      "requirements": [
+        "alexapy==1.25.3",
+        "packaging>=20.3",
+        "wrapt>=1.12.1"
+      ]
+    },
+    "meross_lan": {
+      "version": "2.5.7",
+      "requirements": []
+    },
+    "meross_cloud": {
+      "version": "1.2.0rc2",
+      "requirements": [
+        "meross_iot==0.4.4.4"
+      ]
+    },
+    "fullykiosk": {
+      "version": "1.0.1",
+      "requirements": [
+        "python-fullykiosk==0.0.11"
+      ]
+    },
+    "yi_hack": {
+      "version": "0.3.6",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "config_flow": true,
+    "iot_class": "local_polling",
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "requirements": [],
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      }
+    ],
+    "dependencies": [],
+    "after_dependencies": [
+      "mqtt",
+      "dhcp"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "version": "2.5.7",
+    "is_built_in": false
+  },
+  "data": {
+    "host": "**REDACTED**",
+    "key": "**REDACTED**",
+    "cloud_key": "**REDACTED**",
+    "protocol": null,
+    "polling_period": null,
+    "trace_timeout": null,
+    "device_id": "**REDACTED**",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "msh300hk",
+            "subType": "un",
+            "version": "4.0.0",
+            "chipType": "MT7686",
+            "uuid": "################################",
+            "macAddress": "#################"
+          },
+          "firmware": {
+            "version": "4.5.10",
+            "homekitVersion": "4.1",
+            "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+            "encrypt": 1,
+            "wifiMac": "#################",
+            "innerIp": "##############",
+            "server": "####################",
+            "port": "###",
+            "userId": "#######"
+          },
+          "time": {
+            "timestamp": 1648926384,
+            "timezone": "Europe/Berlin",
+            "timeRule": [
+              [
+                1635642000,
+                3600,
+                0
+              ],
+              [
+                1648342800,
+                7200,
+                1
+              ],
+              [
+                1667091600,
+                3600,
+                0
+              ],
+              [
+                1679792400,
+                7200,
+                1
+              ],
+              [
+                1698541200,
+                3600,
+                0
+              ],
+              [
+                1711846800,
+                7200,
+                1
+              ],
+              [
+                1729990800,
+                3600,
+                0
+              ],
+              [
+                1743296400,
+                7200,
+                1
+              ],
+              [
+                1761440400,
+                3600,
+                0
+              ],
+              [
+                1774746000,
+                7200,
+                1
+              ],
+              [
+                1792890000,
+                3600,
+                0
+              ],
+              [
+                1806195600,
+                7200,
+                1
+              ],
+              [
+                1824944400,
+                3600,
+                0
+              ],
+              [
+                1837645200,
+                7200,
+                1
+              ],
+              [
+                1856394000,
+                3600,
+                0
+              ],
+              [
+                1869094800,
+                7200,
+                1
+              ],
+              [
+                1887843600,
+                3600,
+                0
+              ],
+              [
+                1901149200,
+                7200,
+                1
+              ],
+              [
+                1919293200,
+                3600,
+                0
+              ],
+              [
+                1932598800,
+                7200,
+                1
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "g7L4GgGLoeVZaYdR",
+            "who": 1
+          }
+        },
+        "digest": {
+          "hub": {
+            "hubId": 3917806713,
+            "mode": 0,
+            "subdevice": [
+              {
+                "id": "280000000A7F",
+                "status": 1,
+                "lastActiveTime": 1648924556,
+                "smokeAlarm": {
+                  "status": 170,
+                  "lmTime": 1648924556,
+                  "interConn": 0
+                }
+              }
+            ]
+          }
+        }
+      },
+      "payloadVersion": 1,
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Info": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 5
+        },
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Hub.Online": {},
+        "Appliance.Hub.ToggleX": {},
+        "Appliance.Hub.SubdeviceList": {},
+        "Appliance.Hub.Battery": {},
+        "Appliance.Hub.Sensitivity": {},
+        "Appliance.Hub.PairSubDev": {},
+        "Appliance.Hub.Mts100.All": {},
+        "Appliance.Hub.Mts100.Temperature": {},
+        "Appliance.Hub.Mts100.ScheduleB": {
+          "scheduleUnitTime": 15
+        },
+        "Appliance.Hub.Mts100.Mode": {},
+        "Appliance.Hub.Mts100.Adjust": {},
+        "Appliance.Hub.SubDevice.MotorAdjust": {},
+        "Appliance.Hub.SubDevice.Beep": {},
+        "Appliance.Hub.Sensor.All": {},
+        "Appliance.Hub.Sensor.WaterLeak": {},
+        "Appliance.Hub.Sensor.TempHum": {},
+        "Appliance.Hub.Sensor.Adjust": {},
+        "Appliance.Hub.Sensor.Motion": {},
+        "Appliance.Hub.Sensor.DoorWindow": {},
+        "Appliance.Hub.Sensor.Smoke": {},
+        "Appliance.Hub.Sensor.Alert": {}
+      }
+    },
+    "deviceclass": "RuntimeMixinMerossDeviceHub",
+    "disabled_by": null,
+    "disabled_polling": false,
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2022/04/04 - 11:56:09",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "msh300hk",
+              "subType": "un",
+              "version": "4.0.0",
+              "chipType": "MT7686",
+              "uuid": "################################",
+              "macAddress": "#################"
+            },
+            "firmware": {
+              "version": "4.5.10",
+              "homekitVersion": "4.1",
+              "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+              "encrypt": 1,
+              "wifiMac": "#################",
+              "innerIp": "##############",
+              "server": "####################",
+              "port": "###",
+              "userId": "#######"
+            },
+            "time": {
+              "timestamp": 1649066158,
+              "timezone": "Europe/Berlin",
+              "timeRule": [
+                [
+                  1635642000,
+                  3600,
+                  0
+                ],
+                [
+                  1648342800,
+                  7200,
+                  1
+                ],
+                [
+                  1667091600,
+                  3600,
+                  0
+                ],
+                [
+                  1679792400,
+                  7200,
+                  1
+                ],
+                [
+                  1698541200,
+                  3600,
+                  0
+                ],
+                [
+                  1711846800,
+                  7200,
+                  1
+                ],
+                [
+                  1729990800,
+                  3600,
+                  0
+                ],
+                [
+                  1743296400,
+                  7200,
+                  1
+                ],
+                [
+                  1761440400,
+                  3600,
+                  0
+                ],
+                [
+                  1774746000,
+                  7200,
+                  1
+                ],
+                [
+                  1792890000,
+                  3600,
+                  0
+                ],
+                [
+                  1806195600,
+                  7200,
+                  1
+                ],
+                [
+                  1824944400,
+                  3600,
+                  0
+                ],
+                [
+                  1837645200,
+                  7200,
+                  1
+                ],
+                [
+                  1856394000,
+                  3600,
+                  0
+                ],
+                [
+                  1869094800,
+                  7200,
+                  1
+                ],
+                [
+                  1887843600,
+                  3600,
+                  0
+                ],
+                [
+                  1901149200,
+                  7200,
+                  1
+                ],
+                [
+                  1919293200,
+                  3600,
+                  0
+                ],
+                [
+                  1932598800,
+                  7200,
+                  1
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "g7L4GgGLoeVZaYdR",
+              "who": 1
+            }
+          },
+          "digest": {
+            "hub": {
+              "hubId": 3917806713,
+              "mode": 0,
+              "subdevice": [
+                {
+                  "id": "280000000A7F",
+                  "status": 1,
+                  "lastActiveTime": 1649063189,
+                  "smokeAlarm": {
+                    "status": 170,
+                    "lmTime": 1649063189,
+                    "interConn": 0
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:09",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 5
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Hub.Online": {},
+          "Appliance.Hub.ToggleX": {},
+          "Appliance.Hub.SubdeviceList": {},
+          "Appliance.Hub.Battery": {},
+          "Appliance.Hub.Sensitivity": {},
+          "Appliance.Hub.PairSubDev": {},
+          "Appliance.Hub.Mts100.All": {},
+          "Appliance.Hub.Mts100.Temperature": {},
+          "Appliance.Hub.Mts100.ScheduleB": {
+            "scheduleUnitTime": 15
+          },
+          "Appliance.Hub.Mts100.Mode": {},
+          "Appliance.Hub.Mts100.Adjust": {},
+          "Appliance.Hub.SubDevice.MotorAdjust": {},
+          "Appliance.Hub.SubDevice.Beep": {},
+          "Appliance.Hub.Sensor.All": {},
+          "Appliance.Hub.Sensor.WaterLeak": {},
+          "Appliance.Hub.Sensor.TempHum": {},
+          "Appliance.Hub.Sensor.Adjust": {},
+          "Appliance.Hub.Sensor.Motion": {},
+          "Appliance.Hub.Sensor.DoorWindow": {},
+          "Appliance.Hub.Sensor.Smoke": {},
+          "Appliance.Hub.Sensor.Alert": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:09",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:09",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {
+              "model": "MSH300HK",
+              "sn": "262817220100010",
+              "category": 2,
+              "setupId": "DRGG",
+              "setupCode": "421-07-502",
+              "uuid": "####################################",
+              "token": "############################################################################################################################################################################################################################################################################################################################################################################################################################################################################"
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:14",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Position",
+        {
+          "position": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Position",
+        {
+          "position": {
+            "longitude": 0,
+            "latitude": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:24",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Online",
+        {
+          "online": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:24",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Online",
+        {
+          "online": [
+            {
+              "id": "280000000A7F",
+              "status": 1,
+              "lastActiveTime": 1649063189
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066188,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:29",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:29",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.ToggleX",
+        {
+          "togglex": [
+            {
+              "id": "280000000A7F",
+              "onoff": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Battery",
+        {
+          "battery": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Battery",
+        {
+          "battery": [
+            {
+              "id": "280000000A7F",
+              "value": 100
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:39",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensitivity",
+        {
+          "sensitivity": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:39",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensitivity",
+        {
+          "sensitivity": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.PairSubDev",
+        {
+          "pairsubdev": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:44",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(2201054460988326281748e1e984fc79) client connection attempt(0) error in async_http_request: Server disconnected"
+      ],
+      [
+        "2022/04/04 - 11:56:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.PairSubDev",
+        {
+          "pairsubdev": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:44",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(2201054460988326281748e1e984fc79) client connection attempt(1) error in async_http_request: Server disconnected"
+      ],
+      [
+        "2022/04/04 - 11:56:45",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.PairSubDev",
+        {
+          "pairsubdev": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:45",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(2201054460988326281748e1e984fc79) client connection attempt(2) error in async_http_request: Server disconnected"
+      ],
+      [
+        "2022/04/04 - 11:56:45",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(2201054460988326281748e1e984fc79) going offline!"
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(2201054460988326281748e1e984fc79) back online!"
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066210,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Temperature",
+        {
+          "temperature": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Temperature",
+        {
+          "temperature": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066218,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:59",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.ScheduleB",
+        {
+          "schedule": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:56:59",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.ScheduleB",
+        {
+          "schedule": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:04",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Mode",
+        {
+          "mode": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:04",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Mode",
+        {
+          "mode": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:09",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:09",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:14",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.MotorAdjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:14",
+        "RX",
+        "http",
+        "ERROR",
+        "Appliance.Hub.SubDevice.MotorAdjust",
+        {
+          "error": {
+            "code": 5000
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:14",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(2201054460988326281748e1e984fc79) protocol error: namespace = 'Appliance.Hub.SubDevice.MotorAdjust' payload = '{\"error\": {\"code\": 5000}}'"
+      ],
+      [
+        "2022/04/04 - 11:57:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "beep": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:19",
+        "RX",
+        "http",
+        "ERROR",
+        "Appliance.Hub.SubDevice.Beep",
+        {
+          "error": {
+            "code": 5000
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:19",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(2201054460988326281748e1e984fc79) protocol error: namespace = 'Appliance.Hub.SubDevice.Beep' payload = '{\"error\": {\"code\": 5000}}'"
+      ],
+      [
+        "2022/04/04 - 11:57:24",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:24",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:24",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:24",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066248,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:29",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.WaterLeak",
+        {
+          "waterleak": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:29",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.WaterLeak",
+        {
+          "waterLeak": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:34",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.TempHum",
+        {
+          "temphum": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:34",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.TempHum",
+        {
+          "tempHum": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:39",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:39",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:44",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Motion",
+        {
+          "motion": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:44",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Motion",
+        {
+          "motion": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.DoorWindow",
+        {
+          "doorwindow": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.DoorWindow",
+        {
+          "doorWindow": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Smoke",
+        {
+          "smoke": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:54",
+        "RX",
+        "http",
+        "ERROR",
+        "Appliance.Hub.Sensor.Smoke",
+        {
+          "error": {
+            "code": 5000
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:54",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(2201054460988326281748e1e984fc79) protocol error: namespace = 'Appliance.Hub.Sensor.Smoke' payload = '{\"error\": {\"code\": 5000}}'"
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066278,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:59",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Alert",
+        {
+          "alert": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:57:59",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Alert",
+        {
+          "alert": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066308,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066338,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:58:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066368,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066398,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 11:59:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066428,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066458,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:00:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066488,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066518,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:01:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066548,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066578,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:02:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066608,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066638,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:03:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066668,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066698,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:04:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066728,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msh300hk",
+                "subType": "un",
+                "version": "4.0.0",
+                "chipType": "MT7686",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "4.5.10",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/02/18 14:26:51 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1649066758,
+                "timezone": "Europe/Berlin",
+                "timeRule": [
+                  [
+                    1635642000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1648342800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1667091600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1679792400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1698541200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1711846800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1729990800,
+                    3600,
+                    0
+                  ],
+                  [
+                    1743296400,
+                    7200,
+                    1
+                  ],
+                  [
+                    1761440400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1774746000,
+                    7200,
+                    1
+                  ],
+                  [
+                    1792890000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1806195600,
+                    7200,
+                    1
+                  ],
+                  [
+                    1824944400,
+                    3600,
+                    0
+                  ],
+                  [
+                    1837645200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1856394000,
+                    3600,
+                    0
+                  ],
+                  [
+                    1869094800,
+                    7200,
+                    1
+                  ],
+                  [
+                    1887843600,
+                    3600,
+                    0
+                  ],
+                  [
+                    1901149200,
+                    7200,
+                    1
+                  ],
+                  [
+                    1919293200,
+                    3600,
+                    0
+                  ],
+                  [
+                    1932598800,
+                    7200,
+                    1
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "g7L4GgGLoeVZaYdR",
+                "who": 1
+              }
+            },
+            "digest": {
+              "hub": {
+                "hubId": 3917806713,
+                "mode": 0,
+                "subdevice": [
+                  {
+                    "id": "280000000A7F",
+                    "status": 1,
+                    "lastActiveTime": 1649063189,
+                    "smokeAlarm": {
+                      "status": 170,
+                      "lmTime": 1649063189,
+                      "interConn": 0
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.All",
+        {
+          "all": [
+            {
+              "id": "280000000A7F",
+              "online": {
+                "status": 1,
+                "lastActiveTime": 1649063189
+              },
+              "smokeAlarm": {
+                "status": 170,
+                "lmtime": 1649063189,
+                "interConn": 0
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.All",
+        {
+          "all": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Sensor.Adjust",
+        {
+          "adjust": []
+        }
+      ],
+      [
+        "2022/04/04 - 12:05:58",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Hub.Mts100.Adjust",
+        {
+          "adjust": []
+        }
+      ]
+    ]
+  }
+}

@@ -2,6 +2,7 @@
     Implementation for an async (aiohttp.ClientSession) http client
     for Meross devices.
 """
+from __future__ import annotations
 from logging import Logger, getLogger, DEBUG
 from json import (
     dumps as json_dumps,
@@ -70,7 +71,7 @@ class MerossHttpClient:
             # when this timeout is transient
             while True:
                 try:
-                    with async_timeout.timeout(timeout):
+                    async with async_timeout.timeout(timeout):
                         response = await self._session.post(
                             url=self._requesturl,
                             data=request_data

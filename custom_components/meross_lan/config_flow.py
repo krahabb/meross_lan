@@ -1,4 +1,5 @@
-"""Config flow for Meross IoT local LAN integration."""
+"""Config flow for Meross LAN integration."""
+from __future__ import annotations
 import typing
 from time import time
 from logging import DEBUG
@@ -265,20 +266,21 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
 
     async def async_step_mqtt(self, discovery_info):
         """manage the MQTT discovery flow"""
+        await self.async_set_unique_id(DOMAIN)
         # this entry should only ever called once after startup
         # when HA thinks we're interested in discovery.
         # If our MerossApi is already running it will manage the discovery itself
         # so this flow is only useful when MerossLan has no configuration yet
         # and we leverage the default mqtt discovery to setup our manager
         api = MerossApi.get(self.hass)
-        if api.mqtt_registered:
+        if api.mqtt_is_subscribed():
             return self.async_abort(reason='already_configured')
         # try setup the mqtt subscription
         # this call might not register because of errors or because of an overlapping
         # request from 'async_setup_entry' (we're preventing overlapped calls to MQTT
         # subscription)
         await api.async_mqtt_register()
-        if api.mqtt_registered:
+        if api.mqtt_is_subscribed():
             # ok, now pass along the discovering mqtt message so our MerossApi state machine
             # gets to work on this
             await api.async_mqtt_receive(discovery_info)
@@ -404,7 +406,11 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                         device.entry_option_update(user_input)
                     except:
                         pass # forgive any error
+                # we're not following HA 'etiquette' and we're just updating the
+                # config_entry data with this dirty trick
                 self.hass.config_entries.async_update_entry(self._config_entry, data=data)
+                # return None in data so the async_update_entry is not called for the
+                # options to be updated
                 return self.async_create_entry(title=None, data=None) # type: ignore
 
             except MerossKeyError:

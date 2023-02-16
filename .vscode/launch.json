@@ -13,7 +13,7 @@
         "-P",
         "40000",
         "custom_components.meross_lan.emulator:run",
-        "custom_components/meross_lan/traces/emulator",
+        "emulator_traces",
         "-K pippo"
         //"-U 01234567890123456789012345678901"
       ]
@@ -46,6 +46,14 @@
           "remoteRoot": "/usr/src/homeassistant"
         }
       ]
+    },
+    {
+      "name": "Python: Debug Tests",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "purpose": ["debug-test"],
+      "justMyCode": false
     }
   ]
 }

@@ -257,7 +257,7 @@ class MerossToggle(MerossEntity):
 
 
 #
-# helper functions to 'commonize' platform setup/unload
+# helper functions to 'commonize' platform setup
 #
 def platform_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices, platform: str
@@ -271,15 +271,3 @@ def platform_setup_entry(
     LOGGER.debug(
         "async_setup_entry device_id = %s - platform = %s", device_id, platform
     )
-
-
-def platform_unload_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, platform: str
-):
-    device_id = config_entry.data[CONF_DEVICE_ID]
-    device: "MerossDevice" = hass.data[DOMAIN].devices[device_id]
-    device.platforms[platform] = None
-    LOGGER.debug(
-        "async_unload_entry device_id = %s - platform = %s", device_id, platform
-    )
-    return True

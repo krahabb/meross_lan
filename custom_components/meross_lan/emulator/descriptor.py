@@ -1,9 +1,15 @@
-
+"""
+    Emulator descriptor:
+    build a description of the emulator by parsing the trace file.
+    This will be used then to instantiate a proper Emulator class
+    in case we need some special behavor
+"""
+from __future__ import annotations
 from json import (
     loads as json_loads,
 )
 
-from ..merossclient import (
+from custom_components.meross_lan.merossclient import (
     MerossDeviceDescriptor,
     const as mc,
     get_namespacekey,

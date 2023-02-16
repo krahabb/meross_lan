@@ -1,3 +1,6 @@
 -r requirements_dev.txt
 aiodiscover
+aiohttp-cors
+scapy
+janus
 pytest-homeassistant-custom-component

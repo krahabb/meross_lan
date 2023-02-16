@@ -5,8 +5,6 @@ from .merossclient import const as mc
 
 DOMAIN = "meross_lan"
 
-SERVICE_REQUEST = "request"
-
 DND_ID = 'dnd' # entity (sub)id for the switch representing DNDMode
 
 # ConfigEntry keys
@@ -39,6 +37,9 @@ CONF_TRACE_FILENAME = '{}-{}.csv' # filename format: device_type-device_id.csv
 
 CONF_TIMESTAMP = mc.KEY_TIMESTAMP # this is a 'fake' conf used to force-flush
 
+SERVICE_REQUEST = "request"
+CONF_NOTIFYRESPONSE = 'notifyresponse' # key used in service 'request' call
+
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)
 """
@@ -54,3 +55,4 @@ PARAM_TIMEZONE_CHECK_PERIOD = 604800 # 1 week before retrying timezone updates
 PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
 PARAM_TIMESTAMP_TOLERANCE = 5 # max device timestamp diff against our and trigger warning and (eventually) fix it
+PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2 # used to delay the iteration of abilities while tracing

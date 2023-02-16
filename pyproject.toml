@@ -1,0 +1,54 @@
+################################################################################
+[tool.black]
+################################################################################
+target-version = ["py310"]
+extend-exclude = "/generated/"
+
+################################################################################
+[tool.isort]
+################################################################################
+# https://github.com/PyCQA/isort/wiki/isort-Settings
+profile = "black"
+# will group `import x` and `from x import` of the same module.
+force_sort_within_sections = true
+known_first_party = [
+    "custom_components.meross_lan",
+    "tests",
+]
+forced_separate = [
+    "tests",
+]
+combine_as_imports = true
+
+################################################################################
+[tool.pylint."MESSAGES CONTROL"]
+################################################################################
+disable = [
+    "bare-except",
+    "broad-except",
+    "global-statement",
+    "import-outside-toplevel",
+    "invalid-name",
+    "missing-class-docstring",
+    "missing-function-docstring",
+]
+# .vscode settings.json
+#        "--disable=missing-function-docstring",
+#        "--disable=missing-class-docstring",
+#        "--disable=invalid-name",
+#        "--disable=bare-except",
+#        "--disable=broad-except"
+
+################################################################################
+[tool.pytest.ini_options]
+################################################################################
+testpaths = [
+    "tests",
+]
+norecursedirs = [
+    ".git",
+    "testing_config",
+]
+log_format = "%(asctime)s.%(msecs)03d %(levelname)-8s %(threadName)s %(name)s:%(filename)s:%(lineno)s %(message)s"
+log_date_format = "%Y-%m-%d %H:%M:%S"
+asyncio_mode = "auto"

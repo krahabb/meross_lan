@@ -1,3 +1,4 @@
+from __future__ import annotations
 import typing
 from copy import deepcopy
 from homeassistant.components.diagnostics import REDACTED
@@ -15,22 +16,17 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
 
 
-async def async_get_config_entry_diagnostics(
-    hass, entry: 'ConfigEntry'
-) -> dict[str, object]:
-    """Return diagnostics for a config entry."""
-    return await _async_get_diagnostics(hass, entry)
-
-
 async def async_get_device_diagnostics(
     hass, entry: 'ConfigEntry', device
 ) -> dict[str, object]:
     """Return diagnostics for a device entry."""
-    return await _async_get_diagnostics(hass, entry)
+    return await async_get_config_entry_diagnostics(hass, entry)
 
 
-async def _async_get_diagnostics(hass, entry: 'ConfigEntry'):
-
+async def async_get_config_entry_diagnostics(
+    hass, entry: 'ConfigEntry'
+) -> dict[str, object]:
+    """Return diagnostics for a config entry."""
     device_id = entry.data.get(CONF_DEVICE_ID)
     if device_id is None:# MQTT hub entry
         return {

@@ -36,7 +36,6 @@ from .helpers import (
     LOGGER,
     LOGGER_trap,
     obfuscate,
-    mqtt_is_connected,
 )
 from .const import (
     DOMAIN,
@@ -61,6 +60,7 @@ from .const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_TIMEZONE_CHECK_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
+    PARAM_TRACING_ABILITY_POLL_TIMEOUT,
 )
 
 ResponseCallbackType = typing.Callable[[bool, dict, dict], None]
@@ -88,6 +88,8 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_SYSTEM_REPORT,
     mc.NS_APPLIANCE_SYSTEM_DEBUG,
     mc.NS_APPLIANCE_SYSTEM_CLOCK,
+    mc.NS_APPLIANCE_DIGEST_TRIGGERX,
+    mc.NS_APPLIANCE_DIGEST_TIMERX,
     mc.NS_APPLIANCE_CONFIG_KEY,
     mc.NS_APPLIANCE_CONFIG_WIFI,
     mc.NS_APPLIANCE_CONFIG_WIFIX,  # disconnects
@@ -97,6 +99,8 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_CONTROL_UNBIND,
     mc.NS_APPLIANCE_CONTROL_MULTIPLE,
     mc.NS_APPLIANCE_CONTROL_UPGRADE,  # disconnects
+    mc.NS_APPLIANCE_CONTROL_TRIGGERX,
+    mc.NS_APPLIANCE_CONTROL_TIMERX,
     mc.NS_APPLIANCE_HUB_EXCEPTION,  # disconnects
     mc.NS_APPLIANCE_HUB_REPORT,  # disconnects
     mc.NS_APPLIANCE_HUB_SUBDEVICELIST,  # disconnects
@@ -507,6 +511,18 @@ class MerossDevice:
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ):
+        self.api.hass.async_create_task(
+            self.async_mqtt_request(namespace, method, payload, response_callback, messageid)
+        )
+
+    async def async_mqtt_request(
+        self,
+        namespace: str,
+        method: str,
+        payload: dict,
+        response_callback: ResponseCallbackType | None = None,
+        messageid: str | None = None,
+    ):
         if self._trace_file is not None:
             self._trace(
                 payload, namespace, method, CONF_PROTOCOL_MQTT, TRACE_DIRECTION_TX
@@ -515,7 +531,7 @@ class MerossDevice:
             transaction = _MQTTTransaction(namespace, method, response_callback)
             self._mqtt_transactions[transaction.messageid] = transaction
             messageid = transaction.messageid
-        self.api.mqtt_publish(
+        await self.api.async_mqtt_publish(
             self.device_id, namespace, method, payload, self.key, messageid
         )
 
@@ -557,19 +573,21 @@ class MerossDevice:
                     self.log(
                         INFO,
                         0,
-                        "MerossDevice(%s) %s in async_http_request attempt(%s): %s",
+                        "MerossDevice(%s) %s(%s) in async_http_request %s %s attempt(%s)",
                         self.name,
                         type(e).__name__,
-                        str(attempt),
                         str(e),
+                        str(attempt),
+                        method,
+                        namespace
                     )
                     if (
                         (self.conf_protocol is CONF_PROTOCOL_AUTO)
                         and self.lastmqtt
-                        and mqtt_is_connected(self.api.hass)
+                        and self.api.mqtt_is_connected()
                     ):
                         self.switch_protocol(CONF_PROTOCOL_MQTT)
-                        self.mqtt_request(namespace, method, payload, response_callback)
+                        await self.async_mqtt_request(namespace, method, payload, response_callback)
                         return
                     elif isinstance(e, asyncio.TimeoutError):
                         self._set_offline()
@@ -590,10 +608,12 @@ class MerossDevice:
             self.log(
                 WARNING,
                 14400,
-                "MerossDevice(%s) %s in async_http_request: %s",
+                "MerossDevice(%s) %s(%s) in async_http_request %s %s",
                 self.name,
                 type(e).__name__,
                 str(e),
+                method,
+                namespace
             )
 
     def request(
@@ -603,28 +623,8 @@ class MerossDevice:
         payload: dict,
         response_callback: ResponseCallbackType | None = None,
     ):
-        """
-        route the request through MQTT or HTTP to the physical device.
-        callback will be called on successful replies and actually implemented
-        only when HTTPing SET requests. On MQTT we rely on async PUSH and SETACK to manage
-        confirmation/status updates
-        """
-        self.lastrequest = time()
-        if self.curr_protocol is CONF_PROTOCOL_MQTT:
-            # only publish when mqtt component is really connected else we'd
-            # insanely dump lot of mqtt errors in log
-            if mqtt_is_connected(self.api.hass):
-                self.mqtt_request(namespace, method, payload, response_callback)
-                return
-            # MQTT not connected
-            if self.conf_protocol is CONF_PROTOCOL_MQTT:
-                return
-            # protocol is AUTO
-            self.switch_protocol(CONF_PROTOCOL_HTTP)
-
-        # curr_protocol is HTTP
         self.api.hass.async_create_task(
-            self.async_http_request(namespace, method, payload, response_callback)
+            self.async_request(namespace, method, payload, response_callback)
         )
 
     async def async_request(
@@ -644,8 +644,8 @@ class MerossDevice:
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
-            if mqtt_is_connected(self.api.hass):
-                self.mqtt_request(namespace, method, payload, response_callback)
+            if self.api.mqtt_is_connected():
+                await self.async_mqtt_request(namespace, method, payload, response_callback)
                 return
             # MQTT not connected
             if self.conf_protocol is CONF_PROTOCOL_MQTT:
@@ -672,7 +672,7 @@ class MerossDevice:
         else, when MQTT is alive this will fire the requests only once when just switching online
         or when not listening any MQTT over the PARAM_HEARTBEAT_PERIOD
         """
-        if (epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD:
+        if ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD) or (namespace is not None):
             for _namespace, _payload in self.polling_dictionary.items():
                 if self._online:
                     if _namespace != namespace:
@@ -681,7 +681,7 @@ class MerossDevice:
                     # it might happen we detect a timeout when using HTTP
                     # and this is interpreted as a clear indication the
                     # device is offline (see async_http_request) so we break
-                    # the polling cycle and wait for a reconnect preocedure
+                    # the polling cycle and wait for a reconnect procedure
                     # without wasting execution time here
                     break
 
@@ -837,7 +837,7 @@ class MerossDevice:
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
         if not self._online:
-            self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+            await self.async_request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
 
     def _parse_all(self, payload: dict):
         """
@@ -852,7 +852,7 @@ class MerossDevice:
         descr.update(payload)
         # persist changes to configentry only when relevant properties change
         newaddr = descr.innerIp
-        if oldaddr != newaddr:
+        if newaddr and (oldaddr != newaddr):
             # check the new innerIp is good since we have random blanks in the wild (#90)
             try:
                 socket.inet_aton(newaddr)
@@ -1069,6 +1069,7 @@ class MerossDevice:
 
     def _trace_open(self, endtime):
         try:
+            LOGGER.debug("MerossDevice(%s): start tracing", self.name)
             tracedir = self.api.hass.config.path(
                 "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
             )
@@ -1127,7 +1128,7 @@ class MerossDevice:
                 if ability not in TRACE_ABILITY_EXCLUDE:
                     self.request_get(ability)
                     break
-            self.api.schedule_callback(2, self._trace_ability)
+            self.api.schedule_callback(PARAM_TRACING_ABILITY_POLL_TIMEOUT, self._trace_ability)
         except:  # finished ?!
             self._trace_ability_iter = None
 

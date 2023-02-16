@@ -56,7 +56,8 @@
             "invalid_nullkey": "Error clave: seleccione 'Hack mode' para permitir la clave vacía",
             "already_configured_device": "Este dispositivo ya esta configurado",
             "cannot_connect": "No es posible conectarse",
-            "invalid_auth": "Error de autenticación"
+            "invalid_auth": "Error de autenticación",
+            "device_id_mismatch": "Discrepancia de UUID: el dispositivo no es el mismo"
         },
         "step": {
             "hub": {

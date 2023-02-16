@@ -91,10 +91,6 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_SENSOR)
 
 
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    return me.platform_unload_entry(hass, config_entry, PLATFORM_SENSOR)
-
-
 class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
 
     PLATFORM = PLATFORM_SENSOR
@@ -210,7 +206,9 @@ class ConsumptionMixin(
             st.tm_year,
             st.tm_mon,
             st.tm_mday,
-            tzinfo=timezone(timedelta(seconds=st.tm_gmtoff), st.tm_zone),
+            tzinfo=timezone(
+                timedelta(seconds=st.tm_gmtoff), st.tm_zone
+            ) if st.tm_zone is not None else None,
         )
         timestamp_lastreset = dt.timestamp() - self.device_timedelta
         self.log(
