@@ -56,7 +56,8 @@
       "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
       "already_configured_device": "Déjà configuré. Un seul appareil possible.",
       "cannot_connect": "Pas de connect",
-      "invalid_auth": "Authentication"
+      "invalid_auth": "Authentication",
+      "device_id_mismatch": "Non-concordance de l'UUID: l'appareil n'est pas le même"
     },
     "step": {
       "hub": {

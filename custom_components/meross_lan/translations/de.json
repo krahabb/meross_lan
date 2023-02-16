@@ -56,7 +56,8 @@
             "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
             "already_configured_device": "Das Gerät ist bereits vorhanden",
             "cannot_connect": "Verbindung nicht möglich",
-            "invalid_auth": "Fehlerhafte Zugangsdaten"
+            "invalid_auth": "Fehlerhafte Zugangsdaten",
+            "device_id_mismatch": "Nicht übereinstimmende Geräte-UUID: Das Gerät ist nicht dasselbe"
         },
         "step": {
             "hub": {

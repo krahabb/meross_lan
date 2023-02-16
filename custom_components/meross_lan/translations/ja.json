@@ -56,7 +56,8 @@
             "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
             "already_configured_device": "可能なデバイスは1つだけ",
             "cannot_connect": "接続できません",
-            "invalid_auth": "認証エラー"
+            "invalid_auth": "認証エラー",
+            "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません"
         },
         "step": {
             "hub": {

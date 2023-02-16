@@ -57,7 +57,8 @@
             "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
             "already_configured_device": "Zařízení již bylo konfigurováno",
             "cannot_connect": "Pokus o připojení se nezdařil",
-            "invalid_auth": "Ověření selhalo"
+            "invalid_auth": "Ověření selhalo",
+            "device_id_mismatch": "Neshoda UUID zařízení: zařízení není stejné"
         },
         "step": {
             "hub": {
