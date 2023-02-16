@@ -49,6 +49,24 @@ class Mts200ConfigSwitch(MLSwitch):
         self._attr_name = entitykey
         super().__init__(climate.device, climate.channel, entitykey, DEVICE_CLASS_SWITCH, None, namespace)
 
+    async def async_request_onoff(self, onoff: int):
+
+        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+            if acknowledge:
+                self.update_onoff(onoff)
+
+        await self.device.async_request(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: [{
+                    self.key_channel: self.channel,
+                    self.key_onoff: onoff,
+                }]
+            },
+            _ack_callback,
+        )
+
 
 class Mts200Climate(MtsClimate):
 
