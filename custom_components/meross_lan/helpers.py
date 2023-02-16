@@ -110,31 +110,30 @@ async def get_entity_last_state(hass, entity_id):
     recover the last known good state from recorder in order to
     restore transient state information when restarting HA
     """
-    try:
-        from homeassistant.components.recorder import history
+    from homeassistant.components.recorder import history
 
-        if hasattr(history, 'get_state'):# removed in 2022.6.x
-            return history.get_state(hass, utcnow(), entity_id) # type: ignore
+    if hasattr(history, 'get_state'):# removed in 2022.6.x
+        return history.get_state(hass, utcnow(), entity_id) # type: ignore
 
-        elif hasattr(history, 'get_last_state_changes'):
-            """
-            get_instance too is relatively new: I hope it was in place when
-            get_last_state_changes was added
-            """
-            from homeassistant.components.recorder import get_instance
-            _last_state: dict = await get_instance(hass).async_add_executor_job(
-                    partial(
-                        history.get_last_state_changes,
-                        hass,
-                        1,
-                        entity_id,
-                    )
-                ) # type: ignore
-            if entity_id in _last_state:
-                _last_entity_state: list = _last_state[entity_id]
-                if _last_entity_state:
-                    return _last_entity_state[0]
-    except:
-        pass
+    elif hasattr(history, 'get_last_state_changes'):
+        """
+        get_instance too is relatively new: I hope it was in place when
+        get_last_state_changes was added
+        """
+        from homeassistant.components.recorder import get_instance
+        _last_state: dict = await get_instance(hass).async_add_executor_job(
+                partial(
+                    history.get_last_state_changes,
+                    hass,
+                    1,
+                    entity_id,
+                )
+            ) # type: ignore
+        if entity_id in _last_state:
+            _last_entity_state: list = _last_state[entity_id]
+            if _last_entity_state:
+                return _last_entity_state[0]
 
-    return None
+        return None
+    else:
+        raise Exception("Cannot find history.get_last_state_changes api")
