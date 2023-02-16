@@ -256,7 +256,7 @@ class MerossApi:
         self.devices[device_id] = device
         return device
 
-    def schedule_async_callback(self, delay: float, target: Callable[[], Coroutine] , *args) -> TimerHandle:
+    def schedule_async_callback(self, delay: float, target: Callable[..., Coroutine] , *args) -> TimerHandle:
         @callback
         def _callback(_target, *_args):
             self.hass.async_create_task(_target(*_args))
