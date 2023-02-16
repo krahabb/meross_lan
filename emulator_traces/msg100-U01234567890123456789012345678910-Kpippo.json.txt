@@ -1,0 +1,5618 @@
+{
+  "home_assistant": {
+    "installation_type": "Unsupported Third Party Container",
+    "version": "2023.2.2",
+    "dev": false,
+    "hassio": false,
+    "virtualenv": false,
+    "python_version": "3.10.7",
+    "docker": true,
+    "arch": "x86_64",
+    "timezone": "Pacific/Auckland",
+    "os_name": "Linux",
+    "os_version": "6.1.2-1-pve",
+    "run_as_root": false
+  },
+  "custom_components": {
+    "hacs": {
+      "version": "1.30.1",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "webrtc": {
+      "version": "v3.0.2",
+      "requirements": []
+    },
+    "eufy_security": {
+      "version": "6.2.0",
+      "requirements": [
+        "websocket-client==1.1.0",
+        "aiortsp==1.3.6"
+      ]
+    },
+    "meross_lan": {
+      "version": "3.0.1",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "integration_type": "hub",
+    "config_flow": true,
+    "iot_class": "local_polling",
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "requirements": [],
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "dependencies": [
+      "recorder"
+    ],
+    "after_dependencies": [
+      "mqtt",
+      "dhcp"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "version": "3.0.1",
+    "is_built_in": false
+  },
+  "data": {
+    "host": "**REDACTED**",
+    "key": "**REDACTED**",
+    "cloud_key": "**REDACTED**",
+    "protocol": "auto",
+    "polling_period": 30,
+    "trace_timeout": 600,
+    "device_id": "**REDACTED**",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "msg100",
+            "subType": "us",
+            "version": "3.5.0",
+            "chipType": "mt7682",
+            "uuid": "################################",
+            "macAddress": "#################"
+          },
+          "firmware": {
+            "version": "3.2.7",
+            "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+            "encrypt": 1,
+            "wifiMac": "#################",
+            "innerIp": "##############",
+            "server": "####################",
+            "port": "###",
+            "userId": "#######"
+          },
+          "time": {
+            "timestamp": 1675765634,
+            "timezone": "Pacific/Auckland",
+            "timeRule": [
+              [
+                1664028000,
+                46800,
+                1
+              ],
+              [
+                1680357600,
+                43200,
+                0
+              ],
+              [
+                1695477600,
+                46800,
+                1
+              ],
+              [
+                1712412000,
+                43200,
+                0
+              ],
+              [
+                1727532000,
+                46800,
+                1
+              ],
+              [
+                1743861600,
+                43200,
+                0
+              ],
+              [
+                1758981600,
+                46800,
+                1
+              ],
+              [
+                1775311200,
+                43200,
+                0
+              ],
+              [
+                1790431200,
+                46800,
+                1
+              ],
+              [
+                1806760800,
+                43200,
+                0
+              ],
+              [
+                1821880800,
+                46800,
+                1
+              ],
+              [
+                1838210400,
+                43200,
+                0
+              ],
+              [
+                1853330400,
+                46800,
+                1
+              ],
+              [
+                1869660000,
+                43200,
+                0
+              ],
+              [
+                1885384800,
+                46800,
+                1
+              ],
+              [
+                1901714400,
+                43200,
+                0
+              ],
+              [
+                1916834400,
+                46800,
+                1
+              ],
+              [
+                1933164000,
+                43200,
+                0
+              ],
+              [
+                1948284000,
+                46800,
+                1
+              ],
+              [
+                1964613600,
+                43200,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 1
+          }
+        },
+        "digest": {
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 1,
+              "lmTime": 0
+            }
+          ],
+          "triggerx": [
+            {
+              "channel": 0,
+              "id": "1111111111111111",
+              "count": 1
+            }
+          ],
+          "timerx": [],
+          "garageDoor": [
+            {
+              "channel": 0,
+              "open": 0,
+              "lmTime": 1675760187
+            }
+          ]
+        }
+      },
+      "payloadVersion": 1,
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 5
+        },
+        "Appliance.Control.ToggleX": {},
+        "Appliance.Control.TimerX": {
+          "sunOffsetSupport": 1,
+          "notify": [
+            "Appliance.GarageDoor.State"
+          ]
+        },
+        "Appliance.Control.TriggerX": {
+          "notify": [
+            "Appliance.GarageDoor.State"
+          ]
+        },
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.GarageDoor.State": {},
+        "Appliance.GarageDoor.Config": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.Digest.TimerX": {}
+      }
+    },
+    "deviceclass": "ToggleXMixinRuntimeMixinGarageMixinMerossDevice",
+    "disabled_by": null,
+    "disabled_polling": false,
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2023/02/12 - 09:58:45",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "msg100",
+              "subType": "us",
+              "version": "3.5.0",
+              "chipType": "mt7682",
+              "uuid": "################################",
+              "macAddress": "#################"
+            },
+            "firmware": {
+              "version": "3.2.7",
+              "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+              "encrypt": 1,
+              "wifiMac": "#################",
+              "innerIp": "##############",
+              "server": "####################",
+              "port": "###",
+              "userId": "#######"
+            },
+            "time": {
+              "timestamp": 1676149112,
+              "timezone": "Pacific/Auckland",
+              "timeRule": [
+                [
+                  1664028000,
+                  46800,
+                  1
+                ],
+                [
+                  1680357600,
+                  43200,
+                  0
+                ],
+                [
+                  1695477600,
+                  46800,
+                  1
+                ],
+                [
+                  1712412000,
+                  43200,
+                  0
+                ],
+                [
+                  1727532000,
+                  46800,
+                  1
+                ],
+                [
+                  1743861600,
+                  43200,
+                  0
+                ],
+                [
+                  1758981600,
+                  46800,
+                  1
+                ],
+                [
+                  1775311200,
+                  43200,
+                  0
+                ],
+                [
+                  1790431200,
+                  46800,
+                  1
+                ],
+                [
+                  1806760800,
+                  43200,
+                  0
+                ],
+                [
+                  1821880800,
+                  46800,
+                  1
+                ],
+                [
+                  1838210400,
+                  43200,
+                  0
+                ],
+                [
+                  1853330400,
+                  46800,
+                  1
+                ],
+                [
+                  1869660000,
+                  43200,
+                  0
+                ],
+                [
+                  1885384800,
+                  46800,
+                  1
+                ],
+                [
+                  1901714400,
+                  43200,
+                  0
+                ],
+                [
+                  1916834400,
+                  46800,
+                  1
+                ],
+                [
+                  1933164000,
+                  43200,
+                  0
+                ],
+                [
+                  1948284000,
+                  46800,
+                  1
+                ],
+                [
+                  1964613600,
+                  43200,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1
+            }
+          },
+          "digest": {
+            "togglex": [
+              {
+                "channel": 0,
+                "onoff": 1,
+                "lmTime": 0
+              }
+            ],
+            "triggerx": [
+              {
+                "channel": 0,
+                "id": "1111111111111111",
+                "count": 2
+              }
+            ],
+            "timerx": [
+              {
+                "channel": 0,
+                "id": "1111111111111111",
+                "count": 1
+              }
+            ],
+            "garageDoor": [
+              {
+                "channel": 0,
+                "open": 1,
+                "lmTime": 1676147139
+              }
+            ]
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:45",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 5
+          },
+          "Appliance.Control.ToggleX": {},
+          "Appliance.Control.TimerX": {
+            "sunOffsetSupport": 1,
+            "notify": [
+              "Appliance.GarageDoor.State"
+            ]
+          },
+          "Appliance.Control.TriggerX": {
+            "notify": [
+              "Appliance.GarageDoor.State"
+            ]
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.GarageDoor.State": {},
+          "Appliance.GarageDoor.Config": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.Digest.TimerX": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:45",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:45",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 73
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Position",
+        {
+          "position": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:47",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Position",
+        {
+          "position": {
+            "longitude": 0,
+            "latitude": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:49",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ToggleX",
+        {
+          "channel": 0,
+          "togglex": {
+            "channel": 0,
+            "onoff": 1,
+            "lmTime": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:51",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.TimerX",
+        {
+          "timerx": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:52",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.GarageDoor.State",
+        {
+          "state": {
+            "channel": 0,
+            "open": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.TriggerX",
+        {
+          "triggerx": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:55",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.State",
+        {
+          "state": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:57",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:58",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(Garage Door) has incorrect timestamp: 1676149135 seconds behind HA"
+      ],
+      [
+        "2023/02/12 - 09:58:58",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.GarageDoor.State",
+        {
+          "state": {
+            "channel": 0,
+            "open": 1,
+            "lmTime": 1676147139,
+            "execute": 1
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:58:59",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.TriggerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:01",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Digest.TimerX",
+        {
+          "digest": []
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(Garage Door) TimeoutError in async_http_request attempt(0): "
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(Garage Door) going offline!"
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 3,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 0
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676147139
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(Garage Door) back online!"
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 70
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.TriggerX",
+        {
+          "digest": [
+            {
+              "channel": 0,
+              "id": "1111111111111111",
+              "count": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:08",
+        "",
+        "auto",
+        "LOG",
+        "INFO",
+        "MerossDevice(Garage Door) TimeoutError in async_http_request attempt(0): "
+      ],
+      [
+        "2023/02/12 - 09:59:08",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(Garage Door) going offline!"
+      ],
+      [
+        "2023/02/12 - 09:59:10",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(Garage Door) TimeoutError in async_http_request: "
+      ],
+      [
+        "2023/02/12 - 09:59:12",
+        "",
+        "auto",
+        "LOG",
+        "WARNING",
+        "MerossDevice(Garage Door) TimeoutError in async_http_request: "
+      ],
+      [
+        "2023/02/12 - 09:59:15",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Digest.TimerX",
+        {
+          "digest": [
+            {
+              "channel": 0,
+              "id": "1111111111111111",
+              "count": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:15",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "MerossDevice(Garage Door) back online!"
+      ],
+      [
+        "2023/02/12 - 09:59:15",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:16",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 3,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 0
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 0,
+                  "lmTime": 1676147139
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:16",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:16",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:16",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:16",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:16",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:16",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 70
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149176,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 0,
+                  "lmTime": 1676147139
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 09:59:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149206,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 0,
+                  "lmTime": 1676147139
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149236,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 0,
+                  "lmTime": 1676147139
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:00:36",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149266,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 0,
+                  "lmTime": 1676147139
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:06",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:06",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:30",
+        "TX",
+        "http",
+        "SET",
+        "Appliance.GarageDoor.State",
+        {
+          "state": {
+            "channel": 0,
+            "open": 1
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:30",
+        "RX",
+        "http",
+        "SETACK",
+        "Appliance.GarageDoor.State",
+        {
+          "state": {
+            "channel": 0,
+            "open": 0,
+            "lmTime": 1676147139,
+            "execute": 1
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:36",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:37",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149296,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:37",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:37",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:37",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:01:37",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:07",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149327,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149357,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:02:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149387,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149418,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:03:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149448,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149478,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:04:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 73
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149508,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:08",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149538,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:38",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:05:38",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:08",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:10",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149569,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:10",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:10",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:10",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:10",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:40",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:40",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149599,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:40",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:40",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:40",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:06:40",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:10",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149630,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:11",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:11",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:41",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:41",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149660,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:41",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:41",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:41",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:07:41",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:11",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149690,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:11",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:11",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:11",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:41",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:41",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "msg100",
+                "subType": "us",
+                "version": "3.5.0",
+                "chipType": "mt7682",
+                "uuid": "################################",
+                "macAddress": "#################"
+              },
+              "firmware": {
+                "version": "3.2.7",
+                "compileTime": "2022/08/30 12:14:18 GMT +08:00",
+                "encrypt": 1,
+                "wifiMac": "#################",
+                "innerIp": "##############",
+                "server": "####################",
+                "port": "###",
+                "userId": "#######"
+              },
+              "time": {
+                "timestamp": 1676149720,
+                "timezone": "Pacific/Auckland",
+                "timeRule": [
+                  [
+                    1664028000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1680357600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1695477600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1712412000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1727532000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1743861600,
+                    43200,
+                    0
+                  ],
+                  [
+                    1758981600,
+                    46800,
+                    1
+                  ],
+                  [
+                    1775311200,
+                    43200,
+                    0
+                  ],
+                  [
+                    1790431200,
+                    46800,
+                    1
+                  ],
+                  [
+                    1806760800,
+                    43200,
+                    0
+                  ],
+                  [
+                    1821880800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1838210400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1853330400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1869660000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1885384800,
+                    46800,
+                    1
+                  ],
+                  [
+                    1901714400,
+                    43200,
+                    0
+                  ],
+                  [
+                    1916834400,
+                    46800,
+                    1
+                  ],
+                  [
+                    1933164000,
+                    43200,
+                    0
+                  ],
+                  [
+                    1948284000,
+                    46800,
+                    1
+                  ],
+                  [
+                    1964613600,
+                    43200,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 0
+                }
+              ],
+              "triggerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 2
+                }
+              ],
+              "timerx": [
+                {
+                  "channel": 0,
+                  "id": "1111111111111111",
+                  "count": 1
+                }
+              ],
+              "garageDoor": [
+                {
+                  "channel": 0,
+                  "open": 1,
+                  "lmTime": 1676149291
+                }
+              ]
+            }
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:41",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:41",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:41",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.Config",
+        {
+          "config": {
+            "signalDuration": 1000,
+            "buzzerEnable": 0
+          }
+        }
+      ],
+      [
+        "2023/02/12 - 10:08:41",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ]
+    ]
+  }
+}
