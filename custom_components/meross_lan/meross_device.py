@@ -428,11 +428,6 @@ class MerossDevice:
         if self.needsave is True:
             self.needsave = False
             self._save_config_entry(payload)
-        if self.entity_dnd.enabled:
-            # this is to optimize polling: when on MQTT we're only requesting/receiving
-            # when coming online and 'DND' will then work by pushes. While on HTTP we'll
-            # always call right after receiving 'ALL' which is the general status update
-            self.request_get(mc.NS_APPLIANCE_SYSTEM_DNDMODE)
 
     def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
         if isinstance(dndmode := payload.get(mc.KEY_DNDMODE), dict):
@@ -577,9 +572,9 @@ class MerossDevice:
                         self.name,
                         type(e).__name__,
                         str(e),
-                        str(attempt),
                         method,
-                        namespace
+                        namespace,
+                        str(attempt)
                     )
                     if (
                         (self.conf_protocol is CONF_PROTOCOL_AUTO)
@@ -684,6 +679,8 @@ class MerossDevice:
                     # the polling cycle and wait for a reconnect procedure
                     # without wasting execution time here
                     break
+            if self.entity_dnd.enabled and self._online:
+                await self.async_request_get(mc.NS_APPLIANCE_SYSTEM_DNDMODE)
 
     @callback
     async def _async_polling_callback(self):
