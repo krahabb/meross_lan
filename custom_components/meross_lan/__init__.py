@@ -374,6 +374,8 @@ class MerossApi:
             try:
                 @callback
                 def _mqtt_connected():
+                    for device in self.devices.values():
+                        device.mqtt_connected()
                     self._mqtt_is_connected = True
 
                 @callback

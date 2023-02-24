@@ -170,9 +170,7 @@ class MerossDevice:
         self.lastrequest = 0
         self.lastupdate = 0
         self.lastmqtt = 0  # means we recently received an mqtt message
-        self.hasmqtt = (
-            False  # hasmqtt means it is somehow available to communicate over mqtt
-        )
+        self.hasmqtt = False  # means it is somehow available over mqtt
         self._trace_file: TextIOWrapper | None = None
         self._trace_future: asyncio.Future | None = None
         self._trace_data: list | None = None
@@ -473,7 +471,7 @@ class MerossDevice:
         if (self.pref_protocol is CONF_PROTOCOL_MQTT) and (
             self.curr_protocol is CONF_PROTOCOL_HTTP
         ):
-            self.switch_protocol(CONF_PROTOCOL_MQTT)  # will reset 'lastmqtt'
+            self.switch_protocol(CONF_PROTOCOL_MQTT)
         messageid = header[mc.KEY_MESSAGEID]
         if messageid in self._mqtt_transactions:
             mqtt_transaction = self._mqtt_transactions[messageid]
@@ -489,6 +487,12 @@ class MerossDevice:
         # eventually coming from offline
         # self.lastupdate is not updated when we have protocol ERROR!
         self.lastmqtt = self.lastupdate
+
+    def mqtt_connected(self):
+        if not self._online and self.hasmqtt:
+            if self.curr_protocol is CONF_PROTOCOL_HTTP:
+                self.switch_protocol(CONF_PROTOCOL_MQTT)
+            self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
 
     def mqtt_disconnected(self):
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
@@ -749,9 +753,7 @@ class MerossDevice:
             self.name,
             protocol,
         )
-        self.lastmqtt = (
-            0  # reset so we'll need a new mqtt message to ensure mqtt availability
-        )
+        self.lastmqtt = 0 # we'll need a new mqtt msg to ensure mqtt avail
         self.curr_protocol = protocol
 
     def log(self, level: int, timeout: int, msg: str, *args):
