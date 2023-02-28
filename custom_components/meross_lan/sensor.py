@@ -149,11 +149,22 @@ class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
 class ElectricityMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
+
+    _sensor_power: MLSensor
+    _sensor_current: MLSensor
+    _sensor_voltage: MLSensor
+
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(api, descriptor, entry)
         self._sensor_power = MLSensor.build_for_device(self, DEVICE_CLASS_POWER)
         self._sensor_current = MLSensor.build_for_device(self, DEVICE_CLASS_CURRENT)
         self._sensor_voltage = MLSensor.build_for_device(self, DEVICE_CLASS_VOLTAGE)
+
+    def shutdown(self):
+        super().shutdown()
+        self._sensor_power = None # type: ignore
+        self._sensor_current = None # type: ignore
+        self._sensor_voltage = None # type: ignore
 
     def _handle_Appliance_Control_Electricity(self, header: dict, payload: dict):
         electricity = payload.get(mc.KEY_ELECTRICITY)
@@ -177,15 +188,18 @@ class ConsumptionMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
 
+    _sensor_energy: MLSensor
     _lastupdate_energy = 0
-    _lastreset_energy = (
-        0  # store the last 'device time' we passed onto to _attr_last_reset
-    )
+    _lastreset_energy = 0
 
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(api, descriptor, entry)
         self._sensor_energy = MLSensor.build_for_device(self, DEVICE_CLASS_ENERGY)
         self._sensor_energy._attr_state_class = STATE_CLASS_TOTAL_INCREASING
+
+    def shutdown(self):
+        super().shutdown()
+        self._sensor_energy = None # type: ignore
 
     def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
         self._lastupdate_energy = self.lastupdate
@@ -269,6 +283,7 @@ class RuntimeMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
 
+    _sensor_runtime: MLSensor
     _lastupdate_runtime = 0
 
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
@@ -282,6 +297,10 @@ class RuntimeMixin(
         self._sensor_runtime._attr_entity_category = me.EntityCategory.DIAGNOSTIC
         self._sensor_runtime._attr_native_unit_of_measurement = PERCENTAGE
         self._sensor_runtime._attr_icon = "mdi:wifi"
+
+    def shutdown(self):
+        super().shutdown()
+        self._sensor_runtime = None # type: ignore
 
     def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
         self._lastupdate_runtime = self.lastupdate
