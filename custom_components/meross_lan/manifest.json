@@ -18,5 +18,5 @@
   "after_dependencies": ["mqtt", "dhcp", "recorder", "persistent_notification"],
   "loggers": ["custom_components.meross_lan"],
   "codeowners": ["@krahabb"],
-  "version": "3.0.2"
+  "version": "4.0.0-alpha.0"
 }

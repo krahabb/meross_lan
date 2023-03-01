@@ -26,18 +26,13 @@ combine_as_imports = true
 disable = [
     "bare-except",
     "broad-except",
+    "broad-exception-raised",
     "global-statement",
     "import-outside-toplevel",
     "invalid-name",
     "missing-class-docstring",
     "missing-function-docstring",
 ]
-# .vscode settings.json
-#        "--disable=missing-function-docstring",
-#        "--disable=missing-class-docstring",
-#        "--disable=invalid-name",
-#        "--disable=bare-except",
-#        "--disable=broad-except"
 
 ################################################################################
 [tool.pytest.ini_options]
