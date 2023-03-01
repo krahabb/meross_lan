@@ -57,7 +57,8 @@
             "already_configured_device": "可能なデバイスは1つだけ",
             "cannot_connect": "接続できません",
             "invalid_auth": "認証エラー",
-            "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません"
+            "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
         },
         "step": {
             "hub": {
@@ -74,6 +75,7 @@
                     "host": "デバイスのホストアドレス",
                     "key": "デバイスキー",
                     "protocol": "接続プロトコル",
+                    "cloud_profile": "クラウド プロファイル",
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
                     "trace": "デバイスのデバグトレースを開始する",

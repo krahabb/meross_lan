@@ -57,7 +57,8 @@
             "already_configured_device": "Das Gerät ist bereits vorhanden",
             "cannot_connect": "Verbindung nicht möglich",
             "invalid_auth": "Fehlerhafte Zugangsdaten",
-            "device_id_mismatch": "Nicht übereinstimmende Geräte-UUID: Das Gerät ist nicht dasselbe"
+            "device_id_mismatch": "Nicht übereinstimmende Geräte-UUID: Das Gerät ist nicht dasselbe",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
         },
         "step": {
             "hub": {
@@ -74,6 +75,7 @@
                     "host": "IP-Adresse des Geräts",
                     "key": "Geräteschlüssel",
                     "protocol": "Verbindungsart",
+                    "cloud_profile": "Cloud-Profil",
                     "polling_period": "Abfragerate",
                     "timezone": "Gerätezeitzone",
                     "trace": "Debugmodus aktivieren",

@@ -58,7 +58,8 @@
             "already_configured_device": "Zařízení již bylo konfigurováno",
             "cannot_connect": "Pokus o připojení se nezdařil",
             "invalid_auth": "Ověření selhalo",
-            "device_id_mismatch": "Neshoda UUID zařízení: zařízení není stejné"
+            "device_id_mismatch": "Neshoda UUID zařízení: zařízení není stejné",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
         },
         "step": {
             "hub": {
@@ -75,6 +76,7 @@
                     "host": "Adresa hostitele zařízení",
                     "key": "Klíč zařízení",
                     "protocol": "Protokol připojení",
+                    "cloud_profile": "Cloudový profil",
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
                     "trace": "Zapnout ladění zařízení",

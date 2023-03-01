@@ -57,7 +57,8 @@
             "already_configured_device": "Este dispositivo ya esta configurado",
             "cannot_connect": "No es posible conectarse",
             "invalid_auth": "Error de autenticación",
-            "device_id_mismatch": "Discrepancia de UUID: el dispositivo no es el mismo"
+            "device_id_mismatch": "Discrepancia de UUID: el dispositivo no es el mismo",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
         },
         "step": {
             "hub": {
@@ -74,6 +75,7 @@
                     "host": "Dirección IP del dispositivo",
                     "key": "Clave de dispositivo",
                     "protocol": "Protocolo de conexión",
+                    "cloud_profile": "Perfil de nube",
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
                     "trace": "Activar el modo debug",

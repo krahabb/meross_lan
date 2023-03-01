@@ -72,7 +72,6 @@ OBFUSCATE_KEYS = (
     mc.KEY_USERID, mc.KEY_TOKEN,
 )
 
-
 def obfuscate(payload: dict):
     """
     payload: input-output gets modified by blanking sensistive keys

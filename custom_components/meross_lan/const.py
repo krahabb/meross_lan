@@ -9,8 +9,9 @@ DND_ID = 'dnd' # entity (sub)id for the switch representing DNDMode
 
 # ConfigEntry keys
 CONF_DEVICE_ID = hac.CONF_DEVICE_ID
-CONF_KEY = 'key'
+CONF_KEY = 'key' # actual device key used to sign messages
 CONF_CLOUD_KEY = 'cloud_key' # device key eventually retrieved from Meross account
+CONF_CLOUD_PROFILE = 'cloud_profile' # email/id of cloud account to use with the device
 CONF_PAYLOAD = hac.CONF_PAYLOAD
 CONF_HOST = hac.CONF_HOST
 
@@ -56,3 +57,4 @@ PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
 PARAM_TIMESTAMP_TOLERANCE = 5 # max device timestamp diff against our and trigger warning and (eventually) fix it
 PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2 # used to delay the iteration of abilities while tracing
+PARAM_CLOUDAPI_QUERY_DEVICELIST_TIMEOUT = 86400

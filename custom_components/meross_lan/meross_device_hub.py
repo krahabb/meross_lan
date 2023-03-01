@@ -134,7 +134,7 @@ class MerossDeviceHub(MerossDevice):
             # this is true when subdevice is offline and hub has no recent info
             # we'll check our device registry for luck
             try:
-                hassdevice = device_registry.async_get(self.api.hass).async_get_device(
+                hassdevice = device_registry.async_get(self.hass).async_get_device(
                     identifiers = {(DOMAIN, p_subdevice[mc.KEY_ID])}
                 )
                 if hassdevice is None:
@@ -197,10 +197,9 @@ class MerossDeviceHub(MerossDevice):
                 # so we'll wait a bit..
                 # also, we're not registering an unsub and we're not checking
                 # for redundant invocations (playing a bit unsafe that is)
-                hass = self.api.hass
                 async def setup_again(*_):
-                    await hass.config_entries.async_reload(self.entry_id)
-                async_call_later(hass, 15, setup_again)
+                    await self.hass.config_entries.async_reload(self.entry_id)
+                async_call_later(self.hass, 15, setup_again)
 
     def _build_subdevices_payload(self, types: tuple, count: int):
         """

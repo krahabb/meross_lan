@@ -57,7 +57,8 @@
             "already_configured_device": "Device is already configured",
             "cannot_connect": "Unable to connect",
             "invalid_auth": "Authentication error",
-            "device_id_mismatch": "Device UUID mismatch: the device is not the same"
+            "device_id_mismatch": "Device UUID mismatch: the device is not the same",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
         },
         "step": {
             "hub": {
@@ -74,6 +75,7 @@
                     "host": "Device host address",
                     "key": "Device key",
                     "protocol": "Connection protocol",
+                    "cloud_profile": "Cloud profile",
                     "polling_period": "Polling period",
                     "timezone": "Device time zone",
                     "trace": "Activate device debug tracing",

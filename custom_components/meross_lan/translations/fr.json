@@ -57,7 +57,8 @@
       "already_configured_device": "Déjà configuré. Un seul appareil possible.",
       "cannot_connect": "Pas de connect",
       "invalid_auth": "Authentication",
-      "device_id_mismatch": "Non-concordance de l'UUID: l'appareil n'est pas le même"
+      "device_id_mismatch": "Non-concordance de l'UUID: l'appareil n'est pas le même",
+      "cloud_profile_mismatch": "Cloud profile does not match device configuration"
     },
     "step": {
       "hub": {
@@ -74,6 +75,7 @@
           "host": "Adresse",
           "key": "Clé",
           "protocol": "Protocole de connexion",
+          "cloud_profile": "Profil Cloud",
           "polling_period": "Période de requête",
           "timezone": "Fuseau horaire de l'appareil",
           "trace": "Activer le traçage de l'appareil",

@@ -57,7 +57,8 @@
             "already_configured_device": "Il dispositivo è già configurato",
             "cannot_connect": "Impossibile connettersi",
             "invalid_auth": "Errore di autenticazione",
-            "device_id_mismatch": "UUID non corrispondente: il dispositivo non è lo stesso"
+            "device_id_mismatch": "UUID non corrispondente: il dispositivo non è lo stesso",
+            "cloud_profile_mismatch": "Il dispositivo non appartiene al profilo cloud"
         },
         "step": {
             "hub": {
@@ -74,6 +75,7 @@
                     "host": "Indirizzo dispositivo",
                     "key": "Chiave dispositivo",
                     "protocol": "Protocollo",
+                    "cloud_profile": "Profilo Cloud",
                     "polling_period": "Intervallo di aggiornamento",
                     "timezone": "Zona oraria",
                     "trace": "Attiva il debug tracing",
