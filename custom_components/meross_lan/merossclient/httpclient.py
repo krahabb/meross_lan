@@ -20,7 +20,6 @@ from . import (
     MerossProtocolError,
     build_payload,
     get_replykey,
-    get_default_payload,
     MEROSSDEBUG,
 )
 
@@ -171,8 +170,3 @@ class MerossHttpClient:
                 raise MerossProtocolError(r_payload)
 
         return response
-
-    async def async_request_strict_get(self, namespace: str) -> dict:
-        return await self.async_request_strict(
-            namespace, mc.METHOD_GET, get_default_payload(namespace)
-        )

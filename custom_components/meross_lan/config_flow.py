@@ -21,6 +21,7 @@ from .merossclient import (
     KeyType,
     MerossDeviceDescriptor,
     MerossKeyError,
+    get_default_arguments,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .merossclient.cloudapi import (
@@ -63,13 +64,12 @@ ERR_CLOUD_PROFILE_MISMATCH = "cloud_profile_mismatch"
 async def _http_discovery(hass, host: str, key: KeyType) -> dict[str, object]:
     # passing key=None would allow key-hack and we don't want it aymore
     c = MerossHttpClient(host, key or "", async_get_clientsession(hass), LOGGER)
-    payload = (await c.async_request_strict_get(mc.NS_APPLIANCE_SYSTEM_ALL))[
-        mc.KEY_PAYLOAD
-    ]
-    payload.update(
-        (await c.async_request_strict_get(mc.NS_APPLIANCE_SYSTEM_ABILITY))[
-            mc.KEY_PAYLOAD
-        ]
+    payload = (await c.async_request_strict(
+        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+    ))[mc.KEY_PAYLOAD]
+    payload.update((await c.async_request_strict(
+        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY))
+        )[mc.KEY_PAYLOAD]
     )
     return {CONF_HOST: host, CONF_PAYLOAD: payload, CONF_KEY: key}
 
