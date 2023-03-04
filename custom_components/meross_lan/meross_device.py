@@ -226,6 +226,10 @@ class MerossDevice:
         # in order to complete the transaction
         self._mqtt_transactions: dict[str, _MQTTTransaction] = {}
 
+        # cache this so entities will just ref it
+        self.device_info_id = {
+            "identifiers": {(DOMAIN, self.device_id)}
+        }
         try:
             # try block since this is not critical
             deviceentry = device_registry.async_get(api.hass).async_get_or_create(
@@ -233,11 +237,11 @@ class MerossDevice:
                 connections={
                     (device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)
                 },
-                identifiers={(DOMAIN, self.device_id)},
                 manufacturer=mc.MANUFACTURER,
                 name=descriptor.productname,
                 model=descriptor.productmodel,
                 sw_version=descriptor.firmware.get(mc.KEY_VERSION),
+                **self.device_info_id
             )
             self._deviceentry = weakref.ref(deviceentry)
         except:

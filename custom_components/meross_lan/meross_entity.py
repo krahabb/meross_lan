@@ -117,25 +117,12 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
 
     @property
     def device_info(self):
+        # device is already registered/updated at the
+        # device/subdevice level so we just pass identifiers
+        # to reduce overload
         if (subdevice := self.subdevice) is not None:
-            _id = subdevice.id
-            _type = subdevice.type
-            return {
-                "via_device": (DOMAIN, self.device.device_id),
-                "identifiers": {(DOMAIN, _id)},
-                "manufacturer": mc.MANUFACTURER,
-                "name": get_productnameuuid(_type, str(_id)),
-                "model": _type,
-            }
-        _desc = self.device.descriptor
-        return {
-            "identifiers": {(DOMAIN, self.device.device_id)},
-            "connections": {(CONNECTION_NETWORK_MAC, _desc.macAddress)},
-            "manufacturer": mc.MANUFACTURER,
-            "name": _desc.productname,
-            "model": _desc.productmodel,
-            "sw_version": _desc.firmware.get(mc.KEY_VERSION),
-        }
+            return subdevice.device_info_id
+        return self.device.device_info_id
 
     @property
     def entity_category(self):

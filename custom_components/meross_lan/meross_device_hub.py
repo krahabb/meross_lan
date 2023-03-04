@@ -321,12 +321,25 @@ class MerossDeviceHub(MerossDevice):
 
 class MerossSubDevice:
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
-        self.hub = hub
+        self.id = _id = p_digest[mc.KEY_ID]
         self.type = _type
-        self.id = p_digest[mc.KEY_ID]
         self.p_digest = p_digest
         self._online = False
-        hub.subdevices[self.id] = self
+        self.hub = hub
+        hub.subdevices[_id] = self
+        self.device_info_id = { "identifiers": {(DOMAIN, _id)} }
+        try:
+            device_registry.async_get(hub.hass).async_get_or_create(
+                config_entry_id=hub.entry_id,
+                via_device=next(iter(hub.device_info_id["identifiers"])),
+                manufacturer=mc.MANUFACTURER,
+                name=get_productnameuuid(_type, str(_id)),
+                model=_type,
+                **self.device_info_id
+            )
+        except:
+            pass
+
         self.sensor_battery = self.build_sensor(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
