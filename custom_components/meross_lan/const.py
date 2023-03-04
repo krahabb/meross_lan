@@ -44,6 +44,7 @@ CONF_NOTIFYRESPONSE = 'notifyresponse' # key used in service 'request' call
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)
 """
+PARAM_COLDSTARTPOLL_DELAY = 2 # (maximum) delay of initial poll after device setup
 PARAM_UNAVAILABILITY_TIMEOUT = 20  # number of seconds since last inquiry to consider the device unavailable
 PARAM_HEARTBEAT_PERIOD = 295 # whatever the connection state periodically inquire the device is there
 PARAM_RESTORESTATE_TIMEOUT = 300 # used when restoring 'calculated' state after HA restart

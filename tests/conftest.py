@@ -47,6 +47,18 @@ def skip_notifications_fixture():
         yield
 
 
+@pytest.fixture(name="disable_debug", autouse=True)
+def disable_debug_fixture():
+    """Skip notification calls."""
+    with patch(
+        "custom_components.meross_lan.MEROSSDEBUG", return_value=False), patch(
+        "custom_components.meross_lan.meross_profile.MEROSSDEBUG", return_value=None), patch(
+        "custom_components.meross_lan.merossclient.MEROSSDEBUG", return_value=None), patch(
+        "custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", return_value=None), patch(
+        "custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", return_value=None
+    ):
+        yield
+
 class MQTTMock:
     mqtt_client: MqttMockHAClient
     mqtt_async_publish: Mock

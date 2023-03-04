@@ -27,6 +27,7 @@ from custom_components.meross_lan.const import (
     CONF_PAYLOAD,
     CONF_POLLING_PERIOD,
     DOMAIN,
+    PARAM_COLDSTARTPOLL_DELAY,
 )
 
 from .const import (
@@ -111,6 +112,7 @@ class DeviceContext:
         After this the device should be online and all the polling
         namespaces done
         """
+        self.time.tick(timedelta(seconds=PARAM_COLDSTARTPOLL_DELAY))
         async_fire_time_changed_exact(self.api.hass)
         await self.api.hass.async_block_till_done()
         assert self.device.online
