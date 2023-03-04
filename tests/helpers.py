@@ -26,6 +26,8 @@ from custom_components.meross_lan.const import (
     CONF_KEY,
     CONF_PAYLOAD,
     CONF_POLLING_PERIOD,
+    CONF_PROTOCOL,
+    CONF_PROTOCOL_HTTP,
     DOMAIN,
     PARAM_COLDSTARTPOLL_DELAY,
 )
@@ -60,6 +62,7 @@ def build_emulator_config_entry(emulator: MerossEmulator):
                 mc.KEY_ALL: emulator.descriptor.all,
                 mc.KEY_ABILITY: emulator.descriptor.ability,
             },
+            CONF_PROTOCOL: CONF_PROTOCOL_HTTP,
             CONF_POLLING_PERIOD: MOCK_POLLING_PERIOD,
         },
         unique_id=device_uuid,

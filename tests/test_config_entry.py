@@ -28,7 +28,7 @@ from .const import (
     MOCK_KEY,
     MOCK_POLLING_PERIOD
 )
-from .helpers import build_emulator_config_entry, devicecontext
+from .helpers import devicecontext
 
 
 # We can pass fixtures as defined in conftest.py to tell pytest to use the fixture
