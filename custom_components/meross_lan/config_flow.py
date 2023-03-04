@@ -451,9 +451,9 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                         data[CONF_CLOUD_KEY] = self._cloud_key
                     else:
                         data.pop(CONF_CLOUD_KEY, None)
-                    data[CONF_CLOUD_PROFILE] = self._cloud_profile
                 data[CONF_KEY] = self._key
                 data[CONF_PROTOCOL] = self._protocol
+                data[CONF_CLOUD_PROFILE] = self._cloud_profile
                 data[CONF_POLLING_PERIOD] = self._polling_period
                 data[CONF_TRACE] = (time() + self._trace_timeout) if self._trace else 0
                 data[CONF_TRACE_TIMEOUT] = self._trace_timeout
@@ -490,10 +490,9 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         config_schema[
             vol.Optional(CONF_PROTOCOL, description={DESCR: self._protocol})
         ] = vol.In(CONF_PROTOCOL_OPTIONS.keys())
-        if (self._host is not None) and (_profiles := api.get_profiles_map()):
-            config_schema[
-                vol.Optional(CONF_CLOUD_PROFILE, description={DESCR: self._cloud_profile})
-            ] = vol.In(_profiles)
+        config_schema[
+            vol.Optional(CONF_CLOUD_PROFILE, description={DESCR: self._cloud_profile})
+        ] = vol.In(api.get_profiles_map())
         config_schema[
             vol.Optional(
                 CONF_POLLING_PERIOD,

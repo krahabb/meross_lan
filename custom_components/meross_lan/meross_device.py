@@ -293,7 +293,8 @@ class MerossDevice:
         called when the config entry is unloaded
         we'll try to clear everything here
         """
-        self._mqtt_profile_detach()
+        if self._mqtt_profile is not None:
+            self._mqtt_profile_detach()
         if self._unsub_polling_callback is not None:
             self._unsub_polling_callback.cancel()
             self._unsub_polling_callback = None
@@ -1208,31 +1209,49 @@ class MerossDevice:
 
         if self.conf_protocol is CONF_PROTOCOL_HTTP:
             # strictly HTTP so no use of MQTT
-            self._mqtt_profile_detach()
-        else:
-            _cloud_profile_id = data.get(CONF_CLOUD_PROFILE)
-            if self._cloud_profile_id != _cloud_profile_id:
+            if self._mqtt_profile is not None:
                 self._mqtt_profile_detach()
-                if _cloud_profile_id:
-                    if self.descriptor.userId != _cloud_profile_id:
-                        self.log(
-                            WARNING,
-                            0,
-                            "MerossDevice(%s): cloud profile(%s) does not match device user(%s)",
-                            self.name,
-                            _cloud_profile_id,
-                            str(self.descriptor.userId),
-                        )
-                    else:
-                        self._cloud_profile = self.api.profiles.get(_cloud_profile_id)
-                        if self._cloud_profile is not None:
-                            self._cloud_profile_id = _cloud_profile_id
-                            self._mqtt_profile = self._cloud_profile.attach(self)
-                else:
-                    self._mqtt_profile = self.api.attach(self)
+        elif _cloud_profile_id := data.get(CONF_CLOUD_PROFILE):
+            # this is the case for when we want to use meross cloud mqtt.
+            # On config entry update we might be already connected to the right
+            # cloud_profile...
+            if self._cloud_profile_id != _cloud_profile_id:
                 if self._mqtt_profile is not None:
-                    if self._mqtt_profile.mqtt_is_connected:
-                        self.set_mqtt_connected()
+                    self._mqtt_profile_detach()
+                if self.descriptor.userId != _cloud_profile_id:
+                    self.log(
+                        WARNING,
+                        0,
+                        "MerossDevice(%s): cloud profile(%s) does not match device user(%s)",
+                        self.name,
+                        _cloud_profile_id,
+                        str(self.descriptor.userId),
+                    )
+                else:
+                    self._cloud_profile = self.api.profiles.get(_cloud_profile_id)
+                    if self._cloud_profile is not None:
+                        self._cloud_profile_id = _cloud_profile_id
+                        self._mqtt_profile = self._cloud_profile.attach(self)
+                        if self._mqtt_profile.mqtt_is_connected:
+                            self.set_mqtt_connected()
+        else:
+            # this is the case for when we just want local handling
+            # in this scenario we bind anyway to our local mqtt api
+            # even tho the device might be unavailable since it's
+            # still meross cloud bound. Also, we might not have
+            # local mqtt at all but should this come later we don't
+            # want to have to broadcast a connection event 'in the wild'
+            # We should further inspect how to discriminate which
+            # devices to add (or not) as a small optimization so to not
+            # fill our local mqtt structures with unuseful data..
+            # Right now add anyway since it's no harm
+            # (no mqtt messages will come though)
+            if self._mqtt_profile is not self.api:
+                if self._mqtt_profile is not None:
+                    self._mqtt_profile_detach()
+                self._mqtt_profile = self.api.attach(self)
+                if self._mqtt_profile.mqtt_is_connected:
+                    self.set_mqtt_connected()
 
     def _mqtt_profile_detach(self):
         if self._mqtt_profile is not None:
