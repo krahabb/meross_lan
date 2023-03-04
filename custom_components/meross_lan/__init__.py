@@ -546,6 +546,52 @@ class MerossApi(MQTTProfile):
                 )
                 if mqtt.is_connected(self.hass):
                     self.set_mqtt_connected()
+
+                if MEROSSDEBUG:
+                    async def _async_random_disconnect():
+                        if self._mqtt_subscribing:
+                            pass
+                        elif self.unsub_mqtt_subscribe is None:
+                            if MEROSSDEBUG.mqtt_random_connect():
+                                LOGGER.debug(
+                                    "MerossMQTTProfile(%s) random connect",
+                                    self.profile_id,
+                                )
+                                self._mqtt_subscribing = True
+                                self.unsub_mqtt_subscribe = await mqtt.async_subscribe(
+                                    self.hass, mc.TOPIC_DISCOVERY, self.async_mqtt_message
+                                )
+                                self.unsub_mqtt_disconnected = async_dispatcher_connect(
+                                    self.hass, mqtt.MQTT_DISCONNECTED, self.set_mqtt_disconnected
+                                )
+                                self.unsub_mqtt_connected = async_dispatcher_connect(
+                                    self.hass, mqtt.MQTT_CONNECTED, self.set_mqtt_connected
+                                )
+                                self._mqtt_subscribing = False
+                                if mqtt.is_connected(self.hass):
+                                    self.set_mqtt_connected()
+
+                        else:
+                            if MEROSSDEBUG.mqtt_random_disconnect():
+                                LOGGER.debug(
+                                    "MerossMQTTProfile(%s) random disconnect",
+                                    self.profile_id,
+                                )
+                                if self.unsub_mqtt_disconnected:
+                                    self.unsub_mqtt_disconnected()
+                                    self.unsub_mqtt_disconnected = None
+                                if self.unsub_mqtt_connected:
+                                    self.unsub_mqtt_connected()
+                                    self.unsub_mqtt_connected = None
+                                self.unsub_mqtt_subscribe()
+                                self.unsub_mqtt_subscribe = None
+                                if self._mqtt_is_connected:
+                                    self.set_mqtt_disconnected()
+
+                        self.schedule_async_callback(60, _async_random_disconnect)
+
+                    self.schedule_async_callback(60, _async_random_disconnect)
+
             except:
                 pass
             self._mqtt_subscribing = False
