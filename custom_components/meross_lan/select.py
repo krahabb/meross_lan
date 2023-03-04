@@ -1,44 +1,26 @@
 from __future__ import annotations
 import typing
 
-from homeassistant.const import (
-    STATE_OFF as OPTION_SPRAY_MODE_OFF,
-    STATE_ON as OPTION_SPRAY_MODE_CONTINUOUS,
-)
+from homeassistant.components import select
 
 from .merossclient import const as mc  # mEROSS cONST
 from . import meross_entity as me
-from .helpers import LOGGER
 
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
     from .meross_device import MerossDevice, ResponseCallbackType
 
-try:
-    from homeassistant.components.humidifier.const import (
-        MODE_ECO as OPTION_SPRAY_MODE_ECO,
-    )
-except:
-    OPTION_SPRAY_MODE_ECO = "eco"
 
-try:  # to look for select platform in HA core (available since some 2021.xx...)
-    from homeassistant.components.select import DOMAIN as PLATFORM_SELECT, SelectEntity
+async def async_setup_entry(
+    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+):
+    me.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
 
-    async def async_setup_entry(
-        hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
-    ):
-        me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_SELECT)
 
-except:  # implement a fallback by using a plain old switch
-    LOGGER.warning(
-        "Missing 'select' entity type. Please update HA to latest version"
-        " to fully support meross 'SPRAY' feature. Falling back to basic switch behaviour"
-    )
-    from homeassistant.components.switch import (
-        DOMAIN as PLATFORM_SELECT,
-        SwitchEntity as SelectEntity,
-    )
+OPTION_SPRAY_MODE_OFF = 'off'
+OPTION_SPRAY_MODE_CONTINUOUS = 'on'
+OPTION_SPRAY_MODE_ECO = "eco"
 
 """
     This code is an alternative implementation for SPRAY/humidifier
@@ -47,9 +29,9 @@ except:  # implement a fallback by using a plain old switch
     Also, bear in mind that, if select is not supported in HA core
     we're basically implementing a SwitchEntity
 """
-class MLSpray(me.MerossEntity, SelectEntity): # type: ignore
+class MLSpray(me.MerossEntity, select.SelectEntity): # type: ignore
 
-    PLATFORM = PLATFORM_SELECT
+    PLATFORM = select.DOMAIN
 
     device: SprayMixin
     """

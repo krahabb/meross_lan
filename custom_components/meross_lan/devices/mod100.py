@@ -14,7 +14,7 @@ from ..select import (
     MLSpray,
     OPTION_SPRAY_MODE_OFF, OPTION_SPRAY_MODE_CONTINUOUS, OPTION_SPRAY_MODE_ECO,
 )
-from ..sensor import MLSensor, DEVICE_CLASS_TEMPERATURE, DEVICE_CLASS_HUMIDITY
+from ..sensor import MLSensor
 from ..helpers import reverse_lookup
 
 if typing.TYPE_CHECKING:
@@ -145,8 +145,8 @@ class DiffuserMixin(MerossDevice if typing.TYPE_CHECKING else object): # pylint:
         if mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR in self.descriptor.ability:
             # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
             # are supporting correct values so we implement them (#243)
-            self._sensor_temperature = MLSensor.build_for_device(self, DEVICE_CLASS_TEMPERATURE)
-            self._sensor_humidity = MLSensor.build_for_device(self, DEVICE_CLASS_HUMIDITY)
+            self._sensor_temperature = MLSensor.build_for_device(self, MLSensor.DeviceClass.TEMPERATURE)
+            self._sensor_humidity = MLSensor.build_for_device(self, MLSensor.DeviceClass.HUMIDITY)
             self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR] = \
                 mc.PAYLOAD_GET[mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR]
 

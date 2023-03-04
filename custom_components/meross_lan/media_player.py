@@ -134,8 +134,8 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
                 self._attr_state = (
                     STATE_IDLE if self._mp3.get(mc.KEY_MUTE) else STATE_PLAYING
                 )
-                if self.hass and self.enabled:
-                    self.async_write_ha_state()
+                if self._hass_connected:
+                    self._async_write_ha_state()
 
         await self.device.async_request(
             mc.NS_APPLIANCE_CONTROL_MP3,
@@ -152,8 +152,8 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
             self._mp3 = payload
             if mc.KEY_MUTE in payload:
                 self._attr_state = STATE_IDLE if payload[mc.KEY_MUTE] else STATE_PLAYING
-            if self.hass and self.enabled:
-                self.async_write_ha_state()
+            if self._hass_connected:
+                self._async_write_ha_state()
 
 
 class Mp3Mixin(

@@ -4,12 +4,12 @@ import typing
 from ..climate import (
     MtsClimate, MtsSetPointNumber,
     PRESET_OFF, PRESET_CUSTOM, PRESET_COMFORT, PRESET_SLEEP, PRESET_AWAY, PRESET_AUTO,
-    ATTR_TEMPERATURE, TEMP_CELSIUS, DEVICE_CLASS_TEMPERATURE
+    ATTR_TEMPERATURE, TEMP_CELSIUS
 )
 from ..number import MLConfigNumber
 from ..sensor import MLSensor
-from ..binary_sensor import MLBinarySensor, DEVICE_CLASS_WINDOW, DEVICE_CLASS_PROBLEM
-from ..switch import MLSwitch, DEVICE_CLASS_SWITCH
+from ..binary_sensor import MLBinarySensor
+from ..switch import MLSwitch
 from ..meross_entity import EntityCategory
 from ..merossclient import const as mc
 
@@ -45,9 +45,11 @@ class Mts200ConfigSwitch(MLSwitch):
 
     _attr_entity_category = EntityCategory.CONFIG
 
+    namespace: str
+
     def __init__(self, climate: Mts200Climate, entitykey: str, namespace: str):
         self._attr_name = entitykey
-        super().__init__(climate.device, climate.channel, entitykey, DEVICE_CLASS_SWITCH, None, namespace)
+        super().__init__(climate.device, climate.channel, entitykey, self.DeviceClass.SWITCH, None, namespace)
 
     async def async_request_onoff(self, onoff: int):
 
@@ -106,7 +108,7 @@ class Mts200Climate(MtsClimate):
         self._sleep_temperature_number = Mts200SetPointNumber(self, PRESET_SLEEP)
         self._away_temperature_number = Mts200SetPointNumber(self, PRESET_AWAY)
         self._windowOpened_binary_sensor = MLBinarySensor(
-            device, channel, mc.KEY_WINDOWOPENED, DEVICE_CLASS_WINDOW)
+            device, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW)
         # sensor mode: use internal(0) vs external(1) sensor as temperature loopback
         self._sensorMode_switch = Mts200ConfigSwitch(
             self, 'external sensor mode', mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR)
@@ -115,11 +117,11 @@ class Mts200Climate(MtsClimate):
         self._overheatonoff_switch = Mts200ConfigSwitch(
             self, 'overheat protection', mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT)
         self._overheatwarning_binary_sensor = MLBinarySensor(
-            device, channel, 'overheat warning', DEVICE_CLASS_PROBLEM)
+            device, channel, 'overheat warning', MLBinarySensor.DeviceClass.PROBLEM)
         self._overheatvalue_number = Mts200OverheatThresholdNumber(
-            device, channel, 'overheat threshold', DEVICE_CLASS_TEMPERATURE)
+            device, channel, 'overheat threshold', MLConfigNumber.DeviceClass.TEMPERATURE)
         self._externalsensor_temperature_sensor = MLSensor(
-            device, channel, 'external sensor', DEVICE_CLASS_TEMPERATURE, None)
+            device, channel, 'external sensor', MLSensor.DeviceClass.TEMPERATURE, None)
 
     async def async_set_preset_mode(self, preset_mode: str):
         if preset_mode == PRESET_OFF:

@@ -3,9 +3,8 @@ import typing
 from time import time
 from logging import DEBUG, WARNING
 
+from homeassistant.components import cover
 from homeassistant.components.cover import (
-    DOMAIN as PLATFORM_COVER,
-    CoverEntity,
     ATTR_POSITION,
     ATTR_CURRENT_POSITION,
     STATE_OPEN,
@@ -37,9 +36,9 @@ from homeassistant.const import TIME_SECONDS
 from homeassistant.core import callback
 from homeassistant.util.dt import now
 
-from .merossclient import const as mc
+from .merossclient import const as mc, get_default_arguments
 from . import meross_entity as me
-from .binary_sensor import MLBinarySensor, DEVICE_CLASS_PROBLEM
+from .binary_sensor import MLBinarySensor
 from .number import MLConfigNumber
 from .switch import MLSwitch
 from .helpers import LOGGER, clamp, get_entity_last_state, versiontuple
@@ -77,7 +76,7 @@ EXTRA_ATTR_POSITION_NATIVE = "position_native"
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_COVER)
+    me.platform_setup_entry(hass, config_entry, async_add_devices, cover.DOMAIN)
 
 
 class MLGarageTimeoutBinarySensor(MLBinarySensor):
@@ -87,11 +86,13 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
 
     def __init__(self, cover: MLGarage):
         self._attr_extra_state_attributes = {}
-        super().__init__(cover.device, cover.channel, 'problem', DEVICE_CLASS_PROBLEM)
+        super().__init__(cover.device, cover.channel, 'problem', self.DeviceClass.PROBLEM)
+
+    @property
+    def available(self):
+        return True
 
     def set_unavailable(self):
-        # prevent from going offline since this is an 'internal'
-        # entity
         pass
 
     def update_ok(self):
@@ -194,7 +195,15 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
             + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
         ) / 2)
 
+    @property
+    def available(self):
+        return True
+
+    def set_unavailable(self):
+        pass
+
     async def async_added_to_hass(self):
+        await super().async_added_to_hass()
         try:
             if last_state := await get_entity_last_state(self.hass, self.entity_id):
                 self._attr_state = float(last_state.state) # type: ignore
@@ -210,15 +219,10 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
     async def async_set_native_value(self, value: float):
         self.update_native_value(value)
 
-    def set_unavailable(self):
-        # prevent from going offline since this is an 'internal'
-        # entity
-        pass
 
+class MLGarage(me.MerossEntity, cover.CoverEntity):
 
-class MLGarage(me.MerossEntity, CoverEntity):
-
-    PLATFORM = PLATFORM_COVER
+    PLATFORM = cover.DOMAIN
 
     device: GarageMixin
 
@@ -260,6 +264,7 @@ class MLGarage(me.MerossEntity, CoverEntity):
         return self._attr_state == STATE_CLOSED
 
     async def async_added_to_hass(self):
+        await super().async_added_to_hass()
         """
         we're trying to recover the '_transition_duration' from previous state
         """
@@ -336,6 +341,7 @@ class MLGarage(me.MerossEntity, CoverEntity):
 
     async def async_will_remove_from_hass(self):
         self._cancel_transition()
+        await super().async_will_remove_from_hass()
 
     def set_unavailable(self):
         self._open = None
@@ -410,7 +416,7 @@ class MLGarage(me.MerossEntity, CoverEntity):
     @callback
     def _transition_callback(self):
         self._transition_unsub = None
-        self.device.request_get(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+        self.device.request(*get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE))
 
     @callback
     def _transition_end_callback(self):
@@ -551,11 +557,11 @@ class GarageMixin(
         self._parse__generic(mc.KEY_STATE, payload)
 
 
-class MLRollerShutter(me.MerossEntity, CoverEntity):
+class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
     """
     MRS100 SHUTTER ENTITY
     """
-    PLATFORM = PLATFORM_COVER
+    PLATFORM = cover.DOMAIN
 
     device: RollerShutterMixin
 
@@ -604,6 +610,7 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
         return self._attr_state == STATE_CLOSED
 
     async def async_added_to_hass(self):
+        await super().async_added_to_hass()
         """
         we're trying to recover the 'timed' position from previous state
         if it happens it wasn't updated too far in time
@@ -689,7 +696,7 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
                 # when requesting a position we're not setting up a _transition_callback yet
                 # but we wait for _parse_state to actually decide if there's movement or not
                 # and then start following the transition
-                self.device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
+                self.device.request(*get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE))
 
         self._transition_cancel()
         await self.device.async_request(
@@ -721,8 +728,8 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
             if self._position_native_isgood:
                 if position != self._attr_current_cover_position:
                     self._attr_current_cover_position = position
-                    if self.hass and self.enabled:
-                        self.async_write_ha_state()
+                    if self._hass_connected:
+                        self._async_write_ha_state()
             else:
                 if position != self._position_native:
                     if (position > 0) and (position < 100):
@@ -733,18 +740,18 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
                             EXTRA_ATTR_POSITION_NATIVE, None
                         )
                         self._attr_current_cover_position = position
-                        if self.hass and self.enabled:
-                            self.async_write_ha_state()
+                        if self._hass_connected:
+                            self._async_write_ha_state()
                     else:
                         self._position_native = position
                         self._attr_extra_state_attributes[
                             EXTRA_ATTR_POSITION_NATIVE
                         ] = position
-                        if self.hass and self.enabled:
-                            self.async_write_ha_state()
+                        if self._hass_connected:
+                            self._async_write_ha_state()
 
     def _parse_state(self, payload: dict):
-        self.device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
+        self.device.request(*get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION))
         state = payload.get(mc.KEY_STATE)
         epoch = time()
         if self._position_native_isgood:
@@ -763,22 +770,18 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
                 self._attr_current_cover_position = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)  # type: ignore
                 if self._attr_current_cover_position > POSITION_FULLY_OPENED:
                     self._attr_current_cover_position = POSITION_FULLY_OPENED
-                if (
-                    (state == mc.ROLLERSHUTTER_STATE_OPENING)
-                    and self.hass
-                    and self.enabled
+                if self._hass_connected and (
+                    state == mc.ROLLERSHUTTER_STATE_OPENING
                 ):
-                    self.async_write_ha_state()
+                    self._async_write_ha_state()
             elif self._attr_state == STATE_CLOSING:
                 self._attr_current_cover_position = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)  # type: ignore
                 if self._attr_current_cover_position < POSITION_FULLY_CLOSED:
                     self._attr_current_cover_position = POSITION_FULLY_CLOSED
-                if (
-                    (state == mc.ROLLERSHUTTER_STATE_CLOSING)
-                    and self.hass
-                    and self.enabled
+                if self._hass_connected and (
+                    state == mc.ROLLERSHUTTER_STATE_CLOSING
                 ):
-                    self.async_write_ha_state()
+                    self._async_write_ha_state()
 
             if state == mc.ROLLERSHUTTER_STATE_OPENING:
                 if self._attr_state != STATE_OPENING:
@@ -839,7 +842,7 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
         self._transition_unsub = self.device.api.schedule_callback(
             1, self._transition_callback
         )
-        self.device.request_get(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
+        self.device.request(*get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE))
 
     @callback
     def _transition_end_callback(self):

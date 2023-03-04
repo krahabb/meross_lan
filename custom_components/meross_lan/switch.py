@@ -1,19 +1,7 @@
 from __future__ import annotations
 import typing
 
-from homeassistant.components.switch import (
-    DOMAIN as PLATFORM_SWITCH,
-    SwitchEntity,
-)
-
-try:
-    from homeassistant.components.switch import SwitchDeviceClass
-
-    DEVICE_CLASS_OUTLET = SwitchDeviceClass.OUTLET
-    DEVICE_CLASS_SWITCH = SwitchDeviceClass.SWITCH
-except:
-    from homeassistant.components.switch import DEVICE_CLASS_OUTLET, DEVICE_CLASS_SWITCH
-
+from homeassistant.components import switch
 
 from .merossclient import const as mc  # mEROSS cONST
 from . import meross_entity as me
@@ -23,22 +11,32 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
 
 
+try:
+    SwitchDeviceClass = switch.SwitchDeviceClass # type: ignore
+except:
+    from .helpers import StrEnum
+    class SwitchDeviceClass(StrEnum):
+        OUTLET = 'outlet'
+        SWITCH = 'switch'
+
+
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_SWITCH)
+    me.platform_setup_entry(hass, config_entry, async_add_devices, switch.DOMAIN)
 
 
-class MLSwitch(me.MerossToggle, SwitchEntity):
+class MLSwitch(me.MerossToggle, switch.SwitchEntity):
     """
     generic plugs (single/multi outlet and so)
     """
 
-    PLATFORM = PLATFORM_SWITCH
+    PLATFORM = switch.DOMAIN
+    DeviceClass = SwitchDeviceClass
 
     @staticmethod
     def build_for_device(device: me.MerossDevice, channel: object, namespace: str):
-        return MLSwitch(device, channel, None, DEVICE_CLASS_OUTLET, None, namespace)
+        return MLSwitch(device, channel, None, SwitchDeviceClass.OUTLET, None, namespace)
 
 
 class ToggleXMixin(

@@ -8,33 +8,32 @@
  versioning
 """
 from __future__ import annotations
+
 import typing
 
-from homeassistant.helpers.typing import StateType
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.entity import Entity
-from homeassistant.const import (
-    STATE_ON,
-    STATE_OFF,
-)
+from homeassistant.helpers.typing import StateType
+
+from .const import CONF_DEVICE_ID, DOMAIN
+from .helpers import LOGGER, StrEnum
+from .merossclient import const as mc, get_namespacekey, get_productnameuuid
+
+if typing.TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
+    from .meross_device import MerossDevice
+    from .meross_device_hub import MerossSubDevice
+
 
 try:  # 2022.2 new symbols
     from homeassistant.helpers.entity import EntityCategory  # type: ignore
 except:
-    class EntityCategory:
+    class EntityCategory(StrEnum):
         CONFIG = "config"
         DIAGNOSTIC = "diagnostic"
-
-
-from .merossclient import const as mc, get_namespacekey, get_productnameuuid
-from .helpers import LOGGER
-from .const import CONF_DEVICE_ID, DOMAIN
-
-if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-    from homeassistant.config_entries import ConfigEntry
-    from .meross_device import MerossDevice
-    from .meross_device_hub import MerossSubDevice
 
 
 class MerossFakeEntity:
@@ -42,7 +41,6 @@ class MerossFakeEntity:
     a 'dummy' class we'll use as a placeholder to reduce optional and/or
     disabled entities access overhead
     """
-
     enabled = False
 
 
@@ -50,17 +48,23 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
 
     PLATFORM: str
 
-    _attr_state: StateType = None
-    _attr_device_class: str | None
-    _attr_name: str | None = None
+    _attr_device_class: object | str | None
     _attr_entity_category: EntityCategory | str | None = None
+    # provides a class empty default since the state writing api
+    # would create an empty anyway....
+    _attr_extra_state_attributes: dict[str, object] = {}
+    _attr_name: str | None = None
+    _attr_state: StateType = None
+
+    # used to speed-up checks if entity is enabled and loaded
+    _hass_connected = False
 
     def __init__(
         self,
         device: MerossDevice,
         channel: object | None,
         entitykey: str | None = None,
-        device_class: str | None = None,
+        device_class: object | str | None = None,
         subdevice: MerossSubDevice | None = None,
     ):
         """
@@ -77,8 +81,10 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
         self.channel = channel
         self._attr_device_class = device_class
         if self._attr_name is None:
-            self._attr_name = entitykey or device_class
+            self._attr_name = entitykey or device_class # type: ignore
         self.subdevice = subdevice
+        assert (channel is not None) or (entitykey is not None
+        ), "provide at least channel or entitykey (cannot be 'None' together)"
         self.id = (
             channel
             if entitykey is None
@@ -86,9 +92,8 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
             if channel is None
             else f"{channel}_{entitykey}"
         )
-        assert (self.id is not None) and (
-            device.entities.get(self.id) is None
-        ), "provide a unique (channel, entitykey) in order to correctly identify this entity inside device.entities"
+        assert (device.entities.get(self.id) is None
+        ), "(channel, entitykey) is not unique inside device.entities"
         device.entities[self.id] = self
         async_add_devices = device.platforms.setdefault(self.PLATFORM)
         if async_add_devices is not None:
@@ -99,27 +104,16 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
         return
 
     @property
-    def unique_id(self):
-        return f"{self.device.device_id}_{self.id}"
+    def assumed_state(self):
+        return False
 
     @property
-    def has_entity_name(self):
-        return True
+    def available(self):
+        return self._attr_state is not None
 
     @property
-    def name(self):
-        if hasattr(Entity, "has_entity_name"):
-            # newer api...return just the 'local' name
-            return self._attr_name
-        # compatibility layer....
-        if (subdevice := self.subdevice) is not None:
-            if self._attr_name is not None:
-                return f"{subdevice.name} - {self._attr_name}"
-            else:
-                return subdevice.name
-        if self._attr_name is not None:
-            return f"{self.device.descriptor.productname} - {self._attr_name}"
-        return self.device.descriptor.productname
+    def device_class(self):
+        return self._attr_device_class
 
     @property
     def device_info(self):
@@ -144,30 +138,57 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
         }
 
     @property
-    def device_class(self):
-        return self._attr_device_class
-
-    @property
     def entity_category(self):
         return self._attr_entity_category
+
+    @property
+    def extra_state_attributes(self):
+        return self._attr_extra_state_attributes
+
+    @property
+    def force_update(self):
+        return False
+
+    @property
+    def has_entity_name(self):
+        return True
+
+    @property
+    def name(self):
+        if hasattr(Entity, "has_entity_name"):
+            # newer api...return just the 'local' name
+            return self._attr_name
+        # compatibility layer....
+        if (subdevice := self.subdevice) is not None:
+            if self._attr_name is not None:
+                return f"{subdevice.name} - {self._attr_name}"
+            else:
+                return subdevice.name
+        if self._attr_name is not None:
+            return f"{self.device.descriptor.productname} - {self._attr_name}"
+        return self.device.descriptor.productname
 
     @property
     def should_poll(self):
         return False
 
     @property
-    def available(self):
-        return self._attr_state is not None
+    def unique_id(self):
+        return f"{self.device.device_id}_{self.id}"
 
-    @property
-    def assumed_state(self):
-        return False
+    async def async_added_to_hass(self):
+        self._hass_connected = True
+
+    async def async_will_remove_from_hass(self):
+        self._hass_connected = False
 
     def update_state(self, state: StateType):
         if self._attr_state != state:
             self._attr_state = state
-            if self.hass and self.enabled:  # pylint: disable=no-member
-                self.async_write_ha_state()  # pylint: disable=no-member
+            if self._hass_connected:
+                # optimize hass checks since we're (pretty)
+                # sure they're ok (DANGER)
+                self._async_write_ha_state()
 
     def set_unavailable(self):
         self.update_state(None)
@@ -210,7 +231,7 @@ class MerossToggle(MerossEntity):
         device: 'MerossDevice',
         channel: object,
         entitykey: str | None,
-        device_class: str | None,
+        device_class: object | None,
         subdevice: 'MerossSubDevice' | None,
         namespace: str | None,
     ):

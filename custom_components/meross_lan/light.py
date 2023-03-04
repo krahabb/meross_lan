@@ -1,9 +1,8 @@
 from __future__ import annotations
 import typing
 
+from homeassistant.components import light
 from homeassistant.components.light import (
-    DOMAIN as PLATFORM_LIGHT,
-    LightEntity,
     ATTR_BRIGHTNESS,
     ATTR_HS_COLOR,
     ATTR_COLOR_TEMP,
@@ -14,12 +13,10 @@ from homeassistant.components.light import (
 # back-forward compatibility hell
 try:
     try:
-        from homeassistant.components.light import LightEntityFeature
-
         SUPPORT_BRIGHTNESS = 0
         SUPPORT_COLOR = 0
         SUPPORT_COLOR_TEMP = 0
-        SUPPORT_EFFECT = LightEntityFeature.EFFECT
+        SUPPORT_EFFECT = light.LightEntityFeature.EFFECT
     except:
         from homeassistant.components.light import (
             SUPPORT_BRIGHTNESS,
@@ -36,14 +33,12 @@ except:
 
 try:
     try:
-        from homeassistant.components.light import ColorMode
-
-        COLOR_MODE_UNKNOWN = ColorMode.UNKNOWN
-        COLOR_MODE_ONOFF = ColorMode.ONOFF
-        COLOR_MODE_BRIGHTNESS = ColorMode.BRIGHTNESS
-        COLOR_MODE_HS = ColorMode.HS
-        COLOR_MODE_RGB = ColorMode.RGB
-        COLOR_MODE_COLOR_TEMP = ColorMode.COLOR_TEMP
+        COLOR_MODE_UNKNOWN = light.ColorMode.UNKNOWN
+        COLOR_MODE_ONOFF = light.ColorMode.ONOFF
+        COLOR_MODE_BRIGHTNESS = light.ColorMode.BRIGHTNESS
+        COLOR_MODE_HS = light.ColorMode.HS
+        COLOR_MODE_RGB = light.ColorMode.RGB
+        COLOR_MODE_COLOR_TEMP = light.ColorMode.COLOR_TEMP
     except:
         from homeassistant.components.light import (
             COLOR_MODE_UNKNOWN,
@@ -69,7 +64,6 @@ from .helpers import reverse_lookup
 from .const import DND_ID
 
 if typing.TYPE_CHECKING:
-    from typing import Mapping
     from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
     from .meross_device import MerossDevice, ResponseCallbackType
@@ -88,7 +82,7 @@ MSLANY_MIRED_MAX = 371  # math.ceil(1/(2700/1000000))
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_LIGHT)
+    me.platform_setup_entry(hass, config_entry, async_add_devices, light.DOMAIN)
 
 
 def _rgb_to_int(rgb) -> int:
@@ -118,11 +112,11 @@ def _sat_1_100(value):
         return int(value)
 
 
-class MLLightBase(me.MerossToggle, LightEntity):
+class MLLightBase(me.MerossToggle, light.LightEntity):
     """
     base 'abstract' class for meross light entities
     """
-    PLATFORM = PLATFORM_LIGHT
+    PLATFORM = light.DOMAIN
     """
     internal copy of the actual meross light state
     """
@@ -181,12 +175,12 @@ class MLLightBase(me.MerossToggle, LightEntity):
 
             self._inherited_parse_light(payload)
 
-            if self.hass and self.enabled:
+            if self._hass_connected:
                 # since the light payload could be processed before the relative 'togglex'
                 # here we'll flush only when the lamp is 'on' to avoid intra-updates to HA states.
                 # when the togglex will arrive, the _light (attributes) will be already set
                 # and HA will save a consistent state (hopefully..we'll see)
-                self.async_write_ha_state()
+                self._async_write_ha_state()
 
 
 class MLLight(MLLightBase):
@@ -371,8 +365,8 @@ class MLLight(MLLightBase):
         else:
             self._attr_supported_features &= ~SUPPORT_EFFECT
             self._attr_effect_list = None
-        if self.hass and self.enabled:
-            self.async_write_ha_state()
+        if self._hass_connected:
+            self._async_write_ha_state()
 
     def _inherited_parse_light(self, payload: dict):
         if mc.KEY_CAPACITY in payload:
@@ -408,13 +402,13 @@ class MLLight(MLLightBase):
                         self._attr_effect = effects[effect]  # type: ignore
 
 
-class MLDNDLightEntity(me.MerossToggle, LightEntity):
+class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)
     """
 
-    PLATFORM = PLATFORM_LIGHT
+    PLATFORM = light.DOMAIN
 
     _attr_supported_color_modes = {COLOR_MODE_ONOFF}
     _attr_entity_category = me.EntityCategory.CONFIG

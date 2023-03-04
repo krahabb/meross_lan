@@ -2,12 +2,26 @@
     Helpers!
 """
 from __future__ import annotations
+
 from logging import getLogger
 from functools import partial
 from time import time
 from homeassistant.util.dt import utcnow
 
 from .merossclient import const as mc
+
+
+try:
+    from homeassistant.backports.enum import StrEnum # type: ignore pylint: disable=unused-import
+except:
+    import enum
+    class StrEnum(enum.Enum):
+        """
+        convenience alias for homeassistant.backports.StrEnum
+        """
+        def __str__(self):
+            return str(self.value)
+
 
 LOGGER = getLogger(__name__[:-8]) #get base custom_component name for logging
 _TRAP_DICT = {}

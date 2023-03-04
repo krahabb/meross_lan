@@ -1,10 +1,7 @@
 from __future__ import annotations
 import typing
 
-from homeassistant.components.climate import (
-    DOMAIN as PLATFORM_CLIMATE,
-    ClimateEntity,
-)
+from homeassistant.components import climate
 
 try:
     from homeassistant.components.climate.const import (
@@ -42,14 +39,11 @@ except:  # fallback (pre 2022.5)
 from homeassistant.const import (
     TEMP_CELSIUS,
     ATTR_TEMPERATURE,
-    DEVICE_CLASS_TEMPERATURE,
 )
 
 from .merossclient import const as mc  # mEROSS cONST
 from . import meross_entity as me
-from .number import (
-    MLConfigNumber,
-)
+from .number import MLConfigNumber
 
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -59,7 +53,7 @@ if typing.TYPE_CHECKING:
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_CLIMATE)
+    me.platform_setup_entry(hass, config_entry, async_add_devices, climate.DOMAIN)
 
 
 PRESET_OFF = "off"
@@ -77,9 +71,9 @@ HVAC_TO_PRESET_MAP = {
 }
 
 
-class MtsClimate(me.MerossEntity, ClimateEntity):
+class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
-    PLATFORM = PLATFORM_CLIMATE
+    PLATFORM = climate.DOMAIN
 
     _attr_min_temp = 5
     _attr_max_temp = 35
@@ -131,8 +125,8 @@ class MtsClimate(me.MerossEntity, ClimateEntity):
         else:
             self._attr_state = self._attr_hvac_mode if self.device.online else None
 
-        if self.hass and self.enabled:
-            self.async_write_ha_state()
+        if self._hass_connected:
+            self._async_write_ha_state()
 
     @property
     def supported_features(self):
@@ -228,12 +222,12 @@ class MtsSetPointNumber(MLConfigNumber):
         self._preset_mode = preset_mode
         self.key_value = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
         self._attr_icon = self.PRESET_TO_ICON_MAP[preset_mode]
-        self._attr_name = f"{preset_mode} {DEVICE_CLASS_TEMPERATURE}"
+        self._attr_name = f"{preset_mode} {self.DeviceClass.TEMPERATURE}"
         super().__init__(
             climate.device,
             climate.channel,
             f"config_{mc.KEY_TEMPERATURE}_{self.key_value}",
-            DEVICE_CLASS_TEMPERATURE,
+            self.DeviceClass.TEMPERATURE,
             climate.subdevice,
         )
 

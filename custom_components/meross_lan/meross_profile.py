@@ -61,14 +61,14 @@ class MQTTProfile:
         self.hass = hass
         self.profile_id = profile_id
         self.key = key
-        self.mqttdevices: dict[str, "MerossDevice"] = {}
+        self.mqttdevices: dict[str, MerossDevice] = {}
 
-    def attach(self, device: "MerossDevice"):
+    def attach(self, device: MerossDevice):
         assert device.device_id not in self.mqttdevices
         self.mqttdevices[device.device_id] = device
         return self
 
-    def detach(self, device: "MerossDevice"):
+    def detach(self, device: MerossDevice):
         assert device.device_id in self.mqttdevices
         self.mqttdevices.pop(device.device_id)
 
@@ -325,7 +325,7 @@ class MerossCloudProfile(MerossCloudCredentials):
         if self.need_query_devices():
             await self.async_query_devices()
 
-    def attach(self, device: "MerossDevice"):
+    def attach(self, device: MerossDevice):
         fw = device.descriptor.firmware
         server = fw.get(mc.KEY_SERVER)
         port = fw.get(mc.KEY_PORT)

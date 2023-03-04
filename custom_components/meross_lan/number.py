@@ -1,29 +1,15 @@
 from __future__ import annotations
 import typing
 
-from homeassistant.components.number import (
-    DOMAIN as PLATFORM_NUMBER,
-    NumberEntity,
-)
-
-try:
-    from homeassistant.components.number import NumberMode
-
-    NUMBERMODE_AUTO = NumberMode.AUTO
-    NUMBERMODE_BOX = NumberMode.BOX
-    NUMBERMODE_SLIDER = NumberMode.SLIDER
-except:
-    NUMBERMODE_AUTO = "auto"
-    NUMBERMODE_BOX = "box"
-    NUMBERMODE_SLIDER = "slider"
+from homeassistant.components import number
 
 from homeassistant.const import (
     PERCENTAGE,
+    TEMP_CELSIUS,
 )
 
 from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 from . import meross_entity as me
-from .sensor import CLASS_TO_UNIT_MAP
 from .helpers import LOGGER
 
 if typing.TYPE_CHECKING:
@@ -33,23 +19,40 @@ if typing.TYPE_CHECKING:
     from .meross_device_hub import MerossSubDevice
 
 
-CORE_HAS_NATIVE_UNIT = hasattr(NumberEntity, "native_unit_of_measurement")
+try:
+    NumberDeviceClass = number.NumberDeviceClass # type: ignore
+except:
+    from .helpers import StrEnum
+    class NumberDeviceClass(StrEnum):
+        HUMIDITY = 'humidity'
+        TEMPERATURE = 'temperature'
+
+try:
+    NUMBERMODE_AUTO = number.NumberMode.AUTO
+    NUMBERMODE_BOX = number.NumberMode.BOX
+    NUMBERMODE_SLIDER = number.NumberMode.SLIDER
+except:
+    NUMBERMODE_AUTO = "auto"
+    NUMBERMODE_BOX = "box"
+    NUMBERMODE_SLIDER = "slider"
+
+CORE_HAS_NATIVE_UNIT = hasattr(number.NumberEntity, "native_unit_of_measurement")
 
 
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_NUMBER)
+    me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
 
 if CORE_HAS_NATIVE_UNIT:
     # implement 'new' (2022.6) style NumberEntity
-    PatchedNumberEntity = NumberEntity  # type: ignore
+    NumberEntity = number.NumberEntity  # type: ignore
 else:
     # pre 2022.6 style NumberEntity
     # since derived classes will try to adapt to new _native_* style
     # here we adapt for older HA cores
-    class PatchedNumberEntity(NumberEntity):
+    class NumberEntity(number.NumberEntity):
         @property
         def max_value(self):
             return self.native_max_value
@@ -74,9 +77,16 @@ else:
             await self.async_set_native_value(value)
 
 
-class MLConfigNumber(me.MerossEntity, PatchedNumberEntity):
+CLASS_TO_UNIT_MAP = {
+    NumberDeviceClass.HUMIDITY: PERCENTAGE,
+    NumberDeviceClass.TEMPERATURE: TEMP_CELSIUS,
+}
 
-    PLATFORM = PLATFORM_NUMBER
+
+class MLConfigNumber(me.MerossEntity, NumberEntity):
+
+    PLATFORM = number.DOMAIN
+    DeviceClass = NumberDeviceClass
 
     _attr_entity_category = me.EntityCategory.CONFIG
     _attr_mode = NUMBERMODE_BOX  # type: ignore
@@ -146,7 +156,7 @@ class MLHubAdjustNumber(MLConfigNumber):
         subdevice: "MerossSubDevice",
         key: str,
         namespace: str,
-        device_class: str,
+        device_class: NumberDeviceClass,
         min_value: float,
         max_value: float,
         step: float,

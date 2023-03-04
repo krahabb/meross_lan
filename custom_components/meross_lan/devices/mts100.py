@@ -570,14 +570,14 @@ class Mts100Schedule(MLCalendar):
         # invalidate our internal representation and flush
         self._schedule = None
         self._schedule_entry_count = 0
-        if self.hass and self.enabled:
-            self.async_write_ha_state()
+        if self._hass_connected:
+            self._async_write_ha_state()
 
     def update_climate_modes(self):
         # since our state/active event is dependent on climate mode
         # we'll force a state update when the climate entity
-        if self.hass and self.enabled:
-            self.async_write_ha_state()
+        if self._hass_connected:
+            self._async_write_ha_state()
 
     async def async_request_schedule(self):
         if schedule := self.schedule:

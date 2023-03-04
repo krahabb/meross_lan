@@ -2,26 +2,22 @@ from __future__ import annotations
 import typing
 from logging import WARNING
 
-from homeassistant.const import (
-    DEVICE_CLASS_BATTERY,
-    DEVICE_CLASS_TEMPERATURE,
-    DEVICE_CLASS_HUMIDITY,
-)
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers import device_registry
 
 from .merossclient import (
-    const as mc, # mEROSS cONST
+    const as mc,  # mEROSS cONST
     MerossDeviceDescriptor,
-    get_productnameuuid
+    get_default_arguments,
+    get_productnameuuid,
 )
 from .meross_device import MerossDevice
-from .sensor import PLATFORM_SENSOR, MLSensor
-from .climate import PLATFORM_CLIMATE
-from .binary_sensor import PLATFORM_BINARY_SENSOR, MLBinarySensor, DEVICE_CLASS_WINDOW
-from .number import PLATFORM_NUMBER, MLHubAdjustNumber
-from .switch import PLATFORM_SWITCH, MLSwitch, DEVICE_CLASS_SWITCH
-from .calendar import PLATFORM_CALENDAR
+from .sensor import MLSensor
+from .climate import MtsClimate
+from .binary_sensor import MLBinarySensor
+from .number import MLHubAdjustNumber
+from .switch import MLSwitch
+from .calendar import MLCalendar
 from .helpers import LOGGER
 from .const import (
     DOMAIN,
@@ -30,23 +26,27 @@ from .const import (
 )
 
 
-WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict({
-    # typical entries (they're added on SubDevice declaration)
-    # mc.TYPE_MS100: MS100SubDevice,
-    # mc.TYPE_MTS100: MTS100SubDevice,
-})
+WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
+    {
+        # typical entries (they're added on SubDevice declaration)
+        # mc.TYPE_MS100: MS100SubDevice,
+        # mc.TYPE_MTS100: MTS100SubDevice,
+    }
+)
 # subdevices types listed in NS_APPLIANCE_HUB_SENSOR_ALL
 SENSOR_ALL_TYPESET = (mc.TYPE_MS100, mc.TYPE_SMOKEALARM)
 # subdevices types listed in NS_APPLIANCE_HUB_MTS100_ALL
 MTS100_ALL_TYPESET = (mc.TYPE_MTS100, mc.TYPE_MTS100V3, mc.TYPE_MTS150)
 
-#REMOVE
+# REMOVE
 TRICK = False
+
 
 class MerossDeviceHub(MerossDevice):
     """
     Specialized MerossDevice for smart hub(s) like MSH300
     """
+
     _lastupdate_battery = 0
     _lastupdate_sensor = None
     _lastupdate_mts100 = None
@@ -57,31 +57,44 @@ class MerossDeviceHub(MerossDevice):
         # invoke platform(s) async_setup_entry
         # in order to be able to eventually add entities when they 'pop up'
         # in the hub (see also self.async_add_sensors)
-        self.platforms[PLATFORM_SENSOR] = None
-        self.platforms[PLATFORM_BINARY_SENSOR] = None
-        self.platforms[PLATFORM_CLIMATE] = None
-        self.platforms[PLATFORM_NUMBER] = None
-        self.platforms[PLATFORM_SWITCH] = None
-        self.platforms[PLATFORM_CALENDAR] = None
+        self.platforms[MLSensor.PLATFORM] = None
+        self.platforms[MLBinarySensor.PLATFORM] = None
+        self.platforms[MtsClimate.PLATFORM] = None
+        self.platforms[MLHubAdjustNumber.PLATFORM] = None
+        self.platforms[MLSwitch.PLATFORM] = None
+        self.platforms[MLCalendar.PLATFORM] = None
         try:
             # we expect a well structured digest here since
             # we're sure 'hub' key is there by __init__ device factory
             for p_subdevice in descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]:
                 self._subdevice_build(p_subdevice)
-            #REMOVE
+            # REMOVE
             global TRICK
             if TRICK:
                 TRICK = False
                 MS100SubDevice(
                     self,
-                    {"id": "120027D281CF", "status": 1, "onoff": 0, "lastActiveTime": 1638019438, "ms100": {"latestTime": 1638019438, "latestTemperature": 224, "latestHumidity": 460, "voltage": 2766}}
+                    {
+                        "id": "120027D281CF",
+                        "status": 1,
+                        "onoff": 0,
+                        "lastActiveTime": 1638019438,
+                        "ms100": {
+                            "latestTime": 1638019438,
+                            "latestTemperature": 224,
+                            "latestHumidity": 460,
+                            "voltage": 2766,
+                        },
+                    },
                 )
         except Exception as e:
-            LOGGER.warning("MerossDeviceHub(%s) init exception:(%s)", self.device_id, str(e))
+            LOGGER.warning(
+                "MerossDeviceHub(%s) init exception:(%s)", self.device_id, str(e)
+            )
 
     def _handle_Appliance_Hub_Sensor_All(self, header: dict, payload: dict):
         if self._subdevice_parse(payload, mc.KEY_ALL):
-            self._lastupdate_sensor = self.lastupdate
+            self._lastupdate_sensor = self.lastresponse
 
     def _handle_Appliance_Hub_Sensor_TempHum(self, header: dict, payload: dict):
         self._subdevice_parse(payload, mc.KEY_TEMPHUM)
@@ -94,7 +107,7 @@ class MerossDeviceHub(MerossDevice):
 
     def _handle_Appliance_Hub_Mts100_All(self, header: dict, payload: dict):
         if self._subdevice_parse(payload, mc.KEY_ALL):
-            self._lastupdate_mts100 = self.lastupdate
+            self._lastupdate_mts100 = self.lastresponse
 
     def _handle_Appliance_Hub_Mts100_Mode(self, header: dict, payload: dict):
         self._subdevice_parse(payload, mc.KEY_MODE)
@@ -112,7 +125,7 @@ class MerossDeviceHub(MerossDevice):
         self._subdevice_parse(payload, mc.KEY_TOGGLEX)
 
     def _handle_Appliance_Hub_Battery(self, header: dict, payload: dict):
-        self._lastupdate_battery = self.lastupdate
+        self._lastupdate_battery = self.lastresponse
         self._subdevice_parse(payload, mc.KEY_BATTERY)
 
     def _handle_Appliance_Hub_Online(self, header: dict, payload: dict):
@@ -135,17 +148,17 @@ class MerossDeviceHub(MerossDevice):
             # we'll check our device registry for luck
             try:
                 hassdevice = device_registry.async_get(self.hass).async_get_device(
-                    identifiers = {(DOMAIN, p_subdevice[mc.KEY_ID])}
+                    identifiers={(DOMAIN, p_subdevice[mc.KEY_ID])}
                 )
                 if hassdevice is None:
                     return None
                 _type = hassdevice.model
             except:
                 return None
-        deviceclass = WELL_KNOWN_TYPE_MAP.get(_type) # type: ignore
+        deviceclass = WELL_KNOWN_TYPE_MAP.get(_type)  # type: ignore
         if deviceclass is None:
             # build something anyway...
-            return MerossSubDevice(self, p_subdevice, _type) # type: ignore
+            return MerossSubDevice(self, p_subdevice, _type)  # type: ignore
         return deviceclass(self, p_subdevice)
 
     def _subdevice_parse(self, payload: dict, key: str):
@@ -159,8 +172,11 @@ class MerossDeviceHub(MerossDevice):
                     # only if it appears this device is online else it
                     # would be a waste since we wouldnt have enough info
                     # to correctly build that
-                    if p_subdevice.get(mc.KEY_ONLINE, {}).get(mc.KEY_STATUS) == mc.STATUS_ONLINE:
-                        self.request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+                    if (
+                        p_subdevice.get(mc.KEY_ONLINE, {}).get(mc.KEY_STATUS)
+                        == mc.STATUS_ONLINE
+                    ):
+                        self.request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
                 else:
                     method = getattr(subdevice, f"_parse_{key}", None)
                     if method is not None:
@@ -192,13 +208,20 @@ class MerossDeviceHub(MerossDevice):
                 self.needsave = True
                 for p_id in subdevices_actual:
                     subdevice = self.subdevices[p_id]
-                    self.log(WARNING, 0, "removing subdevice %s(%s) - configuration will be reloaded in 15 sec", subdevice.type, p_id)
+                    self.log(
+                        WARNING,
+                        0,
+                        "removing subdevice %s(%s) - configuration will be reloaded in 15 sec",
+                        subdevice.type,
+                        p_id,
+                    )
                 # before reloading we have to be sure configentry data were persisted
                 # so we'll wait a bit..
                 # also, we're not registering an unsub and we're not checking
                 # for redundant invocations (playing a bit unsafe that is)
                 async def setup_again(*_):
                     await self.hass.config_entries.async_reload(self.entry_id)
+
                 async_call_later(self.hass, 15, setup_again)
 
     def _build_subdevices_payload(self, types: tuple, count: int):
@@ -215,7 +238,7 @@ class MerossDeviceHub(MerossDevice):
             payload = []
             for subdevice in subdevices.values():
                 if subdevice.type in types:
-                    payload.append({ mc.KEY_ID: subdevice.id })
+                    payload.append({mc.KEY_ID: subdevice.id})
                     if len(payload) == count:
                         yield payload
                         payload = []
@@ -237,39 +260,43 @@ class MerossDeviceHub(MerossDevice):
         # the rest of the sequence (see super().async_request_updates for the same logic)
         if not self._online:
             return
+
+        needpoll = (namespace is not None) or (self.lastmqttresponse == 0)
         if self._lastupdate_sensor is not None:
-            if (self._lastupdate_sensor == 0) or ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
-                await self.async_request_get(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
+            if needpoll or (self._lastupdate_sensor == 0):
+                await self.async_request(
+                    *get_default_arguments(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
+                )
                 for p in self._build_subdevices_payload(SENSOR_ALL_TYPESET, 8):
                     await self.async_request(
-                        mc.NS_APPLIANCE_HUB_SENSOR_ALL,
-                        mc.METHOD_GET,
-                        { mc.KEY_ALL: p }
+                        mc.NS_APPLIANCE_HUB_SENSOR_ALL, mc.METHOD_GET, {mc.KEY_ALL: p}
                     )
 
         if not self._online:
             return
         if self._lastupdate_mts100 is not None:
-            if (self._lastupdate_mts100 == 0) or ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
-                await self.async_request_get(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
+            if needpoll or (self._lastupdate_mts100 == 0):
+                await self.async_request(
+                    *get_default_arguments(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
+                )
                 for p in self._build_subdevices_payload(MTS100_ALL_TYPESET, 8):
                     await self.async_request(
-                        mc.NS_APPLIANCE_HUB_MTS100_ALL,
-                        mc.METHOD_GET,
-                        { mc.KEY_ALL: p }
+                        mc.NS_APPLIANCE_HUB_MTS100_ALL, mc.METHOD_GET, {mc.KEY_ALL: p}
                     )
                 for p in self._build_subdevices_payload(MTS100_ALL_TYPESET, 4):
                     if mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in self.descriptor.ability:
                         await self.async_request(
                             mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
                             mc.METHOD_GET,
-                            { mc.KEY_SCHEDULE: p }
+                            {mc.KEY_SCHEDULE: p},
                         )
 
         if not self._online:
             return
-        if ((epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD):
-            await self.async_request_get(mc.NS_APPLIANCE_HUB_BATTERY)
+        if (epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD:
+            await self.async_request(
+                *get_default_arguments(mc.NS_APPLIANCE_HUB_BATTERY)
+            )
 
         # we also need to check for TOGGLEX state in case but this is not always needed:
         # for example, if we just have mts100-likes devices, their 'togglex' state is already carried by
@@ -277,16 +304,22 @@ class MerossDeviceHub(MerossDevice):
         if not self._online:
             return
         if mc.NS_APPLIANCE_HUB_TOGGLEX in self.descriptor.ability:
-            if ((epoch - self.lastmqtt) > PARAM_HEARTBEAT_PERIOD):
-                _excluded = (mc.TYPE_MS100, mc.TYPE_MTS100, mc.TYPE_MTS100V3, mc.TYPE_MTS150)
+            if needpoll:
+                _excluded = (
+                    mc.TYPE_MS100,
+                    mc.TYPE_MTS100,
+                    mc.TYPE_MTS100V3,
+                    mc.TYPE_MTS150,
+                )
                 for subdevice in self.subdevices.values():
                     if subdevice.type not in _excluded:
-                        await self.async_request_get(mc.NS_APPLIANCE_HUB_TOGGLEX)
+                        await self.async_request(
+                            *get_default_arguments(mc.NS_APPLIANCE_HUB_TOGGLEX)
+                        )
                         break
 
 
 class MerossSubDevice:
-
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
         self.hub = hub
         self.type = _type
@@ -294,16 +327,19 @@ class MerossSubDevice:
         self.p_digest = p_digest
         self._online = False
         hub.subdevices[self.id] = self
-        self.sensor_battery = self.build_sensor(DEVICE_CLASS_BATTERY)
+        self.sensor_battery = self.build_sensor(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
         self.switch_togglex = None
 
-    def build_sensor(self, device_class: str):
-        return MLSensor(self.hub, self.id, device_class, device_class, self)
+    def build_sensor(self, device_class: MLSensor.DeviceClass):
+        return MLSensor(self.hub, self.id, str(device_class), device_class, self)
 
-    def build_binary_sensor(self, device_class: str):
-        return MLBinarySensor(self.hub, self.id, device_class, device_class, self)
+    def build_sensor_noclass(self, entitykey: str):
+        return MLSensor(self.hub, self.id, entitykey, None, self)
+
+    def build_binary_sensor(self, device_class: MLBinarySensor.DeviceClass):
+        return MLBinarySensor(self.hub, self.id, str(device_class), device_class, self)
 
     @property
     def online(self):
@@ -356,7 +392,7 @@ class MerossSubDevice:
                     p_latest = p_value.get(mc.KEY_LATEST)
                     if isinstance(p_latest, int):
                         sensorattr = f"sensor_{p_key}"
-                        sensor:MLSensor = getattr(self, sensorattr, None) # type: ignore
+                        sensor: MLSensor = getattr(self, sensorattr, None)  # type: ignore
                         if not sensor:
                             sensor = self.build_sensor(p_key)
                             setattr(self, sensorattr, sensor)
@@ -384,35 +420,47 @@ class MerossSubDevice:
         for p_key, p_value in p_adjust.items():
             if p_key == mc.KEY_ID:
                 continue
-            number:MLHubAdjustNumber
-            if (number := getattr(self, f"number_adjust_{p_key}", None)) is not None: # type: ignore
+            number: MLHubAdjustNumber
+            if (number := getattr(self, f"number_adjust_{p_key}", None)) is not None:  # type: ignore
                 number.update_native_value(p_value)
 
     def _parse_togglex(self, p_togglex: dict):
         if self.switch_togglex is None:
             self.switch_togglex = MLSwitch(
                 self.hub,
-                self.id, None,
-                DEVICE_CLASS_SWITCH,
+                self.id,
+                None,
+                MLSwitch.DeviceClass.SWITCH,
                 self,
-                mc.NS_APPLIANCE_HUB_TOGGLEX
+                mc.NS_APPLIANCE_HUB_TOGGLEX,
             )
             self.switch_togglex.key_channel = mc.KEY_ID
         self.switch_togglex._parse_togglex(p_togglex)
 
 
 class MS100SubDevice(MerossSubDevice):
-
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
-        self.sensor_temperature = self.build_sensor(DEVICE_CLASS_TEMPERATURE)
-        self.sensor_humidity = self.build_sensor(DEVICE_CLASS_HUMIDITY)
+        self.sensor_temperature = self.build_sensor(MLSensor.DeviceClass.TEMPERATURE)
+        self.sensor_humidity = self.build_sensor(MLSensor.DeviceClass.HUMIDITY)
         self.number_adjust_temperature = MLHubAdjustNumber(
-            self, mc.KEY_TEMPERATURE, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST,
-            DEVICE_CLASS_TEMPERATURE, -5, 5, 0.1)
+            self,
+            mc.KEY_TEMPERATURE,
+            mc.NS_APPLIANCE_HUB_SENSOR_ADJUST,
+            MLHubAdjustNumber.DeviceClass.TEMPERATURE,
+            -5,
+            5,
+            0.1,
+        )
         self.number_adjust_humidity = MLHubAdjustNumber(
-            self, mc.KEY_HUMIDITY, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST,
-            DEVICE_CLASS_HUMIDITY, -20, 20, 1)
+            self,
+            mc.KEY_HUMIDITY,
+            mc.NS_APPLIANCE_HUB_SENSOR_ADJUST,
+            MLHubAdjustNumber.DeviceClass.HUMIDITY,
+            -20,
+            20,
+            1,
+        )
 
     def _setonline(self):
         super()._setonline()
@@ -429,27 +477,41 @@ class MS100SubDevice(MerossSubDevice):
         if isinstance(value := p_temphum.get(mc.KEY_LATESTHUMIDITY), int):
             self.sensor_humidity.update_state(value / 10)
 
+
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
 
 
 class MTS100SubDevice(MerossSubDevice):
-
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100):
+    def __init__(
+        self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100
+    ):
         super().__init__(hub, p_digest, _type)
         from .devices import mts100
+
         self.climate = mts100.Mts100Climate(self)
         self.number_comfort_temperature = mts100.Mts100SetPointNumber(
-            self.climate, mts100.PRESET_COMFORT)
+            self.climate, mts100.PRESET_COMFORT
+        )
         self.number_sleep_temperature = mts100.Mts100SetPointNumber(
-            self.climate, mts100.PRESET_SLEEP)
+            self.climate, mts100.PRESET_SLEEP
+        )
         self.number_away_temperature = mts100.Mts100SetPointNumber(
-            self.climate, mts100.PRESET_AWAY)
+            self.climate, mts100.PRESET_AWAY
+        )
         self.schedule = mts100.Mts100Schedule(self.climate)
-        self.binary_sensor_window = self.build_binary_sensor(DEVICE_CLASS_WINDOW)
-        self.sensor_temperature = self.build_sensor(DEVICE_CLASS_TEMPERATURE)
+        self.binary_sensor_window = self.build_binary_sensor(
+            MLBinarySensor.DeviceClass.WINDOW
+        )
+        self.sensor_temperature = self.build_sensor(MLSensor.DeviceClass.TEMPERATURE)
         self.number_adjust_temperature = MLHubAdjustNumber(
-            self, mc.KEY_TEMPERATURE, mc.NS_APPLIANCE_HUB_MTS100_ADJUST,
-            DEVICE_CLASS_TEMPERATURE, -5, 5, 0.1)
+            self,
+            mc.KEY_TEMPERATURE,
+            mc.NS_APPLIANCE_HUB_MTS100_ADJUST,
+            MLHubAdjustNumber.DeviceClass.TEMPERATURE,
+            -5,
+            5,
+            0.1,
+        )
 
     def _setonline(self):
         super()._setonline()
@@ -515,31 +577,31 @@ class MTS100SubDevice(MerossSubDevice):
     def _parse_schedule(self, p_schedule: dict):
         self.schedule._parse_schedule(p_schedule)
 
+
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100] = MTS100SubDevice
 
 
 class MTS100V3SubDevice(MTS100SubDevice):
-
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MTS100V3)
+
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100V3] = MTS100V3SubDevice
 
 
 class MTS150SubDevice(MTS100SubDevice):
-
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MTS150)
+
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150] = MTS150SubDevice
 
 
 class SmokeAlarmSubDevice(MerossSubDevice):
-
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_SMOKEALARM)
-        self.sensor_status = self.build_sensor("status")
-        self.sensor_interConn = self.build_sensor("interConn")
+        self.sensor_status = self.build_sensor_noclass("status")
+        self.sensor_interConn = self.build_sensor_noclass("interConn")
 
     def _setonline(self):
         super()._setonline()
@@ -560,5 +622,6 @@ class SmokeAlarmSubDevice(MerossSubDevice):
             self.sensor_status.update_state(value)
         if isinstance(value := p_smokealarm.get(mc.KEY_INTERCONN), int):
             self.sensor_interConn.update_state(value)
+
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_SMOKEALARM] = SmokeAlarmSubDevice
