@@ -12,7 +12,7 @@ from . import const as mc
 
 KeyType = Union[dict, str, None]
 
-if True:
+try:
     import asyncio
     import json
     from random import randint
@@ -20,15 +20,14 @@ if True:
 
     class MEROSSDEBUG:
 
-        try:
-            data = json.load(
-                open(
-                    "/config/custom_components/meross_lan/merossclient/debug.secret.json",
-                    encoding="utf-8",
-                )
+        # this will raise an OSError on non-dev machines missing the
+        # debug configuration so the MEROSSDEBUG symbol will be invalidated
+        data = json.load(
+            open(
+                "/config/custom_components/meross_lan/merossclient/debug.secret.json",
+                encoding="utf-8",
             )
-        except:
-            data = {}
+        )
 
         cloudapi_login = data.get("login")
         cloudapi_devicelist = data.get("devList")
@@ -92,8 +91,8 @@ if True:
                 MEROSSDEBUG.http_disc_end = time() + MEROSSDEBUG.http_disc_duration
                 raise asyncio.TimeoutError()
 
-else:
-    MEROSSDEBUG = None
+except:
+    MEROSSDEBUG = None # type: ignore
 
 
 class MerossProtocolError(Exception):
