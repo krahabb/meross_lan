@@ -1,5 +1,6 @@
 """The Meross IoT local LAN integration."""
 from __future__ import annotations
+import asyncio
 import typing
 from time import time
 from logging import WARNING, INFO, DEBUG
@@ -742,11 +743,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             )
 
         device = api.build_device(device_id, entry)
-        # this api is too recent (around April 2021): hass.config_entries.async_setup_platforms(entry, device.platforms.keys())
-        for platform in device.platforms.keys():
-            hass.async_create_task(
-                hass.config_entries.async_forward_entry_setup(entry, platform)
-            )
+        await asyncio.gather(
+            *(hass.config_entries.async_forward_entry_setup(entry, platform) for platform in device.platforms.keys())
+        )
+
     return True
 
 
