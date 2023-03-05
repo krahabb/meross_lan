@@ -8,8 +8,8 @@ from json import (
     dumps as json_dumps,
     loads as json_loads,
 )
-from homeassistant.config_entries import ConfigEntry, SOURCE_DISCOVERY
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.config_entries import SOURCE_DISCOVERY
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers import storage
@@ -54,6 +54,8 @@ if typing.TYPE_CHECKING:
         publish as mqtt_publish,
         async_publish as async_mqtt_publish,
     )
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
     from .meross_device import ResponseCallbackType
     from .merossclient.cloudapi import MerossCloudCredentials
 else:
@@ -129,7 +131,7 @@ class MerossApi(MQTTProfile):
         self.deviceclasses: dict[str, type] = {}
         self.devices: dict[str, "MerossDevice"] = {}
         self.discovering: dict[str, dict] = {}
-        self.profiles: dict[object, "MerossCloudProfile"] = {}
+        self.profiles: dict[str, "MerossCloudProfile"] = {}
         self.store = None  # type: ignore
         self.store_loaded = hass.loop.create_future()
         self.unsub_mqtt_subscribe = None
@@ -263,10 +265,13 @@ class MerossApi(MQTTProfile):
             profiles_map[profile.profile_id] = profile.email
         return profiles_map
 
-    def get_profile_id(self, email: str):
+    def get_profile_by_email(self, email: str):
         for profile in self.profiles.values():
             if profile.email == email:
                 return profile.profile_id
+
+    def get_profile_by_id(self, profile_id: str):
+        return self.profiles.get(profile_id)
 
     def build_device(self, device_id: str, entry: ConfigEntry):
         """
@@ -274,7 +279,7 @@ class MerossApi(MQTTProfile):
         The base MerossDevice class is a bulk 'do it all' implementation
         but some devices (i.e. Hub) need a (radically?) different behaviour
         """
-        descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD, {}))
+        descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD))
         ability = descriptor.ability
         digest = descriptor.digest
 
@@ -782,11 +787,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     else:
         # device related entry
         LOGGER.debug("async_setup_entry device_id = %s", device_id)
-        cloud_key = entry.data.get(CONF_CLOUD_KEY)
-        if cloud_key is not None:
-            api.cloud_key = (
-                cloud_key  # last loaded overwrites existing: shouldnt it be the same ?!
-            )
+        # MQTT hub entry doesnt hold cloud_key..
+        if (cloud_key := entry.data.get(CONF_CLOUD_KEY)) is not None:
+            api.cloud_key = cloud_key
 
         device = api.build_device(device_id, entry)
         await asyncio.gather(

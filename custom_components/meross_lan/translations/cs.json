@@ -76,7 +76,7 @@
                     "host": "Adresa hostitele zařízení",
                     "key": "Klíč zařízení",
                     "protocol": "Protokol připojení",
-                    "cloud_profile": "Cloudový profil",
+                    "cloud_profile_id": "Cloudový profil",
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
                     "trace": "Zapnout ladění zařízení",

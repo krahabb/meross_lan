@@ -75,7 +75,7 @@
           "host": "Adresse",
           "key": "Clé",
           "protocol": "Protocole de connexion",
-          "cloud_profile": "Profil Cloud",
+          "cloud_profile_id": "Profil Cloud",
           "polling_period": "Période de requête",
           "timezone": "Fuseau horaire de l'appareil",
           "trace": "Activer le traçage de l'appareil",

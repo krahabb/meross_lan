@@ -31,7 +31,6 @@ from .helpers import (
 )
 from .merossclient import (
     const as mc,  # mEROSS cONST
-    MerossDeviceDescriptor,
     get_namespacekey,
     get_replykey,
     get_default_arguments,
@@ -40,10 +39,11 @@ from .merossclient.httpclient import MerossHttpClient
 from .meross_entity import MerossFakeEntity
 from .sensor import ProtocolSensor
 from .const import (
-    CONF_CLOUD_PROFILE,
     DOMAIN,
+    DeviceConfigType,
     CONF_DEVICE_ID,
     CONF_KEY,
+    CONF_CLOUD_PROFILE_ID,
     CONF_PAYLOAD,
     CONF_HOST,
     CONF_TIMESTAMP,
@@ -73,6 +73,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
     from . import MerossApi
+    from .merossclient import MerossDeviceDescriptor
     from .meross_entity import MerossEntity
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
@@ -227,9 +228,7 @@ class MerossDevice:
         self._mqtt_transactions: dict[str, _MQTTTransaction] = {}
 
         # cache this so entities will just ref it
-        self.device_info_id = {
-            "identifiers": {(DOMAIN, self.device_id)}
-        }
+        self.device_info_id = {"identifiers": {(DOMAIN, self.device_id)}}
         try:
             # try block since this is not critical
             deviceentry = device_registry.async_get(api.hass).async_get_or_create(
@@ -241,7 +240,7 @@ class MerossDevice:
                 name=descriptor.productname,
                 model=descriptor.productmodel,
                 sw_version=descriptor.firmware.get(mc.KEY_VERSION),
-                **self.device_info_id
+                **self.device_info_id,
             )
             self._deviceentry = weakref.ref(deviceentry)
         except:
@@ -260,9 +259,15 @@ class MerossDevice:
             if _init is not None:
                 if isinstance(payload, list):
                     for p in payload:
-                        _init(p)
+                        try:
+                            _init(p)
+                        except:# TODO: add debug log
+                            pass
                 else:
-                    _init(payload)
+                    try:
+                        _init(payload)
+                    except:# TODO: add debug log
+                        pass
 
         self._unsub_entry_update_listener = config_entry.add_update_listener(
             self.entry_update_listener
@@ -271,7 +276,7 @@ class MerossDevice:
         # the mqtt profile might be connected right-away and
         # this has wider implications (for example sensor_protocol
         # is updated)
-        self._set_config_entry(config_entry.data)
+        self._set_config_entry(config_entry.data)  # type: ignore
         # we're disconnected but mqtt broker might be there
         # so we prepare the sensor_protocol state
         self.sensor_protocol.set_unavailable()
@@ -305,7 +310,7 @@ class MerossDevice:
             self._trace_close()
         self.entities.clear()
         self.entity_dnd = MerossFakeEntity
-        self.sensor_protocol = None # type: ignore
+        self.sensor_protocol = None  # type: ignore
 
     @property
     def host(self):
@@ -835,9 +840,12 @@ class MerossDevice:
                         # in case our self.pref_protocol is HTTP.
                         # when self.pref_protocol is MQTT we don't care
                         # since we'll just try the switch when mqtt fails
-                        if (self.curr_protocol is CONF_PROTOCOL_MQTT) and (
-                            self.pref_protocol is CONF_PROTOCOL_HTTP) and (
-                            (epoch - self.lasthttprequest) > PARAM_HEARTBEAT_PERIOD
+                        if (
+                            (self.curr_protocol is CONF_PROTOCOL_MQTT)
+                            and (self.pref_protocol is CONF_PROTOCOL_HTTP)
+                            and (
+                                (epoch - self.lasthttprequest) > PARAM_HEARTBEAT_PERIOD
+                            )
                         ):
                             await self.async_http_request(
                                 *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
@@ -910,7 +918,7 @@ class MerossDevice:
                 )
             ] = TIMEZONES_SET
 
-    def entry_option_update(self, user_input: dict):
+    def entry_option_update(self, user_input: DeviceConfigType):
         """
         called when the user 'SUBMIT' an OptionsFlowHandler: here we'll
         receive the full user_input so to update device config properties
@@ -932,7 +940,7 @@ class MerossDevice:
         callback after user changed configuration through OptionsFlowHandler
         deviceid and/or host are not changed so we're still referring to the same device
         """
-        self._set_config_entry(config_entry.data)
+        self._set_config_entry(config_entry.data)  # type: ignore
         if (http := self._http) is not None:
             if self._host:
                 http.host = self._host
@@ -1166,9 +1174,9 @@ class MerossDevice:
             entries = self.hass.config_entries
             entry = entries.async_get_entry(self.entry_id)
             if entry is not None:
-                data = dict(entry.data)  # deepcopy? not needed: see CONF_TIMESTAMP
+                data = dict(entry.data)
                 data[CONF_PAYLOAD].update(payload)
-                data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+                data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
                 entries.async_update_entry(entry, data=data)
         except Exception as e:
             self.log(
@@ -1179,14 +1187,16 @@ class MerossDevice:
                 str(e),
             )
 
-    def _set_config_entry(self, data: MappingProxyType[str, object]):
+    def _set_config_entry(self, data: DeviceConfigType):
         """
         common properties read from ConfigEntry on __init__ or when a configentry updates
         """
-        self._host = data.get(CONF_HOST)  # type: ignore
-        self.key = data.get(CONF_KEY) or ""  # type: ignore # prevent key-hack at any rate
+        self._host = data.get(CONF_HOST)
+        self.key = data.get(CONF_KEY) or ""
 
-        self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(data.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO)  # type: ignore
+        self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(
+            data.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO
+        )
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
             # and eventually fallback (curr_protocol) until some good news allow us
@@ -1202,16 +1212,18 @@ class MerossDevice:
         else:
             self.curr_protocol = self.pref_protocol = self.conf_protocol
 
-        self.polling_period = data.get(CONF_POLLING_PERIOD, CONF_POLLING_PERIOD_DEFAULT)  # type: ignore
-        if self.polling_period < CONF_POLLING_PERIOD_MIN:  # type: ignore
+        self.polling_period = (
+            data.get(CONF_POLLING_PERIOD) or CONF_POLLING_PERIOD_DEFAULT
+        )
+        if self.polling_period < CONF_POLLING_PERIOD_MIN:
             self.polling_period = CONF_POLLING_PERIOD_MIN
-        self._polling_delay = self.polling_period  # type: ignore
+        self._polling_delay = self.polling_period
 
         if self.conf_protocol is CONF_PROTOCOL_HTTP:
             # strictly HTTP so no use of MQTT
             if self._mqtt_profile is not None:
                 self._mqtt_profile_detach()
-        elif _cloud_profile_id := data.get(CONF_CLOUD_PROFILE):
+        elif _cloud_profile_id := data.get(CONF_CLOUD_PROFILE_ID):
             # this is the case for when we want to use meross cloud mqtt.
             # On config entry update we might be already connected to the right
             # cloud_profile...

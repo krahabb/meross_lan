@@ -24,7 +24,7 @@ try:
         # debug configuration so the MEROSSDEBUG symbol will be invalidated
         data = json.load(
             open(
-                "/config/custom_components/meross_lan/merossclient/debug.secret.json",
+                "./custom_components/meross_lan/merossclient/debug.secret.json",
                 encoding="utf-8",
             )
         )
@@ -76,8 +76,8 @@ try:
 
         # MerossHTTPClient debug patching
         http_disc_end = 0
-        http_disc_duration = 120
-        http_disc_probability = 20
+        http_disc_duration = 25
+        http_disc_probability = 0
 
         @staticmethod
         def http_random_timeout():
@@ -253,8 +253,8 @@ class MerossDeviceDescriptor:
     """
 
     all = {}
-    ability: dict
-    digest: dict
+    ability = {}
+    digest = {}
     system: dict
     hardware: dict
     firmware: dict
@@ -287,9 +287,10 @@ class MerossDeviceDescriptor:
         "productmodel": lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, '')}",
     }
 
-    def __init__(self, payload: dict):
-        self.ability = payload.get(mc.KEY_ABILITY, {})
-        self.update(payload)
+    def __init__(self, payload: dict | None):
+        if payload is not None:
+            self.ability = payload.get(mc.KEY_ABILITY, self.ability)
+            self.update(payload)
 
     def __getattr__(self, name):
         value = MerossDeviceDescriptor._dynamicattrs[name](self)
