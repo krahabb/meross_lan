@@ -2,12 +2,10 @@ from __future__ import annotations
 import typing
 from logging import WARNING
 
-from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers import device_registry
 
 from .merossclient import (
     const as mc,  # mEROSS cONST
-    MerossDeviceDescriptor,
     get_default_arguments,
     get_productnameuuid,
 )
@@ -24,6 +22,9 @@ from .const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_HUBBATTERY_UPDATE_PERIOD,
 )
+
+if typing.TYPE_CHECKING:
+    from .merossclient import MerossDeviceDescriptor
 
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
@@ -64,10 +65,6 @@ class MerossDeviceHub(MerossDevice):
         self.platforms[MLSwitch.PLATFORM] = None
         self.platforms[MLCalendar.PLATFORM] = None
         try:
-            # we expect a well structured digest here since
-            # we're sure 'hub' key is there by __init__ device factory
-            for p_subdevice in descriptor.digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]:
-                self._subdevice_build(p_subdevice)
             # REMOVE
             global TRICK
             if TRICK:
@@ -91,6 +88,10 @@ class MerossDeviceHub(MerossDevice):
             LOGGER.warning(
                 "MerossDeviceHub(%s) init exception:(%s)", self.device_id, str(e)
             )
+
+    def _init_hub(self, payload: dict):
+        for p_subdevice in payload[mc.KEY_SUBDEVICE]:
+            self._subdevice_build(p_subdevice)
 
     def _handle_Appliance_Hub_Sensor_All(self, header: dict, payload: dict):
         if self._subdevice_parse(payload, mc.KEY_ALL):
@@ -219,10 +220,10 @@ class MerossDeviceHub(MerossDevice):
                 # so we'll wait a bit..
                 # also, we're not registering an unsub and we're not checking
                 # for redundant invocations (playing a bit unsafe that is)
-                async def setup_again(*_):
+                async def _async_setup_again():
                     await self.hass.config_entries.async_reload(self.entry_id)
 
-                async_call_later(self.hass, 15, setup_again)
+                self.api.schedule_async_callback(15, _async_setup_again)
 
     def _build_subdevices_payload(self, types: tuple, count: int):
         """
