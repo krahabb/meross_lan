@@ -37,7 +37,6 @@ from homeassistant.util.dt import now
 
 from .merossclient import (
     const as mc,  # mEROSS cONST
-    MerossDeviceDescriptor,
     get_default_arguments,
 )
 from . import meross_entity as me
@@ -263,7 +262,7 @@ class ElectricityMixin(
     _sensor_current: MLSensor
     _sensor_voltage: MLSensor
 
-    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
+    def __init__(self, api, descriptor, entry):
         super().__init__(api, descriptor, entry)
         self._sensor_power = MLSensor.build_for_device(self, SensorDeviceClass.POWER)
         self._sensor_current = MLSensor.build_for_device(
@@ -316,7 +315,7 @@ class ConsumptionMixin(
     _lastupdate_energy = 0
     _lastreset_energy = 0
 
-    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
+    def __init__(self, api, descriptor, entry):
         super().__init__(api, descriptor, entry)
         self._sensor_energy = MLSensor.build_for_device(self, SensorDeviceClass.ENERGY)
         self._sensor_energy._attr_state_class = STATE_CLASS_TOTAL_INCREASING
@@ -412,7 +411,7 @@ class RuntimeMixin(
     _sensor_runtime: MLSensor
     _lastupdate_runtime = 0
 
-    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
+    def __init__(self, api, descriptor, entry):
         super().__init__(api, descriptor, entry)
         # DEVICE_CLASS_SIGNAL_STRENGTH is now 'forcing' dB or dBm as unit
         # so we drop the device_class (none) but we let the 'entitykey' parameter

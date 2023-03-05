@@ -58,7 +58,7 @@ except:
 
 import homeassistant.util.color as color_util
 
-from .merossclient import MerossDeviceDescriptor, const as mc
+from .merossclient import const as mc
 from . import meross_entity as me
 from .helpers import reverse_lookup
 from .const import DND_ID
@@ -66,6 +66,7 @@ from .const import DND_ID
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from .merossclient import MerossDeviceDescriptor
     from .meross_device import MerossDevice, ResponseCallbackType
 
 """
