@@ -279,7 +279,6 @@ class ConsumptionMixin(
 
     _sensor_energy: MLSensor
     _lastupdate_energy = 0
-    _lastreset_energy = 0
 
     def __init__(self, api, descriptor, entry):
         super().__init__(api, descriptor, entry)
@@ -326,14 +325,9 @@ class ConsumptionMixin(
         days = sorted(days, key=get_timestamp, reverse=True)
         day_last: dict = days[0]
         if day_last.get(mc.KEY_TIME) < timestamp_lastreset:  # type: ignore
+            # the more recent sample from the device is from yesterday
+            # so it likely hasnt updated its readings yet for today
             return
-        if days_len > 1:
-            timestamp_lastreset = days[1].get(mc.KEY_TIME)
-        if self._lastreset_energy != timestamp_lastreset:
-            # we 'cache' timestamp_last_reset so we don't 'jitter' _attr_last_reset
-            # should device_timedelta change (and it will!)
-            # this is not really working until days_len is >= 2
-            self._lastreset_energy = timestamp_lastreset
         self._sensor_energy.update_state(day_last.get(mc.KEY_VALUE))
 
     async def async_request_updates(self, epoch, namespace):
