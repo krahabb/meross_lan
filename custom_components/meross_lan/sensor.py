@@ -5,30 +5,13 @@ from time import localtime
 from datetime import datetime, timedelta, timezone
 
 from homeassistant.const import (
-    # DEVICE_CLASS_POWER,
-    POWER_WATT,
-    # DEVICE_CLASS_CURRENT,
-    # DEVICE_CLASS_VOLTAGE,
-    # DEVICE_CLASS_ENERGY,
+    ELECTRIC_CURRENT_AMPERE,
+    ELECTRIC_POTENTIAL_VOLT,
     ENERGY_WATT_HOUR,
-    # DEVICE_CLASS_TEMPERATURE,
-    TEMP_CELSIUS,
-    # DEVICE_CLASS_HUMIDITY,
     PERCENTAGE,
-    # DEVICE_CLASS_BATTERY,
-    # DEVICE_CLASS_SIGNAL_STRENGTH,
+    POWER_WATT,
+    TEMP_CELSIUS,
 )
-
-try:
-    # new in 2021.8.0 core (#52 #53)
-    from homeassistant.const import (
-        ELECTRIC_CURRENT_AMPERE,
-        ELECTRIC_POTENTIAL_VOLT,
-    )
-except:  # someone still pre 2021.8.0 ?
-    ELECTRIC_CURRENT_AMPERE = "A"
-    ELECTRIC_POTENTIAL_VOLT = "V"
-
 from homeassistant.components import sensor
 
 SensorEntity = sensor.SensorEntity
@@ -70,19 +53,6 @@ except:
         VOLTAGE = "voltage"
 
 
-try:
-    STATE_CLASS_MEASUREMENT = sensor.SensorStateClass.MEASUREMENT
-    STATE_CLASS_TOTAL_INCREASING = sensor.SensorStateClass.TOTAL_INCREASING
-except:
-    try:
-        STATE_CLASS_MEASUREMENT = sensor.STATE_CLASS_MEASUREMENT
-    except:
-        STATE_CLASS_MEASUREMENT = None
-    try:
-        STATE_CLASS_TOTAL_INCREASING = sensor.STATE_CLASS_TOTAL_INCREASING
-    except:
-        STATE_CLASS_TOTAL_INCREASING = STATE_CLASS_MEASUREMENT
-
 CORE_HAS_NATIVE_UNIT = hasattr(SensorEntity, "native_unit_of_measurement")
 
 
@@ -109,10 +79,10 @@ class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
 
     PLATFORM = sensor.DOMAIN
     DeviceClass = SensorDeviceClass
+    StateClass = sensor.SensorStateClass
 
-    _attr_last_reset: datetime | None = None
     _attr_native_unit_of_measurement: str | None
-    _attr_state_class: str | None = STATE_CLASS_MEASUREMENT
+    _attr_state_class: str | None = StateClass.MEASUREMENT
 
     def __init__(
         self,
@@ -132,10 +102,6 @@ class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
     @property
     def state_class(self):
         return self._attr_state_class
-
-    @property
-    def last_reset(self):
-        return self._attr_last_reset
 
     @property
     def native_unit_of_measurement(self):
@@ -163,12 +129,12 @@ class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
 
 class ProtocolSensor(MLSensor):  # type: ignore
 
-    STATE_DISCONNECTED = 'disconnected'
-    STATE_ACTIVE = 'active'
-    STATE_INACTIVE = 'inactive'
+    STATE_DISCONNECTED = "disconnected"
+    STATE_ACTIVE = "active"
+    STATE_INACTIVE = "inactive"
     ATTR_HTTP = CONF_PROTOCOL_HTTP
     ATTR_MQTT = CONF_PROTOCOL_MQTT
-    ATTR_MQTT_BROKER = 'mqtt_broker'
+    ATTR_MQTT_BROKER = "mqtt_broker"
 
     _attr_entity_category = me.EntityCategory.DIAGNOSTIC
     _attr_state = STATE_DISCONNECTED
@@ -215,15 +181,15 @@ class ProtocolSensor(MLSensor):  # type: ignore
         if device.conf_protocol is not device.curr_protocol:
             # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
             # if conf_protocol is fixed we'll not set these attrs (redundant)
-            self._attr_extra_state_attributes[self.ATTR_HTTP] = (
-                self._get_attr_state(device.lasthttpresponse)
+            self._attr_extra_state_attributes[self.ATTR_HTTP] = self._get_attr_state(
+                device.lasthttpresponse
             )
-            self._attr_extra_state_attributes[self.ATTR_MQTT] = (
-                self._get_attr_state(device.lastmqttresponse)
+            self._attr_extra_state_attributes[self.ATTR_MQTT] = self._get_attr_state(
+                device.lastmqttresponse
             )
-            self._attr_extra_state_attributes[self.ATTR_MQTT_BROKER] = (
-                self._get_attr_state(device._mqtt)
-            )
+            self._attr_extra_state_attributes[
+                self.ATTR_MQTT_BROKER
+            ] = self._get_attr_state(device._mqtt)
         if self._hass_connected:
             self._async_write_ha_state()
 
@@ -318,7 +284,7 @@ class ConsumptionMixin(
     def __init__(self, api, descriptor, entry):
         super().__init__(api, descriptor, entry)
         self._sensor_energy = MLSensor.build_for_device(self, SensorDeviceClass.ENERGY)
-        self._sensor_energy._attr_state_class = STATE_CLASS_TOTAL_INCREASING
+        self._sensor_energy._attr_state_class = MLSensor.StateClass.TOTAL_INCREASING
 
     def shutdown(self):
         super().shutdown()
@@ -329,8 +295,6 @@ class ConsumptionMixin(
         days: list = payload.get(mc.KEY_CONSUMPTIONX)  # type: ignore
         days_len = len(days)
         if days_len < 1:
-            if STATE_CLASS_TOTAL_INCREASING == STATE_CLASS_MEASUREMENT:
-                self._sensor_energy._attr_last_reset = now()
             self._sensor_energy.update_state(0)  # type: ignore
             return
         # we'll look through the device array values to see
@@ -370,22 +334,6 @@ class ConsumptionMixin(
             # should device_timedelta change (and it will!)
             # this is not really working until days_len is >= 2
             self._lastreset_energy = timestamp_lastreset
-            # we'll add .5 (sec) to the device last reading since the reset
-            # occurs right after that
-            # update the entity last_reset only for a 'corner case'
-            # when the feature was initially added (2021.8) and
-            # STATE_CLASS_TOTAL_INCREASING was not defined yet
-            if STATE_CLASS_TOTAL_INCREASING == STATE_CLASS_MEASUREMENT:
-                self._sensor_energy._attr_last_reset = datetime.utcfromtimestamp(
-                    timestamp_lastreset + self.device_timedelta + 0.5
-                )
-                self.log(
-                    DEBUG,
-                    0,
-                    "MerossDevice(%s) Energy: update last_reset to %s",
-                    self.name,
-                    self._sensor_energy._attr_last_reset.isoformat(),
-                )
         self._sensor_energy.update_state(day_last.get(mc.KEY_VALUE))
 
     async def async_request_updates(self, epoch, namespace):
