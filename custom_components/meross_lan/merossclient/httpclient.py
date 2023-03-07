@@ -111,20 +111,20 @@ class MerossHttpClient:
 
     async def async_request(self, namespace: str, method: str, payload: dict) -> dict:
         key = self.key
-        request: dict = build_payload(
+        request = build_payload(
             namespace,
             method,
             payload,
             self.replykey if key is None else key,
             mc.MANUFACTURER,
         )
-        response: dict = await self.async_request_raw(request)
+        response = await self.async_request_raw(request)
         if (
             response.get(mc.KEY_PAYLOAD, {}).get(mc.KEY_ERROR, {}).get(mc.KEY_CODE)
             == mc.ERROR_INVALIDKEY
         ):
             if key is not None:
-                raise MerossKeyError(response.get(mc.KEY_PAYLOAD))
+                raise MerossKeyError(response)
             # sign error... hack and fool
             if self._logger.isEnabledFor(DEBUG):
                 self._logger.debug(
@@ -143,7 +143,7 @@ class MerossHttpClient:
             except Exception:
                 # any error here is likely consequence of key-reply hack
                 # so we'll rethrow that (see #83 lacking invalid key message when configuring)
-                raise MerossKeyError(response.get(mc.KEY_PAYLOAD))
+                raise MerossKeyError(response)
 
         return response
 
@@ -161,12 +161,13 @@ class MerossHttpClient:
             r_method: str = r_header[mc.KEY_METHOD]
             r_payload: dict = response[mc.KEY_PAYLOAD]
         except Exception as e:
-            raise MerossProtocolError(e) from e
+            raise MerossProtocolError(response, str(e)) from e
 
         if r_method == mc.METHOD_ERROR:
-            if r_payload.get(mc.KEY_ERROR, {}).get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
-                raise MerossKeyError(r_payload)
+            p_error = r_payload.get(mc.KEY_ERROR, {})
+            if p_error.get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
+                raise MerossKeyError(response)
             else:
-                raise MerossProtocolError(r_payload)
+                raise MerossProtocolError(response, p_error)
 
         return response

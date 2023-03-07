@@ -76,19 +76,19 @@ LOGGER = logging.getLogger(__name__)
 class MerossCloudCredentials(dict):
 
     @property
-    def userid(self):
+    def userid(self) -> str:
         return self[mc.KEY_USERID_]
 
     @property
-    def email(self):
+    def email(self) -> str:
         return self[mc.KEY_EMAIL]
 
     @property
-    def key(self):
+    def key(self) -> str:
         return self[mc.KEY_KEY]
 
     @property
-    def token(self):
+    def token(self) -> str | None:
         return self.get(mc.KEY_TOKEN)
 
     @property
@@ -108,17 +108,17 @@ class CloudApiError(MerossProtocolError):
     signals an error when connecting to the public API endpoint
     """
 
-    def __init__(self, response: dict):
-        self.response = response
+    def __init__(self, response: dict, reason: object | None = None):
         self.apistatus = response.get(mc.KEY_APISTATUS)
-        reason = APISTATUS_MAP.get(self.apistatus) # type: ignore
-        if not reason:
+        if reason is None:
+            reason = APISTATUS_MAP.get(self.apistatus) # type: ignore
+        if reason is None:
             # 'info' sometimes carries useful msg
             reason = response.get(mc.KEY_INFO)
         if not reason:
             # fallback to raise the entire response
             reason = json_dumps(response)
-        super().__init__(reason)
+        super().__init__(response, reason)
 
 
 async def async_cloudapi_post_raw(
@@ -170,10 +170,18 @@ async def async_cloudapi_login(
         API_LOGIN_PATH, {"email": username, "password": password}, session=session
     )
     data = response[mc.KEY_DATA]
-    if (mc.KEY_KEY in data) and (mc.KEY_TOKEN in data) and (mc.KEY_USERID_ in data):
-        data.__class__ = MerossCloudCredentials
-        return data
-    raise CloudApiError(response)
+    # formal check since we want to deal with 'safe' data structures
+    for _key in {mc.KEY_USERID_, mc.KEY_EMAIL, mc.KEY_KEY, mc.KEY_TOKEN}:
+        if _key not in data:
+            raise CloudApiError(response, f"Missing '{_key}' in api response")
+        _value = data[_key]
+        if not isinstance(_value, str):
+            raise CloudApiError(response, f"Key '{_key}' in api response is type '{_value.__class__.__name__}'. Expected 'str'")
+        if len(_value) == 0:
+            raise CloudApiError(response, f"Key '{_key}' in api response is empty")
+
+    data.__class__ = MerossCloudCredentials
+    return data
 
 
 async def async_cloudapi_devicelist(

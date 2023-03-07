@@ -92,7 +92,7 @@ try:
                 raise asyncio.TimeoutError()
 
 except:
-    MEROSSDEBUG = None # type: ignore
+    MEROSSDEBUG = None  # type: ignore
 
 
 class MerossProtocolError(Exception):
@@ -101,16 +101,14 @@ class MerossProtocolError(Exception):
     - missing header keys
     - application layer ERROR(s)
 
-    reason is an error payload (dict) if the protocol is formally correct
-    and the device replied us with "method" : "ERROR"
-    and "payload" : { "error": { "code": (int), "detail": (str) } }
-    in a more general case it could be the exception raised by accessing missing
-    fields or a "signature error" in our validation
+    - response is the full response payload
+    - reason is an additional context error
     """
 
-    def __init__(self, reason):
-        super().__init__()
+    def __init__(self, response: dict, reason: object | None = None):
+        self.response = response
         self.reason = reason
+        super().__init__(reason)
 
 
 class MerossKeyError(MerossProtocolError):
@@ -119,6 +117,9 @@ class MerossKeyError(MerossProtocolError):
     reported by device
     """
 
+    def __init__(self, response: dict):
+        super().__init__(response, "Invalid key")
+
 
 class MerossSignatureError(MerossProtocolError):
     """
@@ -126,8 +127,8 @@ class MerossSignatureError(MerossProtocolError):
     when validating the received header
     """
 
-    def __init__(self):
-        super().__init__("Signature error")
+    def __init__(self, response: dict):
+        super().__init__(response, "Signature error")
 
 
 def build_payload(
