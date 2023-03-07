@@ -75,7 +75,6 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     _device_id: str | None = None
     _host: str | None = None
     _key: str | None = None
-    _cloud_key: str | None = None
     _cloud_profile_id: str | None = None
     _placeholders = {
         CONF_DEVICE_TYPE: "",
@@ -100,14 +99,13 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 credentials = await async_cloudapi_login(
                     username, password, async_get_clientsession(self.hass)
                 )
-                await MerossApi.async_update_profile(self.hass, credentials)
-                self._key = credentials.key
-                self._cloud_key = credentials.key
-                self._cloud_profile_id = credentials.userid
+                profile = await MerossApi.async_update_profile(self.hass, credentials)
+                self._key = profile.key
+                self._cloud_profile_id = profile.profile_id
                 return await self.async_step_device()  # type: ignore
             except CloudApiError as error:
                 errors[CONF_ERROR] = ERR_INVALID_AUTH
-                _err = error.reason
+                _err = str(error)
             except Exception as error:
                 errors[CONF_ERROR] = ERR_CANNOT_CONNECT
                 _err = str(error) or type(error).__name__
@@ -127,7 +125,10 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         return self.async_show_form(
             step_id="cloudkey",
             data_schema=vol.Schema(
-                {vol.Required(CONF_USERNAME): str, vol.Required(CONF_PASSWORD): str}
+                {
+                    vol.Required(CONF_USERNAME): str,
+                    vol.Required(CONF_PASSWORD): str,
+                }
             ),
         )
 
@@ -174,8 +175,6 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
             if (profile := next(iter(api.profiles.values()), None)) is not None:
                 self._key = profile.key
                 self._cloud_profile_id = profile.profile_id
-            elif api.cloud_key is not None:
-                self._key = self._cloud_key = api.cloud_key
         return await self.async_step_device()
 
     async def async_step_hub(self, user_input=None):
@@ -204,7 +203,6 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
             except ConfigError as error:
                 errors[ERR_BASE] = error.reason
             except MerossKeyError:
-                self._cloud_key = None
                 return self.show_keyerror()
             except AbortFlow:
                 errors[ERR_BASE] = ERR_ALREADY_CONFIGURED_DEVICE
@@ -285,27 +283,18 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
                     if _descriptor.userId == profile.profile_id:
                         self._key = profile.key
                         self._cloud_profile_id = profile.profile_id
-                    break
+                        break
+                except:
+                    pass
+                _device_config = None
+
+            if (_device_config is None) and ((key := api.key) is not None):
+                try:
+                    _device_config = await self._async_http_discovery(key)
+                    self._key = key
                 except:
                     pass
 
-            if (key := api.cloud_key) is not None:
-                try:
-                    _device_config = await self._async_http_discovery(key)
-                    self._key = key
-                    self._cloud_key = key
-                except:
-                    pass
-            if (
-                (_device_config is None)
-                and ((key := api.key) is not None)
-                and (key != api.cloud_key)
-            ):
-                try:
-                    _device_config = await self._async_http_discovery(key)
-                    self._key = key
-                except MerossKeyError:
-                    pass
             if _device_config is not None:
                 await self._async_set_device_config(_device_config)
 
@@ -379,12 +368,6 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
             # this is coming from manual user entry or dhcp discovery
             data[CONF_DEVICE_ID] = self._device_id
 
-        if (self._cloud_key is not None) and (self._cloud_key == self._key):
-            # save (only if good) so we can later automatically retrieve for new devices
-            data[CONF_CLOUD_KEY] = self._cloud_key
-        else:
-            data.pop(CONF_CLOUD_KEY, None)
-
 
 class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
     """
@@ -399,7 +382,6 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             self._device_id = data.get(CONF_DEVICE_ID)
             self._host = data.get(CONF_HOST)  # null for devices discovered over mqtt
             self._key = data.get(CONF_KEY)
-            self._cloud_key = data.get(CONF_CLOUD_KEY)  # null for non cloud keys
             self._cloud_profile_id = data.get(CONF_CLOUD_PROFILE_ID)
             self._protocol = data.get(CONF_PROTOCOL)
             self._polling_period = data.get(CONF_POLLING_PERIOD)
@@ -409,6 +391,23 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 CONF_DEVICE_ID: self._device_id,
                 CONF_HOST: self._host or "MQTT",
             }
+            # since the introduction of cloud_profile, the cloud_key
+            # is not used anymore and we just check if a device
+            # has not been migrated yet to propose a correct configuration
+            # device migration is done once the user confirms the OptionsFlow
+            # so this code needs to last a bit(indefinitely?)
+            if not self._cloud_profile_id:
+                # this means either the device is not migrated or
+                # is locally bound.
+                if cloud_key := data.get(CONF_CLOUD_KEY):
+                    # not migrated and supposedly good cloud_key
+                    # suggest a profile
+                    api = MerossApi.get(self.hass)
+                    if (profile := api.get_profile_by_key(cloud_key)) is not None:
+                        self._cloud_profile_id = profile.profile_id
+
+
+
 
     async def async_step_init(self, user_input=None):
         if self._config_entry.unique_id == DOMAIN:
@@ -481,13 +480,11 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 if self._host is not None:
                     data[CONF_HOST] = self._host
                     data[CONF_PAYLOAD] = _device_config[CONF_PAYLOAD] # type: ignore
-                    if self._cloud_key and (self._cloud_key == self._key):
-                        data[CONF_CLOUD_KEY] = self._cloud_key
-                    else:
-                        data.pop(CONF_CLOUD_KEY, None)
+
                 data[CONF_KEY] = self._key
                 data[CONF_PROTOCOL] = self._protocol
                 data[CONF_CLOUD_PROFILE_ID] = self._cloud_profile_id
+                data.pop(CONF_CLOUD_KEY, None)
                 data[CONF_POLLING_PERIOD] = self._polling_period
                 if self._trace:
                     data[CONF_TRACE] = time() + (self._trace_timeout or CONF_TRACE_TIMEOUT_DEFAULT)
@@ -508,7 +505,6 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 return self.async_create_entry(title=None, data=None)  # type: ignore
 
             except MerossKeyError:
-                self._cloud_key = None
                 return self.show_keyerror()
             except ConfigError as error:
                 errors[ERR_BASE] = error.reason

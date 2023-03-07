@@ -11,6 +11,9 @@ CONF_DEVICE_ID: Final = hac.CONF_DEVICE_ID
 # actual device key used to sign messages
 CONF_KEY: Final = "key"
 # device key eventually retrieved from Meross account
+# This has been superseded by cloud_profile and will be
+# removed from configentries as soon as the users
+# update/repair/fix their configuration (no automatic migration)
 CONF_CLOUD_KEY: Final = "cloud_key"
 # email/id of cloud account to use with the device
 CONF_CLOUD_PROFILE_ID: Final = "cloud_profile_id"

@@ -56,12 +56,12 @@ if typing.TYPE_CHECKING:
     )
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
-    from .meross_device import ResponseCallbackType
+    from .meross_device import MerossDevice, ResponseCallbackType
     from .merossclient.cloudapi import MerossCloudCredentials
 else:
     # In order to avoid a static dependency we resolve these
     # at runtime only when mqtt is actually needed in code
-    mqtt_publish = None
+    mqtt_publish = None # TODO: REMOVE not used anymore
     async_mqtt_publish = None
 
 
@@ -82,7 +82,6 @@ class MerossApi(MQTTProfile):
     KEY_STARTTIME = "__starttime"
     KEY_REQUESTTIME = "__requesttime"
 
-    cloud_key: str | None
     store: Store
     unsub_mqtt_subscribe: Callable | None
     unsub_mqtt_disconnected: Callable | None
@@ -124,10 +123,10 @@ class MerossApi(MQTTProfile):
             await profile.async_update_credentials(credentials)
         await profile.async_check_query_devices()
         api.schedule_save_store()
+        return profile
 
     def __init__(self, hass: HomeAssistant):
         super().__init__(hass, DOMAIN, "")
-        self.cloud_key = None
         self.deviceclasses: dict[str, type] = {}
         self.devices: dict[str, "MerossDevice"] = {}
         self.discovering: dict[str, dict] = {}
@@ -265,15 +264,20 @@ class MerossApi(MQTTProfile):
             profiles_map[profile.profile_id] = profile.email
         return profiles_map
 
-    def get_profile_by_email(self, email: str):
-        for profile in self.profiles.values():
-            if profile.email == email:
-                return profile.profile_id
-
     def get_profile_by_id(self, profile_id: str):
         return self.profiles.get(profile_id)
 
-    def build_device(self, device_id: str, entry: ConfigEntry):
+    def get_profile_by_email(self, email: str):
+        for profile in self.profiles.values():
+            if profile.email == email:
+                return profile
+
+    def get_profile_by_key(self, key: str):
+        for profile in self.profiles.values():
+            if profile.key == key:
+                return profile
+
+    def build_device(self, device_id: str, entry: ConfigEntry) -> MerossDevice:
         """
         scans device descriptor to build a 'slightly' specialized MerossDevice
         The base MerossDevice class is a bulk 'do it all' implementation
@@ -787,14 +791,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     else:
         # device related entry
         LOGGER.debug("async_setup_entry device_id = %s", device_id)
-        # MQTT hub entry doesnt hold cloud_key..
-        if (cloud_key := entry.data.get(CONF_CLOUD_KEY)) is not None:
-            api.cloud_key = cloud_key
 
         device = api.build_device(device_id, entry)
         await asyncio.gather(
             *(hass.config_entries.async_forward_entry_setup(entry, platform) for platform in device.platforms.keys())
         )
+
+        if cloud_key := entry.data.get(CONF_CLOUD_KEY):
+            # suggest to migrate:
+            # we'll create a 'partial' cloud_profile with the data we
+            # have since userid and key are enough, at least to mock a
+            # working profile. We'll miss user email and cloud token
+            # which are needed for display purposes and to eventually
+            # query the device list. They'll be updated once the user
+            # logins again to the profile (eventually)
+            profile_id = device.descriptor.userId
+            if profile_id and (profile_id not in api.profiles):
+                profile = MerossCloudProfile(api, {
+                    mc.KEY_USERID_: profile_id,
+                    mc.KEY_EMAIL: f"{profile_id}@meross.unknown",
+                    mc.KEY_KEY: cloud_key,
+                })
+                api.schedule_save_store()
+                # TODO: raise an HA repair
+
 
     return True
 
