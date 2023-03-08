@@ -5,12 +5,19 @@ from __future__ import annotations
 from logging import getLogger
 from functools import partial
 from time import time
+import typing
+
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.util.dt import utcnow
 
 from .merossclient import const as mc
 
-LOGGER = getLogger(__name__[:-8]) #get base custom_component name for logging
+if typing.TYPE_CHECKING:
+    from homeassistant.core import State
+
+LOGGER = getLogger(__name__[:-8])  # get base custom_component name for logging
 _TRAP_DICT = {}
+
 
 def LOGGER_trap(level, timeout, msg, *args):
     """
@@ -22,7 +29,7 @@ def LOGGER_trap(level, timeout, msg, *args):
     epoch = time()
     trap_key = (msg, *args)
     trap_time = _TRAP_DICT.get(trap_key, 0)
-    if ((epoch - trap_time) < timeout):
+    if (epoch - trap_time) < timeout:
         return
 
     LOGGER.log(level, msg, *args)
@@ -67,9 +74,16 @@ def versiontuple(version: str):
     deobfuscate on the previously obfuscated payload
 """
 OBFUSCATE_KEYS = (
-    mc.KEY_UUID, mc.KEY_MACADDRESS, mc.KEY_WIFIMAC, mc.KEY_INNERIP,
-    mc.KEY_SERVER, mc.KEY_PORT, mc.KEY_SECONDSERVER, mc.KEY_SECONDPORT,
-    mc.KEY_USERID, mc.KEY_TOKEN,
+    mc.KEY_UUID,
+    mc.KEY_MACADDRESS,
+    mc.KEY_WIFIMAC,
+    mc.KEY_INNERIP,
+    mc.KEY_SERVER,
+    mc.KEY_PORT,
+    mc.KEY_SECONDSERVER,
+    mc.KEY_SECONDPORT,
+    mc.KEY_USERID,
+    mc.KEY_TOKEN,
 )
 
 
@@ -89,7 +103,7 @@ def obfuscate(payload: dict):
                 obfuscated[key] = o
         elif key in OBFUSCATE_KEYS:
             obfuscated[key] = value
-            payload[key] = '#' * len(str(value))
+            payload[key] = "#" * len(str(value))
 
     return obfuscated
 
@@ -105,35 +119,52 @@ def deobfuscate(payload: dict, obfuscated: dict):
 """
 RECORDER helpers
 """
-async def get_entity_last_state(hass, entity_id):
+async def get_entity_last_states(
+    hass, number_of_states: int, entity_id: str
+) -> list[State] | None:
     """
     recover the last known good state from recorder in order to
     restore transient state information when restarting HA
     """
     from homeassistant.components.recorder import history
 
-    if hasattr(history, 'get_state'):# removed in 2022.6.x
-        return history.get_state(hass, utcnow(), entity_id) # type: ignore
+    if hasattr(history, "get_state"):  # removed in 2022.6.x
+        return history.get_state(hass, utcnow(), entity_id)  # type: ignore
 
-    elif hasattr(history, 'get_last_state_changes'):
+    elif hasattr(history, "get_last_state_changes"):
         """
         get_instance too is relatively new: I hope it was in place when
         get_last_state_changes was added
         """
         from homeassistant.components.recorder import get_instance
-        _last_state: dict = await get_instance(hass).async_add_executor_job(
-                partial(
-                    history.get_last_state_changes,
-                    hass,
-                    1,
-                    entity_id,
-                )
-            ) # type: ignore
-        if entity_id in _last_state:
-            _last_entity_state: list = _last_state[entity_id]
-            if _last_entity_state:
-                return _last_entity_state[0]
 
-        return None
+        _last_state = await get_instance(hass).async_add_executor_job(
+            partial(
+                history.get_last_state_changes,
+                hass,
+                number_of_states,
+                entity_id,
+            )
+        )
+        return _last_state.get(entity_id)
+
     else:
         raise Exception("Cannot find history.get_last_state_changes api")
+
+async def get_entity_last_state(hass, entity_id: str) -> State | None:
+    if states := await get_entity_last_states(hass, 1, entity_id):
+        return states[0]
+    return None
+
+async def get_entity_last_state_available(hass, entity_id: str) -> State | None:
+    """
+    if the device/entity was disconnected before restarting and we need
+    the last good reading from the device, we need to skip the last
+    state since it is 'unavailable'
+    """
+    states = await get_entity_last_states(hass, 2, entity_id)
+    if states is not None:
+        for state in reversed(states):
+            if state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}:
+                return state
+    return None

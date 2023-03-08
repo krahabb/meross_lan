@@ -252,7 +252,11 @@ class MerossDevice:
                 else:
                     _init(payload)
 
-        self._unsub_polling_callback = api.schedule_async_callback(
+    def start(self):
+        # called by async_setup after the entities have been registered
+        # here we'll start polling after the states have been eventually
+        # restored (some entities need this)
+        self._unsub_polling_callback = self.api.schedule_async_callback(
             0, self._async_polling_callback
         )
 

@@ -1,5 +1,6 @@
 """The Meross IoT local LAN integration."""
 from __future__ import annotations
+import asyncio
 import typing
 from time import time
 from logging import WARNING, INFO, DEBUG
@@ -172,7 +173,7 @@ class MerossApi:
                 return device
         return None
 
-    def build_device(self, device_id: str, entry: ConfigEntry):
+    def build_device(self, device_id: str, entry: ConfigEntry) -> MerossDevice:
         """
         scans device descriptor to build a 'slightly' specialized MerossDevice
         The base MerossDevice class is a bulk 'do it all' implementation
@@ -551,9 +552,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         if cloud_key is not None:
             api.cloud_key = cloud_key # last loaded overwrites existing: shouldnt it be the same ?!
         device = api.build_device(device_id, entry)
-        # this api is too recent (around April 2021): hass.config_entries.async_setup_platforms(entry, device.platforms.keys())
-        for platform in device.platforms.keys():
-            hass.async_create_task(hass.config_entries.async_forward_entry_setup(entry, platform))
+        await asyncio.gather(
+                    *(hass.config_entries.async_forward_entry_setup(entry, platform) for platform in device.platforms.keys())
+                )
+        device.start()
+
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
