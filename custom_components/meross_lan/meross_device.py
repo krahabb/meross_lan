@@ -367,6 +367,7 @@ class MerossDevice:
         if not self._online:
             self.log(DEBUG, 0, "MerossDevice(%s) back online!", self.name)
             self._online = True
+            self._polling_delay = self.polling_period
             self.api.hass.async_create_task(
                 self.async_request_updates(epoch, namespace)
             )
@@ -551,7 +552,7 @@ class MerossDevice:
             _httpclient: MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)  # type: ignore
             if _httpclient is None:
                 _httpclient = MerossHttpClient(
-                    self.host, self.key, async_get_clientsession(self.api.hass), LOGGER
+                    self.host, self.key, async_get_clientsession(self.api.hass), LOGGER  # type: ignore
                 )
                 self._httpclient = _httpclient
 
