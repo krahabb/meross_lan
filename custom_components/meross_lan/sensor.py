@@ -294,14 +294,14 @@ class ElectricityMixin(
         super().start()
 
     def shutdown(self):
-        if self._cancel_energy_reset is not None:
-            self._cancel_energy_reset()
-            self._cancel_energy_reset = None
+        super().shutdown()
         self._sensor_power = None  # type: ignore
         self._sensor_current = None  # type: ignore
         self._sensor_voltage = None  # type: ignore
         self._sensor_energy_estimate = None  # type: ignore
-        super().shutdown()
+        if self._cancel_energy_reset is not None:
+            self._cancel_energy_reset()
+            self._cancel_energy_reset = None
 
     def _handle_Appliance_Control_Electricity(self, header: dict, payload: dict):
         electricity = payload[mc.KEY_ELECTRICITY]
@@ -394,8 +394,8 @@ class ConsumptionMixin(
         self._sensor_energy = EnergySensor(self, DEVICE_CLASS_ENERGY)
 
     def shutdown(self):
-        self._sensor_energy = None  # type: ignore
         super().shutdown()
+        self._sensor_energy = None  # type: ignore
 
     def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
         self._energy_lastupdate = self.lastupdate
@@ -515,6 +515,7 @@ class RuntimeMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
 
+    _sensor_runtime: MLSensor
     _lastupdate_runtime = 0
 
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
@@ -528,6 +529,10 @@ class RuntimeMixin(
         self._sensor_runtime._attr_entity_category = me.EntityCategory.DIAGNOSTIC
         self._sensor_runtime._attr_native_unit_of_measurement = PERCENTAGE
         self._sensor_runtime._attr_icon = "mdi:wifi"
+
+    def shutdown(self):
+        super().shutdown()
+        self._sensor_runtime = None  # type: ignore
 
     def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
         self._lastupdate_runtime = self.lastupdate
