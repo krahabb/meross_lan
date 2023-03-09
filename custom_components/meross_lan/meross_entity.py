@@ -55,6 +55,9 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
     _attr_name: str | None = None
     _attr_entity_category: EntityCategory | str | None = None
 
+    # used to speed-up checks if entity is enabled and loaded
+    _hass_connected = False
+
     def __init__(
         self,
         device: MerossDevice,
@@ -163,12 +166,20 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
     def assumed_state(self):
         return False
 
+    async def async_added_to_hass(self):
+        self._hass_connected = True
+
+    async def async_will_remove_from_hass(self):
+        self._hass_connected = False
+
     def update_state(self, state: StateType):
         if self._attr_state != state:
             self._attr_state = state
-            if self.hass and self.enabled:  # pylint: disable=no-member
-                self.async_write_ha_state()  # pylint: disable=no-member
-
+            if self._hass_connected:
+                # optimize hass checks since we're (pretty)
+                # sure they're ok (DANGER)
+                self._async_write_ha_state()
+                
     def set_unavailable(self):
         self.update_state(None)
 

@@ -159,15 +159,20 @@ class EnergySensor(MLSensor):
     """
 
     ATTR_ENERGY_OFFSET = "energy_offset"
-    energy_offset: float = 0
+    energy_offset: int = 0
     ATTR_ENERGY_RESET_TS = "energy_reset_ts"
     energy_reset_ts: int = 0
 
-    _attr_state: float = 0
+    _attr_state: int = 0
+    _attr_state_float: float = 0.0
 
     def __init__(self, device: MerossDevice, entity_key: str):
         self._attr_extra_state_attributes = {}
         super().__init__(device, None, entity_key, DEVICE_CLASS_ENERGY, None)
+
+    @property
+    def available(self):
+        return True
 
     @property
     def state_class(self):
@@ -202,7 +207,11 @@ class EnergySensor(MLSensor):
                     ] = _attr_value
                     # we also set the value as an instance attr for faster access
                     setattr(self, _attr_name, _attr_value)
-            self._attr_state = float(state.state)  # type: ignore
+            # state should be an int though but in case we decide some
+            # tweaks here or there this conversion is safer (allowing for a float state)
+            # and more consistent
+            self._attr_state_float = float(state.state)
+            self._attr_state = int(self._attr_state_float)
         except Exception as e:
             self.device.log(
                 WARNING,
@@ -222,36 +231,35 @@ class EnergySensor(MLSensor):
     def update_estimate(self, de: float):
         # this is the 'estimated' sensor update api
         # based off ElectricityMixin power readings
-        self._attr_state = self._attr_state + de
-        if self.hass and self.enabled:
-            self.async_write_ha_state()
+        self._attr_state_float = self._attr_state_float + de
+        state = int(self._attr_state_float)
+        if self._attr_state != state:
+            self._attr_state = state
+            if self._hass_connected:
+                self.async_write_ha_state()
 
     def update_consumption(self, consumption: int):
         # this is the 'official' ConsumptionMixin readings
         # but we're trying to fix #264 with our offset/reset
         self._attr_state = consumption - self.energy_offset
-        if self.hass and self.enabled:
+        # always try to flush even if state didnt change since
+        # we might have attrs update...let HA check this..
+        if self._hass_connected:
             self.async_write_ha_state()
 
     def update_reset(self):
-        # we're likely right after midnight and the device still
-        # hasn't updated its energy readings (looks like they're
-        # updated when they internally change). In our policy
-        # to automatically reset/offset the device readings
-        # we're sure we're starting a new cycle so we prapare for
-        # that. We can already tell HA the state is 0 though
-        if self._attr_state != 0:
-            self._attr_state = 0
-            # we're also removing attrs since they have no meaningful
-            # value in this state
-            self._attr_extra_state_attributes = {}
-            # to be safe (even if apparently not strictly needed)
-            # better cleanup our offsets so we'll trigger
-            # a consistent state refresh when data arrive
-            self.energy_offset = 0
-            self.energy_reset_ts = 0
-            if self.hass and self.enabled:
-                self.async_write_ha_state()
+        self._attr_state_float -= self._attr_state # preserve fraction
+        self._attr_state = 0
+        # we're also removing attrs since they have no meaningful
+        # value in this state
+        self._attr_extra_state_attributes = {}
+        # to be safe (even if apparently not strictly needed)
+        # better cleanup our offsets so we'll trigger
+        # a consistent state refresh when data arrive
+        self.energy_offset = 0
+        self.energy_reset_ts = 0
+        if self._hass_connected:
+            self.async_write_ha_state()
 
 
 class ElectricityMixin(
@@ -261,14 +269,17 @@ class ElectricityMixin(
     _sensor_power: MLSensor
     _sensor_current: MLSensor
     _sensor_voltage: MLSensor
-    _sensor_energy_estimate: EnergySensor
-    # implement an estimated energy measure from _sensor_power
-    # estimate is a trapezoidal integral sum. Using class
+    # implement an estimated energy measure from _sensor_power.
+    # Estimate is a trapezoidal integral sum on power. Using class
     # initializers to ease instance sharing (and type-checks)
     # between ElectricityMixin and ConsumptionMixin. Based on experience
     # ElectricityMixin and ConsumptionMixin are always present together
     # in metering plugs (mss310 is the historical example)
-    _energy_last_epoch: float = 0
+    _sensor_energy: EnergySensor | None = None
+    _sensor_energy_estimate: EnergySensor
+
+    _energy_estimate_lastupdate = 0.0
+    _energy_estimate_integraltime = 0.0
 
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(api, descriptor, entry)
@@ -296,13 +307,14 @@ class ElectricityMixin(
         electricity = payload[mc.KEY_ELECTRICITY]
         power: float = float(electricity[mc.KEY_POWER]) / 1000
         if (last_power := self._sensor_power._attr_state) is not None:
-            # dt = self.lastupdate - self._energy_last_epoch
+            dt = self.lastupdate - self._energy_estimate_lastupdate
+            self._energy_estimate_integraltime += dt
             # de = (((last_power + power) / 2) * dt) / 3600
             self._sensor_energy_estimate.update_estimate(
-                ((last_power + power) * (self.lastupdate - self._energy_last_epoch))
+                ((last_power + power) * dt)
                 / 7200
             )
-        self._energy_last_epoch = self.lastupdate
+        self._energy_estimate_lastupdate = self.lastupdate
         self._sensor_power.update_state(power)
         self._sensor_current.update_state(electricity[mc.KEY_CURRENT] / 1000)  # type: ignore
         self._sensor_voltage.update_state(electricity[mc.KEY_VOLTAGE] / 10)  # type: ignore
@@ -359,7 +371,10 @@ class ElectricityMixin(
             self.name,
             _now.isoformat(),
         )
+        self._energy_estimate_integraltime = 0.0
         self._sensor_energy_estimate.update_reset()
+        if self._sensor_energy is not None:
+            self._sensor_energy.update_reset()
         self._schedule_next_reset(_now)
 
 
@@ -368,8 +383,11 @@ class ConsumptionMixin(
 ):  # pylint: disable=used-before-assignment
 
     _sensor_energy: EnergySensor
+    _energy_lastupdate = 0
+
+    # these come from ElectricityMixin instance
     _sensor_energy_estimate: EnergySensor | None = None
-    _energy_last_update = 0
+    _energy_estimate_integraltime: float
 
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(api, descriptor, entry)
@@ -380,7 +398,7 @@ class ConsumptionMixin(
         super().shutdown()
 
     def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
-        self._energy_last_update = self.lastupdate
+        self._energy_lastupdate = self.lastupdate
         days: list = payload[mc.KEY_CONSUMPTIONX]  # type: ignore
         # we'll look through the device array values to see
         # data timestamped (in device time) after last midnight
@@ -453,31 +471,42 @@ class ConsumptionMixin(
                 _sensor_energy._attr_extra_state_attributes = {
                     _sensor_energy.ATTR_ENERGY_RESET_TS: day_yesterday_time
                 }
-                # to determine the consumption reliability (and offset it)
-                # we try to check it against our energy_estimate in
-                # ElectricityMixin.
-                # we'll offset the consumption for the day (#264)
-                # only when we're 99.999% sure it's bugging. That includes
-                # the data reading is very close (after) midnight.
-                # 20 minutes as time window should allow to catch the new
-                # consumption payload even when power usage is very low and
-                # the device energy is not quickly updated
-                if (self._sensor_energy_estimate is not None) and ((day_last_time - midnight_epoch) < 1200):
-                    # _sensor_energy_estimate should be there based off our
-                    # experience that ConsumptionMixin is always paired with
-                    # ElectricityMixin but we don't know for sure...
-                    energy_estimate: int = ceil(self._sensor_energy_estimate.native_value) # type: ignore
-                    if day_last_consumption > energy_estimate:
-                        _sensor_energy._attr_extra_state_attributes[
-                            _sensor_energy.ATTR_ENERGY_OFFSET
-                        ] = _sensor_energy.energy_offset = day_last_consumption - energy_estimate
+                # In order to fix #264 and any further bug in consumption
+                # we'll check it against our energy_estimate in ElectricityMixin.
+                if self._sensor_energy_estimate is not None:
+                    consumption_integral_time = day_last_time - midnight_epoch
+                    # This test ensures our estimate has run a decent amount of
+                    # time after midnight to be accurate (i.e. no disconnections)
+                    # when checking against reported consumption 'around the clock'.
+                    # If the device updates us very soon (consumption_integral_time < 600)
+                    # we consider it as enough since we don't want our time check
+                    # to be exposed to time jitter in midnight_epoch
+                    if (consumption_integral_time < 600) or (
+                        (self._energy_estimate_integraltime / consumption_integral_time) > 0.9
+                    ):
+                        # day_last_consumption carries over accumulated energy from
+                        # the time of last change so, depending on time alignment
+                        # it also has a part of energy of the day before (being int it
+                        # doesnt get discarded). We're trying to implement the
+                        # same accumulation carrying over on our estimate too
+                        # since, saving rounded values, we might loss the fractions
+                        # when resetting around midnight.
+                        # This is not a big issue for the day (just rounding) but losing
+                        # this fraction would accumulate (small) errors over longer periods
+                        # Also, since our int energy estimate is 'floored' we don't want
+                        # small disalignments in time and/or accumulation to kick in
+                        energy_estimate = self._sensor_energy_estimate._attr_state + 1
+                        if day_last_consumption > energy_estimate:
+                            _sensor_energy._attr_extra_state_attributes[
+                                _sensor_energy.ATTR_ENERGY_OFFSET
+                            ] = _sensor_energy.energy_offset = day_last_consumption - energy_estimate
 
         _sensor_energy.update_consumption(day_last_consumption)
 
     async def async_request_updates(self, epoch, namespace):
         await super().async_request_updates(epoch, namespace)
         if self.online and self._sensor_energy.enabled and (
-            (epoch - self._energy_last_update) > PARAM_ENERGY_UPDATE_PERIOD
+            (epoch - self._energy_lastupdate) > PARAM_ENERGY_UPDATE_PERIOD
         ):
             await self.async_request_get(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)
 
