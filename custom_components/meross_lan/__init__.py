@@ -570,7 +570,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if not await hass.config_entries.async_unload_platforms(entry, device.platforms.keys()):
                 return False
             api.devices.pop(device_id)
-            device.shutdown()
+            await device.async_shutdown()
         #don't cleanup: the MerossApi is still needed to detect MQTT discoveries
         #if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
         #    api.shutdown()
