@@ -5,9 +5,8 @@
     in case we need some special behavor
 """
 from __future__ import annotations
-from json import (
-    loads as json_loads,
-)
+
+from json import loads as json_loads
 
 from custom_components.meross_lan.merossclient import (
     MerossDeviceDescriptor,
@@ -18,14 +17,12 @@ from custom_components.meross_lan.merossclient import (
 
 class MerossEmulatorDescriptor(MerossDeviceDescriptor):
 
-
     namespaces: dict
 
-
-    def __init__(self, tracefile:str, uuid):
+    def __init__(self, tracefile: str, uuid):
         self.namespaces = {}
-        with open(tracefile, 'r', encoding='utf8') as f:
-            if tracefile.endswith('.json.txt'):
+        with open(tracefile, "r", encoding="utf8") as f:
+            if tracefile.endswith(".json.txt"):
                 # HA diagnostics trace
                 self._import_json(f)
             else:
@@ -38,15 +35,13 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         hardware[mc.KEY_UUID] = uuid
         hardware[mc.KEY_MACADDRESS] = uuid[-12:]
 
-
     def _import_tsv(self, f):
         """
         parse a legacy tab separated values meross_lan trace
         """
         for line in f:
-            row = line.split('\t')
+            row = line.split("\t")
             self._import_tracerow(row)
-
 
     def _import_json(self, f):
         """
@@ -54,9 +49,9 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         """
         try:
             _json = json_loads(f.read())
-            data = _json['data']
+            data = _json["data"]
             columns = None
-            for row in data['trace']:
+            for row in data["trace"]:
                 if columns is None:
                     columns = row
                     # we could parse and setup a 'column search'
@@ -70,17 +65,20 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
 
         return
 
-
     def _import_tracerow(self, values: list):
-        #rxtx = values[1]
+        # rxtx = values[1]
         protocol = values[-4]
         method = values[-3]
         namespace = values[-2]
         data = values[-1]
         if method == mc.METHOD_GETACK:
-            if protocol == 'auto':
+            if protocol == "auto":
                 self.namespaces[namespace] = {
-                    get_namespacekey(namespace): data if isinstance(data, dict) else json_loads(data)
+                    get_namespacekey(namespace): data
+                    if isinstance(data, dict)
+                    else json_loads(data)
                 }
             else:
-                self.namespaces[namespace] = data if isinstance(data, dict) else json_loads(data)
+                self.namespaces[namespace] = (
+                    data if isinstance(data, dict) else json_loads(data)
+                )

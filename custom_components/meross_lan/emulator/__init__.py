@@ -10,6 +10,7 @@
     is just a 'reply' service of what's inside a trace
 """
 from __future__ import annotations
+
 import os
 
 from aiohttp import web
@@ -31,14 +32,24 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
 
     if mc.KEY_THERMOSTAT in descriptor.digest:
         from .mixins.thermostat import ThermostatMixin
+
         mixin_classes.append(ThermostatMixin)
     if mc.KEY_GARAGEDOOR in descriptor.digest:
         from .mixins.garagedoor import GarageDoorMixin
+
         mixin_classes.append(GarageDoorMixin)
+    if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in descriptor.ability:
+        from .mixins.electricity import ElectricityMixin
+
+        mixin_classes.append(ElectricityMixin)
+    if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in descriptor.ability:
+        from .mixins.electricity import ConsumptionMixin
+
+        mixin_classes.append(ConsumptionMixin)
 
     mixin_classes.append(MerossEmulator)
     # build a label to cache the set
-    class_name = ''
+    class_name = ""
     for m in mixin_classes:
         class_name = class_name + m.__name__
     class_type = type(class_name, tuple(mixin_classes), {})
@@ -59,9 +70,9 @@ def generate_emulators(tracespath: str, defaultuuid: str, defaultkey: str):
     uuidsub = 0
     for f in os.listdir(tracespath):
         fullpath = os.path.join(tracespath, f)
-        #expect only valid csv or json files
-        f = f.split('.')
-        if f[-1] not in ('csv','txt','json'):
+        # expect only valid csv or json files
+        f = f.split(".")
+        if f[-1] not in ("csv", "txt", "json"):
             continue
 
         # filename could be formatted to carry device definitions parameters:
@@ -69,15 +80,15 @@ def generate_emulators(tracespath: str, defaultuuid: str, defaultkey: str):
         # this way, parameters will be 'binded' to that trace in an easy way
         key = defaultkey
         uuid = None
-        for _f in f[0].split('-'):
-            if _f.startswith('K'):
+        for _f in f[0].split("-"):
+            if _f.startswith("K"):
                 key = _f[1:].strip()
-            elif _f.startswith('U'):
+            elif _f.startswith("U"):
                 uuid = _f[1:].strip()
         if uuid is None:
             uuidsub = uuidsub + 1
             _uuidsub = str(uuidsub)
-            uuid = defaultuuid[:-len(_uuidsub)] + _uuidsub
+            uuid = defaultuuid[: -len(_uuidsub)] + _uuidsub
         yield build_emulator(fullpath, uuid, key)
 
 
@@ -87,14 +98,14 @@ def run(argv):
     command line invocation:
     'python -m aiohttp.web -H localhost -P 80 meross_lan.emulator:run tracefilepath'
     """
-    key = ''
-    uuid = '01234567890123456789001122334455'
-    tracefilepath = '.'
+    key = ""
+    uuid = "01234567890123456789001122334455"
+    tracefilepath = "."
     for arg in argv:
         arg: str
-        if arg.startswith('-K'):
+        if arg.startswith("-K"):
             key = arg[2:].strip()
-        elif arg.startswith('-U'):
+        elif arg.startswith("-U"):
             uuid = arg[2:].strip()
         else:
             tracefilepath = arg
@@ -104,11 +115,14 @@ def run(argv):
     def make_post_handler(emulator: MerossEmulator):
         async def _callback(request: web.Request) -> web.Response:
             return web.json_response(emulator.handle(await request.text()))
+
         return _callback
 
     if os.path.isdir(tracefilepath):
         for emulator in generate_emulators(tracefilepath, uuid, key):
-            app.router.add_post(f"/{emulator.descriptor.uuid}/config", make_post_handler(emulator))
+            app.router.add_post(
+                f"/{emulator.descriptor.uuid}/config", make_post_handler(emulator)
+            )
     else:
         emulator = build_emulator(tracefilepath, uuid, key)
         app.router.add_post("/config", make_post_handler(emulator))
