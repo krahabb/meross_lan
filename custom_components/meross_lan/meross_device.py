@@ -147,6 +147,7 @@ class MerossDevice:
     _polling_delay: int = CONF_POLLING_PERIOD_DEFAULT
     # other default property values
     _deviceentry = None # weakly cached entry to the device registry
+    _tzinfo: ZoneInfo | None = None # smart cache of device tzinfo
 
     def __init__(
         self,
@@ -163,7 +164,7 @@ class MerossDevice:
         self.needsave = (
             False  # while parsing ns.ALL code signals to persist ConfigEntry
         )
-        self.device_timestamp: int = 0
+        self.device_timestamp = 0.0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
@@ -252,27 +253,33 @@ class MerossDevice:
                 else:
                     _init(payload)
 
-        self._unsub_polling_callback = api.schedule_async_callback(
-            0, self._async_polling_callback
-        )
-
     def __del__(self):
         LOGGER.debug("MerossDevice(%s) destroy", self.device_id)
         return
 
-    def shutdown(self):
+    def start(self):
+        # called by async_setup_entry after the entities have been registered
+        # here we'll start polling after the states have been eventually
+        # restored (some entities need this)
+        self._unsub_polling_callback = self.api.schedule_async_callback(
+            0, self._async_polling_callback
+        )
+
+    async def async_shutdown(self):
         """
         called when the config entry is unloaded
         we'll try to clear everything here
         """
-        if self._unsub_polling_callback is not None:
-            self._unsub_polling_callback.cancel()
-            self._unsub_polling_callback = None
-        if self._unsub_entry_update_listener is not None:
-            self._unsub_entry_update_listener()
-            self._unsub_entry_update_listener = None
-        if self._trace_file:
+        while self._unsub_polling_callback is None:
+            # wait for the polling loop to finish in case
+            await asyncio.sleep(1)
+        self._unsub_polling_callback.cancel()
+        self._unsub_polling_callback = None
+        self._unsub_entry_update_listener()
+        if self._trace_file is not None:
             self._trace_close()
+        self.entities.clear()
+        self.entity_dnd = MerossFakeEntity
 
     @property
     def host(self):
@@ -285,8 +292,13 @@ class MerossDevice:
     @property
     def tzinfo(self) -> tzinfo:
         tz_name = self.descriptor.timezone
+        if not tz_name:
+            return timezone.utc
+        if (self._tzinfo is not None) and (self._tzinfo.key == tz_name):
+            return self._tzinfo
         try:
-            return ZoneInfo(tz_name) if tz_name else timezone.utc
+            self._tzinfo = ZoneInfo(tz_name)
+            return self._tzinfo
         except Exception:
             self.log(
                 WARNING,
@@ -295,7 +307,8 @@ class MerossDevice:
                 self.name,
                 tz_name,
             )
-            return timezone.utc
+            self._tzinfo = None
+        return timezone.utc
 
     @property
     def name(self) -> str:
@@ -327,7 +340,7 @@ class MerossDevice:
         # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
         # we'll always be a bit late in processing
         epoch = time()
-        self.device_timestamp = int(header.get(mc.KEY_TIMESTAMP, epoch))
+        self.device_timestamp = float(header.get(mc.KEY_TIMESTAMP, epoch))
         device_timedelta = epoch - self.device_timestamp
         if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
             self._config_timestamp(epoch, device_timedelta)
@@ -361,8 +374,7 @@ class MerossDevice:
 
         self.lastupdate = epoch
         if not self._online:
-            self.log(DEBUG, 0, "MerossDevice(%s) back online!", self.name)
-            self._online = True
+            self._set_online()
             self.api.hass.async_create_task(
                 self.async_request_updates(epoch, namespace)
             )
@@ -547,7 +559,7 @@ class MerossDevice:
             _httpclient: MerossHttpClient = getattr(self, VOLATILE_ATTR_HTTPCLIENT, None)  # type: ignore
             if _httpclient is None:
                 _httpclient = MerossHttpClient(
-                    self.host, self.key, async_get_clientsession(self.api.hass), LOGGER
+                    self.host, self.key, async_get_clientsession(self.api.hass), LOGGER  # type: ignore
                 )
                 self._httpclient = _httpclient
 
@@ -689,6 +701,7 @@ class MerossDevice:
     async def _async_polling_callback(self):
         LOGGER.log(DEBUG, "MerossDevice(%s) polling start", self.name)
         try:
+            self._unsub_polling_callback = None
             epoch = time()
             # this is a kind of 'heartbeat' to check if the device is still there
             # especially on MQTT where we might see no messages for a long time
@@ -994,6 +1007,23 @@ class MerossDevice:
                     mc.METHOD_SET,
                     payload={mc.KEY_TIME: {mc.KEY_TIMEZONE: "", mc.KEY_TIMERULE: []}},
                 )
+
+    def _set_online(self):
+        self.log(DEBUG, 0, "MerossDevice(%s) back online!", self.name)
+        self._online = True
+        self._polling_delay = self.polling_period
+        # retrigger the polling loop since we're already
+        # scheduling an immediate async_request_updates.
+        # This is needed to avoid startup staggering and also
+        # as an optimization against asynchronous onlining events (on MQTT)
+        # which could come anytime and so the (next)
+        # polling might be too early
+        if self._unsub_polling_callback is not None:
+            # might be None when we're already inside a polling loop
+            self._unsub_polling_callback.cancel()
+            self._unsub_polling_callback = self.api.schedule_async_callback(
+                self._polling_delay, self._async_polling_callback
+            )
 
     def _set_offline(self):
         self.log(DEBUG, 0, "MerossDevice(%s) going offline!", self.name)

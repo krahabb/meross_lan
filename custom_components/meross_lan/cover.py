@@ -195,6 +195,7 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
         ) / 2)
 
     async def async_added_to_hass(self):
+        await super().async_added_to_hass()
         try:
             if last_state := await get_entity_last_state(self.hass, self.entity_id):
                 self._attr_state = float(last_state.state) # type: ignore
@@ -260,6 +261,7 @@ class MLGarage(me.MerossEntity, CoverEntity):
         return self._attr_state == STATE_CLOSED
 
     async def async_added_to_hass(self):
+        await super().async_added_to_hass()
         """
         we're trying to recover the '_transition_duration' from previous state
         """
@@ -336,7 +338,8 @@ class MLGarage(me.MerossEntity, CoverEntity):
 
     async def async_will_remove_from_hass(self):
         self._cancel_transition()
-
+        await super().async_will_remove_from_hass()
+        
     def set_unavailable(self):
         self._open = None
         self._cancel_transition()
@@ -604,6 +607,7 @@ class MLRollerShutter(me.MerossEntity, CoverEntity):
         return self._attr_state == STATE_CLOSED
 
     async def async_added_to_hass(self):
+        await super().async_added_to_hass()
         """
         we're trying to recover the 'timed' position from previous state
         if it happens it wasn't updated too far in time
