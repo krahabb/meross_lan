@@ -815,6 +815,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 api.schedule_save_store()
                 # TODO: raise an HA repair
 
+        device.start()
 
     return True
 
@@ -832,8 +833,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ):
                 return False
             api.devices.pop(device_id)
-            device.shutdown()
-        # don't cleanup: the MerossApi is still needed to detect MQTT discoveries
-        # if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
+            await device.async_shutdown()
+        #don't cleanup: the MerossApi is still needed to detect MQTT discoveries
+        #if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
         #    api.shutdown()
     return True

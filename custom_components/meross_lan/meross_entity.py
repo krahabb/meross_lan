@@ -59,6 +59,9 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
     # used to speed-up checks if entity is enabled and loaded
     _hass_connected = False
 
+    # used to speed-up checks if entity is enabled and loaded
+    _hass_connected = False
+
     def __init__(
         self,
         device: MerossDevice,

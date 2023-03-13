@@ -1,6 +1,5 @@
 from __future__ import annotations
 import typing
-from types import MappingProxyType
 from logging import (
     WARNING,
     INFO,
@@ -149,9 +148,13 @@ class MerossDevice:
     key: str = ""
     polling_period: int = CONF_POLLING_PERIOD_DEFAULT
     _polling_delay: int = CONF_POLLING_PERIOD_DEFAULT
+    conf_protocol: str
+    pref_protocol: str
+    curr_protocol: str = CONF_PROTOCOL_AUTO
     # other default property values
-    _deviceentry = None  # weakly cached entry to the device registry
     entity_dnd = MerossFakeEntity
+    _deviceentry = None  # weakly cached entry to the device registry
+    _tzinfo: ZoneInfo | None = None # smart cache of device tzinfo
 
     def __init__(
         self,
@@ -166,12 +169,11 @@ class MerossDevice:
         self.descriptor = descriptor
         self.entry_id = config_entry.entry_id
         self.needsave = True  # after boot update with fresh CONF_PAYLOAD
-        self.device_timestamp: int = 0
+        self.device_timestamp = 0.0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self._online = False
-        self.curr_protocol = None
         self.lastrequest = 0
         self.lastresponse = 0
         self._cloud_profile_id = None
@@ -280,33 +282,40 @@ class MerossDevice:
         # we're disconnected but mqtt broker might be there
         # so we prepare the sensor_protocol state
         self.sensor_protocol.set_unavailable()
-        # since mqtt could be readily available (it takes very few
-        # tenths of sec to connect, setup and respond to our GET
-        # NS_ALL) we'll give it a short 'advantage' before starting
-        # the polling loop
-        self._unsub_polling_callback = api.schedule_async_callback(
-            0 if self._mqtt_profile is None else PARAM_COLDSTARTPOLL_DELAY,
-            self._async_polling_callback,
-        )
 
     def __del__(self):
         LOGGER.debug("MerossDevice(%s) destroy", self.device_id)
         return
 
-    def shutdown(self):
+    def start(self):
+        # called by async_setup_entry after the entities have been registered
+        # here we'll start polling after the states have been eventually
+        # restored (some entities need this)
+        # since mqtt could be readily available (it takes very few
+        # tenths of sec to connect, setup and respond to our GET
+        # NS_ALL) we'll give it a short 'advantage' before starting
+        # the polling loop
+        self._unsub_polling_callback = self.api.schedule_async_callback(
+            0 if self._mqtt_profile is None else PARAM_COLDSTARTPOLL_DELAY,
+            self._async_polling_callback,
+        )
+
+    async def async_shutdown(self):
         """
         called when the config entry is unloaded
         we'll try to clear everything here
         """
         if self._mqtt_profile is not None:
             self._mqtt_profile_detach()
-        if self._unsub_polling_callback is not None:
-            self._unsub_polling_callback.cancel()
-            self._unsub_polling_callback = None
         if self._unsub_entry_update_listener is not None:
             self._unsub_entry_update_listener()
             self._unsub_entry_update_listener = None
-        if self._trace_file:
+        while self._unsub_polling_callback is None:
+            # wait for the polling loop to finish in case
+            await asyncio.sleep(1)
+        self._unsub_polling_callback.cancel()
+        self._unsub_polling_callback = None
+        if self._trace_file is not None:
             self._trace_close()
         self.entities.clear()
         self.entity_dnd = MerossFakeEntity
@@ -323,8 +332,13 @@ class MerossDevice:
     @property
     def tzinfo(self) -> tzinfo:
         tz_name = self.descriptor.timezone
+        if not tz_name:
+            return timezone.utc
+        if (self._tzinfo is not None) and (self._tzinfo.key == tz_name):
+            return self._tzinfo
         try:
-            return ZoneInfo(tz_name) if tz_name else timezone.utc
+            self._tzinfo = ZoneInfo(tz_name)
+            return self._tzinfo
         except Exception:
             self.log(
                 WARNING,
@@ -333,7 +347,8 @@ class MerossDevice:
                 self.name,
                 tz_name,
             )
-            return timezone.utc
+            self._tzinfo = None
+        return timezone.utc
 
     @property
     def name(self) -> str:
@@ -464,7 +479,7 @@ class MerossDevice:
         # and we want to 'translate' this timings in our (local) time.
         # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
         # we'll always be a bit late in processing
-        self.device_timestamp = int(header.get(mc.KEY_TIMESTAMP, epoch))
+        self.device_timestamp = float(header.get(mc.KEY_TIMESTAMP, epoch))
         device_timedelta = epoch - self.device_timestamp
         if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
             self._config_timestamp(epoch, device_timedelta)
@@ -1208,7 +1223,8 @@ class MerossDevice:
             # else we'll leave it stable so the state machine can run
             # without sudden changes when we update CONF by letting
             # conf_protocol == AUTO
-            self.curr_protocol = self.curr_protocol or self.pref_protocol
+            if self.curr_protocol is CONF_PROTOCOL_AUTO:
+                self.curr_protocol = self.pref_protocol
         else:
             self.curr_protocol = self.pref_protocol = self.conf_protocol
 
