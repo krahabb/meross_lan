@@ -1,7 +1,7 @@
 from __future__ import annotations
 import typing
 from logging import DEBUG, WARNING
-from time import gmtime
+from time import gmtime, time
 from datetime import datetime, timedelta
 
 from homeassistant.const import (
@@ -428,7 +428,7 @@ class ConsumptionSensor(MLSensor):
     ATTR_RESET_TS = "reset_ts"
     reset_ts: int = 0
 
-    _attr_state: int = 0
+    _attr_state: int | None
 
     def __init__(self, device: MerossDevice):
         self._attr_extra_state_attributes = {}
@@ -453,12 +453,26 @@ class ConsumptionSensor(MLSensor):
         # device reading data). If an entity is disabled on startup of course our state
         # will start resetted and our sums will restart (disabled means not interesting
         # anyway)
-        if (self._attr_state != 0) or self._attr_extra_state_attributes:
+        if (self._attr_state is not None) or self._attr_extra_state_attributes:
             return
 
         try:
             state = await get_entity_last_state_available(self.hass, self.entity_id)
             if state is None:
+                return
+
+            # check if the restored sample is fresh enough i.e. it was
+            # updated after the device midnight for today..else it is too
+            # old to be good. Since we don't have actual device epoch we
+            # 'guess' it is nicely synchronized so we'll use our time
+            devicetime = self.device.get_datetime(time())
+            devicetime_today_midnight = datetime(
+                devicetime.year,
+                devicetime.month,
+                devicetime.day,
+                tzinfo=devicetime.tzinfo,
+            )
+            if state.last_updated < devicetime_today_midnight:
                 return
 
             # fix beta/preview attr names (sometime REMOVE)
@@ -530,26 +544,21 @@ class ConsumptionMixin(
         # against it's own midnight and we'll see a delayed 'sawtooth'
         if self.device_timestamp > self._tomorrow_midnight_epoch:
             # catch the device starting a new day since our last update (yesterday)
-            y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(self.device_timestamp)
-            ss = min(ss, 59)  # clamp out leap seconds if the platform has them
-            devtime_utc = datetime(y, m, d, hh, mm, ss, 0, dt_util.UTC)
-            devtime_devlocaltz = devtime_utc.astimezone(self.tzinfo)
-            devtime_today_midnight = datetime(
-                devtime_devlocaltz.year,
-                devtime_devlocaltz.month,
-                devtime_devlocaltz.day,
-                tzinfo=self.tzinfo,
+            devicetime = self.get_datetime(self.device_timestamp)
+            devicetime_today_midnight = datetime(
+                devicetime.year,
+                devicetime.month,
+                devicetime.day,
+                tzinfo=devicetime.tzinfo,
             )
             # we'd better not trust our cached tomorrow, today and yesterday
             # epochs (even if 99% of the times they should be good)
             # so we fully recalculate them on each 'midnight trip update'
             # and spend some cpu resources this way...
-            self._today_midnight_epoch = devtime_today_midnight.timestamp()
+            self._today_midnight_epoch = devicetime_today_midnight.timestamp()
             daydelta = timedelta(days=1)
-            devtime_tomorrow_midnight = devtime_today_midnight + daydelta
-            self._tomorrow_midnight_epoch = devtime_tomorrow_midnight.timestamp()
-            devtime_yesterday_midnight = devtime_today_midnight - daydelta
-            self._yesterday_midnight_epoch = devtime_yesterday_midnight.timestamp()
+            self._tomorrow_midnight_epoch = (devicetime_today_midnight + daydelta).timestamp()
+            self._yesterday_midnight_epoch = (devicetime_today_midnight - daydelta).timestamp()
             self.log(
                 DEBUG,
                 0,
