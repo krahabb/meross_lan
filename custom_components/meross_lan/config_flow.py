@@ -249,7 +249,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
         """Handle a flow initialized by DHCP discovery."""
         if LOGGER.isEnabledFor(DEBUG):
             LOGGER.debug("received dhcp discovery: %s", str(discovery_info))
-        self._host = discovery_info.ip
+        host = discovery_info.ip
         macaddress = discovery_info.macaddress.replace(":", "").lower()
         # check if the device is already registered
         try:
@@ -258,15 +258,16 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
                 descriptor = MerossDeviceDescriptor(entry.data.get(CONF_PAYLOAD))
                 if descriptor.macAddress.replace(":", "").lower() != macaddress:
                     continue
-                data = dict(entry.data)
-                data[CONF_HOST] = self._host
-                data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
-                entries.async_update_entry(entry, data=data)
-                LOGGER.info(
-                    "DHCP updated device ip address (%s) for device %s",
-                    self._host,
-                    descriptor.uuid,
-                )
+                if entry.data.get(CONF_HOST) != host:
+                    data = dict(entry.data)
+                    data[CONF_HOST] = host
+                    data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+                    entries.async_update_entry(entry, data=data)
+                    LOGGER.info(
+                        "DHCP updated device ip address (%s) for device %s",
+                        host,
+                        descriptor.uuid,
+                    )
                 return self.async_abort(reason="already_configured")
         except Exception as error:
             LOGGER.warning("DHCP update internal error: %s", str(error))
@@ -284,6 +285,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
         api = MerossApi.get(self.hass)
         if api.get_device_with_mac(macaddress) is not None:
             return self.async_abort(reason="already_configured")
+        self._host = host
         try:
             # try device identification so the user/UI has a good context to start with
             _device_config = _descriptor = None
@@ -317,7 +319,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
                 LOGGER.debug(
                     "Error (%s) identifying meross device (host:%s)",
                     str(error),
-                    self._host,
+                    host,
                 )
             if isinstance(error, AbortFlow):
                 # we might have 'correctly' identified an already configured entry
