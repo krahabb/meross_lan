@@ -66,6 +66,8 @@ class MQTTProfile:
     def attach(self, device: MerossDevice):
         assert device.device_id not in self.mqttdevices
         self.mqttdevices[device.device_id] = device
+        if self._mqtt_is_connected:
+            device.set_mqtt_connected()
         return self
 
     def detach(self, device: MerossDevice):

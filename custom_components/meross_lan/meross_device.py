@@ -150,7 +150,7 @@ class MerossDevice:
     _polling_delay: int = CONF_POLLING_PERIOD_DEFAULT
     conf_protocol: str
     pref_protocol: str
-    curr_protocol: str = CONF_PROTOCOL_AUTO
+    curr_protocol: str
     # other default property values
     entity_dnd = MerossFakeEntity
     _deviceentry = None  # weakly cached entry to the device registry
@@ -274,14 +274,8 @@ class MerossDevice:
         self._unsub_entry_update_listener = config_entry.add_update_listener(
             self.entry_update_listener
         )
-        # we must be careful on this since (especially when reloading)
-        # the mqtt profile might be connected right-away and
-        # this has wider implications (for example sensor_protocol
-        # is updated)
         self._set_config_entry(config_entry.data)  # type: ignore
-        # we're disconnected but mqtt broker might be there
-        # so we prepare the sensor_protocol state
-        self.sensor_protocol.set_unavailable()
+        self.curr_protocol = self.pref_protocol
 
     def __del__(self):
         LOGGER.debug("MerossDevice(%s) destroy", self.device_id)
@@ -295,6 +289,9 @@ class MerossDevice:
         # tenths of sec to connect, setup and respond to our GET
         # NS_ALL) we'll give it a short 'advantage' before starting
         # the polling loop
+        if self.conf_protocol is not CONF_PROTOCOL_HTTP:
+            self._mqtt_profile_attach()
+
         self._unsub_polling_callback = self.api.schedule_async_callback(
             0 if self._mqtt_profile is None else PARAM_COLDSTARTPOLL_DELAY,
             self._async_polling_callback,
@@ -626,7 +623,6 @@ class MerossDevice:
         self.receive(header, payload, CONF_PROTOCOL_MQTT)
 
     def set_mqtt_connected(self):
-        assert self.conf_protocol is not CONF_PROTOCOL_HTTP
         self._mqtt = self._mqtt_profile
         self.sensor_protocol.update_connected_attr(ProtocolSensor.ATTR_MQTT_BROKER)
         # even tho this req might seems redundant it serves
@@ -634,7 +630,6 @@ class MerossDevice:
         self.mqtt_request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
 
     def set_mqtt_disconnected(self):
-        assert self.conf_protocol is not CONF_PROTOCOL_HTTP
         self._mqtt = None
         self.lastmqttresponse = 0
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
@@ -956,6 +951,18 @@ class MerossDevice:
         deviceid and/or host are not changed so we're still referring to the same device
         """
         self._set_config_entry(config_entry.data)  # type: ignore
+
+        if self.conf_protocol is CONF_PROTOCOL_HTTP:
+            # strictly HTTP so detach MQTT in case
+            if self._mqtt_profile is not None:
+                self._mqtt_profile_detach()
+        else:
+            self._mqtt_profile_attach()
+
+        if self.conf_protocol is not CONF_PROTOCOL_AUTO:
+            if self.curr_protocol is not self.pref_protocol:
+                self._switch_protocol(self.pref_protocol)
+
         if (http := self._http) is not None:
             if self._host:
                 http.host = self._host
@@ -1208,25 +1215,21 @@ class MerossDevice:
         """
         self._host = data.get(CONF_HOST)
         self.key = data.get(CONF_KEY) or ""
-
+        self._cloud_profile_id = data.get(CONF_CLOUD_PROFILE_ID)
         self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(
             data.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO
         )
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
             # and eventually fallback (curr_protocol) until some good news allow us
-            # to retry pref_protocol
-            self.pref_protocol = (
-                CONF_PROTOCOL_HTTP if self._host else CONF_PROTOCOL_MQTT
-            )
-            # we'll fix curr_protocol only once when initializing
-            # else we'll leave it stable so the state machine can run
-            # without sudden changes when we update CONF by letting
-            # conf_protocol == AUTO
-            if self.curr_protocol is CONF_PROTOCOL_AUTO:
-                self.curr_protocol = self.pref_protocol
+            # to retry pref_protocol. When binded to a cloud_profile always prefer
+            # 'local' http since it should be faster and less prone to cloud 'issues'
+            if self._host or self._cloud_profile_id:
+                self.pref_protocol = CONF_PROTOCOL_HTTP
+            else:
+                self.pref_protocol = CONF_PROTOCOL_MQTT
         else:
-            self.curr_protocol = self.pref_protocol = self.conf_protocol
+            self.pref_protocol = self.conf_protocol
 
         self.polling_period = (
             data.get(CONF_POLLING_PERIOD) or CONF_POLLING_PERIOD_DEFAULT
@@ -1234,7 +1237,7 @@ class MerossDevice:
         if self.polling_period < CONF_POLLING_PERIOD_MIN:
             self.polling_period = CONF_POLLING_PERIOD_MIN
         self._polling_delay = self.polling_period
-
+        """
         if self.conf_protocol is CONF_PROTOCOL_HTTP:
             # strictly HTTP so no use of MQTT
             if self._mqtt_profile is not None:
@@ -1280,15 +1283,55 @@ class MerossDevice:
                 self._mqtt_profile = self.api.attach(self)
                 if self._mqtt_profile.mqtt_is_connected:
                     self.set_mqtt_connected()
+        """
+
+    def _mqtt_profile_attach(self):
+        if self._cloud_profile_id:
+            # this is the case for when we want to use meross cloud mqtt.
+            # On config entry update we might be already connected to the right
+            # cloud_profile...
+            if self._mqtt_profile is not None:
+                if self._cloud_profile is None or self._cloud_profile.profile_id != self._cloud_profile_id:
+                    self._mqtt_profile_detach()
+
+            if self._mqtt_profile is None:
+                if self.descriptor.userId != self._cloud_profile_id:
+                    self.log(
+                        WARNING,
+                        0,
+                        "MerossDevice(%s): cloud profile(%s) does not match device user(%s)",
+                        self.name,
+                        self._cloud_profile_id,
+                        str(self.descriptor.userId),
+                    )
+                else:
+                    self._cloud_profile = self.api.profiles.get(self._cloud_profile_id)
+                    if self._cloud_profile is not None:
+                        self._mqtt_profile = self._cloud_profile.attach(self)
+        else:
+            # this is the case for when we just want local handling
+            # in this scenario we bind anyway to our local mqtt api
+            # even tho the device might be unavailable since it's
+            # still meross cloud bound. Also, we might not have
+            # local mqtt at all but should this come later we don't
+            # want to have to broadcast a connection event 'in the wild'
+            # We should further inspect how to discriminate which
+            # devices to add (or not) as a small optimization so to not
+            # fill our local mqtt structures with unuseful data..
+            # Right now add anyway since it's no harm
+            # (no mqtt messages will come though)
+            if self._mqtt_profile is not self.api:
+                if self._mqtt_profile is not None:
+                    self._mqtt_profile_detach()
+                self._mqtt_profile = self.api.attach(self)
 
     def _mqtt_profile_detach(self):
         if self._mqtt_profile is not None:
             self._mqtt_profile.detach(self)
             self._mqtt_profile = None
-            self._mqtt = None
+            if self._mqtt is not None:
+                self.set_mqtt_disconnected()
             self._cloud_profile = None
-            self._cloud_profile_id = None
-            self.lastmqttresponse = 0
 
     def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
         """
