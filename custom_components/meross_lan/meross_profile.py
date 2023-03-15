@@ -2,22 +2,36 @@
     meross_lan module interface to access Meross Cloud services
 """
 from __future__ import annotations
-from logging import DEBUG
+
+from json import dumps as json_dumps, loads as json_loads
+from logging import DEBUG, INFO, WARNING
 from time import time
 import typing
-from json import dumps as json_dumps, loads as json_loads
 
-import paho.mqtt.client as mqtt
-
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_call_later
+import paho.mqtt.client as mqtt
 
+from .const import (
+    CONF_DEVICE_ID,
+    CONF_KEY,
+    CONF_PAYLOAD,
+    CONF_PROFILE_ID,
+    CONF_PROFILE_ID_LOCAL,
+    DOMAIN,
+    PARAM_CLOUDAPI_QUERY_DEVICELIST_TIMEOUT,
+    PARAM_HEARTBEAT_PERIOD,
+    PARAM_UNAVAILABILITY_TIMEOUT,
+)
+from .helpers import LOGGER, LOGGER_trap
 from .merossclient import (
-    const as mc,
-    KeyType,
     MEROSSDEBUG,
+    KeyType,
     build_payload,
+    const as mc,
+    get_default_arguments,
+    get_replykey,
 )
 from .merossclient.cloudapi import (
     APISTATUS_TOKEN_ERRORS,
@@ -27,14 +41,13 @@ from .merossclient.cloudapi import (
     async_cloudapi_devicelist,
     async_cloudapi_logout,
 )
-from .helpers import (
-    LOGGER,
-)
-from .const import (
-    PARAM_CLOUDAPI_QUERY_DEVICELIST_TIMEOUT,
-)
 
 if typing.TYPE_CHECKING:
+    from asyncio import TimerHandle
+    from typing import Callable, ClassVar, Coroutine
+
+    from homeassistant.core import HomeAssistant
+
     from . import MerossApi
     from .meross_device import MerossDevice
 
@@ -55,13 +68,25 @@ class MQTTProfile:
     merosss cloud mqtt)
     """
 
+    _KEY_STARTTIME = "__starttime"
+    _KEY_REQUESTTIME = "__requesttime"
+
+    hass: ClassVar[HomeAssistant]  # set on MerossApi init
+    devices: ClassVar[dict[str, MerossDevice]] = {}
+
     _mqtt_is_connected = False
 
-    def __init__(self, hass: HomeAssistant, profile_id: str, key: str):
-        self.hass = hass
+    def __init__(self, profile_id: str, key: str):
         self.profile_id = profile_id
         self.key = key
         self.mqttdevices: dict[str, MerossDevice] = {}
+        self.mqttdiscovering: dict[str, dict] = {}
+        self._unsub_discovery_callback: TimerHandle | None = None
+
+    def shutdown(self):
+        if self._unsub_discovery_callback is not None:
+            self._unsub_discovery_callback.cancel()
+            self._unsub_discovery_callback = None
 
     def attach(self, device: MerossDevice):
         assert device.device_id not in self.mqttdevices
@@ -102,7 +127,132 @@ class MQTTProfile:
                 self.mqttdevices[device_id].mqtt_receive(
                     header, message[mc.KEY_PAYLOAD]
                 )
-            # TODO: implement mqtt discovery like in our MerossApi
+
+            if device_id in self.devices:
+                # we have the device registered but somehow it is not 'mqtt binded'
+                # either it's configuration is ONLY_HTTP or it is paired to the
+                # Meross cloud. In this case we shouldn't receive 'local' MQTT
+                LOGGER_trap(
+                    WARNING,
+                    14400,
+                    "MQTTProfile(%s): device(%s) not registered for MQTT handling",
+                    self.profile_id,
+                    self.devices[device_id].name,
+                )
+                return
+
+            # lookout for any disabled/ignored entry
+            hub_entry_present = False
+            for config_entry in self.hass.config_entries.async_entries(DOMAIN):
+                if config_entry.unique_id == device_id:
+                    # entry already present...
+                    # if config_entry.disabled_by == DOMAIN:
+                    # we previously disabled this one due to extended anuavailability
+                    # await self.hass.config_entries.async_set_disabled_by(config_entry.entry_id, None)
+                    # skip discovery anyway
+                    msg_reason = (
+                        "disabled"
+                        if config_entry.disabled_by is not None
+                        else "ignored"
+                        if config_entry.source == "ignore"
+                        else "unknown"
+                    )
+                    LOGGER_trap(
+                        INFO,
+                        14400,
+                        "MQTTProfile(%s): ignoring discovery for already configured device_id: %s (ConfigEntry is %s)",
+                        self.profile_id,
+                        device_id,
+                        msg_reason,
+                    )
+                    return
+                hub_entry_present |= config_entry.unique_id == DOMAIN
+            # also skip discovered integrations waiting in HA queue
+            for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN):
+                flow_unique_id = flow.get("context", {}).get("unique_id")
+                if flow_unique_id == device_id:
+                    LOGGER_trap(
+                        INFO,
+                        14400,
+                        "MQTTProfile(%s): ignoring discovery for device_id: %s (ConfigEntry is in progress)",
+                        self.profile_id,
+                        device_id,
+                    )
+                    return
+                hub_entry_present |= flow_unique_id == DOMAIN
+
+            if not hub_entry_present and self.profile_id is CONF_PROFILE_ID_LOCAL:
+                await self.hass.config_entries.flow.async_init(
+                    DOMAIN,
+                    context={"source": "hub"},
+                    data=None,
+                )
+
+            if (replykey := get_replykey(header, self.key)) is not self.key:
+                LOGGER_trap(
+                    WARNING,
+                    300,
+                    "Meross discovery key error for device_id: %s",
+                    device_id,
+                )
+                if (
+                    self.key is not None
+                ):  # we're using a fixed key in discovery so ignore this device
+                    return
+
+            if (discovered := self.mqttdiscovering.get(device_id)) is None:
+                # new device discovered: try to determine the capabilities
+                await self.async_mqtt_publish(
+                    device_id,
+                    *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
+                    replykey,
+                )
+                epoch = time()
+                self.mqttdiscovering[device_id] = {
+                    MQTTProfile._KEY_STARTTIME: epoch,
+                    MQTTProfile._KEY_REQUESTTIME: epoch,
+                }
+                if self._unsub_discovery_callback is None:
+                    self._unsub_discovery_callback = self.schedule_async_callback(
+                        PARAM_UNAVAILABILITY_TIMEOUT + 2, self._async_discovery_callback
+                    )
+                return
+
+            if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
+                namespace = header[mc.KEY_NAMESPACE]
+                if namespace == mc.NS_APPLIANCE_SYSTEM_ALL:
+                    discovered[mc.NS_APPLIANCE_SYSTEM_ALL] = message[mc.KEY_PAYLOAD]
+                    await self.async_mqtt_publish(
+                        device_id,
+                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                        replykey,
+                    )
+                    discovered[MQTTProfile._KEY_REQUESTTIME] = time()
+                    return
+                elif namespace == mc.NS_APPLIANCE_SYSTEM_ABILITY:
+                    if discovered.get(mc.NS_APPLIANCE_SYSTEM_ALL) is None:
+                        await self.async_mqtt_publish(
+                            device_id,
+                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
+                            replykey,
+                        )
+                        discovered[MQTTProfile._KEY_REQUESTTIME] = time()
+                        return
+                    payload = message[mc.KEY_PAYLOAD]
+                    payload.update(discovered[mc.NS_APPLIANCE_SYSTEM_ALL])
+                    self.mqttdiscovering.pop(device_id)
+                    await self.hass.config_entries.flow.async_init(
+                        DOMAIN,
+                        context={"source": DOMAIN},
+                        data={
+                            CONF_DEVICE_ID: device_id,
+                            CONF_PAYLOAD: payload,
+                            CONF_KEY: self.key,
+                            CONF_PROFILE_ID: self.profile_id,
+                        },
+                    )
+                    return
+
         except Exception as error:
             LOGGER.error(
                 "MQTTProfile(%s) %s %s",
@@ -127,6 +277,57 @@ class MQTTProfile:
             device.set_mqtt_disconnected()
         self._mqtt_is_connected = False
 
+    def schedule_async_callback(
+        self, delay: float, target: Callable[..., Coroutine], *args
+    ) -> TimerHandle:
+        @callback
+        def _callback(_target, *_args):
+            self.hass.async_create_task(_target(*_args))
+
+        return self.hass.loop.call_later(delay, _callback, target, *args)
+
+    def schedule_callback(self, delay: float, target: Callable, *args) -> TimerHandle:
+        return self.hass.loop.call_later(delay, target, *args)
+
+    async def _async_discovery_callback(self):
+        """
+        async task to keep alive the discovery process:
+        activated when any device is initially detected
+        this task is not renewed when the list of devices
+        under 'discovery' is empty or these became stale
+        """
+        self._unsub_discovery_callback = None
+        if len(discovering := self.mqttdiscovering) == 0:
+            return
+
+        epoch = time()
+        for device_id, discovered in discovering.copy().items():
+            if (
+                epoch - discovered.get(MQTTProfile._KEY_STARTTIME, 0)
+            ) > PARAM_HEARTBEAT_PERIOD:
+                # stale entry...remove
+                discovering.pop(device_id)
+                continue
+            if self._mqtt_is_connected and (
+                (epoch - discovered.get(MQTTProfile._KEY_REQUESTTIME, 0))
+                > PARAM_UNAVAILABILITY_TIMEOUT
+            ):
+                await self.async_mqtt_publish(
+                    device_id,
+                    *get_default_arguments(
+                        mc.NS_APPLIANCE_SYSTEM_ABILITY
+                        if mc.NS_APPLIANCE_SYSTEM_ALL in discovered
+                        else mc.NS_APPLIANCE_SYSTEM_ALL
+                    ),
+                    self.key,
+                )
+                discovered[MQTTProfile._KEY_REQUESTTIME] = epoch
+
+        if len(discovering):
+            self._unsub_discovery_callback = self.schedule_async_callback(
+                PARAM_UNAVAILABILITY_TIMEOUT + 2, self._async_discovery_callback
+            )
+
 
 class MerossMQTTProfile(MQTTProfile, MerossMQTTClient):
 
@@ -135,7 +336,7 @@ class MerossMQTTProfile(MQTTProfile, MerossMQTTClient):
 
     def __init__(self, profile: MerossCloudProfile, mqttprofile_id, server, port):
         MerossMQTTClient.__init__(self, profile)
-        MQTTProfile.__init__(self, profile.api.hass, mqttprofile_id, profile.key)
+        MQTTProfile.__init__(self, mqttprofile_id, profile.key)
         self._server = server
         self._port = port
         self.user_data_set(self.hass)  # speedup hass lookup in callbacks
@@ -199,7 +400,9 @@ class MerossMQTTProfile(MQTTProfile, MerossMQTTClient):
             # we need to be sure the 'attach' process completed in the main loop
             # before all the connection process starts so the mqttdevices list
             # is set when the connection signal arrives
-            self.hass.loop.call_soon(self.hass.async_add_executor_job, self._safe_connect)
+            self.hass.loop.call_soon(
+                self.hass.async_add_executor_job, self._safe_connect
+            )
 
         return super().attach(device)
 

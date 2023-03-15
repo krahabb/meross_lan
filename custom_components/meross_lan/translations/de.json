@@ -75,7 +75,7 @@
                     "host": "IP-Adresse des Geräts",
                     "key": "Geräteschlüssel",
                     "protocol": "Verbindungsart",
-                    "cloud_profile_id": "Cloud-Profil",
+                    "profile_id": "Cloud-Profil",
                     "polling_period": "Abfragerate",
                     "timezone": "Gerätezeitzone",
                     "trace": "Debugmodus aktivieren",

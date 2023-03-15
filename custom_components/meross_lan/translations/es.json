@@ -75,7 +75,7 @@
                     "host": "Dirección IP del dispositivo",
                     "key": "Clave de dispositivo",
                     "protocol": "Protocolo de conexión",
-                    "cloud_profile_id": "Perfil de nube",
+                    "profile_id": "Perfil de nube",
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
                     "trace": "Activar el modo debug",

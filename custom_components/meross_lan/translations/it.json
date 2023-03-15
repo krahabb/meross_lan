@@ -75,7 +75,7 @@
                     "host": "Indirizzo dispositivo",
                     "key": "Chiave dispositivo",
                     "protocol": "Protocollo",
-                    "cloud_profile_id": "Profilo Cloud",
+                    "profile_id": "Profilo Cloud",
                     "polling_period": "Intervallo di aggiornamento",
                     "timezone": "Zona oraria",
                     "trace": "Attiva il debug tracing",

@@ -1,79 +1,68 @@
 from __future__ import annotations
-import typing
-from logging import (
-    WARNING,
-    INFO,
-    DEBUG,
-    getLevelName as logging_getLevelName,
-)
-import os
-import socket
+
 import asyncio
-from time import gmtime, localtime, strftime, time
+from copy import deepcopy
 from datetime import datetime, timezone, tzinfo
-from zoneinfo import ZoneInfo
-from uuid import uuid4
 from io import TextIOWrapper
 from json import dumps as json_dumps
-from copy import deepcopy
-import voluptuous as vol
+from logging import DEBUG, INFO, WARNING, getLevelName as logging_getLevelName
+import os
+import socket
+from time import gmtime, localtime, strftime, time
+import typing
+from uuid import uuid4
 import weakref
+from zoneinfo import ZoneInfo
 
 from homeassistant.core import callback
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import device_registry
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+import voluptuous as vol
 
-from .helpers import (
-    LOGGER,
-    LOGGER_trap,
-    obfuscate,
-)
-from .merossclient import (
-    const as mc,  # mEROSS cONST
-    get_namespacekey,
-    get_replykey,
-    get_default_arguments,
-)
-from .merossclient.httpclient import MerossHttpClient
-from .meross_entity import MerossFakeEntity
-from .sensor import ProtocolSensor
 from .const import (
-    DOMAIN,
-    DeviceConfigType,
     CONF_DEVICE_ID,
-    CONF_KEY,
-    CONF_CLOUD_PROFILE_ID,
-    CONF_PAYLOAD,
     CONF_HOST,
-    CONF_TIMESTAMP,
+    CONF_KEY,
+    CONF_PAYLOAD,
     CONF_POLLING_PERIOD,
     CONF_POLLING_PERIOD_DEFAULT,
     CONF_POLLING_PERIOD_MIN,
+    CONF_PROFILE_ID,
     CONF_PROTOCOL,
-    CONF_PROTOCOL_OPTIONS,
     CONF_PROTOCOL_AUTO,
-    CONF_PROTOCOL_MQTT,
     CONF_PROTOCOL_HTTP,
+    CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_OPTIONS,
+    CONF_TIMESTAMP,
     CONF_TRACE,
     CONF_TRACE_DIRECTORY,
     CONF_TRACE_FILENAME,
     CONF_TRACE_MAXSIZE,
     CONF_TRACE_TIMEOUT_DEFAULT,
+    DOMAIN,
     PARAM_COLDSTARTPOLL_DELAY,
     PARAM_HEARTBEAT_PERIOD,
-    PARAM_TIMEZONE_CHECK_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
+    PARAM_TIMEZONE_CHECK_PERIOD,
     PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+    DeviceConfigType,
 )
+from .helpers import LOGGER, LOGGER_trap, obfuscate
+from .meross_entity import MerossFakeEntity
+from .merossclient import const as mc  # mEROSS cONST
+from .merossclient import get_default_arguments, get_namespacekey, get_replykey
+from .merossclient.httpclient import MerossHttpClient
+from .sensor import ProtocolSensor
 
 ResponseCallbackType = typing.Callable[[bool, dict, dict], None]
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
     from . import MerossApi
-    from .merossclient import MerossDeviceDescriptor
     from .meross_entity import MerossEntity
+    from .merossclient import MerossDeviceDescriptor
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
 # this list will be excluded from enumeration since it's redundant/exposing sensitive info
@@ -146,6 +135,7 @@ class MerossDevice:
     # these are set from ConfigEntry
     _host: str | None = None
     key: str = ""
+    profile_id: str | None = None
     polling_period: int = CONF_POLLING_PERIOD_DEFAULT
     _polling_delay: int = CONF_POLLING_PERIOD_DEFAULT
     conf_protocol: str
@@ -154,7 +144,7 @@ class MerossDevice:
     # other default property values
     entity_dnd = MerossFakeEntity
     _deviceentry = None  # weakly cached entry to the device registry
-    _tzinfo: ZoneInfo | None = None # smart cache of device tzinfo
+    _tzinfo: ZoneInfo | None = None  # smart cache of device tzinfo
 
     def __init__(
         self,
@@ -176,7 +166,6 @@ class MerossDevice:
         self._online = False
         self.lastrequest = 0
         self.lastresponse = 0
-        self._cloud_profile_id = None
         self._cloud_profile = None
         self._mqtt_profile = None
         self._mqtt = None
@@ -263,12 +252,12 @@ class MerossDevice:
                     for p in payload:
                         try:
                             _init(p)
-                        except:# TODO: add debug log
+                        except:  # TODO: add debug log
                             pass
                 else:
                     try:
                         _init(payload)
-                    except:# TODO: add debug log
+                    except:  # TODO: add debug log
                         pass
 
         self._unsub_entry_update_listener = config_entry.add_update_listener(
@@ -1019,9 +1008,7 @@ class MerossDevice:
             except:
                 pass
 
-        epoch = int(
-            self.lastresponse
-        )  # we're not calling time() since it's fresh enough
+        epoch = int(self.lastresponse)
 
         if self.locallybound:
             # only deal with time related settings when devices are un-paired
@@ -1100,8 +1087,9 @@ class MerossDevice:
                 """
                 timerules = []
                 try:
-                    import pytz
                     import bisect
+
+                    import pytz
 
                     tz_local = pytz.timezone(tzname)
                     idx = bisect.bisect_right(
@@ -1210,7 +1198,7 @@ class MerossDevice:
             if entry is not None:
                 data = dict(entry.data)
                 data[CONF_PAYLOAD].update(payload)
-                data[CONF_TIMESTAMP] = time() # force ConfigEntry update..
+                data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
                 entries.async_update_entry(entry, data=data)
         except Exception as e:
             self.log(
@@ -1227,7 +1215,7 @@ class MerossDevice:
         """
         self._host = data.get(CONF_HOST)
         self.key = data.get(CONF_KEY) or ""
-        self._cloud_profile_id = data.get(CONF_CLOUD_PROFILE_ID)
+        self.profile_id = data.get(CONF_PROFILE_ID)
         self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(
             data.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO
         )
@@ -1236,7 +1224,7 @@ class MerossDevice:
             # and eventually fallback (curr_protocol) until some good news allow us
             # to retry pref_protocol. When binded to a cloud_profile always prefer
             # 'local' http since it should be faster and less prone to cloud 'issues'
-            if self._host or self._cloud_profile_id:
+            if self._host or self.profile_id:
                 self.pref_protocol = CONF_PROTOCOL_HTTP
             else:
                 self.pref_protocol = CONF_PROTOCOL_MQTT
@@ -1298,26 +1286,29 @@ class MerossDevice:
         """
 
     def _mqtt_profile_attach(self):
-        if self._cloud_profile_id:
+        if self.profile_id:
             # this is the case for when we want to use meross cloud mqtt.
             # On config entry update we might be already connected to the right
             # cloud_profile...
             if self._mqtt_profile is not None:
-                if self._cloud_profile is None or self._cloud_profile.profile_id != self._cloud_profile_id:
+                if (
+                    self._cloud_profile is None
+                    or self._cloud_profile.profile_id != self.profile_id
+                ):
                     self._mqtt_profile_detach()
 
             if self._mqtt_profile is None:
-                if self.descriptor.userId != self._cloud_profile_id:
+                if self.descriptor.userId != self.profile_id:
                     self.log(
                         WARNING,
                         0,
                         "MerossDevice(%s): cloud profile(%s) does not match device user(%s)",
                         self.name,
-                        self._cloud_profile_id,
+                        self.profile_id,
                         str(self.descriptor.userId),
                     )
                 else:
-                    self._cloud_profile = self.api.profiles.get(self._cloud_profile_id)
+                    self._cloud_profile = self.api.profiles.get(self.profile_id)
                     if self._cloud_profile is not None:
                         self._mqtt_profile = self._cloud_profile.attach(self)
         else:

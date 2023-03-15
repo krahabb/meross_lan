@@ -1,6 +1,8 @@
 """Constants for the Meross IoT local LAN integration."""
-from typing import TypedDict, Final
+from typing import Final, TypedDict
+
 from homeassistant import const as hac
+
 from .merossclient import const as mc
 
 DOMAIN: Final = "meross_lan"
@@ -16,7 +18,8 @@ CONF_KEY: Final = "key"
 # update/repair/fix their configuration (no automatic migration)
 CONF_CLOUD_KEY: Final = "cloud_key"
 # email/id of cloud account to use with the device
-CONF_CLOUD_PROFILE_ID: Final = "cloud_profile_id"
+CONF_PROFILE_ID: Final = "profile_id"
+CONF_PROFILE_ID_LOCAL: Final = ""
 CONF_PAYLOAD: Final = hac.CONF_PAYLOAD
 CONF_HOST: Final = hac.CONF_HOST
 # protocol used to communicate with device
@@ -53,7 +56,7 @@ class DeviceConfigType(TypedDict, total=False):
     payload: dict
     key: str | None
     cloud_key: str | None
-    cloud_profile_id: str | None
+    profile_id: str | None
     host: str | None
     protocol: str | None
     polling_period: int | None

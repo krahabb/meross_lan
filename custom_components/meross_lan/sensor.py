@@ -1,9 +1,11 @@
 from __future__ import annotations
-import typing
+
+from datetime import datetime, timedelta
 from logging import DEBUG, WARNING
 from time import gmtime, time
-from datetime import datetime, timedelta
+import typing
 
+from homeassistant.components import sensor
 from homeassistant.const import (
     ELECTRIC_CURRENT_AMPERE,
     ELECTRIC_POTENTIAL_VOLT,
@@ -12,21 +14,14 @@ from homeassistant.const import (
     POWER_WATT,
     TEMP_CELSIUS,
 )
-from homeassistant.components import sensor
 
 SensorEntity = sensor.SensorEntity
 
-from homeassistant.util.dt import now
 from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
+from homeassistant.util.dt import now
 
-from .merossclient import (
-    const as mc,  # mEROSS cONST
-    get_default_arguments,
-    MerossDeviceDescriptor,
-)
-from .helpers import StrEnum, get_entity_last_state_available
 from . import meross_entity as me
 from .const import (
     CONF_PROTOCOL_HTTP,
@@ -34,10 +29,14 @@ from .const import (
     PARAM_ENERGY_UPDATE_PERIOD,
     PARAM_SIGNAL_UPDATE_PERIOD,
 )
+from .helpers import StrEnum, get_entity_last_state_available
+from .merossclient import MerossDeviceDescriptor, get_default_arguments
+from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
     from .meross_device import MerossDevice
     from .meross_device_hub import MerossSubDevice
 
@@ -45,6 +44,7 @@ if typing.TYPE_CHECKING:
 try:
     SensorDeviceClass = sensor.SensorDeviceClass  # type: ignore
 except:
+
     class SensorDeviceClass(StrEnum):
         BATTERY = "battery"
         CURRENT = "current"
@@ -132,7 +132,7 @@ class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
         return self.native_value
 
 
-class ProtocolSensor(MLSensor):  # type: ignore
+class ProtocolSensor(MLSensor):
 
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
@@ -327,8 +327,12 @@ class ElectricityMixin(
     def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(api, descriptor, entry)
         self._sensor_power = MLSensor.build_for_device(self, MLSensor.DeviceClass.POWER)
-        self._sensor_current = MLSensor.build_for_device(self, MLSensor.DeviceClass.CURRENT)
-        self._sensor_voltage = MLSensor.build_for_device(self, MLSensor.DeviceClass.VOLTAGE)
+        self._sensor_current = MLSensor.build_for_device(
+            self, MLSensor.DeviceClass.CURRENT
+        )
+        self._sensor_voltage = MLSensor.build_for_device(
+            self, MLSensor.DeviceClass.VOLTAGE
+        )
         self._sensor_energy_estimate = EnergyEstimateSensor(self)
 
     def start(self):
@@ -352,9 +356,9 @@ class ElectricityMixin(
             # dt = self.lastupdate - self._electricity_lastupdate
             # de = (((last_power + power) / 2) * dt) / 3600
             de = (
-                (last_power + power) *
-                (self.lastresponse - self._electricity_lastupdate)
-                ) / 7200
+                (last_power + power)
+                * (self.lastresponse - self._electricity_lastupdate)
+            ) / 7200
             self._consumption_estimate += de
             self._sensor_energy_estimate.update_estimate(de)
 
@@ -432,7 +436,9 @@ class ConsumptionSensor(MLSensor):
 
     def __init__(self, device: MerossDevice):
         self._attr_extra_state_attributes = {}
-        super().__init__(device, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY, None)
+        super().__init__(
+            device, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY, None
+        )
 
     @property
     def available(self):
@@ -557,8 +563,12 @@ class ConsumptionMixin(
             # and spend some cpu resources this way...
             self._today_midnight_epoch = devicetime_today_midnight.timestamp()
             daydelta = timedelta(days=1)
-            self._tomorrow_midnight_epoch = (devicetime_today_midnight + daydelta).timestamp()
-            self._yesterday_midnight_epoch = (devicetime_today_midnight - daydelta).timestamp()
+            self._tomorrow_midnight_epoch = (
+                devicetime_today_midnight + daydelta
+            ).timestamp()
+            self._yesterday_midnight_epoch = (
+                devicetime_today_midnight - daydelta
+            ).timestamp()
             self.log(
                 DEBUG,
                 0,

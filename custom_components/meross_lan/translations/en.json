@@ -75,7 +75,7 @@
                     "host": "Device host address",
                     "key": "Device key",
                     "protocol": "Connection protocol",
-                    "cloud_profile_id": "Cloud profile",
+                    "profile_id": "Cloud profile",
                     "polling_period": "Polling period",
                     "timezone": "Device time zone",
                     "trace": "Activate device debug tracing",
