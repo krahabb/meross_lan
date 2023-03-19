@@ -3,10 +3,8 @@ from uuid import uuid4
 from hashlib import md5
 from base64 import b64encode
 from time import time
-from json import (
-    dumps as json_dumps,
-    loads as json_loads
-)
+import typing
+from json import dumps as json_dumps, loads as json_loads
 import async_timeout
 import aiohttp
 import logging
@@ -22,13 +20,13 @@ from . import (
 )
 
 
-
 SECRET = "23x17ahWarFH6w29"
 
 API_V1_URL = "https://iot.meross.com/v1"
-API_LOGIN_PATH = "/Auth/Login"
-API_LOGOUT_PATH = "/Profile/Logout"
-API_DEVICELIST_PATH = "/Device/devList"
+API_AUTH_LOGIN_PATH = "/Auth/Login"
+API_PROFILE_LOGOUT_PATH = "/Profile/Logout"
+API_DEVICE_DEVLIST_PATH = "/Device/devList"
+API_HUB_GETSUBDEVICES_PATH = "/Hub/getSubDevices"
 
 APISTATUS_NO_ERROR = 0
 """Not an error"""
@@ -73,8 +71,8 @@ APISTATUS_TOKEN_ERRORS = {
 
 LOGGER = logging.getLogger(__name__)
 
-class MerossCloudCredentials(dict):
 
+class MerossCloudCredentials(dict):
     @property
     def userid(self) -> str:
         return self[mc.KEY_USERID_]
@@ -96,11 +94,19 @@ class MerossCloudCredentials(dict):
         return md5(f"{self.userid}{self.key}".encode("utf8")).hexdigest()
 
 
+class DeviceInfoType(typing.TypedDict, total=False):
+    uuid: str
+    domain: str
+
+
+"""
+actually unused since we cant force cast the devList elements
 class MerossDeviceInfo(dict):
 
     @property
     def uuid(self):
         return self[mc.KEY_UUID]
+"""
 
 
 class CloudApiError(MerossProtocolError):
@@ -111,7 +117,7 @@ class CloudApiError(MerossProtocolError):
     def __init__(self, response: dict, reason: object | None = None):
         self.apistatus = response.get(mc.KEY_APISTATUS)
         if reason is None:
-            reason = APISTATUS_MAP.get(self.apistatus) # type: ignore
+            reason = APISTATUS_MAP.get(self.apistatus)  # type: ignore
         if reason is None:
             # 'info' sometimes carries useful msg
             reason = response.get(mc.KEY_INFO)
@@ -167,7 +173,7 @@ async def async_cloudapi_login(
         return MEROSSDEBUG.cloudapi_login
 
     response = await async_cloudapi_post(
-        API_LOGIN_PATH, {"email": username, "password": password}, session=session
+        API_AUTH_LOGIN_PATH, { mc.KEY_EMAIL: username, "password": password}, session=session
     )
     data = response[mc.KEY_DATA]
     # formal check since we want to deal with 'safe' data structures
@@ -176,7 +182,10 @@ async def async_cloudapi_login(
             raise CloudApiError(response, f"Missing '{_key}' in api response")
         _value = data[_key]
         if not isinstance(_value, str):
-            raise CloudApiError(response, f"Key '{_key}' in api response is type '{_value.__class__.__name__}'. Expected 'str'")
+            raise CloudApiError(
+                response,
+                f"Key '{_key}' in api response is type '{_value.__class__.__name__}'. Expected 'str'",
+            )
         if len(_value) == 0:
             raise CloudApiError(response, f"Key '{_key}' in api response is empty")
 
@@ -189,14 +198,21 @@ async def async_cloudapi_devicelist(
 ):
     if MEROSSDEBUG and MEROSSDEBUG.cloudapi_devicelist:
         return MEROSSDEBUG.cloudapi_devicelist
-    response = await async_cloudapi_post(API_DEVICELIST_PATH, {}, token, session)
+    response = await async_cloudapi_post(API_DEVICE_DEVLIST_PATH, {}, token, session)
+    return response[mc.KEY_DATA]
+
+
+async def async_cloudapi_subdevicelist(
+    token: str, uuid: str, session: aiohttp.ClientSession | None = None
+):
+    response = await async_cloudapi_post(API_HUB_GETSUBDEVICES_PATH, {mc.KEY_UUID: uuid}, token, session)
     return response[mc.KEY_DATA]
 
 
 async def async_cloudapi_logout(
     token: str, session: aiohttp.ClientSession | None = None
 ):
-    await async_cloudapi_post(API_LOGOUT_PATH, {}, token, session)
+    await async_cloudapi_post(API_PROFILE_LOGOUT_PATH, {}, token, session)
 
 
 async def async_get_cloud_key(
@@ -207,34 +223,83 @@ async def async_get_cloud_key(
     # everything good:
     # kindly invalidate login token so to not exhaust our pool...
     try:
-        await async_cloudapi_logout(credentials.token, session) # type: ignore
+        await async_cloudapi_logout(credentials.token, session)  # type: ignore
     except:
         pass  # don't care if any failure here: we have the key anyway
     return credentials.key
 
 
 class MerossMQTTClient(mqtt.Client):
+
+    STATE_CONNECTING = "connecting"
+    STATE_CONNECTED = "connected"
+    STATE_RECONNECTING = "reconnecting"
+    STATE_DISCONNECTING = "disconnecting"
+    STATE_DISCONNECTED = "disconnected"
+
     def __init__(self, credentials: MerossCloudCredentials):
-        self.app_id = md5(uuid4().hex.encode('utf-8')).hexdigest()
-        self.client_id = f"app:{self.app_id}"
+        self._stateext = self.STATE_DISCONNECTED
+        self.app_id = md5(uuid4().hex.encode("utf-8")).hexdigest()
         self.topic_command = f"/app/{credentials.userid}-{self.app_id}/subscribe"
         self.topic_push = f"/app/{credentials.userid}/subscribe"
         self.lock = threading.Lock()
-        super().__init__(self.client_id, protocol=mqtt.MQTTv311)
+        super().__init__(f"app:{self.app_id}", protocol=mqtt.MQTTv311)
         self.username_pw_set(credentials.userid, credentials.mqttpassword)
         self.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT)
-        self.on_connect = self._mqtt_connect
+        self.on_connect = self._mqttc_connect
+        self.on_disconnect = self._mqttc_disconnect
         self.suppress_exceptions = True
         if MEROSSDEBUG and MEROSSDEBUG.mqtt_client_log_enable:
             self.enable_logger(LOGGER)
 
-    def _mqtt_connect(self, client: mqtt.Client, userdata, rc, other):
-        result, mid = client.subscribe([
-            (self.topic_push, 1),
-            (self.topic_command, 1)
-        ])
+    @property
+    def stateext(self):
+        return self._stateext
+
+    @property
+    def state_active(self):
+        return self._stateext not in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
+
+    @property
+    def state_inactive(self):
+        return self._stateext in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
+
+    def safe_connect(self, host: str, port: int):
+        """
+        Safe to be called from any thread (except the mqtt one). Could be a bit
+        'blocking' if the thread needs to be stopped (in case it was still running).
+        The effective connection is asynchronous and will be managed by the thread
+        """
+        with self.lock:
+            # paho mqtt client has a very crazy interface so we cannot know
+            # for sure the internal state (being it 'connecting' or 'new'
+            # or whatever) so we just try to be as 'safe' as possible given
+            # its behavior
+            self.loop_stop()  # in case we're connected or connecting or disconnecting
+            self.connect_async(host, port)
+            self._stateext = self.STATE_CONNECTING
+            self.loop_start()
+
+    def safe_disconnect(self):
+        """
+        Safe to be called from any thread (except the mqtt one)
+        This is non-blocking and the thread will just die
+        by itself.
+        """
+        with self.lock:
+            self._stateext = self.STATE_DISCONNECTING
+            if mqtt.MQTT_ERR_NO_CONN == self.disconnect():
+                self._stateext = self.STATE_DISCONNECTED
+
+    def _mqttc_connect(self, client: mqtt.Client, userdata, rc, other):
+        self._stateext = self.STATE_CONNECTED
+        result, mid = client.subscribe([(self.topic_push, 1), (self.topic_command, 1)])
         if result != mqtt.MQTT_ERR_SUCCESS:
             LOGGER.error("Failed to subscribe to topics")
 
-    #def _mqtt_subscribe(self, client: mqtt.Client, userdata, mid, granted_qos):
-    #    pass
+    def _mqttc_disconnect(self, client: mqtt.Client, userdata, rc):
+        self._stateext = (
+            self.STATE_DISCONNECTED
+            if self._stateext in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
+            else self.STATE_RECONNECTING
+        )

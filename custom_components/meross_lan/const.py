@@ -51,14 +51,24 @@ CONF_TRACE_FILENAME: Final = "{}-{}.csv"
 CONF_TIMESTAMP: Final = mc.KEY_TIMESTAMP
 
 
-class DeviceConfigType(TypedDict, total=False):
+class DeviceConfigTypeMinimal(TypedDict):
+    """
+    define required keys
+    """
     device_id: str
     payload: dict
+
+class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
+    """
+    Our device config allows for optional keys so total=False
+    allows thid in TypedDict: Nevertheless some keys are mandatory
+    and defined though DeviceConfigTypeMinimal
+    """
     key: str | None
     cloud_key: str | None
     profile_id: str | None
-    host: str | None
-    protocol: str | None
+    host: str
+    protocol: str
     polling_period: int | None
     trace: int | float | None
     trace_timeout: int | None
@@ -98,3 +108,4 @@ PARAM_TIMESTAMP_TOLERANCE = 5
 # used to delay the iteration of abilities while tracing
 PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
 PARAM_CLOUDAPI_QUERY_DEVICELIST_TIMEOUT = 86400
+PARAM_CLOUDAPI_DELAYED_SETUP_TIMEOUT = 60

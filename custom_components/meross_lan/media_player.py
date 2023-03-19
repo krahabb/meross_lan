@@ -159,8 +159,8 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
 class Mp3Mixin(
     LightMixin if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
         try:
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here

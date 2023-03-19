@@ -464,8 +464,8 @@ class LightMixin(
 
     light_effect_map: dict[object, str] = {}  # map effect.Id to effect.Name
 
-    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor: MerossDeviceDescriptor, entry):
+        super().__init__(descriptor, entry)
 
         if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in descriptor.ability:
             self.polling_dictionary[

@@ -41,7 +41,13 @@ from . import meross_entity as me
 from .binary_sensor import MLBinarySensor
 from .number import MLConfigNumber
 from .switch import MLSwitch
-from .helpers import LOGGER, clamp, get_entity_last_state, versiontuple
+from .helpers import (
+    LOGGER,
+    clamp,
+    get_entity_last_state,
+    schedule_callback,
+    versiontuple,
+)
 from .const import (
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
@@ -52,7 +58,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from .meross_device import MerossDevice
 
-STATE_MAP = { 0: STATE_CLOSED, 1: STATE_OPEN }
+STATE_MAP = {0: STATE_CLOSED, 1: STATE_OPEN}
 
 POSITION_FULLY_CLOSED = 0
 POSITION_FULLY_OPENED = 100
@@ -86,7 +92,9 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
 
     def __init__(self, cover: MLGarage):
         self._attr_extra_state_attributes = {}
-        super().__init__(cover.device, cover.channel, 'problem', self.DeviceClass.PROBLEM)
+        super().__init__(
+            cover.device, cover.channel, "problem", self.DeviceClass.PROBLEM
+        )
 
     @property
     def available(self):
@@ -101,9 +109,7 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
         self.update_onoff(0)
 
     def update_timeout(self, target_state):
-        self._attr_extra_state_attributes[
-            EXTRA_ATTR_TRANSITION_TARGET
-        ] = target_state
+        self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_TARGET] = target_state
         self._attr_extra_state_attributes[
             EXTRA_ATTR_TRANSITION_TIMEOUT
         ] = now().isoformat()
@@ -142,6 +148,7 @@ class MLGarageConfigNumber(MLConfigNumber):
     """
     Helper entity to configure MSG open/close duration
     """
+
     device: GarageMixin
     # these are ok for 2 of the 3 config numbers
     # customize those when instantiating
@@ -187,13 +194,20 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
     entities will therefore be just 'emulated' in meross_lan and
     the state is managed inside this component
     """
+
     multiplier = 1
 
     def __init__(self, cover: MLGarage, key: str):
-        super().__init__(cover.device, cover.channel, key, (
-            PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
-            + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
-        ) / 2)
+        super().__init__(
+            cover.device,
+            cover.channel,
+            key,
+            (
+                PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
+                + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
+            )
+            / 2,
+        )
 
     @property
     def available(self):
@@ -206,7 +220,7 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
         await super().async_added_to_hass()
         try:
             if last_state := await get_entity_last_state(self.hass, self.entity_id):
-                self._attr_state = float(last_state.state) # type: ignore
+                self._attr_state = float(last_state.state)  # type: ignore
         except Exception as e:
             self.device.log(
                 WARNING,
@@ -270,7 +284,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         """
         try:
             if last_state := await get_entity_last_state(self.hass, self.entity_id):
-                _attr = last_state.attributes # type: ignore
+                _attr = last_state.attributes  # type: ignore
                 if EXTRA_ATTR_TRANSITION_DURATION in _attr:
                     # restore anyway besides PARAM_RESTORESTATE_TIMEOUT
                     # since this is no harm and unlikely to change
@@ -295,7 +309,6 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         await self.async_request_position(0)
 
     async def async_request_position(self, open_request: int):
-
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             """
             example payload in SETACK:
@@ -307,7 +320,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             """
             if acknowledge:
                 p_state = payload.get(mc.KEY_STATE, {})
-                if p_state.get(mc.KEY_EXECUTE) and open_request != p_state.get(mc.KEY_OPEN):
+                if p_state.get(mc.KEY_EXECUTE) and open_request != p_state.get(
+                    mc.KEY_OPEN
+                ):
                     self._cancel_transition()
                     self._open_request = open_request
                     self._transition_start = time()
@@ -315,28 +330,34 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                     if open_request:
                         if self.doorOpenDuration_number is None:
                             # should really not happen since the GarageMixin already set this
-                            self.doorOpenDuration_number = MLGarageOpenCloseDurationNumber(
-                                self, mc.KEY_DOOROPENDURATION
+                            self.doorOpenDuration_number = (
+                                MLGarageOpenCloseDurationNumber(
+                                    self, mc.KEY_DOOROPENDURATION
+                                )
                             )
                         timeout = self.doorOpenDuration_number.native_value
                     else:
                         if self.doorCloseDuration_number is None:
                             # should really not happen since the GarageMixin already set this
-                            self.doorCloseDuration_number = MLGarageOpenCloseDurationNumber(
-                                self, mc.KEY_DOORCLOSEDURATION
+                            self.doorCloseDuration_number = (
+                                MLGarageOpenCloseDurationNumber(
+                                    self, mc.KEY_DOORCLOSEDURATION
+                                )
                             )
                         timeout = self.doorCloseDuration_number.native_value
                     # check the timeout 1 sec after expected to account
                     # for delays in communication
-                    self._transition_end_unsub = self.device.api.schedule_callback(
-                        timeout + 1, self._transition_end_callback # type: ignore
+                    self._transition_end_unsub = schedule_callback(
+                        self.hass,
+                        timeout + 1,  # type: ignore
+                        self._transition_end_callback,
                     )
 
         await self.device.async_request(
             mc.NS_APPLIANCE_GARAGEDOOR_STATE,
             mc.METHOD_SET,
             {mc.KEY_STATE: {mc.KEY_CHANNEL: self.channel, mc.KEY_OPEN: open_request}},
-            _ack_callback
+            _ack_callback,
         )
 
     async def async_will_remove_from_hass(self):
@@ -365,8 +386,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             if self._open_request != _open:
                 # keep monitoring the transition in less than 1 sec
                 if self._transition_unsub is None:
-                    self._transition_unsub = self.device.api.schedule_callback(
-                        .9, self._transition_callback
+                    self._transition_unsub = schedule_callback(
+                        self.hass, 0.9, self._transition_callback
                     )
             else:
                 # we can monitor the (sampled) exact time when the garage closes to
@@ -379,8 +400,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                 if not _open:
                     transition_duration = epoch - self._transition_start
                     # autoregression filtering applying 20% of last updated sample
-                    self._update_transition_duration(int(
-                        (4 * self._transition_duration + transition_duration) / 5)
+                    self._update_transition_duration(
+                        int((4 * self._transition_duration + transition_duration) / 5)
                     )
                     self._cancel_transition()
                     self.update_state(STATE_CLOSED)
@@ -431,17 +452,17 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
             # or the garage didnt close at all
-            transition_duration = time() - self._transition_start # type: ignore
+            transition_duration = time() - self._transition_start  # type: ignore
             if self._transition_duration < transition_duration:
                 self._update_transition_duration(self._transition_duration + 1)
 
         if self._open_request == self._open:
             # transition correctly ended: set the state according to our last known hardware status
             self._timeout_binary_sensor.update_ok()
-            self.update_state(STATE_MAP.get(self._open_request)) # type: ignore
+            self.update_state(STATE_MAP.get(self._open_request))  # type: ignore
         else:
             # let the current opening/closing state be updated only on subsequent poll
-            self._timeout_binary_sensor.update_timeout(STATE_MAP.get(self._open_request)) # type: ignore
+            self._timeout_binary_sensor.update_timeout(STATE_MAP.get(self._open_request))  # type: ignore
 
         self._open_request = None
         self._transition_start = None
@@ -450,13 +471,13 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         self._transition_duration = clamp(
             transition_duration,
             PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
-            PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
+            PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
         )
         self._attr_extra_state_attributes[
             EXTRA_ATTR_TRANSITION_DURATION
         ] = self._transition_duration
-        #self.doorCloseDuration_number.update_native_value(self._transition_duration)
-        #self.doorOpenDuration_number.update_native_value(self._transition_duration)
+        # self.doorCloseDuration_number.update_native_value(self._transition_duration)
+        # self.doorOpenDuration_number.update_native_value(self._transition_duration)
 
 
 class GarageMixin(
@@ -466,8 +487,8 @@ class GarageMixin(
     _need_build_doorOpenDuration = True
     _need_build_doorCloseDuration = True
 
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
         if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in descriptor.ability:
             self.garageDoor_config = {}
             self.config_signalDuration = MLGarageConfigNumber(
@@ -480,9 +501,9 @@ class GarageMixin(
                 mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
             ]
         if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in descriptor.ability:
-            self.polling_dictionary[mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG] = mc.PAYLOAD_GET[
+            self.polling_dictionary[
                 mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
-            ]
+            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG]
 
     def _init_garageDoor(self, payload: dict):
         MLGarage(self, payload[mc.KEY_CHANNEL])
@@ -493,7 +514,7 @@ class GarageMixin(
     def _handle_Appliance_GarageDoor_Config(self, header: dict, payload: dict):
         # {"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
         # no channel here ?!..need to parse the manual way
-        if isinstance(payload := payload.get(mc.KEY_CONFIG), dict): # type: ignore
+        if isinstance(payload := payload.get(mc.KEY_CONFIG), dict):  # type: ignore
             self.garageDoor_config.update(payload)
 
             if mc.KEY_SIGNALDURATION in payload:
@@ -513,18 +534,24 @@ class GarageMixin(
                     )
                 except AttributeError:
                     self.config_doorOpenDuration = MLGarageConfigNumber(
-                        self, None, mc.KEY_DOOROPENDURATION,
-                        payload[mc.KEY_DOOROPENDURATION] / 1000
+                        self,
+                        None,
+                        mc.KEY_DOOROPENDURATION,
+                        payload[mc.KEY_DOOROPENDURATION] / 1000,
                     )
                     for entity in self.entities.values():
                         if isinstance(entity, MLGarage):
-                            entity.doorOpenDuration_number = self.config_doorOpenDuration
+                            entity.doorOpenDuration_number = (
+                                self.config_doorOpenDuration
+                            )
             elif self._need_build_doorOpenDuration:
                 self._need_build_doorOpenDuration = False
                 for entity in list(self.entities.values()):
                     if isinstance(entity, MLGarage):
-                        entity.doorOpenDuration_number = MLGarageOpenCloseDurationNumber(
-                            entity, mc.KEY_DOOROPENDURATION
+                        entity.doorOpenDuration_number = (
+                            MLGarageOpenCloseDurationNumber(
+                                entity, mc.KEY_DOOROPENDURATION
+                            )
                         )
 
             if mc.KEY_DOORCLOSEDURATION in payload:
@@ -536,18 +563,24 @@ class GarageMixin(
                     )
                 except AttributeError:
                     self.config_doorCloseDuration = MLGarageConfigNumber(
-                        self, None, mc.KEY_DOORCLOSEDURATION,
-                        payload[mc.KEY_DOORCLOSEDURATION] / 1000
+                        self,
+                        None,
+                        mc.KEY_DOORCLOSEDURATION,
+                        payload[mc.KEY_DOORCLOSEDURATION] / 1000,
                     )
                     for entity in self.entities.values():
                         if isinstance(entity, MLGarage):
-                            entity.doorCloseDuration_number = self.config_doorCloseDuration
+                            entity.doorCloseDuration_number = (
+                                self.config_doorCloseDuration
+                            )
             elif self._need_build_doorCloseDuration:
                 self._need_build_doorCloseDuration = False
                 for entity in list(self.entities.values()):
                     if isinstance(entity, MLGarage):
-                        entity.doorCloseDuration_number = MLGarageOpenCloseDurationNumber(
-                            entity, mc.KEY_DOORCLOSEDURATION
+                        entity.doorCloseDuration_number = (
+                            MLGarageOpenCloseDurationNumber(
+                                entity, mc.KEY_DOORCLOSEDURATION
+                            )
                         )
 
     def _handle_Appliance_GarageDoor_MultipleConfig(self, header: dict, payload: dict):
@@ -561,11 +594,12 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
     """
     MRS100 SHUTTER ENTITY
     """
+
     PLATFORM = cover.DOMAIN
 
     device: RollerShutterMixin
 
-    def __init__(self, device: 'MerossDevice', channel: object):
+    def __init__(self, device: "MerossDevice", channel: object):
         super().__init__(device, channel, None, DEVICE_CLASS_SHUTTER)
         self._number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self._number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
@@ -680,23 +714,22 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         await self.async_request_position(-1)
 
     def request_position(self, position: int, timeout: float | None = None):
-        self.hass.async_create_task(
-            self.async_request_position(position, timeout)
-        )
+        self.hass.async_create_task(self.async_request_position(position, timeout))
 
     async def async_request_position(self, position: int, timeout: float | None = None):
-
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
                 if timeout is not None:
                     self._position_endtime = time() + timeout
-                    self._transition_end_unsub = self.device.api.schedule_callback(
-                        timeout, self._transition_end_callback
+                    self._transition_end_unsub = schedule_callback(
+                        self.hass, timeout, self._transition_end_callback
                     )
                 # when requesting a position we're not setting up a _transition_callback yet
                 # but we wait for _parse_state to actually decide if there's movement or not
                 # and then start following the transition
-                self.device.request(*get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE))
+                self.device.request(
+                    *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
+                )
 
         self._transition_cancel()
         await self.device.async_request(
@@ -751,7 +784,9 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                             self._async_write_ha_state()
 
     def _parse_state(self, payload: dict):
-        self.device.request(*get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION))
+        self.device.request(
+            *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
+        )
         state = payload.get(mc.KEY_STATE)
         epoch = time()
         if self._position_native_isgood:
@@ -770,17 +805,13 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 self._attr_current_cover_position = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)  # type: ignore
                 if self._attr_current_cover_position > POSITION_FULLY_OPENED:
                     self._attr_current_cover_position = POSITION_FULLY_OPENED
-                if self._hass_connected and (
-                    state == mc.ROLLERSHUTTER_STATE_OPENING
-                ):
+                if self._hass_connected and (state == mc.ROLLERSHUTTER_STATE_OPENING):
                     self._async_write_ha_state()
             elif self._attr_state == STATE_CLOSING:
                 self._attr_current_cover_position = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)  # type: ignore
                 if self._attr_current_cover_position < POSITION_FULLY_CLOSED:
                     self._attr_current_cover_position = POSITION_FULLY_CLOSED
-                if self._hass_connected and (
-                    state == mc.ROLLERSHUTTER_STATE_CLOSING
-                ):
+                if self._hass_connected and (state == mc.ROLLERSHUTTER_STATE_CLOSING):
                     self._async_write_ha_state()
 
             if state == mc.ROLLERSHUTTER_STATE_OPENING:
@@ -839,8 +870,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     @callback
     def _transition_callback(self):
-        self._transition_unsub = self.device.api.schedule_callback(
-            1, self._transition_callback
+        self._transition_unsub = schedule_callback(
+            self.hass, 1, self._transition_callback
         )
         self.device.request(*get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE))
 
@@ -901,8 +932,8 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
 class RollerShutterMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
         try:
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here

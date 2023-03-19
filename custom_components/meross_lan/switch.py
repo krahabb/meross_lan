@@ -42,8 +42,8 @@ class MLSwitch(me.MerossToggle, switch.SwitchEntity):
 class ToggleXMixin(
     me.MerossDevice if typing.TYPE_CHECKING else object
 ):
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
         # we build switches here after everything else have been
         # setup since the togglex verb might refer to a more specialized
         # entity than switches
@@ -79,8 +79,8 @@ class ToggleXMixin(
 class ToggleMixin(
     me.MerossDevice if typing.TYPE_CHECKING else object
 ):
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
         # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
         # but have 'control' and the toggle payload looks like not carrying 'channel'
         p_control = descriptor.all.get(mc.KEY_CONTROL)

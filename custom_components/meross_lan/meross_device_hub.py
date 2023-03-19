@@ -10,21 +10,19 @@ from .merossclient import (
     get_productnameuuid,
 )
 from .meross_device import MerossDevice
+from .meross_profile import ApiProfile
 from .sensor import MLSensor
 from .climate import MtsClimate
 from .binary_sensor import MLBinarySensor
 from .number import MLHubAdjustNumber
 from .switch import MLSwitch
 from .calendar import MLCalendar
-from .helpers import LOGGER
+from .helpers import LOGGER, schedule_async_callback
 from .const import (
     DOMAIN,
     PARAM_HEARTBEAT_PERIOD,
     PARAM_HUBBATTERY_UPDATE_PERIOD,
 )
-
-if typing.TYPE_CHECKING:
-    from .merossclient import MerossDeviceDescriptor
 
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
@@ -52,8 +50,8 @@ class MerossDeviceHub(MerossDevice):
     _lastupdate_sensor = None
     _lastupdate_mts100 = None
 
-    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
         self.subdevices: dict[object, MerossSubDevice] = {}
         # invoke platform(s) async_setup_entry
         # in order to be able to eventually add entities when they 'pop up'
@@ -148,7 +146,7 @@ class MerossDeviceHub(MerossDevice):
             # this is true when subdevice is offline and hub has no recent info
             # we'll check our device registry for luck
             try:
-                hassdevice = device_registry.async_get(self.hass).async_get_device(
+                hassdevice = device_registry.async_get(ApiProfile.hass).async_get_device(
                     identifiers={(DOMAIN, p_subdevice[mc.KEY_ID])}
                 )
                 if hassdevice is None:
@@ -221,9 +219,9 @@ class MerossDeviceHub(MerossDevice):
                 # also, we're not registering an unsub and we're not checking
                 # for redundant invocations (playing a bit unsafe that is)
                 async def _async_setup_again():
-                    await self.hass.config_entries.async_reload(self.entry_id)
+                    await ApiProfile.hass.config_entries.async_reload(self.entry_id)
 
-                self.api.schedule_async_callback(15, _async_setup_again)
+                schedule_async_callback(ApiProfile.hass, 15, _async_setup_again)
 
     def _build_subdevices_payload(self, types: tuple, count: int):
         """
@@ -328,15 +326,15 @@ class MerossSubDevice:
         self._online = False
         self.hub = hub
         hub.subdevices[_id] = self
-        self.device_info_id = { "identifiers": {(DOMAIN, _id)} }
+        self.device_info_id = {"identifiers": {(DOMAIN, _id)}}
         try:
-            device_registry.async_get(hub.hass).async_get_or_create(
+            device_registry.async_get(ApiProfile.hass).async_get_or_create(
                 config_entry_id=hub.entry_id,
                 via_device=next(iter(hub.device_info_id["identifiers"])),
                 manufacturer=mc.MANUFACTURER,
                 name=get_productnameuuid(_type, str(_id)),
                 model=_type,
-                **self.device_info_id
+                **self.device_info_id,
             )
         except:
             pass

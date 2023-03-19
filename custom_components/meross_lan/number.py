@@ -216,8 +216,8 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 class ScreenBrightnessMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
 
         try:
             # the 'ScreenBrightnessMixin' actually doesnt have a clue of how many  entities

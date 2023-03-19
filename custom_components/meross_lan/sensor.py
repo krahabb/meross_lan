@@ -30,8 +30,8 @@ from .const import (
     PARAM_SIGNAL_UPDATE_PERIOD,
 )
 from .helpers import StrEnum, get_entity_last_state_available
-from .merossclient import MerossDeviceDescriptor, get_default_arguments
-from .merossclient import const as mc  # mEROSS cONST
+from .meross_profile import ApiProfile
+from .merossclient import const as mc, get_default_arguments  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -39,7 +39,6 @@ if typing.TYPE_CHECKING:
 
     from .meross_device import MerossDevice
     from .meross_device_hub import MerossSubDevice
-
 
 try:
     SensorDeviceClass = sensor.SensorDeviceClass  # type: ignore
@@ -171,7 +170,7 @@ class ProtocolSensor(MLSensor):
 
     def set_unavailable(self):
         self._attr_state = self.STATE_DISCONNECTED
-        if self.device._mqtt_profile is None:
+        if self.device._mqtt_connection is None:
             self._attr_extra_state_attributes = {}
         else:
             self._attr_extra_state_attributes = {
@@ -205,7 +204,7 @@ class ProtocolSensor(MLSensor):
     # and the full state will be flushed by the update_connected call
     # and call them 'after' any eventual disconnection for the same reason
 
-    def update_connected_attr(self, attrname):
+    def update_connected_attr(self, attrname: str):
         if self._attr_extra_state_attributes.get(attrname) is self.STATE_INACTIVE:
             # this actually means the device is already online and
             # conf_protocol is CONF_PROTOCOL_AUTO
@@ -324,8 +323,8 @@ class ElectricityMixin(
     # This is actually reset in ConsumptionMixin
     _consumption_estimate = 0.0
 
-    def __init__(self, api, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
         self._sensor_power = MLSensor.build_for_device(self, MLSensor.DeviceClass.POWER)
         self._sensor_current = MLSensor.build_for_device(
             self, MLSensor.DeviceClass.CURRENT
@@ -393,7 +392,7 @@ class ElectricityMixin(
                 tzinfo=dt_util.DEFAULT_TIME_ZONE,
             )
             self._cancel_energy_reset = async_track_point_in_time(
-                self.api.hass, self._energy_reset, next_reset
+                ApiProfile.hass, self._energy_reset, next_reset
             )
             self.log(
                 DEBUG,
@@ -533,8 +532,8 @@ class ConsumptionMixin(
     # instance value shared with ElectricityMixin
     _consumption_estimate = 0.0
 
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
         self._sensor_consumption: ConsumptionSensor = ConsumptionSensor(self)
 
     async def async_shutdown(self):
@@ -718,8 +717,8 @@ class RuntimeMixin(
     _sensor_runtime: MLSensor
     _lastupdate_runtime = 0
 
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
         # DEVICE_CLASS_SIGNAL_STRENGTH is now 'forcing' dB or dBm as unit
         # so we drop the device_class (none) but we let the 'entitykey' parameter
         # to keep the same value so the entity id inside HA remains stable (#239)
