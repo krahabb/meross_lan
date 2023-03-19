@@ -101,10 +101,10 @@ class MerossApi(MQTTConnection, ApiProfile):
         profile_id = credentials.userid
         if profile_id not in api.profiles:
             profile = MerossCloudProfile(credentials)
+            await profile.async_start()
         else:
             profile = api.profiles[profile_id]
             await profile.async_update_credentials(credentials)
-        await profile.async_check_query_devices()
         api.schedule_save_store()
         return profile
 
@@ -217,7 +217,7 @@ class MerossApi(MQTTConnection, ApiProfile):
             if data := await self.store.async_load():
                 for profile_data in data.get("profiles", []):
                     profile = MerossCloudProfile(profile_data)
-                    profile.schedule_setup()
+                    profile.schedule_start()
 
             if MEROSSDEBUG:
                 for dummy_profile in MEROSSDEBUG.cloud_profiles:
@@ -535,7 +535,11 @@ async def async_setup(hass: HomeAssistant, config: dict):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up Meross IoT local LAN from a config entry."""
-    LOGGER.debug("async_setup_entry { unique_id: %s, entry_id: %s }", entry.unique_id, entry.entry_id)
+    LOGGER.debug(
+        "async_setup_entry { unique_id: %s, entry_id: %s }",
+        entry.unique_id,
+        entry.entry_id,
+    )
     api = MerossApi.get(hass)
 
     await api.async_load_store()

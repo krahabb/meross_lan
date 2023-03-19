@@ -97,6 +97,7 @@ class MerossCloudCredentials(dict):
 class DeviceInfoType(typing.TypedDict, total=False):
     uuid: str
     domain: str
+    reservedDomain: str
 
 
 """
