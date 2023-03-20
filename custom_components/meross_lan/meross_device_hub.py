@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+import weakref
 
 from homeassistant.helpers import device_registry
 
@@ -308,6 +309,9 @@ class MerossDeviceHub(MerossDevice):
 
 
 class MerossSubDevice(Loggable):
+
+    _deviceentry = None  # weakly cached entry to the device registry
+
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
         self.id = _id = p_digest[mc.KEY_ID]
         self.type = _type
@@ -315,15 +319,17 @@ class MerossSubDevice(Loggable):
         self._online = False
         self.hub = hub
         hub.subdevices[_id] = self
-        self.device_info_id = {"identifiers": {(DOMAIN, _id)}}
+        self.deviceentry_id = {"identifiers": {(DOMAIN, _id)}}
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
-            device_registry.async_get(ApiProfile.hass).async_get_or_create(
-                config_entry_id=hub.entry_id,
-                via_device=next(iter(hub.device_info_id["identifiers"])),
-                manufacturer=mc.MANUFACTURER,
-                name=get_productnameuuid(_type, str(_id)),
-                model=_type,
-                **self.device_info_id,
+            self._deviceentry = weakref.ref(
+                device_registry.async_get(ApiProfile.hass).async_get_or_create(
+                    config_entry_id=hub.entry_id,
+                    via_device=next(iter(hub.deviceentry_id["identifiers"])),
+                    manufacturer=mc.MANUFACTURER,
+                    name=get_productnameuuid(_type, str(_id)),
+                    model=_type,
+                    **self.deviceentry_id,
+                )
             )
 
         self.sensor_battery = self.build_sensor(MLSensor.DeviceClass.BATTERY)
@@ -355,8 +361,24 @@ class MerossSubDevice(Loggable):
         return self._online
 
     @property
-    def name(self):
-        return get_productnameuuid(self.type, self.id)
+    def name(self) -> str:
+        """
+        returns a proper (friendly) device name for logging purposes
+        """
+        deviceentry = self._deviceentry and self._deviceentry()
+        if deviceentry is None:
+            deviceentry = device_registry.async_get(ApiProfile.hass).async_get_device(
+                **self.deviceentry_id
+            )
+            if deviceentry is None:
+                return get_productnameuuid(self.type, self.id)
+            self._deviceentry = weakref.ref(deviceentry)
+
+        return (
+            deviceentry.name_by_user
+            or deviceentry.name
+            or get_productnameuuid(self.type, self.id)
+        )
 
     def _setonline(self):
         # here we should request updates for all entities but

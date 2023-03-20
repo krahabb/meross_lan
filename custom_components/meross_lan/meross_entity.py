@@ -137,8 +137,8 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         # device/subdevice level so we just pass identifiers
         # to reduce overload
         if (subdevice := self.subdevice) is not None:
-            return subdevice.device_info_id
-        return self.device.device_info_id
+            return subdevice.deviceentry_id
+        return self.device.deviceentry_id
 
     @property
     def entity_category(self):
@@ -162,14 +162,13 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             # newer api...return just the 'local' name
             return self._attr_name
         # compatibility layer....
-        if (subdevice := self.subdevice) is not None:
-            if self._attr_name is not None:
-                return f"{subdevice.name} - {self._attr_name}"
-            else:
-                return subdevice.name
+        if (subdevice := self.subdevice) is None:
+            devname = self.device.name
+        else:
+            devname = subdevice.name
         if self._attr_name is not None:
-            return f"{self.device.descriptor.productname} - {self._attr_name}"
-        return self.device.descriptor.productname
+            return f"{devname} - {self._attr_name}"
+        return devname
 
     @property
     def should_poll(self):
