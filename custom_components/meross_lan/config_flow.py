@@ -308,14 +308,15 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
             if _device_config is not None:
                 await self._async_set_device_config(_device_config, _descriptor)  # type: ignore
 
-        except Exception as error:
+        except Exception as exception:
             if LOGGER.isEnabledFor(DEBUG):
                 LOGGER.debug(
-                    "Error (%s) identifying meross device (host:%s)",
-                    str(error),
+                    "%s(%s) identifying meross device (host:%s)",
+                    exception.__class__.__name__,
+                    str(exception),
                     host,
                 )
-            if isinstance(error, AbortFlow):
+            if isinstance(exception, AbortFlow):
                 # we might have 'correctly' identified an already configured entry
                 return self.async_abort(reason="already_configured")
             # forgive and continue if we cant discover the device...let the user work it out

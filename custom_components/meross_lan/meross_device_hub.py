@@ -1,29 +1,24 @@
 from __future__ import annotations
+
 import typing
-from logging import WARNING
 
 from homeassistant.helpers import device_registry
 
-from .merossclient import (
-    const as mc,  # mEROSS cONST
+from .binary_sensor import MLBinarySensor
+from .calendar import MLCalendar
+from .climate import MtsClimate
+from .const import DOMAIN, PARAM_HEARTBEAT_PERIOD, PARAM_HUBBATTERY_UPDATE_PERIOD
+from .helpers import Loggable, schedule_async_callback
+from .meross_device import MerossDevice
+from .meross_profile import ApiProfile
+from .merossclient import (  # mEROSS cONST
+    const as mc,
     get_default_arguments,
     get_productnameuuid,
 )
-from .meross_device import MerossDevice
-from .meross_profile import ApiProfile
-from .sensor import MLSensor
-from .climate import MtsClimate
-from .binary_sensor import MLBinarySensor
 from .number import MLHubAdjustNumber
+from .sensor import MLSensor
 from .switch import MLSwitch
-from .calendar import MLCalendar
-from .helpers import LOGGER, schedule_async_callback
-from .const import (
-    DOMAIN,
-    PARAM_HEARTBEAT_PERIOD,
-    PARAM_HUBBATTERY_UPDATE_PERIOD,
-)
-
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
     {
@@ -62,29 +57,25 @@ class MerossDeviceHub(MerossDevice):
         self.platforms[MLHubAdjustNumber.PLATFORM] = None
         self.platforms[MLSwitch.PLATFORM] = None
         self.platforms[MLCalendar.PLATFORM] = None
-        try:
-            # REMOVE
-            global TRICK
-            if TRICK:
-                TRICK = False
-                MS100SubDevice(
-                    self,
-                    {
-                        "id": "120027D281CF",
-                        "status": 1,
-                        "onoff": 0,
-                        "lastActiveTime": 1638019438,
-                        "ms100": {
-                            "latestTime": 1638019438,
-                            "latestTemperature": 224,
-                            "latestHumidity": 460,
-                            "voltage": 2766,
-                        },
+
+        # REMOVE
+        global TRICK
+        if TRICK:
+            TRICK = False
+            MS100SubDevice(
+                self,
+                {
+                    "id": "120027D281CF",
+                    "status": 1,
+                    "onoff": 0,
+                    "lastActiveTime": 1638019438,
+                    "ms100": {
+                        "latestTime": 1638019438,
+                        "latestTemperature": 224,
+                        "latestHumidity": 460,
+                        "voltage": 2766,
                     },
-                )
-        except Exception as e:
-            LOGGER.warning(
-                "MerossDeviceHub(%s) init exception:(%s)", self.device_id, str(e)
+                },
             )
 
     def _init_hub(self, payload: dict):
@@ -146,9 +137,9 @@ class MerossDeviceHub(MerossDevice):
             # this is true when subdevice is offline and hub has no recent info
             # we'll check our device registry for luck
             try:
-                hassdevice = device_registry.async_get(ApiProfile.hass).async_get_device(
-                    identifiers={(DOMAIN, p_subdevice[mc.KEY_ID])}
-                )
+                hassdevice = device_registry.async_get(
+                    ApiProfile.hass
+                ).async_get_device(identifiers={(DOMAIN, p_subdevice[mc.KEY_ID])})
                 if hassdevice is None:
                     return None
                 _type = hassdevice.model
@@ -207,9 +198,7 @@ class MerossDeviceHub(MerossDevice):
                 self.needsave = True
                 for p_id in subdevices_actual:
                     subdevice = self.subdevices[p_id]
-                    self.log(
-                        WARNING,
-                        0,
+                    self.warning(
                         "removing subdevice %s(%s) - configuration will be reloaded in 15 sec",
                         subdevice.type,
                         p_id,
@@ -318,7 +307,7 @@ class MerossDeviceHub(MerossDevice):
                         break
 
 
-class MerossSubDevice:
+class MerossSubDevice(Loggable):
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
         self.id = _id = p_digest[mc.KEY_ID]
         self.type = _type
@@ -327,7 +316,7 @@ class MerossSubDevice:
         self.hub = hub
         hub.subdevices[_id] = self
         self.device_info_id = {"identifiers": {(DOMAIN, _id)}}
-        try:
+        with self.exception_warning("DeviceRegistry.async_get_or_create"):
             device_registry.async_get(ApiProfile.hass).async_get_or_create(
                 config_entry_id=hub.entry_id,
                 via_device=next(iter(hub.device_info_id["identifiers"])),
@@ -336,13 +325,21 @@ class MerossSubDevice:
                 model=_type,
                 **self.device_info_id,
             )
-        except:
-            pass
 
         self.sensor_battery = self.build_sensor(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
         self.switch_togglex = None
+
+    def log(self, level: int, msg: str, *args, **kwargs):
+        self.hub.log(
+            level, f"{self.__class__.__name__}({self.name}) {msg}", *args, **kwargs
+        )
+
+    def warning(self, msg: str, *args, **kwargs):
+        self.hub.warning(
+            f"{self.__class__.__name__}({self.name}) {msg}", *args, **kwargs
+        )
 
     def build_sensor(self, device_class: MLSensor.DeviceClass):
         return MLSensor(self.hub, self.id, str(device_class), device_class, self)

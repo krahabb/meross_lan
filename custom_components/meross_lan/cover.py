@@ -1,16 +1,17 @@
 from __future__ import annotations
-import typing
+
+from logging import DEBUG
 from time import time
-from logging import DEBUG, WARNING
+import typing
 
 from homeassistant.components import cover
 from homeassistant.components.cover import (
-    ATTR_POSITION,
     ATTR_CURRENT_POSITION,
-    STATE_OPEN,
-    STATE_OPENING,
+    ATTR_POSITION,
     STATE_CLOSED,
     STATE_CLOSING,
+    STATE_OPEN,
+    STATE_OPENING,
 )
 
 try:
@@ -36,26 +37,21 @@ from homeassistant.const import TIME_SECONDS
 from homeassistant.core import callback
 from homeassistant.util.dt import now
 
-from .merossclient import const as mc, get_default_arguments
 from . import meross_entity as me
 from .binary_sensor import MLBinarySensor
-from .number import MLConfigNumber
-from .switch import MLSwitch
-from .helpers import (
-    LOGGER,
-    clamp,
-    get_entity_last_state,
-    schedule_callback,
-    versiontuple,
-)
 from .const import (
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
+from .helpers import clamp, get_entity_last_state, schedule_callback, versiontuple
+from .merossclient import const as mc, get_default_arguments
+from .number import MLConfigNumber
+from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
     from .meross_device import MerossDevice
 
 STATE_MAP = {0: STATE_CLOSED, 1: STATE_OPEN}
@@ -218,17 +214,9 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        try:
+        with self.exception_warning("restoring previous state"):
             if last_state := await get_entity_last_state(self.hass, self.entity_id):
                 self._attr_state = float(last_state.state)  # type: ignore
-        except Exception as e:
-            self.device.log(
-                WARNING,
-                14400,
-                "MLGarage(%s): error(%s) while trying to restore previous state",
-                self.name,
-                str(e),
-            )
 
     async def async_set_native_value(self, value: float):
         self.update_native_value(value)
@@ -282,7 +270,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         """
         we're trying to recover the '_transition_duration' from previous state
         """
-        try:
+        with self.exception_warning("restoring previous state"):
             if last_state := await get_entity_last_state(self.hass, self.entity_id):
                 _attr = last_state.attributes  # type: ignore
                 if EXTRA_ATTR_TRANSITION_DURATION in _attr:
@@ -293,14 +281,6 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                     self._attr_extra_state_attributes[
                         EXTRA_ATTR_TRANSITION_DURATION
                     ] = self._transition_duration
-        except Exception as e:
-            self.device.log(
-                WARNING,
-                14400,
-                "MLGarage(%s): error(%s) while trying to restore previous state",
-                self.name,
-                str(e),
-            )
 
     async def async_open_cover(self, **kwargs):
         await self.async_request_position(1)
@@ -649,7 +629,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         we're trying to recover the 'timed' position from previous state
         if it happens it wasn't updated too far in time
         """
-        try:
+        with self.exception_warning("restoring previous state"):
             if last_state := await get_entity_last_state(self.hass, self.entity_id):
                 _attr = last_state.attributes  # type: ignore
                 if EXTRA_ATTR_DURATION_OPEN in _attr:
@@ -664,14 +644,6 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     ] = self._signalClose
                 if ATTR_CURRENT_POSITION in _attr:
                     self._attr_current_cover_position = _attr[ATTR_CURRENT_POSITION]
-        except Exception as e:
-            self.device.log(
-                WARNING,
-                14400,
-                "MLRollerShutter(%s): error(%s) while trying to restore previous state",
-                self.name,
-                str(e),
-            )
 
     async def async_open_cover(self, **kwargs):
         await self.async_request_position(POSITION_FULLY_OPENED)
@@ -877,7 +849,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     @callback
     def _transition_end_callback(self):
-        self.device.log(DEBUG, 0, "MLRollerShutter(0): _transition_end_callback")
+        self.log(DEBUG, "_transition_end_callback")
         self._transition_end_unsub = None
         self.request_position(-1)
 
@@ -934,7 +906,7 @@ class RollerShutterMixin(
 ):  # pylint: disable=used-before-assignment
     def __init__(self, descriptor, entry):
         super().__init__(descriptor, entry)
-        try:
+        with self.exception_warning("RollerShutterMixin init"):
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here
             MLRollerShutter(self, 0)
@@ -944,11 +916,6 @@ class RollerShutterMixin(
             self.polling_dictionary[
                 mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG
             ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG]
-
-        except Exception as e:
-            LOGGER.warning(
-                "RollerShutterMixin(%s) init exception:(%s)", self.device_id, str(e)
-            )
 
     def _handle_Appliance_RollerShutter_Position(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_POSITION, payload.get(mc.KEY_POSITION))

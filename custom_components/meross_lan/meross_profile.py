@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from json import dumps as json_dumps, loads as json_loads
-from logging import DEBUG, INFO, WARNING
+from logging import DEBUG, INFO
 from time import time
 import typing
 
@@ -26,7 +26,7 @@ from .const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_UNAVAILABILITY_TIMEOUT,
 )
-from .helpers import LOGGER, ConfigEntriesHelper, LOGGER_trap, schedule_async_callback
+from .helpers import LOGGER, ConfigEntriesHelper, Loggable, schedule_async_callback
 from .merossclient import (
     MEROSSDEBUG,
     KeyType,
@@ -59,7 +59,7 @@ KEY_DEVICE_INFO = "deviceInfo"
 KEY_DEVICE_INFO_TIME = "deviceInfoTime"
 
 
-class ApiProfile:
+class ApiProfile(Loggable):
     """
     base class for both MerossCloudProfile and MerossApi
     allowing lightweight sharing of globals and defining
@@ -75,7 +75,7 @@ class ApiProfile:
     key: str | None
 
 
-class MQTTConnection:
+class MQTTConnection(Loggable):
     """
     Base abstract class representing a connection to an MQTT
     broker. Historically, MQTT support was only through MerossApi
@@ -104,6 +104,10 @@ class MQTTConnection:
         if self._unsub_discovery_callback is not None:
             self._unsub_discovery_callback.cancel()
             self._unsub_discovery_callback = None
+
+    @property
+    def logtag(self):
+        return f"{self.__class__.__name__}({self.id})"
 
     def attach(self, device: MerossDevice):
         assert device.device_id not in self.mqttdevices
@@ -144,14 +148,14 @@ class MQTTConnection:
         raise NotImplementedError()
 
     async def async_mqtt_message(self, msg):
-        try:
+        with self.exception_warning("async_mqtt_message"):
             message = json_loads(msg.payload)
             header = message[mc.KEY_HEADER]
             device_id = header[mc.KEY_FROM].split("/")[2]
             if LOGGER.isEnabledFor(DEBUG):
-                LOGGER.debug(
-                    "MQTTConnection(%s): MQTT RECV device_id:(%s) method:(%s) namespace:(%s)",
-                    self.id,
+                self.log(
+                    DEBUG,
+                    "MQTT RECV device_id:(%s) method:(%s) namespace:(%s)",
                     device_id,
                     header[mc.KEY_METHOD],
                     header[mc.KEY_NAMESPACE],
@@ -166,12 +170,10 @@ class MQTTConnection:
                 # we have the device registered but somehow it is not 'mqtt binded'
                 # either it's configuration is ONLY_HTTP or it is paired to the
                 # Meross cloud. In this case we shouldn't receive 'local' MQTT
-                LOGGER_trap(
-                    WARNING,
-                    14400,
-                    "MQTTConnection(%s): device(%s) not registered for MQTT handling",
-                    self.id,
+                self.warning(
+                    "device(%s) not registered for MQTT handling",
                     ApiProfile.devices[device_id].name,
+                    timeout=14400,
                 )
                 return
 
@@ -192,38 +194,35 @@ class MQTTConnection:
                 config_entry := config_entries_helper.get_config_entry(device_id)
             ) is not None:
                 # entry already present...skip discovery
-                LOGGER_trap(
+                self.log(
                     INFO,
-                    14400,
-                    "MQTTConnection(%s): ignoring discovery for already configured device_id: %s (ConfigEntry is %s)",
-                    self.id,
+                    "ignoring discovery for already configured device_id: %s (ConfigEntry is %s)",
                     device_id,
                     "disabled"
                     if config_entry.disabled_by is not None
                     else "ignored"
                     if config_entry.source == "ignore"
                     else "unknown",
+                    timeout=14400,  # type: ignore
                 )
                 return
 
             # also skip discovered integrations waiting in HA queue
             if config_entries_helper.get_config_flow(device_id) is not None:
-                LOGGER_trap(
+                self.log(
                     INFO,
-                    14400,
-                    "MQTTConnection(%s): ignoring discovery for device_id: %s (ConfigFlow is in progress)",
-                    self.id,
+                    "ignoring discovery for device_id: %s (ConfigFlow is in progress)",
                     device_id,
+                    timeout=14400,  # type: ignore
                 )
                 return
 
             key = self.profile.key
             if (replykey := get_replykey(header, key)) is not key:
-                LOGGER_trap(
-                    WARNING,
-                    300,
-                    "Meross discovery key error for device_id: %s",
+                self.warning(
+                    "discovery key error for device_id: %s",
                     device_id,
+                    timeout=300,
                 )
                 if key is not None:
                     return
@@ -253,13 +252,6 @@ class MQTTConnection:
                     CONF_KEY: key,
                     CONF_PROFILE_ID: self.profile.id,
                 },
-            )
-        except Exception as error:
-            LOGGER.error(
-                "MQTTConnection(%s) %s %s",
-                self.id,
-                type(error).__name__,
-                str(error),
             )
 
     @property
@@ -360,17 +352,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                 # this should run in an executor
                 if self.state_inactive:
                     if MEROSSDEBUG.mqtt_random_connect():
-                        LOGGER.debug(
-                            "MerossMQTTConnection(%s) random connect",
-                            self.id,
-                        )
+                        self.log(DEBUG, "random connect")
                         self.safe_connect(self._host, self._port)
                 else:
                     if MEROSSDEBUG.mqtt_random_disconnect():
-                        LOGGER.debug(
-                            "MerossMQTTConnection(%s) random disconnect",
-                            self.id,
-                        )
+                        self.log(DEBUG, "random disconnect")
                         self.safe_disconnect()
                 ApiProfile.hass.loop.call_soon_threadsafe(
                     async_call_later, ApiProfile.hass, 60, _random_disconnect
@@ -411,9 +397,9 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         messageid: str | None = None,
     ) -> asyncio.Future:
         def _publish():
-            LOGGER.debug(
-                "MerossMQTTConnection(%s): MQTT SEND device_id:(%s) method:(%s) namespace:(%s)",
-                self.id,
+            self.log(
+                DEBUG,
+                "MQTT SEND device_id:(%s) method:(%s) namespace:(%s)",
                 device_id,
                 method,
                 namespace,
@@ -481,6 +467,10 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
     def id(self):
         return self.userid
 
+    @property
+    def logtag(self):
+        return f"MerossCloudProfile({self.userid})"
+
     async def async_start(self):
         self._unsub_schedule_start = None
         if not await self.async_check_query_devices():
@@ -545,7 +535,6 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
                 )
 
     async def async_query_devices(self):
-        error = None
         try:
             if (token := self.token) is None:
                 return False
@@ -564,15 +553,10 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
         except CloudApiError as clouderror:
             if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
                 self.pop(mc.KEY_TOKEN, None)
-            error = clouderror
+            exception = clouderror
         except Exception as e:
-            error = e
-        LOGGER.warning(
-            "MerossCloudProfile(%s): %s %s in async_query_devices",
-            self.id,
-            type(error).__name__,
-            str(error),
-        )
+            exception = e
+        self.log_exception_warning(exception, "async_query_devices")
         return False
 
     def need_query_devices(self):
@@ -614,24 +598,22 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
         config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
         unknown_devs = []
         for uuid in devs.keys():
-            try:
+            with self.exception_warning(f"_check_updated_device_info: uuid={uuid}"):
                 if config_entries_helper.get_config_entry(uuid) is not None:
                     continue
                 if config_entries_helper.get_config_flow(uuid) is not None:
                     continue
                 # cloud conf has new devices
                 unknown_devs.append(uuid)
-            except:
-                pass
 
         for uuid in unknown_devs:
             device_info = devs[uuid]
             for hostkey in (mc.KEY_DOMAIN, mc.KEY_RESERVEDDOMAIN):
-                try:
+                with self.exception_warning(
+                    f"_check_updated_device_info: unknown uuid={uuid}"
+                ):
                     host = device_info[hostkey]
-                    mqttprofile = self._get_or_create_mqttconnection(
-                        host, 443
-                    )
+                    mqttprofile = self._get_or_create_mqttconnection(host, 443)
                     if mqttprofile.state_inactive:
                         mqttprofile.schedule_connect()
                     mqttprofile.get_or_set_discovering(uuid)
@@ -639,8 +621,6 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
                         # dirty trick to avoid looping when the 2 hosts
                         # are the same
                         break
-                except:
-                    pass
 
         # retrigger the poll at the right time since async_query_devices
         # might be called for whatever reason 'asynchronously'

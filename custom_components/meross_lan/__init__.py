@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from json import dumps as json_dumps, loads as json_loads
+from logging import DEBUG
 import typing
 
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -155,14 +156,14 @@ class MerossApi(MQTTConnection, ApiProfile):
                     )
                     return
                 if host is None:
-                    LOGGER.warning(
-                        "MerossApi: cannot execute service call on %s - missing MQTT connectivity or device not registered",
+                    self.warning(
+                        "cannot execute service call on %s - missing MQTT connectivity or device not registered",
                         device_id,
                     )
                     return
             elif host is None:
-                LOGGER.warning(
-                    "MerossApi: cannot execute service call (missing device_id and host)"
+                self.warning(
+                    "cannot execute service call (missing device_id and host)"
                 )
                 return
             # host is not None
@@ -196,6 +197,10 @@ class MerossApi(MQTTConnection, ApiProfile):
             self.unsub_entry_update_listener()
             self.unsub_entry_update_listener = None
         self.hass.data.pop(DOMAIN)
+
+    @property
+    def logtag(self):
+        return f"MerossApi"
 
     def get_device_with_mac(self, macaddress: str):
         # macaddress from dhcp discovery is already stripped/lower but...
@@ -363,7 +368,7 @@ class MerossApi(MQTTConnection, ApiProfile):
         """
         if (self._unsub_mqtt_subscribe is None) and (not self._mqtt_subscribing):
             self._mqtt_subscribing = True
-            try:
+            with self.exception_warning("async_mqtt_register"):
 
                 from homeassistant.components import mqtt
 
@@ -388,10 +393,7 @@ class MerossApi(MQTTConnection, ApiProfile):
                             pass
                         elif self._unsub_mqtt_subscribe is None:
                             if MEROSSDEBUG.mqtt_random_connect():
-                                LOGGER.debug(
-                                    "MerossApi(%s) random connect",
-                                    self.id,
-                                )
+                                self.log(DEBUG, "random connect")
                                 self._mqtt_subscribing = True
                                 self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
                                     self.hass,
@@ -416,10 +418,7 @@ class MerossApi(MQTTConnection, ApiProfile):
 
                         else:
                             if MEROSSDEBUG.mqtt_random_disconnect():
-                                LOGGER.debug(
-                                    "MerossApi(%s) random disconnect",
-                                    self.id,
-                                )
+                                self.log(DEBUG, "random disconnect")
                                 if self._unsub_mqtt_disconnected:
                                     self._unsub_mqtt_disconnected()
                                     self._unsub_mqtt_disconnected = None
@@ -435,8 +434,6 @@ class MerossApi(MQTTConnection, ApiProfile):
 
                     schedule_async_callback(self.hass, 60, _async_random_disconnect)
 
-            except:
-                pass
             self._mqtt_subscribing = False
 
     def mqtt_publish(
@@ -463,8 +460,8 @@ class MerossApi(MQTTConnection, ApiProfile):
         key: KeyType = None,
         messageid: str | None = None,
     ):
-        LOGGER.debug(
-            "MerossApi: MQTT SEND device_id:(%s) method:(%s) namespace:(%s)",
+        self.log(DEBUG,
+            "MQTT SEND device_id:(%s) method:(%s) namespace:(%s)",
             device_id,
             method,
             namespace,
@@ -493,7 +490,7 @@ class MerossApi(MQTTConnection, ApiProfile):
         key: KeyType = None,
         callback_or_device: ResponseCallbackType | MerossDevice | None = None,
     ):
-        try:
+        with self.exception_warning("async_http_request"):
             _httpclient: MerossHttpClient = getattr(self, "_httpclient", None)  # type: ignore
             if _httpclient is None:
                 _httpclient = MerossHttpClient(
@@ -517,10 +514,6 @@ class MerossApi(MQTTConnection, ApiProfile):
                         r_header,
                         response[mc.KEY_PAYLOAD],
                     )
-        except Exception as e:
-            LOGGER.warning(
-                "MerossApi: error in async_http_request(%s)", str(e) or type(e).__name__
-            )
 
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry
@@ -603,11 +596,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    LOGGER.debug("async_unload_entry entry_id = %s", entry.entry_id)
+    LOGGER.debug(
+        "async_unload_entry { unique_id: %s, entry_id: %s }",
+        entry.unique_id,
+        entry.entry_id,
+    )
     if (api := MerossApi.peek(hass)) is not None:
         device_id = entry.data.get(CONF_DEVICE_ID)
         if device_id is not None:
-            LOGGER.debug("async_unload_entry device_id = %s", device_id)
             device = api.devices[device_id]
             if not await hass.config_entries.async_unload_platforms(
                 entry, device.platforms.keys()

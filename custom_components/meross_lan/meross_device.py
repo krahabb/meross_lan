@@ -5,7 +5,7 @@ from copy import deepcopy
 from datetime import datetime, timezone, tzinfo
 from io import TextIOWrapper
 from json import dumps as json_dumps
-from logging import DEBUG, INFO, WARNING, getLevelName as logging_getLevelName
+from logging import DEBUG, INFO, getLevelName as logging_getLevelName
 import os
 import socket
 from time import gmtime, localtime, strftime, time
@@ -49,15 +49,19 @@ from .const import (
 )
 from .helpers import (
     LOGGER,
-    LOGGER_trap,
+    Loggable,
     obfuscate,
     schedule_async_callback,
     schedule_callback,
 )
 from .meross_entity import MerossFakeEntity
 from .meross_profile import ApiProfile
-from .merossclient import const as mc  # mEROSS cONST
-from .merossclient import get_default_arguments, get_namespacekey, get_replykey
+from .merossclient import (  # mEROSS cONST
+    const as mc,
+    get_default_arguments,
+    get_namespacekey,
+    get_replykey,
+)
 from .merossclient.httpclient import MerossHttpClient
 from .sensor import ProtocolSensor
 
@@ -68,7 +72,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .meross_entity import MerossEntity
-    from .meross_profile import MQTTConnection, MerossCloudProfile
+    from .meross_profile import MerossCloudProfile, MQTTConnection
     from .merossclient import MerossDeviceDescriptor
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
@@ -132,7 +136,7 @@ class _MQTTTransaction:
         self.messageid = uuid4().hex
 
 
-class MerossDevice:
+class MerossDevice(Loggable):
     """
     Generic protocol handler class managing the physical device stack/state
     """
@@ -159,7 +163,7 @@ class MerossDevice:
         config_entry: ConfigEntry,
     ):
         self.device_id: str = config_entry.data[CONF_DEVICE_ID]
-        LOGGER.debug("MerossDevice(%s) init", self.device_id)
+        LOGGER.debug("MerossDevice(%s): init", self.device_id)
         self.descriptor = descriptor
         self.entry_id = config_entry.entry_id
         self.needsave = True  # after boot update with fresh CONF_PAYLOAD
@@ -238,7 +242,7 @@ class MerossDevice:
             devname = descriptor.productname
         # cache this so entities will just ref it
         self.device_info_id = {"identifiers": {(DOMAIN, self.device_id)}}
-        try:
+        with self.exception_warning("DeviceRegistry.async_get_or_create"):
             # try block since this is not critical
             deviceentry = device_registry.async_get(
                 ApiProfile.hass
@@ -254,8 +258,6 @@ class MerossDevice:
                 **self.device_info_id,
             )
             self._deviceentry = weakref.ref(deviceentry)
-        except:
-            pass
 
         self.sensor_protocol = ProtocolSensor(self)
 
@@ -266,22 +268,19 @@ class MerossDevice:
 
         for key, payload in descriptor.digest.items():
             # _init_xxxx methods provided by mixins
-            _init = getattr(self, f"_init_{key}", None)
+            _init_method_name = f"_init_{key}"
+            _init = getattr(self, _init_method_name, None)
             if _init is not None:
                 if isinstance(payload, list):
                     for p in payload:
-                        try:
+                        with self.exception_warning(_init_method_name):
                             _init(p)
-                        except:  # TODO: add debug log
-                            pass
                 else:
-                    try:
+                    with self.exception_warning(_init_method_name):
                         _init(payload)
-                    except:  # TODO: add debug log
-                        pass
 
     def __del__(self):
-        LOGGER.debug("MerossDevice(%s) destroy", self.device_id)
+        LOGGER.debug("MerossDevice(%s): destroy", self.device_id)
         return
 
     def start(self):
@@ -341,12 +340,10 @@ class MerossDevice:
             self._tzinfo = ZoneInfo(tz_name)
             return self._tzinfo
         except Exception:
-            self.log(
-                WARNING,
-                14400,
-                "MerossDevice(%s) unable to load timezone info for %s - check your python environment",
-                self.name,
+            self.warning(
+                "unable to load timezone info for %s - check your python environment",
                 tz_name,
+                timeout=14400,
             )
             self._tzinfo = None
         return timezone.utc
@@ -376,7 +373,7 @@ class MerossDevice:
     @property
     def locallybound(self):
         """
-        should report if the device is paired to meros or not
+        should report if the device is paired to meross or not
         This should actually be inferred from system payload but at the moment
         we just euristically guess by the fact we're receiving 'local' MQTT
         """
@@ -394,13 +391,15 @@ class MerossDevice:
             return devtime_utc
         return devtime_utc.astimezone(tz)
 
-    def log(self, level: int, timeout: int, msg: str, *args):
-        if timeout:
-            LOGGER_trap(level, timeout, msg, *args)
-        else:
-            LOGGER.log(level, msg, *args)
+    def log(self, level: int, msg: str, *args, **kwargs):
+        LOGGER.log(level, f"MerossDevice({self.name}): {msg}", *args, **kwargs)
         if self._trace_file is not None:
             self._trace(time(), msg % args, logging_getLevelName(level), "LOG")
+
+    def warning(self, msg: str, *args, **kwargs):
+        LOGGER.warning(f"MerossDevice({self.name}): {msg}", *args, **kwargs)
+        if self._trace_file is not None:
+            self._trace(time(), msg % args, "WARNING", "LOG")
 
     def request(
         self,
@@ -500,11 +499,9 @@ class MerossDevice:
             self.device_timedelta = 0
 
         if get_replykey(header, self.key) is not self.key:
-            self.log(
-                WARNING,
-                14400,
-                "MerossDevice(%s) received signature error (incorrect key?)",
-                self.name,
+            self.warning(
+                "received signature error (incorrect key?)",
+                timeout=14400,
             )
 
         if not self._online:
@@ -514,13 +511,11 @@ class MerossDevice:
             )
 
         if method == mc.METHOD_ERROR:
-            self.log(
-                WARNING,
-                14400,
-                "MerossDevice(%s) protocol error: namespace = '%s' payload = '%s'",
-                self.name,
+            self.warning(
+                "protocol error: namespace = '%s' payload = '%s'",
                 namespace,
                 json_dumps(payload),
+                timeout=14400,
             )
             return True
 
@@ -695,9 +690,7 @@ class MerossDevice:
             # available, it could happen we loose that when asynchronously coming here
             self.log(
                 DEBUG,
-                0,
-                "MerossDevice(%s) attempting to use async_mqtt_request with no available profile",
-                self.name,
+                "attempting to use async_mqtt_request with no available profile",
             )
             return
         if response_callback is not None:
@@ -725,7 +718,12 @@ class MerossDevice:
         payload: dict,
         response_callback: ResponseCallbackType | None = None,
     ):
-        try:
+        with self.exception_warning(
+            "async_http_request %s %s",
+            method,
+            namespace,
+            timeout=14400,
+        ):
             if (http := self._http) is None:
                 http = MerossHttpClient(
                     self.host, self.key, async_get_clientsession(ApiProfile.hass), LOGGER  # type: ignore
@@ -752,17 +750,14 @@ class MerossDevice:
                             ProtocolSensor.ATTR_HTTP
                         )
                     break
-                except Exception as e:
+                except Exception as exception:
                     if not self._online:
-                        raise e
+                        raise exception
                     self.lasthttpresponse = 0
-                    self.log(
+                    self.log_exception(
                         INFO,
-                        0,
-                        "MerossDevice(%s) %s(%s) in async_http_request %s %s attempt(%s)",
-                        self.name,
-                        type(e).__name__,
-                        str(e),
+                        exception,
+                        "async_http_request %s %s attempt(%s)",
                         method,
                         namespace,
                         str(attempt),
@@ -780,7 +775,7 @@ class MerossDevice:
                             namespace, method, payload, response_callback
                         )
                         return
-                    elif isinstance(e, asyncio.TimeoutError):
+                    elif isinstance(exception, asyncio.TimeoutError):
                         self._set_offline()
                         return
                     await asyncio.sleep(0.1)  # wait a bit before re-issuing request
@@ -796,21 +791,10 @@ class MerossDevice:
                     r_header[mc.KEY_METHOD] != mc.METHOD_ERROR, r_header, r_payload
                 )
             self.receive(r_header, r_payload, CONF_PROTOCOL_HTTP)
-        except Exception as e:
-            self.log(
-                WARNING,
-                14400,
-                "MerossDevice(%s) %s(%s) in async_http_request %s %s",
-                self.name,
-                type(e).__name__,
-                str(e),
-                method,
-                namespace,
-            )
 
     @callback
     async def _async_polling_callback(self):
-        LOGGER.log(DEBUG, "MerossDevice(%s) polling start", self.name)
+        self.log(DEBUG, "polling start")
         try:
             self._unsub_polling_callback = None
             epoch = time()
@@ -914,7 +898,7 @@ class MerossDevice:
             self._unsub_polling_callback = schedule_async_callback(
                 ApiProfile.hass, self._polling_delay, self._async_polling_callback
             )
-            LOGGER.log(DEBUG, "MerossDevice(%s) polling end", self.name)
+            self.log(DEBUG, "polling end")
 
     def entry_option_setup(self, config_schema: dict):
         """
@@ -1080,11 +1064,8 @@ class MerossDevice:
                 return
         if (epoch - self.device_timedelta_log_epoch) > 604800:  # 1 week lockout
             self.device_timedelta_log_epoch = epoch
-            self.log(
-                WARNING,
-                0,
-                "MerossDevice(%s) has incorrect timestamp: %d seconds behind HA",
-                self.name,
+            self.warning(
+                "incorrect timestamp: %d seconds behind HA",
                 int(self.device_timedelta),
             )
 
@@ -1136,11 +1117,8 @@ class MerossDevice:
                         ]
                     )
                 except Exception as e:
-                    self.log(
-                        WARNING,
-                        0,
-                        "MerossDevice(%s) error while building timezone info (%s)",
-                        self.name,
+                    self.warning(
+                        "error while building timezone info (%s)",
                         str(e),
                     )
                     timerules = [[0, 0, 0], [epoch + PARAM_TIMEZONE_CHECK_PERIOD, 0, 1]]
@@ -1163,7 +1141,7 @@ class MerossDevice:
                 )
 
     def _set_online(self):
-        self.log(DEBUG, 0, "MerossDevice(%s) back online!", self.name)
+        self.log(DEBUG, "back online!")
         self._online = True
         self._polling_delay = self.polling_period
         self.sensor_protocol.update_connected()
@@ -1181,7 +1159,7 @@ class MerossDevice:
             )
 
     def _set_offline(self):
-        self.log(DEBUG, 0, "MerossDevice(%s) going offline!", self.name)
+        self.log(DEBUG, "going offline!")
         self._online = False
         self._polling_delay = self.polling_period
         self.lastmqttresponse = 0
@@ -1192,9 +1170,7 @@ class MerossDevice:
     def _switch_protocol(self, protocol):
         self.log(
             INFO,
-            0,
-            "MerossDevice(%s) switching protocol to %s",
-            self.name,
+            "switching protocol to %s",
             protocol,
         )
         self.curr_protocol = protocol
@@ -1214,7 +1190,7 @@ class MerossDevice:
             self.sensor_protocol.update_connected()
 
     def _save_config_entry(self, payload: dict):
-        try:
+        with self.exception_warning("ConfigEntry update"):
             entries = ApiProfile.hass.config_entries
             entry = entries.async_get_entry(self.entry_id)
             if entry is not None:
@@ -1222,14 +1198,6 @@ class MerossDevice:
                 data[CONF_PAYLOAD].update(payload)
                 data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
                 entries.async_update_entry(entry, data=data)
-        except Exception as e:
-            self.log(
-                WARNING,
-                0,
-                "MerossDevice(%s) error while updating ConfigEntry (%s)",
-                self.name,
-                str(e),
-            )
 
     def _set_config_entry(self, data: DeviceConfigType):
         """
@@ -1274,11 +1242,8 @@ class MerossDevice:
 
             if self._mqtt_connection is None:
                 if self.descriptor.userId != self.profile_id:
-                    self.log(
-                        WARNING,
-                        0,
-                        "MerossDevice(%s): cloud profile(%s) does not match device user(%s)",
-                        self.name,
+                    self.warning(
+                        "cloud profile(%s) does not match device user(%s)",
                         self.profile_id,
                         str(self.descriptor.userId),
                     )
@@ -1334,7 +1299,7 @@ class MerossDevice:
 
     def _trace_open(self, epoch: float, endtime):
         try:
-            LOGGER.debug("MerossDevice(%s): start tracing", self.name)
+            self.log(DEBUG, "start tracing")
             tracedir = ApiProfile.hass.config.path(
                 "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
             )
@@ -1359,25 +1324,18 @@ class MerossDevice:
             )
             self._trace_ability_iter = iter(self.descriptor.ability)
             self._trace_ability()
-        except Exception as e:
-            LOGGER.warning(
-                "MerossDevice(%s) error while creating trace file (%s)",
-                self.name,
-                str(e),
-            )
+        except Exception as exception:
             if self._trace_file is not None:
                 self._trace_close()
+            self.log_exception_warning(exception, "creating trace file")
 
     def _trace_close(self):
         try:
             self._trace_file.close()  # type: ignore
-        except Exception as e:
-            LOGGER.warning(
-                "MerossDevice(%s) error while closing trace file (%s)",
-                self.name,
-                str(e),
-            )
-        self._trace_file = None
+            self._trace_file = None
+        except Exception as exception:
+            self._trace_file = None
+            self.log_exception_warning(exception, "closing trace file")
         self._trace_ability_iter = None
         if self._trace_future is not None:
             self._trace_future.set_result(self._trace_data)
@@ -1434,10 +1392,6 @@ class MerossDevice:
                 # better have json for dignostic trace
                 columns[5] = data  # type: ignore
                 self._trace_data.append(columns)
-        except Exception as e:
-            LOGGER.warning(
-                "MerossDevice(%s) error while writing to trace file (%s)",
-                self.name,
-                str(e),
-            )
+        except Exception as exception:
             self._trace_close()
+            self.log_exception_warning(exception, "writing to trace file")

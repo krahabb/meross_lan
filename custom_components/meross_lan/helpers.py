@@ -2,9 +2,11 @@
     Helpers!
 """
 from __future__ import annotations
+
 import asyncio
-from logging import getLogger
+from contextlib import contextmanager
 from functools import partial
+import logging
 from time import time
 import typing
 
@@ -15,42 +17,26 @@ from homeassistant.util.dt import utcnow
 from .const import DOMAIN
 from .merossclient import const as mc
 
-
 try:
-    from homeassistant.backports.enum import StrEnum # type: ignore pylint: disable=unused-import
+    from homeassistant.backports.enum import (
+        StrEnum,  # type: ignore pylint: disable=unused-import
+    )
 except:
     import enum
+
     class StrEnum(enum.Enum):
         """
         convenience alias for homeassistant.backports.StrEnum
         """
+
         def __str__(self):
             return str(self.value)
 
 
 if typing.TYPE_CHECKING:
     from typing import Callable, Coroutine
+
     from homeassistant.core import HomeAssistant, State
-
-LOGGER = getLogger(__name__[:-8])  # get base custom_component name for logging
-_TRAP_DICT = {}
-
-
-def LOGGER_trap(level, timeout, msg, *args):
-    """
-    avoid repeating the same last log message until something changes or timeout expires
-    used mainly when discovering new devices
-    """
-    global _TRAP_DICT
-
-    epoch = time()
-    trap_key = (msg, *args)
-    trap_time = _TRAP_DICT.get(trap_key, 0)
-    if (epoch - trap_time) < timeout:
-        return
-
-    LOGGER.log(level, msg, *args)
-    _TRAP_DICT[trap_key] = epoch
 
 
 def clamp(_value, _min, _max):
@@ -84,6 +70,130 @@ def versiontuple(version: str):
 
 
 """
+    LOGGER:
+    Customize logging library to 'trap' repeated messages under a
+    short timeout
+"""
+
+
+def getLogger(name):
+    """
+    Replaces the default Logger with our wrapped implementation:
+    replace your logging.getLogger with helpers.getLogger et voilà
+    """
+    logger = logging.getLogger(name)
+    logger.__class__ = type(
+        "Logger",
+        (
+            _Logger,
+            logger.__class__,
+        ),
+        {},
+    )
+    return logger
+
+
+class _Logger(logging.Logger if typing.TYPE_CHECKING else object):
+    """
+    This wrapper will 'filter' log messages and avoid
+    verbose over-logging for the same message by using a timeout
+    to prevent repeating the very same log before the timeout expires.
+    The implementation 'hacks' a standard Logger instance by mixin-ing
+    """
+
+    # default timeout: these can be overriden at the log call level
+    # by passing in the 'timeout=' param
+    # for example: LOGGER.error("This error will %s be logged again", "soon", timeout=5)
+    # it can also be overriden at the 'Logger' instance level
+    default_timeout = 60 * 60 * 8
+    # cache of logged messages with relative last-thrown-epoch
+    _LOGGER_TIMEOUTS = {}
+
+    def _log(self, level, msg, args, **kwargs):
+
+        if "timeout" in kwargs:
+            timeout = kwargs.pop("timeout")
+            epoch = time()
+            trap_key = (msg, args)
+            if trap_key in _Logger._LOGGER_TIMEOUTS:
+                if (epoch - _Logger._LOGGER_TIMEOUTS[trap_key]) < timeout:
+                    if self.isEnabledFor(logging.DEBUG):
+                        super()._log(
+                            logging.DEBUG,
+                            f"dropped log message for {msg}",
+                            args,
+                            **kwargs,
+                        )
+                    return
+            _Logger._LOGGER_TIMEOUTS[trap_key] = epoch
+
+        super()._log(level, msg, args, **kwargs)
+
+
+LOGGER = getLogger(__name__[:-8])  # get base custom_component name for logging
+
+
+class Loggable:
+    """
+    Helper base class for logging instance name/id related info.
+    Derived classes can customize this in different flavours:
+    Basic is to override 'logtag' to provide a custom name when
+    logging. By overriding 'log' (together with 'warning' since
+    the basic implementation doesnt call 'log' in order to optimize/skip
+    a call and forwards itself the log message to the underlying LOGGER)
+    like in 'MerossDevice' we can intercept log messages
+    Here, since most of our logs are WARNINGS, the 'warning' interface
+    is just a small optimization in order to reduce parameters pushing
+    """
+
+    @property
+    def logtag(self):
+        return self.__class__.__name__
+
+    def log(self, level: int, msg: str, *args, **kwargs):
+        LOGGER.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
+
+    def warning(self, msg: str, *args, **kwargs):
+        LOGGER.warning(f"{self.logtag}: {msg}", *args, **kwargs)
+
+    def log_exception(
+        self, level: int, exception: Exception, msg: str, *args, **kwargs
+    ):
+        self.log(
+            level,
+            f"{exception.__class__.__name__}({str(exception)}) in {msg}",
+            *args,
+            **kwargs,
+        )
+
+    def log_exception_warning(self, exception: Exception, msg: str, *args, **kwargs):
+        self.warning(
+            f"{exception.__class__.__name__}({str(exception)}) in {msg}",
+            *args,
+            **kwargs,
+        )
+
+    @contextmanager
+    def exception_warning(self, msg: str, *args, **kwargs):
+        try:
+            yield
+        except Exception as exception:
+            self.warning(
+                f"{exception.__class__.__name__}({str(exception)}) in {msg}",
+                *args,
+                **kwargs,
+            )
+
+
+@contextmanager
+def log_exceptions(logger: logging.Logger = LOGGER):
+    try:
+        yield
+    except Exception as error:
+        logger.error("Unexpected %s: %s", type(error).__name__, str(error))
+
+
+"""
     obfuscation:
     call obfuscate on a paylod (dict) to remove well-known sensitive
     keys (list in OBFUSCATE_KEYS). The returned dictionary contains a
@@ -102,6 +212,7 @@ OBFUSCATE_KEYS = (
     mc.KEY_USERID,
     mc.KEY_TOKEN,
 )
+
 
 def obfuscate(payload: dict):
     """
@@ -151,6 +262,8 @@ def schedule_callback(
 """
 RECORDER helpers
 """
+
+
 async def get_entity_last_states(
     hass: HomeAssistant, number_of_states: int, entity_id: str
 ) -> list[State] | None:
@@ -183,12 +296,16 @@ async def get_entity_last_states(
     else:
         raise Exception("Cannot find history.get_last_state_changes api")
 
+
 async def get_entity_last_state(hass: HomeAssistant, entity_id: str) -> State | None:
     if states := await get_entity_last_states(hass, 1, entity_id):
         return states[0]
     return None
 
-async def get_entity_last_state_available(hass: HomeAssistant, entity_id: str) -> State | None:
+
+async def get_entity_last_state_available(
+    hass: HomeAssistant, entity_id: str
+) -> State | None:
     """
     if the device/entity was disconnected before restarting and we need
     the last good reading from the device, we need to skip the last
@@ -203,7 +320,6 @@ async def get_entity_last_state_available(hass: HomeAssistant, entity_id: str) -
 
 
 class ConfigEntriesHelper:
-
     def __init__(self, hass: HomeAssistant):
         self.config_entries = hass.config_entries
         self.entries = hass.config_entries.async_entries(DOMAIN)

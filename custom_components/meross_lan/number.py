@@ -1,20 +1,17 @@
 from __future__ import annotations
+
 import typing
 
 from homeassistant.components import number
+from homeassistant.const import PERCENTAGE, TEMP_CELSIUS
 
-from homeassistant.const import (
-    PERCENTAGE,
-    TEMP_CELSIUS,
-)
-
-from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 from . import meross_entity as me
-from .helpers import LOGGER
+from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
     from .meross_device import MerossDevice
     from .meross_device_hub import MerossSubDevice
 
@@ -219,7 +216,7 @@ class ScreenBrightnessMixin(
     def __init__(self, descriptor, entry):
         super().__init__(descriptor, entry)
 
-        try:
+        with self.exception_warning("ScreenBrightnessMixin init"):
             # the 'ScreenBrightnessMixin' actually doesnt have a clue of how many  entities
             # are controllable since the digest payload doesnt carry anything (like MerossShutter)
             # So we're not implementing _init_xxx and _parse_xxx methods here and
@@ -234,11 +231,6 @@ class ScreenBrightnessMixin(
             self.polling_dictionary[
                 mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
             ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS]
-
-        except Exception as e:
-            LOGGER.warning(
-                "ScreenBrightnessMixin(%s) init exception:(%s)", self.device_id, str(e)
-            )
 
     def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
         if isinstance(p_channels := payload.get(mc.KEY_BRIGHTNESS), list):

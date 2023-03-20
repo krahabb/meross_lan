@@ -17,7 +17,7 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import StateType
 
 from .const import CONF_DEVICE_ID, DOMAIN
-from .helpers import LOGGER, StrEnum
+from .helpers import LOGGER, Loggable, StrEnum
 from .merossclient import const as mc, get_namespacekey, get_productnameuuid
 
 if typing.TYPE_CHECKING:
@@ -31,6 +31,7 @@ if typing.TYPE_CHECKING:
 try:  # 2022.2 new symbols
     from homeassistant.helpers.entity import EntityCategory  # type: ignore
 except:
+
     class EntityCategory(StrEnum):
         CONFIG = "config"
         DIAGNOSTIC = "diagnostic"
@@ -41,10 +42,11 @@ class MerossFakeEntity:
     a 'dummy' class we'll use as a placeholder to reduce optional and/or
     disabled entities access overhead
     """
+
     enabled = False
 
 
-class MerossEntity(Entity if typing.TYPE_CHECKING else object):
+class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     PLATFORM: str
 
@@ -84,9 +86,10 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
         self.channel = channel
         self._attr_device_class = device_class
         if self._attr_name is None:
-            self._attr_name = entitykey or device_class # type: ignore
+            self._attr_name = entitykey or device_class  # type: ignore
         self.subdevice = subdevice
-        assert (channel is not None) or (entitykey is not None
+        assert (channel is not None) or (
+            entitykey is not None
         ), "provide at least channel or entitykey (cannot be 'None' together)"
         self.id = (
             channel
@@ -95,7 +98,8 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
             if channel is None
             else f"{channel}_{entitykey}"
         )
-        assert (device.entities.get(self.id) is None
+        assert (
+            device.entities.get(self.id) is None
         ), "(channel, entitykey) is not unique inside device.entities"
         device.entities[self.id] = self
         async_add_devices = device.platforms.setdefault(self.PLATFORM)
@@ -103,8 +107,17 @@ class MerossEntity(Entity if typing.TYPE_CHECKING else object):
             async_add_devices([self])
 
     def __del__(self):
-        LOGGER.debug("MerossEntity(%s) destroy", self.unique_id)
-        return
+        LOGGER.debug("MerossEntity(%s): destroy", self.unique_id)
+
+    def log(self, level: int, msg: str, *args, **kwargs):
+        self.device.log(
+            level, f"{self.__class__.__name__}({self.entity_id}) {msg}", *args, **kwargs
+        )
+
+    def warning(self, msg: str, *args, **kwargs):
+        self.device.warning(
+            f"{self.__class__.__name__}({self.entity_id}) {msg}", *args, **kwargs
+        )
 
     @property
     def assumed_state(self):
@@ -218,11 +231,11 @@ class MerossToggle(MerossEntity):
 
     def __init__(
         self,
-        device: 'MerossDevice',
+        device: "MerossDevice",
         channel: object,
         entitykey: str | None,
         device_class: object | None,
-        subdevice: 'MerossSubDevice' | None,
+        subdevice: "MerossSubDevice" | None,
         namespace: str | None,
     ):
         super().__init__(device, channel, entitykey, device_class, subdevice)

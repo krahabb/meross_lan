@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from logging import DEBUG, WARNING
+from logging import DEBUG
 from time import gmtime, time
 import typing
 
@@ -256,7 +256,7 @@ class EnergyEstimateSensor(MLSensor):
         if self._attr_state != 0:
             return
 
-        try:
+        with self.exception_warning("restoring previous state"):
             state = await get_entity_last_state_available(self.hass, self.entity_id)
             if state is None:
                 return
@@ -268,14 +268,6 @@ class EnergyEstimateSensor(MLSensor):
             # and more consistent
             self._attr_state_float = float(state.state)
             self._attr_state = int(self._attr_state_float)
-        except Exception as e:
-            self.device.log(
-                WARNING,
-                0,
-                "EnergyEstimateSensor(%s): error(%s) while trying to restore previous state",
-                self.name,
-                str(e),
-            )
 
     def set_unavailable(self):
         # we need to preserve our sum so we don't reset
@@ -378,7 +370,7 @@ class ElectricityMixin(
             )
 
     def _schedule_next_reset(self, _now: datetime):
-        try:
+        with self.exception_warning("_schedule_next_reset"):
             today = _now.date()
             tomorrow = today + timedelta(days=1)
             next_reset = datetime(
@@ -394,32 +386,11 @@ class ElectricityMixin(
             self._cancel_energy_reset = async_track_point_in_time(
                 ApiProfile.hass, self._energy_reset, next_reset
             )
-            self.log(
-                DEBUG,
-                0,
-                "ElectricityMixin(%s) _schedule_next_reset: %s",
-                self.name,
-                next_reset.isoformat(),
-            )
-        except Exception as error:
-            # really? log something
-            self.log(
-                DEBUG,
-                0,
-                "ElectricityMixin(%s) _schedule_next_reset Exception: %s",
-                self.name,
-                str(error),
-            )
+            self.log(DEBUG, "_schedule_next_reset at %s", next_reset.isoformat())
 
     @callback
     def _energy_reset(self, _now: datetime):
-        self.log(
-            DEBUG,
-            0,
-            "ElectricityMixin(%s) _energy_reset: %s",
-            self.name,
-            _now.isoformat(),
-        )
+        self.log(DEBUG, "_energy_reset at %s", _now.isoformat())
         self._sensor_energy_estimate.reset_estimate()
         self._schedule_next_reset(_now)
 
@@ -461,11 +432,10 @@ class ConsumptionSensor(MLSensor):
         if (self._attr_state is not None) or self._attr_extra_state_attributes:
             return
 
-        try:
+        with self.exception_warning("restoring previous state"):
             state = await get_entity_last_state_available(self.hass, self.entity_id)
             if state is None:
                 return
-
             # check if the restored sample is fresh enough i.e. it was
             # updated after the device midnight for today..else it is too
             # old to be good. Since we don't have actual device epoch we
@@ -497,14 +467,6 @@ class ConsumptionSensor(MLSensor):
                     # we also set the value as an instance attr for faster access
                     setattr(self, _attr_name, _attr_value)
             self._attr_state = int(state.state)
-        except Exception as e:
-            self.device.log(
-                WARNING,
-                0,
-                "ConsumptionSensor(%s): error(%s) while trying to restore previous state",
-                self.name,
-                str(e),
-            )
 
     def set_unavailable(self):
         # we need to preserve our state so we don't reset
@@ -570,9 +532,7 @@ class ConsumptionMixin(
             ).timestamp()
             self.log(
                 DEBUG,
-                0,
-                "ConsumptionMixin(%s) updated midnight epochs: yesterday=%s - today=%s - tomorrow=%s",
-                self.name,
+                "updated midnight epochs: yesterday=%s - today=%s - tomorrow=%s",
                 str(self._yesterday_midnight_epoch),
                 str(self._today_midnight_epoch),
                 str(self._tomorrow_midnight_epoch),
@@ -618,10 +578,7 @@ class ConsumptionMixin(
                 if _sensor_consumption._hass_connected:
                     _sensor_consumption.async_write_ha_state()
                 self.log(
-                    DEBUG,
-                    0,
-                    "ConsumptionMixin(%s): no readings available for new day - resetting",
-                    self.name,
+                    DEBUG, "no consumption readings available for new day - resetting"
                 )
             return
 
@@ -668,9 +625,7 @@ class ConsumptionMixin(
                     ] = _sensor_consumption.offset = (day_last_value - energy_estimate)
             self.log(
                 DEBUG,
-                0,
-                "ConsumptionMixin(%s): first reading for new day, offset=%d",
-                self.name,
+                "first consumption reading for new day, offset=%d",
                 _sensor_consumption.offset,
             )
 
@@ -684,13 +639,7 @@ class ConsumptionMixin(
         _sensor_consumption._attr_state = day_last_value - _sensor_consumption.offset
         if _sensor_consumption._hass_connected:
             _sensor_consumption.async_write_ha_state()
-        self.log(
-            DEBUG,
-            0,
-            "ConsumptionMixin(%s): updating consumption=%d",
-            self.name,
-            day_last_value,
-        )
+        self.log(DEBUG, "updating consumption=%d", day_last_value)
 
     async def async_request_updates(self, epoch, namespace):
         await super().async_request_updates(epoch, namespace)
