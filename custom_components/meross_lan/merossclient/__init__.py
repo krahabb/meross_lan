@@ -77,7 +77,7 @@ try:
         # MerossHTTPClient debug patching
         http_disc_end = 0
         http_disc_duration = 25
-        http_disc_probability = 0
+        http_disc_probability = 5
 
         @staticmethod
         def http_random_timeout():
