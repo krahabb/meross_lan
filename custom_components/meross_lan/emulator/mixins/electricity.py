@@ -3,12 +3,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from random import randint
-from time import gmtime, mktime
+from time import gmtime
 import typing
 
-from custom_components.meross_lan.merossclient import const as mc
-
-from ..emulator import MerossEmulator, MerossEmulatorDescriptor
+from .. import MerossEmulator, MerossEmulatorDescriptor
+from ...merossclient import const as mc
 
 
 class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
@@ -73,7 +72,7 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
         ]
         p_consumptionx: list = self.payload_consumptionx[mc.KEY_CONSUMPTIONX]
-        if (consumptionx_len := len(p_consumptionx)) == 0:
+        if (len(p_consumptionx)) == 0:
             p_consumptionx.append(
                 {
                     mc.KEY_DATE: "1970-01-01",
