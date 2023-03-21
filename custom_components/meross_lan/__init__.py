@@ -6,6 +6,7 @@ from json import dumps as json_dumps, loads as json_loads
 from logging import DEBUG
 import typing
 
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -43,9 +44,8 @@ if typing.TYPE_CHECKING:
 
     from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
 
-    from .meross_device import MerossDevice, ResponseCallbackType
+    from .meross_device import ResponseCallbackType
     from .merossclient.cloudapi import MerossCloudCredentials
 else:
     # In order to avoid a static dependency we resolve these
@@ -162,9 +162,7 @@ class MerossApi(MQTTConnection, ApiProfile):
                     )
                     return
             elif host is None:
-                self.warning(
-                    "cannot execute service call (missing device_id and host)"
-                )
+                self.warning("cannot execute service call (missing device_id and host)")
                 return
             # host is not None
             for device in self.devices.values():
@@ -200,7 +198,7 @@ class MerossApi(MQTTConnection, ApiProfile):
 
     @property
     def logtag(self):
-        return f"MerossApi"
+        return "MerossApi"
 
     def get_device_with_mac(self, macaddress: str):
         # macaddress from dhcp discovery is already stripped/lower but...
@@ -460,7 +458,8 @@ class MerossApi(MQTTConnection, ApiProfile):
         key: KeyType = None,
         messageid: str | None = None,
     ):
-        self.log(DEBUG,
+        self.log(
+            DEBUG,
             "MQTT SEND device_id:(%s) method:(%s) namespace:(%s)",
             device_id,
             method,

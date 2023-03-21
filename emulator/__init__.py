@@ -18,7 +18,38 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
-from ..merossclient import (
+# This import is tricky since importlib will initialize
+# meross_lan too when importing. This has the following
+# implications:
+# meross_lan is not really needed to be run in order to
+# run the emulator so that's an unneded overhead just to
+# access the symbols defined in merossclient. The right
+# solution would be to 'move' merossclient to an independent
+# package since merossclient itself is not dependant
+# on meross_lan (it is a basic meross api interface)
+# but that would imply packaging/publishing the code
+# in order to have it as a dependency accessible by
+# meross_lan. The solutions so far could be:
+# 1) use an import trick to bypass the importlib
+# design. This would have a lot of implications
+# when we use the emulator in our tests which are using
+# meross_lan (and all of its imports)
+# 2) actually, importing the whole meross_lan, beside the
+# overhead, has always worked when instantiating the
+# emulator alone (standalone app from the cli)
+# but now (aiohttp 3.8.1) the import system fails
+# when importing the meross_lan module due to circular
+# imports in homeassistant modules (namely the homeassistant.helpers)
+# This is maybe due to changes in relative import order in
+# HomeAssistant but they're not appearing when running HA
+# since they're likely living in a 'sweet spot' of the
+# init sequence.
+# As for now, we need to be sure the homeassistant.core module
+# is initialized before the homeassistant.helpers.storage
+# so I've changed a bit the import sequence in meross_lan
+# to have the homeassistant.core imported (initialized) before
+# homeassistant.helpers.storage
+from custom_components.meross_lan.merossclient import (
     MerossDeviceDescriptor,
     build_payload,
     const as mc,

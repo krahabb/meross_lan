@@ -7,7 +7,7 @@ from time import gmtime
 import typing
 
 from .. import MerossEmulator, MerossEmulatorDescriptor
-from ...merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc
 
 
 class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
