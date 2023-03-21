@@ -1,14 +1,10 @@
 """Test for meross_lan.request service calls"""
-
-from unittest.mock import ANY
 import json
+from unittest.mock import ANY
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-    async_fire_mqtt_message,
-)
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.meross_lan.const import (
     CONF_DEVICE_ID,
     CONF_NOTIFYRESPONSE,
@@ -24,9 +20,9 @@ from tests.helpers import devicecontext
 
 async def test_request_on_mqtt(hass: HomeAssistant, mqtt_patch: MQTTMock):
     """
-        Test service call routed through mqtt without being forwarded to
-        MerossDevice. This happens when we want to send request to
-        devices not registered in HA
+    Test service call routed through mqtt without being forwarded to
+    MerossDevice. This happens when we want to send request to
+    devices not registered in HA
     """
     config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_HUB_CONFIG)
     config_entry.add_to_hass(hass)
@@ -47,14 +43,17 @@ async def test_request_on_mqtt(hass: HomeAssistant, mqtt_patch: MQTTMock):
     # this call, with no devices registered in configuration
     # will just try to publish on mqtt so we'll check the mock
     mqtt_patch.mqtt_async_publish.assert_called_once_with(
-        hass, mc.TOPIC_REQUEST.format(MOCK_DEVICE_UUID), ANY)
+        hass, mc.TOPIC_REQUEST.format(MOCK_DEVICE_UUID), ANY
+    )
 
     assert await hass.config_entries.async_unload(config_entry.entry_id)
 
 
-async def test_request_on_device(hass: HomeAssistant, mqtt_patch: MQTTMock, aioclient_mock):
+async def test_request_on_device(
+    hass: HomeAssistant, mqtt_patch: MQTTMock, aioclient_mock
+):
     """
-        Test service calls routed through a device
+    Test service calls routed through a device
     """
     async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
 
@@ -74,11 +73,14 @@ async def test_request_on_device(hass: HomeAssistant, mqtt_patch: MQTTMock, aioc
                 CONF_DEVICE_ID: device_id,
                 mc.KEY_NAMESPACE: mc.NS_APPLIANCE_CONTROL_TOGGLEX,
                 mc.KEY_METHOD: mc.METHOD_SET,
-                mc.KEY_PAYLOAD: json.dumps({
-                    mc.KEY_TOGGLEX: {
-                        mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 1-initialstate
+                mc.KEY_PAYLOAD: json.dumps(
+                    {
+                        mc.KEY_TOGGLEX: {
+                            mc.KEY_CHANNEL: 0,
+                            mc.KEY_ONOFF: 1 - initialstate,
+                        }
                     }
-                }),
+                ),
             },
             blocking=True,
         )
@@ -92,9 +94,11 @@ async def test_request_on_device(hass: HomeAssistant, mqtt_patch: MQTTMock, aioc
         mqtt_patch.mqtt_async_publish.assert_not_called()
 
 
-async def test_request_notification(hass: HomeAssistant, mqtt_patch: MQTTMock, aioclient_mock):
+async def test_request_notification(
+    hass: HomeAssistant, mqtt_patch: MQTTMock, aioclient_mock
+):
     """
-        Test service calls routed through a device
+    Test service calls routed through a device
     """
     async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
 
@@ -110,7 +114,7 @@ async def test_request_notification(hass: HomeAssistant, mqtt_patch: MQTTMock, a
             service_data={
                 CONF_DEVICE_ID: device_id,
                 mc.KEY_NAMESPACE: mc.NS_APPLIANCE_SYSTEM_ALL,
-                CONF_NOTIFYRESPONSE: True
+                CONF_NOTIFYRESPONSE: True,
             },
             blocking=True,
         )

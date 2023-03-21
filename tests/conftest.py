@@ -14,10 +14,9 @@
 #
 # See here for more info: https://docs.pytest.org/en/latest/fixture.html (note that
 # pytest includes fixtures OOB which you can use as defined on this page)
-from typing import Callable, Coroutine, Any
-from unittest.mock import Mock, MagicMock, patch
+from typing import Any, Callable, Coroutine
+from unittest.mock import MagicMock, Mock, patch
 
-from homeassistant.core import callback
 import pytest
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -27,6 +26,7 @@ MqttMockPahoClient = MagicMock
 MqttMockHAClient = MagicMock
 """MagicMock for `homeassistant.components.mqtt.MQTT`."""
 MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
+
 
 # This fixture enables loading custom integrations in all tests.
 # Remove to enable selective use of this fixture
@@ -50,14 +50,19 @@ def skip_notifications_fixture():
 @pytest.fixture(name="disable_debug", autouse=True)
 def disable_debug_fixture():
     """Skip notification calls."""
-    with patch(
-        "custom_components.meross_lan.MEROSSDEBUG", return_value=False), patch(
-        "custom_components.meross_lan.meross_profile.MEROSSDEBUG", return_value=None), patch(
-        "custom_components.meross_lan.merossclient.MEROSSDEBUG", return_value=None), patch(
-        "custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", return_value=None), patch(
-        "custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", return_value=None
+    with patch("custom_components.meross_lan.MEROSSDEBUG", return_value=False), patch(
+        "custom_components.meross_lan.meross_profile.MEROSSDEBUG", return_value=None
+    ), patch(
+        "custom_components.meross_lan.merossclient.MEROSSDEBUG", return_value=None
+    ), patch(
+        "custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG",
+        return_value=None,
+    ), patch(
+        "custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG",
+        return_value=None,
     ):
         yield
+
 
 class MQTTMock:
     mqtt_client: MqttMockHAClient
@@ -65,6 +70,7 @@ class MQTTMock:
 
     def async_publish(self, hass, topic: str, payload: str, *args, **kwargs):
         pass
+
 
 @pytest.fixture()
 async def mqtt_patch(mqtt_mock_entry_no_yaml_config: MqttMockHAClientGenerator):
@@ -75,4 +81,3 @@ async def mqtt_patch(mqtt_mock_entry_no_yaml_config: MqttMockHAClientGenerator):
         context.mqtt_async_publish = mqtt_async_publish
         mqtt_async_publish.side_effect = context.async_publish
         yield context
-

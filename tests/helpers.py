@@ -1,12 +1,9 @@
 """"""
 from asyncio import Future, run_coroutine_threadsafe
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta
-import threading
-import time
 
-from freezegun.api import freeze_time, FrozenDateTimeFactory, StepTickTimeFactory
-
+from freezegun.api import FrozenDateTimeFactory, StepTickTimeFactory, freeze_time
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -17,9 +14,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMockResponse,
 )
 
-from custom_components.meross_lan import MerossApi, MerossDevice, emulator as em
-from custom_components.meross_lan.emulator import MerossEmulator
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan import MerossApi, MerossDevice
 from custom_components.meross_lan.const import (
     CONF_DEVICE_ID,
     CONF_HOST,
@@ -31,6 +26,9 @@ from custom_components.meross_lan.const import (
     DOMAIN,
     PARAM_COLDSTARTPOLL_DELAY,
 )
+from custom_components.meross_lan.merossclient import const as mc
+import emulator
+from emulator import MerossEmulator
 
 from .const import (
     EMULATOR_TRACES_MAP,
@@ -44,7 +42,7 @@ from .const import (
 def build_emulator(model: str) -> MerossEmulator:
     # Watchout: this call will not use the uuid and key set
     # in the filename, just DEFAULT_UUID and DEFAULT_KEY
-    return em.build_emulator(
+    return emulator.build_emulator(
         EMULATOR_TRACES_PATH + EMULATOR_TRACES_MAP[model], MOCK_DEVICE_UUID, MOCK_KEY
     )
 
@@ -71,24 +69,26 @@ def build_emulator_config_entry(emulator: MerossEmulator):
 
 
 @contextmanager
-def emulator_mock(emulator_: MerossEmulator | str, aioclient_mock: 'AiohttpClientMocker'):
+def emulator_mock(
+    emulator_: MerossEmulator | str, aioclient_mock: "AiohttpClientMocker"
+):
     """
-        This context provides an emulator working on HTTP  by leveraging
-        the aioclient_mock.
-        This is a basic mock which is not polluting HA
+    This context provides an emulator working on HTTP  by leveraging
+    the aioclient_mock.
+    This is a basic mock which is not polluting HA
     """
     try:
         if isinstance(emulator_, str):
             emulator_ = build_emulator(emulator_)
 
         async def _handle_http_request(method, url, data):
-            response = emulator_.handle(data) # pylint: disable=no-member
+            response = emulator_.handle(data)
             return AiohttpClientMockResponse(method, url, json=response)
 
         # we'll use the uuid so we can mock multiple at the same time
         # and the aioclient_mock will route accordingly
         aioclient_mock.post(
-            f"http://{emulator_.descriptor.uuid}/config", # pylint: disable=no-member
+            f"http://{emulator_.descriptor.uuid}/config",
             side_effect=_handle_http_request,
         )
 
@@ -120,13 +120,13 @@ class DeviceContext:
         await self.api.hass.async_block_till_done()
         assert self.device.online
 
-    def warp(self, tick: float | int | timedelta = .5):
+    def warp(self, tick: float | int | timedelta = 0.5):
         """
-            starts an asynchronous task which manipulates our
-            freze_time so the time passes and get advanced to
-            time.time() + timeout.
-            While passing it tries to perform HA events rollout
-            every tick seconds
+        starts an asynchronous task which manipulates our
+        freze_time so the time passes and get advanced to
+        time.time() + timeout.
+        While passing it tries to perform HA events rollout
+        every tick seconds
         """
         assert self._warp_task is None
 
@@ -140,12 +140,9 @@ class DeviceContext:
             await hass.async_block_till_done()
 
         def _warp():
-            try:
-                while self._warp_run:
-                    run_coroutine_threadsafe(_async_tick(), hass.loop)
-                    #future.result(None)  # Wait for the result with a timeout
-            except Exception as error:
-                pass
+
+            while self._warp_run:
+                run_coroutine_threadsafe(_async_tick(), hass.loop)
 
         self._warp_run = True
         self._warp_task = hass.async_add_executor_job(_warp)
@@ -157,10 +154,10 @@ class DeviceContext:
         self._warp_task = None
 
     async def async_warp(
-            self,
-            timeout: float | int | timedelta | datetime,
-            tick: float | int | timedelta = 1
-        ):
+        self,
+        timeout: float | int | timedelta | datetime,
+        tick: float | int | timedelta = 1,
+    ):
 
         if not isinstance(timeout, datetime):
             if isinstance(timeout, timedelta):
@@ -177,13 +174,16 @@ class DeviceContext:
             await hass.async_block_till_done()
 
 
-
 @asynccontextmanager
-async def devicecontext(emulator: MerossEmulator | str, hass: HomeAssistant, aioclient_mock: 'AiohttpClientMocker'):
+async def devicecontext(
+    emulator: MerossEmulator | str,
+    hass: HomeAssistant,
+    aioclient_mock: "AiohttpClientMocker",
+):
     """
-        This is a 'full featured' context providing an emulator and setting it
-        up as a configured device in HA
-        It also provides timefreezing
+    This is a 'full featured' context providing an emulator and setting it
+    up as a configured device in HA
+    It also provides timefreezing
     """
     with emulator_mock(emulator, aioclient_mock) as emulator:
         with freeze_time() as frozen_time:

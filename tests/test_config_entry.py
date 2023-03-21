@@ -1,33 +1,17 @@
 """Test meross_lan config entry setup"""
-from unittest.mock import ANY
-
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-)
-from pytest_homeassistant_custom_component.test_util.aiohttp import (
-    AiohttpClientMocker,
-)
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.meross_lan import MerossApi
-from custom_components.meross_lan.const import (
-    DOMAIN,
-)
-from custom_components.meross_lan.emulator import generate_emulators
+from custom_components.meross_lan.const import DOMAIN
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.sensor import RuntimeMixin
+from emulator import generate_emulators
 
 from .conftest import MQTTMock
-from .const import (
-    EMULATOR_TRACES_PATH,
-    MOCK_DEVICE_IP,
-    MOCK_DEVICE_UUID,
-    MOCK_HUB_CONFIG,
-    MOCK_KEY,
-    MOCK_POLLING_PERIOD
-)
+from .const import EMULATOR_TRACES_PATH, MOCK_DEVICE_UUID, MOCK_HUB_CONFIG, MOCK_KEY
 from .helpers import devicecontext
 
 
@@ -49,7 +33,7 @@ async def test_mqtthub_entry(hass: HomeAssistant, mqtt_patch: MQTTMock):
 
     assert api.mqtt_is_subscribed()
 
-    #mqtt_available.async_subscribe.assert_called_once_with(hass, mc.TOPIC_DISCOVERY, ANY)
+    # mqtt_available.async_subscribe.assert_called_once_with(hass, mc.TOPIC_DISCOVERY, ANY)
 
     # Unload the entry and verify that the data has not been removed
     # we actually never remove the MerossApi...
@@ -79,7 +63,9 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
     by communicating to MerossEmulator through the aioclient_mock
     i.e. we're testing something close to http connected devices
     """
-    for emulator in generate_emulators(EMULATOR_TRACES_PATH, MOCK_DEVICE_UUID, MOCK_KEY):
+    for emulator in generate_emulators(
+        EMULATOR_TRACES_PATH, MOCK_DEVICE_UUID, MOCK_KEY
+    ):
 
         async with devicecontext(emulator, hass, aioclient_mock) as context:
 
@@ -110,4 +96,3 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
             if sensor_runtime is not None:
                 runtimestate = hass.states.get(sensor_runtime.entity_id)  # type: ignore
                 assert runtimestate.state.isdigit()  # type: ignore
-
