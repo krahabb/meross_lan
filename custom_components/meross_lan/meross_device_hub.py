@@ -8,7 +8,7 @@ from homeassistant.helpers import device_registry
 from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
-from .const import DOMAIN, PARAM_HEARTBEAT_PERIOD, PARAM_HUBBATTERY_UPDATE_PERIOD
+from .const import DOMAIN, PARAM_HUBBATTERY_UPDATE_PERIOD
 from .helpers import Loggable, schedule_async_callback
 from .meross_device import MerossDevice
 from .meross_profile import ApiProfile
@@ -204,6 +204,7 @@ class MerossDeviceHub(MerossDevice):
                         subdevice.type,
                         p_id,
                     )
+
                 # before reloading we have to be sure configentry data were persisted
                 # so we'll wait a bit..
                 # also, we're not registering an unsub and we're not checking
@@ -319,6 +320,15 @@ class MerossSubDevice(Loggable):
         self._online = False
         self.hub = hub
         hub.subdevices[_id] = self
+
+        if (
+            hub._cloud_profile is not None
+            and (subdevice_info := hub._cloud_profile.get_subdevice_info(hub.device_id, _id))
+        ):
+            devname = subdevice_info.get(mc.KEY_DEVNAME) or get_productnameuuid(_type, str(_id))
+        else:
+            devname = get_productnameuuid(_type, str(_id))
+
         self.deviceentry_id = {"identifiers": {(DOMAIN, _id)}}
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             self._deviceentry = weakref.ref(
@@ -326,7 +336,7 @@ class MerossSubDevice(Loggable):
                     config_entry_id=hub.entry_id,
                     via_device=next(iter(hub.deviceentry_id["identifiers"])),
                     manufacturer=mc.MANUFACTURER,
-                    name=get_productnameuuid(_type, str(_id)),
+                    name=devname,
                     model=_type,
                     **self.deviceentry_id,
                 )

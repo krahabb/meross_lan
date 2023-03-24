@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-from datetime import datetime, timezone, tzinfo
+from datetime import datetime, timezone
 from io import TextIOWrapper
 from json import dumps as json_dumps
 from logging import DEBUG, INFO, getLevelName as logging_getLevelName
@@ -233,9 +233,8 @@ class MerossDevice(Loggable):
         self.curr_protocol = self.pref_protocol
 
         if (
-            self.profile_id
-            and (profile := ApiProfile.api.get_profile_by_id(self.profile_id))
-            and (device_info := profile.get_device_info(self.device_id))
+            self._cloud_profile is not None
+            and (device_info := self._cloud_profile.get_device_info(self.device_id))
         ):
             devname = device_info.get(mc.KEY_DEVNAME) or descriptor.productname
         else:
@@ -291,7 +290,7 @@ class MerossDevice(Loggable):
         # NS_ALL) we'll give it a short 'advantage' before starting
         # the polling loop
         if self.conf_protocol is not CONF_PROTOCOL_HTTP:
-            self._mqtt_profile_attach()
+            self._mqtt_connection_attach()
 
         self._unsub_polling_callback = schedule_async_callback(
             ApiProfile.hass,
@@ -305,7 +304,7 @@ class MerossDevice(Loggable):
         we'll try to clear everything here
         """
         if self._mqtt_connection is not None:
-            self._mqtt_profile_detach()
+            self._mqtt_connection_detach()
         if self._unsub_entry_update_listener is not None:
             self._unsub_entry_update_listener()
             self._unsub_entry_update_listener = None
@@ -329,7 +328,7 @@ class MerossDevice(Loggable):
         return self.descriptor.timezone
 
     @property
-    def tzinfo(self) -> tzinfo:
+    def tzinfo(self):
         tz_name = self.descriptor.timezone
         if not tz_name:
             return timezone.utc
@@ -961,9 +960,10 @@ class MerossDevice(Loggable):
         if self.conf_protocol is CONF_PROTOCOL_HTTP:
             # strictly HTTP so detach MQTT in case
             if self._mqtt_connection is not None:
-                self._mqtt_profile_detach()
+                self._mqtt_connection_detach()
         else:
-            self._mqtt_profile_attach()
+            if self._mqtt_connection is None:
+                self._mqtt_connection_attach()
 
         if self.conf_protocol is not CONF_PROTOCOL_AUTO:
             if self.curr_protocol is not self.pref_protocol:
@@ -1204,7 +1204,22 @@ class MerossDevice(Loggable):
         """
         self._host = data.get(CONF_HOST)
         self.key = data.get(CONF_KEY) or ""
-        self.profile_id = data.get(CONF_PROFILE_ID)
+        profile_id = data.get(CONF_PROFILE_ID)
+        if self.profile_id != profile_id:
+            if self._mqtt_connection is not None:
+                self._mqtt_connection_detach()
+            self._cloud_profile = None
+            if profile_id:
+                if self.descriptor.userId != profile_id:
+                    self.warning(
+                        "cloud profile(%s) does not match device user(%s)",
+                        profile_id,
+                        str(self.descriptor.userId),
+                    )
+                else:
+                    self._cloud_profile = ApiProfile.profiles.get(profile_id)
+            self.profile_id = profile_id
+
         self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(
             data.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO
         )
@@ -1227,29 +1242,14 @@ class MerossDevice(Loggable):
             self.polling_period = CONF_POLLING_PERIOD_MIN
         self._polling_delay = self.polling_period
 
-    def _mqtt_profile_attach(self):
+    def _mqtt_connection_attach(self):
+        # assert self._mqtt_connection is None
         if self.profile_id:
             # this is the case for when we want to use meross cloud mqtt.
             # On config entry update we might be already connected to the right
             # cloud_profile...
-            if self._mqtt_connection is not None:
-                if (
-                    self._cloud_profile is None
-                    or self._cloud_profile.id != self.profile_id
-                ):
-                    self._mqtt_profile_detach()
-
-            if self._mqtt_connection is None:
-                if self.descriptor.userId != self.profile_id:
-                    self.warning(
-                        "cloud profile(%s) does not match device user(%s)",
-                        self.profile_id,
-                        str(self.descriptor.userId),
-                    )
-                else:
-                    self._cloud_profile = ApiProfile.profiles.get(self.profile_id)
-                    if self._cloud_profile is not None:
-                        self._cloud_profile.attach(self)
+            if self._cloud_profile is not None:
+                self._cloud_profile.attach(self)
         else:
             # this is the case for when we just want local handling
             # in this scenario we bind anyway to our local mqtt api
@@ -1262,18 +1262,14 @@ class MerossDevice(Loggable):
             # fill our local mqtt structures with unuseful data..
             # Right now add anyway since it's no harm
             # (no mqtt messages will come though)
-            if self._mqtt_connection is not ApiProfile.api:
-                if self._mqtt_connection is not None:
-                    self._mqtt_profile_detach()
-                ApiProfile.api.attach(self)
+            ApiProfile.api.attach(self)
 
-    def _mqtt_profile_detach(self):
-        if self._mqtt_connection is not None:
-            self._mqtt_connection.detach(self)
-            self._mqtt_connection = None
-            if self._mqtt is not None:
-                self.mqtt_disconnected()
-            self._cloud_profile = None
+    def _mqtt_connection_detach(self):
+        # assert self._mqtt_connection is not None
+        self._mqtt_connection.detach(self)  # type: ignore
+        self._mqtt_connection = None
+        if self._mqtt is not None:
+            self.mqtt_disconnected()
 
     def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
         """

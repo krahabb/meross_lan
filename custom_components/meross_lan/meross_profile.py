@@ -23,7 +23,6 @@ from .const import (
     DOMAIN,
     PARAM_CLOUDAPI_DELAYED_SETUP_TIMEOUT,
     PARAM_CLOUDAPI_QUERY_DEVICELIST_TIMEOUT,
-    PARAM_HEARTBEAT_PERIOD,
     PARAM_UNAVAILABILITY_TIMEOUT,
 )
 from .helpers import LOGGER, ConfigEntriesHelper, Loggable, schedule_async_callback
@@ -218,7 +217,7 @@ class MQTTConnection(Loggable):
                 return
 
             key = self.profile.key
-            if (replykey := get_replykey(header, key)) is not key:
+            if get_replykey(header, key) is not key:
                 self.warning(
                     "discovery key error for device_id: %s",
                     device_id,
@@ -514,6 +513,10 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
 
     def get_device_info(self, uuid: str) -> DeviceInfoType | None:
         return self[KEY_DEVICE_INFO].get(uuid)
+
+    def get_subdevice_info(self, uuid: str, subdevice_id: str) -> DeviceInfoType | None:
+        # TODO: retrieve subdevice list from cloud
+        return None
 
     async def async_update_credentials(self, credentials: MerossCloudCredentials):
         assert self.userid == credentials.userid
