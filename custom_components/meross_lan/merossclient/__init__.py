@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Union
 from uuid import uuid4
 from hashlib import md5
-from time import time
 
 from . import const as mc
 

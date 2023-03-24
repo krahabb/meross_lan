@@ -117,6 +117,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     """
     base 'abstract' class for meross light entities
     """
+
     PLATFORM = light.DOMAIN
     """
     internal copy of the actual meross light state
@@ -189,6 +190,7 @@ class MLLight(MLLightBase):
     light entity for Meross bulbs and any device supporting light api
     (identified from devices carrying 'light' node in SYSTEM_ALL payload)
     """
+
     device: LightMixin
 
     _attr_max_mireds = MSLANY_MIRED_MAX
@@ -330,9 +332,10 @@ class MLLight(MLLightBase):
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
-                self._light = {} # invalidate so _parse_light will force-flush
+                self._light = {}  # invalidate so _parse_light will force-flush
                 self._attr_state = me.STATE_ON
                 self._parse_light(light)
+
         await self.device.async_request_light(light, _ack_callback)
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
@@ -350,8 +353,11 @@ class MLLight(MLLightBase):
                     self.update_onoff(0)
 
             await self.device.async_request_light(
-                {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0},
-                _ack_callback
+                {
+                    mc.KEY_CHANNEL: self.channel,
+                    mc.KEY_ONOFF: 0,
+                },
+                _ack_callback,
             )
 
     def update_effect_map(self, light_effect_map: dict):
@@ -495,6 +501,6 @@ class LightMixin(
         await self.async_request(
             mc.NS_APPLIANCE_CONTROL_LIGHT,
             mc.METHOD_SET,
-            { mc.KEY_LIGHT: payload },
-            callback
+            {mc.KEY_LIGHT: payload},
+            callback,
         )

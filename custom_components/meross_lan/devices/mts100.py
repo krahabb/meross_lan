@@ -10,11 +10,9 @@ import homeassistant.util.dt as dt
 from .. import meross_entity as me
 from ..calendar import (
     EVENT_END,
-    EVENT_RECURRENCE_ID,
     EVENT_RRULE,
     EVENT_START,
     EVENT_SUMMARY,
-    EVENT_UID,
     CalendarEntityFeature,
     CalendarEvent,
     MLCalendar,
