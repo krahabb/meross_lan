@@ -209,7 +209,7 @@ class MQTTConnection(Loggable):
             # also skip discovered integrations waiting in HA queue
             if config_entries_helper.get_config_flow(device_id) is not None:
                 self.log(
-                    INFO,
+                    DEBUG,
                     "ignoring discovery for device_id: %s (ConfigFlow is in progress)",
                     device_id,
                     timeout=14400,  # type: ignore

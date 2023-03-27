@@ -5,7 +5,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from io import TextIOWrapper
 from json import dumps as json_dumps
-from logging import DEBUG, INFO, getLevelName as logging_getLevelName
+from logging import DEBUG, getLevelName as logging_getLevelName
 import os
 import socket
 from time import gmtime, localtime, strftime, time
@@ -753,7 +753,7 @@ class MerossDevice(Loggable):
                         raise exception
                     self.lasthttpresponse = 0
                     self.log_exception(
-                        INFO,
+                        DEBUG,
                         exception,
                         "async_http_request %s %s attempt(%s)",
                         method,
@@ -1168,7 +1168,7 @@ class MerossDevice(Loggable):
 
     def _switch_protocol(self, protocol):
         self.log(
-            INFO,
+            DEBUG,
             "switching protocol to %s",
             protocol,
         )
