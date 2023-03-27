@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+
 pytest_plugins = "pytest_homeassistant_custom_component"
 
 MqttMockPahoClient = MagicMock
@@ -27,11 +28,15 @@ MqttMockHAClient = MagicMock
 """MagicMock for `homeassistant.components.mqtt.MQTT`."""
 MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
-
-# This fixture enables loading custom integrations in all tests.
-# Remove to enable selective use of this fixture
+# Test initialization must ensure custom_components are enabled
+# but we can't autouse a simple fixture for that since the recorder
+# need to be initialized first
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
+def auto_enable(request: pytest.FixtureRequest):
+    if "recorder_mock" in request.fixturenames:
+        request.getfixturevalue("recorder_mock")
+    hass = request.getfixturevalue("hass")
+    hass.data.pop("custom_components")
     yield
 
 

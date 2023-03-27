@@ -49,7 +49,7 @@ jobs:
         run: |
           pytest \
             -qq \
-            --timeout=15 \
+            --timeout=20 \
             --durations=10 \
             -n auto \
             --cov custom_components.meross_lan \

@@ -11,6 +11,12 @@ from custom_components.meross_lan.merossclient import const as mc
 
 
 class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+
+    # used to 'fix' and control the power level in tests
+    # if None (default) it will generate random values
+    _power_set: int | None = None
+    power: int
+
     def __init__(self, descriptor: MerossEmulatorDescriptor, key):
         super().__init__(descriptor, key)
         self.payload_electricity = descriptor.namespaces[
@@ -19,6 +25,12 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         self.electricity = self.payload_electricity[mc.KEY_ELECTRICITY]
         self.voltage_average: int = self.electricity[mc.KEY_VOLTAGE] or 2280
         self.power = self.electricity[mc.KEY_POWER]
+        self._power_set = None
+
+    def set_power(self, power: int | None):
+        self._power_set = power
+        if power is not None:
+            self.power = self.electricity[mc.KEY_POWER] = power
 
     def _GET_Appliance_Control_Electricity(self, header, payload):
         """
@@ -32,25 +44,25 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             }
         }
         """
+        if self._power_set is None:
+            if randint(0, 5) == 0:
+                # make a big power step
+                power = self.power + randint(-1000000, 1000000)
+            else:
+                # make some noise
+                power = self.power + randint(-1000, 1000)
+            if power > 3600000:
+                power = 3600000
+            elif power < 0:
+                power = 0
+        else:
+            power = self._power_set
+
         p_electricity = self.electricity
-        power: int = p_electricity[mc.KEY_POWER]  # power in mW
-        if randint(0, 5) == 0:
-            # make a big power step
-            power += randint(-1000000, 1000000)
-        else:
-            # make some noise
-            power += randint(-1000, 1000)
-
-        if power > 3600000:
-            p_electricity[mc.KEY_POWER] = self.power = 3600000
-        elif power < 0:
-            p_electricity[mc.KEY_POWER] = self.power = 0
-        else:
-            p_electricity[mc.KEY_POWER] = self.power = int(power)
-
+        p_electricity[mc.KEY_POWER] = self.power = power
         p_electricity[mc.KEY_VOLTAGE] = self.voltage_average + randint(-20, 20)
         p_electricity[mc.KEY_CURRENT] = int(
-            10 * self.power / p_electricity[mc.KEY_VOLTAGE]
+            10 * power / p_electricity[mc.KEY_VOLTAGE]
         )
         return mc.METHOD_GETACK, self.payload_electricity
 
@@ -60,9 +72,6 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     # this is a static default but we're likely using
     # the current 'power' state managed by the ElectricityMixin
     power = 0.0  # in mW
-    energy = 0.0  # in Wh
-    epoch_prev: int
-    power_prev = 0.0
 
     BUG_RESET = True
 
@@ -89,11 +98,13 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             self.payload_consumptionx[mc.KEY_CONSUMPTIONX] = p_consumptionx
 
         self.consumptionx = p_consumptionx
-        self.epoch_prev = self.epoch
+        self._epoch_prev = self.epoch
+        self._power_prev = None
+        self._energy_fraction = 0.0  # in Wh
         # REMOVE
         # "Asia/Bangkok" GMT + 7
         # "Asia/Baku" GMT + 4
-        descriptor.timezone = descriptor.time[mc.KEY_TIMEZONE] = "Asia/Baku"
+        self.set_timezone("Asia/Baku")
 
     def _GET_Appliance_Control_ConsumptionX(self, header, payload):
         """
@@ -107,17 +118,22 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         }
         """
         # energy will be reset every time we update our consumptionx array
-        self.energy += (
-            (self.power + self.power_prev) * (self.epoch - self.epoch_prev) / 7200000
-        )
-        self.epoch_prev = self.epoch
-        self.power_prev = self.power
+        if self._power_prev is None:
+            self._energy_fraction += (
+                self.power * (self.epoch - self._epoch_prev) / 3600000
+            )
+        else:
+            self._energy_fraction += (
+                (self.power + self._power_prev) * (self.epoch - self._epoch_prev) / 7200000
+            )
+        self._epoch_prev = self.epoch
+        self._power_prev = self.power
 
-        if self.energy < 1.0:
+        if self._energy_fraction < 1.0:
             return mc.METHOD_GETACK, self.payload_consumptionx
 
-        energy = int(self.energy)
-        self.energy -= energy
+        energy = int(self._energy_fraction)
+        self._energy_fraction -= energy
 
         y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(self.epoch)
         ss = min(ss, 59)  # clamp out leap seconds if the platform has them

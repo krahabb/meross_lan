@@ -153,6 +153,12 @@ class MerossEmulator:
         self.update_epoch()
         print(f"Initialized {descriptor.productname} (model:{descriptor.productmodel})")
 
+    def set_timezone(self, timezone: str):
+        # beware when using TZ names: here we expect a IANA zoneinfo key
+        # as "US/Pacific" or so. Using tzname(s) like "PDT" or "PST"
+        # such as those recovered from tzinfo.tzname() might be wrong
+        self.descriptor.timezone = self.descriptor.time[mc.KEY_TIMEZONE] = timezone
+
     @property
     def tzinfo(self):
         tz_name = self.descriptor.timezone
