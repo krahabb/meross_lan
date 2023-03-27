@@ -19,7 +19,6 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-
 pytest_plugins = "pytest_homeassistant_custom_component"
 
 MqttMockPahoClient = MagicMock

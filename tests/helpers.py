@@ -1,16 +1,13 @@
 """"""
 from asyncio import Future, run_coroutine_threadsafe
-from contextlib import contextmanager, asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta
-from typing import NewType, Type, TypeAlias, TypeVar, Generic
 
-from freezegun.api import freeze_time, FrozenDateTimeFactory, StepTickTimeFactory
-
+from freezegun.api import FrozenDateTimeFactory, StepTickTimeFactory, freeze_time
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
-
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed_exact,
@@ -33,8 +30,7 @@ from custom_components.meross_lan.const import (
     PARAM_COLDSTARTPOLL_DELAY,
 )
 from custom_components.meross_lan.merossclient import const as mc
-import emulator
-from emulator import MerossEmulator
+from emulator import build_emulator as emulator_build_emulator, MerossEmulator
 
 from .const import (
     EMULATOR_TRACES_MAP,
@@ -46,12 +42,10 @@ from .const import (
 )
 
 
-MerossDeviceType = TypeVar('MerossDeviceType', bound=MerossDevice)
-
 def build_emulator(model: str) -> MerossEmulator:
     # Watchout: this call will not use the uuid and key set
     # in the filename, just DEFAULT_UUID and DEFAULT_KEY
-    return emulator.build_emulator(
+    return emulator_build_emulator(
         EMULATOR_TRACES_PATH + EMULATOR_TRACES_MAP[model], MOCK_DEVICE_UUID, MOCK_KEY
     )
 
@@ -80,7 +74,7 @@ def build_emulator_config_entry(emulator: MerossEmulator):
 @contextmanager
 def emulator_mock(
     emulator_: MerossEmulator | str,
-    aioclient_mock: 'AiohttpClientMocker',
+    aioclient_mock: "AiohttpClientMocker",
     frozen_time: FrozenDateTimeFactory | StepTickTimeFactory | None = None,
 ):
     """
@@ -93,9 +87,11 @@ def emulator_mock(
             emulator_ = build_emulator(emulator_)
 
         async def _handle_http_request(method, url, data):
-            response = emulator_.handle(data) # pylint: disable=no-member
+            response = emulator_.handle(data)  # pylint: disable=no-member
             if frozen_time is not None:
-                frozen_time.tick(timedelta(seconds=MOCK_HTTP_RESPONSE_DELAY))  # emulate http roundtrip time
+                frozen_time.tick(
+                    timedelta(seconds=MOCK_HTTP_RESPONSE_DELAY)
+                )  # emulate http roundtrip time
             return AiohttpClientMockResponse(method, url, json=response)
 
         # we'll use the uuid so we can mock multiple at the same time
@@ -112,12 +108,13 @@ def emulator_mock(
         aioclient_mock.clear_requests()
 
 
-class DeviceContext(Generic[MerossDeviceType]):
+class DeviceContext:
     hass: HomeAssistant
     config_entry: MockConfigEntry
     api: MerossApi
     emulator: MerossEmulator
-    device: MerossDeviceType | None
+    device_id: str
+    device: MerossDevice | None
     time: FrozenDateTimeFactory | StepTickTimeFactory
     _warp_task: Future | None = None
     _warp_run: bool
@@ -150,7 +147,7 @@ class DeviceContext(Generic[MerossDeviceType]):
         assert await hass.config_entries.async_unload(self.config_entry.entry_id)
         await hass.async_block_till_done()
         assert self.config_entry.unique_id not in hass.data[DOMAIN].devices
-        self.device = None # discard our local reference so the device gets destroyed
+        self.device = None  # discard our local reference so the device gets destroyed
 
     async def async_enable_entity(self, entity_id):
         # entity enable will reload the config_entry
@@ -162,7 +159,9 @@ class DeviceContext(Generic[MerossDeviceType]):
         # fire the entity registry changed
         await self.hass.async_block_till_done()
         # perform the reload task after RELOAD_AFTER_UPDATE_DELAY
-        await self.async_tick(timedelta(seconds=config_entries.RELOAD_AFTER_UPDATE_DELAY))
+        await self.async_tick(
+            timedelta(seconds=config_entries.RELOAD_AFTER_UPDATE_DELAY)
+        )
         # gather the new instances
         self.api = self.hass.data[DOMAIN]
         self.device = self.api.devices[self.config_entry.unique_id]
@@ -170,6 +169,7 @@ class DeviceContext(Generic[MerossDeviceType]):
         await self.perform_coldstart()
 
     async def async_tick(self, tick: timedelta):
+        print(f"async_tick: time={self.time} tick={tick}")
         self.time.tick(tick)
         async_fire_time_changed_exact(self.hass)
         await self.hass.async_block_till_done()
@@ -182,7 +182,7 @@ class DeviceContext(Generic[MerossDeviceType]):
     async def async_warp(
         self,
         timeout: float | int | timedelta | datetime,
-        tick: float | int | timedelta = 1
+        tick: float | int | timedelta = 1,
     ):
         if not isinstance(timeout, datetime):
             if isinstance(timeout, timedelta):
@@ -195,7 +195,7 @@ class DeviceContext(Generic[MerossDeviceType]):
         while self.time() < timeout:
             await self.async_tick(tick)
 
-    def warp(self, tick: float | int | timedelta = .5):
+    def warp(self, tick: float | int | timedelta = 0.5):
         """
         starts an asynchronous task which manipulates our
         freze_time so the time passes and get advanced to
@@ -209,9 +209,11 @@ class DeviceContext(Generic[MerossDeviceType]):
             tick = timedelta(seconds=tick)
 
         def _warp():
-
+            count = 0
             while self._warp_run:
                 run_coroutine_threadsafe(self.async_tick(tick), self.hass.loop)
+                print(f"Executor: _warp count={count}")
+                count += 1
 
         self._warp_run = True
         self._warp_task = self.hass.async_add_executor_job(_warp)
@@ -244,6 +246,7 @@ async def devicecontext(
             context.emulator = emulator
             context.config_entry = build_emulator_config_entry(emulator)
             context.config_entry.add_to_hass(hass)
+            context.device_id = emulator.descriptor.uuid
             context.device = None
             await context.async_load_config_entry()
             try:

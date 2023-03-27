@@ -1,11 +1,17 @@
 """Test meross_lan config entry setup"""
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import (
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+)
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.meross_lan import MerossApi
 from custom_components.meross_lan.const import DOMAIN
+from custom_components.meross_lan.light import MLDNDLightEntity
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.sensor import RuntimeMixin
 from emulator import generate_emulators
@@ -21,19 +27,16 @@ from .helpers import devicecontext
 # Assertions allow you to verify that the return value of whatever is on the left
 # side of the assertion matches with the right side.
 async def test_mqtthub_entry(hass: HomeAssistant, mqtt_patch: MQTTMock):
-    """Test entry setup and unload."""
-    # Create a mock entry so we don't have to go through config flow
+    """Test mqtt hub entry setup and unload."""
     config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_HUB_CONFIG)
     config_entry.add_to_hass(hass)
 
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
-    api: MerossApi = hass.data[DOMAIN]
-    assert type(api) == MerossApi
+    api = hass.data[DOMAIN]
+    assert isinstance(api, MerossApi)
 
     assert api.mqtt_is_subscribed()
-
-    # mqtt_available.async_subscribe.assert_called_once_with(hass, mc.TOPIC_DISCOVERY, ANY)
 
     # Unload the entry and verify that the data has not been removed
     # we actually never remove the MerossApi...
@@ -42,7 +45,7 @@ async def test_mqtthub_entry(hass: HomeAssistant, mqtt_patch: MQTTMock):
 
 
 async def test_mqtthub_entry_notready(hass: HomeAssistant):
-    # Test ConfigEntryNotReady when API raises an exception during entry setup.
+    """ Test ConfigEntryNotReady when API raises an exception during entry setup"""
     config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_HUB_CONFIG)
     config_entry.add_to_hass(hass)
     # In this case we are testing the condition where async_setup_entry raises
@@ -69,30 +72,29 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
 
         async with devicecontext(emulator, hass, aioclient_mock) as context:
 
-            device = context.device
+            assert (device := context.device)
             device_ability = emulator.descriptor.ability
 
             entity_dnd = None
             if mc.NS_APPLIANCE_SYSTEM_DNDMODE in device_ability:
                 entity_dnd = device.entity_dnd
-                dndstate = hass.states.get(entity_dnd.entity_id)  # type: ignore
-                assert dndstate
-                assert dndstate.state == "unavailable"
+                assert isinstance(entity_dnd, MLDNDLightEntity)
+                dndstate = hass.states.get(entity_dnd.entity_id)
+                assert dndstate and dndstate.state == STATE_UNAVAILABLE
 
             sensor_runtime = None
             if mc.NS_APPLIANCE_SYSTEM_RUNTIME in device_ability:
                 assert isinstance(device, RuntimeMixin)
                 sensor_runtime = device._sensor_runtime
                 runtimestate = hass.states.get(sensor_runtime.entity_id)
-                assert runtimestate
-                assert runtimestate.state == "unavailable"
+                assert runtimestate and runtimestate.state == STATE_UNAVAILABLE
 
             await context.perform_coldstart()
 
             if entity_dnd is not None:
-                dndstate = hass.states.get(entity_dnd.entity_id)  # type: ignore
-                assert dndstate.state in ("on", "off")  # type: ignore
+                dndstate = hass.states.get(entity_dnd.entity_id)
+                assert dndstate and dndstate.state in (STATE_OFF, STATE_ON)
 
             if sensor_runtime is not None:
-                runtimestate = hass.states.get(sensor_runtime.entity_id)  # type: ignore
-                assert runtimestate.state.isdigit()  # type: ignore
+                runtimestate = hass.states.get(sensor_runtime.entity_id)
+                assert runtimestate and runtimestate.state.isdigit()

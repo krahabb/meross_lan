@@ -57,8 +57,6 @@ async def test_request_on_device(
     """
     async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
 
-        device_id = context.device.device_id
-
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -70,7 +68,7 @@ async def test_request_on_device(
             DOMAIN,
             SERVICE_REQUEST,
             service_data={
-                CONF_DEVICE_ID: device_id,
+                CONF_DEVICE_ID: context.device_id,
                 mc.KEY_NAMESPACE: mc.NS_APPLIANCE_CONTROL_TOGGLEX,
                 mc.KEY_METHOD: mc.METHOD_SET,
                 mc.KEY_PAYLOAD: json.dumps(
@@ -102,8 +100,6 @@ async def test_request_notification(
     """
     async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
 
-        device_id = context.device.device_id
-
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -112,7 +108,7 @@ async def test_request_notification(
             DOMAIN,
             SERVICE_REQUEST,
             service_data={
-                CONF_DEVICE_ID: device_id,
+                CONF_DEVICE_ID: context.device_id,
                 mc.KEY_NAMESPACE: mc.NS_APPLIANCE_SYSTEM_ALL,
                 CONF_NOTIFYRESPONSE: True,
             },
