@@ -10,7 +10,7 @@ from logging import (
 import os
 import socket
 import asyncio
-from time import strftime, time
+from time import gmtime, strftime, time
 from datetime import datetime, timezone, tzinfo
 from zoneinfo import ZoneInfo
 from uuid import uuid4
@@ -329,6 +329,18 @@ class MerossDevice:
     @property
     def online(self):
         return self._online
+
+    def get_datetime(self, epoch):
+        """
+        given the epoch (utc timestamp) returns the datetime
+        in device local timezone
+        """
+        y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
+        ss = min(ss, 59)  # clamp out leap seconds if the platform has them
+        devtime_utc = datetime(y, m, d, hh, mm, ss, 0, timezone.utc)
+        if (tz := self.tzinfo) is timezone.utc:
+            return devtime_utc
+        return devtime_utc.astimezone(tz)
 
     def receive(self, header: dict, payload: dict, protocol) -> bool:
         """

@@ -17,6 +17,7 @@ from custom_components.meross_lan.const import (
     CONF_TRACE_TIMEOUT_DEFAULT,
     PARAM_TRACING_ABILITY_POLL_TIMEOUT
 )
+from .const import MOCK_HTTP_RESPONSE_DELAY
 
 from .helpers import devicecontext
 
@@ -51,7 +52,7 @@ async def test_tracing(hass: HomeAssistant, aioclient_mock):
         await hass.async_block_till_done()
 
         assert context.device._trace_file
-        assert context.device._trace_endtime == time.time() + CONF_TRACE_TIMEOUT_DEFAULT
+        assert context.device._trace_endtime == time.time() + CONF_TRACE_TIMEOUT_DEFAULT - MOCK_HTTP_RESPONSE_DELAY
 
 
         await context.async_warp(
