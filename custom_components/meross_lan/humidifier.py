@@ -1,15 +1,15 @@
 from __future__ import annotations
+
 import typing
 
 from homeassistant.components import humidifier
+
 try:
-    from homeassistant.components.humidifier import (
-        HumidifierDeviceClass,
-    )
+    from homeassistant.components.humidifier import HumidifierDeviceClass
     from homeassistant.components.humidifier.const import (
-        HumidifierEntityFeature,
         MODE_ECO,
         MODE_NORMAL,
+        HumidifierEntityFeature,
     )
 
     DEVICE_CLASS_HUMIDIFIER = HumidifierDeviceClass.HUMIDIFIER
@@ -26,12 +26,13 @@ except:
 
 from homeassistant.const import STATE_OFF, STATE_ON
 
-from .merossclient import const as mc  # mEROSS cONST
 from . import meross_entity as me
+from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
     from .meross_device import MerossDevice
 
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from logging import DEBUG, WARNING
-from time import gmtime, time
+from logging import DEBUG
+from time import time
 import typing
 
 from homeassistant.components import sensor
@@ -14,13 +14,9 @@ from homeassistant.const import (
     POWER_WATT,
     TEMP_CELSIUS,
 )
-
-SensorEntity = sensor.SensorEntity
-
 from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
-from homeassistant.util.dt import now
 
 from . import meross_entity as me
 from .const import (
@@ -29,8 +25,7 @@ from .const import (
     PARAM_ENERGY_UPDATE_PERIOD,
     PARAM_SIGNAL_UPDATE_PERIOD,
 )
-from .helpers import StrEnum, get_entity_last_state_available
-from .meross_profile import ApiProfile
+from .helpers import ApiProfile, StrEnum, get_entity_last_state_available
 from .merossclient import const as mc, get_default_arguments  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
@@ -40,6 +35,7 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
     from .meross_device_hub import MerossSubDevice
 
+SensorEntity = sensor.SensorEntity
 try:
     SensorDeviceClass = sensor.SensorDeviceClass  # type: ignore
 except:
@@ -493,9 +489,7 @@ class ConsumptionSensor(MLSensor):
             self.reset_ts = 0
             if self._hass_connected:
                 self.async_write_ha_state()
-            self.log(
-                DEBUG, "no readings available for new day - resetting"
-            )
+            self.log(DEBUG, "no readings available for new day - resetting")
 
 
 class ConsumptionMixin(

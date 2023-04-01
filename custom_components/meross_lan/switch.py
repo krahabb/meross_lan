@@ -1,14 +1,15 @@
 from __future__ import annotations
+
 import typing
 
 from homeassistant.components import switch
 
-from .merossclient import const as mc  # mEROSS cONST
 from . import meross_entity as me
+from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
 
 
 try:

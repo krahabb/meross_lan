@@ -12,13 +12,12 @@ from __future__ import annotations
 import typing
 
 from homeassistant.const import STATE_OFF, STATE_ON
-from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import StateType
 
 from .const import CONF_DEVICE_ID, DOMAIN
 from .helpers import LOGGER, Loggable, StrEnum
-from .merossclient import const as mc, get_namespacekey, get_productnameuuid
+from .merossclient import const as mc, get_namespacekey
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry

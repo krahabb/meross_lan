@@ -1,17 +1,25 @@
 from __future__ import annotations
+
 import typing
 
-from ..climate import (
-    MtsClimate, MtsSetPointNumber,
-    PRESET_OFF, PRESET_CUSTOM, PRESET_COMFORT, PRESET_SLEEP, PRESET_AWAY, PRESET_AUTO,
-    ATTR_TEMPERATURE, TEMP_CELSIUS
-)
-from ..number import MLConfigNumber
-from ..sensor import MLSensor
 from ..binary_sensor import MLBinarySensor
-from ..switch import MLSwitch
+from ..climate import (
+    ATTR_TEMPERATURE,
+    PRESET_AUTO,
+    PRESET_AWAY,
+    PRESET_COMFORT,
+    PRESET_CUSTOM,
+    PRESET_OFF,
+    PRESET_SLEEP,
+    TEMP_CELSIUS,
+    MtsClimate,
+    MtsSetPointNumber,
+)
 from ..meross_entity import EntityCategory
 from ..merossclient import const as mc
+from ..number import MLConfigNumber
+from ..sensor import MLSensor
+from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice

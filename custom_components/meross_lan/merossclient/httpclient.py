@@ -3,24 +3,23 @@
     for Meross devices.
 """
 from __future__ import annotations
-from logging import Logger, getLogger, DEBUG
-from json import (
-    dumps as json_dumps,
-    loads as json_loads,
-)
+
 import asyncio
-import async_timeout
+from json import dumps as json_dumps, loads as json_loads
+from logging import DEBUG, Logger, getLogger
+
 import aiohttp
+import async_timeout
 from yarl import URL
 
 from . import (
-    const as mc,
+    MEROSSDEBUG,
     KeyType,
     MerossKeyError,
     MerossProtocolError,
     build_payload,
+    const as mc,
     get_replykey,
-    MEROSSDEBUG,
 )
 
 

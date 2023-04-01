@@ -1,16 +1,23 @@
 from __future__ import annotations
-import typing
+
 from copy import deepcopy
+import typing
+
 from homeassistant.components.diagnostics import REDACTED
 
 from . import MerossApi
-from .helpers import obfuscate
 from .const import (
-    CONF_DEVICE_ID, CONF_PAYLOAD,
-    CONF_HOST, CONF_KEY, CONF_CLOUD_KEY,
-    CONF_PROTOCOL, CONF_POLLING_PERIOD,
-    CONF_TRACE, CONF_TRACE_TIMEOUT,
+    CONF_CLOUD_KEY,
+    CONF_DEVICE_ID,
+    CONF_HOST,
+    CONF_KEY,
+    CONF_PAYLOAD,
+    CONF_POLLING_PERIOD,
+    CONF_PROTOCOL,
+    CONF_TRACE,
+    CONF_TRACE_TIMEOUT,
 )
+from .helpers import obfuscate
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry

@@ -1,21 +1,28 @@
 from __future__ import annotations
+
 import typing
 
-from ..merossclient import const as mc  # mEROSS cONST
+from ..helpers import reverse_lookup
 from ..light import (
-    MLLightBase,
+    ATTR_BRIGHTNESS,
+    ATTR_EFFECT,
+    ATTR_RGB_COLOR,
     COLOR_MODE_RGB,
-    SUPPORT_BRIGHTNESS, SUPPORT_COLOR, SUPPORT_EFFECT,
-    ATTR_RGB_COLOR, ATTR_BRIGHTNESS, ATTR_EFFECT,
+    SUPPORT_BRIGHTNESS,
+    SUPPORT_COLOR,
+    SUPPORT_EFFECT,
+    MLLightBase,
     _rgb_to_int,
-    _sat_1_100
+    _sat_1_100,
 )
+from ..merossclient import const as mc  # mEROSS cONST
 from ..select import (
+    OPTION_SPRAY_MODE_CONTINUOUS,
+    OPTION_SPRAY_MODE_ECO,
+    OPTION_SPRAY_MODE_OFF,
     MLSpray,
-    OPTION_SPRAY_MODE_OFF, OPTION_SPRAY_MODE_CONTINUOUS, OPTION_SPRAY_MODE_ECO,
 )
 from ..sensor import MLSensor
-from ..helpers import reverse_lookup
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice, ResponseCallbackType

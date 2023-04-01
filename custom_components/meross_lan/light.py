@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 import typing
 
 from homeassistant.components import light
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
-    ATTR_HS_COLOR,
     ATTR_COLOR_TEMP,
-    ATTR_RGB_COLOR,
     ATTR_EFFECT,
+    ATTR_HS_COLOR,
+    ATTR_RGB_COLOR,
 )
 
 # back-forward compatibility hell
@@ -41,12 +42,12 @@ try:
         COLOR_MODE_COLOR_TEMP = light.ColorMode.COLOR_TEMP
     except:
         from homeassistant.components.light import (
-            COLOR_MODE_UNKNOWN,
-            COLOR_MODE_ONOFF,
             COLOR_MODE_BRIGHTNESS,
-            COLOR_MODE_HS,
-            COLOR_MODE_RGB,
             COLOR_MODE_COLOR_TEMP,
+            COLOR_MODE_HS,
+            COLOR_MODE_ONOFF,
+            COLOR_MODE_RGB,
+            COLOR_MODE_UNKNOWN,
         )
 except:
     COLOR_MODE_UNKNOWN = ""  # leave empty so we don't use color_modes
@@ -58,16 +59,17 @@ except:
 
 import homeassistant.util.color as color_util
 
-from .merossclient import const as mc
 from . import meross_entity as me
-from .helpers import reverse_lookup
 from .const import DND_ID
+from .helpers import reverse_lookup
+from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
-    from .merossclient import MerossDeviceDescriptor
+    from homeassistant.core import HomeAssistant
+
     from .meross_device import MerossDevice, ResponseCallbackType
+    from .merossclient import MerossDeviceDescriptor
 
 """
     map light Temperature effective range to HA mired(s):

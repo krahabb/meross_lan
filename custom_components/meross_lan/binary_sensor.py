@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import typing
 
 from homeassistant.components import binary_sensor
@@ -6,8 +7,8 @@ from homeassistant.components import binary_sensor
 from . import meross_entity as me
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
 
 
 try:
