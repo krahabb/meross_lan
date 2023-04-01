@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from json import dumps as json_dumps, loads as json_loads
 from logging import DEBUG, INFO
 from time import time
@@ -10,6 +11,7 @@ import typing
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
+from homeassistant.helpers import storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_call_later
 import paho.mqtt.client as mqtt
@@ -21,11 +23,19 @@ from .const import (
     CONF_PROFILE_ID,
     CONF_PROFILE_ID_LOCAL,
     DOMAIN,
-    PARAM_CLOUDAPI_DELAYED_SETUP_TIMEOUT,
-    PARAM_CLOUDAPI_QUERY_DEVICELIST_TIMEOUT,
+    PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT,
+    PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT,
+    PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
     PARAM_UNAVAILABILITY_TIMEOUT,
 )
-from .helpers import LOGGER, ConfigEntriesHelper, Loggable, schedule_async_callback
+from .helpers import (
+    LOGGER,
+    ApiProfile,
+    ConfigEntriesHelper,
+    Loggable,
+    schedule_async_callback,
+)
+from .meross_device_hub import MerossDeviceHub
 from .merossclient import (
     MEROSSDEBUG,
     KeyType,
@@ -42,36 +52,18 @@ from .merossclient.cloudapi import (
     MerossMQTTClient,
     async_cloudapi_devicelist,
     async_cloudapi_logout,
+    async_cloudapi_subdevicelist,
 )
 
 if typing.TYPE_CHECKING:
     import asyncio
-    from typing import ClassVar
+    from typing import ClassVar, Final
 
     from homeassistant.core import HomeAssistant
 
     from . import MerossApi
     from .meross_device import MerossDevice
-    from .merossclient.cloudapi import DeviceInfoType
-
-KEY_DEVICE_INFO = "deviceInfo"
-KEY_DEVICE_INFO_TIME = "deviceInfoTime"
-
-
-class ApiProfile(Loggable):
-    """
-    base class for both MerossCloudProfile and MerossApi
-    allowing lightweight sharing of globals and defining
-    a common interface
-    """
-
-    hass: ClassVar[HomeAssistant]
-    api: ClassVar[MerossApi]
-    devices: ClassVar[dict[str, MerossDevice]] = {}
-    profiles: ClassVar[dict[str, MerossCloudProfile]] = {}
-
-    # instance attributes
-    key: str | None
+    from .merossclient.cloudapi import DeviceInfoType, SubDeviceInfoType
 
 
 class MQTTConnection(Loggable):
@@ -442,24 +434,70 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         userdata.add_job(self.set_mqtt_disconnected)
 
 
+class MerossCloudProfileStore(storage.Store[dict]):
+
+    VERSION = 1
+
+    def __init__(self, profile_id: str):
+        super().__init__(
+            ApiProfile.hass,
+            MerossCloudProfileStore.VERSION,
+            f"{DOMAIN}.profile.{profile_id}",
+        )
+
+
 class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
     """
     Represents and manages a cloud account profile used to retrieve keys
     and/or to manage cloud mqtt connection(s)
     """
 
-    def __init__(self, data: dict):
+    KEY_DEVICE_INFO: Final = "deviceInfo"
+    KEY_DEVICE_INFO_TIME: Final = "deviceInfoTime"
+    KEY_SUBDEVICE_INFO: Final = "__subDeviceInfo"
+
+    _stores_loading: ClassVar[dict[str, MerossCloudProfileStore]] = {}
+
+    @staticmethod
+    async def async_load(profile_id: str):
+        # see Store.async_load() to understand the 'overlapping'
+        # behavior of this call. MerossCloudProfile.async_load()
+        # is called while setting up our config entries
+        # and for each entry linking to the same profile we want
+        # to gate all of the (subsequent) overlapping calls that might
+        # arise. It is important to note we don't want to build a profile
+        # until we have the data...to avoid creating dumb entries
+        if profile_id in MerossCloudProfile._stores_loading:
+            # loading in async task..just gate the call
+            store = MerossCloudProfile._stores_loading[profile_id]
+            await store.async_load()
+        else:
+            store = MerossCloudProfileStore(profile_id)
+            MerossCloudProfile._stores_loading[profile_id] = store
+            try:
+                if data := await store.async_load():
+                    profile = MerossCloudProfile(data, store)
+                    profile.schedule_start()
+            finally:
+                MerossCloudProfile._stores_loading.pop(profile_id)
+
+    def __init__(self, data: dict, store: MerossCloudProfileStore | None = None):
         self.mqttconnections: dict[str, MerossMQTTConnection] = {}
         self.update(data)
-        if not isinstance(self.get(KEY_DEVICE_INFO), dict):
-            self[KEY_DEVICE_INFO] = {}
-            self[KEY_DEVICE_INFO_TIME] = self._last_query_devices = 0.0
+        if not isinstance(self.get(self.KEY_DEVICE_INFO), dict):
+            self[self.KEY_DEVICE_INFO] = {}
+            self[self.KEY_DEVICE_INFO_TIME] = self._last_query_devices = 0.0
         else:
-            self._last_query_devices = data.get(KEY_DEVICE_INFO_TIME, 0.0)
+            self._last_query_devices = data.get(self.KEY_DEVICE_INFO_TIME, 0.0)
             if not isinstance(self._last_query_devices, float):
                 self._last_query_devices = 0.0
         self._unsub_schedule_start: asyncio.TimerHandle | None = None
         self._unsub_polling_query_devices: asyncio.TimerHandle | None = None
+        if store is None:
+            self._store = MerossCloudProfileStore(self.id)
+            self.schedule_save_store()
+        else:
+            self._store = store
         ApiProfile.profiles[self.id] = self
 
     @property
@@ -471,29 +509,48 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
         return f"MerossCloudProfile({self.userid})"
 
     async def async_start(self):
-        self._unsub_schedule_start = None
-        if not await self.async_check_query_devices():
-            # the device refresh did not kick in or failed
-            # for whatever reason. We just scan the device_info
-            # we have and setup the polling
-            self._check_updated_device_info()
-
-    def schedule_start(self):
         """
-        Performs a delayed initialization of the profile with low priority
-        check tasks. This is called on integration setup when profiles are
-        loaded and scheduled to be run some time after the staggering boot.
-        Here we'll eventually download the updated device list
-        from the cloud profile and update our registry with data recovered
-        Also. We'll eventually setup the mqtt listeners in case our
+        Performs 'semi-cold' initialization of the profile by checking
+        if we need to update the device_info and eventually start the
+        unknown devices discovery.
+        We'll eventually setup the mqtt listeners in case our
         configured devices don't match the profile list. This usually means
         the user has binded a new device and we need to 'discover' it.
         Keep in mind discovery might already be working if any of our configured
         devices is already setup (not disabled!) and is using the same
-        cloud mqtt broker. '_check_updated_device_info' then will just check that..
+        cloud mqtt broker. '_process_device_info_unknown' then will just check that..
+        """
+        self._unsub_schedule_start = None
+        if await self.async_check_query_devices() is None:
+            # the device_info refresh did not kick in or failed
+            # for whatever reason. We just scan the device_info
+            # we have and setup the polling
+            device_info_unknown = [
+                device_info
+                for uuid, device_info in self[self.KEY_DEVICE_INFO].items()
+                if uuid not in ApiProfile.devices.keys()
+            ]
+            if len(device_info_unknown):
+                await self._process_device_info_unknown(device_info_unknown)
+
+            if self._unsub_polling_query_devices is None:
+                # this happens when 'async_query_devices' is unable to
+                # retrieve fresh cloud data for whatever reason
+                self._unsub_polling_query_devices = schedule_async_callback(
+                    ApiProfile.hass,
+                    PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
+                    self._async_polling_query_devices,
+                )
+
+    def schedule_start(self):
+        """
+        Schedules a delayed initialization of the profile with low priority
+        check tasks. 'async_start' will just perform the tasks some time
+        after the staggering boot. This is called on startup when the profile is
+        reloaded from the store
         """
         self._unsub_schedule_start = schedule_async_callback(
-            ApiProfile.hass, PARAM_CLOUDAPI_DELAYED_SETUP_TIMEOUT, self.async_start
+            ApiProfile.hass, PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT, self.async_start
         )
 
     def shutdown(self):
@@ -505,6 +562,12 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
             self._unsub_polling_query_devices = None
         ApiProfile.profiles.pop(self.id)
 
+    def schedule_save_store(self):
+        def _data_func():
+            return self
+
+        self._store.async_delay_save(_data_func, PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT)
+
     def attach(self, device: MerossDevice):
         fw = device.descriptor.firmware
         self._get_or_create_mqttconnection(
@@ -512,71 +575,72 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
         ).attach(device)
 
     def get_device_info(self, uuid: str) -> DeviceInfoType | None:
-        return self[KEY_DEVICE_INFO].get(uuid)
-
-    def get_subdevice_info(self, uuid: str, subdevice_id: str) -> DeviceInfoType | None:
-        # TODO: retrieve subdevice list from cloud
-        return None
+        return self[self.KEY_DEVICE_INFO].get(uuid)
 
     async def async_update_credentials(self, credentials: MerossCloudCredentials):
         assert self.userid == credentials.userid
         assert self.key == credentials.key
         if credentials.token != self.token:
-            await self.async_release_token()
+            await self._async_release_token()
         self.update(credentials)
+        self.schedule_save_store()
         # the 'async_check_query_devices' will only occur if we didn't refresh
         # on our polling schedule for whatever reason (invalid token -
         # no connection - whatsoever) so, having a fresh token and likely
         # good connectivity we're going to retrigger that
         await self.async_check_query_devices()
 
-    async def async_release_token(self):
-        if mc.KEY_TOKEN in self:
-            if token := self.pop(mc.KEY_TOKEN):
-                await async_cloudapi_logout(
-                    token, async_get_clientsession(ApiProfile.hass)
-                )
-
     async def async_query_devices(self):
-        try:
-            if (token := self.token) is None:
-                return False
+        with self.cloud_token_exception_manager("async_query_devices") as token:
+            if token is None:
+                return None
             self._last_query_devices = time()
-            device_info_list = await async_cloudapi_devicelist(
+            device_info_new = await async_cloudapi_devicelist(
                 token, async_get_clientsession(ApiProfile.hass)
             )
-            self[KEY_DEVICE_INFO] = {
-                device_info[mc.KEY_UUID]: device_info
-                for device_info in device_info_list
-            }
-            self[KEY_DEVICE_INFO_TIME] = self._last_query_devices
-            ApiProfile.api.schedule_save_store()
-            self._check_updated_device_info()
-            return True
-        except CloudApiError as clouderror:
-            if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
-                self.pop(mc.KEY_TOKEN, None)
-            exception = clouderror
-        except Exception as e:
-            exception = e
-        self.log_exception_warning(exception, "async_query_devices")
-        return False
+            await self._process_device_info_new(device_info_new)
+            self[self.KEY_DEVICE_INFO_TIME] = self._last_query_devices
+            self.schedule_save_store()
+            # retrigger the poll at the right time since async_query_devices
+            # might be called for whatever reason 'asynchronously'
+            # at any time (say the user does a new cloud login or so...)
+            if self._unsub_polling_query_devices is not None:
+                self._unsub_polling_query_devices.cancel()
+            self._unsub_polling_query_devices = schedule_async_callback(
+                ApiProfile.hass,
+                PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
+                self._async_polling_query_devices,
+            )
+            return device_info_new
+
+        return None
 
     def need_query_devices(self):
         return (
             time() - self._last_query_devices
-        ) > PARAM_CLOUDAPI_QUERY_DEVICELIST_TIMEOUT
+        ) > PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
 
     async def async_check_query_devices(self):
         if self.need_query_devices():
             return await self.async_query_devices()
-        return False
+        return None
 
     def _get_or_create_mqttconnection(self, server, port):
         connection_id = f"{self.id}:{server}:{port}"
         if connection_id in self.mqttconnections:
             return self.mqttconnections[connection_id]
         return MerossMQTTConnection(self, connection_id, server, port)
+
+    @contextmanager
+    def cloud_token_exception_manager(self, msg: str, *args, **kwargs):
+        try:
+            yield self.token
+        except CloudApiError as clouderror:
+            if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
+                self.pop(mc.KEY_TOKEN, None)
+            self.log_exception_warning(clouderror, msg)
+        except Exception as exception:
+            self.log_exception_warning(exception, msg)
 
     async def _async_polling_query_devices(self):
         try:
@@ -588,50 +652,134 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
                 # retrieve fresh cloud data for whatever reason
                 self._unsub_polling_query_devices = schedule_async_callback(
                     ApiProfile.hass,
-                    PARAM_CLOUDAPI_QUERY_DEVICELIST_TIMEOUT,
+                    PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
                     self._async_polling_query_devices,
                 )
 
-    def _check_updated_device_info(self):
-        # _check_updated_device_info is called inside a succesful
-        # async_query_devices (when new data come from meross cloud)
-        # or at the start even if the async_query_devices didn't kick-in
-        # for whatever reason
-        devs: dict[str, DeviceInfoType] = self[KEY_DEVICE_INFO]
+    async def _async_release_token(self):
+        if mc.KEY_TOKEN in self:
+            if token := self.pop(mc.KEY_TOKEN):
+                await async_cloudapi_logout(
+                    token, async_get_clientsession(ApiProfile.hass)
+                )
+
+    async def _async_query_subdevices(self, uuid: str):
+        with self.cloud_token_exception_manager("_async_query_subdevices") as token:
+            if token is not None:
+                return await async_cloudapi_subdevicelist(
+                    token, uuid, async_get_clientsession(ApiProfile.hass)
+                )
+        return None
+
+    async def _process_device_info_new(
+        self, device_info_list_new: list[DeviceInfoType]
+    ):
+        device_info_dict: dict[str, DeviceInfoType] = self[self.KEY_DEVICE_INFO]
+        device_info_removed = {uuid for uuid in device_info_dict.keys()}
+        device_info_unknown: list[DeviceInfoType] = []
+        for device_info in device_info_list_new:
+            with self.exception_warning("_process_device_info_new"):
+                uuid = device_info[mc.KEY_UUID]
+
+                # preserved (old) dict of hub subdevices to process/carry over
+                # for MerossDeviceHub(s)
+                sub_device_info_dict: dict[str, SubDeviceInfoType] | None
+                if uuid in device_info_dict:
+                    # already known device
+                    device_info_removed.remove(uuid)
+                    sub_device_info_dict = device_info_dict[uuid].get(
+                        self.KEY_SUBDEVICE_INFO
+                    )
+                else:
+                    # new device
+                    sub_device_info_dict = None
+                device_info_dict[uuid] = device_info
+
+                if (device := ApiProfile.devices.get(uuid)) is not None:
+                    if isinstance(device, MerossDeviceHub):
+                        if sub_device_info_dict is None:
+                            sub_device_info_dict = {}
+                        device_info[self.KEY_SUBDEVICE_INFO] = sub_device_info_dict
+                        sub_device_info_list_new = await self._async_query_subdevices(
+                            uuid
+                        )
+                        if sub_device_info_list_new is not None:
+                            await self._process_subdevice_info_new(
+                                device, sub_device_info_dict, sub_device_info_list_new
+                            )
+
+                    device.update_device_info(device_info)
+                else:
+                    device_info_unknown.append(device_info)
+
+        for uuid in device_info_removed:
+            device_info_dict.pop(uuid)
+            # TODO: warn the user? should we remove the device ?
+
+        if len(device_info_unknown):
+            await self._process_device_info_unknown(device_info_unknown)
+
+    async def _process_subdevice_info_new(
+        self,
+        hub_device: MerossDeviceHub,
+        sub_device_info_dict: dict[str, SubDeviceInfoType],
+        sub_device_info_list_new: list[SubDeviceInfoType],
+    ):
+        sub_device_info_removed = {
+            subdeviceid for subdeviceid in sub_device_info_dict.keys()
+        }
+        sub_device_info_unknown: list[SubDeviceInfoType] = []
+
+        for sub_device_info in sub_device_info_list_new:
+            with self.exception_warning("_process_subdevice_info_new"):
+                subdeviceid = sub_device_info[mc.KEY_SUBDEVICEID]
+                if subdeviceid in sub_device_info_dict:
+                    # already known device
+                    sub_device_info_removed.remove(subdeviceid)
+
+                sub_device_info_dict[subdeviceid] = sub_device_info
+                if (subdevice := hub_device.subdevices.get(subdeviceid)) is not None:
+                    subdevice.update_device_info(sub_device_info)
+                else:
+                    sub_device_info_unknown.append(sub_device_info)
+
+        for subdeviceid in sub_device_info_removed:
+            sub_device_info_dict.pop(subdeviceid)
+            # TODO: warn the user? should we remove the subdevice from the hub?
+
+        if len(sub_device_info_unknown):
+            # subdevices were added.. discovery should be managed by the hub itself
+            # TODO: warn the user ?
+            pass
+
+    async def _process_device_info_unknown(
+        self, device_info_unknown: list[DeviceInfoType]
+    ):
         config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
-        unknown_devs = []
-        for uuid in devs.keys():
-            with self.exception_warning(f"_check_updated_device_info: uuid={uuid}"):
+        for device_info in device_info_unknown:
+            with self.exception_warning("_process_device_info_unknown"):
+                uuid = device_info[mc.KEY_UUID]
                 if config_entries_helper.get_config_entry(uuid) is not None:
                     continue
                 if config_entries_helper.get_config_flow(uuid) is not None:
                     continue
-                # cloud conf has new devices
-                unknown_devs.append(uuid)
-
-        for uuid in unknown_devs:
-            device_info = devs[uuid]
-            for hostkey in (mc.KEY_DOMAIN, mc.KEY_RESERVEDDOMAIN):
-                with self.exception_warning(
-                    f"_check_updated_device_info: unknown uuid={uuid}"
-                ):
-                    host = device_info[hostkey]
-                    mqttprofile = self._get_or_create_mqttconnection(host, 443)
-                    if mqttprofile.state_inactive:
-                        mqttprofile.schedule_connect()
-                    mqttprofile.get_or_set_discovering(uuid)
-                    if host == device_info[mc.KEY_RESERVEDDOMAIN]:
-                        # dirty trick to avoid looping when the 2 hosts
-                        # are the same
-                        break
-
-        # retrigger the poll at the right time since async_query_devices
-        # might be called for whatever reason 'asynchronously'
-        # at any time (say the user does a new cloud login or so...)
-        if self._unsub_polling_query_devices is not None:
-            self._unsub_polling_query_devices.cancel()
-        self._unsub_polling_query_devices = schedule_async_callback(
-            ApiProfile.hass,
-            PARAM_CLOUDAPI_QUERY_DEVICELIST_TIMEOUT,
-            self._async_polling_query_devices,
-        )
+                # cloud conf has a new device
+                for hostkey in (mc.KEY_DOMAIN, mc.KEY_RESERVEDDOMAIN):
+                    with self.exception_warning(
+                        f"_process_device_info_unknown: unknown uuid={uuid}"
+                    ):
+                        host_and_port = device_info[hostkey]
+                        if (colon_index := host_and_port.find(":")) != -1:
+                            host = host_and_port[0:colon_index]
+                            port = int(host_and_port[colon_index + 1 :])
+                        else:
+                            host = host_and_port
+                            port = 443
+                        mqttprofile = self._get_or_create_mqttconnection(host, port)
+                        if mqttprofile.state_inactive:
+                            mqttprofile.schedule_connect()
+                        mqttprofile.get_or_set_discovering(uuid)
+                        if host_and_port == device_info[mc.KEY_RESERVEDDOMAIN]:
+                            # dirty trick to avoid looping when the 2 hosts
+                            # are the same
+                            break

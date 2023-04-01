@@ -8,7 +8,6 @@ import typing
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
@@ -19,6 +18,7 @@ from .const import (
     CONF_KEY,
     CONF_NOTIFYRESPONSE,
     CONF_PAYLOAD,
+    CONF_PROFILE_ID,
     CONF_PROFILE_ID_LOCAL,
     CONF_PROTOCOL,
     CONF_PROTOCOL_HTTP,
@@ -26,9 +26,9 @@ from .const import (
     DOMAIN,
     SERVICE_REQUEST,
 )
-from .helpers import LOGGER, schedule_async_callback
+from .helpers import LOGGER, ApiProfile, schedule_async_callback
 from .meross_device import MerossDevice
-from .meross_profile import ApiProfile, MerossCloudProfile, MQTTConnection
+from .meross_profile import MerossCloudProfile, MQTTConnection
 from .merossclient import (
     MEROSSDEBUG,
     KeyType,
@@ -53,21 +53,11 @@ else:
     mqtt_async_publish = None
 
 
-class Store(storage.Store[dict]):
-
-    VERSION = 1
-
-    def __init__(self, hass: HomeAssistant):
-        super().__init__(hass, Store.VERSION, DOMAIN)
-
-
 class MerossApi(MQTTConnection, ApiProfile):
     """
     central meross_lan management (singleton) class which handles devices
     and MQTT discovery and message routing
     """
-
-    store: Store
     _unsub_mqtt_subscribe: Callable | None
     _unsub_mqtt_disconnected: Callable | None
     _unsub_mqtt_connected: Callable | None
@@ -98,7 +88,6 @@ class MerossApi(MQTTConnection, ApiProfile):
         hass: HomeAssistant, credentials: "MerossCloudCredentials"
     ):
         api = MerossApi.get(hass)
-        await api.async_load_store()
         profile_id = credentials.userid
         if profile_id not in api.profiles:
             profile = MerossCloudProfile(credentials)
@@ -106,7 +95,6 @@ class MerossApi(MQTTConnection, ApiProfile):
         else:
             profile = api.profiles[profile_id]
             await profile.async_update_credentials(credentials)
-        api.schedule_save_store()
         return profile
 
     def __init__(self, hass: HomeAssistant):
@@ -115,8 +103,6 @@ class MerossApi(MQTTConnection, ApiProfile):
         super().__init__(self, CONF_PROFILE_ID_LOCAL)
         self.deviceclasses: dict[str, type] = {}
         self.key = ""
-        self.store = None  # type: ignore
-        self.store_loaded = hass.loop.create_future()
         self._unsub_mqtt_subscribe = None
         self._unsub_mqtt_disconnected = None
         self._unsub_mqtt_connected = None
@@ -207,38 +193,6 @@ class MerossApi(MQTTConnection, ApiProfile):
             if device.descriptor.macAddress.replace(":", "").lower() == macaddress:
                 return device
         return None
-
-    async def async_load_store(self):
-        if self.store_loaded is None:
-            return
-        if self.store is not None:
-            await self.store_loaded
-            return
-
-        self.store = Store(self.hass)
-        try:
-            if data := await self.store.async_load():
-                for profile_data in data.get("profiles", []):
-                    profile = MerossCloudProfile(profile_data)
-                    profile.schedule_start()
-
-            if MEROSSDEBUG:
-                for dummy_profile in MEROSSDEBUG.cloud_profiles:
-                    if dummy_profile[mc.KEY_USERID_] in self.profiles:
-                        continue
-                    MerossCloudProfile(dummy_profile)
-                    self.schedule_save_store()
-
-        finally:
-            self.store_loaded.set_result(True)
-            self.store_loaded = None
-
-    def schedule_save_store(self):
-        def _data_func():
-            profiles_data = [profile for profile in self.profiles.values()]
-            return {"profiles": profiles_data}
-
-        self.store.async_delay_save(_data_func, 60)
 
     def get_profiles_map(self):
         profiles_map: dict[str, str] = {CONF_PROFILE_ID_LOCAL: "local only"}
@@ -534,7 +488,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     )
     api = MerossApi.get(hass)
 
-    await api.async_load_store()
+    if MEROSSDEBUG:
+        for dummy_profile in MEROSSDEBUG.cloud_profiles:
+            if dummy_profile[mc.KEY_USERID_] in api.profiles:
+                continue
+            MerossCloudProfile(dummy_profile)
 
     device_id = entry.data.get(CONF_DEVICE_ID)
     if (device_id is None) or (entry.data.get(CONF_PROTOCOL) != CONF_PROTOCOL_HTTP):
@@ -560,6 +518,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             api.entry_update_listener
         )
     else:
+        if profile_id := entry.data.get(CONF_PROFILE_ID):
+            if profile_id not in api.profiles:
+                await MerossCloudProfile.async_load(profile_id)
         device = api.build_device(device_id, entry)
         await asyncio.gather(
             *(
@@ -585,7 +546,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         mc.KEY_KEY: cloud_key,
                     },
                 )
-                api.schedule_save_store()
                 # TODO: raise an HA repair
 
         device.start()

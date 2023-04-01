@@ -269,6 +269,9 @@ KEY_USERID_ = "userid"
 KEY_DEVNAME = "devName"
 KEY_DOMAIN = "domain"
 KEY_RESERVEDDOMAIN = "reservedDomain"
+KEY_SUBDEVICEID = "subDeviceId"
+KEY_SUBDEVICENAME = "subDeviceName"
+
 
 # 'well-know' syntax for METHOD_GET
 PAYLOAD_GET = {

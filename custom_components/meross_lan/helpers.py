@@ -34,9 +34,13 @@ except:
 
 
 if typing.TYPE_CHECKING:
-    from typing import Callable, Coroutine
+    from typing import Callable, ClassVar, Coroutine
 
     from homeassistant.core import HomeAssistant, State
+
+    from . import MerossApi
+    from .meross_device import MerossDevice
+    from .meross_profile import MerossCloudProfile
 
 
 def clamp(_value, _min, _max):
@@ -337,3 +341,19 @@ class ConfigEntriesHelper:
                 if context.get("unique_id") == unique_id:
                     return flow
         return None
+
+
+class ApiProfile(Loggable):
+    """
+    base class for both MerossCloudProfile and MerossApi
+    allowing lightweight sharing of globals and defining
+    a common interface
+    """
+
+    hass: ClassVar[HomeAssistant]
+    api: ClassVar[MerossApi]
+    devices: ClassVar[dict[str, MerossDevice]] = {}
+    profiles: ClassVar[dict[str, MerossCloudProfile]] = {}
+
+    # instance attributes
+    key: str | None

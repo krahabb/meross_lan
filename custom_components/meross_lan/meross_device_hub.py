@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing
-import weakref
 
 from homeassistant.helpers import device_registry
 
@@ -9,9 +8,8 @@ from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
 from .const import DOMAIN, PARAM_HUBBATTERY_UPDATE_PERIOD
-from .helpers import Loggable, schedule_async_callback
-from .meross_device import MerossDevice
-from .meross_profile import ApiProfile
+from .helpers import ApiProfile, schedule_async_callback
+from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (  # mEROSS cONST
     const as mc,
     get_default_arguments,
@@ -20,6 +18,9 @@ from .merossclient import (  # mEROSS cONST
 from .number import MLHubAdjustNumber
 from .sensor import MLSensor
 from .switch import MLSwitch
+
+if typing.TYPE_CHECKING:
+    from .devices import mts100
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
     {
@@ -78,6 +79,13 @@ class MerossDeviceHub(MerossDevice):
                     },
                 },
             )
+
+    async def async_shutdown(self):
+        # shutdown the base first to stop polling in case
+        await super().async_shutdown()
+        for subdevice in self.subdevices.values():
+            await subdevice.async_shutdown()
+        self.subdevices.clear()
 
     def _init_hub(self, payload: dict):
         for p_subdevice in payload[mc.KEY_SUBDEVICE]:
@@ -309,9 +317,11 @@ class MerossDeviceHub(MerossDevice):
                         break
 
 
-class MerossSubDevice(Loggable):
+class MerossSubDevice(MerossDeviceBase):
 
-    _deviceentry = None  # weakly cached entry to the device registry
+    hub: MerossDeviceHub
+    sensor_battery: MLSensor
+    switch_togglex: MLSwitch | None
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
         self.id = _id = p_digest[mc.KEY_ID]
@@ -321,31 +331,35 @@ class MerossSubDevice(Loggable):
         self.hub = hub
         hub.subdevices[_id] = self
 
-        if (
-            hub._cloud_profile is not None
-            and (subdevice_info := hub._cloud_profile.get_subdevice_info(hub.device_id, _id))
-        ):
-            devname = subdevice_info.get(mc.KEY_DEVNAME) or get_productnameuuid(_type, str(_id))
+        if hub.device_info is not None:
+            assert hub._cloud_profile is not None
+            sub_device_info = hub.device_info.get(hub._cloud_profile.KEY_SUBDEVICE_INFO, {}).get(_id)
         else:
-            devname = get_productnameuuid(_type, str(_id))
-
-        self.deviceentry_id = {"identifiers": {(DOMAIN, _id)}}
-        with self.exception_warning("DeviceRegistry.async_get_or_create"):
-            self._deviceentry = weakref.ref(
-                device_registry.async_get(ApiProfile.hass).async_get_or_create(
-                    config_entry_id=hub.entry_id,
-                    via_device=next(iter(hub.deviceentry_id["identifiers"])),
-                    manufacturer=mc.MANUFACTURER,
-                    name=devname,
-                    model=_type,
-                    **self.deviceentry_id,
-                )
-            )
+            sub_device_info = None
+        super().__init__(
+            _id,
+            config_entry_id=hub.entry_id,
+            device_info=sub_device_info,
+            via_device=next(iter(hub.deviceentry_id["identifiers"])),
+            model=_type,
+        )
 
         self.sensor_battery = self.build_sensor(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
         self.switch_togglex = None
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.hub = None  # type: ignore
+        self.sensor_battery = None  # type: ignore
+        self.switch_togglex = None
+
+    def _get_device_info_name_key(self) -> str:
+        return mc.KEY_SUBDEVICENAME
+
+    def _get_internal_name(self) -> str:
+        return get_productnameuuid(self.type, self.id)
 
     def log(self, level: int, msg: str, *args, **kwargs):
         self.hub.log(
@@ -369,26 +383,6 @@ class MerossSubDevice(Loggable):
     @property
     def online(self):
         return self._online
-
-    @property
-    def name(self) -> str:
-        """
-        returns a proper (friendly) device name for logging purposes
-        """
-        deviceentry = self._deviceentry and self._deviceentry()
-        if deviceentry is None:
-            deviceentry = device_registry.async_get(ApiProfile.hass).async_get_device(
-                **self.deviceentry_id
-            )
-            if deviceentry is None:
-                return get_productnameuuid(self.type, self.id)
-            self._deviceentry = weakref.ref(deviceentry)
-
-        return (
-            deviceentry.name_by_user
-            or deviceentry.name
-            or get_productnameuuid(self.type, self.id)
-        )
 
     def _setonline(self):
         # here we should request updates for all entities but
@@ -480,6 +474,12 @@ class MerossSubDevice(Loggable):
 
 
 class MS100SubDevice(MerossSubDevice):
+
+    sensor_temperature: MLSensor
+    sensor_humidity: MLSensor
+    number_adjust_temperature: MLHubAdjustNumber
+    number_adjust_humidity: MLHubAdjustNumber
+
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
         self.sensor_temperature = self.build_sensor(MLSensor.DeviceClass.TEMPERATURE)
@@ -503,6 +503,13 @@ class MS100SubDevice(MerossSubDevice):
             1,
         )
 
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.sensor_temperature = None  # type: ignore
+        self.sensor_humidity = None  # type: ignore
+        self.number_adjust_temperature = None  # type: ignore
+        self.number_adjust_humidity = None  # type: ignore
+
     def _setonline(self):
         super()._setonline()
         self.hub._lastupdate_sensor = 0
@@ -523,6 +530,15 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
 
 
 class MTS100SubDevice(MerossSubDevice):
+
+    climate: mts100.Mts100Climate
+    number_comfort_temperature: mts100.Mts100SetPointNumber
+    number_sleep_temperature: mts100.Mts100SetPointNumber
+    number_away_temperature: mts100.Mts100SetPointNumber
+    schedule: mts100.Mts100Schedule
+    binary_sensor_window: MLBinarySensor
+    sensor_temperature: MLSensor
+
     def __init__(
         self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100
     ):
@@ -553,6 +569,17 @@ class MTS100SubDevice(MerossSubDevice):
             5,
             0.1,
         )
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.climate = None  # type: ignore
+        self.number_comfort_temperature = None  # type: ignore
+        self.number_sleep_temperature = None  # type: ignore
+        self.number_away_temperature = None  # type: ignore
+        self.schedule = None  # type: ignore
+        self.binary_sensor_window = None  # type: ignore
+        self.sensor_temperature = None  # type: ignore
+        self.number_adjust_temperature = None  # type: ignore
 
     def _setonline(self):
         super()._setonline()
@@ -639,10 +666,19 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150] = MTS150SubDevice
 
 
 class SmokeAlarmSubDevice(MerossSubDevice):
+
+    sensor_status: MLSensor
+    sensor_interConn: MLSensor
+
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_SMOKEALARM)
         self.sensor_status = self.build_sensor_noclass("status")
         self.sensor_interConn = self.build_sensor_noclass("interConn")
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.sensor_status = None  # type: ignore
+        self.sensor_interConn = None  # type: ignore
 
     def _setonline(self):
         super()._setonline()

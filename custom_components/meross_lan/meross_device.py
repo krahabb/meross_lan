@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import abc
 import asyncio
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -49,13 +50,13 @@ from .const import (
 )
 from .helpers import (
     LOGGER,
+    ApiProfile,
     Loggable,
     obfuscate,
     schedule_async_callback,
     schedule_callback,
 )
 from .meross_entity import MerossFakeEntity
-from .meross_profile import ApiProfile
 from .merossclient import (  # mEROSS cONST
     const as mc,
     get_default_arguments,
@@ -72,7 +73,12 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .meross_entity import MerossEntity
-    from .meross_profile import MerossCloudProfile, MQTTConnection
+    from .meross_profile import (
+        DeviceInfoType,
+        MerossCloudProfile,
+        MQTTConnection,
+        SubDeviceInfoType,
+    )
     from .merossclient import MerossDeviceDescriptor
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
@@ -136,7 +142,103 @@ class _MQTTTransaction:
         self.messageid = uuid4().hex
 
 
-class MerossDevice(Loggable):
+class MerossDeviceBase(Loggable, abc.ABC):
+    """
+    Abstract base class for MerossDevice and MerossSubDevice (from hub)
+    giving common behaviors like device_registry interface
+    """
+
+    # weakly cached entry to the device registry
+    _device_registry_entry = None
+    # device info dict from meross cloud api
+    device_info: DeviceInfoType | SubDeviceInfoType | None
+
+    def __init__(
+        self,
+        _id: str,
+        config_entry_id: str,
+        device_info: DeviceInfoType | SubDeviceInfoType | None,
+        model: str,
+        sw_version: str | None = None,
+        connections: set[tuple[str, str]] | None = None,
+        via_device: tuple[str, str] | None = None,
+    ):
+        self.deviceentry_id = {"identifiers": {(DOMAIN, _id)}}
+        self.device_info = device_info
+        name = self._get_internal_name()
+        if device_info is not None:
+            name = device_info.get(self._get_device_info_name_key()) or name
+        with self.exception_warning("DeviceRegistry.async_get_or_create"):
+            self._device_registry_entry = weakref.ref(
+                device_registry.async_get(ApiProfile.hass).async_get_or_create(
+                    config_entry_id=config_entry_id,
+                    connections=connections,
+                    manufacturer=mc.MANUFACTURER,
+                    name=name,
+                    model=model,
+                    sw_version=sw_version,
+                    via_device=via_device,
+                    **self.deviceentry_id,
+                )
+            )
+
+    async def async_shutdown(self):
+        self._device_registry_entry = None
+        self.device_info = None
+
+    @property
+    def device_registry_entry(self):
+        _device_registry_entry = (
+            self._device_registry_entry and self._device_registry_entry()
+        )
+        if _device_registry_entry is None:
+            _device_registry_entry = device_registry.async_get(
+                ApiProfile.hass
+            ).async_get_device(**self.deviceentry_id)
+            if _device_registry_entry is not None:
+                self._device_registry_entry = weakref.ref(_device_registry_entry)
+        return _device_registry_entry
+
+    @property
+    def name(self) -> str:
+        """
+        returns a proper (friendly) device name for logging purposes
+        """
+        if (_device_registry_entry := self.device_registry_entry) is not None:
+            return (
+                _device_registry_entry.name_by_user
+                or _device_registry_entry.name
+                or self._get_internal_name()
+            )
+        return self._get_internal_name()
+
+    def update_device_info(self, device_info: DeviceInfoType | SubDeviceInfoType):
+        self.device_info = device_info
+        if (_device_registry_entry := self.device_registry_entry) is not None:
+            name = device_info.get(self._get_device_info_name_key()) or self._get_internal_name()
+            if name != _device_registry_entry.name:
+                device_registry.async_get(ApiProfile.hass).async_update_device(
+                    _device_registry_entry.id, name=name
+                )
+
+    @abc.abstractmethod
+    def _get_device_info_name_key(self) -> str:
+        return ""
+
+    @abc.abstractmethod
+    def _get_internal_name(self) -> str:
+        return ""
+
+    @abc.abstractmethod
+    def log(self, level: int, msg: str, *args, **kwargs):
+        pass
+
+    @abc.abstractmethod
+    def warning(self, msg: str, *args, **kwargs):
+        pass
+
+
+class MerossDevice(MerossDeviceBase):
     """
     Generic protocol handler class managing the physical device stack/state
     """
@@ -154,7 +256,6 @@ class MerossDevice(Loggable):
     curr_protocol: str
     # other default property values
     entity_dnd = MerossFakeEntity
-    _deviceentry = None  # weakly cached entry to the device registry
     _tzinfo: ZoneInfo | None = None  # smart cache of device tzinfo
 
     def __init__(
@@ -232,18 +333,26 @@ class MerossDevice(Loggable):
         self._set_config_entry(config_entry.data)  # type: ignore
         self.curr_protocol = self.pref_protocol
 
-        if (
-            self._cloud_profile is not None
-            and (device_info := self._cloud_profile.get_device_info(self.device_id))
-        ):
-            devname = device_info.get(mc.KEY_DEVNAME) or descriptor.productname
-        else:
-            devname = descriptor.productname
-        # cache this so entities will just ref it
-        self.deviceentry_id = {"identifiers": {(DOMAIN, self.device_id)}}
+        device_info = (
+            self._cloud_profile.get_device_info(self.device_id)
+            if self._cloud_profile is not None
+            else None
+        )
+
+        super().__init__(
+            self.device_id,
+            config_entry_id=config_entry.entry_id,
+            device_info=device_info,
+            connections={
+                (device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)
+            },
+            model=descriptor.productmodel,
+            sw_version=descriptor.firmware.get(mc.KEY_VERSION),
+        )
+        """ REMOVE
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             # try block since this is not critical
-            self._deviceentry = weakref.ref(
+            self._device_registry_entry = weakref.ref(
                 device_registry.async_get(ApiProfile.hass).async_get_or_create(
                     config_entry_id=config_entry.entry_id,
                     connections={
@@ -256,7 +365,7 @@ class MerossDevice(Loggable):
                     **self.deviceentry_id,
                 )
             )
-
+        """
         self.sensor_protocol = ProtocolSensor(self)
 
         if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
@@ -318,6 +427,7 @@ class MerossDevice(Loggable):
         self.entities.clear()
         self.entity_dnd = MerossFakeEntity
         self.sensor_protocol = None  # type: ignore
+        await super().async_shutdown()
 
     @property
     def host(self):
@@ -347,24 +457,6 @@ class MerossDevice(Loggable):
         return timezone.utc
 
     @property
-    def name(self) -> str:
-        """
-        returns a proper (friendly) device name for logging purposes
-        """
-        deviceentry = self._deviceentry and self._deviceentry()
-        if deviceentry is None:
-            deviceentry = device_registry.async_get(ApiProfile.hass).async_get_device(
-                **self.deviceentry_id
-            )
-            if deviceentry is None:
-                return self.descriptor.productname
-            self._deviceentry = weakref.ref(deviceentry)
-
-        return (
-            deviceentry.name_by_user or deviceentry.name or self.descriptor.productname
-        )
-
-    @property
     def online(self):
         return self._online
 
@@ -388,6 +480,12 @@ class MerossDevice(Loggable):
         if (tz := self.tzinfo) is timezone.utc:
             return devtime_utc
         return devtime_utc.astimezone(tz)
+
+    def _get_device_info_name_key(self) -> str:
+        return mc.KEY_DEVNAME
+
+    def _get_internal_name(self) -> str:
+        return self.descriptor.productname
 
     def log(self, level: int, msg: str, *args, **kwargs):
         LOGGER.log(level, f"MerossDevice({self.name}): {msg}", *args, **kwargs)

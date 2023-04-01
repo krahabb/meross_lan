@@ -1,24 +1,20 @@
 from __future__ import annotations
-from uuid import uuid4
-from hashlib import md5
+
 from base64 import b64encode
-from time import time
-import typing
-from json import dumps as json_dumps, loads as json_loads
-import async_timeout
-import aiohttp
+from hashlib import md5
+from json import dumps as json_dumps
 import logging
 import ssl
 import threading
+from time import time
+import typing
+from uuid import uuid4
 
+import aiohttp
+import async_timeout
 import paho.mqtt.client as mqtt
 
-from . import (
-    const as mc,
-    MerossProtocolError,
-    MEROSSDEBUG,
-)
-
+from . import MEROSSDEBUG, MerossProtocolError, const as mc
 
 SECRET = "23x17ahWarFH6w29"
 
@@ -95,9 +91,37 @@ class MerossCloudCredentials(dict):
 
 
 class DeviceInfoType(typing.TypedDict, total=False):
+    """
+    Device info as recovered from meross cloud api "/Device/devList"
+    """
     uuid: str
+    onlineStatus: int
+    devName: str
+    devIconId: str
+    bindTime: int
+    deviceType: str
+    subType: str
+    channels: list
+    region: str
+    fmwareVersion: str
+    hdwareVersion: str
+    userDevIcon: str
+    iconType: int
+    cluster: int
     domain: str
     reservedDomain: str
+    __subDeviceInfo: dict[str, SubDeviceInfoType]  # this key is not from meross api
+
+
+class SubDeviceInfoType(typing.TypedDict, total=False):
+    """
+    (Hub) SubDevice info as recovered from meross cloud api "/Hub/getSubDevices"
+    """
+    subDeviceId: str
+    subDeviceType: str
+    subDeviceVendor: str
+    subDeviceName: str
+    subDeviceIconId: str
 
 
 """
@@ -174,7 +198,7 @@ async def async_cloudapi_login(
         return MEROSSDEBUG.cloudapi_login
 
     response = await async_cloudapi_post(
-        API_AUTH_LOGIN_PATH, { mc.KEY_EMAIL: username, "password": password}, session=session
+        API_AUTH_LOGIN_PATH, {mc.KEY_EMAIL: username, "password": password}, session=session
     )
     data = response[mc.KEY_DATA]
     # formal check since we want to deal with 'safe' data structures
@@ -196,7 +220,7 @@ async def async_cloudapi_login(
 
 async def async_cloudapi_devicelist(
     token: str, session: aiohttp.ClientSession | None = None
-):
+) -> list[DeviceInfoType]:
     if MEROSSDEBUG and MEROSSDEBUG.cloudapi_devicelist:
         return MEROSSDEBUG.cloudapi_devicelist
     response = await async_cloudapi_post(API_DEVICE_DEVLIST_PATH, {}, token, session)
@@ -205,7 +229,7 @@ async def async_cloudapi_devicelist(
 
 async def async_cloudapi_subdevicelist(
     token: str, uuid: str, session: aiohttp.ClientSession | None = None
-):
+) -> list[SubDeviceInfoType]:
     response = await async_cloudapi_post(API_HUB_GETSUBDEVICES_PATH, {mc.KEY_UUID: uuid}, token, session)
     return response[mc.KEY_DATA]
 
