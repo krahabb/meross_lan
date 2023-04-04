@@ -1,5 +1,10 @@
 """Constants for integration_blueprint tests."""
-from custom_components.meross_lan.const import CONF_DEVICE_ID, CONF_KEY, CONF_PAYLOAD
+from custom_components.meross_lan.const import (
+    CONF_DEVICE_ID,
+    CONF_KEY,
+    CONF_PAYLOAD,
+    DOMAIN,
+)
 from custom_components.meross_lan.merossclient import const as mc
 
 # Mock config data to be used across multiple tests
@@ -109,8 +114,117 @@ MOCK_DEVICE_CONFIG = {
 MOCK_POLLING_PERIOD = 15.0
 MOCK_HTTP_RESPONSE_DELAY = 0.1
 
+# cloud profiles
+# setting mocks for a 'default' nicely working cloud profile
+# to test expected normal behavior state
+MOCK_PROFILE_ID = "111111"
+MOCK_PROFILE_EMAIL = "mockprofile@meross_lan.local"
+MOCK_PROFILE_PASSWORD = "Avery.-Strangest?:001$%ò*"
+MOCK_PROFILE_KEY = "abcdefghijklmnopq"
+MOCK_PROFILE_TOKEN = "1234567890ABCDEF"
+MOCK_PROFILE_MSS310_UUID = "00000000000000000000000000000001"
+MOCK_PROFILE_MSS310_DEVNAME_STORED = "Cloud plug"
+MOCK_PROFILE_MSS310_DEVNAME = "Smart plug"
+MOCK_PROFILE_MSS310_DOMAIN = "mqtt-1.meross_lan.local"
+MOCK_PROFILE_MSS310_RESERVEDDOMAIN = "mqtt-1.meross_lan.local"
+MOCK_PROFILE_MSH300_UUID = "00000000000000000000000000000002"
+MOCK_PROFILE_MSH300_DEVNAME = "Cloud smart hub"
+MOCK_PROFILE_MSH300_DOMAIN = "mqtt-2.meross_lan.local"
+MOCK_PROFILE_MSH300_RESERVEDDOMAIN = "mqtt-1.meross_lan.local"
+MOCK_PROFILE_DEVLIST = [
+    {
+        "uuid": MOCK_PROFILE_MSS310_UUID,
+        "onlineStatus": 1,
+        "devName": MOCK_PROFILE_MSS310_DEVNAME,
+        "devIconId": "device045_it",
+        "bindTime": 1677165116,
+        "deviceType": mc.TYPE_MSS310,
+        "subType": "it",
+        "channels": [{}],
+        "region": "eu",
+        "fmwareVersion": "2.1.4",
+        "hdwareVersion": "2.0.0",
+        "userDevIcon": "",
+        "iconType": 1,
+        "cluster": 1,
+        "domain": MOCK_PROFILE_MSS310_DOMAIN,
+        "reservedDomain": MOCK_PROFILE_MSS310_RESERVEDDOMAIN,
+    },
+    {
+        "uuid": MOCK_PROFILE_MSH300_UUID,
+        "onlineStatus": 1,
+        "devName": MOCK_PROFILE_MSH300_DEVNAME,
+        "devIconId": "device045_it",
+        "bindTime": 1677165116,
+        "deviceType": mc.TYPE_MSH300,
+        "subType": "it",
+        "channels": [{}],
+        "region": "eu",
+        "fmwareVersion": "4.1.26",
+        "hdwareVersion": "4.0.0",
+        "userDevIcon": "",
+        "iconType": 1,
+        "cluster": 2,
+        "domain": MOCK_PROFILE_MSH300_DOMAIN,
+        "reservedDomain": MOCK_PROFILE_MSH300_RESERVEDDOMAIN,
+    },
+]
+MOCK_PROFILE_SUBDEVICE_DICT = {
+    MOCK_PROFILE_MSH300_UUID: [
+        {
+            "subDeviceId": "00001234",
+            "subDeviceType": mc.TYPE_MTS100V3,
+            "subDeviceVendor": "Meross",
+            "subDeviceName": "Awesome thermostat",
+            "subDeviceIconId": "device045_it",
+        },
+        {
+            "subDeviceId": "00001235",
+            "subDeviceType": mc.TYPE_MS100,
+            "subDeviceVendor": "Meross",
+            "subDeviceName": "Nice temp/humidity outside",
+            "subDeviceIconId": "device045_it",
+        },
+    ]
+}
+MOCK_PROFILE_STORE_KEY = f"{DOMAIN}.profile.{MOCK_PROFILE_ID}"
+MOCK_PROFILE_STORE = {
+    "version": 1,
+    "data": {
+        mc.KEY_USERID_: MOCK_PROFILE_ID,
+        mc.KEY_EMAIL: MOCK_PROFILE_EMAIL,
+        mc.KEY_KEY: MOCK_PROFILE_KEY,
+        mc.KEY_TOKEN: MOCK_PROFILE_TOKEN,
+        "deviceInfo": {
+            MOCK_PROFILE_MSS310_UUID: {
+                "uuid": MOCK_PROFILE_MSS310_UUID,
+                "onlineStatus": 1,
+                "devName": MOCK_PROFILE_MSS310_DEVNAME_STORED,
+                "devIconId": "device045_it",
+                "bindTime": 1677165116,
+                "deviceType": mc.TYPE_MSS310,
+                "subType": "it",
+                "channels": [{}],
+                "region": "eu",
+                "fmwareVersion": "2.1.4",
+                "hdwareVersion": "2.0.0",
+                "userDevIcon": "",
+                "iconType": 1,
+                "cluster": 1,
+                "domain": MOCK_PROFILE_MSS310_DOMAIN,
+                "reservedDomain": MOCK_PROFILE_MSS310_RESERVEDDOMAIN,
+            }
+        },
+        "deviceInfoTime": 0,
+    },
+}
+# storage could contain more than one cloud profiles.
+# right now we just set our 'default' nice one
+MOCK_PROFILE_STORAGE = {MOCK_PROFILE_STORE_KEY: MOCK_PROFILE_STORE}
+
 EMULATOR_TRACES_PATH = "./emulator_traces/"
 EMULATOR_TRACES_MAP = {
     mc.TYPE_MTS200: "mts200b-1674112759-U0123456789012345678901234567890C-Kpippo.csv",
     mc.TYPE_MSS310: "mss310r-1676020598-U0123456789012345678901234567890E-Kpippo.csv",
+    mc.TYPE_MSH300: "msh300-1646299947-U0123456789012345678901234567890F-Kpippo.csv",
 }

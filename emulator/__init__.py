@@ -144,6 +144,9 @@ class MerossEmulator:
 
     _tzinfo: ZoneInfo | None = None
 
+    # this is used during tests to 'fix' the emulator host address
+    host: str | None = None
+
     def __init__(self, descriptor: MerossEmulatorDescriptor, key):
         self.key = key
         self.descriptor = descriptor

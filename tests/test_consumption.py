@@ -69,6 +69,8 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
     emulator.set_timezone(timezone)
     emulator.set_power(TEST_POWER * 1000)
 
+    await context.async_load_config_entry()
+
     device = context.device
     assert isinstance(device, ConsumptionMixin)
     assert isinstance(device, ElectricityMixin)

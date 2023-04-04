@@ -14,18 +14,15 @@
 #
 # See here for more info: https://docs.pytest.org/en/latest/fixture.html (note that
 # pytest includes fixtures OOB which you can use as defined on this page)
-from typing import Any, Callable, Coroutine
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import patch
 
 import pytest
+from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
+
+from . import helpers
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
-MqttMockPahoClient = MagicMock
-"""MagicMock for `paho.mqtt.client.Client`"""
-MqttMockHAClient = MagicMock
-"""MagicMock for `homeassistant.components.mqtt.MQTT`."""
-MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
 # Test initialization must ensure custom_components are enabled
 # but we can't autouse a simple fixture for that since the recorder
@@ -54,34 +51,34 @@ def skip_notifications_fixture():
 @pytest.fixture(name="disable_debug", autouse=True)
 def disable_debug_fixture():
     """Skip notification calls."""
-    with patch("custom_components.meross_lan.MEROSSDEBUG", return_value=False), patch(
-        "custom_components.meross_lan.meross_profile.MEROSSDEBUG", return_value=None
-    ), patch(
-        "custom_components.meross_lan.merossclient.MEROSSDEBUG", return_value=None
-    ), patch(
+    with patch("custom_components.meross_lan.MEROSSDEBUG", None), patch(
+        "custom_components.meross_lan.meross_profile.MEROSSDEBUG", None
+    ), patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None), patch(
         "custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG",
-        return_value=None,
+        None,
     ), patch(
         "custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG",
-        return_value=None,
+        None,
     ):
         yield
 
 
-class MQTTMock:
-    mqtt_client: MqttMockHAClient
-    mqtt_async_publish: Mock
+@pytest.fixture()
+def cloudapi_mock(aioclient_mock: AiohttpClientMocker):
 
-    def async_publish(self, hass, topic: str, payload: str, *args, **kwargs):
-        pass
+    with helpers.CloudApiMocker(aioclient_mock) as _cloudapi_mock:
+        yield _cloudapi_mock
 
 
 @pytest.fixture()
-async def mqtt_patch(mqtt_mock_entry_no_yaml_config: MqttMockHAClientGenerator):
+async def hamqtt_mock(mqtt_mock_entry_no_yaml_config):
 
-    with patch("homeassistant.components.mqtt.async_publish") as mqtt_async_publish:
-        context = MQTTMock()
-        context.mqtt_client = await mqtt_mock_entry_no_yaml_config()
-        context.mqtt_async_publish = mqtt_async_publish
-        mqtt_async_publish.side_effect = context.async_publish
-        yield context
+    async with helpers.HAMQTTMocker(mqtt_mock_entry_no_yaml_config) as _hamqtt_mock:
+        yield _hamqtt_mock
+
+
+@pytest.fixture()
+def merossmqtt_mock():
+
+    with helpers.MerossMQTTMocker() as _merossmqtt_mock:
+        yield _merossmqtt_mock

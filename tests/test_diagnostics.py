@@ -6,26 +6,19 @@ import time
 
 from homeassistant.core import HomeAssistant
 
-from custom_components.meross_lan.const import (
-    CONF_HOST,
-    CONF_KEY,
-    CONF_TRACE,
-    CONF_TRACE_TIMEOUT_DEFAULT,
-    PARAM_TRACING_ABILITY_POLL_TIMEOUT,
-)
+from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.diagnostics import async_get_device_diagnostics
 from custom_components.meross_lan.merossclient import const as mc
 
-from .const import MOCK_HTTP_RESPONSE_DELAY
-from .helpers import devicecontext
+from tests import const as tc, helpers
 
 
 async def test_diagnostics(hass: HomeAssistant, aioclient_mock):
 
-    async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
+    async with helpers.devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
         await context.perform_coldstart()
 
-        context.warp(tick=PARAM_TRACING_ABILITY_POLL_TIMEOUT)
+        context.warp(tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT)
         diagnostic = await async_get_device_diagnostics(
             hass, context.config_entry, None
         )
@@ -35,19 +28,19 @@ async def test_diagnostics(hass: HomeAssistant, aioclient_mock):
 
 async def test_tracing(hass: HomeAssistant, aioclient_mock):
 
-    async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
+    async with helpers.devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
         await context.perform_coldstart()
 
         assert (device := context.device)
 
-        result = await hass.config_entries.options.async_init(device.entry_id)
+        result = await hass.config_entries.options.async_init(device.config_entry_id)
 
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             user_input={
-                CONF_HOST: device.host,
-                CONF_KEY: device.key,
-                CONF_TRACE: True,
+                mlc.CONF_HOST: device.host,
+                mlc.CONF_KEY: device.key,
+                mlc.CONF_TRACE: True,
             },
         )
         await hass.async_block_till_done()
@@ -58,14 +51,18 @@ async def test_tracing(hass: HomeAssistant, aioclient_mock):
         assert (
             math.fabs(
                 device._trace_endtime
-                - (time.time() + CONF_TRACE_TIMEOUT_DEFAULT - MOCK_HTTP_RESPONSE_DELAY)
+                - (
+                    time.time()
+                    + mlc.CONF_TRACE_TIMEOUT_DEFAULT
+                    - tc.MOCK_HTTP_RESPONSE_DELAY
+                )
             )
-            < MOCK_HTTP_RESPONSE_DELAY
+            < tc.MOCK_HTTP_RESPONSE_DELAY
         )
 
         await context.async_warp(
-            CONF_TRACE_TIMEOUT_DEFAULT + device.polling_period,
-            tick=PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+            mlc.CONF_TRACE_TIMEOUT_DEFAULT + device.polling_period,
+            tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
         )
 
         assert device._trace_file is None
