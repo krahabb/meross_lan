@@ -151,19 +151,38 @@ class MerossDeviceBase(Loggable, abc.ABC):
     # weakly cached entry to the device registry
     _device_registry_entry = None
     # device info dict from meross cloud api
-    device_info: DeviceInfoType | SubDeviceInfoType | None
+    device_info: DeviceInfoType | SubDeviceInfoType | None = None
 
     def __init__(
         self,
         _id: str,
-        config_entry_id: str,
+        config_entry_id
+    ):
+        """
+        lightweight initialization in order to prepare the class to work
+        (logging behavior needs this to be setup). If log anything
+        during the concrete class __init__ this base needs to be initialized
+        internally even though we can't still update the device registry.
+        """
+        self.deviceentry_id = {"identifiers": {(DOMAIN, _id)}}
+        self.config_entry_id = config_entry_id
+
+    async def async_shutdown(self):
+        self._device_registry_entry = None
+        self.device_info = None
+
+    def initialize_registry_entry(
+        self,
         device_info: DeviceInfoType | SubDeviceInfoType | None,
         model: str,
         sw_version: str | None = None,
         connections: set[tuple[str, str]] | None = None,
         via_device: tuple[str, str] | None = None,
     ):
-        self.deviceentry_id = {"identifiers": {(DOMAIN, _id)}}
+        """
+        called later during initialization of concrete class when 'device_info'
+        is available after reading the configuration entry
+        """
         self.device_info = device_info
         name = self._get_internal_name()
         if device_info is not None:
@@ -171,7 +190,7 @@ class MerossDeviceBase(Loggable, abc.ABC):
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             self._device_registry_entry = weakref.ref(
                 device_registry.async_get(ApiProfile.hass).async_get_or_create(
-                    config_entry_id=config_entry_id,
+                    config_entry_id=self.config_entry_id,
                     connections=connections,
                     manufacturer=mc.MANUFACTURER,
                     name=name,
@@ -181,10 +200,6 @@ class MerossDeviceBase(Loggable, abc.ABC):
                     **self.deviceentry_id,
                 )
             )
-
-    async def async_shutdown(self):
-        self._device_registry_entry = None
-        self.device_info = None
 
     @property
     def device_registry_entry(self):
@@ -264,9 +279,9 @@ class MerossDevice(MerossDeviceBase):
         config_entry: ConfigEntry,
     ):
         self.device_id: str = config_entry.data[CONF_DEVICE_ID]
+        super().__init__(self.device_id, config_entry.entry_id)
         LOGGER.debug("MerossDevice(%s): init", self.device_id)
         self.descriptor = descriptor
-        self.entry_id = config_entry.entry_id
         self.needsave = True  # after boot update with fresh CONF_PAYLOAD
         self.device_timestamp = 0.0
         self.device_timedelta = 0
@@ -338,10 +353,7 @@ class MerossDevice(MerossDeviceBase):
             if self._cloud_profile is not None
             else None
         )
-
-        super().__init__(
-            self.device_id,
-            config_entry_id=config_entry.entry_id,
+        self.initialize_registry_entry(
             device_info=device_info,
             connections={
                 (device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)
@@ -1289,7 +1301,7 @@ class MerossDevice(MerossDeviceBase):
     def _save_config_entry(self, payload: dict):
         with self.exception_warning("ConfigEntry update"):
             entries = ApiProfile.hass.config_entries
-            entry = entries.async_get_entry(self.entry_id)
+            entry = entries.async_get_entry(self.config_entry_id)
             if entry is not None:
                 data = dict(entry.data)
                 data[CONF_PAYLOAD].update(payload)

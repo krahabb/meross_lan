@@ -53,6 +53,7 @@ from .merossclient.cloudapi import (
     async_cloudapi_devicelist,
     async_cloudapi_logout,
     async_cloudapi_subdevicelist,
+    parse_domain,
 )
 
 if typing.TYPE_CHECKING:
@@ -91,7 +92,7 @@ class MQTTConnection(Loggable):
         self.mqttdiscovering: dict[str, dict] = {}
         self._unsub_discovery_callback: asyncio.TimerHandle | None = None
 
-    def shutdown(self):
+    async def async_shutdown(self):
         if self._unsub_discovery_callback is not None:
             self._unsub_discovery_callback.cancel()
             self._unsub_discovery_callback = None
@@ -250,13 +251,13 @@ class MQTTConnection(Loggable):
         return self._mqtt_is_connected
 
     @callback
-    def set_mqtt_connected(self):
+    def _mqtt_connected(self):
         for device in self.mqttdevices.values():
             device.mqtt_connected()
         self._mqtt_is_connected = True
 
     @callback
-    def set_mqtt_disconnected(self):
+    def _mqtt_disconnected(self):
         for device in self.mqttdevices.values():
             device.mqtt_disconnected()
         self._mqtt_is_connected = False
@@ -355,6 +356,10 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
 
             async_call_later(ApiProfile.hass, 60, _random_disconnect)
 
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        await self.schedule_disconnect()
+
     def schedule_connect(self):
         # even if safe_connect should be as fast as possible and thread-safe
         # we still might incur some contention with thread stop/restart
@@ -427,11 +432,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
 
     def _mqttc_connect(self, client, userdata: HomeAssistant, rc, other):
         MerossMQTTClient._mqttc_connect(self, client, userdata, rc, other)
-        userdata.add_job(self.set_mqtt_connected)
+        userdata.add_job(self._mqtt_connected)
 
     def _mqttc_disconnect(self, client, userdata: HomeAssistant, rc):
         MerossMQTTClient._mqttc_disconnect(self, client, userdata, rc)
-        userdata.add_job(self.set_mqtt_disconnected)
+        userdata.add_job(self._mqtt_disconnected)
 
 
 class MerossCloudProfileStore(storage.Store[dict]):
@@ -553,7 +558,9 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
             ApiProfile.hass, PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT, self.async_start
         )
 
-    def shutdown(self):
+    async def async_shutdown(self):
+        for mqttconnection in self.mqttconnections.values():
+            await mqttconnection.async_shutdown()
         if self._unsub_schedule_start is not None:
             self._unsub_schedule_start.cancel()
             self._unsub_schedule_start = None
@@ -768,18 +775,12 @@ class MerossCloudProfile(MerossCloudCredentials, ApiProfile):
                     with self.exception_warning(
                         f"_process_device_info_unknown: unknown uuid={uuid}"
                     ):
-                        host_and_port = device_info[hostkey]
-                        if (colon_index := host_and_port.find(":")) != -1:
-                            host = host_and_port[0:colon_index]
-                            port = int(host_and_port[colon_index + 1 :])
-                        else:
-                            host = host_and_port
-                            port = 443
+                        host, port = parse_domain(domain := device_info[hostkey])
                         mqttprofile = self._get_or_create_mqttconnection(host, port)
                         if mqttprofile.state_inactive:
-                            mqttprofile.schedule_connect()
+                            await mqttprofile.schedule_connect()
                         mqttprofile.get_or_set_discovering(uuid)
-                        if host_and_port == device_info[mc.KEY_RESERVEDDOMAIN]:
+                        if domain == device_info[mc.KEY_RESERVEDDOMAIN]:
                             # dirty trick to avoid looping when the 2 hosts
                             # are the same
                             break

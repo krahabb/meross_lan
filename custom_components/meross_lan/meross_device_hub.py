@@ -218,7 +218,9 @@ class MerossDeviceHub(MerossDevice):
                 # also, we're not registering an unsub and we're not checking
                 # for redundant invocations (playing a bit unsafe that is)
                 async def _async_setup_again():
-                    await ApiProfile.hass.config_entries.async_reload(self.entry_id)
+                    await ApiProfile.hass.config_entries.async_reload(
+                        self.config_entry_id
+                    )
 
                 schedule_async_callback(ApiProfile.hass, 15, _async_setup_again)
 
@@ -325,6 +327,7 @@ class MerossSubDevice(MerossDeviceBase):
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
         self.id = _id = p_digest[mc.KEY_ID]
+        super().__init__(_id, hub.config_entry_id)
         self.type = _type
         self.p_digest = p_digest
         self._online = False
@@ -333,12 +336,12 @@ class MerossSubDevice(MerossDeviceBase):
 
         if hub.device_info is not None:
             assert hub._cloud_profile is not None
-            sub_device_info = hub.device_info.get(hub._cloud_profile.KEY_SUBDEVICE_INFO, {}).get(_id)
+            sub_device_info = hub.device_info.get(
+                hub._cloud_profile.KEY_SUBDEVICE_INFO, {}
+            ).get(_id)
         else:
             sub_device_info = None
-        super().__init__(
-            _id,
-            config_entry_id=hub.entry_id,
+        self.initialize_registry_entry(
             device_info=sub_device_info,
             via_device=next(iter(hub.deviceentry_id["identifiers"])),
             model=_type,

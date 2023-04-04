@@ -45,6 +45,9 @@ APISTATUS_TOKEN_INVALID = 1019
 APISTATUS_TOKEN_ERROR = 1022
 APISTATUS_TOKEN_EXPIRED = 1200
 APISTATUS_TOO_MANY_TOKENS = 1301
+"""Generic error (or unknown)"""
+APISTATUS_GENERIC_ERROR = 5000
+
 APISTATUS_MAP = {
     APISTATUS_NO_ERROR: "Not an error",
     APISTATUS_MISSING_PASSWORD: "Wrong or missing password",
@@ -58,6 +61,7 @@ APISTATUS_MAP = {
     APISTATUS_TOKEN_ERROR: "Token error",
     APISTATUS_TOKEN_EXPIRED: "Token expired",
     APISTATUS_TOO_MANY_TOKENS: "Too many tokens",
+    APISTATUS_GENERIC_ERROR: "Generic error",
 }
 APISTATUS_TOKEN_ERRORS = {
     APISTATUS_TOKEN_INVALID,
@@ -94,6 +98,7 @@ class DeviceInfoType(typing.TypedDict, total=False):
     """
     Device info as recovered from meross cloud api "/Device/devList"
     """
+
     uuid: str
     onlineStatus: int
     devName: str
@@ -108,15 +113,23 @@ class DeviceInfoType(typing.TypedDict, total=False):
     userDevIcon: str
     iconType: int
     cluster: int
-    domain: str
-    reservedDomain: str
+    domain: str  # optionally formatted as host:port
+    reservedDomain: str  # optionally formatted as host:port
     __subDeviceInfo: dict[str, SubDeviceInfoType]  # this key is not from meross api
+
+
+def parse_domain(domain: str):
+    if (colon_index := domain.find(":")) != -1:
+        return domain[0:colon_index], int(domain[colon_index + 1 :])
+    else:
+        return domain, 443
 
 
 class SubDeviceInfoType(typing.TypedDict, total=False):
     """
     (Hub) SubDevice info as recovered from meross cloud api "/Hub/getSubDevices"
     """
+
     subDeviceId: str
     subDeviceType: str
     subDeviceVendor: str
@@ -198,7 +211,9 @@ async def async_cloudapi_login(
         return MEROSSDEBUG.cloudapi_login
 
     response = await async_cloudapi_post(
-        API_AUTH_LOGIN_PATH, {mc.KEY_EMAIL: username, "password": password}, session=session
+        API_AUTH_LOGIN_PATH,
+        {mc.KEY_EMAIL: username, mc.KEY_PASSWORD: password},
+        session=session,
     )
     data = response[mc.KEY_DATA]
     # formal check since we want to deal with 'safe' data structures
@@ -230,7 +245,9 @@ async def async_cloudapi_devicelist(
 async def async_cloudapi_subdevicelist(
     token: str, uuid: str, session: aiohttp.ClientSession | None = None
 ) -> list[SubDeviceInfoType]:
-    response = await async_cloudapi_post(API_HUB_GETSUBDEVICES_PATH, {mc.KEY_UUID: uuid}, token, session)
+    response = await async_cloudapi_post(
+        API_HUB_GETSUBDEVICES_PATH, {mc.KEY_UUID: uuid}, token, session
+    )
     return response[mc.KEY_DATA]
 
 

@@ -58,6 +58,7 @@ class MerossApi(MQTTConnection, ApiProfile):
     central meross_lan management (singleton) class which handles devices
     and MQTT discovery and message routing
     """
+
     _unsub_mqtt_subscribe: Callable | None
     _unsub_mqtt_disconnected: Callable | None
     _unsub_mqtt_connected: Callable | None
@@ -166,8 +167,8 @@ class MerossApi(MQTTConnection, ApiProfile):
         hass.services.async_register(DOMAIN, SERVICE_REQUEST, async_service_request)
         return
 
-    def shutdown(self):
-        super().shutdown()
+    async def async_shutdown(self):
+        await super().async_shutdown()
         if self._unsub_mqtt_connected is not None:
             self._unsub_mqtt_connected()
             self._unsub_mqtt_connected = None
@@ -330,13 +331,13 @@ class MerossApi(MQTTConnection, ApiProfile):
                     self.hass, mc.TOPIC_DISCOVERY, self.async_mqtt_message
                 )
                 self._unsub_mqtt_disconnected = async_dispatcher_connect(
-                    self.hass, mqtt.MQTT_DISCONNECTED, self.set_mqtt_disconnected
+                    self.hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected
                 )
                 self._unsub_mqtt_connected = async_dispatcher_connect(
-                    self.hass, mqtt.MQTT_CONNECTED, self.set_mqtt_connected
+                    self.hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
                 )
                 if mqtt.is_connected(self.hass):
-                    self.set_mqtt_connected()
+                    self._mqtt_connected()
 
                 if MEROSSDEBUG:
 
@@ -356,17 +357,17 @@ class MerossApi(MQTTConnection, ApiProfile):
                                     async_dispatcher_connect(
                                         self.hass,
                                         mqtt.MQTT_DISCONNECTED,
-                                        self.set_mqtt_disconnected,
+                                        self._mqtt_disconnected,
                                     )
                                 )
                                 self._unsub_mqtt_connected = async_dispatcher_connect(
                                     self.hass,
                                     mqtt.MQTT_CONNECTED,
-                                    self.set_mqtt_connected,
+                                    self._mqtt_connected,
                                 )
                                 self._mqtt_subscribing = False
                                 if mqtt.is_connected(self.hass):
-                                    self.set_mqtt_connected()
+                                    self._mqtt_connected()
 
                         else:
                             if MEROSSDEBUG.mqtt_random_disconnect():
@@ -380,7 +381,7 @@ class MerossApi(MQTTConnection, ApiProfile):
                                 self._unsub_mqtt_subscribe()
                                 self._unsub_mqtt_subscribe = None
                                 if self._mqtt_is_connected:
-                                    self.set_mqtt_disconnected()
+                                    self._mqtt_disconnected()
 
                         schedule_async_callback(self.hass, 60, _async_random_disconnect)
 
@@ -572,5 +573,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await device.async_shutdown()
         # don't cleanup: the MerossApi is still needed to detect MQTT discoveries
         # if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
-        #    api.shutdown()
+        #    await api.async_shutdown()
     return True
