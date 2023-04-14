@@ -15,8 +15,7 @@ from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import StateType
 
-from .const import CONF_DEVICE_ID, DOMAIN
-from .helpers import LOGGER, Loggable, StrEnum
+from .helpers import LOGGER, ApiProfile, Loggable, StrEnum
 from .merossclient import const as mc, get_namespacekey
 
 if typing.TYPE_CHECKING:
@@ -175,7 +174,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     @property
     def unique_id(self):
-        return f"{self.device.device_id}_{self.id}"
+        return f"{self.device.id}_{self.id}"
 
     async def async_added_to_hass(self):
         self._hass_connected = True
@@ -284,12 +283,11 @@ class MerossToggle(MerossEntity):
 def platform_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices, platform: str
 ):
-    device_id = config_entry.data[CONF_DEVICE_ID]
-    device: "MerossDevice" = hass.data[DOMAIN].devices[device_id]
+    device: MerossDevice = ApiProfile.devices[config_entry.unique_id]  # type: ignore
     device.platforms[platform] = async_add_devices
     async_add_devices(
         [entity for entity in device.entities.values() if entity.PLATFORM is platform]
     )
     LOGGER.debug(
-        "async_setup_entry device_id = %s - platform = %s", device_id, platform
+        "async_setup_entry device_id = %s - platform = %s", device.id, platform
     )

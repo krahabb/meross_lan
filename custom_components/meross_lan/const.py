@@ -18,7 +18,7 @@ CONF_KEY: Final = "key"
 # update/repair/fix their configuration (no automatic migration)
 CONF_CLOUD_KEY: Final = "cloud_key"
 # email/id of cloud account to use with the device
-CONF_PROFILE_ID: Final = "profile_id"
+CONF_PROFILE_ID: Final = "profile_id"  # REMOVE
 CONF_PROFILE_ID_LOCAL: Final = ""
 CONF_PAYLOAD: Final = hac.CONF_PAYLOAD
 CONF_HOST: Final = hac.CONF_HOST
@@ -53,7 +53,7 @@ CONF_TIMESTAMP: Final = mc.KEY_TIMESTAMP
 
 class DeviceConfigTypeMinimal(TypedDict):
     """
-    define required keys
+    Device config_entry required keys
     """
 
     device_id: str
@@ -63,7 +63,7 @@ class DeviceConfigTypeMinimal(TypedDict):
 class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     """
     Our device config allows for optional keys so total=False
-    allows thid in TypedDict: Nevertheless some keys are mandatory
+    allows this in TypedDict: Nevertheless some keys are mandatory
     and defined though DeviceConfigTypeMinimal
     """
 
@@ -77,6 +77,20 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     trace_timeout: int | None
     timezone: str | None
     timestamp: float | None
+
+
+CONF_USERNAME: Final = hac.CONF_USERNAME
+CONF_PASSWORD: Final = hac.CONF_PASSWORD
+
+
+class ProfileConfigType(TypedDict):
+    """
+    Meross cloud profile config_entry keys
+    """
+    userid: str
+    email: str
+    key: str
+    token: str
 
 
 SERVICE_REQUEST = "request"
@@ -111,5 +125,4 @@ PARAM_TIMESTAMP_TOLERANCE = 5
 # used to delay the iteration of abilities while tracing
 PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400
-PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT = 10
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 10

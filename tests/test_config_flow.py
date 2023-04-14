@@ -8,28 +8,35 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import build_payload, const as mc
+from custom_components.meross_lan.merossclient import (
+    build_payload,
+    cloudapi,
+    const as mc,
+)
 
 from tests import const as tc, helpers
 
 
-async def test_user_config_flow(hass: HomeAssistant, aioclient_mock):
+async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
     """
-    Test standard manual entry config flow
+    Test standard manual device entry config flow
     """
     with helpers.emulator_mock(mc.TYPE_MTS200, aioclient_mock) as emulator:
-
         device_id = emulator.descriptor.uuid
         host = emulator.host
 
         result = await hass.config_entries.flow.async_init(
             mlc.DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
-
-        # Check that the config flow shows the user form as the first step
+        # Check that the config flow shows the menu as the first step
+        assert result["type"] == FlowResultType.MENU  # type: ignore
+        assert result["step_id"] == "user"  # type: ignore
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"next_step_id": "device"},
+        )
         assert result["type"] == FlowResultType.FORM  # type: ignore
         assert result["step_id"] == "device"  # type: ignore
-
         # we'll use the configuration of the emulator to reach it
         # through the aioclient_mock
         result = await hass.config_entries.flow.async_configure(
@@ -52,6 +59,68 @@ async def test_user_config_flow(hass: HomeAssistant, aioclient_mock):
         assert data[mlc.CONF_KEY] == emulator.key
         assert data[mlc.CONF_PAYLOAD][mc.KEY_ALL] == emulator.descriptor.all
         assert data[mlc.CONF_PAYLOAD][mc.KEY_ABILITY] == emulator.descriptor.ability
+
+
+async def test_profile_config_flow(
+    hass: HomeAssistant, cloudapi_mock: helpers.CloudApiMocker
+):
+    """
+    Test cloud profile entry config flow
+    """
+    result = await hass.config_entries.flow.async_init(
+        mlc.DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    # Check that the config flow shows the menu as the first step
+    assert result["type"] == FlowResultType.MENU  # type: ignore
+    assert result["step_id"] == "user"  # type: ignore
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={"next_step_id": "profile"},
+    )
+    assert result["type"] == FlowResultType.FORM  # type: ignore
+    assert result["step_id"] == "profile"  # type: ignore
+
+    # enter wrong profile username/password
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            mlc.CONF_USERNAME: tc.MOCK_PROFILE_EMAIL,
+            mlc.CONF_PASSWORD: "",
+        },
+    )
+    assert cloudapi_mock.api_calls[cloudapi.API_AUTH_LOGIN_PATH] == 1
+    assert result["type"] == FlowResultType.FORM  # type: ignore
+    assert result["step_id"] == "profile"  # type: ignore
+
+    # put the cloud offline
+    cloudapi_mock.online = False
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            mlc.CONF_USERNAME: tc.MOCK_PROFILE_EMAIL,
+            mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
+        },
+    )
+    assert cloudapi_mock.api_calls[cloudapi.API_AUTH_LOGIN_PATH] == 2
+    assert result["type"] == FlowResultType.FORM  # type: ignore
+    assert result["step_id"] == "profile"  # type: ignore
+
+    # online the cloud and finish setup
+    cloudapi_mock.online = True
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            mlc.CONF_USERNAME: tc.MOCK_PROFILE_EMAIL,
+            mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
+        },
+    )
+    assert cloudapi_mock.api_calls[cloudapi.API_AUTH_LOGIN_PATH] == 3
+    assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
+    data: mlc.ProfileConfigType = result["data"]  # type: ignore
+    assert data[mc.KEY_USERID_] == tc.MOCK_PROFILE_ID
+    assert data[mc.KEY_EMAIL] == tc.MOCK_PROFILE_EMAIL
+    assert data[mc.KEY_KEY] == tc.MOCK_PROFILE_KEY
+    assert data[mc.KEY_TOKEN] == tc.MOCK_PROFILE_TOKEN
 
 
 async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
@@ -93,7 +162,6 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
 
 
 async def test_dhcp_discovery_config_flow(hass: HomeAssistant):
-
     result = await hass.config_entries.flow.async_init(
         mlc.DOMAIN,
         context={"source": config_entries.SOURCE_DHCP},
@@ -130,7 +198,6 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
 
 
 async def test_options_flow(hass, aioclient_mock):
-
     async with helpers.devicecontext(mc.TYPE_MTS200, hass, aioclient_mock) as context:
         await context.perform_coldstart()
 

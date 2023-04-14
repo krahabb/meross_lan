@@ -13,6 +13,14 @@
             "invalid_auth": "Authentication error"
         },
         "step": {
+            "user": {
+                "title": "Choose option",
+                "description": "",
+                "menu_options": {
+                    "profile": "Register a Meross cloud profile",
+                    "device": "Manually configure a device"
+                }
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configure global Meross LAN settings",
@@ -25,6 +33,14 @@
                 "data": {
                     "host": "Device host address",
                     "key": "Device key"
+                }
+            },
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
+                "data": {
+                    "username": "Meross login",
+                    "password": "Meross password"
                 }
             },
             "keyerror": {
@@ -73,7 +89,6 @@
                     "host": "Device host address",
                     "key": "Device key",
                     "protocol": "Connection protocol",
-                    "profile_id": "Cloud profile",
                     "polling_period": "Polling period",
                     "timezone": "Device time zone",
                     "trace": "Activate device debug tracing",

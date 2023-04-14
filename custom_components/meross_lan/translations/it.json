@@ -13,6 +13,14 @@
             "invalid_auth": "Errore di autenticazione"
         },
         "step": {
+            "user": {
+                "title": "Scegli un'opzione",
+                "description": "",
+                "menu_options": {
+                    "profile": "Connetti un account Meross",
+                    "device": "Configura un dispositivo manualmente"
+                }
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configura le impostazioni globali di Meross LAN",
@@ -25,6 +33,14 @@
                 "data": {
                     "host": "Indirizzo dispositivo",
                     "key": "Chiave dispositivo"
+                }
+            },
+            "profile": {
+                "title": "Profilo Meross cloud",
+                "description": "Registra e connetti un profilo Meross",
+                "data": {
+                    "username": "Meross login",
+                    "password": "Meross password"
                 }
             },
             "keyerror": {
@@ -75,7 +91,6 @@
                     "host": "Indirizzo dispositivo",
                     "key": "Chiave dispositivo",
                     "protocol": "Protocollo",
-                    "profile_id": "Profilo Cloud",
                     "polling_period": "Intervallo di aggiornamento",
                     "timezone": "Zona oraria",
                     "trace": "Attiva il debug tracing",

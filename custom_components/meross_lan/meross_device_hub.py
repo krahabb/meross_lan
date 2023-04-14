@@ -326,27 +326,19 @@ class MerossSubDevice(MerossDeviceBase):
     switch_togglex: MLSwitch | None
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
-        self.id = _id = p_digest[mc.KEY_ID]
-        super().__init__(_id, hub.config_entry_id)
+        _id = p_digest[mc.KEY_ID]
+        super().__init__(
+            _id,
+            hub.config_entry_id,
+            default_name=get_productnameuuid(_type, _id),
+            model=_type,
+            via_device=next(iter(hub.deviceentry_id["identifiers"])),
+        )
         self.type = _type
         self.p_digest = p_digest
         self._online = False
         self.hub = hub
         hub.subdevices[_id] = self
-
-        if hub.device_info is not None:
-            assert hub._cloud_profile is not None
-            sub_device_info = hub.device_info.get(
-                hub._cloud_profile.KEY_SUBDEVICE_INFO, {}
-            ).get(_id)
-        else:
-            sub_device_info = None
-        self.initialize_registry_entry(
-            device_info=sub_device_info,
-            via_device=next(iter(hub.deviceentry_id["identifiers"])),
-            model=_type,
-        )
-
         self.sensor_battery = self.build_sensor(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place

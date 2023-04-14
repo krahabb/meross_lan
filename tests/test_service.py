@@ -3,7 +3,6 @@ import json
 from unittest.mock import ANY
 
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import const as mc
@@ -17,29 +16,22 @@ async def test_request_on_mqtt(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTM
     MerossDevice. This happens when we want to send request to
     devices not registered in HA
     """
-    config_entry = MockConfigEntry(domain=mlc.DOMAIN, data=tc.MOCK_HUB_CONFIG)
-    config_entry.add_to_hass(hass)
-
-    assert await hass.config_entries.async_setup(config_entry.entry_id)
-    await hass.async_block_till_done()
-
-    await hass.services.async_call(
-        mlc.DOMAIN,
-        mlc.SERVICE_REQUEST,
-        service_data={
-            mlc.CONF_DEVICE_ID: tc.MOCK_DEVICE_UUID,
-            mc.KEY_NAMESPACE: mc.NS_APPLIANCE_SYSTEM_ALL,
-            mc.KEY_METHOD: mc.METHOD_GET,
-        },
-        blocking=True,
-    )
-    # this call, with no devices registered in configuration
-    # will just try to publish on mqtt so we'll check the mock
-    hamqtt_mock.mqtt_async_publish.assert_called_once_with(
-        hass, mc.TOPIC_REQUEST.format(tc.MOCK_DEVICE_UUID), ANY
-    )
-
-    assert await hass.config_entries.async_unload(config_entry.entry_id)
+    async with helpers.MQTTHubEntryMocker(hass):
+        await hass.services.async_call(
+            mlc.DOMAIN,
+            mlc.SERVICE_REQUEST,
+            service_data={
+                mlc.CONF_DEVICE_ID: tc.MOCK_DEVICE_UUID,
+                mc.KEY_NAMESPACE: mc.NS_APPLIANCE_SYSTEM_ALL,
+                mc.KEY_METHOD: mc.METHOD_GET,
+            },
+            blocking=True,
+        )
+        # this call, with no devices registered in configuration
+        # will just try to publish on mqtt so we'll check the mock
+        hamqtt_mock.mqtt_async_publish.assert_called_once_with(
+            hass, mc.TOPIC_REQUEST.format(tc.MOCK_DEVICE_UUID), ANY
+        )
 
 
 async def test_request_on_device(
@@ -49,7 +41,6 @@ async def test_request_on_device(
     Test service calls routed through a device
     """
     async with helpers.devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
-
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -92,7 +83,6 @@ async def test_request_notification(
     Test service calls routed through a device
     """
     async with helpers.devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
-
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 

@@ -3,6 +3,7 @@
 """
 from __future__ import annotations
 
+import abc
 import asyncio
 from contextlib import contextmanager
 from functools import partial
@@ -41,6 +42,7 @@ if typing.TYPE_CHECKING:
     from . import MerossApi
     from .meross_device import MerossDevice
     from .meross_profile import MerossCloudProfile
+    from .merossclient.cloudapi import MerossCloudCredentials
 
 
 def clamp(_value, _min, _max):
@@ -114,7 +116,6 @@ class _Logger(logging.Logger if typing.TYPE_CHECKING else object):
     _LOGGER_TIMEOUTS = {}
 
     def _log(self, level, msg, args, **kwargs):
-
         if "timeout" in kwargs:
             timeout = kwargs.pop("timeout")
             epoch = time()
@@ -325,35 +326,75 @@ async def get_entity_last_state_available(
 
 class ConfigEntriesHelper:
     def __init__(self, hass: HomeAssistant):
-        self.config_entries = hass.config_entries
-        self.entries = hass.config_entries.async_entries(DOMAIN)
-        self.flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        self.config_entries: typing.Final = hass.config_entries
+        self._entries = None
+        self._flows = None
 
     def get_config_entry(self, unique_id: str):
-        for config_entry in self.entries:
+        if self._entries is None:
+            self._entries = self.config_entries.async_entries(DOMAIN)
+        for config_entry in self._entries:
             if config_entry.unique_id == unique_id:
                 return config_entry
         return None
 
     def get_config_flow(self, unique_id: str):
-        for flow in self.flows:
+        if self._flows is None:
+            self._flows = self.config_entries.flow.async_progress_by_handler(DOMAIN)
+        for flow in self._flows:
             if context := flow.get("context"):
                 if context.get("unique_id") == unique_id:
                     return flow
         return None
 
 
-class ApiProfile(Loggable):
+class ApiProfile(Loggable, abc.ABC):
     """
     base class for both MerossCloudProfile and MerossApi
     allowing lightweight sharing of globals and defining
     a common interface
     """
 
-    hass: ClassVar[HomeAssistant]
-    api: ClassVar[MerossApi]
-    devices: ClassVar[dict[str, MerossDevice]] = {}
-    profiles: ClassVar[dict[str, MerossCloudProfile]] = {}
+    # hass, api: set when initializing MerossApi
+    hass: ClassVar[HomeAssistant] = None  # type: ignore
+    api: ClassVar[MerossApi] = None  # type: ignore
+    # devices: list of known devices. Every device config_entry
+    # in the system is mapped here and set to the MerossDevice instance
+    # if the device is actually active (config_entry loaded) or None
+    # if the device entry is not loaded
+    devices: ClassVar[dict[str, MerossDevice | None]] = {}
+
+    @staticmethod
+    def active_devices():
+        return (device for device in ApiProfile.devices.values() if device is not None)
+
+    # profiles: list of known cloud profiles (same as devices)
+    profiles: ClassVar[dict[str, MerossCloudProfile | None]] = {}
+
+    @staticmethod
+    def active_profiles():
+        return (
+            profile for profile in ApiProfile.profiles.values() if profile is not None
+        )
 
     # instance attributes
-    key: str | None
+    @property
+    @abc.abstractmethod
+    def key(self) -> str | None:
+        return None
+
+    @staticmethod
+    def get_device_with_mac(macaddress: str):
+        # macaddress from dhcp discovery is already stripped/lower but...
+        macaddress = macaddress.replace(":", "").lower()
+        for device in ApiProfile.active_devices():
+            if device.descriptor.macAddress.replace(":", "").lower() == macaddress:
+                return device
+        return None
+
+    @staticmethod
+    async def async_update_profile(credentials: MerossCloudCredentials):
+        profile_id = credentials[mc.KEY_USERID_]
+        profile = ApiProfile.profiles.get(profile_id)
+        if profile is not None:
+            await profile.async_update_credentials(credentials)

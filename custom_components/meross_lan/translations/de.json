@@ -13,6 +13,14 @@
             "invalid_auth": "Fehlerhafte Zugangsdaten"
         },
         "step": {
+            "user": {
+                "title": "Choose option",
+                "description": "",
+                "menu_options": {
+                    "profile": "Register a Meross cloud profile",
+                    "device": "Manually configure a device"
+                }
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Allgemeine Meross LAN Einstellungen",
@@ -33,6 +41,14 @@
                 "menu_options": {
                     "cloudkey": "Aus der Meross-Cloud abrufen",
                     "device": "Wiederholen"
+                }
+            },
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
+                "data": {
+                    "username": "Meross login",
+                    "password": "Meross password"
                 }
             },
             "cloudkey": {

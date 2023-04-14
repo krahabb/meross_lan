@@ -2,11 +2,9 @@
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.meross_lan import MerossApi
-from custom_components.meross_lan.const import DOMAIN
+from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.light import MLDNDLightEntity
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.sensor import RuntimeMixin
@@ -22,32 +20,25 @@ from tests import const as tc, helpers
 # side of the assertion matches with the right side.
 async def test_mqtthub_entry(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker):
     """Test mqtt hub entry setup and unload."""
-    config_entry = MockConfigEntry(domain=DOMAIN, data=tc.MOCK_HUB_CONFIG)
-    config_entry.add_to_hass(hass)
+    async with helpers.MQTTHubEntryMocker(hass):
 
-    assert await hass.config_entries.async_setup(config_entry.entry_id)
-    await hass.async_block_till_done()
-    api = hass.data[DOMAIN]
-    assert isinstance(api, MerossApi)
-
-    assert api.mqtt_is_subscribed()
+        api = hass.data[mlc.DOMAIN]
+        assert isinstance(api, MerossApi)
+        assert api.mqtt_is_subscribed()
 
     # Unload the entry and verify that the data has not been removed
     # we actually never remove the MerossApi...
-    assert await hass.config_entries.async_unload(config_entry.entry_id)
-    assert type(hass.data[DOMAIN]) == MerossApi
+    assert type(hass.data[mlc.DOMAIN]) == MerossApi
 
 
 async def test_mqtthub_entry_notready(hass: HomeAssistant):
     """Test ConfigEntryNotReady when API raises an exception during entry setup"""
-    config_entry = MockConfigEntry(domain=DOMAIN, data=tc.MOCK_HUB_CONFIG)
-    config_entry.add_to_hass(hass)
-    # In this case we are testing the condition where async_setup_entry raises
-    # ConfigEntryNotReady since we don't have mqtt component in the test environment
-    await hass.config_entries.async_setup(config_entry.entry_id)
-    assert config_entry.state == ConfigEntryState.SETUP_RETRY
-    # with pytest.raises(ConfigEntryNotReady):
-    #    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    async with helpers.MQTTHubEntryMocker(hass, auto_setup=False) as mqtthub_entry_mocker:
+
+        await mqtthub_entry_mocker.async_setup()
+        # In this case we are testing the condition where async_setup_entry raises
+        # ConfigEntryNotReady since we don't have mqtt component in the test environment
+        assert mqtthub_entry_mocker.state == ConfigEntryState.SETUP_RETRY
 
 
 async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
@@ -94,3 +85,12 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
             if sensor_runtime is not None:
                 runtimestate = hass.states.get(sensor_runtime.entity_id)
                 assert runtimestate and runtimestate.state.isdigit()
+
+
+async def test_profile_entry(hass: HomeAssistant, cloudapi_mock: helpers.CloudApiMocker):
+    """
+    Test a Meross cloud profile entry
+    """
+    async with helpers.ProfileEntryMocker(hass):
+
+        assert MerossApi.profiles[tc.MOCK_PROFILE_ID] is not None

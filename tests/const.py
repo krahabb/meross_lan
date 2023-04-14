@@ -5,7 +5,7 @@ from custom_components.meross_lan.const import (
     CONF_PAYLOAD,
     DOMAIN,
 )
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import cloudapi, const as mc
 
 # Mock config data to be used across multiple tests
 MOCK_DEVICE_UUID = "01234567890123456789001122334455"
@@ -122,6 +122,12 @@ MOCK_PROFILE_EMAIL = "mockprofile@meross_lan.local"
 MOCK_PROFILE_PASSWORD = "Avery.-Strangest?:001$%ò*"
 MOCK_PROFILE_KEY = "abcdefghijklmnopq"
 MOCK_PROFILE_TOKEN = "1234567890ABCDEF"
+MOCK_PROFILE_CONFIG = {
+    mc.KEY_USERID_: MOCK_PROFILE_ID,
+    mc.KEY_EMAIL: MOCK_PROFILE_EMAIL,
+    mc.KEY_KEY: MOCK_PROFILE_KEY,
+    mc.KEY_TOKEN: MOCK_PROFILE_TOKEN,
+}
 MOCK_PROFILE_MSS310_UUID = "00000000000000000000000000000001"
 MOCK_PROFILE_MSS310_DEVNAME_STORED = "Cloud plug"
 MOCK_PROFILE_MSS310_DEVNAME = "Smart plug"
@@ -131,7 +137,7 @@ MOCK_PROFILE_MSH300_UUID = "00000000000000000000000000000002"
 MOCK_PROFILE_MSH300_DEVNAME = "Cloud smart hub"
 MOCK_PROFILE_MSH300_DOMAIN = "mqtt-2.meross_lan.local"
 MOCK_PROFILE_MSH300_RESERVEDDOMAIN = "mqtt-1.meross_lan.local"
-MOCK_PROFILE_DEVLIST = [
+MOCK_PROFILE_CLOUDAPI_DEVLIST: list[cloudapi.DeviceInfoType] = [
     {
         "uuid": MOCK_PROFILE_MSS310_UUID,
         "onlineStatus": 1,
@@ -169,7 +175,7 @@ MOCK_PROFILE_DEVLIST = [
         "reservedDomain": MOCK_PROFILE_MSH300_RESERVEDDOMAIN,
     },
 ]
-MOCK_PROFILE_SUBDEVICE_DICT = {
+MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT: dict[str, list[cloudapi.SubDeviceInfoType]] = {
     MOCK_PROFILE_MSH300_UUID: [
         {
             "subDeviceId": "00001234",
@@ -188,6 +194,27 @@ MOCK_PROFILE_SUBDEVICE_DICT = {
     ]
 }
 MOCK_PROFILE_STORE_KEY = f"{DOMAIN}.profile.{MOCK_PROFILE_ID}"
+MOCK_PROFILE_STORE_DEVICEINFO_DICT: dict[str, cloudapi.DeviceInfoType] = {
+    MOCK_PROFILE_MSS310_UUID: {
+        "uuid": MOCK_PROFILE_MSS310_UUID,
+        "onlineStatus": 1,
+        "devName": MOCK_PROFILE_MSS310_DEVNAME_STORED,
+        "devIconId": "device045_it",
+        "bindTime": 1677165116,
+        "deviceType": mc.TYPE_MSS310,
+        "subType": "it",
+        "channels": [{}],
+        "region": "eu",
+        "fmwareVersion": "2.1.4",
+        "hdwareVersion": "2.0.0",
+        "userDevIcon": "",
+        "iconType": 1,
+        "cluster": 1,
+        "domain": MOCK_PROFILE_MSS310_DOMAIN,
+        "reservedDomain": MOCK_PROFILE_MSS310_RESERVEDDOMAIN,
+    }
+
+}
 MOCK_PROFILE_STORE = {
     "version": 1,
     "data": {
@@ -195,26 +222,7 @@ MOCK_PROFILE_STORE = {
         mc.KEY_EMAIL: MOCK_PROFILE_EMAIL,
         mc.KEY_KEY: MOCK_PROFILE_KEY,
         mc.KEY_TOKEN: MOCK_PROFILE_TOKEN,
-        "deviceInfo": {
-            MOCK_PROFILE_MSS310_UUID: {
-                "uuid": MOCK_PROFILE_MSS310_UUID,
-                "onlineStatus": 1,
-                "devName": MOCK_PROFILE_MSS310_DEVNAME_STORED,
-                "devIconId": "device045_it",
-                "bindTime": 1677165116,
-                "deviceType": mc.TYPE_MSS310,
-                "subType": "it",
-                "channels": [{}],
-                "region": "eu",
-                "fmwareVersion": "2.1.4",
-                "hdwareVersion": "2.0.0",
-                "userDevIcon": "",
-                "iconType": 1,
-                "cluster": 1,
-                "domain": MOCK_PROFILE_MSS310_DOMAIN,
-                "reservedDomain": MOCK_PROFILE_MSS310_RESERVEDDOMAIN,
-            }
-        },
+        "deviceInfo": MOCK_PROFILE_STORE_DEVICEINFO_DICT,
         "deviceInfoTime": 0,
     },
 }

@@ -7,28 +7,24 @@ from logging import DEBUG
 import typing
 
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
-    CONF_CLOUD_KEY,
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_KEY,
     CONF_NOTIFYRESPONSE,
     CONF_PAYLOAD,
-    CONF_PROFILE_ID,
     CONF_PROFILE_ID_LOCAL,
-    CONF_PROTOCOL,
     CONF_PROTOCOL_HTTP,
-    CONF_PROTOCOL_MQTT,
     DOMAIN,
     SERVICE_REQUEST,
 )
 from .helpers import LOGGER, ApiProfile, schedule_async_callback
 from .meross_device import MerossDevice
-from .meross_profile import MerossCloudProfile, MQTTConnection
+from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (
     MEROSSDEBUG,
     KeyType,
@@ -46,7 +42,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
 
     from .meross_device import ResponseCallbackType
-    from .merossclient.cloudapi import MerossCloudCredentials
+
 else:
     # In order to avoid a static dependency we resolve these
     # at runtime only when mqtt is actually needed in code
@@ -65,50 +61,33 @@ class MerossApi(MQTTConnection, ApiProfile):
     unsub_entry_update_listener: Callable | None
 
     @staticmethod
-    def peek(hass: HomeAssistant) -> "MerossApi" | None:
-        """helper to get the singleton"""
-        return hass.data.get(DOMAIN)
-
-    @staticmethod
-    def peek_device(hass: HomeAssistant, device_id: str | None) -> MerossDevice | None:
-        if (api := hass.data.get(DOMAIN)) is not None:
-            return api.devices.get(device_id)
-        return None
-
-    @staticmethod
-    def get(hass: HomeAssistant) -> "MerossApi":
-        """helper to get the singleton eventually creating it"""
-        api = hass.data.get(DOMAIN)
-        if api is None:
-            api = MerossApi(hass)
-            hass.data[DOMAIN] = api
-        return api
-
-    @staticmethod
-    async def async_update_profile(
-        hass: HomeAssistant, credentials: "MerossCloudCredentials"
-    ):
-        api = MerossApi.get(hass)
-        profile_id = credentials.userid
-        if profile_id not in api.profiles:
-            profile = MerossCloudProfile(credentials)
-            await profile.async_start()
-        else:
-            profile = api.profiles[profile_id]
-            await profile.async_update_credentials(credentials)
-        return profile
+    def get(hass: HomeAssistant) -> MerossApi:
+        if DOMAIN not in hass.data:
+            hass.data[DOMAIN] = api = MerossApi(hass)
+            return api
+        return hass.data[DOMAIN]
 
     def __init__(self, hass: HomeAssistant):
         ApiProfile.hass = hass
         ApiProfile.api = self
         super().__init__(self, CONF_PROFILE_ID_LOCAL)
         self.deviceclasses: dict[str, type] = {}
-        self.key = ""
+        self._key = ""
         self._unsub_mqtt_subscribe = None
         self._unsub_mqtt_disconnected = None
         self._unsub_mqtt_connected = None
         self.unsub_entry_update_listener = None
         self._mqtt_subscribing = False  # guard for asynchronous mqtt sub registration
+
+        for config_entry in hass.config_entries.async_entries(DOMAIN):
+            unique_id = config_entry.unique_id
+            if (unique_id is None) or (unique_id == DOMAIN):
+                continue
+            unique_id = unique_id.split(".")
+            if unique_id[0] == "profile":
+                self.profiles[unique_id[1]] = None
+            else:
+                self.devices[unique_id[0]] = None
 
         async def async_service_request(service_call):
             device_id = service_call.data.get(CONF_DEVICE_ID)
@@ -120,7 +99,7 @@ class MerossApi(MQTTConnection, ApiProfile):
                 payload = get_default_payload(namespace)
             else:
                 payload = {}  # likely failing the request...
-            key = service_call.data.get(CONF_KEY, self.key)
+            key = service_call.data.get(CONF_KEY, self._key)
             host = service_call.data.get(CONF_HOST)
 
             def response_callback(acknowledge: bool, header: dict, payload: dict):
@@ -130,8 +109,7 @@ class MerossApi(MQTTConnection, ApiProfile):
                     )
 
             if device_id is not None:
-                device = self.devices.get(device_id)
-                if device is not None:
+                if (device := self.devices.get(device_id)) is not None:
                     await device.async_request(
                         namespace, method, payload, response_callback
                     )
@@ -153,7 +131,7 @@ class MerossApi(MQTTConnection, ApiProfile):
                 return
             # host is not None
             for device in self.devices.values():
-                if device.host == host:
+                if (device is not None) and (device.host == host):
                     await device.async_request(
                         namespace, method, payload, response_callback
                     )
@@ -184,37 +162,14 @@ class MerossApi(MQTTConnection, ApiProfile):
         self.hass.data.pop(DOMAIN)
 
     @property
+    def key(self) -> str | None:
+        return self._key
+
+    @property
     def logtag(self):
         return "MerossApi"
 
-    def get_device_with_mac(self, macaddress: str):
-        # macaddress from dhcp discovery is already stripped/lower but...
-        macaddress = macaddress.replace(":", "").lower()
-        for device in self.devices.values():
-            if device.descriptor.macAddress.replace(":", "").lower() == macaddress:
-                return device
-        return None
-
-    def get_profiles_map(self):
-        profiles_map: dict[str, str] = {CONF_PROFILE_ID_LOCAL: "local only"}
-        for profile in self.profiles.values():
-            profiles_map[profile.id] = profile.email
-        return profiles_map
-
-    def get_profile_by_id(self, profile_id: str):
-        return self.profiles.get(profile_id)
-
-    def get_profile_by_email(self, email: str):
-        for profile in self.profiles.values():
-            if profile.email == email:
-                return profile
-
-    def get_profile_by_key(self, key: str):
-        for profile in self.profiles.values():
-            if profile.key == key:
-                return profile
-
-    def build_device(self, device_id: str, entry: ConfigEntry) -> MerossDevice:
+    def build_device(self, entry: ConfigEntry) -> MerossDevice:
         """
         scans device descriptor to build a 'slightly' specialized MerossDevice
         The base MerossDevice class is a bulk 'do it all' implementation
@@ -309,85 +264,89 @@ class MerossApi(MQTTConnection, ApiProfile):
             self.deviceclasses[class_name] = class_type
 
         device = class_type(descriptor, entry)
-        self.devices[device_id] = device
         return device
 
     def mqtt_is_subscribed(self):
         return self._unsub_mqtt_subscribe is not None
 
-    async def async_mqtt_register(self):
+    async def async_mqtt_register(self) -> bool:
         """
         subscribe to the general meross mqtt 'publish' topic
         """
-        if (self._unsub_mqtt_subscribe is None) and (not self._mqtt_subscribing):
-            self._mqtt_subscribing = True
-            with self.exception_warning("async_mqtt_register"):
+        if self._unsub_mqtt_subscribe is not None:
+            return True
+        """
+        TODO: use a future to gate the calls instead of the dumb
+        _mqtt_subscribing lock
+        """
+        if self._mqtt_subscribing is True:
+            return False
 
-                from homeassistant.components import mqtt
+        with self.exception_warning("async_mqtt_register"):
+            from homeassistant.components import mqtt
 
-                global mqtt_async_publish
-                mqtt_async_publish = mqtt.async_publish
-                self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
-                    self.hass, mc.TOPIC_DISCOVERY, self.async_mqtt_message
-                )
-                self._unsub_mqtt_disconnected = async_dispatcher_connect(
-                    self.hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected
-                )
-                self._unsub_mqtt_connected = async_dispatcher_connect(
-                    self.hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
-                )
-                if mqtt.is_connected(self.hass):
-                    self._mqtt_connected()
+            global mqtt_async_publish
+            mqtt_async_publish = mqtt.async_publish
+            self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
+                self.hass, mc.TOPIC_DISCOVERY, self.async_mqtt_message
+            )
+            self._unsub_mqtt_disconnected = async_dispatcher_connect(
+                self.hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected
+            )
+            self._unsub_mqtt_connected = async_dispatcher_connect(
+                self.hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
+            )
+            if mqtt.is_connected(self.hass):
+                self._mqtt_connected()
 
-                if MEROSSDEBUG:
+            if MEROSSDEBUG:
 
-                    async def _async_random_disconnect():
-                        if self._mqtt_subscribing:
-                            pass
-                        elif self._unsub_mqtt_subscribe is None:
-                            if MEROSSDEBUG.mqtt_random_connect():
-                                self.log(DEBUG, "random connect")
-                                self._mqtt_subscribing = True
-                                self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
-                                    self.hass,
-                                    mc.TOPIC_DISCOVERY,
-                                    self.async_mqtt_message,
-                                )
-                                self._unsub_mqtt_disconnected = (
-                                    async_dispatcher_connect(
-                                        self.hass,
-                                        mqtt.MQTT_DISCONNECTED,
-                                        self._mqtt_disconnected,
-                                    )
-                                )
-                                self._unsub_mqtt_connected = async_dispatcher_connect(
-                                    self.hass,
-                                    mqtt.MQTT_CONNECTED,
-                                    self._mqtt_connected,
-                                )
-                                self._mqtt_subscribing = False
-                                if mqtt.is_connected(self.hass):
-                                    self._mqtt_connected()
+                async def _async_random_disconnect():
+                    if self._mqtt_subscribing:
+                        pass
+                    elif self._unsub_mqtt_subscribe is None:
+                        if MEROSSDEBUG.mqtt_random_connect():
+                            self.log(DEBUG, "random connect")
+                            self._mqtt_subscribing = True
+                            self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
+                                self.hass,
+                                mc.TOPIC_DISCOVERY,
+                                self.async_mqtt_message,
+                            )
+                            self._unsub_mqtt_disconnected = async_dispatcher_connect(
+                                self.hass,
+                                mqtt.MQTT_DISCONNECTED,
+                                self._mqtt_disconnected,
+                            )
+                            self._unsub_mqtt_connected = async_dispatcher_connect(
+                                self.hass,
+                                mqtt.MQTT_CONNECTED,
+                                self._mqtt_connected,
+                            )
+                            self._mqtt_subscribing = False
+                            if mqtt.is_connected(self.hass):
+                                self._mqtt_connected()
 
-                        else:
-                            if MEROSSDEBUG.mqtt_random_disconnect():
-                                self.log(DEBUG, "random disconnect")
-                                if self._unsub_mqtt_disconnected:
-                                    self._unsub_mqtt_disconnected()
-                                    self._unsub_mqtt_disconnected = None
-                                if self._unsub_mqtt_connected:
-                                    self._unsub_mqtt_connected()
-                                    self._unsub_mqtt_connected = None
-                                self._unsub_mqtt_subscribe()
-                                self._unsub_mqtt_subscribe = None
-                                if self._mqtt_is_connected:
-                                    self._mqtt_disconnected()
-
-                        schedule_async_callback(self.hass, 60, _async_random_disconnect)
+                    else:
+                        if MEROSSDEBUG.mqtt_random_disconnect():
+                            self.log(DEBUG, "random disconnect")
+                            if self._unsub_mqtt_disconnected:
+                                self._unsub_mqtt_disconnected()
+                                self._unsub_mqtt_disconnected = None
+                            if self._unsub_mqtt_connected:
+                                self._unsub_mqtt_connected()
+                                self._unsub_mqtt_connected = None
+                            self._unsub_mqtt_subscribe()
+                            self._unsub_mqtt_subscribe = None
+                            if self._mqtt_is_connected:
+                                self._mqtt_disconnected()
 
                     schedule_async_callback(self.hass, 60, _async_random_disconnect)
 
-            self._mqtt_subscribing = False
+                schedule_async_callback(self.hass, 60, _async_random_disconnect)
+
+        self._mqtt_subscribing = False
+        return self._unsub_mqtt_subscribe is not None
 
     def mqtt_publish(
         self,
@@ -472,106 +431,129 @@ class MerossApi(MQTTConnection, ApiProfile):
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ):
-        self.key = config_entry.data.get(CONF_KEY) or ""
+        self._key = config_entry.data.get(CONF_KEY) or ""
 
 
 async def async_setup(hass: HomeAssistant, config: dict):
-    """Set up the Meross IoT local LAN component."""
+    """
+    Set up the Meross IoT local LAN component.
+    "async_setup" is just called when loading entries for
+    the first time after boot but the api might need
+    initialization for the ConfigFlow.
+    'Our' truth singleton is saved in hass.data[DOMAIN] and
+    ApiProfile.api is just a cache to speed access
+    """
+    MerossApi.get(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up Meross IoT local LAN from a config entry."""
+    unique_id = entry.unique_id
+    assert unique_id, "unique_id must be set"
     LOGGER.debug(
         "async_setup_entry { unique_id: %s, entry_id: %s }",
-        entry.unique_id,
+        unique_id,
         entry.entry_id,
     )
-    api = MerossApi.get(hass)
+    api = ApiProfile.api
 
-    if MEROSSDEBUG:
-        for dummy_profile in MEROSSDEBUG.cloud_profiles:
-            if dummy_profile[mc.KEY_USERID_] in api.profiles:
-                continue
-            MerossCloudProfile(dummy_profile)
-
-    device_id = entry.data.get(CONF_DEVICE_ID)
-    if (device_id is None) or (entry.data.get(CONF_PROTOCOL) != CONF_PROTOCOL_HTTP):
-        """
-        this is the MQTT Hub entry or a device which could/should use MQTT
-        so we'll (try) register mqtt subscription for our topics
-        """
-        await api.async_mqtt_register()
-    """
-    this is a hell of race conditions: the previous mqtt_register could be overlapping (awaited)
-    because of a different ConfigEntry request (where CONF_PROTOCOL != HTTP)
-    here we need to be sure to delay load this entry until mqtt is in place (at least for those
-    directly requiring MQTT)
-    """
-    if (device_id is None) or (entry.data.get(CONF_PROTOCOL) == CONF_PROTOCOL_MQTT):
-        if not api.mqtt_is_subscribed():
+    if unique_id == DOMAIN:
+        # MQTT Hub entry
+        if not await api.async_mqtt_register():
             raise ConfigEntryNotReady("MQTT unavailable")
-
-    if device_id is None:
-        # this is the MQTT Hub entry
-        api.key = entry.data.get(CONF_KEY) or ""
+        api._key = entry.data.get(CONF_KEY) or ""
         api.unsub_entry_update_listener = entry.add_update_listener(
             api.entry_update_listener
         )
-    else:
-        if profile_id := entry.data.get(CONF_PROFILE_ID):
-            if profile_id not in api.profiles:
-                await MerossCloudProfile.async_load(profile_id)
-        device = api.build_device(device_id, entry)
+        return True
+
+    unique_id = unique_id.split(".")
+    if unique_id[0] == "profile":
+        # profile entry
+        assert api.profiles.get(profile_id := unique_id[1]) is None
+        profile = MerossCloudProfile(entry.data)
+        try:
+            await profile.async_start()
+            # 'link' the devices already initialized
+            for device in api.active_devices():
+                if device.profile_id == profile_id:
+                    profile.link(device)
+                    break
+            api.profiles[profile_id] = profile
+            return True
+        except Exception as error:
+            await profile.async_shutdown()
+            raise ConfigEntryError from error
+
+    # device entry
+    device_id = unique_id[0]
+    assert api.devices.get(device_id) is None, "device already initialized"
+    api.devices[device_id] = device = api.build_device(entry)
+    try:
         await asyncio.gather(
             *(
                 hass.config_entries.async_forward_entry_setup(entry, platform)
                 for platform in device.platforms.keys()
             )
         )
-
-        if cloud_key := entry.data.get(CONF_CLOUD_KEY):
-            # suggest to migrate:
-            # we'll create a 'partial' cloud_profile with the data we
-            # have since userid and key are enough, at least to mock a
-            # working profile. We'll miss user email and cloud token
-            # which are needed for display purposes and to eventually
-            # query the device list. They'll be updated once the user
-            # logins again to the profile (eventually)
-            profile_id = device.descriptor.userId
-            if profile_id and (profile_id not in api.profiles):
-                MerossCloudProfile(
-                    {
-                        mc.KEY_USERID_: profile_id,
-                        mc.KEY_EMAIL: f"{profile_id}@unknown.profile",
-                        mc.KEY_KEY: cloud_key,
-                    },
-                )
-                # TODO: raise an HA repair
-
+        if (profile := api.profiles.get(device.profile_id)) is not None:
+            profile.link(device)
         device.start()
-
-    return True
+        return True
+    except Exception as error:
+        api.devices[device_id] = None
+        await device.async_shutdown()
+        raise ConfigEntryError from error
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
+    unique_id = entry.unique_id
     LOGGER.debug(
         "async_unload_entry { unique_id: %s, entry_id: %s }",
-        entry.unique_id,
+        unique_id,
         entry.entry_id,
     )
-    if (api := MerossApi.peek(hass)) is not None:
-        device_id = entry.data.get(CONF_DEVICE_ID)
-        if device_id is not None:
-            device = api.devices[device_id]
-            if not await hass.config_entries.async_unload_platforms(
-                entry, device.platforms.keys()
-            ):
-                return False
-            api.devices.pop(device_id)
-            await device.async_shutdown()
-        # don't cleanup: the MerossApi is still needed to detect MQTT discoveries
-        # if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
-        #    await api.async_shutdown()
+
+    if unique_id == DOMAIN:
+        # MQTT Hub entry
+        return True
+
+    unique_id = unique_id.split(".")  # type: ignore
+    if unique_id[0] == "profile":
+        profile = ApiProfile.profiles[unique_id[1]]
+        assert profile is not None
+        ApiProfile.profiles[unique_id[1]] = None
+        await profile.async_shutdown()
+        return True
+
+    device = ApiProfile.devices[unique_id[0]]
+    assert device is not None
+    if not await hass.config_entries.async_unload_platforms(
+        entry, device.platforms.keys()
+    ):
+        return False
+    ApiProfile.devices[unique_id[0]] = None
+    await device.async_shutdown()
+    # don't cleanup: the MerossApi is still needed to detect MQTT discoveries
+    # if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
+    #    await api.async_shutdown()
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
+    unique_id = entry.unique_id
+    assert unique_id
+    LOGGER.debug(
+        "async_remove_entry { unique_id: %s, entry_id: %s }",
+        unique_id,
+        entry.entry_id,
+    )
+
+    unique_id = unique_id.split(".")
+
+    if unique_id[0] == "profile":
+        ApiProfile.profiles.pop(unique_id[1])
+        await MerossCloudProfileStore(unique_id[1]).async_remove()
+
+    ApiProfile.devices.pop(unique_id[0])

@@ -18,11 +18,11 @@ from . import MEROSSDEBUG, MerossProtocolError, const as mc
 
 SECRET = "23x17ahWarFH6w29"
 
-API_V1_URL = "https://iot.meross.com/v1"
-API_AUTH_LOGIN_PATH = "/Auth/Login"
-API_PROFILE_LOGOUT_PATH = "/Profile/Logout"
-API_DEVICE_DEVLIST_PATH = "/Device/devList"
-API_HUB_GETSUBDEVICES_PATH = "/Hub/getSubDevices"
+API_URL = "https://iot.meross.com"
+API_AUTH_LOGIN_PATH = "/v1/Auth/Login"
+API_PROFILE_LOGOUT_PATH = "/v1/Profile/Logout"
+API_DEVICE_DEVLIST_PATH = "/v1/Device/devList"
+API_HUB_GETSUBDEVICES_PATH = "/v1/Hub/getSubDevices"
 
 APISTATUS_NO_ERROR = 0
 """Not an error"""
@@ -72,26 +72,15 @@ APISTATUS_TOKEN_ERRORS = {
 LOGGER = logging.getLogger(__name__)
 
 
-class MerossCloudCredentials(dict):
-    @property
-    def userid(self) -> str:
-        return self[mc.KEY_USERID_]
+class MerossCloudCredentials(typing.TypedDict):
+    """
+    Meross cloud credentyials as recovered from meross cloud api "/Auth/Login"
+    """
 
-    @property
-    def email(self) -> str:
-        return self[mc.KEY_EMAIL]
-
-    @property
-    def key(self) -> str:
-        return self[mc.KEY_KEY]
-
-    @property
-    def token(self) -> str | None:
-        return self.get(mc.KEY_TOKEN)
-
-    @property
-    def mqttpassword(self):
-        return md5(f"{self.userid}{self.key}".encode("utf8")).hexdigest()
+    userid: str
+    email: str
+    key: str
+    token: str
 
 
 class DeviceInfoType(typing.TypedDict, total=False):
@@ -116,6 +105,10 @@ class DeviceInfoType(typing.TypedDict, total=False):
     domain: str  # optionally formatted as host:port
     reservedDomain: str  # optionally formatted as host:port
     __subDeviceInfo: dict[str, SubDeviceInfoType]  # this key is not from meross api
+
+
+def generate_app_id():
+    return md5(uuid4().hex.encode("utf-8")).hexdigest()
 
 
 def parse_domain(domain: str):
@@ -176,9 +169,9 @@ async def async_cloudapi_post_raw(
     params = json_dumps(data, ensure_ascii=False)
     params = b64encode(params.encode("utf-8")).decode("utf-8")
     sign = md5((SECRET + str(timestamp) + nonce + params).encode("utf-8"))
-    with async_timeout.timeout(10):
+    async with async_timeout.timeout(10):
         response = await (session or aiohttp.ClientSession()).post(
-            url=API_V1_URL + urlpath,
+            url=API_URL + urlpath,
             json={
                 mc.KEY_TIMESTAMP: timestamp,
                 mc.KEY_NONCE: nonce,
@@ -207,8 +200,10 @@ async def async_cloudapi_login(
     username: str, password: str, session: aiohttp.ClientSession | None = None
 ) -> MerossCloudCredentials:
     if MEROSSDEBUG and MEROSSDEBUG.cloudapi_login:
-        MEROSSDEBUG.cloudapi_login.__class__ = MerossCloudCredentials
-        return MEROSSDEBUG.cloudapi_login
+        if username == MEROSSDEBUG.cloudapi_login[mc.KEY_EMAIL]:
+            return MEROSSDEBUG.cloudapi_login
+        response = {mc.KEY_APISTATUS: APISTATUS_WRONG_EMAIL}
+        raise CloudApiError(response)
 
     response = await async_cloudapi_post(
         API_AUTH_LOGIN_PATH,
@@ -229,7 +224,6 @@ async def async_cloudapi_login(
         if len(_value) == 0:
             raise CloudApiError(response, f"Key '{_key}' in api response is empty")
 
-    data.__class__ = MerossCloudCredentials
     return data
 
 
@@ -260,33 +254,36 @@ async def async_cloudapi_logout(
 async def async_get_cloud_key(
     username: str, password: str, session: aiohttp.ClientSession | None = None
 ) -> str:
-
     credentials = await async_cloudapi_login(username, password, session)
     # everything good:
     # kindly invalidate login token so to not exhaust our pool...
     try:
-        await async_cloudapi_logout(credentials.token, session)  # type: ignore
+        await async_cloudapi_logout(credentials[mc.KEY_TOKEN], session)
     except:
         pass  # don't care if any failure here: we have the key anyway
-    return credentials.key
+    return credentials[mc.KEY_KEY]
 
 
 class MerossMQTTClient(mqtt.Client):
-
     STATE_CONNECTING = "connecting"
     STATE_CONNECTED = "connected"
     STATE_RECONNECTING = "reconnecting"
     STATE_DISCONNECTING = "disconnecting"
     STATE_DISCONNECTED = "disconnected"
 
-    def __init__(self, credentials: MerossCloudCredentials):
+    def __init__(self, credentials: MerossCloudCredentials, app_id: str | None = None):
         self._stateext = self.STATE_DISCONNECTED
-        self.app_id = md5(uuid4().hex.encode("utf-8")).hexdigest()
-        self.topic_command = f"/app/{credentials.userid}-{self.app_id}/subscribe"
-        self.topic_push = f"/app/{credentials.userid}/subscribe"
+        if not isinstance(app_id, str):
+            app_id = generate_app_id()
+        self.app_id = app_id
+        userid = credentials[mc.KEY_USERID_]
+        self.topic_command = f"/app/{userid}-{app_id}/subscribe"
+        self.topic_push = f"/app/{userid}/subscribe"
         self.lock = threading.Lock()
-        super().__init__(f"app:{self.app_id}", protocol=mqtt.MQTTv311)
-        self.username_pw_set(credentials.userid, credentials.mqttpassword)
+        super().__init__(f"app:{app_id}", protocol=mqtt.MQTTv311)
+        self.username_pw_set(
+            userid, md5(f"{userid}{credentials[mc.KEY_KEY]}".encode("utf8")).hexdigest()
+        )
         self.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT)
         self.on_connect = self._mqttc_connect
         self.on_disconnect = self._mqttc_disconnect

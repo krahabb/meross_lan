@@ -19,6 +19,8 @@ from unittest.mock import patch
 import pytest
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
+from custom_components.meross_lan.helpers import ApiProfile
+
 from . import helpers
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -34,6 +36,8 @@ def auto_enable(request: pytest.FixtureRequest):
     hass = request.getfixturevalue("hass")
     hass.data.pop("custom_components")
     yield
+    ApiProfile.hass = None  # type: ignore
+    ApiProfile.api = None  # type: ignore
 
 
 # This fixture is used to prevent HomeAssistant from attempting to create and dismiss persistent

@@ -6,9 +6,11 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 import hashlib
 import json
+import re
 from typing import Any, Callable, Coroutine
 from unittest.mock import MagicMock, Mock, patch
 
+import aiohttp
 from freezegun.api import FrozenDateTimeFactory, StepTickTimeFactory, freeze_time
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
@@ -28,6 +30,82 @@ from custom_components.meross_lan.merossclient import cloudapi, const as mc
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
 from . import const as tc
+
+
+class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: MockConfigEntry,
+        auto_add: bool = True,
+        auto_setup: bool = True,
+    ) -> None:
+        super().__init__()
+        self.hass = hass
+        self.config_entry = config_entry
+        self.auto_setup = auto_setup
+        if auto_add:
+            config_entry.add_to_hass(hass)
+
+    @property
+    def state(self):
+        return self.config_entry.state
+
+    async def async_setup(self):
+        result = await self.hass.config_entries.async_setup(self.config_entry.entry_id)
+        await self.hass.async_block_till_done()
+        return result
+
+    async def async_unload(self):
+        return await self.hass.config_entries.async_unload(self.config_entry.entry_id)
+
+    async def __aenter__(self):
+        if self.auto_setup:
+            assert await self.async_setup()
+        return self
+
+    async def __aexit__(self, __exc_type, __exc_value, __traceback):
+        if self.config_entry.state.recoverable:
+            assert await self.async_unload()
+        return await super().__aexit__(__exc_type, __exc_value, __traceback)
+
+
+class MQTTHubEntryMocker(ConfigEntryMocker):
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        auto_add: bool = True,
+        auto_setup: bool = True,
+    ):
+        super().__init__(
+            hass,
+            MockConfigEntry(
+                domain=mlc.DOMAIN,
+                data=tc.MOCK_HUB_CONFIG,
+                unique_id=mlc.DOMAIN,
+            ),
+            auto_add=auto_add,
+            auto_setup=auto_setup,
+        )
+
+
+class ProfileEntryMocker(ConfigEntryMocker):
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        auto_add: bool = True,
+        auto_setup: bool = True,
+    ):
+        super().__init__(
+            hass,
+            MockConfigEntry(
+                domain=mlc.DOMAIN,
+                data=tc.MOCK_PROFILE_CONFIG,
+                unique_id=f"profile.{tc.MOCK_PROFILE_CONFIG[mc.KEY_USERID_]}",
+            ),
+            auto_add=auto_add,
+            auto_setup=auto_setup,
+        )
 
 
 def build_emulator(model: str) -> MerossEmulator:
@@ -88,14 +166,15 @@ def build_emulator_for_profile(
         key,
     )
 
+    fw = emulator.descriptor.firmware
+    fw[mc.KEY_USERID] = int(profile_id)
+
     if domain:
         host, port = cloudapi.parse_domain(domain)
-        fw = emulator.descriptor.firmware
         fw[mc.KEY_SERVER] = host
         fw[mc.KEY_PORT] = port
 
     if reservedDomain:
-        fw = emulator.descriptor.firmware
         if domain == reservedDomain:
             fw.pop(mc.KEY_SECONDSERVER, None)
             fw.pop(mc.KEY_SECONDPORT, None)
@@ -115,12 +194,6 @@ def build_emulator_config_entry(
     Use config_data to override/add the defaults
     """
     if config_data:
-        # we need to patch the emulator config before
-        if mlc.CONF_PROFILE_ID in config_data:
-            # by default configure the emulator to be binded correctly
-            profile_id = config_data[mlc.CONF_PROFILE_ID]
-            emulator.descriptor.firmware[mc.KEY_USERID] = profile_id
-
         if mlc.CONF_KEY in config_data:
             emulator.key = config_data[mlc.CONF_KEY]
 
@@ -224,21 +297,23 @@ class DeviceContext:
         await hass.async_block_till_done()
         if self.api is None:
             self.api = hass.data[mlc.DOMAIN]
-            assert self.api
+            assert isinstance(self.api, MerossApi)
         else:
             assert self.api == hass.data[mlc.DOMAIN]
-        self.device = self.api.devices[self.device_id]  # type: ignore
-        assert not self.device.online
+        self.device = self.api.devices[self.device_id]
+        assert self.device and not self.device.online
 
     async def async_unload_config_entry(self):
-        assert self._config_entry_loaded is True
-        assert self.device is not None
+        """
+        Robust finalizer, asserts the config_entry will be correctly unloaded
+        and the device cleanup done, whatever the config_entry.state
+        """
         hass = self.hass
         assert await hass.config_entries.async_unload(self.config_entry.entry_id)
         self._config_entry_loaded = False
         await hass.async_block_till_done()
-        assert self.device_id not in hass.data[mlc.DOMAIN].devices
-        self.device = None  # discard our local reference so the device gets destroyed
+        self.device = MerossApi.devices[self.device_id]
+        assert self.device is None
 
     async def async_enable_entity(self, entity_id):
         # entity enable will reload the config_entry
@@ -331,7 +406,6 @@ async def devicecontext(
     """
     with freeze_time(time_to_freeze) as frozen_time:
         with emulator_mock(emulator, aioclient_mock, frozen_time) as emulator:
-
             context = DeviceContext()
             context.hass = hass
             context.time = frozen_time
@@ -346,8 +420,7 @@ async def devicecontext(
             try:
                 yield context
             finally:
-                if context._config_entry_loaded:
-                    await context.async_unload_config_entry()
+                await context.async_unload_config_entry()
 
 
 class CloudApiMocker(contextlib.AbstractContextManager):
@@ -355,29 +428,23 @@ class CloudApiMocker(contextlib.AbstractContextManager):
     Emulates the Meross server side api by leveraging aioclient_mock
     """
 
-    def __init__(self, aioclient_mock: AiohttpClientMocker):
+    def __init__(self, aioclient_mock: AiohttpClientMocker, online: bool = True):
         self.aioclient_mock = aioclient_mock
+        self._token = None
+        self._online = online
+        self.api_calls: dict[str, int] = {}
+        aioclient_mock.post(
+            re.compile(r"https://iot\.meross\.com"),
+            side_effect=self._async_handle,
+        )
 
-        self.login_calls = 0
-        aioclient_mock.post(
-            cloudapi.API_V1_URL + cloudapi.API_AUTH_LOGIN_PATH,
-            side_effect=self._async_handle_login,
-        )
-        self.devlist_calls = 0
-        aioclient_mock.post(
-            cloudapi.API_V1_URL + cloudapi.API_DEVICE_DEVLIST_PATH,
-            side_effect=self._async_handle_devlist,
-        )
-        self.getsubdevices_calls = 0
-        aioclient_mock.post(
-            cloudapi.API_V1_URL + cloudapi.API_HUB_GETSUBDEVICES_PATH,
-            side_effect=self._async_handle_getsubdevices,
-        )
-        self.logout_calls = 0
-        aioclient_mock.post(
-            cloudapi.API_V1_URL + cloudapi.API_PROFILE_LOGOUT_PATH,
-            side_effect=self._async_handle_logout,
-        )
+    @property
+    def online(self):
+        return self._online
+
+    @online.setter
+    def online(self, value: bool):
+        self._online = value
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.aioclient_mock.clear_requests()
@@ -404,6 +471,73 @@ class CloudApiMocker(contextlib.AbstractContextManager):
         params = base64.b64decode(params.encode("utf-8")).decode("utf-8")
         return json.loads(params)
 
+    async def _async_handle(self, method, url, data):
+        path: str = url.path
+        self.api_calls[path] = self.api_calls.get(path, 0) + 1
+        if self._online:
+            try:
+                result = getattr(self, path.replace("/", "_").lower())(
+                    self._validate_request_payload(data)
+                )
+                return AiohttpClientMockResponse(method, url, json=result)
+            except:
+                return AiohttpClientMockResponse(
+                    method, url, exc=aiohttp.ServerConnectionError()
+                )
+
+        return AiohttpClientMockResponse(
+            method, url, exc=aiohttp.ServerConnectionError()
+        )
+
+    def _v1_auth_login(self, request: dict):
+        response = {}
+        if mc.KEY_EMAIL not in request:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_INVALID_EMAIL
+        elif request[mc.KEY_EMAIL] != tc.MOCK_PROFILE_EMAIL:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_UNEXISTING_ACCOUNT
+        elif mc.KEY_PASSWORD not in request:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_MISSING_PASSWORD
+        elif request[mc.KEY_PASSWORD] != tc.MOCK_PROFILE_PASSWORD:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_WRONG_CREDENTIALS
+        else:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_NO_ERROR
+            response[mc.KEY_DATA] = {
+                mc.KEY_USERID_: tc.MOCK_PROFILE_ID,
+                mc.KEY_EMAIL: tc.MOCK_PROFILE_EMAIL,
+                mc.KEY_KEY: tc.MOCK_PROFILE_KEY,
+                mc.KEY_TOKEN: tc.MOCK_PROFILE_TOKEN,
+            }
+            self._token = tc.MOCK_PROFILE_TOKEN
+        return response
+
+    def _v1_device_devlist(self, request: dict):
+        assert len(request) == 0
+        return {
+            mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
+            mc.KEY_DATA: tc.MOCK_PROFILE_CLOUDAPI_DEVLIST,
+        }
+
+    def _v1_hub_getsubdevices(self, request: dict):
+        response = {}
+        if mc.KEY_UUID not in request:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_GENERIC_ERROR
+            response[mc.KEY_INFO] = "Missing uuid in request"
+        else:
+            uuid = request[mc.KEY_UUID]
+            if uuid not in tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT:
+                response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_GENERIC_ERROR
+                response[mc.KEY_INFO] = "uuid not registered"
+            else:
+                response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_NO_ERROR
+                response[mc.KEY_DATA] = tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT[uuid]
+        return response
+
+    def _v1_profile_logout(self, request: dict):
+        assert len(request) == 0
+        self._token = None
+        return {mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR, mc.KEY_DATA: {}}
+
+    """
     async def _async_handle_login(self, method, url, data):
         self.login_calls += 1
         request = self._validate_request_payload(data)
@@ -424,6 +558,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
                 mc.KEY_KEY: tc.MOCK_PROFILE_KEY,
                 mc.KEY_TOKEN: tc.MOCK_PROFILE_TOKEN,
             }
+            self._token = tc.MOCK_PROFILE_TOKEN
         return AiohttpClientMockResponse(method, url, json=response)
 
     async def _async_handle_devlist(self, method, url, data):
@@ -457,10 +592,10 @@ class CloudApiMocker(contextlib.AbstractContextManager):
         self.logout_calls += 1
         request = self._validate_request_payload(data)
         assert len(request) == 0
-        response = {
-            mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
-        }
+        self._token = None
+        response = {mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR, mc.KEY_DATA: {}}
         return AiohttpClientMockResponse(method, url, json=response)
+    """
 
 
 MqttMockPahoClient = MagicMock
@@ -471,7 +606,6 @@ MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
 
 class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
-
     mqtt_client: MqttMockHAClient
     mqtt_async_publish: Mock
 
@@ -501,7 +635,6 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
 
 
 class MerossMQTTMocker(contextlib.AbstractContextManager):
-
     safe_connect_mock: Mock
     safe_disconnect_mock: Mock
 
