@@ -48,8 +48,8 @@ class MerossDeviceHub(MerossDevice):
     _lastupdate_mts100 = None
 
     def __init__(self, descriptor, entry):
-        super().__init__(descriptor, entry)
         self.subdevices: dict[object, MerossSubDevice] = {}
+        super().__init__(descriptor, entry)
         # invoke platform(s) async_setup_entry
         # in order to be able to eventually add entities when they 'pop up'
         # in the hub (see also self.async_add_sensors)
