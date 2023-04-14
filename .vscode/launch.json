@@ -53,7 +53,12 @@
       "type": "python",
       "request": "launch",
       "program": "${file}",
-      "purpose": ["debug-test"],
+      "purpose": [
+        "debug-test"
+      ],
+      "env": {
+        "PYTEST_ADDOPTS": "--no-cov"
+      },
       "justMyCode": false
     }
   ]
