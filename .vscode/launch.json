@@ -49,7 +49,7 @@
       ]
     },
     {
-      "name": "Python: Debug Tests",
+      "name": "Debug Tests",
       "type": "python",
       "request": "launch",
       "program": "${file}",
@@ -60,6 +60,16 @@
         "PYTEST_ADDOPTS": "--no-cov"
       },
       "justMyCode": false
+    },
+    {
+      "name": "Coverage",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "--cov=custom_components/meross_lan",
+        "--cov-report=html:htmlcov",
+      ],
     }
   ]
 }

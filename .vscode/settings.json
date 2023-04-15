@@ -14,11 +14,10 @@
     "python.analysis.extraPaths": [
         "./custom_components/meross_lan"
     ],
+    "testing.defaultGutterClickAction": "debug",
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
-        "--cov=custom_components/meross_lan",
-        "--cov-report=html:htmlcov",
         "tests"
     ],
     "[python]": {
