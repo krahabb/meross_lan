@@ -15,7 +15,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
 from homeassistant.util.dt import utcnow
 
-from .const import DOMAIN
+from .const import CONF_CLOUD_KEY, CONF_DEVICE_ID, CONF_HOST, DOMAIN
 from .merossclient import const as mc
 
 try:
@@ -199,33 +199,135 @@ def log_exceptions(logger: logging.Logger = LOGGER):
 
 
 """
-    obfuscation:
-    call obfuscate on a paylod (dict) to remove well-known sensitive
-    keys (list in OBFUSCATE_KEYS). The returned dictionary contains a
-    copy of original values and need to be used a gain when calling
-    deobfuscate on the previously obfuscated payload
+    Obfuscation:
+
+    There are 2 different approaches both producing the same result by working
+    on a set of well-known keys to hide values from a structure. The 'OBFUSCATE_KEYS'
+    dict mandates which key values are patched:
+
+    - Obfuscate values 'in place' and then allow to deobfuscate. This approach
+    is less memory intensive since it will not duplicate data but will just
+    'patch' the passed in structure. 'deobfuscate' will then be able to restore
+    the structure to the original values in case. 'obfuscate' will modify the
+    passed in data (which must be mutable) only where obfuscation occurs
+
+    - Deepcopy the data. This is useful when source data are immutable and/or
+    there's the need to deepcopy the data anyway
 """
-OBFUSCATE_KEYS = (
-    mc.KEY_UUID,
-    mc.KEY_MACADDRESS,
-    mc.KEY_WIFIMAC,
-    mc.KEY_INNERIP,
-    mc.KEY_SERVER,
-    mc.KEY_PORT,
-    mc.KEY_SECONDSERVER,
-    mc.KEY_SECONDPORT,
-    mc.KEY_USERID,
-    mc.KEY_TOKEN,
-)
+# common (shared) obfuscation mappings for related keys
+OBFUSCATE_DEVICE_ID_MAP = {}
+OBFUSCATE_HOST_MAP = {}
+OBFUSCATE_USERID_MAP = {}
+OBFUSCATE_SERVER_MAP = {}
+OBFUSCATE_PORT_MAP = {}
+OBFUSCATE_KEY_MAP = {}
+OBFUSCATE_KEYS = {
+    # MEROSS PROTOCOL PAYLOADS keys
+    # devices uuid(s) is better obscured since knowing this
+    # could allow malicious attempts at the public Meross mqtt to
+    # correctly address the device (with some easy hacks on signing)
+    mc.KEY_UUID: OBFUSCATE_DEVICE_ID_MAP,
+    mc.KEY_MACADDRESS: {},
+    mc.KEY_WIFIMAC: {},
+    mc.KEY_INNERIP: OBFUSCATE_HOST_MAP,
+    mc.KEY_SERVER: OBFUSCATE_SERVER_MAP,
+    mc.KEY_PORT: OBFUSCATE_PORT_MAP,
+    mc.KEY_SECONDSERVER: OBFUSCATE_SERVER_MAP,
+    mc.KEY_SECONDPORT: OBFUSCATE_PORT_MAP,
+    mc.KEY_USERID: OBFUSCATE_USERID_MAP,
+    mc.KEY_TOKEN: {},
+    mc.KEY_KEY: OBFUSCATE_KEY_MAP,
+    #
+    # MEROSS CLOUD HTTP API KEYS
+    mc.KEY_USERID_: OBFUSCATE_USERID_MAP,
+    mc.KEY_EMAIL: {},
+    # mc.KEY_KEY: OBFUSCATE_KEY_MAP,
+    # mc.KEY_TOKEN: {},
+    mc.KEY_CLUSTER: {},
+    mc.KEY_DOMAIN: OBFUSCATE_SERVER_MAP,
+    mc.KEY_RESERVEDDOMAIN: OBFUSCATE_SERVER_MAP,
+    # subdevice(s) ids are hardly sensitive since they
+    # cannot be accessed over the api without knowing the uuid
+    # of the hub device (which is obfuscated indeed). Masking
+    # this would also require to obfuscate mc.KEY_ID used by hubs
+    # and dumped in traces
+    # mc.KEY_SUBDEVICEID: {},
+    #
+    # ConfigEntries keys
+    CONF_DEVICE_ID: OBFUSCATE_DEVICE_ID_MAP,
+    CONF_HOST: OBFUSCATE_HOST_MAP,
+    # CONF_KEY: OBFUSCATE_KEY_MAP,
+    CONF_CLOUD_KEY: OBFUSCATE_KEY_MAP,
+    #
+    # MerossCloudProfile keys
+    "appId": {},
+}
+
+
+def _obfuscated_value(obfuscated_map: dict[typing.Any, str], value: typing.Any):
+    """
+    for every value we obfuscate, we'll keep
+    a cache of 'unique' obfuscated values in order
+    to be able to relate 'stable' identical vales in traces
+    for debugging/diagnostics purposes
+    """
+    if obfuscated_map is OBFUSCATE_USERID_MAP:
+        # terrible patch here since we want to match
+        # values (userid) which are carried both as strings
+        # (in mc.KEY_USERID_) and as int (in mc.KEY_USERID)
+        try:
+            # no type checks before conversion since we're
+            # confident its almost an integer decimal number
+            value = int(value)
+        except:
+            # but we play safe anyway
+            pass
+    elif obfuscated_map is OBFUSCATE_SERVER_MAP:
+        # mc.KEY_DOMAIN and mc.KEY_RESERVEDDOMAIN could
+        # carry the protocol port embedded like: "server.domain.com:port"
+        # so, in order to map to the same values as in mc.KEY_SERVER,
+        # mc.KEY_PORT and the likes we'll need special processing
+        try:
+            if (colon_index := value.find(":")) != -1:
+                host = value[0:colon_index]
+                port = int(value[colon_index + 1 :])
+                return ":".join(
+                    (
+                        _obfuscated_value(OBFUSCATE_SERVER_MAP, host),
+                        _obfuscated_value(OBFUSCATE_PORT_MAP, port),
+                    )
+                )
+        except:
+            pass
+
+    if value not in obfuscated_map:
+        # first time seen: generate the obfuscation
+        count = len(obfuscated_map)
+        if isinstance(value, str):
+            # we'll preserve string length when obfuscating strings
+            obfuscated_value = str(count)
+            padding = len(value) - len(obfuscated_value)
+            if padding > 0:
+                obfuscated_map[value] = "#" * padding + obfuscated_value
+            else:
+                obfuscated_map[value] = "#" + obfuscated_value
+        else:
+            obfuscated_map[value] = "@" + str(count)
+
+    return obfuscated_map[value]
 
 
 def obfuscate(payload: dict):
     """
-    payload: input-output gets modified by blanking sensistive keys
-    returns: a dict with the original mapped obfuscated keys
     parses the input payload and 'hides' (obfuscates) some sensitive keys.
-    returns the mapping of the obfuscated keys in 'obfuscated' so to re-set them in _deobfuscate
-    this function is recursive
+    Obfuscation keeps a static list of obfuscated values (in OBFUSCATE_KEYS)
+    so to always obfuscate an input value to the same stable value.
+    This function is recursive
+
+    - payload(input-output): gets modified by obfuscating sensistive keys
+
+    - return: a dict of the original values which were obfuscated
+    (to be used in 'deobfuscate')
     """
     obfuscated = {}
     for key, value in payload.items():
@@ -234,8 +336,9 @@ def obfuscate(payload: dict):
             if o:
                 obfuscated[key] = o
         elif key in OBFUSCATE_KEYS:
+            # save for deobfuscate handling
             obfuscated[key] = value
-            payload[key] = "#" * len(str(value))
+            payload[key] = _obfuscated_value(OBFUSCATE_KEYS[key], value)
 
     return obfuscated
 
@@ -246,6 +349,30 @@ def deobfuscate(payload: dict, obfuscated: dict):
             deobfuscate(payload[key], value)
         else:
             payload[key] = value
+
+
+def obfuscated_list_copy(data: typing.Sequence):
+    return [
+        obfuscated_dict_copy(value)  # type: ignore
+        if isinstance(value, dict)
+        else obfuscated_list_copy(value)
+        if isinstance(value, list)
+        else value
+        for value in data
+    ]
+
+
+def obfuscated_dict_copy(data: dict):
+    return {
+        key: obfuscated_dict_copy(value)
+        if isinstance(value, dict)
+        else obfuscated_list_copy(value)
+        if isinstance(value, list)
+        else _obfuscated_value(OBFUSCATE_KEYS[key], value)
+        if key in OBFUSCATE_KEYS
+        else value
+        for key, value in data.items()
+    }
 
 
 def schedule_async_callback(

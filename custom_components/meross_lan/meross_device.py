@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 import asyncio
-from copy import deepcopy
 from datetime import datetime, timezone
 from io import TextIOWrapper
 from json import dumps as json_dumps
@@ -51,7 +50,7 @@ from .helpers import (
     LOGGER,
     ApiProfile,
     Loggable,
-    obfuscate,
+    obfuscated_dict_copy,
     schedule_async_callback,
     schedule_callback,
 )
@@ -1450,8 +1449,7 @@ class MerossDevice(MerossDeviceBase):
             # we'll eventually make a deepcopy since data
             # might be retained by the _trace_data list
             # and carry over the deobfuscation (which we'll skip now)
-            data = deepcopy(data)
-            obfuscate(data)
+            data = obfuscated_dict_copy(data)
             textdata = json_dumps(data)
         else:
             textdata = data

@@ -3,7 +3,7 @@ from typing import Final, TypedDict
 
 from homeassistant import const as hac
 
-from .merossclient import const as mc
+from .merossclient import cloudapi, const as mc
 
 DOMAIN: Final = "meross_lan"
 # entity (sub)id for the switch representing DNDMode
@@ -17,9 +17,6 @@ CONF_KEY: Final = "key"
 # removed from configentries as soon as the users
 # update/repair/fix their configuration (no automatic migration)
 CONF_CLOUD_KEY: Final = "cloud_key"
-# email/id of cloud account to use with the device
-CONF_PROFILE_ID: Final = "profile_id"  # REMOVE
-CONF_PROFILE_ID_LOCAL: Final = ""
 CONF_PAYLOAD: Final = hac.CONF_PAYLOAD
 CONF_HOST: Final = hac.CONF_HOST
 # protocol used to communicate with device
@@ -83,20 +80,19 @@ CONF_USERNAME: Final = hac.CONF_USERNAME
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
 
 
-class ProfileConfigType(TypedDict):
+class ProfileConfigType(cloudapi.MerossCloudCredentials):
     """
     Meross cloud profile config_entry keys
     """
-    userid: str
-    email: str
-    key: str
-    token: str
+
+    pass
 
 
 SERVICE_REQUEST = "request"
 # key used in service 'request' call
 CONF_NOTIFYRESPONSE = "notifyresponse"
-
+# label for MerossApi as a 'fake' cloud profile
+CONF_PROFILE_ID_LOCAL: Final = ""
 """
  general working/configuration parameters (waiting to be moved to CONF_ENTRY)
 """
