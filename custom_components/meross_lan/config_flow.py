@@ -258,10 +258,13 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
                     username, password, async_get_clientsession(self.hass)
                 )
                 entry = await self.async_set_unique_id(
-                    f"profile.{credentials[mc.KEY_USERID_]}"
+                    f"profile.{credentials[mc.KEY_USERID_]}", raise_on_progress=False
                 )
                 if entry is not None:
                     # profile already configured
+                    self.hass.config_entries.async_update_entry(
+                        entry, title=username, data=credentials
+                    )
                     if entry.disabled_by is not None:
                         await self.hass.config_entries.async_set_disabled_by(
                             entry.entry_id, None
@@ -291,7 +294,12 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
     async def async_step_integration_discovery(self, discovery_info: DeviceConfigType):
         """
         this is actually the entry point for devices discovered through our MQTTConnection(s)
+        or to trigger a cloud profile configuration when migrating older config entries
         """
+        if mc.KEY_USERID_ in discovery_info:
+            self.context["title_placeholders"] = {CONF_DEVICE_TYPE: "profile"}
+            return await self.async_step_profile()
+
         return await self._async_set_device_config(
             discovery_info, MerossDeviceDescriptor(discovery_info[CONF_PAYLOAD])
         )
@@ -525,7 +533,6 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
 
                 data[CONF_KEY] = self._key
                 data[CONF_PROTOCOL] = self._protocol
-                data.pop(CONF_CLOUD_KEY, None)
                 data[CONF_POLLING_PERIOD] = self._polling_period
                 if self._trace:
                     data[CONF_TRACE] = time() + (
@@ -538,6 +545,16 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     device.entry_option_update(user_input)
                 except:
                     pass  # forgive any error
+
+                if CONF_CLOUD_KEY in data:
+                    # cloud_key functionality has been superseeded by
+                    # meross cloud profiles and we could just remove it.
+                    # Actually, we leave it in place as a way to 'force/trigger'
+                    # the user to properly configure a meross cloud profile.
+                    # In fact it is checked when loading the device config entry
+                    # to see if a (profile) flow need to be started
+                    if _descriptor.userId in ApiProfile.profiles:
+                        data.pop(CONF_CLOUD_KEY)
                 # we're not following HA 'etiquette' and we're just updating the
                 # config_entry data with this dirty trick
                 self.hass.config_entries.async_update_entry(

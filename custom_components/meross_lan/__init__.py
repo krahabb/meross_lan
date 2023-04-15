@@ -6,12 +6,14 @@ from json import dumps as json_dumps, loads as json_loads
 from logging import DEBUG
 import typing
 
+from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
+    CONF_CLOUD_KEY,
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_KEY,
@@ -22,7 +24,7 @@ from .const import (
     DOMAIN,
     SERVICE_REQUEST,
 )
-from .helpers import LOGGER, ApiProfile, schedule_async_callback
+from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, schedule_async_callback
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (
@@ -497,8 +499,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 for platform in device.platforms.keys()
             )
         )
-        if (profile := api.profiles.get(device.profile_id)) is not None:
-            profile.link(device)
+        if profile_id := device.profile_id:
+            # the profile is somehow configured, either disabled or not
+            if (profile := api.profiles[profile_id]) is not None:
+                profile.link(device)
+        else:
+            # trigger a cloud profile discovery if we guess it reasonable
+            if CONF_CLOUD_KEY in entry.data:
+                cloud_key = entry.data[CONF_CLOUD_KEY]
+                userid = device.descriptor.userId
+                if userid and (cloud_key == device.key):
+                    helper = ConfigEntriesHelper(hass)
+                    flow_unique_id = f"profile.{userid}"
+                    if helper.get_config_flow(flow_unique_id) is None:
+                        await hass.config_entries.flow.async_init(
+                            DOMAIN,
+                            context={
+                                "source": SOURCE_INTEGRATION_DISCOVERY,
+                                "unique_id": flow_unique_id,
+                            },
+                            data={
+                                mc.KEY_USERID_: userid,
+                                mc.KEY_KEY: cloud_key,
+                            },
+                        )
+
         device.start()
         return True
     except Exception as error:
@@ -549,11 +574,16 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
         unique_id,
         entry.entry_id,
     )
+    if unique_id == DOMAIN:
+        return
 
     unique_id = unique_id.split(".")
 
     if unique_id[0] == "profile":
-        ApiProfile.profiles.pop(unique_id[1])
-        await MerossCloudProfileStore(unique_id[1]).async_remove()
+        profile_id = unique_id[1]
+        ApiProfile.profiles.pop(profile_id)
+        await MerossCloudProfileStore(profile_id).async_remove()
+        return
 
-    ApiProfile.devices.pop(unique_id[0])
+    device_id = unique_id[0]
+    ApiProfile.devices.pop(device_id)
