@@ -73,8 +73,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         "menu_options": ["cloudkey", "device"],
     }
 
-    # These values ar just buffers for UI state persistance
-    _device_id: str | None = None
+    # These values are just buffers for UI state persistance
+    _device_id: str = ""
     _host: str | None = None
     _key: str | None = None
     _placeholders = {
@@ -403,8 +403,16 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
         return await self.async_step_hub()
 
     async def async_step_finalize(self, user_input=None):
+        if (
+            ((profile_id := self._descriptor.userId) in ApiProfile.profiles)
+            and ((profile := ApiProfile.profiles.get(profile_id)) is not None)
+            and ((device_info := profile.get_device_info(self._device_id)) is not None)
+        ):
+            name = device_info.get(mc.KEY_DEVNAME, self._device_id)
+        else:
+            name = self._device_id
         return self.async_create_entry(
-            title=f"{self._descriptor.type} {self._device_id}",
+            title=f"{self._descriptor.type} - {name}",
             data=self._device_config,  # type: ignore
         )
 
