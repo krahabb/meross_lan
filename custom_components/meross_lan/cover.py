@@ -82,7 +82,6 @@ async def async_setup_entry(
 
 
 class MLGarageTimeoutBinarySensor(MLBinarySensor):
-
     _attr_entity_category = me.EntityCategory.DIAGNOSTIC
     _attr_state = me.STATE_OFF
 
@@ -113,7 +112,6 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
 
 
 class MLGarageConfigSwitch(MLSwitch):
-
     device: GarageMixin
 
     _attr_entity_category = me.EntityCategory.CONFIG
@@ -223,7 +221,6 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
 
 
 class MLGarage(me.MerossEntity, cover.CoverEntity):
-
     PLATFORM = cover.DOMAIN
 
     device: GarageMixin
@@ -303,7 +300,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                 if p_state.get(mc.KEY_EXECUTE) and open_request != p_state.get(
                     mc.KEY_OPEN
                 ):
-                    self._cancel_transition()
+                    self._transition_cancel()
                     self._open_request = open_request
                     self._transition_start = time()
                     self.update_state(STATE_OPENING if open_request else STATE_CLOSING)
@@ -341,12 +338,12 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         )
 
     async def async_will_remove_from_hass(self):
-        self._cancel_transition()
+        self._transition_cancel()
         await super().async_will_remove_from_hass()
 
     def set_unavailable(self):
         self._open = None
-        self._cancel_transition()
+        self._transition_cancel()
         super().set_unavailable()
 
     def _parse_state(self, payload: dict):
@@ -383,7 +380,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                     self._update_transition_duration(
                         int((4 * self._transition_duration + transition_duration) / 5)
                     )
-                    self._cancel_transition()
+                    self._transition_cancel()
                     self.update_state(STATE_CLOSED)
 
     def _parse_config(self, payload):
@@ -404,7 +401,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         #else: RIP!
         """
 
-    def _cancel_transition(self):
+    def _transition_cancel(self):
         if self._transition_unsub is not None:
             self._transition_unsub.cancel()
             self._transition_unsub = None
@@ -463,7 +460,6 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
 class GarageMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-
     _need_build_doorOpenDuration = True
     _need_build_doorCloseDuration = True
 
@@ -644,6 +640,10 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     ] = self._signalClose
                 if ATTR_CURRENT_POSITION in _attr:
                     self._attr_current_cover_position = _attr[ATTR_CURRENT_POSITION]
+
+    async def async_will_remove_from_hass(self):
+        self._transition_cancel()
+        await super().async_will_remove_from_hass()
 
     async def async_open_cover(self, **kwargs):
         await self.async_request_position(POSITION_FULLY_OPENED)
