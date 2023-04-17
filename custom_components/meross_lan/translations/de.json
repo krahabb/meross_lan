@@ -1,6 +1,6 @@
 {
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "Keine Geräte im Netzwerk gefunden",
             "single_instance_allowed": "Das Gerät ist bereits vorhanden. Jedes Gerät kann nur ein mal konfiguriert werden."
@@ -39,19 +39,11 @@
                 "title": "Geräteschlüsselfehler",
                 "description": "Der bereitgestellte Schlüssel ist falsch. Wähle eine Option",
                 "menu_options": {
-                    "cloudkey": "Aus der Meross-Cloud abrufen",
+                    "profile": "Aus der Meross-Cloud abrufen",
                     "device": "Wiederholen"
                 }
             },
             "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
-                "data": {
-                    "username": "Meross login",
-                    "password": "Meross password"
-                }
-            },
-            "cloudkey": {
                 "title": "Geräteschlüssel übertragen",
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {
@@ -104,11 +96,11 @@
                 "title": "Geräteschlüsselfehler",
                 "description": "Der bereitgestellte Schlüssel ist falsch. Wähle eine Option",
                 "menu_options": {
-                    "cloudkey": "Aus der Meross-Cloud abrufen",
+                    "profile": "Aus der Meross-Cloud abrufen",
                     "device": "Wiederholen"
                 }
             },
-            "cloudkey": {
+            "profile": {
                 "title": "Geräteschlüssel übertragen",
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {

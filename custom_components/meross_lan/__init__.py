@@ -57,11 +57,6 @@ class MerossApi(MQTTConnection, ApiProfile):
     and MQTT discovery and message routing
     """
 
-    _unsub_mqtt_subscribe: Callable | None
-    _unsub_mqtt_disconnected: Callable | None
-    _unsub_mqtt_connected: Callable | None
-    unsub_entry_update_listener: Callable | None
-
     @staticmethod
     def get(hass: HomeAssistant) -> MerossApi:
         if DOMAIN not in hass.data:
@@ -75,10 +70,9 @@ class MerossApi(MQTTConnection, ApiProfile):
         super().__init__(self, CONF_PROFILE_ID_LOCAL)
         self.deviceclasses: dict[str, type] = {}
         self._key = ""
-        self._unsub_mqtt_subscribe = None
-        self._unsub_mqtt_disconnected = None
-        self._unsub_mqtt_connected = None
-        self.unsub_entry_update_listener = None
+        self._unsub_mqtt_subscribe: Callable | None = None
+        self._unsub_mqtt_disconnected: Callable | None = None
+        self._unsub_mqtt_connected: Callable | None = None
         self._mqtt_subscribing = False  # guard for asynchronous mqtt sub registration
 
         for config_entry in hass.config_entries.async_entries(DOMAIN):
@@ -158,9 +152,6 @@ class MerossApi(MQTTConnection, ApiProfile):
         if self._unsub_mqtt_subscribe is not None:
             self._unsub_mqtt_subscribe()
             self._unsub_mqtt_subscribe = None
-        if self.unsub_entry_update_listener is not None:
-            self.unsub_entry_update_listener()
-            self.unsub_entry_update_listener = None
         self.hass.data.pop(DOMAIN)
 
     @property
@@ -170,6 +161,10 @@ class MerossApi(MQTTConnection, ApiProfile):
     @property
     def logtag(self):
         return "MerossApi"
+
+    @property
+    def broker(self):
+        return "homeassistant"
 
     def build_device(self, entry: ConfigEntry) -> MerossDevice:
         """
@@ -430,9 +425,7 @@ class MerossApi(MQTTConnection, ApiProfile):
                         response[mc.KEY_PAYLOAD],
                     )
 
-    async def entry_update_listener(
-        self, hass: HomeAssistant, config_entry: ConfigEntry
-    ):
+    async def entry_update_listener(self, hass, config_entry: ConfigEntry):
         self._key = config_entry.data.get(CONF_KEY) or ""
 
 
@@ -465,9 +458,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         if not await api.async_mqtt_register():
             raise ConfigEntryNotReady("MQTT unavailable")
         api._key = entry.data.get(CONF_KEY) or ""
-        api.unsub_entry_update_listener = entry.add_update_listener(
-            api.entry_update_listener
-        )
+        api.listen_entry_update(entry)
         return True
 
     unique_id = unique_id.split(".")
@@ -483,6 +474,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     profile.link(device)
                     break
             api.profiles[profile_id] = profile
+            profile.listen_entry_update(entry)
             return True
         except Exception as error:
             await profile.async_shutdown()
@@ -517,6 +509,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                             context={
                                 "source": SOURCE_INTEGRATION_DISCOVERY,
                                 "unique_id": flow_unique_id,
+                                "title_placeholders": {"name": "profile"},
                             },
                             data={
                                 mc.KEY_USERID_: userid,
@@ -540,8 +533,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.entry_id,
     )
 
+    api = ApiProfile.api
+
     if unique_id == DOMAIN:
         # MQTT Hub entry
+        api.unlisten_entry_update()
         return True
 
     unique_id = unique_id.split(".")  # type: ignore
@@ -550,6 +546,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         assert profile is not None
         ApiProfile.profiles[unique_id[1]] = None
         await profile.async_shutdown()
+        profile.unlisten_entry_update()
         return True
 
     device = ApiProfile.devices[unique_id[0]]

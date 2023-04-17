@@ -1,6 +1,6 @@
 {
   "config": {
-    "flow_title": "Meross {device_type}",
+    "flow_title": "{name}",
     "abort": {
       "no_devices_found": "Pas d'appareils découverts sur le réseau.",
       "single_instance_allowed": "Déjà configuré. Une seule configuration possible."
@@ -35,25 +35,17 @@
           "key": "Clé"
         }
       },
-      "profile": {
-        "title": "Meross cloud profile",
-        "description": "Register and connect to a Meross account",
-        "data": {
-          "username": "Meross login",
-          "password": "Meross password"
-        }
-      },
       "keyerror": {
         "title": "Erreur de clé de périphérique",
         "description": "La clé fournie est erronée. Choisis une option",
         "menu_options": {
-          "cloudkey": "Récupérer depuis le cloud Meross",
+          "profile": "Récupérer depuis le cloud Meross",
           "device": "Retenter"
         }
       },
-      "cloudkey": {
-        "title": "Récupérer la clé de l'appareil",
-        "description": "Connectez-vous à votre compte Meross pour récupérer la clé",
+      "profile": {
+        "title": "Meross cloud profile",
+        "description": "Connectez-vous à votre compte Meross",
         "data": {
           "username": "Nom d'utilisateur Meross",
           "password": "Mot de passe Meross"
@@ -104,13 +96,13 @@
         "title": "Erreur de clé de périphérique",
         "description": "La clé fournie est erronée. Choisis une option",
         "menu_options": {
-          "cloudkey": "Récupérer depuis le cloud Meross",
+          "profile": "Récupérer depuis le cloud Meross",
           "device": "Retenter"
         }
       },
-      "cloudkey": {
-        "title": "Récupérer la clé de l'appareil",
-        "description": "Connectez-vous à votre compte Meross pour récupérer la clé",
+      "profile": {
+        "title": "Meross cloud profile",
+        "description": "Connectez-vous à votre compte Meross",
         "data": {
           "username": "Nom d'utilisateur Meross",
           "password": "Mot de passe Meross"

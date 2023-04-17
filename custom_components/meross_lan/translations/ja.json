@@ -1,6 +1,6 @@
 {
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "ネットワーク上でデバイスが見つかりませんでした。",
             "single_instance_allowed": "すでに構成済みです。 構成は一つだけ可能です。"
@@ -35,25 +35,17 @@
                     "key": "デバイスキー"
                 }
             },
-            "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
-                "data": {
-                    "username": "Meross login",
-                    "password": "Meross password"
-                }
-            },
             "keyerror": {
                 "title": "デバイスキーエラー",
                 "description": "指定されたキーが間違っています。オプションを選択",
                 "menu_options": {
-                    "cloudkey": "Merossクラウドから取得",
+                    "profile": "Merossクラウドから取得",
                     "device": "リトライ"
                 }
             },
-            "cloudkey": {
-                "title": "デバイスキーの取得",
-                "description": "Merossアカウントにログインして、デバイスキーを取得します",
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
                 "data": {
                     "username": "メロスログイン",
                     "password": "メロスパスワード"
@@ -104,13 +96,13 @@
                 "title": "デバイスキーエラー",
                 "description": "指定されたキーが間違っています。オプションを選択",
                 "menu_options": {
-                    "cloudkey": "Merossクラウドから取得",
+                    "profile": "Merossクラウドから取得",
                     "device": "リトライ"
                 }
             },
-            "cloudkey": {
-                "title": "デバイスキーの取得",
-                "description": "Merossアカウントにログインして、デバイスキーを取得します",
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
                 "data": {
                     "username": "メロスログイン",
                     "password": "メロスパスワード"

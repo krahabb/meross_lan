@@ -1,6 +1,6 @@
 {
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "Nessun dispositivo trovato",
             "single_instance_allowed": "Già configurato. E' possibile aggiungere solo una configurazione."
@@ -35,25 +35,17 @@
                     "key": "Chiave dispositivo"
                 }
             },
-            "profile": {
-                "title": "Profilo Meross cloud",
-                "description": "Registra e connetti un profilo Meross",
-                "data": {
-                    "username": "Meross login",
-                    "password": "Meross password"
-                }
-            },
             "keyerror": {
                 "title": "Errore chiave",
                 "description": "La chiave fornita non è valida. Scegli un opzione",
                 "menu_options": {
-                    "cloudkey": "Recupera dall'account Meross",
+                    "profile": "Recupera dall'account Meross",
                     "device": "Riprova"
                 }
             },
-            "cloudkey": {
-                "title": "Recupera chiave dispositivo",
-                "description": "Accedi al tuo account Meross per recuperare",
+            "profile": {
+                "title": "Profilo Meross cloud",
+                "description": "Registra e connetti un profilo Meross",
                 "data": {
                     "username": "Meross login",
                     "password": "Meross password"
@@ -103,13 +95,13 @@
                 "title": "Errore chiave",
                 "description": "La chiave fornita non è valida. Scegli un opzione",
                 "menu_options": {
-                    "cloudkey": "Recupera dall'account Meross",
+                    "profile": "Recupera dall'account Meross",
                     "device": "Riprova"
                 }
             },
-            "cloudkey": {
-                "title": "Recupera chiave dispositivo",
-                "description": "Accedi al tuo account Meross per recuperare",
+            "profile": {
+                "title": "Profilo Meross cloud",
+                "description": "Registra e connetti un profilo Meross",
                 "data": {
                     "username": "Meross login",
                     "password": "Meross password"

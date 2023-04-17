@@ -381,8 +381,7 @@ class MerossDevice(MerossDeviceBase):
         # tenths of sec to connect, setup and respond to our GET
         # NS_ALL) we'll give it a short 'advantage' before starting
         # the polling loop
-        if self.conf_protocol is not CONF_PROTOCOL_HTTP:
-            self._mqtt_connection_attach()
+        self._check_mqtt_connection_attach()
 
         self._unsub_polling_callback = schedule_async_callback(
             ApiProfile.hass,
@@ -724,16 +723,21 @@ class MerossDevice(MerossDeviceBase):
         self.receive(header, payload, CONF_PROTOCOL_MQTT)
 
     def mqtt_attached(self, mqtt_connection: MQTTConnection):
+        self.log(DEBUG, "mqtt_attached to %s", mqtt_connection.logtag)
         self._mqtt_connection = mqtt_connection
         if mqtt_connection.mqtt_is_connected:
             self.mqtt_connected()
 
     def mqtt_detached(self):
+        assert self._mqtt_connection
+        self.log(DEBUG, "mqtt_detached from %s", self._mqtt_connection.logtag)
         if self._mqtt is not None:
             self.mqtt_disconnected()
         self._mqtt_connection = None
 
     def mqtt_connected(self):
+        assert self._mqtt_connection
+        self.log(DEBUG, "mqtt_connected to %s", self._mqtt_connection.broker)
         self._mqtt = self._mqtt_connection
         self.sensor_protocol.update_connected_attr(ProtocolSensor.ATTR_MQTT_BROKER)
         # even tho this req might seems redundant it serves
@@ -741,6 +745,8 @@ class MerossDevice(MerossDeviceBase):
         self.mqtt_request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
 
     def mqtt_disconnected(self):
+        assert self._mqtt_connection
+        self.log(DEBUG, "mqtt_disconnected from %s", self._mqtt_connection.broker)
         self._mqtt = None
         self.lastmqttresponse = 0
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
@@ -1051,13 +1057,7 @@ class MerossDevice(MerossDeviceBase):
         """
         self._set_config_entry(config_entry.data)  # type: ignore
 
-        if self.conf_protocol is CONF_PROTOCOL_HTTP:
-            # strictly HTTP so detach MQTT in case
-            if self._mqtt_connection is not None:
-                self._mqtt_connection.detach(self)
-        else:
-            if self._mqtt_connection is None:
-                self._mqtt_connection_attach()
+        self._check_mqtt_connection_attach()
 
         if self.conf_protocol is not CONF_PROTOCOL_AUTO:
             if self.curr_protocol is not self.pref_protocol:
@@ -1312,40 +1312,47 @@ class MerossDevice(MerossDeviceBase):
 
     def profile_linked(self, profile: MerossCloudProfile):
         if self._cloud_profile is not profile:
-            if _restore_mqtt := (self._mqtt_connection is not None):
+            if self._mqtt_connection is not None:
                 self._mqtt_connection.detach(self)
             if self._cloud_profile is not None:
                 self._cloud_profile.unlink(self)
             self._cloud_profile = profile
-            if _restore_mqtt:
-                self._mqtt_connection_attach()
+            self._check_mqtt_connection_attach()
 
     def profile_unlinked(self):
         # assert self._cloud_profile is not None
-        if _restore_mqtt := (self._mqtt_connection is not None):
+        if self._mqtt_connection is not None:
             self._mqtt_connection.detach(self)
         self._cloud_profile = None
-        if _restore_mqtt:
-            self._mqtt_connection_attach()
 
-    def _mqtt_connection_attach(self):
-        # assert self._mqtt_connection is None
-        if self.profile_id:
-            if self._cloud_profile is not None:
-                self._cloud_profile.attach_mqtt(self)
+    def _check_mqtt_connection_attach(self):
+        if self.conf_protocol is CONF_PROTOCOL_HTTP:
+            # strictly HTTP so detach MQTT in case
+            if self._mqtt_connection is not None:
+                self._mqtt_connection.detach(self)
         else:
-            # this is the case for when we just want local handling
-            # in this scenario we bind anyway to our local mqtt api
-            # even tho the device might be unavailable since it's
-            # still meross cloud bound. Also, we might not have
-            # local mqtt at all but should this come later we don't
-            # want to have to broadcast a connection event 'in the wild'
-            # We should further inspect how to discriminate which
-            # devices to add (or not) as a small optimization so to not
-            # fill our local mqtt structures with unuseful data..
-            # Right now add anyway since it's no harm
-            # (no mqtt messages will come though)
-            ApiProfile.api.attach(self)
+            profile_id = self.profile_id
+            if self._mqtt_connection is not None:
+                if self._mqtt_connection.profile.id == profile_id:
+                    return
+                self._mqtt_connection.detach(self)
+
+            if profile_id:
+                if self._cloud_profile is not None:
+                    self._cloud_profile.attach_mqtt(self)
+            else:
+                # this is the case for when we just want local handling
+                # in this scenario we bind anyway to our local mqtt api
+                # even tho the device might be unavailable since it's
+                # still meross cloud bound. Also, we might not have
+                # local mqtt at all but should this come later we don't
+                # want to have to broadcast a connection event 'in the wild'
+                # We should further inspect how to discriminate which
+                # devices to add (or not) as a small optimization so to not
+                # fill our local mqtt structures with unuseful data..
+                # Right now add anyway since it's no harm
+                # (no mqtt messages will come though)
+                ApiProfile.api.attach(self)
 
     def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
         """

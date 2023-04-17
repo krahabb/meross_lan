@@ -37,12 +37,12 @@ except:
 if typing.TYPE_CHECKING:
     from typing import Callable, ClassVar, Coroutine
 
+    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, State
 
     from . import MerossApi
     from .meross_device import MerossDevice
     from .meross_profile import MerossCloudProfile
-    from .merossclient.cloudapi import MerossCloudCredentials
 
 
 def clamp(_value, _min, _max):
@@ -490,25 +490,18 @@ class ApiProfile(Loggable, abc.ABC):
     # if the device is actually active (config_entry loaded) or None
     # if the device entry is not loaded
     devices: ClassVar[dict[str, MerossDevice | None]] = {}
+    # profiles: list of known cloud profiles (same as devices)
+    profiles: ClassVar[dict[str, MerossCloudProfile | None]] = {}
 
     @staticmethod
     def active_devices():
         return (device for device in ApiProfile.devices.values() if device is not None)
-
-    # profiles: list of known cloud profiles (same as devices)
-    profiles: ClassVar[dict[str, MerossCloudProfile | None]] = {}
 
     @staticmethod
     def active_profiles():
         return (
             profile for profile in ApiProfile.profiles.values() if profile is not None
         )
-
-    # instance attributes
-    @property
-    @abc.abstractmethod
-    def key(self) -> str | None:
-        return None
 
     @staticmethod
     def get_device_with_mac(macaddress: str):
@@ -519,9 +512,25 @@ class ApiProfile(Loggable, abc.ABC):
                 return device
         return None
 
-    @staticmethod
-    async def async_update_profile(credentials: MerossCloudCredentials):
-        profile_id = credentials[mc.KEY_USERID_]
-        profile = ApiProfile.profiles.get(profile_id)
-        if profile is not None:
-            await profile.async_update_credentials(credentials)
+    # instance attributes
+
+    @property
+    @abc.abstractmethod
+    def key(self) -> str | None:
+        return NotImplemented
+
+    unsub_entry_update_listener: Callable | None = None
+
+    def listen_entry_update(self, config_entry: ConfigEntry):
+        self.unsub_entry_update_listener = config_entry.add_update_listener(
+            self.entry_update_listener
+        )
+
+    def unlisten_entry_update(self):
+        if self.unsub_entry_update_listener is not None:
+            self.unsub_entry_update_listener()
+            self.unsub_entry_update_listener = None
+
+    @abc.abstractmethod
+    async def entry_update_listener(self, hass, config_entry: ConfigEntry):
+        raise NotImplementedError()

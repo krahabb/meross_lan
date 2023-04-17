@@ -1,6 +1,6 @@
 {
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "No se han encontrado dispositivos en la red",
             "single_instance_allowed": "Ya esta configurada la Integración. Solo se puede configurar una vez."
@@ -35,25 +35,17 @@
                     "key": "Clave de dispositivo"
                 }
             },
-            "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
-                "data": {
-                    "username": "Meross login",
-                    "password": "Meross password"
-                }
-            },
             "keyerror": {
                 "title": "Error de clave de dispositivo",
                 "description": "La clave proporcionada es incorrecta. Elija una opción",
                 "menu_options": {
-                    "cloudkey": "Recuperar de la nube de Meross",
+                    "profile": "Recuperar de la nube de Meross",
                     "device": "Rever"
                 }
             },
-            "cloudkey": {
-                "title": "Recuperar clave de dispositivo",
-                "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
                 "data": {
                     "username": "Nombre de usuario de Meross",
                     "password": "Contraseña de Meross"
@@ -104,11 +96,11 @@
                 "title": "Error de clave de dispositivo",
                 "description": "La clave proporcionada es incorrecta. Elija una opción",
                 "menu_options": {
-                    "cloudkey": "Recuperar de la nube de Meross",
+                    "profile": "Recuperar de la nube de Meross",
                     "device": "Rever"
                 }
             },
-            "cloudkey": {
+            "profile": {
                 "title": "Recuperar clave de dispositivo",
                 "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
                 "data": {

@@ -1,6 +1,6 @@
 {
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "V síti nebylo nalezeno žádné zařízení",
             "single_instance_allowed": "Konfigurace již existuje. Více konfigurací není podporováno."
@@ -36,23 +36,15 @@
                     "Required": "Povinné pole"
                 }
             },
-            "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
-                "data": {
-                    "username": "Meross login",
-                    "password": "Meross password"
-                }
-            },
             "keyerror": {
                 "title": "Chyba klíče zařízení",
                 "description": "Zadaný klíč je nesprávný. Vyberte možnost",
                 "menu_options": {
-                    "cloudkey": "Načíst z cloudu Meross",
+                    "profile": "Načíst z cloudu Meross",
                     "device": "Zkuste to znovu"
                 }
             },
-            "cloudkey": {
+            "profile": {
                 "title": "Obnova klíče zařízení",
                 "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
                 "data": {
@@ -105,11 +97,11 @@
                 "title": "Chyba klíče zařízení",
                 "description": "Zadaný klíč je nesprávný. Vyberte možnost",
                 "menu_options": {
-                    "cloudkey": "Načíst z cloudu Meross",
+                    "profile": "Načíst z cloudu Meross",
                     "device": "Zkuste to znovu"
                 }
             },
-            "cloudkey": {
+            "profile": {
                 "title": "Obnova klíče zařízení",
                 "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
                 "data": {
