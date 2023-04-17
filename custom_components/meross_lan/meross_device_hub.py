@@ -1,6 +1,6 @@
 from __future__ import annotations
-import asyncio
 
+import asyncio
 import typing
 
 from homeassistant.helpers import device_registry
@@ -227,7 +227,9 @@ class MerossDeviceHub(MerossDevice):
                         self.config_entry_id
                     )
 
-                self._unsub_setup_again = schedule_async_callback(ApiProfile.hass, 15, _async_setup_again)
+                self._unsub_setup_again = schedule_async_callback(
+                    ApiProfile.hass, 15, _async_setup_again
+                )
 
     def _build_subdevices_payload(self, types: tuple, count: int):
         """
@@ -325,7 +327,6 @@ class MerossDeviceHub(MerossDevice):
 
 
 class MerossSubDevice(MerossDeviceBase):
-
     hub: MerossDeviceHub
     sensor_battery: MLSensor
     switch_togglex: MLSwitch | None
@@ -474,7 +475,6 @@ class MerossSubDevice(MerossDeviceBase):
 
 
 class MS100SubDevice(MerossSubDevice):
-
     sensor_temperature: MLSensor
     sensor_humidity: MLSensor
     number_adjust_temperature: MLHubAdjustNumber
@@ -530,7 +530,6 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
 
 
 class MTS100SubDevice(MerossSubDevice):
-
     climate: mts100.Mts100Climate
     number_comfort_temperature: mts100.Mts100SetPointNumber
     number_sleep_temperature: mts100.Mts100SetPointNumber
@@ -666,7 +665,6 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150] = MTS150SubDevice
 
 
 class SmokeAlarmSubDevice(MerossSubDevice):
-
     sensor_status: MLSensor
     sensor_interConn: MLSensor
 
