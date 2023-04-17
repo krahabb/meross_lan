@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 
 import typing
 
@@ -47,6 +48,8 @@ class MerossDeviceHub(MerossDevice):
     _lastupdate_sensor = None
     _lastupdate_mts100 = None
 
+    _unsub_setup_again: asyncio.TimerHandle | None = None
+
     def __init__(self, descriptor, entry):
         self.subdevices: dict[object, MerossSubDevice] = {}
         super().__init__(descriptor, entry)
@@ -81,6 +84,9 @@ class MerossDeviceHub(MerossDevice):
             )
 
     async def async_shutdown(self):
+        if self._unsub_setup_again is not None:
+            self._unsub_setup_again.cancel()
+            self._unsub_setup_again = None
         # shutdown the base first to stop polling in case
         await super().async_shutdown()
         for subdevice in self.subdevices.values():
@@ -215,14 +221,13 @@ class MerossDeviceHub(MerossDevice):
 
                 # before reloading we have to be sure configentry data were persisted
                 # so we'll wait a bit..
-                # also, we're not registering an unsub and we're not checking
-                # for redundant invocations (playing a bit unsafe that is)
                 async def _async_setup_again():
+                    self._unsub_setup_again = None
                     await ApiProfile.hass.config_entries.async_reload(
                         self.config_entry_id
                     )
 
-                schedule_async_callback(ApiProfile.hass, 15, _async_setup_again)
+                self._unsub_setup_again = schedule_async_callback(ApiProfile.hass, 15, _async_setup_again)
 
     def _build_subdevices_payload(self, types: tuple, count: int):
         """
