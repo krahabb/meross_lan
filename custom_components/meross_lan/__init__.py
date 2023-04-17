@@ -464,17 +464,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     unique_id = unique_id.split(".")
     if unique_id[0] == "profile":
         # profile entry
-        assert api.profiles.get(profile_id := unique_id[1]) is None
+        profile_id = unique_id[1]
+        if profile_id in api.profiles:
+            assert api.profiles[profile_id] is None
+        else:
+            # this could happen when we add profile entries
+            # after boot
+            api.profiles[profile_id] = None
         profile = MerossCloudProfile(entry.data)
         try:
             await profile.async_start()
             # 'link' the devices already initialized
             for device in api.active_devices():
-                if device.profile_id == profile_id:
+                if device.descriptor.userId == profile_id:
                     profile.link(device)
                     break
-            api.profiles[profile_id] = profile
             profile.listen_entry_update(entry)
+            api.profiles[profile_id] = profile
             return True
         except Exception as error:
             await profile.async_shutdown()
@@ -497,25 +503,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 profile.link(device)
         else:
             # trigger a cloud profile discovery if we guess it reasonable
-            if CONF_CLOUD_KEY in entry.data:
-                cloud_key = entry.data[CONF_CLOUD_KEY]
-                userid = device.descriptor.userId
-                if userid and (cloud_key == device.key):
-                    helper = ConfigEntriesHelper(hass)
-                    flow_unique_id = f"profile.{userid}"
-                    if helper.get_config_flow(flow_unique_id) is None:
-                        await hass.config_entries.flow.async_init(
-                            DOMAIN,
-                            context={
-                                "source": SOURCE_INTEGRATION_DISCOVERY,
-                                "unique_id": flow_unique_id,
-                                "title_placeholders": {"name": "profile"},
-                            },
-                            data={
-                                mc.KEY_USERID_: userid,
-                                mc.KEY_KEY: cloud_key,
-                            },
-                        )
+            userid = device.descriptor.userId
+            if userid and (entry.data.get(CONF_CLOUD_KEY) == device.key):
+                helper = ConfigEntriesHelper(hass)
+                flow_unique_id = f"profile.{userid}"
+                if helper.get_config_flow(flow_unique_id) is None:
+                    await hass.config_entries.flow.async_init(
+                        DOMAIN,
+                        context={
+                            "source": SOURCE_INTEGRATION_DISCOVERY,
+                            "unique_id": flow_unique_id,
+                            "title_placeholders": {"name": "unknown cloud profile"},
+                        },
+                        data={
+                            mc.KEY_USERID_: userid,
+                        },
+                    )
 
         device.start()
         return True

@@ -147,7 +147,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                                 unique_id=unique_id,
                             )
                         )
-                    return self.async_step_device()  # type: ignore
+                    return await self.async_step_device()  # type: ignore
 
                 # this flow was managing a profile be it a user initiated one
                 # or an OptionsFlow.
@@ -437,7 +437,10 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
         )
 
     async def _async_finish_profile(self, title: str, unique_id: str, credentials):
-        if await self.async_set_unique_id(unique_id) is not None:
+        if (
+            await self.async_set_unique_id(unique_id, raise_on_progress=False)
+            is not None
+        ):
             return self.async_abort()
         return self.async_create_entry(title=title, data=credentials)
 
@@ -519,17 +522,29 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     # which would be treated in the other branch
                     # TODO: implement mqtt connection check and validation
                     _descriptor = device.descriptor
+                    _device_config = None
+                    # as a temporary solution we'll optimistically infer http usage
+                    # to just check for the key validation
+                    if (_host := _descriptor.innerIp):
+                        try:
+                            _device_config, _descriptor = await self._async_http_discovery(
+                                _host, self._key
+                            )
+                        except MerossKeyError:
+                            return self.show_keyerror()
+                        except Exception:
+                            pass
                 else:
                     _device_config, _descriptor = await self._async_http_discovery(
                         self._host, self._key
                     )
-                    if self._device_id != _descriptor.uuid:
-                        raise ConfigError(ERR_DEVICE_ID_MISMATCH)
+                if self._device_id != _descriptor.uuid:
+                    raise ConfigError(ERR_DEVICE_ID_MISMATCH)
                 data = dict(self._config_entry.data)
                 if self._host is not None:
                     data[CONF_HOST] = self._host
-                    data[CONF_PAYLOAD] = _device_config[CONF_PAYLOAD]  # type: ignore
-
+                if _device_config is not None:
+                    data[CONF_PAYLOAD] = _device_config[CONF_PAYLOAD]
                 data[CONF_KEY] = self._key
                 data[CONF_PROTOCOL] = self._protocol
                 data[CONF_POLLING_PERIOD] = self._polling_period
