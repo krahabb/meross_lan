@@ -23,7 +23,7 @@ try:
         # debug configuration so the MEROSSDEBUG symbol will be invalidated
         data = json.load(
             open(
-                "./custom_components/meross_lan/merossclient/debug.secret.json",
+                file="./custom_components/meross_lan/merossclient/debug.secret.json",
                 encoding="utf-8",
             )
         )
