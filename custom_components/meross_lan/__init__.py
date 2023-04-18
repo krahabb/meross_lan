@@ -7,6 +7,7 @@ from logging import DEBUG
 import typing
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -60,8 +61,7 @@ class MerossApi(MQTTConnection, ApiProfile):
     @staticmethod
     def get(hass: HomeAssistant) -> MerossApi:
         if DOMAIN not in hass.data:
-            hass.data[DOMAIN] = api = MerossApi(hass)
-            return api
+            hass.data[DOMAIN] = MerossApi(hass)
         return hass.data[DOMAIN]
 
     def __init__(self, hass: HomeAssistant):
@@ -152,7 +152,8 @@ class MerossApi(MQTTConnection, ApiProfile):
         if self._unsub_mqtt_subscribe is not None:
             self._unsub_mqtt_subscribe()
             self._unsub_mqtt_subscribe = None
-        self.hass.data.pop(DOMAIN)
+        ApiProfile.hass = None  # type: ignore
+        ApiProfile.api = None  # type: ignore
 
     @property
     def key(self) -> str | None:
@@ -438,7 +439,14 @@ async def async_setup(hass: HomeAssistant, config: dict):
     'Our' truth singleton is saved in hass.data[DOMAIN] and
     ApiProfile.api is just a cache to speed access
     """
-    MerossApi.get(hass)
+    api = MerossApi.get(hass)
+
+    async def _async_unload_merossapi(_event) -> None:
+        await api.async_shutdown()
+        hass.data.pop(DOMAIN)
+
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi)
+
     return True
 
 
@@ -560,9 +568,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
     ApiProfile.devices[unique_id[0]] = None
     await device.async_shutdown()
-    # don't cleanup: the MerossApi is still needed to detect MQTT discoveries
-    # if (not api.devices) and (len(hass.config_entries.async_entries(DOMAIN)) == 1):
-    #    await api.async_shutdown()
     return True
 
 

@@ -537,66 +537,6 @@ class CloudApiMocker(contextlib.AbstractContextManager):
         self._token = None
         return {mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR, mc.KEY_DATA: {}}
 
-    """
-    async def _async_handle_login(self, method, url, data):
-        self.login_calls += 1
-        request = self._validate_request_payload(data)
-        response = {}
-        if mc.KEY_EMAIL not in request:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_INVALID_EMAIL
-        elif request[mc.KEY_EMAIL] != tc.MOCK_PROFILE_EMAIL:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_UNEXISTING_ACCOUNT
-        elif mc.KEY_PASSWORD not in request:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_MISSING_PASSWORD
-        elif request[mc.KEY_PASSWORD] != tc.MOCK_PROFILE_PASSWORD:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_WRONG_CREDENTIALS
-        else:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_NO_ERROR
-            response[mc.KEY_DATA] = {
-                mc.KEY_USERID_: tc.MOCK_PROFILE_ID,
-                mc.KEY_EMAIL: tc.MOCK_PROFILE_EMAIL,
-                mc.KEY_KEY: tc.MOCK_PROFILE_KEY,
-                mc.KEY_TOKEN: tc.MOCK_PROFILE_TOKEN,
-            }
-            self._token = tc.MOCK_PROFILE_TOKEN
-        return AiohttpClientMockResponse(method, url, json=response)
-
-    async def _async_handle_devlist(self, method, url, data):
-        self.devlist_calls += 1
-        request = self._validate_request_payload(data)
-        assert len(request) == 0
-        response = {
-            mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
-            mc.KEY_DATA: tc.MOCK_PROFILE_DEVLIST,
-        }
-        return AiohttpClientMockResponse(method, url, json=response)
-
-    async def _async_handle_getsubdevices(self, method, url, data):
-        self.getsubdevices_calls += 1
-        request = self._validate_request_payload(data)
-        response = {}
-        if mc.KEY_UUID not in request:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_GENERIC_ERROR
-            response[mc.KEY_INFO] = "Missing uuid in request"
-        else:
-            uuid = request[mc.KEY_UUID]
-            if uuid not in tc.MOCK_PROFILE_SUBDEVICE_DICT:
-                response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_GENERIC_ERROR
-                response[mc.KEY_INFO] = "uuid not registered"
-            else:
-                response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_NO_ERROR
-                response[mc.KEY_DATA] = tc.MOCK_PROFILE_SUBDEVICE_DICT[uuid]
-        return AiohttpClientMockResponse(method, url, json=response)
-
-    async def _async_handle_logout(self, method, url, data):
-        self.logout_calls += 1
-        request = self._validate_request_payload(data)
-        assert len(request) == 0
-        self._token = None
-        response = {mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR, mc.KEY_DATA: {}}
-        return AiohttpClientMockResponse(method, url, json=response)
-    """
-
 
 MqttMockPahoClient = MagicMock
 """MagicMock for `paho.mqtt.client.Client`"""
@@ -606,21 +546,15 @@ MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
 
 class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
-    mqtt_client: MqttMockHAClient
     mqtt_async_publish: Mock
 
-    def __init__(
-        self,
-        mqtt_mock_entry_no_yaml_config: MqttMockHAClientGenerator,
-    ):
-        self.mqtt_mock_entry_no_yaml_config = mqtt_mock_entry_no_yaml_config
+    def __init__(self):
         self.mqtt_async_publish_patcher = patch(
             "homeassistant.components.mqtt.async_publish"
         )
 
     async def __aenter__(self):
         """Return `self` upon entering the runtime context."""
-        self.mqtt_client = await self.mqtt_mock_entry_no_yaml_config()
         self.mqtt_async_publish = self.mqtt_async_publish_patcher.start()
         self.mqtt_async_publish.side_effect = self._async_publish
         return self

@@ -3,4 +3,4 @@ aiodiscover
 aiohttp-cors
 scapy
 janus
-pytest-homeassistant-custom-component
+pytest-homeassistant-custom-component==0.13.22

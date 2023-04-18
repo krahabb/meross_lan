@@ -3,8 +3,9 @@ import json
 
 from homeassistant import config_entries
 from homeassistant.components.dhcp import DhcpServiceInfo
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResult, FlowResultType
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
@@ -15,6 +16,12 @@ from custom_components.meross_lan.merossclient import (
 )
 
 from tests import const as tc, helpers
+
+
+async def _cleanup_config_entry(hass: HomeAssistant, result: FlowResult):
+    config_entry: ConfigEntry = result["result"]  # type: ignore
+    assert config_entry.state == ConfigEntryState.LOADED
+    await hass.config_entries.async_unload(config_entry.entry_id)
 
 
 async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
@@ -59,6 +66,9 @@ async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
         assert data[mlc.CONF_KEY] == emulator.key
         assert data[mlc.CONF_PAYLOAD][mc.KEY_ALL] == emulator.descriptor.all
         assert data[mlc.CONF_PAYLOAD][mc.KEY_ABILITY] == emulator.descriptor.ability
+
+        # now cleanup the entry
+        await _cleanup_config_entry(hass, result)
 
 
 async def test_profile_config_flow(
@@ -122,6 +132,9 @@ async def test_profile_config_flow(
     assert data[mc.KEY_KEY] == tc.MOCK_PROFILE_KEY
     assert data[mc.KEY_TOKEN] == tc.MOCK_PROFILE_TOKEN
 
+    # now cleanup the entry
+    await _cleanup_config_entry(hass, result)
+
 
 async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
     """
@@ -144,19 +157,29 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
     await hass.async_block_till_done()
 
     # we should have 2 flows now: one for the MQTT hub and the other for the
-    # incoming device
+    # incoming device but this second one needs the time to progress in order to show up
+    # so we're not checking now (#TODO: warp the test time so discovery will complete)
+    flow_hub = None
+    flow_device = None
     for flow in hass.config_entries.flow.async_progress_by_handler(mlc.DOMAIN):
-        flow_context = flow.get("context", {})
-        if flow_context.get("unique_id") == mlc.DOMAIN:
-            assert flow["step_id"] == "hub"  # type: ignore
-            result = await hass.config_entries.flow.async_configure(
-                flow["flow_id"], user_input={mlc.CONF_KEY: emulator.key}
-            )
-            assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
-        elif flow_context.get("unique_id") == device_id:
-            pass
+        flow_unique_id = flow.get("context", {}).get("unique_id")
+        if flow_unique_id == mlc.DOMAIN:
+            flow_hub = flow
+        elif flow_unique_id == device_id:
+            flow_device = flow
         else:
             assert False, "unexpected flow in progress"
+
+    assert flow_hub
+    assert flow_hub["step_id"] == "hub"  # type: ignore
+    result = await hass.config_entries.flow.async_configure(
+        flow_hub["flow_id"], user_input={mlc.CONF_KEY: emulator.key}
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
+    await _cleanup_config_entry(hass, result)
+
+    # TODO: check the device flow after we completed discovery
+    assert flow_device is None
 
     await hass.async_block_till_done()
 
