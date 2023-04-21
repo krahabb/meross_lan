@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import asyncio
 from json import dumps as json_dumps, loads as json_loads
-from logging import DEBUG, Logger, getLogger
+from logging import DEBUG
+import typing
 
 import aiohttp
 import async_timeout
@@ -22,9 +23,11 @@ from . import (
     get_replykey,
 )
 
+if typing.TYPE_CHECKING:
+    from logging import Logger
+
 
 class MerossHttpClient:
-
     timeout = 5  # total timeout will be 1+2+4: check relaxation algorithm
 
     def __init__(
@@ -45,7 +48,8 @@ class MerossHttpClient:
         self.key = key  # key == None for hack-mode
         self.replykey = None
         self._session = session or aiohttp.ClientSession()
-        self._logger = logger or getLogger(__name__)
+        self._logger = logger
+        self._logid = None
 
     @property
     def host(self):
@@ -56,16 +60,23 @@ class MerossHttpClient:
         self._host = value
         self._requesturl = URL(f"http://{value}/config")
 
+    def set_logger(self, _logger: Logger):
+        if _logger is None:
+            self._logger = None
+            self._logid = None
+        else:
+            self._logger = _logger
+
     async def async_request_raw(self, request: dict) -> dict:
         timeout = 1
-        debugid = None
         try:
-            if self._logger.isEnabledFor(DEBUG):
-                debugid = f"{self._host}:{id(request)}"
+            self._logid = None
+            if self._logger is not None and self._logger.isEnabledFor(DEBUG):
+                # we catch the 'request' id before json dumping so
+                # to reasonably set the context before any exception
+                self._logid = f"MerossHttpClient({self._host}:{id(request)})"
                 request_data = json_dumps(request)
-                self._logger.debug(
-                    "MerossHttpClient(%s): HTTP Request (%s)", debugid, request_data
-                )
+                self._logger.debug("%s: HTTP Request (%s)", self._logid, request_data)
             else:
                 request_data = json_dumps(request)
             # since device HTTP service sometimes timeouts with no apparent
@@ -88,19 +99,17 @@ class MerossHttpClient:
 
             response.raise_for_status()
             text_body = await response.text()
-            if debugid is not None:
-                self._logger.debug(
-                    "MerossHttpClient(%s): HTTP Response (%s)", debugid, text_body
-                )
+            if self._logid is not None:
+                self._logger.debug("%s: HTTP Response (%s)", self._logid, text_body)  # type: ignore
             json_body: dict = json_loads(text_body)
             if self.key is None:
                 self.replykey = get_replykey(json_body[mc.KEY_HEADER], self.key)
         except Exception as e:
             self.replykey = None  # reset the key hack since it could became stale
-            if debugid is not None:
-                self._logger.debug(
-                    "MerossHttpClient(%s): HTTP %s (%s)",
-                    debugid,
+            if self._logid is not None:
+                self._logger.debug(  # type: ignore
+                    "%s: HTTP %s (%s)",
+                    self._logid,
                     type(e).__name__,
                     str(e),
                 )
@@ -125,10 +134,10 @@ class MerossHttpClient:
             if key is not None:
                 raise MerossKeyError(response)
             # sign error... hack and fool
-            if self._logger.isEnabledFor(DEBUG):
-                self._logger.debug(
-                    "Key error on %s (%s:%s) -> retrying with key-reply hack",
-                    self._host,
+            if self._logid is not None:
+                self._logger.debug(  # type: ignore
+                    "%s: Key error on (%s:%s) -> retrying with key-reply hack",
+                    self._logid,
                     method,
                     namespace,
                 )
@@ -156,7 +165,7 @@ class MerossHttpClient:
         response = await self.async_request(namespace, method, payload)
         try:
             r_header: dict = response[mc.KEY_HEADER]
-            r_namespace: str = r_header[mc.KEY_NAMESPACE]
+            r_header[mc.KEY_NAMESPACE]
             r_method: str = r_header[mc.KEY_METHOD]
             r_payload: dict = response[mc.KEY_PAYLOAD]
         except Exception as e:
