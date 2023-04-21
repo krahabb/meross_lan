@@ -17,12 +17,14 @@ if typing.TYPE_CHECKING:
 
 
 try:
-    NumberDeviceClass = number.NumberDeviceClass # type: ignore
+    NumberDeviceClass = number.NumberDeviceClass  # type: ignore
 except:
     from .helpers import StrEnum
+
     class NumberDeviceClass(StrEnum):
-        HUMIDITY = 'humidity'
-        TEMPERATURE = 'temperature'
+        HUMIDITY = "humidity"
+        TEMPERATURE = "temperature"
+
 
 try:
     NUMBERMODE_AUTO = number.NumberMode.AUTO
@@ -74,14 +76,13 @@ else:
             await self.async_set_native_value(value)
 
 
-CLASS_TO_UNIT_MAP = {
+DEVICECLASS_TO_UNIT_MAP = {
     NumberDeviceClass.HUMIDITY: PERCENTAGE,
     NumberDeviceClass.TEMPERATURE: TEMP_CELSIUS,
 }
 
 
 class MLConfigNumber(me.MerossEntity, NumberEntity):
-
     PLATFORM = number.DOMAIN
     DeviceClass = NumberDeviceClass
 
@@ -124,7 +125,6 @@ class MLConfigNumber(me.MerossEntity, NumberEntity):
         self.update_state(value / self.multiplier)
 
     async def async_set_native_value(self, value: float):
-
         device_value = int(value * self.multiplier)
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
@@ -144,7 +144,6 @@ class MLConfigNumber(me.MerossEntity, NumberEntity):
 
 
 class MLHubAdjustNumber(MLConfigNumber):
-
     multiplier = 100
     key_channel = mc.KEY_ID
 
@@ -164,7 +163,9 @@ class MLHubAdjustNumber(MLConfigNumber):
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
-        self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(device_class)
+        self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(
+            device_class
+        )
         self._attr_name = f"Adjust {device_class}"
         super().__init__(
             subdevice.hub,
@@ -176,7 +177,6 @@ class MLHubAdjustNumber(MLConfigNumber):
 
 
 class MLScreenBrightnessNumber(MLConfigNumber):
-
     device: ScreenBrightnessMixin
 
     _attr_native_max_value = 100
