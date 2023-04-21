@@ -62,7 +62,6 @@ from custom_components.meross_lan.merossclient import (
 
 
 class MerossEmulatorDescriptor(MerossDeviceDescriptor):
-
     namespaces: dict
 
     def __init__(self, tracefile: str, uuid):
@@ -153,7 +152,7 @@ class MerossEmulator:
         self.p_all_system_time = descriptor.system.get(mc.KEY_TIME)
         if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
             self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
-        self.update_epoch()
+        self._update_epoch()
         print(f"Initialized {descriptor.productname} (model:{descriptor.productmodel})")
 
     def set_timezone(self, timezone: str):
@@ -188,7 +187,7 @@ class MerossEmulator:
             f"RX: namespace={namespace} method={method} payload={json.dumps(payload)}"
         )
         try:
-            self.update_epoch()
+            self._update_epoch()
 
             if namespace not in self.descriptor.ability:
                 raise Exception(f"{namespace} not supported in ability")
@@ -224,7 +223,11 @@ class MerossEmulator:
         )
         return data
 
-    def update_epoch(self):
+    def _update_epoch(self):
+        """
+        Called (by default) on every command processing.
+        Could be used to (rather asynchronously) trigger internal state changes
+        """
         self.epoch = int(time())
         if self.p_all_system_time is not None:
             self.p_all_system_time[mc.KEY_TIMESTAMP] = self.epoch
