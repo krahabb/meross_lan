@@ -36,6 +36,7 @@ if typing.TYPE_CHECKING:
     from .meross_device_hub import MerossSubDevice
 
 SensorEntity = sensor.SensorEntity
+SensorStateClass = sensor.SensorStateClass
 try:
     SensorDeviceClass = sensor.SensorDeviceClass  # type: ignore
 except:
@@ -60,7 +61,7 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
 
 
-CLASS_TO_UNIT_MAP = {
+DEVICECLASS_TO_UNIT_MAP = {
     SensorDeviceClass.POWER: POWER_WATT,
     SensorDeviceClass.CURRENT: ELECTRIC_CURRENT_AMPERE,
     SensorDeviceClass.VOLTAGE: ELECTRIC_POTENTIAL_VOLT,
@@ -70,19 +71,25 @@ CLASS_TO_UNIT_MAP = {
     SensorDeviceClass.BATTERY: PERCENTAGE,
 }
 
+# we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
+# except these device classes
+DEVICECLASS_TO_STATECLASS_MAP: dict[SensorDeviceClass, SensorStateClass | None] = {
+    SensorDeviceClass.ENUM: None,
+    SensorDeviceClass.ENERGY: sensor.SensorStateClass.TOTAL_INCREASING,
+}
+
 NativeValueCallbackType = typing.Callable[[], me.StateType]
 
 
 class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
-
     PLATFORM = sensor.DOMAIN
     DeviceClass = SensorDeviceClass
-    StateClass = sensor.SensorStateClass
+    StateClass = SensorStateClass
 
     _attr_native_unit_of_measurement: str | None
     _attr_last_reset: datetime | None = None
     _attr_state: int | float | None
-    _attr_state_class: str | None = StateClass.MEASUREMENT
+    _attr_state_class: SensorStateClass | None = StateClass.MEASUREMENT
 
     def __init__(
         self,
@@ -93,15 +100,14 @@ class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
         subdevice: MerossSubDevice | None,
     ):
         super().__init__(device, channel, entitykey, device_class, subdevice)
-        self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(device_class)  # type: ignore
+        self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(device_class)  # type: ignore
+        self._attr_state_class = DEVICECLASS_TO_STATECLASS_MAP.get(
+            device_class, self.StateClass.MEASUREMENT  # type: ignore
+        )
 
     @staticmethod
     def build_for_device(device: MerossDevice, device_class: SensorDeviceClass):
         return MLSensor(device, None, str(device_class), device_class, None)
-
-    @property
-    def state_class(self):
-        return self._attr_state_class
 
     @property
     def native_unit_of_measurement(self):
@@ -126,9 +132,12 @@ class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
             return SensorEntity.state.__get__(self)
         return self.native_value
 
+    @property
+    def state_class(self):
+        return self._attr_state_class
+
 
 class ProtocolSensor(MLSensor):
-
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
@@ -219,7 +228,6 @@ class ProtocolSensor(MLSensor):
 
 
 class EnergyEstimateSensor(MLSensor):
-
     _attr_state: int = 0
     _attr_state_float: float = 0.0
 
@@ -233,10 +241,6 @@ class EnergyEstimateSensor(MLSensor):
     @property
     def available(self):
         return True
-
-    @property
-    def state_class(self):
-        return self.StateClass.TOTAL_INCREASING
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -292,7 +296,6 @@ class EnergyEstimateSensor(MLSensor):
 class ElectricityMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-
     _electricity_lastupdate = 0.0
     _sensor_power: MLSensor
     _sensor_current: MLSensor
@@ -392,7 +395,6 @@ class ElectricityMixin(
 
 
 class ConsumptionSensor(MLSensor):
-
     ATTR_OFFSET = "offset"
     offset: int = 0
     ATTR_RESET_TS = "reset_ts"
@@ -405,10 +407,6 @@ class ConsumptionSensor(MLSensor):
         super().__init__(
             device, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY, None
         )
-
-    @property
-    def state_class(self):
-        return self.StateClass.TOTAL_INCREASING
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -495,7 +493,6 @@ class ConsumptionSensor(MLSensor):
 class ConsumptionMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-
     _consumption_lastupdate = 0.0
     _consumption_last_value: int | None = None
     _consumption_last_time: int | None = None
@@ -676,7 +673,6 @@ class ConsumptionMixin(
 class RuntimeMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-
     _sensor_runtime: MLSensor
     _lastupdate_runtime = 0
 
