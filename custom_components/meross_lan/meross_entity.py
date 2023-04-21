@@ -45,7 +45,6 @@ class MerossFakeEntity:
 
 
 class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
-
     PLATFORM: str
 
     _attr_device_class: object | str | None
@@ -55,6 +54,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     _attr_extra_state_attributes: dict[str, object] = {}
     _attr_name: str | None = None
     _attr_state: StateType = None
+    _attr_translation_key: str | None = None
 
     # used to speed-up checks if entity is enabled and loaded
     _hass_connected = False
@@ -171,6 +171,10 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     @property
     def should_poll(self):
         return False
+
+    @property
+    def translation_key(self) -> str | None:
+        return self._attr_translation_key
 
     @property
     def unique_id(self):
