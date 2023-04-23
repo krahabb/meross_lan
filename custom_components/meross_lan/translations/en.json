@@ -3,9 +3,9 @@
         "sensor": {
             "mts200_overheat_warning": {
                 "state": {
-                    "0": "Ok",
-                    "1": "Overheat",
-                    "2": "Not connected"
+                    "ok": "Ok",
+                    "overheating": "Overheating",
+                    "disconnected": "Disconnected"
                 }
             }
         }

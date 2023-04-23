@@ -135,10 +135,6 @@ class Mts200Climate(MtsClimate):
         self._overheat_onoff_switch = Mts200ConfigSwitch(
             self, "overheat protection", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
         )
-        """REMOVE
-         self._overheatwarning_binary_sensor = MLBinarySensor(
-            device, channel, "overheat warning", MLBinarySensor.DeviceClass.PROBLEM
-        )"""
         self._overheat_warning_sensor = MLSensor(
             device, channel, "overheat warning", MLSensor.DeviceClass.ENUM, None
         )
@@ -257,7 +253,10 @@ class Mts200Climate(MtsClimate):
         if mc.KEY_ONOFF in payload:
             self._overheat_onoff_switch.update_onoff(payload[mc.KEY_ONOFF])
         if mc.KEY_WARNING in payload:
-            self._overheat_warning_sensor.update_state(payload[mc.KEY_WARNING])
+            _warning = payload[mc.KEY_WARNING]
+            self._overheat_warning_sensor.update_state(
+                mc.MTS200_OVERHEAT_WARNING_MAP.get(_warning, _warning)
+            )
         if mc.KEY_MIN in payload:
             self._overheat_value_number._attr_native_min_value = (
                 payload[mc.KEY_MIN] / 10

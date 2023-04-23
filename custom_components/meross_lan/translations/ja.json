@@ -1,4 +1,15 @@
 {
+    "entity": {
+        "sensor": {
+            "mts200_overheat_warning": {
+                "state": {
+                    "ok": "良い",
+                    "overheating": "過熱",
+                    "disconnected": "切断された"
+                }
+            }
+        }
+    },
     "config": {
         "flow_title": "{name}",
         "abort": {

@@ -1,4 +1,15 @@
 {
+    "entity": {
+        "sensor": {
+            "mts200_overheat_warning": {
+                "state": {
+                    "ok": "Ok",
+                    "overheating": "Sobrecalentado",
+                    "disconnected": "Desconectado"
+                }
+            }
+        }
+    },
     "config": {
         "flow_title": "{name}",
         "abort": {
