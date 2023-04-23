@@ -312,7 +312,8 @@ class DeviceContext:
         assert await hass.config_entries.async_unload(self.config_entry.entry_id)
         self._config_entry_loaded = False
         await hass.async_block_till_done()
-        self.device = MerossApi.devices[self.device_id]
+        if self.device_id in MerossApi.devices:
+            self.device = MerossApi.devices[self.device_id]
         assert self.device is None
 
     async def async_enable_entity(self, entity_id):
