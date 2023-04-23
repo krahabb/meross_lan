@@ -513,6 +513,8 @@ class ApiProfile(Loggable, abc.ABC):
         return None
 
     # instance attributes
+    async def async_shutdown(self):
+        self.unlisten_entry_update()
 
     @property
     @abc.abstractmethod

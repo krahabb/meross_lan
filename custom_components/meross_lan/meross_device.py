@@ -412,6 +412,7 @@ class MerossDevice(MerossDeviceBase):
         self.entity_dnd = MerossFakeEntity
         self.sensor_protocol = None  # type: ignore
         await super().async_shutdown()
+        ApiProfile.devices[self.id] = None
 
     @property
     def host(self):

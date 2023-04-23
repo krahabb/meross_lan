@@ -563,6 +563,7 @@ class MerossCloudProfile(dict, ApiProfile):
         )
 
     async def async_shutdown(self):
+        ApiProfile.profiles[self.id] = None
         for mqttconnection in self.mqttconnections.values():
             await mqttconnection.async_shutdown()
         self.mqttconnections.clear()
@@ -572,6 +573,7 @@ class MerossCloudProfile(dict, ApiProfile):
         if self._unsub_polling_query_devices is not None:
             self._unsub_polling_query_devices.cancel()
             self._unsub_polling_query_devices = None
+        await super().async_shutdown()
 
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
         await self.async_update_credentials(config_entry.data)  # type: ignore

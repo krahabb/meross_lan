@@ -74,6 +74,7 @@ class MerossApi(MQTTConnection, ApiProfile):
         self._unsub_mqtt_disconnected: Callable | None = None
         self._unsub_mqtt_connected: Callable | None = None
         self._mqtt_subscribing = False  # guard for asynchronous mqtt sub registration
+        self._unsub_random_disconnect = None
 
         for config_entry in hass.config_entries.async_entries(DOMAIN):
             unique_id = config_entry.unique_id
@@ -142,7 +143,9 @@ class MerossApi(MQTTConnection, ApiProfile):
         return
 
     async def async_shutdown(self):
-        await super().async_shutdown()
+        if self._unsub_random_disconnect is not None:
+            self._unsub_random_disconnect.cancel()
+            self._unsub_random_disconnect = None
         if self._unsub_mqtt_connected is not None:
             self._unsub_mqtt_connected()
             self._unsub_mqtt_connected = None
@@ -152,6 +155,11 @@ class MerossApi(MQTTConnection, ApiProfile):
         if self._unsub_mqtt_subscribe is not None:
             self._unsub_mqtt_subscribe()
             self._unsub_mqtt_subscribe = None
+        for device in self.active_devices():
+            await device.async_shutdown()
+        for profile in self.active_profiles():
+            await profile.async_shutdown()
+        await super().async_shutdown()
         ApiProfile.hass = None  # type: ignore
         ApiProfile.api = None  # type: ignore
 
@@ -297,9 +305,12 @@ class MerossApi(MQTTConnection, ApiProfile):
             if mqtt.is_connected(self.hass):
                 self._mqtt_connected()
 
-            if MEROSSDEBUG:
+            if MEROSSDEBUG and (self._unsub_random_disconnect is None):
 
                 async def _async_random_disconnect():
+                    self._unsub_random_disconnect = schedule_async_callback(
+                        self.hass, 60, _async_random_disconnect
+                    )
                     if self._mqtt_subscribing:
                         pass
                     elif self._unsub_mqtt_subscribe is None:
@@ -339,9 +350,9 @@ class MerossApi(MQTTConnection, ApiProfile):
                             if self._mqtt_is_connected:
                                 self._mqtt_disconnected()
 
-                    schedule_async_callback(self.hass, 60, _async_random_disconnect)
-
-                schedule_async_callback(self.hass, 60, _async_random_disconnect)
+                self._unsub_random_disconnect = schedule_async_callback(
+                    self.hass, 60, _async_random_disconnect
+                )
 
         self._mqtt_subscribing = False
         return self._unsub_mqtt_subscribe is not None
@@ -531,7 +542,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         device.start()
         return True
     except Exception as error:
-        api.devices[device_id] = None
         await device.async_shutdown()
         raise ConfigEntryError from error
 
@@ -555,9 +565,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unique_id[0] == "profile":
         profile = ApiProfile.profiles[unique_id[1]]
         assert profile is not None
-        ApiProfile.profiles[unique_id[1]] = None
         await profile.async_shutdown()
-        profile.unlisten_entry_update()
         return True
 
     device = ApiProfile.devices[unique_id[0]]
@@ -566,7 +574,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry, device.platforms.keys()
     ):
         return False
-    ApiProfile.devices[unique_id[0]] = None
     await device.async_shutdown()
     return True
 
