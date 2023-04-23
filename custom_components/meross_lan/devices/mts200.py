@@ -3,18 +3,8 @@ from __future__ import annotations
 import typing
 
 from ..binary_sensor import MLBinarySensor
-from ..climate import (
-    ATTR_TEMPERATURE,
-    PRESET_AUTO,
-    PRESET_AWAY,
-    PRESET_COMFORT,
-    PRESET_CUSTOM,
-    PRESET_OFF,
-    PRESET_SLEEP,
-    TEMP_CELSIUS,
-    MtsClimate,
-    MtsSetPointNumber,
-)
+from ..climate import MtsClimate, MtsSetPointNumber
+from ..helpers import reverse_lookup
 from ..meross_entity import EntityCategory
 from ..merossclient import const as mc
 from ..number import MLConfigNumber
@@ -43,7 +33,7 @@ class Mts200OverheatThresholdNumber(MLConfigNumber):
     _attr_native_max_value = 70
     _attr_native_min_value = 20
     _attr_native_step = 0.5
-    _attr_native_unit_of_measurement = TEMP_CELSIUS
+    _attr_native_unit_of_measurement = MtsClimate.TEMP_CELSIUS
 
     multiplier = 10
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
@@ -62,7 +52,7 @@ class Mts200ConfigSwitch(MLSwitch):
             climate.device,
             climate.channel,
             entitykey,
-            self.DeviceClass.SWITCH,
+            MLSwitch.DeviceClass.SWITCH,
             None,
             namespace,
         )
@@ -88,21 +78,15 @@ class Mts200ConfigSwitch(MLSwitch):
 
 
 class Mts200Climate(MtsClimate):
+    """Climate entity for MTS200 devices"""
+
     MTS_MODE_AUTO = mc.MTS200_MODE_AUTO
     MTS_MODE_TO_PRESET_MAP = {
-        mc.MTS200_MODE_CUSTOM: PRESET_CUSTOM,
-        mc.MTS200_MODE_HEAT: PRESET_COMFORT,
-        mc.MTS200_MODE_COOL: PRESET_SLEEP,
-        mc.MTS200_MODE_ECO: PRESET_AWAY,
-        mc.MTS200_MODE_AUTO: PRESET_AUTO,
-    }
-    # reverse map
-    PRESET_TO_MTS_MODE_MAP = {
-        PRESET_CUSTOM: mc.MTS200_MODE_CUSTOM,
-        PRESET_COMFORT: mc.MTS200_MODE_HEAT,
-        PRESET_SLEEP: mc.MTS200_MODE_COOL,
-        PRESET_AWAY: mc.MTS200_MODE_ECO,
-        PRESET_AUTO: mc.MTS200_MODE_AUTO,
+        mc.MTS200_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
+        mc.MTS200_MODE_HEAT: MtsClimate.PRESET_COMFORT,
+        mc.MTS200_MODE_COOL: MtsClimate.PRESET_SLEEP,
+        mc.MTS200_MODE_ECO: MtsClimate.PRESET_AWAY,
+        mc.MTS200_MODE_AUTO: MtsClimate.PRESET_AUTO,
     }
     # when setting target temp we'll set an appropriate payload key
     # for the mts100 depending on current 'preset' mode.
@@ -110,19 +94,25 @@ class Mts200Climate(MtsClimate):
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
     PRESET_TO_TEMPERATUREKEY_MAP = {
-        PRESET_OFF: mc.KEY_MANUALTEMP,
-        PRESET_CUSTOM: mc.KEY_MANUALTEMP,
-        PRESET_COMFORT: mc.KEY_HEATTEMP,
-        PRESET_SLEEP: mc.KEY_COOLTEMP,
-        PRESET_AWAY: mc.KEY_ECOTEMP,
-        PRESET_AUTO: mc.KEY_MANUALTEMP,
+        MtsClimate.PRESET_OFF: mc.KEY_MANUALTEMP,
+        MtsClimate.PRESET_CUSTOM: mc.KEY_MANUALTEMP,
+        MtsClimate.PRESET_COMFORT: mc.KEY_HEATTEMP,
+        MtsClimate.PRESET_SLEEP: mc.KEY_COOLTEMP,
+        MtsClimate.PRESET_AWAY: mc.KEY_ECOTEMP,
+        MtsClimate.PRESET_AUTO: mc.KEY_MANUALTEMP,
     }
 
-    def __init__(self, device: "MerossDevice", channel: object):
+    def __init__(self, device: MerossDevice, channel: object):
         super().__init__(device, channel, None, None, None)
-        self._comfort_temperature_number = Mts200SetPointNumber(self, PRESET_COMFORT)
-        self._sleep_temperature_number = Mts200SetPointNumber(self, PRESET_SLEEP)
-        self._away_temperature_number = Mts200SetPointNumber(self, PRESET_AWAY)
+        self._comfort_temperature_number = Mts200SetPointNumber(
+            self, MtsClimate.PRESET_COMFORT
+        )
+        self._sleep_temperature_number = Mts200SetPointNumber(
+            self, MtsClimate.PRESET_SLEEP
+        )
+        self._away_temperature_number = Mts200SetPointNumber(
+            self, MtsClimate.PRESET_AWAY
+        )
         self._windowOpened_binary_sensor = MLBinarySensor(
             device, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
         )
@@ -150,10 +140,10 @@ class Mts200Climate(MtsClimate):
         )
 
     async def async_set_preset_mode(self, preset_mode: str):
-        if preset_mode == PRESET_OFF:
+        if preset_mode == MtsClimate.PRESET_OFF:
             await self.async_request_onoff(0)
         else:
-            mode = self.PRESET_TO_MTS_MODE_MAP.get(preset_mode)
+            mode = reverse_lookup(Mts200Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
             if mode is not None:
 
                 def _ack_callback(acknowledge: bool, header: dict, payload: dict):
@@ -172,8 +162,10 @@ class Mts200Climate(MtsClimate):
                     await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        t = kwargs[ATTR_TEMPERATURE]
-        key = self.PRESET_TO_TEMPERATUREKEY_MAP[self._attr_preset_mode or PRESET_CUSTOM]
+        t = kwargs[Mts200Climate.ATTR_TEMPERATURE]
+        key = Mts200Climate.PRESET_TO_TEMPERATUREKEY_MAP[
+            self._attr_preset_mode or Mts200Climate.PRESET_CUSTOM
+        ]
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:

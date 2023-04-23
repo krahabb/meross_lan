@@ -1,5 +1,21 @@
 {
     "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Spento",
+                            "custom": "Manuale",
+                            "comfort": "Comfort (Heat)",
+                            "sleep": "Notturno (Cool)",
+                            "away": "Fuori casa (Eco)",
+                            "auto": "Auto"
+                        }
+                    }
+                }
+            }
+        },
         "sensor": {
             "mts200_overheat_warning": {
                 "state": {

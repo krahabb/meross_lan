@@ -21,7 +21,7 @@ from .sensor import MLSensor
 from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from .devices import mts100
+    from .devices.mts100 import Mts100Climate, Mts100Schedule, Mts100SetPointNumber
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
     {
@@ -530,11 +530,11 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
 
 
 class MTS100SubDevice(MerossSubDevice):
-    climate: mts100.Mts100Climate
-    number_comfort_temperature: mts100.Mts100SetPointNumber
-    number_sleep_temperature: mts100.Mts100SetPointNumber
-    number_away_temperature: mts100.Mts100SetPointNumber
-    schedule: mts100.Mts100Schedule
+    climate: Mts100Climate
+    number_comfort_temperature: Mts100SetPointNumber
+    number_sleep_temperature: Mts100SetPointNumber
+    number_away_temperature: Mts100SetPointNumber
+    schedule: Mts100Schedule
     binary_sensor_window: MLBinarySensor
     sensor_temperature: MLSensor
 
@@ -542,19 +542,19 @@ class MTS100SubDevice(MerossSubDevice):
         self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100
     ):
         super().__init__(hub, p_digest, _type)
-        from .devices import mts100
+        from .devices.mts100 import Mts100Climate, Mts100Schedule, Mts100SetPointNumber
 
-        self.climate = mts100.Mts100Climate(self)
-        self.number_comfort_temperature = mts100.Mts100SetPointNumber(
-            self.climate, mts100.PRESET_COMFORT
+        self.climate = Mts100Climate(self)
+        self.number_comfort_temperature = Mts100SetPointNumber(
+            self.climate, Mts100Climate.PRESET_COMFORT
         )
-        self.number_sleep_temperature = mts100.Mts100SetPointNumber(
-            self.climate, mts100.PRESET_SLEEP
+        self.number_sleep_temperature = Mts100SetPointNumber(
+            self.climate, Mts100Climate.PRESET_SLEEP
         )
-        self.number_away_temperature = mts100.Mts100SetPointNumber(
-            self.climate, mts100.PRESET_AWAY
+        self.number_away_temperature = Mts100SetPointNumber(
+            self.climate, Mts100Climate.PRESET_AWAY
         )
-        self.schedule = mts100.Mts100Schedule(self.climate)
+        self.schedule = Mts100Schedule(self.climate)
         self.binary_sensor_window = self.build_binary_sensor(
             MLBinarySensor.DeviceClass.WINDOW
         )

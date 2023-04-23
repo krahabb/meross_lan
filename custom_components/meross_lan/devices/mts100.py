@@ -17,18 +17,8 @@ from ..calendar import (
     CalendarEvent,
     MLCalendar,
 )
-from ..climate import (
-    ATTR_TEMPERATURE,
-    PRESET_AUTO,
-    PRESET_AWAY,
-    PRESET_COMFORT,
-    PRESET_CUSTOM,
-    PRESET_OFF,
-    PRESET_SLEEP,
-    MtsClimate,
-    MtsSetPointNumber,
-)
-from ..helpers import clamp
+from ..climate import MtsClimate, MtsSetPointNumber
+from ..helpers import clamp, reverse_lookup
 from ..merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
@@ -40,18 +30,11 @@ class Mts100Climate(MtsClimate):
 
     MTS_MODE_AUTO = mc.MTS100_MODE_AUTO
     MTS_MODE_TO_PRESET_MAP = {
-        mc.MTS100_MODE_CUSTOM: PRESET_CUSTOM,
-        mc.MTS100_MODE_HEAT: PRESET_COMFORT,
-        mc.MTS100_MODE_COOL: PRESET_SLEEP,
-        mc.MTS100_MODE_ECO: PRESET_AWAY,
-        mc.MTS100_MODE_AUTO: PRESET_AUTO,
-    }
-    PRESET_TO_MTS_MODE_MAP = {
-        PRESET_CUSTOM: mc.MTS100_MODE_CUSTOM,
-        PRESET_COMFORT: mc.MTS100_MODE_HEAT,
-        PRESET_SLEEP: mc.MTS100_MODE_COOL,
-        PRESET_AWAY: mc.MTS100_MODE_ECO,
-        PRESET_AUTO: mc.MTS100_MODE_AUTO,
+        mc.MTS100_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
+        mc.MTS100_MODE_HEAT: MtsClimate.PRESET_COMFORT,
+        mc.MTS100_MODE_COOL: MtsClimate.PRESET_SLEEP,
+        mc.MTS100_MODE_ECO: MtsClimate.PRESET_AWAY,
+        mc.MTS100_MODE_AUTO: MtsClimate.PRESET_AUTO,
     }
     # when setting target temp we'll set an appropriate payload key
     # for the mts100 depending on current 'preset' mode.
@@ -59,12 +42,12 @@ class Mts100Climate(MtsClimate):
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
     PRESET_TO_TEMPERATUREKEY_MAP = {
-        PRESET_OFF: mc.KEY_CUSTOM,
-        PRESET_CUSTOM: mc.KEY_CUSTOM,
-        PRESET_COMFORT: mc.KEY_COMFORT,
-        PRESET_SLEEP: mc.KEY_ECONOMY,
-        PRESET_AWAY: mc.KEY_AWAY,
-        PRESET_AUTO: mc.KEY_CUSTOM,
+        MtsClimate.PRESET_OFF: mc.KEY_CUSTOM,
+        MtsClimate.PRESET_CUSTOM: mc.KEY_CUSTOM,
+        MtsClimate.PRESET_COMFORT: mc.KEY_COMFORT,
+        MtsClimate.PRESET_SLEEP: mc.KEY_ECONOMY,
+        MtsClimate.PRESET_AWAY: mc.KEY_AWAY,
+        MtsClimate.PRESET_AUTO: mc.KEY_CUSTOM,
     }
 
     def __init__(self, subdevice: "MerossSubDevice"):
@@ -83,10 +66,10 @@ class Mts100Climate(MtsClimate):
             self._attr_extra_state_attributes.pop(mc.KEY_SCHEDULEBMODE)
 
     async def async_set_preset_mode(self, preset_mode: str):
-        if preset_mode == PRESET_OFF:
+        if preset_mode == MtsClimate.PRESET_OFF:
             await self.async_request_onoff(0)
         else:
-            mode = self.PRESET_TO_MTS_MODE_MAP.get(preset_mode)
+            mode = reverse_lookup(Mts100Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
             if mode is not None:
 
                 def _ack_callback(acknowledge: bool, header: dict, payload: dict):
@@ -105,8 +88,10 @@ class Mts100Climate(MtsClimate):
                     await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        t = kwargs[ATTR_TEMPERATURE]
-        key = self.PRESET_TO_TEMPERATUREKEY_MAP[self._attr_preset_mode or PRESET_CUSTOM]
+        t = kwargs[Mts100Climate.ATTR_TEMPERATURE]
+        key = Mts100Climate.PRESET_TO_TEMPERATUREKEY_MAP[
+            self._attr_preset_mode or Mts100Climate.PRESET_CUSTOM
+        ]
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
@@ -201,7 +186,6 @@ class Mts100ScheduleEntry:
 
 
 class Mts100Schedule(MLCalendar):
-
     _attr_entity_category = me.EntityCategory.CONFIG
 
     subdevice: MerossSubDevice
