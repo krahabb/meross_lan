@@ -39,7 +39,7 @@ SensorEntity = sensor.SensorEntity
 SensorStateClass = sensor.SensorStateClass
 try:
     SensorDeviceClass = sensor.SensorDeviceClass  # type: ignore
-except:
+except Exception:
 
     class SensorDeviceClass(StrEnum):
         BATTERY = "battery"

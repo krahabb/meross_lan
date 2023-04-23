@@ -480,7 +480,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
                     self._validate_request_payload(data)
                 )
                 return AiohttpClientMockResponse(method, url, json=result)
-            except:
+            except Exception:
                 return AiohttpClientMockResponse(
                     method, url, exc=aiohttp.ServerConnectionError()
                 )

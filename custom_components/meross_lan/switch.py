@@ -13,12 +13,13 @@ if typing.TYPE_CHECKING:
 
 
 try:
-    SwitchDeviceClass = switch.SwitchDeviceClass # type: ignore
-except:
+    SwitchDeviceClass = switch.SwitchDeviceClass  # type: ignore
+except Exception:
     from .helpers import StrEnum
+
     class SwitchDeviceClass(StrEnum):
-        OUTLET = 'outlet'
-        SWITCH = 'switch'
+        OUTLET = "outlet"
+        SWITCH = "switch"
 
 
 async def async_setup_entry(
@@ -37,12 +38,12 @@ class MLSwitch(me.MerossToggle, switch.SwitchEntity):
 
     @staticmethod
     def build_for_device(device: me.MerossDevice, channel: object, namespace: str):
-        return MLSwitch(device, channel, None, SwitchDeviceClass.OUTLET, None, namespace)
+        return MLSwitch(
+            device, channel, None, SwitchDeviceClass.OUTLET, None, namespace
+        )
 
 
-class ToggleXMixin(
-    me.MerossDevice if typing.TYPE_CHECKING else object
-):
+class ToggleXMixin(me.MerossDevice if typing.TYPE_CHECKING else object):
     def __init__(self, descriptor, entry):
         super().__init__(descriptor, entry)
         # we build switches here after everything else have been
@@ -77,9 +78,7 @@ class ToggleXMixin(
         self._parse__generic(mc.KEY_TOGGLEX, payload)
 
 
-class ToggleMixin(
-    me.MerossDevice if typing.TYPE_CHECKING else object
-):
+class ToggleMixin(me.MerossDevice if typing.TYPE_CHECKING else object):
     def __init__(self, descriptor, entry):
         super().__init__(descriptor, entry)
         # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'

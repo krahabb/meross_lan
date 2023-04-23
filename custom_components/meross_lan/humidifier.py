@@ -14,7 +14,7 @@ try:
 
     DEVICE_CLASS_HUMIDIFIER = HumidifierDeviceClass.HUMIDIFIER
     SUPPORT_MODES = HumidifierEntityFeature.MODES
-except:
+except Exception:
     from homeassistant.components.humidifier import (
         DEVICE_CLASS_HUMIDIFIER,
     )

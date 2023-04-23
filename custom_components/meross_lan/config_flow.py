@@ -343,7 +343,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
                     if _descriptor.userId == profile[mc.KEY_USERID_]:
                         self._key = profile.key
                         break
-                except:
+                except Exception:
                     pass
                 _device_config = _descriptor = None
 
@@ -353,7 +353,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
                         host, key
                     )
                     self._key = key
-                except:
+                except Exception:
                     pass
 
             if _device_config is not None:
@@ -557,7 +557,7 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 data[CONF_TRACE_TIMEOUT] = self._trace_timeout
                 try:
                     device.entry_option_update(user_input)
-                except:
+                except Exception:
                     pass  # forgive any error
 
                 if CONF_CLOUD_KEY in data:
@@ -605,7 +605,7 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         self._placeholders[CONF_DEVICE_TYPE] = device.descriptor.productnametype
         try:
             device.entry_option_setup(config_schema)
-        except:
+        except Exception:
             pass  # forgive any error
 
         config_schema[

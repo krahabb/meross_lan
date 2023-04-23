@@ -24,7 +24,6 @@ combine_as_imports = true
 [tool.pylint."MESSAGES CONTROL"]
 ################################################################################
 disable = [
-    "bare-except",
     "broad-except",
     "broad-exception-raised",
     "global-statement",

@@ -30,7 +30,7 @@ try:  # to look for calendar platform in HA core
     ):
         me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_CALENDAR)
 
-except:  # implement a fallback by using a sensor
+except Exception:  # implement a fallback by using a sensor
     LOGGER.warning(
         "Missing 'calendar' entity type. Please update HA to latest version"
         " to fully support thermostat schedule feature"

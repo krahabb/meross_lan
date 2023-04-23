@@ -1434,7 +1434,7 @@ class MerossDevice(MerossDeviceBase):
             schedule_callback(
                 ApiProfile.hass, PARAM_TRACING_ABILITY_POLL_TIMEOUT, self._trace_ability
             )
-        except:  # finished ?!
+        except Exception:  # finished ?!
             self._trace_ability_iter = None
 
     def _trace(

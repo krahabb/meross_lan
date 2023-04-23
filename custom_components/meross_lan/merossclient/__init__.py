@@ -18,7 +18,6 @@ try:
     from time import time
 
     class MEROSSDEBUG:
-
         # this will raise an OSError on non-dev machines missing the
         # debug configuration so the MEROSSDEBUG symbol will be invalidated
         data = json.load(
@@ -67,7 +66,7 @@ try:
         def mqtt_random_connect():
             return randint(0, 99) < MEROSSDEBUG.mqtt_connect_probability
 
-        mqtt_disconnect_probability = 20
+        mqtt_disconnect_probability = 0
 
         @staticmethod
         def mqtt_random_disconnect():
@@ -76,7 +75,7 @@ try:
         # MerossHTTPClient debug patching
         http_disc_end = 0
         http_disc_duration = 25
-        http_disc_probability = 5
+        http_disc_probability = 0
 
         @staticmethod
         def http_random_timeout():
@@ -90,7 +89,7 @@ try:
                 MEROSSDEBUG.http_disc_end = time() + MEROSSDEBUG.http_disc_duration
                 raise asyncio.TimeoutError()
 
-except:
+except Exception:
     MEROSSDEBUG = None  # type: ignore
 
 
@@ -308,7 +307,7 @@ class MerossDeviceDescriptor:
             # dynamic attrs logic gets f...d
             try:
                 delattr(self, key)
-            except:
+            except Exception:
                 pass
 
     def update_time(self, p_time: dict):

@@ -259,7 +259,7 @@ async def async_get_cloud_key(
     # kindly invalidate login token so to not exhaust our pool...
     try:
         await async_cloudapi_logout(credentials[mc.KEY_TOKEN], session)
-    except:
+    except Exception:
         pass  # don't care if any failure here: we have the key anyway
     return credentials[mc.KEY_KEY]
 

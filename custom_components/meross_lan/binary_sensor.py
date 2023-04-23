@@ -12,22 +12,22 @@ if typing.TYPE_CHECKING:
 
 
 try:
-    BinarySensorDeviceClass = binary_sensor.BinarySensorDeviceClass # type: ignore
-except:
+    BinarySensorDeviceClass = binary_sensor.BinarySensorDeviceClass  # type: ignore
+except Exception:
     from .helpers import StrEnum
+
     class BinarySensorDeviceClass(StrEnum):
-        PROBLEM = 'problem'
-        WINDOW = 'window'
-        CONNECTIVITY = 'connectivity'
+        PROBLEM = "problem"
+        WINDOW = "window"
+        CONNECTIVITY = "connectivity"
 
 
 async def async_setup_entry(
-    hass: 'HomeAssistant', config_entry: 'ConfigEntry', async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, binary_sensor.DOMAIN)
 
 
 class MLBinarySensor(me.MerossEntity, binary_sensor.BinarySensorEntity):
-
     PLATFORM = binary_sensor.DOMAIN
     DeviceClass = BinarySensorDeviceClass

@@ -21,7 +21,7 @@ try:
     SUPPORT_PREVIOUS_TRACK = MediaPlayerEntityFeature.PREVIOUS_TRACK
     SUPPORT_PLAY = MediaPlayerEntityFeature.PLAY
     SUPPORT_STOP = MediaPlayerEntityFeature.STOP
-except:  # fallback (pre 2022.5)
+except Exception:  # fallback (pre 2022.5)
     from homeassistant.components.media_player.const import (
         MEDIA_TYPE_MUSIC,
         SUPPORT_VOLUME_MUTE,

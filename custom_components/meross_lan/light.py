@@ -18,14 +18,14 @@ try:
         SUPPORT_COLOR = 0
         SUPPORT_COLOR_TEMP = 0
         SUPPORT_EFFECT = light.LightEntityFeature.EFFECT
-    except:
+    except Exception:
         from homeassistant.components.light import (
             SUPPORT_BRIGHTNESS,
             SUPPORT_COLOR,
             SUPPORT_COLOR_TEMP,
             SUPPORT_EFFECT,
         )
-except:
+except Exception:
     # should HA remove any we guess SUPPORT_EFFECT still valued at 4
     SUPPORT_BRIGHTNESS = 0
     SUPPORT_COLOR = 0
@@ -40,7 +40,7 @@ try:
         COLOR_MODE_HS = light.ColorMode.HS
         COLOR_MODE_RGB = light.ColorMode.RGB
         COLOR_MODE_COLOR_TEMP = light.ColorMode.COLOR_TEMP
-    except:
+    except Exception:
         from homeassistant.components.light import (
             COLOR_MODE_BRIGHTNESS,
             COLOR_MODE_COLOR_TEMP,
@@ -49,7 +49,7 @@ try:
             COLOR_MODE_RGB,
             COLOR_MODE_UNKNOWN,
         )
-except:
+except Exception:
     COLOR_MODE_UNKNOWN = ""  # leave empty so we don't use color_modes
     COLOR_MODE_ONOFF = COLOR_MODE_UNKNOWN
     COLOR_MODE_BRIGHTNESS = COLOR_MODE_UNKNOWN

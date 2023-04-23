@@ -28,7 +28,7 @@ if typing.TYPE_CHECKING:
 
 try:  # 2022.2 new symbols
     from homeassistant.helpers.entity import EntityCategory  # type: ignore
-except:
+except Exception:
 
     class EntityCategory(StrEnum):
         CONFIG = "config"

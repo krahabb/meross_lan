@@ -105,7 +105,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                 else:
                     self._import_tracerow(row)
 
-        except:
+        except Exception:
             pass
 
         return

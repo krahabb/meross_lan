@@ -23,7 +23,7 @@ try:
     SUPPORT_CLOSE = CoverEntityFeature.CLOSE
     SUPPORT_SET_POSITION = CoverEntityFeature.SET_POSITION
     SUPPORT_STOP = CoverEntityFeature.STOP
-except:  # fallback (pre 2022.5)
+except Exception:  # fallback (pre 2022.5)
     from homeassistant.components.cover import (
         DEVICE_CLASS_GARAGE,
         DEVICE_CLASS_SHUTTER,
@@ -595,7 +595,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._position_native_isgood = versiontuple(
                 device.descriptor.firmware.get(mc.KEY_VERSION, "")
             ) >= versiontuple("7.6.10")
-        except:
+        except Exception:
             self._position_native_isgood = None
 
     @property

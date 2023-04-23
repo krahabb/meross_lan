@@ -22,7 +22,7 @@ try:
     CURRENT_HVAC_HEAT = HVACAction.HEATING
     CURRENT_HVAC_IDLE = HVACAction.IDLE
     CURRENT_HVAC_OFF = HVACAction.OFF
-except:  # fallback (pre 2022.5)
+except Exception:  # fallback (pre 2022.5)
     from homeassistant.components.climate.const import (
         PRESET_AWAY,
         PRESET_COMFORT,

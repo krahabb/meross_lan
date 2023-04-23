@@ -18,7 +18,7 @@ if typing.TYPE_CHECKING:
 
 try:
     NumberDeviceClass = number.NumberDeviceClass  # type: ignore
-except:
+except Exception:
     from .helpers import StrEnum
 
     class NumberDeviceClass(StrEnum):
@@ -30,7 +30,7 @@ try:
     NUMBERMODE_AUTO = number.NumberMode.AUTO
     NUMBERMODE_BOX = number.NumberMode.BOX
     NUMBERMODE_SLIDER = number.NumberMode.SLIDER
-except:
+except Exception:
     NUMBERMODE_AUTO = "auto"
     NUMBERMODE_BOX = "box"
     NUMBERMODE_SLIDER = "slider"

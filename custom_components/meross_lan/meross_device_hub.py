@@ -158,7 +158,7 @@ class MerossDeviceHub(MerossDevice):
                 if hassdevice is None:
                     return None
                 _type = hassdevice.model
-            except:
+            except Exception:
                 return None
         deviceclass = WELL_KNOWN_TYPE_MAP.get(_type)  # type: ignore
         if deviceclass is None:

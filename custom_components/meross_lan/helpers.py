@@ -22,7 +22,7 @@ try:
     from homeassistant.backports.enum import (
         StrEnum,  # type: ignore pylint: disable=unused-import
     )
-except:
+except Exception:
     import enum
 
     class StrEnum(enum.Enum):
@@ -279,7 +279,7 @@ def _obfuscated_value(obfuscated_map: dict[typing.Any, str], value: typing.Any):
             # no type checks before conversion since we're
             # confident its almost an integer decimal number
             value = int(value)
-        except:
+        except Exception:
             # but we play safe anyway
             pass
     elif obfuscated_map is OBFUSCATE_SERVER_MAP:
@@ -297,7 +297,7 @@ def _obfuscated_value(obfuscated_map: dict[typing.Any, str], value: typing.Any):
                         _obfuscated_value(OBFUSCATE_PORT_MAP, port),
                     )
                 )
-        except:
+        except Exception:
             pass
 
     if value not in obfuscated_map:
