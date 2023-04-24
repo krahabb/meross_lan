@@ -21,7 +21,7 @@ from emulator.mixins.electricity import (
     ElectricityMixin as EmulatorElectricityMixin,
 )
 
-from .helpers import devicecontext
+from tests import helpers
 
 if typing.TYPE_CHECKING:
     from .helpers import DeviceContext
@@ -110,7 +110,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
     """
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
-    async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock, today) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock, today) as context:
 
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, dt_util.DEFAULT_TIME_ZONE.key  # type: ignore
@@ -195,7 +195,7 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
     """
     today, tomorrow, todayseconds = _configure_dates(ZoneInfo(DEVICE_TIMEZONE))
 
-    async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock, today) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock, today) as context:
 
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, DEVICE_TIMEZONE
@@ -274,7 +274,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
 
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
-    async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock, today) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock, today) as context:
 
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, dt_util.DEFAULT_TIME_ZONE.key  # type: ignore

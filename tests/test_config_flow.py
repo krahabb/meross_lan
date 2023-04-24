@@ -28,9 +28,10 @@ async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
     """
     Test standard manual device entry config flow
     """
-    with helpers.emulator_mock(mc.TYPE_MTS200, aioclient_mock) as emulator:
+    with helpers.EmulatorContext(mc.TYPE_MTS200, aioclient_mock) as emulator_context:
+        emulator = emulator_context.emulator
         device_id = emulator.descriptor.uuid
-        host = emulator.host
+        host = emulator_context.host
 
         result = await hass.config_entries.flow.async_init(
             mlc.DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -200,7 +201,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
     When an entry is already configured, check what happens when dhcp sends
     us a new ip
     """
-    async with helpers.devicecontext(mc.TYPE_MTS200, hass, aioclient_mock) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MTS200, aioclient_mock) as context:
         await context.perform_coldstart()
 
         assert (device := context.device)
@@ -221,7 +222,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
 
 
 async def test_options_flow(hass, aioclient_mock):
-    async with helpers.devicecontext(mc.TYPE_MTS200, hass, aioclient_mock) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MTS200, aioclient_mock) as context:
         await context.perform_coldstart()
 
         assert (device := context.device)

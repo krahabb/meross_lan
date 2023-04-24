@@ -95,7 +95,9 @@ async def test_meross_profile(
         # check cleanup
         assert await profile_entry_mock.async_unload()
         assert MerossApi.profiles[tc.MOCK_PROFILE_ID] is None
-        assert merossmqtt_mock.safe_disconnect_mock.call_count == len(safe_connect_calls)
+        assert merossmqtt_mock.safe_disconnect_mock.call_count == len(
+            safe_connect_calls
+        )
 
 
 async def test_meross_profile_cloudapi_offline(
@@ -144,7 +146,9 @@ async def test_meross_profile_cloudapi_offline(
         # check cleanup
         assert await profile_entry_mock.async_unload()
         assert MerossApi.profiles[tc.MOCK_PROFILE_ID] is None
-        assert merossmqtt_mock.safe_disconnect_mock.call_count == len(safe_connect_calls)
+        assert merossmqtt_mock.safe_disconnect_mock.call_count == len(
+            safe_connect_calls
+        )
 
 
 async def test_meross_profile_with_device(
@@ -163,9 +167,9 @@ async def test_meross_profile_with_device(
     """
     hass_storage.update(tc.MOCK_PROFILE_STORAGE)
 
-    async with helpers.devicecontext(
-        helpers.build_emulator_for_profile(tc.MOCK_PROFILE_ID, model=mc.TYPE_MSS310),
+    async with helpers.DeviceContext(
         hass,
+        helpers.build_emulator_for_profile(tc.MOCK_PROFILE_ID, model=mc.TYPE_MSS310),
         aioclient_mock,
         config_data={
             mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_AUTO,

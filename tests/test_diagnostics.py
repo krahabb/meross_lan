@@ -35,7 +35,7 @@ async def test_profile_diagnostics(hass: HomeAssistant):
 
 
 async def test_device_diagnostics(hass: HomeAssistant, aioclient_mock):
-    async with helpers.devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
         await context.perform_coldstart()
 
         context.warp(tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT)
@@ -47,7 +47,7 @@ async def test_device_diagnostics(hass: HomeAssistant, aioclient_mock):
 
 
 async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
-    async with helpers.devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
         await context.perform_coldstart()
 
         assert (device := context.device)

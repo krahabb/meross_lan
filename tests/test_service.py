@@ -40,7 +40,7 @@ async def test_request_on_device(
     """
     Test service calls routed through a device
     """
-    async with helpers.devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -82,7 +82,7 @@ async def test_request_notification(
     """
     Test service calls routed through a device
     """
-    async with helpers.devicecontext(mc.TYPE_MSS310, hass, aioclient_mock) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 

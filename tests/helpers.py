@@ -108,13 +108,15 @@ class ProfileEntryMocker(ConfigEntryMocker):
         )
 
 
-def build_emulator(model: str) -> MerossEmulator:
+def build_emulator(
+    model: str, *, device_id=tc.MOCK_DEVICE_UUID, key=tc.MOCK_KEY
+) -> MerossEmulator:
     # Watchout: this call will not use the uuid and key set
     # in the filename, just DEFAULT_UUID and DEFAULT_KEY
     return emulator_build_emulator(
         tc.EMULATOR_TRACES_PATH + tc.EMULATOR_TRACES_MAP[model],
-        tc.MOCK_DEVICE_UUID,
-        tc.MOCK_KEY,
+        device_id,
+        key,
     )
 
 
@@ -220,45 +222,50 @@ def build_emulator_config_entry(
     )
 
 
-@contextlib.contextmanager
-def emulator_mock(
-    emulator_: MerossEmulator | str,
-    aioclient_mock: AiohttpClientMocker,
-    frozen_time: FrozenDateTimeFactory | StepTickTimeFactory | None = None,
-):
-    """
-    This context provides an emulator working on HTTP by leveraging
-    the aioclient_mock.
-    This is a basic mock which is not polluting HA
-    """
-    try:
-        if isinstance(emulator_, str):
-            emulator_ = build_emulator(emulator_)
-        emulator_.host = str(id(emulator_))
+class EmulatorContext(contextlib.AbstractContextManager):
+    def __init__(
+        self,
+        emulator: MerossEmulator | str,
+        aioclient_mock: AiohttpClientMocker,
+        frozen_time: FrozenDateTimeFactory | StepTickTimeFactory | None = None,
+    ) -> None:
+        if isinstance(emulator, str):
+            emulator = build_emulator(emulator)
+        self.emulator = emulator
+        self.host = str(id(emulator))
+        self.aioclient_mock = aioclient_mock
+        if frozen_time is not None:
+            self.frozen_time = frozen_time
+            emulator.update_epoch()
+        else:
+            self.frozen_time = None
 
-        async def _handle_http_request(method, url, data):
-            response = emulator_.handle(data)  # pylint: disable=no-member
-            if frozen_time is not None:
-                frozen_time.tick(
-                    timedelta(seconds=tc.MOCK_HTTP_RESPONSE_DELAY)
-                )  # emulate http roundtrip time
-            return AiohttpClientMockResponse(method, url, json=response)
-
-        # we'll use the uuid so we can mock multiple at the same time
-        # and the aioclient_mock will route accordingly
-        aioclient_mock.post(
-            f"http://{emulator_.host}/config",
-            side_effect=_handle_http_request,
+    def __enter__(self):
+        self.aioclient_mock.post(
+            f"http://{self.host}/config",
+            side_effect=self._handle_http_request,
         )
+        return self
 
-        yield emulator_
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.aioclient_mock.clear_requests()
+        return None
 
-    finally:
-        # remove the mock from aioclient
-        aioclient_mock.clear_requests()
+    async def _handle_http_request(self, method, url, data):
+        response = self.emulator.handle(data)
+        if self.frozen_time is not None:
+            # emulate http roundtrip time
+            self.frozen_time.tick(timedelta(seconds=tc.MOCK_HTTP_RESPONSE_DELAY))
+        return AiohttpClientMockResponse(method, url, json=response)
 
 
-class DeviceContext:
+class DeviceContext(contextlib.AbstractAsyncContextManager):
+    """
+    This is a 'full featured' context providing an emulator and setting it
+    up as a configured device in HA
+    It also provides timefreezing
+    """
+
     hass: HomeAssistant
     time: FrozenDateTimeFactory | StepTickTimeFactory
     emulator: MerossEmulator
@@ -270,6 +277,28 @@ class DeviceContext:
     _config_entry_loaded: bool = False
     _warp_task: Future | None = None
     _warp_run: bool
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        emulator: MerossEmulator | str,
+        aioclient_mock: AiohttpClientMocker,
+        time_to_freeze=None,
+        config_data: dict | None = None,
+    ):
+        self.hass = hass
+        self.api = None
+        self.device = None
+        self.aioclient_mock = aioclient_mock
+        self._freeze_time = freeze_time(time_to_freeze)
+        if isinstance(emulator, str):
+            emulator = build_emulator(emulator)
+        self.emulator = emulator
+        self.device_id = emulator.descriptor.uuid
+        self.config_entry = build_emulator_config_entry(
+            emulator, config_data=config_data
+        )
+        self.config_entry.add_to_hass(hass)
 
     async def perform_coldstart(self):
         """
@@ -391,37 +420,20 @@ class DeviceContext:
         await self._warp_task
         self._warp_task = None
 
+    async def __aenter__(self):
+        self.time = self._freeze_time.start()
+        self._emulator_context = EmulatorContext(
+            self.emulator, self.aioclient_mock, self.time
+        )
+        self._emulator_context.__enter__()
+        return self
 
-@contextlib.asynccontextmanager
-async def devicecontext(
-    emulator: MerossEmulator | str,
-    hass: HomeAssistant,
-    aioclient_mock: AiohttpClientMocker,
-    time_to_freeze=None,
-    config_data: dict | None = None,
-):
-    """
-    This is a 'full featured' context providing an emulator and setting it
-    up as a configured device in HA
-    It also provides timefreezing
-    """
-    with freeze_time(time_to_freeze) as frozen_time:
-        with emulator_mock(emulator, aioclient_mock, frozen_time) as emulator:
-            context = DeviceContext()
-            context.hass = hass
-            context.time = frozen_time
-            context.emulator = emulator
-            context.device_id = emulator.descriptor.uuid
-            context.api = None
-            context.device = None
-            context.config_entry = build_emulator_config_entry(
-                emulator, config_data=config_data
-            )
-            context.config_entry.add_to_hass(hass)
-            try:
-                yield context
-            finally:
-                await context.async_unload_config_entry()
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        try:
+            await self.async_unload_config_entry()
+        finally:
+            self._emulator_context.__exit__(exc_type, exc_value, traceback)
+            self._freeze_time.stop()
 
 
 class CloudApiMocker(contextlib.AbstractContextManager):

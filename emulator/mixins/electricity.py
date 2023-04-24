@@ -98,7 +98,7 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             self.payload_consumptionx[mc.KEY_CONSUMPTIONX] = p_consumptionx
 
         self.consumptionx = p_consumptionx
-        self._epoch_prev = self.epoch
+        self._epoch_prev = 0
         self._power_prev = None
         self._energy_fraction = 0.0  # in Wh
         # REMOVE
@@ -118,11 +118,7 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         }
         """
         # energy will be reset every time we update our consumptionx array
-        if self._power_prev is None:
-            self._energy_fraction += (
-                self.power * (self.epoch - self._epoch_prev) / 3600000
-            )
-        else:
+        if self._power_prev is not None:
             self._energy_fraction += (
                 (self.power + self._power_prev) * (self.epoch - self._epoch_prev) / 7200000
             )

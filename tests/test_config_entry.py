@@ -55,7 +55,7 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
         tc.EMULATOR_TRACES_PATH, tc.MOCK_DEVICE_UUID, tc.MOCK_KEY
     ):
 
-        async with helpers.devicecontext(emulator, hass, aioclient_mock) as context:
+        async with helpers.DeviceContext(hass, emulator, aioclient_mock) as context:
 
             await context.async_load_config_entry()
 

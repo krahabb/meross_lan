@@ -143,16 +143,12 @@ class MerossEmulator:
 
     _tzinfo: ZoneInfo | None = None
 
-    # this is used during tests to 'fix' the emulator host address
-    host: str | None = None
-
     def __init__(self, descriptor: MerossEmulatorDescriptor, key):
         self.key = key
         self.descriptor = descriptor
         self.p_all_system_time = descriptor.system.get(mc.KEY_TIME)
         if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
             self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
-        self._update_epoch()
         print(f"Initialized {descriptor.productname} (model:{descriptor.productmodel})")
 
     def set_timezone(self, timezone: str):
@@ -187,7 +183,7 @@ class MerossEmulator:
             f"RX: namespace={namespace} method={method} payload={json.dumps(payload)}"
         )
         try:
-            self._update_epoch()
+            self.update_epoch()
 
             if namespace not in self.descriptor.ability:
                 raise Exception(f"{namespace} not supported in ability")
@@ -223,7 +219,7 @@ class MerossEmulator:
         )
         return data
 
-    def _update_epoch(self):
+    def update_epoch(self):
         """
         Called (by default) on every command processing.
         Could be used to (rather asynchronously) trigger internal state changes
