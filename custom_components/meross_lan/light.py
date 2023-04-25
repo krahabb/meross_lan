@@ -420,10 +420,13 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
     PLATFORM = light.DOMAIN
 
     _attr_supported_color_modes = {COLOR_MODE_ONOFF}
-    _attr_entity_category = me.EntityCategory.CONFIG
 
     def __init__(self, device: MerossDevice):
         super().__init__(device, None, DND_ID, mc.KEY_DNDMODE, None, None)
+
+    @property
+    def entity_category(self):
+        return me.EntityCategory.CONFIG
 
     @property
     def supported_color_modes(self):

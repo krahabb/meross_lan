@@ -35,45 +35,11 @@ except Exception:
     NUMBERMODE_BOX = "box"
     NUMBERMODE_SLIDER = "slider"
 
-CORE_HAS_NATIVE_UNIT = hasattr(number.NumberEntity, "native_unit_of_measurement")
-
 
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
-
-
-if CORE_HAS_NATIVE_UNIT:
-    # implement 'new' (2022.6) style NumberEntity
-    NumberEntity = number.NumberEntity  # type: ignore
-else:
-    # pre 2022.6 style NumberEntity
-    # since derived classes will try to adapt to new _native_* style
-    # here we adapt for older HA cores
-    class NumberEntity(number.NumberEntity):
-        @property
-        def max_value(self):
-            return self.native_max_value
-
-        @property
-        def min_value(self):
-            return self.native_min_value
-
-        @property
-        def step(self):
-            return self.native_step
-
-        @property
-        def unit_of_measurement(self):
-            return self.native_unit_of_measurement
-
-        @property
-        def value(self):
-            return self._attr_state
-
-        async def async_set_value(self, value: float):  # type: ignore
-            await self.async_set_native_value(value)
 
 
 DEVICECLASS_TO_UNIT_MAP = {
@@ -82,24 +48,37 @@ DEVICECLASS_TO_UNIT_MAP = {
 }
 
 
-class MLConfigNumber(me.MerossEntity, NumberEntity):
+class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     PLATFORM = number.DOMAIN
     DeviceClass = NumberDeviceClass
 
-    _attr_entity_category = me.EntityCategory.CONFIG
-    _attr_mode = NUMBERMODE_BOX  # type: ignore
     _attr_native_max_value: float
     _attr_native_min_value: float
     _attr_native_step: float
     _attr_native_unit_of_measurement: str | None
 
-    multiplier = 1
     # customize the request payload for different
     # devices api. see 'async_set_native_value' to see how
     namespace: str
     key_namespace: str
     key_channel: str = mc.KEY_CHANNEL
     key_value: str
+
+    __slots__ = (
+        "_attr_native_max_value",
+        "_attr_native_min_value",
+        "_attr_native_step",
+        "_attr_native_unit_of_measurement",
+    )
+
+    @property
+    def entity_category(self):
+        return me.EntityCategory.CONFIG
+
+    @property
+    def mode(self) -> number.NumberMode:
+        """Return the mode of the entity."""
+        return NUMBERMODE_BOX  # type: ignore
 
     @property
     def native_max_value(self):
@@ -122,10 +101,10 @@ class MLConfigNumber(me.MerossEntity, NumberEntity):
         return self._attr_state
 
     def update_native_value(self, value):
-        self.update_state(value / self.multiplier)
+        self.update_state(value / self.ml_multiplier)
 
     async def async_set_native_value(self, value: float):
-        device_value = int(value * self.multiplier)
+        device_value = int(value * self.ml_multiplier)
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
@@ -142,9 +121,12 @@ class MLConfigNumber(me.MerossEntity, NumberEntity):
             _ack_callback,
         )
 
+    @property
+    def ml_multiplier(self):
+        return 1
+
 
 class MLHubAdjustNumber(MLConfigNumber):
-    multiplier = 100
     key_channel = mc.KEY_ID
 
     def __init__(
@@ -175,20 +157,36 @@ class MLHubAdjustNumber(MLConfigNumber):
             subdevice,
         )
 
+    @property
+    def ml_multiplier(self):
+        return 100
+
 
 class MLScreenBrightnessNumber(MLConfigNumber):
     device: ScreenBrightnessMixin
 
-    _attr_native_max_value = 100
-    _attr_native_min_value = 0
-    _attr_native_step = 12.5
-    _attr_native_unit_of_measurement = PERCENTAGE
     _attr_icon = "mdi:brightness-percent"
 
     def __init__(self, device: "MerossDevice", channel: object, key: str):
         self.key_value = key
         self._attr_name = f"Screen brightness ({key})"
         super().__init__(device, channel, f"screenbrightness_{key}")
+
+    @property
+    def native_max_value(self):
+        return 100
+
+    @property
+    def native_min_value(self):
+        return 0
+
+    @property
+    def native_step(self):
+        return 12.5
+
+    @property
+    def native_unit_of_measurement(self):
+        return PERCENTAGE
 
     async def async_set_native_value(self, value: float):
         brightness = {

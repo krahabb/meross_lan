@@ -181,8 +181,6 @@ class MtsSetPointNumber(MLConfigNumber):
     AKA: Heat(comfort) - Cool(sleep) - Eco(away)
     """
 
-    multiplier = 10
-
     PRESET_TO_ICON_MAP: Final = {
         MtsClimate.PRESET_COMFORT: "mdi:sun-thermometer",
         MtsClimate.PRESET_SLEEP: "mdi:power-sleep",
@@ -218,3 +216,7 @@ class MtsSetPointNumber(MLConfigNumber):
     @property
     def native_unit_of_measurement(self):
         return MtsClimate.TEMP_CELSIUS
+
+    @property
+    def ml_multiplier(self):
+        return 10

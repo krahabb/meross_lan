@@ -186,8 +186,6 @@ class Mts100ScheduleEntry:
 
 
 class Mts100Schedule(MLCalendar):
-    _attr_entity_category = me.EntityCategory.CONFIG
-
     subdevice: MerossSubDevice
 
     # ScheduleDict = Dict[str, list] # internal schedule dict type alias
@@ -225,6 +223,10 @@ class Mts100Schedule(MLCalendar):
         # but we're recovering the value by inspecting the device scheduleB payload.
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
+
+    @property
+    def entity_category(self):
+        return me.EntityCategory.CONFIG
 
     @property
     def schedule(self):

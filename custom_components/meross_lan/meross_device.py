@@ -125,20 +125,22 @@ TIMEZONES_SET = None
 
 
 class _MQTTTransaction:
-    namespace: str
-    method: str
-    response_callback: ResponseCallbackType
-    messageid: str
-    request_time: float
+    __slots__ = (
+        "namespace",
+        "messageid",
+        "method",
+        "request_time",
+        "response_callback",
+    )
 
     def __init__(
         self, namespace: str, method: str, response_callback: ResponseCallbackType
     ):
         self.namespace = namespace
-        self.method = method
-        self.response_callback = response_callback
-        self.request_time = time()
         self.messageid = uuid4().hex
+        self.method = method
+        self.request_time = time()
+        self.response_callback = response_callback
 
 
 class MerossDeviceBase(Loggable, abc.ABC):
@@ -148,10 +150,16 @@ class MerossDeviceBase(Loggable, abc.ABC):
     """
 
     id: Final[str]
-    # weakly cached entry to the device registry
-    _device_registry_entry = None
     # device info dict from meross cloud api
-    device_info: DeviceInfoType | SubDeviceInfoType | None = None
+    device_info: DeviceInfoType | SubDeviceInfoType | None
+
+    __slots__ = (
+        "id",
+        "config_entry_id",
+        "deviceentry_id",
+        "device_info",
+        "_device_registry_entry",
+    )
 
     def __init__(
         self,
@@ -171,8 +179,10 @@ class MerossDeviceBase(Loggable, abc.ABC):
         internally even though we can't still update the device registry.
         """
         self.id = _id
-        self.deviceentry_id = {"identifiers": {(DOMAIN, _id)}}
         self.config_entry_id = config_entry_id
+        self.deviceentry_id = {"identifiers": {(DOMAIN, _id)}}
+        self.device_info = None
+        self._device_registry_entry = None
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             self._device_registry_entry = weakref.ref(
                 device_registry.async_get(ApiProfile.hass).async_get_or_create(
@@ -251,20 +261,59 @@ class MerossDevice(MerossDeviceBase):
     Generic protocol handler class managing the physical device stack/state
     """
 
-    # provide class defaults for typing:
     sensor_protocol: ProtocolSensor
     # these are set from ConfigEntry
-    _host: str | None = None
-    key: str = ""
-    polling_period: int = CONF_POLLING_PERIOD_DEFAULT
-    _polling_delay: int = CONF_POLLING_PERIOD_DEFAULT
+    _host: str | None
+    key: str
+    polling_period: int
+    _polling_delay: int
     conf_protocol: str
     pref_protocol: str
     curr_protocol: str
     # other default property values
     entity_dnd = MerossFakeEntity
-    _tzinfo: ZoneInfo | None = None  # smart cache of device tzinfo
-    _unsub_polling_callback: asyncio.TimerHandle | None = None
+    _tzinfo: ZoneInfo | None  # smart cache of device tzinfo
+    _unsub_polling_callback: asyncio.TimerHandle | None
+
+    __slots__ = (
+        "_host",
+        "key",
+        "polling_period",
+        "_polling_delay",
+        "conf_protocol",
+        "pref_protocol",
+        "curr_protocol",
+        "sensor_protocol",
+        "descriptor",
+        "needsave",
+        "device_timestamp",
+        "device_timedelta",
+        "device_timedelta_log_epoch",
+        "device_timedelta_config_epoch",
+        "_online",
+        "lastrequest",
+        "lastresponse",
+        "_cloud_profile",
+        "_mqtt_connection",
+        "_mqtt",
+        "lastmqttrequest",
+        "lastmqttresponse",
+        "_mqtt_transactions",
+        "_http",
+        "lasthttprequest",
+        "lasthttpresponse",
+        "_trace_file",
+        "_trace_future",
+        "_trace_data",
+        "_trace_endtime",
+        "_trace_ability_iter",
+        "entities",
+        "polling_dictionary",
+        "platforms",
+        "_tzinfo",
+        "_unsub_entry_update_listener",
+        "_unsub_polling_callback",
+    )
 
     def __init__(
         self,
@@ -342,10 +391,12 @@ class MerossDevice(MerossDeviceBase):
         # The list of pending MQTT requests (SET or GET) which are waiting their SETACK (or GETACK)
         # in order to complete the transaction
         self._mqtt_transactions: dict[str, _MQTTTransaction] = {}
-
+        self._tzinfo = None
         self._unsub_entry_update_listener = config_entry.add_update_listener(
             self.entry_update_listener
         )
+        self._unsub_polling_callback = None
+
         self._set_config_entry(config_entry.data)  # type: ignore
         self.curr_protocol = self.pref_protocol
 

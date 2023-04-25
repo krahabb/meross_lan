@@ -35,6 +35,9 @@ except Exception:
         DIAGNOSTIC = "diagnostic"
 
 
+CORE_HAS_ENTITY_NAME = hasattr(Entity, "has_entity_name")
+
+
 class MerossFakeEntity:
     """
     a 'dummy' class we'll use as a placeholder to reduce optional and/or
@@ -53,11 +56,23 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     # would create an empty anyway....
     _attr_extra_state_attributes: dict[str, object] = {}
     _attr_name: str | None = None
-    _attr_state: StateType = None
+    _attr_state: StateType
     _attr_translation_key: str | None = None
+    _attr_unique_id: str
 
     # used to speed-up checks if entity is enabled and loaded
-    _hass_connected = False
+    _hass_connected: bool
+
+    __slots__ = (
+        "id",
+        "device",
+        "channel",
+        "subdevice",
+        "_attr_device_class",
+        "_attr_state",
+        "_attr_unique_id",
+        "_hass_connected",
+    )
 
     def __init__(
         self,
@@ -77,16 +92,10 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         entities for the same channel and usually equal to device_class (but might not be)
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
-        self.device = device
-        self.channel = channel
-        self._attr_device_class = device_class
-        if self._attr_name is None:
-            self._attr_name = entitykey or device_class  # type: ignore
-        self.subdevice = subdevice
         assert (channel is not None) or (
             entitykey is not None
         ), "provide at least channel or entitykey (cannot be 'None' together)"
-        self.id = (
+        self.id = _id = (
             channel
             if entitykey is None
             else entitykey
@@ -94,9 +103,18 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             else f"{channel}_{entitykey}"
         )
         assert (
-            device.entities.get(self.id) is None
+            device.entities.get(_id) is None
         ), "(channel, entitykey) is not unique inside device.entities"
-        device.entities[self.id] = self
+        self.device = device
+        self.channel = channel
+        self.subdevice = subdevice
+        self._attr_device_class = device_class
+        if self._attr_name is None:
+            self._attr_name = entitykey or device_class  # type: ignore
+        self._attr_state = None
+        self._attr_unique_id = f"{device.id}_{_id}"
+        self._hass_connected = False
+        device.entities[_id] = self
         async_add_devices = device.platforms.setdefault(self.PLATFORM)
         if async_add_devices is not None:
             async_add_devices([self])
@@ -153,7 +171,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     @property
     def name(self):
-        if hasattr(Entity, "has_entity_name"):
+        if CORE_HAS_ENTITY_NAME:
             # newer api...return just the 'local' name
             return self._attr_name
         # compatibility layer....
@@ -175,7 +193,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     @property
     def unique_id(self):
-        return f"{self.device.id}_{self.id}"
+        return self._attr_unique_id
 
     async def async_added_to_hass(self):
         self._hass_connected = True

@@ -44,14 +44,20 @@ class MerossDeviceHub(MerossDevice):
     Specialized MerossDevice for smart hub(s) like MSH300
     """
 
-    _lastupdate_battery = 0
-    _lastupdate_sensor = None
-    _lastupdate_mts100 = None
-
-    _unsub_setup_again: asyncio.TimerHandle | None = None
+    __slots__ = (
+        "subdevices",
+        "_lastupdate_battery",
+        "_lastupdate_sensor",
+        "_lastupdate_mts100",
+        "_unsub_setup_again",
+    )
 
     def __init__(self, descriptor, entry):
         self.subdevices: dict[object, MerossSubDevice] = {}
+        self._lastupdate_battery = 0
+        self._lastupdate_sensor = None
+        self._lastupdate_mts100 = None
+        self._unsub_setup_again: asyncio.TimerHandle | None = None
         super().__init__(descriptor, entry)
         # invoke platform(s) async_setup_entry
         # in order to be able to eventually add entities when they 'pop up'
@@ -327,9 +333,14 @@ class MerossDeviceHub(MerossDevice):
 
 
 class MerossSubDevice(MerossDeviceBase):
-    hub: MerossDeviceHub
-    sensor_battery: MLSensor
-    switch_togglex: MLSwitch | None
+    __slots__ = (
+        "hub",
+        "type",
+        "p_digest",
+        "_online",
+        "sensor_battery",
+        "switch_togglex",
+    )
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
         _id = p_digest[mc.KEY_ID]
@@ -340,20 +351,20 @@ class MerossSubDevice(MerossDeviceBase):
             model=_type,
             via_device=next(iter(hub.deviceentry_id["identifiers"])),
         )
+        self.hub = hub
         self.type = _type
         self.p_digest = p_digest
         self._online = False
-        self.hub = hub
         hub.subdevices[_id] = self
         self.sensor_battery = self.build_sensor(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
-        self.switch_togglex = None
+        self.switch_togglex: MLSwitch | None = None
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.hub = None  # type: ignore
-        self.sensor_battery = None  # type: ignore
+        self.hub: MerossDeviceHub = None  # type: ignore
+        self.sensor_battery: MLSensor = None  # type: ignore
         self.switch_togglex = None
 
     def _get_device_info_name_key(self) -> str:
@@ -475,10 +486,12 @@ class MerossSubDevice(MerossDeviceBase):
 
 
 class MS100SubDevice(MerossSubDevice):
-    sensor_temperature: MLSensor
-    sensor_humidity: MLSensor
-    number_adjust_temperature: MLHubAdjustNumber
-    number_adjust_humidity: MLHubAdjustNumber
+    __slots__ = (
+        "sensor_temperature",
+        "sensor_humidity",
+        "number_adjust_temperature",
+        "number_adjust_humidity",
+    )
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
@@ -505,10 +518,10 @@ class MS100SubDevice(MerossSubDevice):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.sensor_temperature = None  # type: ignore
-        self.sensor_humidity = None  # type: ignore
-        self.number_adjust_temperature = None  # type: ignore
-        self.number_adjust_humidity = None  # type: ignore
+        self.sensor_temperature: MLSensor = None  # type: ignore
+        self.sensor_humidity: MLSensor = None  # type: ignore
+        self.number_adjust_temperature: MLHubAdjustNumber = None  # type: ignore
+        self.number_adjust_humidity: MLHubAdjustNumber = None  # type: ignore
 
     def _setonline(self):
         super()._setonline()
@@ -530,13 +543,15 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
 
 
 class MTS100SubDevice(MerossSubDevice):
-    climate: Mts100Climate
-    number_comfort_temperature: Mts100SetPointNumber
-    number_sleep_temperature: Mts100SetPointNumber
-    number_away_temperature: Mts100SetPointNumber
-    schedule: Mts100Schedule
-    binary_sensor_window: MLBinarySensor
-    sensor_temperature: MLSensor
+    __slots__ = (
+        "climate",
+        "number_comfort_temperature",
+        "number_sleep_temperature",
+        "number_away_temperature",
+        "schedule",
+        "binary_sensor_window",
+        "sensor_temperature",
+    )
 
     def __init__(
         self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100
@@ -571,13 +586,13 @@ class MTS100SubDevice(MerossSubDevice):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.climate = None  # type: ignore
-        self.number_comfort_temperature = None  # type: ignore
-        self.number_sleep_temperature = None  # type: ignore
-        self.number_away_temperature = None  # type: ignore
-        self.schedule = None  # type: ignore
-        self.binary_sensor_window = None  # type: ignore
-        self.sensor_temperature = None  # type: ignore
+        self.climate: Mts100Climate = None  # type: ignore
+        self.number_comfort_temperature: Mts100SetPointNumber = None  # type: ignore
+        self.number_sleep_temperature: Mts100SetPointNumber = None  # type: ignore
+        self.number_away_temperature: Mts100SetPointNumber = None  # type: ignore
+        self.schedule: Mts100Schedule = None  # type: ignore
+        self.binary_sensor_window: MLBinarySensor = None  # type: ignore
+        self.sensor_temperature: MLSensor = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
 
     def _setonline(self):
@@ -665,8 +680,10 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150] = MTS150SubDevice
 
 
 class SmokeAlarmSubDevice(MerossSubDevice):
-    sensor_status: MLSensor
-    sensor_interConn: MLSensor
+    __slots__ = (
+        "sensor_status",
+        "sensor_interConn",
+    )
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_SMOKEALARM)
@@ -675,8 +692,8 @@ class SmokeAlarmSubDevice(MerossSubDevice):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.sensor_status = None  # type: ignore
-        self.sensor_interConn = None  # type: ignore
+        self.sensor_status: MLSensor = None  # type: ignore
+        self.sensor_interConn: MLSensor = None  # type: ignore
 
     def _setonline(self):
         super()._setonline()

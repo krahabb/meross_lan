@@ -35,7 +35,6 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
     from .meross_device_hub import MerossSubDevice
 
-SensorEntity = sensor.SensorEntity
 SensorStateClass = sensor.SensorStateClass
 try:
     SensorDeviceClass = sensor.SensorDeviceClass  # type: ignore
@@ -52,16 +51,13 @@ except Exception:
         VOLTAGE = "voltage"
 
 
-CORE_HAS_NATIVE_UNIT = hasattr(SensorEntity, "native_unit_of_measurement")
-
-
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
 
 
-DEVICECLASS_TO_UNIT_MAP = {
+DEVICECLASS_TO_UNIT_MAP: dict[SensorDeviceClass | None, str] = {
     SensorDeviceClass.POWER: POWER_WATT,
     SensorDeviceClass.CURRENT: ELECTRIC_CURRENT_AMPERE,
     SensorDeviceClass.VOLTAGE: ELECTRIC_POTENTIAL_VOLT,
@@ -73,23 +69,29 @@ DEVICECLASS_TO_UNIT_MAP = {
 
 # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
 # except these device classes
-DEVICECLASS_TO_STATECLASS_MAP: dict[SensorDeviceClass, SensorStateClass | None] = {
+DEVICECLASS_TO_STATECLASS_MAP: dict[
+    SensorDeviceClass | None, SensorStateClass | None
+] = {
     SensorDeviceClass.ENUM: None,
-    SensorDeviceClass.ENERGY: sensor.SensorStateClass.TOTAL_INCREASING,
+    SensorDeviceClass.ENERGY: SensorStateClass.TOTAL_INCREASING,
 }
 
 NativeValueCallbackType = typing.Callable[[], me.StateType]
 
 
-class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
+class MLSensor(me.MerossEntity, sensor.SensorEntity):
     PLATFORM = sensor.DOMAIN
     DeviceClass = SensorDeviceClass
     StateClass = SensorStateClass
 
     _attr_native_unit_of_measurement: str | None
-    _attr_last_reset: datetime | None = None
     _attr_state: int | float | None
-    _attr_state_class: SensorStateClass | None = StateClass.MEASUREMENT
+    _attr_state_class: SensorStateClass | None
+
+    __slots__ = (
+        "_attr_native_unit_of_measurement",
+        "_attr_state_class",
+    )
 
     def __init__(
         self,
@@ -100,14 +102,20 @@ class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
         subdevice: MerossSubDevice | None,
     ):
         super().__init__(device, channel, entitykey, device_class, subdevice)
-        self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(device_class)  # type: ignore
+        self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(
+            device_class
+        )
         self._attr_state_class = DEVICECLASS_TO_STATECLASS_MAP.get(
-            device_class, self.StateClass.MEASUREMENT  # type: ignore
+            device_class, SensorStateClass.MEASUREMENT
         )
 
     @staticmethod
     def build_for_device(device: MerossDevice, device_class: SensorDeviceClass):
         return MLSensor(device, None, str(device_class), device_class, None)
+
+    @property
+    def last_reset(self) -> datetime | None:
+        return None
 
     @property
     def native_unit_of_measurement(self):
@@ -116,21 +124,6 @@ class MLSensor(me.MerossEntity, SensorEntity):  # type: ignore
     @property
     def native_value(self):
         return self._attr_state
-
-    @property
-    def unit_of_measurement(self):
-        if CORE_HAS_NATIVE_UNIT:
-            # let the core implementation manage unit conversions
-            # in it's '@final unit_of_measurement'
-            return SensorEntity.unit_of_measurement.__get__(self)
-        return self._attr_native_unit_of_measurement
-
-    @property
-    def state(self):
-        if CORE_HAS_NATIVE_UNIT:
-            # let the core implementation manage unit conversions
-            return SensorEntity.state.__get__(self)
-        return self.native_value
 
     @property
     def state_class(self):
@@ -145,10 +138,8 @@ class ProtocolSensor(MLSensor):
     ATTR_MQTT = CONF_PROTOCOL_MQTT
     ATTR_MQTT_BROKER = "mqtt_broker"
 
-    _attr_entity_category = me.EntityCategory.DIAGNOSTIC
-    _attr_state: str = STATE_DISCONNECTED
+    _attr_state: str
     _attr_options = [STATE_DISCONNECTED, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP]
-    _attr_state_class = None
 
     @staticmethod
     def _get_attr_state(value):
@@ -160,10 +151,15 @@ class ProtocolSensor(MLSensor):
     ):
         self._attr_extra_state_attributes = {}
         super().__init__(device, None, "sensor_protocol", self.DeviceClass.ENUM, None)
+        self._attr_state = ProtocolSensor.STATE_DISCONNECTED
 
     @property
     def available(self):
         return True
+
+    @property
+    def entity_category(self):
+        return me.EntityCategory.DIAGNOSTIC
 
     @property
     def entity_registry_enabled_default(self):
@@ -174,7 +170,7 @@ class ProtocolSensor(MLSensor):
         return self._attr_options
 
     def set_unavailable(self):
-        self._attr_state = self.STATE_DISCONNECTED
+        self._attr_state = ProtocolSensor.STATE_DISCONNECTED
         if self.device._mqtt_connection is None:
             self._attr_extra_state_attributes = {}
         else:
@@ -228,11 +224,12 @@ class ProtocolSensor(MLSensor):
 
 
 class EnergyEstimateSensor(MLSensor):
-    _attr_state: int = 0
+    _attr_state: int
     _attr_state_float: float = 0.0
 
     def __init__(self, device: MerossDevice):
         super().__init__(device, None, "energy_estimate", self.DeviceClass.ENERGY, None)
+        self._attr_state = 0
 
     @property
     def entity_registry_enabled_default(self):

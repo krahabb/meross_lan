@@ -30,20 +30,32 @@ class Mts200OverheatThresholdNumber(MLConfigNumber):
     """
 
     _attr_name = "Overheat threshold"
-    _attr_native_max_value = 70
-    _attr_native_min_value = 20
-    _attr_native_step = 0.5
-    _attr_native_unit_of_measurement = MtsClimate.TEMP_CELSIUS
 
-    multiplier = 10
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
     key_namespace = mc.KEY_OVERHEAT
     key_value = mc.KEY_VALUE
 
+    def __init__(self, device: MerossDevice, channel: object | None):
+        super().__init__(
+            device,
+            channel,
+            "overheat threshold",
+            MLConfigNumber.DeviceClass.TEMPERATURE,
+        )
+        self._attr_native_max_value = 70
+        self._attr_native_min_value = 20
+        self._attr_native_step = 0.5
+
+    @property
+    def native_unit_of_measurement(self):
+        return MtsClimate.TEMP_CELSIUS
+
+    @property
+    def ml_multiplier(self):
+        return 10
+
 
 class Mts200ConfigSwitch(MLSwitch):
-    _attr_entity_category = EntityCategory.CONFIG
-
     namespace: str
 
     def __init__(self, climate: Mts200Climate, entitykey: str, namespace: str):
@@ -56,6 +68,10 @@ class Mts200ConfigSwitch(MLSwitch):
             None,
             namespace,
         )
+
+    @property
+    def entity_category(self):
+        return EntityCategory.CONFIG
 
     async def async_request_onoff(self, onoff: int):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
@@ -132,8 +148,6 @@ class Mts200Climate(MtsClimate):
         self._overheat_value_number = Mts200OverheatThresholdNumber(
             device,
             channel,
-            "overheat threshold",
-            MLConfigNumber.DeviceClass.TEMPERATURE,
         )
         self._externalsensor_temperature_sensor = MLSensor(
             device, channel, "external sensor", MLSensor.DeviceClass.TEMPERATURE, None

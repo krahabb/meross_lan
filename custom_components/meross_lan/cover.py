@@ -82,18 +82,20 @@ async def async_setup_entry(
 
 
 class MLGarageTimeoutBinarySensor(MLBinarySensor):
-    _attr_entity_category = me.EntityCategory.DIAGNOSTIC
-    _attr_state = me.STATE_OFF
-
     def __init__(self, cover: MLGarage):
         self._attr_extra_state_attributes = {}
         super().__init__(
             cover.device, cover.channel, "problem", self.DeviceClass.PROBLEM
         )
+        self._attr_state = me.STATE_OFF
 
     @property
     def available(self):
         return True
+
+    @property
+    def entity_category(self):
+        return me.EntityCategory.DIAGNOSTIC
 
     def set_unavailable(self):
         pass
@@ -114,12 +116,14 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
 class MLGarageConfigSwitch(MLSwitch):
     device: GarageMixin
 
-    _attr_entity_category = me.EntityCategory.CONFIG
-
     def __init__(self, device, key: str):
         self.key_onoff = key
         self._attr_name = key
         super().__init__(device, None, f"config_{key}", None, None, None)
+
+    @property
+    def entity_category(self):
+        return me.EntityCategory.CONFIG
 
     async def async_request_onoff(self, onoff: int):
         config = dict(self.device.garageDoor_config)
@@ -144,24 +148,24 @@ class MLGarageConfigNumber(MLConfigNumber):
     """
 
     device: GarageMixin
-    # these are ok for 2 of the 3 config numbers
-    # customize those when instantiating
-    _attr_native_max_value = 60
-    _attr_native_min_value = 1
-    _attr_native_step = 1
-    _attr_native_unit_of_measurement = TIME_SECONDS
 
-    multiplier = 1000
-
-    def __init__(self, device, channel, key: str, initial_value):
+    def __init__(self, device, channel, key: str):
         self.key_value = key
         self._attr_name = key
-        self._attr_state = initial_value
+        # these are ok for 2 of the 3 config numbers
+        # customize those when instantiating
+        self._attr_native_max_value = 60
+        self._attr_native_min_value = 1
+        self._attr_native_step = 1
         super().__init__(device, channel, f"config_{key}")
+
+    @property
+    def native_unit_of_measurement(self):
+        return TIME_SECONDS
 
     async def async_set_native_value(self, value: float):
         config: dict[str, object] = dict(self.device.garageDoor_config)
-        config[self.key_value] = int(value * self.multiplier)
+        config[self.key_value] = int(value * self.ml_multiplier)
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
@@ -174,6 +178,10 @@ class MLGarageConfigNumber(MLConfigNumber):
             {mc.KEY_CONFIG: config},
             _ack_callback,
         )
+
+    @property
+    def ml_multiplier(self):
+        return 1000
 
 
 class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
@@ -189,19 +197,16 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
     the state is managed inside this component
     """
 
-    multiplier = 1
-
     def __init__(self, cover: MLGarage, key: str):
         super().__init__(
             cover.device,
             cover.channel,
             key,
-            (
-                PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
-                + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
-            )
-            / 2,
         )
+        self._attr_state = (
+            PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
+            + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
+        ) / 2
 
     @property
     def available(self):
@@ -218,6 +223,10 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
 
     async def async_set_native_value(self, value: float):
         self.update_native_value(value)
+
+    @property
+    def ml_multiplier(self):
+        return 1
 
 
 class MLGarage(me.MerossEntity, cover.CoverEntity):
@@ -468,7 +477,7 @@ class GarageMixin(
         if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in descriptor.ability:
             self.garageDoor_config = {}
             self.config_signalDuration = MLGarageConfigNumber(
-                self, None, mc.KEY_SIGNALDURATION, None
+                self, None, mc.KEY_SIGNALDURATION
             )
             self.config_signalDuration._attr_native_step = 0.1
             self.config_signalDuration._attr_native_min_value = 0.1
@@ -504,22 +513,22 @@ class GarageMixin(
             if mc.KEY_DOOROPENDURATION in payload:
                 # this config key has been removed in recent firmwares
                 # now we have door open/close duration set per channel (#82)
-                try:
-                    self.config_doorOpenDuration.update_native_value(
-                        payload[mc.KEY_DOOROPENDURATION]
-                    )
-                except AttributeError:
-                    self.config_doorOpenDuration = MLGarageConfigNumber(
+                if (_config_doorOpenDuration := self.config_doorOpenDuration) is None:
+                    self.config_doorOpenDuration = (
+                        _config_doorOpenDuration
+                    ) = MLGarageConfigNumber(
                         self,
                         None,
                         mc.KEY_DOOROPENDURATION,
-                        payload[mc.KEY_DOOROPENDURATION] / 1000,
                     )
                     for entity in self.entities.values():
                         if isinstance(entity, MLGarage):
-                            entity.doorOpenDuration_number = (
-                                self.config_doorOpenDuration
-                            )
+                            entity.doorOpenDuration_number = _config_doorOpenDuration
+
+                _config_doorOpenDuration.update_native_value(
+                    payload[mc.KEY_DOOROPENDURATION]
+                )
+
             elif self._need_build_doorOpenDuration:
                 self._need_build_doorOpenDuration = False
                 for entity in list(self.entities.values()):
@@ -533,22 +542,22 @@ class GarageMixin(
             if mc.KEY_DOORCLOSEDURATION in payload:
                 # this config key has been removed in recent firmwares
                 # now we have door open/close duration set per channel (#82)
-                try:
-                    self.config_doorCloseDuration.update_native_value(
-                        payload[mc.KEY_DOORCLOSEDURATION]
-                    )
-                except AttributeError:
-                    self.config_doorCloseDuration = MLGarageConfigNumber(
+                if (_config_doorCloseDuration := self.config_doorCloseDuration) is None:
+                    self.config_doorCloseDuration = (
+                        _config_doorCloseDuration
+                    ) = MLGarageConfigNumber(
                         self,
                         None,
                         mc.KEY_DOORCLOSEDURATION,
-                        payload[mc.KEY_DOORCLOSEDURATION] / 1000,
                     )
                     for entity in self.entities.values():
                         if isinstance(entity, MLGarage):
-                            entity.doorCloseDuration_number = (
-                                self.config_doorCloseDuration
-                            )
+                            entity.doorCloseDuration_number = _config_doorCloseDuration
+
+                _config_doorCloseDuration.update_native_value(
+                    payload[mc.KEY_DOORCLOSEDURATION]
+                )
+
             elif self._need_build_doorCloseDuration:
                 self._need_build_doorCloseDuration = False
                 for entity in list(self.entities.values()):
@@ -868,18 +877,18 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     Helper entity to configure MRS open/close duration
     """
 
-    _attr_native_max_value = 60
-    _attr_native_min_value = 1
-    _attr_native_step = 1
-    _attr_native_unit_of_measurement = TIME_SECONDS
-
-    multiplier = 1000
-
     def __init__(self, cover: MLRollerShutter, key: str):
         self._cover = cover
         self.key_value = key
         self._attr_name = key
+        self._attr_native_max_value = 60
+        self._attr_native_min_value = 1
+        self._attr_native_step = 1
         super().__init__(cover.device, cover.channel, f"config_{key}")
+
+    @property
+    def native_unit_of_measurement(self):
+        return TIME_SECONDS
 
     async def async_set_native_value(self, value: float):
         config = {
@@ -899,6 +908,10 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
             {mc.KEY_CONFIG: [config]},
             _ack_callback,
         )
+
+    @property
+    def ml_multiplier(self):
+        return 1000
 
 
 class RollerShutterMixin(
