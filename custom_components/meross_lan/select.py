@@ -31,7 +31,9 @@ OPTION_SPRAY_MODE_ECO = "eco"
     Also, bear in mind that, if select is not supported in HA core
     we're basically implementing a SwitchEntity
 """
-class MLSpray(me.MerossEntity, select.SelectEntity): # type: ignore
+
+
+class MLSpray(me.MerossEntity, select.SelectEntity):
 
     PLATFORM = select.DOMAIN
 
@@ -111,7 +113,7 @@ class SprayMixin(
 
     def _init_spray(self, payload: dict):
         # spray = [{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]
-        MLSpray(self, payload.get(mc.KEY_CHANNEL, 0), self.SPRAY_MODE_MAP)
+        MLSpray(self, payload.get(mc.KEY_CHANNEL, 0), SprayMixin.SPRAY_MODE_MAP)
 
     def _handle_Appliance_Control_Spray(self, header: dict, payload: dict):
         self._parse_spray(payload.get(mc.KEY_SPRAY))

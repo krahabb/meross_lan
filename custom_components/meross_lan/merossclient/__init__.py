@@ -23,6 +23,7 @@ try:
         data = json.load(
             open(
                 file="./custom_components/meross_lan/merossclient/debug.secret.json",
+                mode="r",
                 encoding="utf-8",
             )
         )
@@ -251,9 +252,9 @@ class MerossDeviceDescriptor:
     device descriptor
     """
 
-    all = {}
-    ability = {}
-    digest = {}
+    all: dict
+    ability: dict
+    digest: dict
     system: dict
     hardware: dict
     firmware: dict
@@ -267,6 +268,13 @@ class MerossDeviceDescriptor:
     productname: str
     productnametype: str
     productmodel: str
+
+    __slots__ = (
+        "all",
+        "ability",
+        "digest",
+        "__dict__",
+    )
 
     _dynamicattrs = {
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),
@@ -287,9 +295,14 @@ class MerossDeviceDescriptor:
     }
 
     def __init__(self, payload: dict | None):
-        if payload is not None:
-            self.ability = payload.get(mc.KEY_ABILITY, self.ability)
-            self.update(payload)
+        if payload is None:
+            self.all = {}
+            self.ability = {}
+            self.digest = {}
+        else:
+            self.all = payload.get(mc.KEY_ALL, {})
+            self.ability = payload.get(mc.KEY_ABILITY, {})
+            self.digest = self.all.get(mc.KEY_DIGEST, {})
 
     def __getattr__(self, name):
         value = MerossDeviceDescriptor._dynamicattrs[name](self)
