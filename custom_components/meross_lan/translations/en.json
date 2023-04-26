@@ -7,8 +7,8 @@
                         "state": {
                             "off": "Off",
                             "custom": "Manual",
-                            "comfort": "Comfort (Heat)",
-                            "sleep": "Sleep (Cool)",
+                            "comfort": "Comfort (heat)",
+                            "sleep": "Sleep (cool)",
                             "away": "Away (economy)",
                             "auto": "Auto"
                         }

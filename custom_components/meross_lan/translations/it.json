@@ -7,9 +7,9 @@
                         "state": {
                             "off": "Spento",
                             "custom": "Manuale",
-                            "comfort": "Comfort (Heat)",
-                            "sleep": "Notturno (Cool)",
-                            "away": "Fuori casa (Eco)",
+                            "comfort": "Comfort (caldo)",
+                            "sleep": "Notturno (fresco)",
+                            "away": "Fuori casa (eco)",
                             "auto": "Auto"
                         }
                     }

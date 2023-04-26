@@ -1,5 +1,21 @@
 {
     "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Aus",
+                            "custom": "Manuell",
+                            "comfort": "Komfort (wärme)",
+                            "sleep": "Schlaf (kühl)",
+                            "away": "Abwesend (wirtschaft)",
+                            "auto": "Automatisch"
+                        }
+                    }
+                }
+            }
+        },
         "sensor": {
             "mts200_overheat_warning": {
                 "state": {

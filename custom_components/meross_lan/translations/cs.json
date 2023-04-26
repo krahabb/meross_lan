@@ -1,5 +1,21 @@
 {
     "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Vypnuto",
+                            "custom": "Ruční",
+                            "comfort": "Komfort (teplo)",
+                            "sleep": "Spánek (v pohodě)",
+                            "away": "Pryč (ekonomika)",
+                            "auto": "Automatický"
+                        }
+                    }
+                }
+            }
+        },
         "sensor": {
             "mts200_overheat_warning": {
                 "state": {
