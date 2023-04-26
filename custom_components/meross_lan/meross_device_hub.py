@@ -11,6 +11,7 @@ from .climate import MtsClimate
 from .const import DOMAIN, PARAM_HUBBATTERY_UPDATE_PERIOD
 from .helpers import ApiProfile, schedule_async_callback
 from .meross_device import MerossDevice, MerossDeviceBase
+from . import meross_entity as me
 from .merossclient import (  # mEROSS cONST
     const as mc,
     get_default_arguments,
@@ -30,10 +31,8 @@ WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
         # mc.TYPE_MTS100: MTS100SubDevice,
     }
 )
-# subdevices types listed in NS_APPLIANCE_HUB_SENSOR_ALL
-SENSOR_ALL_TYPESET = (mc.TYPE_MS100, mc.TYPE_SMOKEALARM)
 # subdevices types listed in NS_APPLIANCE_HUB_MTS100_ALL
-MTS100_ALL_TYPESET = (mc.TYPE_MTS100, mc.TYPE_MTS100V3, mc.TYPE_MTS150)
+MTS100_ALL_TYPESET = {mc.TYPE_MTS100, mc.TYPE_MTS100V3, mc.TYPE_MTS150}
 
 # REMOVE
 TRICK = False
@@ -104,43 +103,43 @@ class MerossDeviceHub(MerossDevice):
             self._subdevice_build(p_subdevice)
 
     def _handle_Appliance_Hub_Sensor_All(self, header: dict, payload: dict):
-        if self._subdevice_parse(payload, mc.KEY_ALL):
-            self._lastupdate_sensor = self.lastresponse
+        self._lastupdate_sensor = self.lastresponse
+        self._subdevice_parse(mc.KEY_ALL, payload)
 
     def _handle_Appliance_Hub_Sensor_TempHum(self, header: dict, payload: dict):
-        self._subdevice_parse(payload, mc.KEY_TEMPHUM)
+        self._subdevice_parse(mc.KEY_TEMPHUM, payload)
 
     def _handle_Appliance_Hub_Sensor_Smoke(self, header: dict, payload: dict):
-        self._subdevice_parse(payload, mc.KEY_SMOKEALARM)
+        self._subdevice_parse(mc.KEY_SMOKEALARM, payload)
 
     def _handle_Appliance_Hub_Sensor_Adjust(self, header: dict, payload: dict):
-        self._subdevice_parse(payload, mc.KEY_ADJUST)
+        self._subdevice_parse(mc.KEY_ADJUST, payload)
 
     def _handle_Appliance_Hub_Mts100_All(self, header: dict, payload: dict):
-        if self._subdevice_parse(payload, mc.KEY_ALL):
-            self._lastupdate_mts100 = self.lastresponse
+        self._lastupdate_mts100 = self.lastresponse
+        self._subdevice_parse(mc.KEY_ALL, payload)
 
     def _handle_Appliance_Hub_Mts100_Mode(self, header: dict, payload: dict):
-        self._subdevice_parse(payload, mc.KEY_MODE)
+        self._subdevice_parse(mc.KEY_MODE, payload)
 
     def _handle_Appliance_Hub_Mts100_Temperature(self, header: dict, payload: dict):
-        self._subdevice_parse(payload, mc.KEY_TEMPERATURE)
+        self._subdevice_parse(mc.KEY_TEMPERATURE, payload)
 
     def _handle_Appliance_Hub_Mts100_Adjust(self, header: dict, payload: dict):
-        self._subdevice_parse(payload, mc.KEY_ADJUST)
+        self._subdevice_parse(mc.KEY_ADJUST, payload)
 
     def _handle_Appliance_Hub_Mts100_ScheduleB(self, header: dict, payload: dict):
-        self._subdevice_parse(payload, mc.KEY_SCHEDULE)
+        self._subdevice_parse(mc.KEY_SCHEDULE, payload)
 
     def _handle_Appliance_Hub_ToggleX(self, header: dict, payload: dict):
-        self._subdevice_parse(payload, mc.KEY_TOGGLEX)
+        self._subdevice_parse(mc.KEY_TOGGLEX, payload)
 
     def _handle_Appliance_Hub_Battery(self, header: dict, payload: dict):
         self._lastupdate_battery = self.lastresponse
-        self._subdevice_parse(payload, mc.KEY_BATTERY)
+        self._subdevice_parse(mc.KEY_BATTERY, payload)
 
     def _handle_Appliance_Hub_Online(self, header: dict, payload: dict):
-        self._subdevice_parse(payload, mc.KEY_ONLINE)
+        self._subdevice_parse(mc.KEY_ONLINE, payload)
 
     def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
         self._parse_hub(payload[mc.KEY_HUB])
@@ -172,8 +171,7 @@ class MerossDeviceHub(MerossDevice):
             return MerossSubDevice(self, p_subdevice, _type)  # type: ignore
         return deviceclass(self, p_subdevice)
 
-    def _subdevice_parse(self, payload: dict, key: str):
-        count = 0
+    def _subdevice_parse(self, key: str, payload: dict):
         if isinstance(p_subdevices := payload.get(key), list):
             for p_subdevice in p_subdevices:
                 p_id = p_subdevice[mc.KEY_ID]
@@ -189,11 +187,7 @@ class MerossDeviceHub(MerossDevice):
                     ):
                         self.request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
                 else:
-                    method = getattr(subdevice, f"_parse_{key}", None)
-                    if method is not None:
-                        method(p_subdevice)
-                        count += 1
-        return count
+                    subdevice._parse(key, p_subdevice)
 
     def _parse_hub(self, p_hub: dict):
         # This is usually called inside _parse_all as part of the digest parsing
@@ -212,7 +206,7 @@ class MerossDeviceHub(MerossDevice):
                     self.needsave = True
                 else:
                     subdevices_actual.remove(p_id)
-                subdevice.update_digest(p_digest)
+                subdevice.parse_digest(p_digest)
 
             if subdevices_actual:
                 # now we're left with non-existent (removed) subdevices
@@ -221,7 +215,7 @@ class MerossDeviceHub(MerossDevice):
                     subdevice = self.subdevices[p_id]
                     self.warning(
                         "removing subdevice %s(%s) - configuration will be reloaded in 15 sec",
-                        subdevice.type,
+                        subdevice.name,
                         p_id,
                     )
 
@@ -237,7 +231,9 @@ class MerossDeviceHub(MerossDevice):
                     ApiProfile.hass, 15, _async_setup_again
                 )
 
-    def _build_subdevices_payload(self, types: tuple, count: int):
+    def _build_subdevices_payload(
+        self, types: typing.Collection, included: bool, count: int
+    ):
         """
         This generator helps dealing with hubs hosting an high number
         of subdevices: when queried, the response payload might became huge
@@ -250,7 +246,7 @@ class MerossDeviceHub(MerossDevice):
         if len(subdevices := self.subdevices) > count:
             payload = []
             for subdevice in subdevices.values():
-                if subdevice.type in types:
+                if (subdevice.type in types) == included:
                     payload.append({mc.KEY_ID: subdevice.id})
                     if len(payload) == count:
                         yield payload
@@ -280,7 +276,7 @@ class MerossDeviceHub(MerossDevice):
                 await self.async_request(
                     *get_default_arguments(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
                 )
-                for p in self._build_subdevices_payload(SENSOR_ALL_TYPESET, 8):
+                for p in self._build_subdevices_payload(MTS100_ALL_TYPESET, False, 8):
                     await self.async_request(
                         mc.NS_APPLIANCE_HUB_SENSOR_ALL, mc.METHOD_GET, {mc.KEY_ALL: p}
                     )
@@ -292,11 +288,11 @@ class MerossDeviceHub(MerossDevice):
                 await self.async_request(
                     *get_default_arguments(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
                 )
-                for p in self._build_subdevices_payload(MTS100_ALL_TYPESET, 8):
+                for p in self._build_subdevices_payload(MTS100_ALL_TYPESET, True, 8):
                     await self.async_request(
                         mc.NS_APPLIANCE_HUB_MTS100_ALL, mc.METHOD_GET, {mc.KEY_ALL: p}
                     )
-                for p in self._build_subdevices_payload(MTS100_ALL_TYPESET, 4):
+                for p in self._build_subdevices_payload(MTS100_ALL_TYPESET, True, 4):
                     if mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in self.descriptor.ability:
                         await self.async_request(
                             mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
@@ -406,25 +402,87 @@ class MerossSubDevice(MerossDeviceBase):
         # polling cycle by setting the battery update trigger..
         self.hub._lastupdate_battery = 0
 
-    def update_digest(self, p_digest: dict):
+    def _parse(self, key: str, payload: dict):
+        with self.exception_warning("_parse(%s, %s)", key, payload, timeout=14400):
+            method = getattr(self, f"_parse_{key}", None)
+            if method is not None:
+                method(payload)
+                return
+            # This happens when we still haven't 'normalized' the device structure
+            # so we'll euristically generate sensors for device properties
+            # This is the case for when we see newer devices and we don't know
+            # their payloads and features.
+            # as for know we've seen "smokeAlarm" and "doorWindow" subdevices
+            # carrying similar payloads structures. We'll be conservative
+            # and generate generic sensors for any key, except "lmTime"
+            for subkey, subvalue in payload.items():
+                if subkey in {mc.KEY_LMTIME, mc.KEY_LMTIME_}:
+                    continue
+                entitykey = f"{key}_{subkey}"
+                sensorattr = f"sensor_{entitykey}"
+                sensor: MLSensor | None = getattr(self, sensorattr, None)
+                if sensor is None:
+                    sensor = self.build_sensor_noclass(entitykey)
+                    setattr(self, sensorattr, sensor)
+                sensor.update_state(subvalue)
+
+    def parse_digest(self, p_digest: dict):
+        """
+        digest payload (from NS_ALL or HUB digest)
+        {
+            "id": "160020100486",  # subdev id
+            "status": 1,  # online "status"
+            "onoff": 0,  # togglex "onoff"
+            "lastActiveTime": 1681996722,
+
+            # and a subdev type specific key:
+            # sometimes this child payload is the same
+            # carried in the NS_SENSOR_ALL for the subdev
+            # other times it's different. "ms100" and "mts100x" series
+            # valves carries an "ms100" ("mts100x") payload in digest and
+            # a "tempHum" ("temperature" and more) payload in NS_SENSOR_ALL)
+
+            "ms100": {
+                  "latestTime": 1671039319,
+                  "latestTemperature": 95,
+                  "latestHumidity": 670,
+                  "voltage": 2704
+                }
+
+            # or
+            "doorWindow": {"status": 0, "lmTime": 1681983460}
+        }
+        """
         self.p_digest = p_digest
         self._parse_online(p_digest)
+        if self._online:
+            for _ in (
+                self._parse(key, value)
+                for key, value in p_digest.items()
+                if key
+                not in {mc.KEY_ID, mc.KEY_STATUS, mc.KEY_ONOFF, mc.KEY_LASTACTIVETIME}
+                and isinstance(value, dict)
+            ):
+                pass
 
     def _parse_all(self, p_all: dict):
         # typically parses NS_APPLIANCE_HUB_SENSOR_ALL:
         # generally speaking this payload has a couple of well-known keys
-        # plus a set of sensor values like (MS100 example):
+        # plus a set of sensor values like:
         # {
+        #     keys appearing in any subdevice type
         #     "id": "..."
-        #     "online: "..."
-        #     "temperature": {
-        #         "latest": value
-        #         ...
-        #     }
-        #     "humidity": {
-        #         "latest": value
-        #         ...
-        #     }
+        #     "online: {"status": 1, "lastActiveTime": ...}
+        #
+        #     keys in "ms100"
+        #     "temperature": {"latest": value, ...}
+        #     "humidity": {"latest": value, ...}
+        #
+        #     keys in "smokeAlarm"
+        #     "smokeAlarm": {"status": value, "interConn": value, "lmtime": ...}
+        #
+        #     keys in "doorWindow"
+        #     "doorWindow": {"status": value, "lmTime": ...}
         # }
         # so we just extract generic sensors where we find 'latest'
         # Luckily enough the key names in Meross will behave consistently in HA
@@ -434,16 +492,20 @@ class MerossSubDevice(MerossDeviceBase):
         self._parse_online(p_all.get(mc.KEY_ONLINE, {}))
 
         if self._online:
-            for p_key, p_value in p_all.items():
-                if isinstance(p_value, dict):
-                    p_latest = p_value.get(mc.KEY_LATEST)
-                    if isinstance(p_latest, int):
-                        sensorattr = f"sensor_{p_key}"
-                        sensor: MLSensor = getattr(self, sensorattr, None)  # type: ignore
-                        if not sensor:
-                            sensor = self.build_sensor(p_key)
-                            setattr(self, sensorattr, sensor)
-                        sensor.update_state(p_latest / 10)
+            for _ in (
+                self._parse(key, value)
+                for key, value in p_all.items()
+                if key not in {mc.KEY_ID, mc.KEY_ONLINE} and isinstance(value, dict)
+            ):
+                pass
+
+    def _parse_adjust(self, p_adjust: dict):
+        for p_key, p_value in p_adjust.items():
+            if p_key == mc.KEY_ID:
+                continue
+            number: MLHubAdjustNumber
+            if (number := getattr(self, f"number_adjust_{p_key}", None)) is not None:  # type: ignore
+                number.update_native_value(p_value)
 
     def _parse_battery(self, p_battery: dict):
         if self._online:
@@ -463,17 +525,9 @@ class MerossSubDevice(MerossDeviceBase):
                         if getattr(entity, "subdevice", None) is self:
                             entity.set_unavailable()
 
-    def _parse_adjust(self, p_adjust: dict):
-        for p_key, p_value in p_adjust.items():
-            if p_key == mc.KEY_ID:
-                continue
-            number: MLHubAdjustNumber
-            if (number := getattr(self, f"number_adjust_{p_key}", None)) is not None:  # type: ignore
-                number.update_native_value(p_value)
-
     def _parse_togglex(self, p_togglex: dict):
-        if self.switch_togglex is None:
-            self.switch_togglex = MLSwitch(
+        if (switch_togglex := self.switch_togglex) is None:
+            self.switch_togglex = switch_togglex = MLSwitch(
                 self.hub,
                 self.id,
                 None,
@@ -481,8 +535,9 @@ class MerossSubDevice(MerossDeviceBase):
                 self,
                 mc.NS_APPLIANCE_HUB_TOGGLEX,
             )
-            self.switch_togglex.key_channel = mc.KEY_ID
-        self.switch_togglex._parse_togglex(p_togglex)
+            switch_togglex._attr_entity_category = me.EntityCategory.DIAGNOSTIC
+            switch_togglex.key_channel = mc.KEY_ID
+        switch_togglex._parse_togglex(p_togglex)
 
 
 class MS100SubDevice(MerossSubDevice):
@@ -527,10 +582,16 @@ class MS100SubDevice(MerossSubDevice):
         super()._setonline()
         self.hub._lastupdate_sensor = 0
 
-    def update_digest(self, p_digest: dict):
-        super().update_digest(p_digest)
-        if self._online:
-            self._parse_tempHum(p_digest[mc.TYPE_MS100])
+    def _parse_humidity(self, p_humidity: dict):
+        if isinstance(p_latest := p_humidity.get(mc.KEY_LATEST), int):
+            self.sensor_humidity.update_state(p_latest / 10)
+
+    def _parse_ms100(self, p_ms100: dict):
+        self._parse_tempHum(p_ms100)
+
+    def _parse_temperature(self, p_temperature: dict):
+        if isinstance(p_latest := p_temperature.get(mc.KEY_LATEST), int):
+            self.sensor_temperature.update_state(p_latest / 10)
 
     def _parse_tempHum(self, p_temphum: dict):
         if isinstance(value := p_temphum.get(mc.KEY_LATESTTEMPERATURE), int):
@@ -624,6 +685,12 @@ class MTS100SubDevice(MerossSubDevice):
         climate.update_modes()
         self.schedule.update_climate_modes()
 
+    def _parse_mts100(self, p_mts100: dict):
+        pass
+
+    def _parse_schedule(self, p_schedule: dict):
+        self.schedule._parse_schedule(p_schedule)
+
     def _parse_temperature(self, p_temperature: dict):
         climate = self.climate
         if isinstance(_t := p_temperature.get(mc.KEY_ROOM), int):
@@ -656,9 +723,6 @@ class MTS100SubDevice(MerossSubDevice):
         climate.update_modes()
         self.schedule.update_climate_modes()
 
-    def _parse_schedule(self, p_schedule: dict):
-        self.schedule._parse_schedule(p_schedule)
-
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100] = MTS100SubDevice
 
@@ -666,6 +730,9 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100] = MTS100SubDevice
 class MTS100V3SubDevice(MTS100SubDevice):
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MTS100V3)
+
+    def _parse_mts100v3(self, p_mts100v3: dict):
+        pass
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100V3] = MTS100V3SubDevice
@@ -675,20 +742,23 @@ class MTS150SubDevice(MTS100SubDevice):
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MTS150)
 
+    def _parse_mts150(self, p_mts150: dict):
+        pass
+
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150] = MTS150SubDevice
 
 
-class SmokeAlarmSubDevice(MerossSubDevice):
+class GS559SubDevice(MerossSubDevice):
     __slots__ = (
         "sensor_status",
         "sensor_interConn",
     )
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
-        super().__init__(hub, p_digest, mc.TYPE_SMOKEALARM)
-        self.sensor_status = self.build_sensor_noclass("status")
-        self.sensor_interConn = self.build_sensor_noclass("interConn")
+        super().__init__(hub, p_digest, mc.TYPE_GS559)
+        self.sensor_status = self.build_sensor_noclass(mc.KEY_STATUS)
+        self.sensor_interConn = self.build_sensor_noclass(mc.KEY_INTERCONN)
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -699,16 +769,6 @@ class SmokeAlarmSubDevice(MerossSubDevice):
         super()._setonline()
         self.hub._lastupdate_sensor = 0
 
-    def update_digest(self, p_digest: dict):
-        super().update_digest(p_digest)
-        if self._online:
-            self._parse_smokeAlarm(p_digest[mc.TYPE_SMOKEALARM])
-
-    def _parse_all(self, p_all: dict):
-        self._parse_online(p_all.get(mc.KEY_ONLINE, {}))
-        if self._online:
-            self._parse_smokeAlarm(p_all[mc.TYPE_SMOKEALARM])
-
     def _parse_smokeAlarm(self, p_smokealarm: dict):
         if isinstance(value := p_smokealarm.get(mc.KEY_STATUS), int):
             self.sensor_status.update_state(value)
@@ -716,4 +776,34 @@ class SmokeAlarmSubDevice(MerossSubDevice):
             self.sensor_interConn.update_state(value)
 
 
-WELL_KNOWN_TYPE_MAP[mc.TYPE_SMOKEALARM] = SmokeAlarmSubDevice
+WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
+# smokeAlarm devices (mc.TYPE_GS559) are presented as
+# mc.KEY_SMOKEALARM in digest(s) so we have to map that too
+WELL_KNOWN_TYPE_MAP[mc.KEY_SMOKEALARM] = GS559SubDevice
+
+
+class MS200SubDevice(MerossSubDevice):
+    __slots__ = ("binarysensor_window",)
+
+    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+        super().__init__(hub, p_digest, mc.TYPE_MS200)
+        self.binarysensor_window = self.build_binary_sensor(
+            MLBinarySensor.DeviceClass.WINDOW
+        )
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.binarysensor_window: MLBinarySensor = None  # type: ignore
+
+    def _setonline(self):
+        super()._setonline()
+        self.hub._lastupdate_sensor = 0
+
+    def _parse_doorWindow(self, p_doorwindow: dict):
+        self.binarysensor_window.update_onoff(p_doorwindow[mc.KEY_STATUS])
+
+
+WELL_KNOWN_TYPE_MAP[mc.TYPE_MS200] = MS200SubDevice
+# doorWindow devices (mc.TYPE_MS200) are presented as
+# mc.KEY_DOORWINDOW in digest(s) so we have to map that too
+WELL_KNOWN_TYPE_MAP[mc.KEY_DOORWINDOW] = MS200SubDevice
