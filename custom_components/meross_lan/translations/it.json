@@ -17,11 +17,11 @@
             }
         },
         "sensor": {
-            "smokeAlarm_status": {
+            "smoke_alarm_status": {
                 "state": {
-                    "error_temperature": "Errore: sensore temperatura",
-                    "error_smoke": "Errore: sensore di fumo",
-                    "error_battery": "Errore: batteria",
+                    "error_temperature": "Errore: Sensore temperatura",
+                    "error_smoke": "Errore: Sensore di fumo",
+                    "error_battery": "Errore: Batteria",
                     "alarm_test": "Allarme: Test",
                     "alarm_temperature_high": "Allarme: Alta temperatura",
                     "alarm_smoke": "Allarme: Fumo",

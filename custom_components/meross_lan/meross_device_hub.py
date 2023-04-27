@@ -787,7 +787,7 @@ class GS559SubDevice(MerossSubDevice):
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
         self.sensor_status = self.build_sensor(mc.KEY_STATUS, MLSensor.DeviceClass.ENUM)
-        self.sensor_status._attr_translation_key = "smokeAlarm_status"
+        self.sensor_status._attr_translation_key = "smoke_alarm_status"
         self.sensor_interConn = self.build_sensor(
             mc.KEY_INTERCONN, MLSensor.DeviceClass.ENUM
         )

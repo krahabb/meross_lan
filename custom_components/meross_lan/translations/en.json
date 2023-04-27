@@ -17,7 +17,7 @@
             }
         },
         "sensor": {
-            "smokeAlarm_status": {
+            "smoke_alarm_status": {
                 "state": {
                     "error_temperature": "Error: Temperature sensor",
                     "error_smoke": "Error: Smoke sensor",

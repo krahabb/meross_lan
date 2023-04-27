@@ -17,15 +17,15 @@
             }
         },
         "sensor": {
-            "smokeAlarm_status": {
+            "smoke_alarm_status": {
                 "state": {
-                    "error_temperature": "Error: Temperature sensor",
-                    "error_smoke": "Error: Smoke sensor",
-                    "error_battery": "Error: Battery",
-                    "alarm_test": "Alarm: Test",
-                    "alarm_temperature_high": "Alarm: High temperature",
-                    "alarm_smoke": "Alarm: Smoke",
-                    "ok": "No issues"
+                    "error_temperature": "Error: Sensor de temperatura",
+                    "error_smoke": "Error: Sensor de humo",
+                    "error_battery": "Error: Batería",
+                    "alarm_test": "Alarma: Prueba",
+                    "alarm_temperature_high": "Alarma: Alta temperatura",
+                    "alarm_smoke": "Alarma: Humo",
+                    "ok": "Sin problemas"
                 }
             },
             "mts200_overheat_warning": {

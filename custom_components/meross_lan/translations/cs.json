@@ -17,15 +17,15 @@
             }
         },
         "sensor": {
-            "smokeAlarm_status": {
+            "smoke_alarm_status": {
                 "state": {
-                    "error_temperature": "Error: Temperature sensor",
-                    "error_smoke": "Error: Smoke sensor",
-                    "error_battery": "Error: Battery",
+                    "error_temperature": "Chyba: Snímač teploty",
+                    "error_smoke": "Chyba: Snímač kouře",
+                    "error_battery": "Chyba: Baterie",
                     "alarm_test": "Alarm: Test",
-                    "alarm_temperature_high": "Alarm: High temperature",
-                    "alarm_smoke": "Alarm: Smoke",
-                    "ok": "No issues"
+                    "alarm_temperature_high": "Alarm: Vysoká teplota",
+                    "alarm_smoke": "Alarm: Kouř",
+                    "ok": "Žádné problémy"
                 }
             },
             "mts200_overheat_warning": {
