@@ -5,13 +5,13 @@ import typing
 
 from homeassistant.helpers import device_registry
 
+from . import meross_entity as me
 from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
 from .const import DOMAIN, PARAM_HUBBATTERY_UPDATE_PERIOD
 from .helpers import ApiProfile, schedule_async_callback
 from .meross_device import MerossDevice, MerossDeviceBase
-from . import meross_entity as me
 from .merossclient import (  # mEROSS cONST
     const as mc,
     get_default_arguments,
@@ -352,7 +352,7 @@ class MerossSubDevice(MerossDeviceBase):
         self.p_digest = p_digest
         self._online = False
         hub.subdevices[_id] = self
-        self.sensor_battery = self.build_sensor(MLSensor.DeviceClass.BATTERY)
+        self.sensor_battery = self.build_sensor_c(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
         self.switch_togglex: MLSwitch | None = None
@@ -379,13 +379,20 @@ class MerossSubDevice(MerossDeviceBase):
             f"{self.__class__.__name__}({self.name}) {msg}", *args, **kwargs
         )
 
-    def build_sensor(self, device_class: MLSensor.DeviceClass):
+    def build_sensor(
+        self, entitykey: str, device_class: MLSensor.DeviceClass | None = None
+    ):
+        return MLSensor(self.hub, self.id, entitykey, device_class, self)
+
+    def build_sensor_c(self, device_class: MLSensor.DeviceClass):
         return MLSensor(self.hub, self.id, str(device_class), device_class, self)
 
-    def build_sensor_noclass(self, entitykey: str):
-        return MLSensor(self.hub, self.id, entitykey, None, self)
+    def build_binary_sensor(
+        self, entitykey: str, device_class: MLBinarySensor.DeviceClass | None = None
+    ):
+        return MLBinarySensor(self.hub, self.id, entitykey, device_class, self)
 
-    def build_binary_sensor(self, device_class: MLBinarySensor.DeviceClass):
+    def build_binary_sensor_c(self, device_class: MLBinarySensor.DeviceClass):
         return MLBinarySensor(self.hub, self.id, str(device_class), device_class, self)
 
     @property
@@ -422,7 +429,7 @@ class MerossSubDevice(MerossDeviceBase):
                 sensorattr = f"sensor_{entitykey}"
                 sensor: MLSensor | None = getattr(self, sensorattr, None)
                 if sensor is None:
-                    sensor = self.build_sensor_noclass(entitykey)
+                    sensor = self.build_sensor(entitykey)
                     setattr(self, sensorattr, sensor)
                 sensor.update_state(subvalue)
 
@@ -550,8 +557,8 @@ class MS100SubDevice(MerossSubDevice):
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
-        self.sensor_temperature = self.build_sensor(MLSensor.DeviceClass.TEMPERATURE)
-        self.sensor_humidity = self.build_sensor(MLSensor.DeviceClass.HUMIDITY)
+        self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
+        self.sensor_humidity = self.build_sensor_c(MLSensor.DeviceClass.HUMIDITY)
         self.number_adjust_temperature = MLHubAdjustNumber(
             self,
             mc.KEY_TEMPERATURE,
@@ -631,10 +638,10 @@ class MTS100SubDevice(MerossSubDevice):
             self.climate, Mts100Climate.PRESET_AWAY
         )
         self.schedule = Mts100Schedule(self.climate)
-        self.binary_sensor_window = self.build_binary_sensor(
+        self.binary_sensor_window = self.build_binary_sensor_c(
             MLBinarySensor.DeviceClass.WINDOW
         )
-        self.sensor_temperature = self.build_sensor(MLSensor.DeviceClass.TEMPERATURE)
+        self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
         self.number_adjust_temperature = MLHubAdjustNumber(
             self,
             mc.KEY_TEMPERATURE,
@@ -750,18 +757,51 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150] = MTS150SubDevice
 
 
 class GS559SubDevice(MerossSubDevice):
+    STATUS_MAP = {
+        17: "error_temperature",
+        18: "error_smoke",
+        19: "error_battery",
+        20: "error_temperature",
+        21: "error_smoke",
+        22: "error_battery",
+        23: "alarm_test",
+        24: "alarm_temperature_high",
+        25: "alarm_smoke",
+        26: "alarm_temperature_high",
+        27: "alarm_smoke",
+        170: "ok",
+    }
+
+    STATUS_ALARM = {23, 24, 25, 26, 27}
+    STATUS_ERROR = {17, 18, 19, 20, 21, 22}
+    STATUS_MUTED = {20, 21, 22, 26, 27}
+
     __slots__ = (
+        "binary_sensor_alarm",
+        "binary_sensor_error",
+        "binary_sensor_muted",
         "sensor_status",
         "sensor_interConn",
     )
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
-        self.sensor_status = self.build_sensor_noclass(mc.KEY_STATUS)
-        self.sensor_interConn = self.build_sensor_noclass(mc.KEY_INTERCONN)
+        self.sensor_status = self.build_sensor(mc.KEY_STATUS, MLSensor.DeviceClass.ENUM)
+        self.sensor_status._attr_translation_key = "smokeAlarm_status"
+        self.sensor_interConn = self.build_sensor(
+            mc.KEY_INTERCONN, MLSensor.DeviceClass.ENUM
+        )
+        self.binary_sensor_alarm = self.build_binary_sensor("alarm")
+        self.binary_sensor_error = self.build_binary_sensor(
+            "error", MLBinarySensor.DeviceClass.PROBLEM
+        )
+        self.binary_sensor_muted = self.build_binary_sensor("muted")
 
     async def async_shutdown(self):
         await super().async_shutdown()
+        self.binary_sensor_muted: MLBinarySensor = None  # type: ignore
+        self.binary_sensor_error: MLBinarySensor = None  # type: ignore
+        self.binary_sensor_alarm: MLBinarySensor = None  # type: ignore
         self.sensor_status: MLSensor = None  # type: ignore
         self.sensor_interConn: MLSensor = None  # type: ignore
 
@@ -771,7 +811,10 @@ class GS559SubDevice(MerossSubDevice):
 
     def _parse_smokeAlarm(self, p_smokealarm: dict):
         if isinstance(value := p_smokealarm.get(mc.KEY_STATUS), int):
-            self.sensor_status.update_state(value)
+            self.binary_sensor_alarm.update_onoff(value in GS559SubDevice.STATUS_ALARM)
+            self.binary_sensor_error.update_onoff(value in GS559SubDevice.STATUS_ERROR)
+            self.binary_sensor_muted.update_onoff(value in GS559SubDevice.STATUS_MUTED)
+            self.sensor_status.update_state(GS559SubDevice.STATUS_MAP.get(value, value))
         if isinstance(value := p_smokealarm.get(mc.KEY_INTERCONN), int):
             self.sensor_interConn.update_state(value)
 
@@ -783,24 +826,24 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_SMOKEALARM] = GS559SubDevice
 
 
 class MS200SubDevice(MerossSubDevice):
-    __slots__ = ("binarysensor_window",)
+    __slots__ = ("binary_sensor_window",)
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS200)
-        self.binarysensor_window = self.build_binary_sensor(
+        self.binary_sensor_window = self.build_binary_sensor_c(
             MLBinarySensor.DeviceClass.WINDOW
         )
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.binarysensor_window: MLBinarySensor = None  # type: ignore
+        self.binary_sensor_window: MLBinarySensor = None  # type: ignore
 
     def _setonline(self):
         super()._setonline()
         self.hub._lastupdate_sensor = 0
 
     def _parse_doorWindow(self, p_doorwindow: dict):
-        self.binarysensor_window.update_onoff(p_doorwindow[mc.KEY_STATUS])
+        self.binary_sensor_window.update_onoff(p_doorwindow[mc.KEY_STATUS])
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS200] = MS200SubDevice
