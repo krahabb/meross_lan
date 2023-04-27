@@ -39,7 +39,7 @@ Once installed and restarted, your Meross devices should be automatically discov
 
 > ℹ️ If device(s) are not automatically discovered, try powering them off for 10s and then powering them back on. A notification that new devices have been discovered should appear in `notifications`.
 
-> ℹ️ To manually add your devices or Meross cloud account go to HA->Settings->Devices & Services->Add Integration->Meross LAN
+> ℹ️ To manually add your devices or Meross cloud account go to `HA->Settings->Devices & Services->Add Integration->Meross LAN`
 Here, choose what's appropriate and follow up
 
 Depending on how your devices are configured you should proceed as follows:
@@ -97,14 +97,12 @@ Most of this software has been developed and tested on my owned Meross devices w
 
 ## Features
 
+See the [wiki](https://github.com/krahabb/meross_lan/wiki/Meross-LAN-details) for some behavior/implementation details on specific devices
+
 The component exposes the basic functionality of the underlying device (toggle on/off, dimm, report consumption through sensors) without any other effort. It should be able to detect if the device goes offline suddenly by using a periodic heartbeat.
 It also features an automatic protocol switching capability so, if you have your MQTT setup and your broker dies or whatever, the integration will try to fallback to HTTP communication and keep the device available returning automatically to MQTT mode as soon as the MQTT infrastructure returns online. The same works for HTTP mode: when the device is not reachable it will try to use MQTT (provided it is available!). This feature is enabled by default for every new configuration entry and you can control it by setting the 'Protocol' field in the configration panel of the integration: setting 'AUTO' (or empty) will do the automatic switch. Setting any fixed protocol 'MQTT' or 'HTTP' will force the use of that option (useful if you're in trouble and want to isolate or investigate inconsistent behaviours). I'd say: leave it empty or 'AUTO' it works good in my tests.
 
 If you have the MSH300 Hub working with this integration, every new subdevice (thermostat or sensor) can be automatically discovered once the subdevice is paired with the hub. When the hub is configured in this integration you don't need to switch back and forth to/from the Meross app in order to 'bind' new devices: just pair the thermostat or sensor to the hub by using the subdevice pairing procedure (fast double press on the hub).
-
-DND mode (status/presence light) is supported through a light entity. This entity is marked as a 'configuration entity' in HA terms and is by default visible in the device page in HA UI. If you want to access it in your lovelace cards you have to manually add it. When the device is in 'do-not-disturb' mode the light will be switched off so the device doesn't pollute your home environment!
-
-Wifi signal strength is available for every meross wifi device and could be accessed on the device page. It is refreshed every 5 minutes.
 
 In general, many device configuration options available in Meross app are not supported in meross_lan though some are. As an example, the thermostats preset temperatures (for heat, cool, eco/away) are accessible in HA/meross_lan exactly as if you were to set them manually on the device or via the app. These, and any other supported configuration options, are available as configuration entities (so they're not added to the default lovelace dashboard) and you can access them by going to the relevant device page in HA Configuration -> Devices
 
