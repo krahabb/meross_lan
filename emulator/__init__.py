@@ -57,9 +57,6 @@ from custom_components.meross_lan.merossclient import (
     get_replykey,
 )
 
-# from .descriptor import MerossEmulatorDescriptor
-# from .emulator import MerossEmulator
-
 
 class MerossEmulatorDescriptor(MerossDeviceDescriptor):
     namespaces: dict
@@ -373,6 +370,10 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
 
     mixin_classes = []
 
+    if mc.KEY_HUB in descriptor.digest:
+        from .mixins.hub import HubMixin
+
+        mixin_classes.append(HubMixin)
     if mc.KEY_THERMOSTAT in descriptor.digest:
         from .mixins.thermostat import ThermostatMixin
 

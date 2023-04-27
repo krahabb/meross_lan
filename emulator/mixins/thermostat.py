@@ -1,14 +1,12 @@
 """"""
 from __future__ import annotations
-from random import randint
 
+from random import randint
 import typing
 
+from custom_components.meross_lan.merossclient import const as mc, get_element_by_key
+
 from .. import MerossEmulator, MerossEmulatorDescriptor
-from custom_components.meross_lan.merossclient import (
-    const as mc,
-    get_element_by_key,
-)
 
 
 class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
