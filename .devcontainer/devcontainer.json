@@ -6,9 +6,7 @@
 	"runArgs": [ "--network=host" ],
 	"postCreateCommand": "container install",
 	"extensions": [
-		"ms-python.python",
-		"github.vscode-pull-request-github",
-		"ryanluker.vscode-coverage-gutters",
+		"ms-python.python",		
 		"ms-python.vscode-pylance"
 	],
 	"settings": {
