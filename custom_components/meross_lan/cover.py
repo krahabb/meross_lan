@@ -34,7 +34,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import MerossDevice
+    from .meross_device import MerossDevice, MerossDeviceDescriptor
 
 SUPPORT_OPEN = CoverEntityFeature.OPEN
 SUPPORT_CLOSE = CoverEntityFeature.CLOSE
@@ -221,9 +221,6 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
 
     device: GarageMixin
 
-    doorOpenDuration_number: MLGarageConfigNumber | None = None
-    doorCloseDuration_number: MLGarageConfigNumber | None = None
-
     __slots__ = (
         "_transition_duration",
         "_transition_start",
@@ -232,6 +229,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         "_open",
         "_open_request",
         "binary_sensor_timeout",
+        "number_doorOpenDuration",
+        "number_doorCloseDuration",
     )
 
     def __init__(self, device: "MerossDevice", channel: object):
@@ -251,6 +250,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             EXTRA_ATTR_TRANSITION_DURATION: self._transition_duration
         }
         self.binary_sensor_timeout = MLGarageTimeoutBinarySensor(self)
+        self.number_doorOpenDuration: MLGarageConfigNumber | None = None
+        self.number_doorCloseDuration: MLGarageConfigNumber | None = None
 
     @property
     def supported_features(self):
@@ -311,23 +312,30 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                     self._transition_start = time()
                     self.update_state(STATE_OPENING if open_request else STATE_CLOSING)
                     if open_request:
-                        if self.doorOpenDuration_number is None:
-                            # should really not happen since the GarageMixin already set this
-                            self.doorOpenDuration_number = (
+                        try:
+                            timeout = self.number_doorOpenDuration.native_value  # type: ignore
+                        except AttributeError:
+                            # should really not happen if the GarageMixin has global conf key
+                            # for closeDuration. Else, this fw supports 'per channel' conf (#82)
+                            self.number_doorOpenDuration = (
                                 MLGarageOpenCloseDurationNumber(
                                     self, mc.KEY_DOOROPENDURATION
                                 )
                             )
-                        timeout = self.doorOpenDuration_number.native_value
+                            timeout = self.number_doorOpenDuration.native_value
                     else:
-                        if self.doorCloseDuration_number is None:
-                            # should really not happen since the GarageMixin already set this
-                            self.doorCloseDuration_number = (
+                        try:
+                            timeout = self.number_doorCloseDuration.native_value  # type: ignore
+                        except AttributeError:
+                            # should really not happen if the GarageMixin has global conf key
+                            # for closeDuration. Else, this fw supports 'per channel' conf (#82)
+                            self.number_doorCloseDuration = (
                                 MLGarageOpenCloseDurationNumber(
                                     self, mc.KEY_DOORCLOSEDURATION
                                 )
                             )
-                        timeout = self.doorCloseDuration_number.native_value
+                            timeout = self.number_doorCloseDuration.native_value
+
                     # check the timeout 1 sec after expected to account
                     # for delays in communication
                     self._transition_end_unsub = schedule_callback(
@@ -354,10 +362,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
 
     def _parse_state(self, payload: dict):
         # {"channel": 0, "open": 1, "lmTime": 0}
-        epoch = time()
-        _open = payload[mc.KEY_OPEN]
-        self._open = _open
-
+        self._open = _open = payload[mc.KEY_OPEN]
+        epoch = self.device.lastresponse
         if self._transition_start is None:
             # our state machine is idle and we could be polling a
             # state change triggered by any external means (app, remote)
@@ -459,26 +465,26 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         self._attr_extra_state_attributes[
             EXTRA_ATTR_TRANSITION_DURATION
         ] = self._transition_duration
-        # self.doorCloseDuration_number.update_native_value(self._transition_duration)
-        # self.doorOpenDuration_number.update_native_value(self._transition_duration)
 
 
 class GarageMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-    _need_build_doorOpenDuration = True
-    _need_build_doorCloseDuration = True
+    number_signalDuration: MLGarageConfigNumber
+    switch_buzzerEnable: MLGarageConfigSwitch
+    number_doorOpenDuration: MLGarageConfigNumber | None = None
+    number_doorCloseDuration: MLGarageConfigNumber | None = None
 
-    def __init__(self, descriptor, entry):
+    def __init__(self, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(descriptor, entry)
+        self.garageDoor_config = {}
+        self.number_signalDuration = MLGarageConfigNumber(
+            self, None, mc.KEY_SIGNALDURATION
+        )
+        self.number_signalDuration._attr_native_step = 0.1
+        self.number_signalDuration._attr_native_min_value = 0.1
+        self.switch_buzzerEnable = MLGarageConfigSwitch(self, mc.KEY_BUZZERENABLE)
         if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in descriptor.ability:
-            self.garageDoor_config = {}
-            self.config_signalDuration = MLGarageConfigNumber(
-                self, None, mc.KEY_SIGNALDURATION
-            )
-            self.config_signalDuration._attr_native_step = 0.1
-            self.config_signalDuration._attr_native_min_value = 0.1
-            self.config_buzzerEnable = MLGarageConfigSwitch(self, mc.KEY_BUZZERENABLE)
             self.polling_dictionary[mc.NS_APPLIANCE_GARAGEDOOR_CONFIG] = mc.PAYLOAD_GET[
                 mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
             ]
@@ -486,6 +492,13 @@ class GarageMixin(
             self.polling_dictionary[
                 mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
             ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG]
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.number_signalDuration = None  # type: ignore
+        self.switch_buzzerEnable = None  # type: ignore
+        self.number_doorOpenDuration = None
+        self.number_doorCloseDuration = None
 
     def _init_garageDoor(self, payload: dict):
         MLGarage(self, payload[mc.KEY_CHANNEL])
@@ -500,70 +513,55 @@ class GarageMixin(
             self.garageDoor_config.update(payload)
 
             if mc.KEY_SIGNALDURATION in payload:
-                self.config_signalDuration.update_native_value(
+                self.number_signalDuration.update_native_value(
                     payload[mc.KEY_SIGNALDURATION]
                 )
 
             if mc.KEY_BUZZERENABLE in payload:
-                self.config_buzzerEnable.update_onoff(payload[mc.KEY_BUZZERENABLE])
+                self.switch_buzzerEnable.update_onoff(payload[mc.KEY_BUZZERENABLE])
 
             if mc.KEY_DOOROPENDURATION in payload:
                 # this config key has been removed in recent firmwares
                 # now we have door open/close duration set per channel (#82)
-                if (_config_doorOpenDuration := self.config_doorOpenDuration) is None:
-                    self.config_doorOpenDuration = (
-                        _config_doorOpenDuration
-                    ) = MLGarageConfigNumber(
+                # but legacy ones still manage this
+                try:
+                    self.number_doorOpenDuration.update_native_value(  # type: ignore
+                        payload[mc.KEY_DOOROPENDURATION]
+                    )
+                except AttributeError:
+                    _number_doorOpenDuration = MLGarageConfigNumber(
                         self,
                         None,
                         mc.KEY_DOOROPENDURATION,
                     )
+                    _number_doorOpenDuration.update_native_value(
+                        payload[mc.KEY_DOOROPENDURATION]
+                    )
+                    self.number_doorOpenDuration = _number_doorOpenDuration
                     for entity in self.entities.values():
                         if isinstance(entity, MLGarage):
-                            entity.doorOpenDuration_number = _config_doorOpenDuration
-
-                _config_doorOpenDuration.update_native_value(
-                    payload[mc.KEY_DOOROPENDURATION]
-                )
-
-            elif self._need_build_doorOpenDuration:
-                self._need_build_doorOpenDuration = False
-                for entity in list(self.entities.values()):
-                    if isinstance(entity, MLGarage):
-                        entity.doorOpenDuration_number = (
-                            MLGarageOpenCloseDurationNumber(
-                                entity, mc.KEY_DOOROPENDURATION
-                            )
-                        )
+                            entity.number_doorOpenDuration = _number_doorOpenDuration
 
             if mc.KEY_DOORCLOSEDURATION in payload:
                 # this config key has been removed in recent firmwares
                 # now we have door open/close duration set per channel (#82)
-                if (_config_doorCloseDuration := self.config_doorCloseDuration) is None:
-                    self.config_doorCloseDuration = (
-                        _config_doorCloseDuration
-                    ) = MLGarageConfigNumber(
+                try:
+                    self.number_doorCloseDuration.update_native_value(  # type: ignore
+                        payload[mc.KEY_DOORCLOSEDURATION]
+                    )
+                except AttributeError:
+                    _number_doorCloseDuration = MLGarageConfigNumber(
                         self,
                         None,
                         mc.KEY_DOORCLOSEDURATION,
                     )
+                    _number_doorCloseDuration.update_native_value(
+                        payload[mc.KEY_DOORCLOSEDURATION]
+                    )
+                    self.number_doorCloseDuration = _number_doorCloseDuration
                     for entity in self.entities.values():
                         if isinstance(entity, MLGarage):
-                            entity.doorCloseDuration_number = _config_doorCloseDuration
-
-                _config_doorCloseDuration.update_native_value(
-                    payload[mc.KEY_DOORCLOSEDURATION]
-                )
-
-            elif self._need_build_doorCloseDuration:
-                self._need_build_doorCloseDuration = False
-                for entity in list(self.entities.values()):
-                    if isinstance(entity, MLGarage):
-                        entity.doorCloseDuration_number = (
-                            MLGarageOpenCloseDurationNumber(
-                                entity, mc.KEY_DOORCLOSEDURATION
-                            )
-                        )
+                            entity.number_doorCloseDuration = _number_doorCloseDuration
 
     def _handle_Appliance_GarageDoor_MultipleConfig(self, header: dict, payload: dict):
         self._parse__generic(mc.KEY_CONFIG, payload.get(mc.KEY_CONFIG))
@@ -582,8 +580,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
     device: RollerShutterMixin
 
     __slots__ = (
-        "_number_signalOpen",
-        "_number_signalClose",
+        "number_signalOpen",
+        "number_signalClose",
         "_signalOpen",
         "_signalClose",
         "_position_native",
@@ -598,8 +596,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     def __init__(self, device: "MerossDevice", channel: object):
         super().__init__(device, channel, None, CoverDeviceClass.SHUTTER)
-        self._number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
-        self._number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
+        self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
+        self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         self._signalOpen: int = 30000  # msec to fully open (config'd on device)
         self._signalClose: int = 30000  # msec to fully close (config'd on device)
         self._position_native = None  # as reported by the device
@@ -848,7 +846,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._signalOpen = payload[
                 mc.KEY_SIGNALOPEN
             ]  # time to fully open cover in msec
-            self._number_signalOpen.update_native_value(self._signalOpen)
+            self.number_signalOpen.update_native_value(self._signalOpen)
             self._attr_extra_state_attributes[
                 EXTRA_ATTR_DURATION_OPEN
             ] = self._signalOpen
@@ -856,7 +854,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._signalClose = payload[
                 mc.KEY_SIGNALCLOSE
             ]  # time to fully close cover in msec
-            self._number_signalClose.update_native_value(self._signalClose)
+            self.number_signalClose.update_native_value(self._signalClose)
             self._attr_extra_state_attributes[
                 EXTRA_ATTR_DURATION_CLOSE
             ] = self._signalClose
