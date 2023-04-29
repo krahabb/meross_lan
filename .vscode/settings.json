@@ -1,8 +1,8 @@
 {
     "python.linting.enabled": true,
-    "python.linting.pylintEnabled": true,
-    "python.linting.pylintArgs": [
-    ],
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true,
+    "python.linting.pylintArgs": [],
     "python.pythonPath": "/usr/local/bin/python",
     "files.associations": {
         "*.yaml": "home-assistant"
@@ -14,9 +14,14 @@
     "python.analysis.extraPaths": [
         "./custom_components/meross_lan"
     ],
+    "testing.defaultGutterClickAction": "debug",
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
-        "."
-    ]
+        "tests"
+    ],
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
+    "python.formatting.provider": "none"
 }

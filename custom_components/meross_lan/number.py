@@ -1,97 +1,84 @@
 from __future__ import annotations
+
 import typing
 
-from homeassistant.components.number import (
-    DOMAIN as PLATFORM_NUMBER,
-    NumberEntity,
-)
+from homeassistant.components import number
+from homeassistant.const import PERCENTAGE, TEMP_CELSIUS
 
-try:
-    from homeassistant.components.number import NumberMode
-
-    NUMBERMODE_AUTO = NumberMode.AUTO
-    NUMBERMODE_BOX = NumberMode.BOX
-    NUMBERMODE_SLIDER = NumberMode.SLIDER
-except:
-    NUMBERMODE_AUTO = "auto"
-    NUMBERMODE_BOX = "box"
-    NUMBERMODE_SLIDER = "slider"
-
-from homeassistant.const import (
-    PERCENTAGE,
-)
-
-from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 from . import meross_entity as me
-from .sensor import CLASS_TO_UNIT_MAP
-from .helpers import LOGGER
+from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
     from .meross_device import MerossDevice
     from .meross_device_hub import MerossSubDevice
 
 
-CORE_HAS_NATIVE_UNIT = hasattr(NumberEntity, "native_unit_of_measurement")
+try:
+    NumberDeviceClass = number.NumberDeviceClass  # type: ignore
+except Exception:
+    from .helpers import StrEnum
+
+    class NumberDeviceClass(StrEnum):
+        HUMIDITY = "humidity"
+        TEMPERATURE = "temperature"
+
+
+try:
+    NUMBERMODE_AUTO = number.NumberMode.AUTO
+    NUMBERMODE_BOX = number.NumberMode.BOX
+    NUMBERMODE_SLIDER = number.NumberMode.SLIDER
+except Exception:
+    NUMBERMODE_AUTO = "auto"
+    NUMBERMODE_BOX = "box"
+    NUMBERMODE_SLIDER = "slider"
 
 
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_NUMBER)
+    me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
 
-if CORE_HAS_NATIVE_UNIT:
-    # implement 'new' (2022.6) style NumberEntity
-    PatchedNumberEntity = NumberEntity  # type: ignore
-else:
-    # pre 2022.6 style NumberEntity
-    # since derived classes will try to adapt to new _native_* style
-    # here we adapt for older HA cores
-    class PatchedNumberEntity(NumberEntity):
-        @property
-        def max_value(self):
-            return self.native_max_value
-
-        @property
-        def min_value(self):
-            return self.native_min_value
-
-        @property
-        def step(self):
-            return self.native_step
-
-        @property
-        def unit_of_measurement(self):
-            return self.native_unit_of_measurement
-
-        @property
-        def value(self):
-            return self._attr_state
-
-        async def async_set_value(self, value: float):  # type: ignore
-            await self.async_set_native_value(value)
+DEVICECLASS_TO_UNIT_MAP = {
+    NumberDeviceClass.HUMIDITY: PERCENTAGE,
+    NumberDeviceClass.TEMPERATURE: TEMP_CELSIUS,
+}
 
 
-class MLConfigNumber(me.MerossEntity, PatchedNumberEntity):
+class MLConfigNumber(me.MerossEntity, number.NumberEntity):
+    PLATFORM = number.DOMAIN
+    DeviceClass = NumberDeviceClass
 
-    PLATFORM = PLATFORM_NUMBER
-
-    _attr_entity_category = me.EntityCategory.CONFIG
-    _attr_mode = NUMBERMODE_BOX  # type: ignore
     _attr_native_max_value: float
     _attr_native_min_value: float
     _attr_native_step: float
     _attr_native_unit_of_measurement: str | None
 
-    multiplier = 1
     # customize the request payload for different
     # devices api. see 'async_set_native_value' to see how
     namespace: str
     key_namespace: str
     key_channel: str = mc.KEY_CHANNEL
     key_value: str
+
+    __slots__ = (
+        "_attr_native_max_value",
+        "_attr_native_min_value",
+        "_attr_native_step",
+        "_attr_native_unit_of_measurement",
+    )
+
+    @property
+    def entity_category(self):
+        return me.EntityCategory.CONFIG
+
+    @property
+    def mode(self) -> number.NumberMode:
+        """Return the mode of the entity."""
+        return NUMBERMODE_BOX  # type: ignore
 
     @property
     def native_max_value(self):
@@ -114,11 +101,10 @@ class MLConfigNumber(me.MerossEntity, PatchedNumberEntity):
         return self._attr_state
 
     def update_native_value(self, value):
-        self.update_state(value / self.multiplier)
+        self.update_state(value / self.ml_multiplier)
 
     async def async_set_native_value(self, value: float):
-
-        device_value = int(value * self.multiplier)
+        device_value = int(value * self.ml_multiplier)
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
@@ -135,10 +121,12 @@ class MLConfigNumber(me.MerossEntity, PatchedNumberEntity):
             _ack_callback,
         )
 
+    @property
+    def ml_multiplier(self):
+        return 1
+
 
 class MLHubAdjustNumber(MLConfigNumber):
-
-    multiplier = 100
     key_channel = mc.KEY_ID
 
     def __init__(
@@ -146,7 +134,7 @@ class MLHubAdjustNumber(MLConfigNumber):
         subdevice: "MerossSubDevice",
         key: str,
         namespace: str,
-        device_class: str,
+        device_class: NumberDeviceClass,
         min_value: float,
         max_value: float,
         step: float,
@@ -157,7 +145,9 @@ class MLHubAdjustNumber(MLConfigNumber):
         self._attr_native_min_value = min_value
         self._attr_native_max_value = max_value
         self._attr_native_step = step
-        self._attr_native_unit_of_measurement = CLASS_TO_UNIT_MAP.get(device_class)
+        self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(
+            device_class
+        )
         self._attr_name = f"Adjust {device_class}"
         super().__init__(
             subdevice.hub,
@@ -167,21 +157,36 @@ class MLHubAdjustNumber(MLConfigNumber):
             subdevice,
         )
 
+    @property
+    def ml_multiplier(self):
+        return 100
+
 
 class MLScreenBrightnessNumber(MLConfigNumber):
-
     device: ScreenBrightnessMixin
 
-    _attr_native_max_value = 100
-    _attr_native_min_value = 0
-    _attr_native_step = 12.5
-    _attr_native_unit_of_measurement = PERCENTAGE
     _attr_icon = "mdi:brightness-percent"
 
     def __init__(self, device: "MerossDevice", channel: object, key: str):
         self.key_value = key
         self._attr_name = f"Screen brightness ({key})"
         super().__init__(device, channel, f"screenbrightness_{key}")
+
+    @property
+    def native_max_value(self):
+        return 100
+
+    @property
+    def native_min_value(self):
+        return 0
+
+    @property
+    def native_step(self):
+        return 12.5
+
+    @property
+    def native_unit_of_measurement(self):
+        return PERCENTAGE
 
     async def async_set_native_value(self, value: float):
         brightness = {
@@ -206,10 +211,10 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 class ScreenBrightnessMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
 
-        try:
+        with self.exception_warning("ScreenBrightnessMixin init"):
             # the 'ScreenBrightnessMixin' actually doesnt have a clue of how many  entities
             # are controllable since the digest payload doesnt carry anything (like MerossShutter)
             # So we're not implementing _init_xxx and _parse_xxx methods here and
@@ -224,11 +229,6 @@ class ScreenBrightnessMixin(
             self.polling_dictionary[
                 mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
             ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS]
-
-        except Exception as e:
-            LOGGER.warning(
-                "ScreenBrightnessMixin(%s) init exception:(%s)", self.device_id, str(e)
-            )
 
     def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
         if isinstance(p_channels := payload.get(mc.KEY_BRIGHTNESS), list):

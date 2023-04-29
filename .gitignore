@@ -5,6 +5,7 @@ venv
 .coverage
 coverage.xml
 *.secret
+*.secret.json
 *.user
 traces
 .DS_Store

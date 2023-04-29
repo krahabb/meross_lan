@@ -1,6 +1,44 @@
 {
+    "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Apagado",
+                            "custom": "Manual",
+                            "comfort": "Confort (calor)",
+                            "sleep": "Dormir (fresco)",
+                            "away": "Lejos (económico)",
+                            "auto": "Auto"
+                        }
+                    }
+                }
+            }
+        },
+        "sensor": {
+            "smoke_alarm_status": {
+                "state": {
+                    "error_temperature": "Error: Sensor de temperatura",
+                    "error_smoke": "Error: Sensor de humo",
+                    "error_battery": "Error: Batería",
+                    "alarm_test": "Alarma: Prueba",
+                    "alarm_temperature_high": "Alarma: Alta temperatura",
+                    "alarm_smoke": "Alarma: Humo",
+                    "ok": "Sin problemas"
+                }
+            },
+            "mts200_overheat_warning": {
+                "state": {
+                    "ok": "Ok",
+                    "overheating": "Sobrecalentado",
+                    "disconnected": "Desconectado"
+                }
+            }
+        }
+    },
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "No se han encontrado dispositivos en la red",
             "single_instance_allowed": "Ya esta configurada la Integración. Solo se puede configurar una vez."
@@ -13,6 +51,14 @@
             "invalid_auth": "Error de autenticación"
         },
         "step": {
+            "user": {
+                "title": "Choose option",
+                "description": "",
+                "menu_options": {
+                    "profile": "Register a Meross cloud profile",
+                    "device": "Manually configure a device"
+                }
+            },
             "hub": {
                 "title": "Concentrador Meross LAN MQTT",
                 "description": "Configurar las opciones globales de Meross LAN",
@@ -31,13 +77,13 @@
                 "title": "Error de clave de dispositivo",
                 "description": "La clave proporcionada es incorrecta. Elija una opción",
                 "menu_options": {
-                    "cloudkey": "Recuperar de la nube de Meross",
+                    "profile": "Recuperar de la nube de Meross",
                     "device": "Rever"
                 }
             },
-            "cloudkey": {
-                "title": "Recuperar clave de dispositivo",
-                "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
                 "data": {
                     "username": "Nombre de usuario de Meross",
                     "password": "Contraseña de Meross"
@@ -57,7 +103,8 @@
             "already_configured_device": "Este dispositivo ya esta configurado",
             "cannot_connect": "No es posible conectarse",
             "invalid_auth": "Error de autenticación",
-            "device_id_mismatch": "Discrepancia de UUID: el dispositivo no es el mismo"
+            "device_id_mismatch": "Discrepancia de UUID: el dispositivo no es el mismo",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
         },
         "step": {
             "hub": {
@@ -74,6 +121,7 @@
                     "host": "Dirección IP del dispositivo",
                     "key": "Clave de dispositivo",
                     "protocol": "Protocolo de conexión",
+                    "profile_id": "Perfil de nube",
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
                     "trace": "Activar el modo debug",
@@ -86,11 +134,11 @@
                 "title": "Error de clave de dispositivo",
                 "description": "La clave proporcionada es incorrecta. Elija una opción",
                 "menu_options": {
-                    "cloudkey": "Recuperar de la nube de Meross",
+                    "profile": "Recuperar de la nube de Meross",
                     "device": "Rever"
                 }
             },
-            "cloudkey": {
+            "profile": {
                 "title": "Recuperar clave de dispositivo",
                 "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
                 "data": {

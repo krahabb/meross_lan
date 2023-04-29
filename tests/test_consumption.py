@@ -5,29 +5,23 @@ import datetime as dt
 import typing
 from zoneinfo import ZoneInfo
 
-import pytest
-
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-
 import homeassistant.util.dt as dt_util
-
+import pytest
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
-    wait_recording_done,
 )
-from custom_components.meross_lan.emulator.mixins.electricity import (
+
+from custom_components.meross_lan.const import PARAM_ENERGY_UPDATE_PERIOD
+from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.sensor import ConsumptionMixin, ElectricityMixin
+from emulator.mixins.electricity import (
     ConsumptionMixin as EmulatorConsumptionMixin,
     ElectricityMixin as EmulatorElectricityMixin,
 )
-from custom_components.meross_lan.const import (
-    PARAM_ENERGY_UPDATE_PERIOD,
-)
-from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.meross_device import MerossDevice
-from custom_components.meross_lan.sensor import ConsumptionMixin, ElectricityMixin
 
-from .helpers import devicecontext
+from tests import helpers
 
 if typing.TYPE_CHECKING:
     from .helpers import DeviceContext
@@ -75,6 +69,8 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
     emulator.set_timezone(timezone)
     emulator.set_power(TEST_POWER * 1000)
 
+    await context.async_load_config_entry()
+
     device = context.device
     assert isinstance(device, ConsumptionMixin)
     assert isinstance(device, ElectricityMixin)
@@ -114,7 +110,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
     """
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
-    async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock, today) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock, today) as context:
 
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, dt_util.DEFAULT_TIME_ZONE.key  # type: ignore
@@ -199,7 +195,7 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
     """
     today, tomorrow, todayseconds = _configure_dates(ZoneInfo(DEVICE_TIMEZONE))
 
-    async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock, today) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock, today) as context:
 
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, DEVICE_TIMEZONE
@@ -278,18 +274,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
 
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
-    async with devicecontext(mc.TYPE_MSS310, hass, aioclient_mock, today) as context:
-
-        _t = type(
-            "_t",
-            (
-                ConsumptionMixin,
-                ElectricityMixin,
-                MerossDevice,
-            ),
-            {},
-        )
-        context: DeviceContext[_t]
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock, today) as context:
 
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, dt_util.DEFAULT_TIME_ZONE.key  # type: ignore
@@ -326,8 +311,6 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
 
         async def _async_unload_reload(msg: str, offset: int):
 
-            await async_wait_recording_done(hass)
-
             estimatestate = hass.states.get(sensor_estimate_entity_id)
             assert estimatestate
             saved_estimated_energy_value = estimatestate.state
@@ -335,9 +318,13 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
             await context.async_unload_config_entry()
             # device has been destroyed and entities should be unavailable
             consumptionstate = hass.states.get(sensor_consumption_entity_id)
-            assert (consumptionstate is None) or (consumptionstate.state == STATE_UNAVAILABLE)
+            assert (consumptionstate is None) or (
+                consumptionstate.state == STATE_UNAVAILABLE
+            )
             estimatestate = hass.states.get(sensor_estimate_entity_id)
             assert (estimatestate is None) or (estimatestate.state == STATE_UNAVAILABLE)
+
+            await async_wait_recording_done(hass)
 
             # move the time before reloading to make the emulator accumulate some energy
             await context.async_tick(dt.timedelta(seconds=2 * TEST_DURATION))
@@ -349,7 +336,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
             assert consumptionstate and consumptionstate.state == STATE_UNAVAILABLE
             estimatestate = hass.states.get(sensor_estimate_entity_id)
             assert estimatestate and estimatestate.state == saved_estimated_energy_value
-            
+
             # online the device
             await context.perform_coldstart()
             # check the real consumption

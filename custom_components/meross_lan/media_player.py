@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 import typing
 
 from homeassistant.components.media_player import (
     DOMAIN as PLATFORM_MEDIA_PLAYER,
-    MediaPlayerEntity,
     MediaPlayerDeviceClass,
+    MediaPlayerEntity,
 )
 
 try:
@@ -20,7 +21,7 @@ try:
     SUPPORT_PREVIOUS_TRACK = MediaPlayerEntityFeature.PREVIOUS_TRACK
     SUPPORT_PLAY = MediaPlayerEntityFeature.PLAY
     SUPPORT_STOP = MediaPlayerEntityFeature.STOP
-except:  # fallback (pre 2022.5)
+except Exception:  # fallback (pre 2022.5)
     from homeassistant.components.media_player.const import (
         MEDIA_TYPE_MUSIC,
         SUPPORT_VOLUME_MUTE,
@@ -32,34 +33,34 @@ except:  # fallback (pre 2022.5)
         SUPPORT_STOP,
     )
 
-from homeassistant.const import (
-    STATE_IDLE,
-    STATE_PLAYING,
-)
+from homeassistant.const import STATE_IDLE, STATE_PLAYING
 
-from .merossclient import const as mc  # mEROSS cONST
 from . import meross_entity as me
+from .helpers import clamp
 from .light import MLLight
-from .helpers import LOGGER, clamp
+from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
-    from .meross_device import MerossDevice
+    from homeassistant.core import HomeAssistant
+
     from .light import LightMixin
+    from .meross_device import MerossDevice
 
 
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_MEDIA_PLAYER)
+    me.platform_setup_entry(
+        hass, config_entry, async_add_devices, PLATFORM_MEDIA_PLAYER
+    )
 
 
 class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
 
     PLATFORM = PLATFORM_MEDIA_PLAYER
 
-    def __init__(self, device: 'MerossDevice', channel: object):
+    def __init__(self, device: "MerossDevice", channel: object):
         super().__init__(device, channel, mc.KEY_MP3, MediaPlayerDeviceClass.SPEAKER)
         self._mp3 = {}
         self._attr_supported_features = (
@@ -134,8 +135,8 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
                 self._attr_state = (
                     STATE_IDLE if self._mp3.get(mc.KEY_MUTE) else STATE_PLAYING
                 )
-                if self.hass and self.enabled:
-                    self.async_write_ha_state()
+                if self._hass_connected:
+                    self._async_write_ha_state()
 
         await self.device.async_request(
             mc.NS_APPLIANCE_CONTROL_MP3,
@@ -152,16 +153,16 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
             self._mp3 = payload
             if mc.KEY_MUTE in payload:
                 self._attr_state = STATE_IDLE if payload[mc.KEY_MUTE] else STATE_PLAYING
-            if self.hass and self.enabled:
-                self.async_write_ha_state()
+            if self._hass_connected:
+                self._async_write_ha_state()
 
 
 class Mp3Mixin(
     LightMixin if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-    def __init__(self, api, descriptor, entry):
-        super().__init__(api, descriptor, entry)
-        try:
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
+        with self.exception_warning("Mp3Mixin init"):
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here
             MLMp3Player(self, 0)
@@ -172,8 +173,6 @@ class Mp3Mixin(
             light: MLLight = self.entities.get(0)  # type: ignore
             if light is not None:
                 light.update_effect_map(mc.HP110A_LIGHT_EFFECT_MAP)
-        except Exception as e:
-            LOGGER.warning("Mp3Mixin(%s) init exception:(%s)", self.device_id, str(e))
 
     def _handle_Appliance_Control_Mp3(self, header: dict, payload: dict):
         """

@@ -1,34 +1,16 @@
 """Test meross_lan config entry setup"""
-from unittest.mock import ANY
-
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
-    async_fire_time_changed,
-)
-from pytest_homeassistant_custom_component.test_util.aiohttp import (
-    AiohttpClientMocker,
-)
+from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.meross_lan import MerossApi
-from custom_components.meross_lan.const import (
-    DOMAIN,
-)
-from custom_components.meross_lan.emulator import generate_emulators
+from custom_components.meross_lan import MerossApi, const as mlc
+from custom_components.meross_lan.light import MLDNDLightEntity
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.sensor import RuntimeMixin
+from emulator import generate_emulators
 
-from .conftest import MQTTMock
-from .const import (
-    EMULATOR_TRACES_PATH,
-    MOCK_DEVICE_IP,
-    MOCK_DEVICE_UUID,
-    MOCK_HUB_CONFIG,
-    MOCK_KEY,
-    MOCK_POLLING_PERIOD
-)
-from .helpers import build_emulator_config_entry, devicecontext
+from tests import const as tc, helpers
 
 
 # We can pass fixtures as defined in conftest.py to tell pytest to use the fixture
@@ -36,37 +18,27 @@ from .helpers import build_emulator_config_entry, devicecontext
 # Home Assistant using the pytest_homeassistant_custom_component plugin.
 # Assertions allow you to verify that the return value of whatever is on the left
 # side of the assertion matches with the right side.
-async def test_mqtthub_entry(hass: HomeAssistant, mqtt_patch: MQTTMock):
-    """Test entry setup and unload."""
-    # Create a mock entry so we don't have to go through config flow
-    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_HUB_CONFIG)
-    config_entry.add_to_hass(hass)
+async def test_mqtthub_entry(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker):
+    """Test mqtt hub entry setup and unload."""
+    async with helpers.MQTTHubEntryMocker(hass):
 
-    assert await hass.config_entries.async_setup(config_entry.entry_id)
-    await hass.async_block_till_done()
-    api: MerossApi = hass.data[DOMAIN]
-    assert type(api) == MerossApi
-
-    assert api.mqtt_is_subscribed()
-
-    #mqtt_available.async_subscribe.assert_called_once_with(hass, mc.TOPIC_DISCOVERY, ANY)
+        api = hass.data[mlc.DOMAIN]
+        assert isinstance(api, MerossApi)
+        assert api.mqtt_is_subscribed()
 
     # Unload the entry and verify that the data has not been removed
     # we actually never remove the MerossApi...
-    assert await hass.config_entries.async_unload(config_entry.entry_id)
-    assert type(hass.data[DOMAIN]) == MerossApi
+    assert type(hass.data[mlc.DOMAIN]) == MerossApi
 
 
 async def test_mqtthub_entry_notready(hass: HomeAssistant):
-    # Test ConfigEntryNotReady when API raises an exception during entry setup.
-    config_entry = MockConfigEntry(domain=DOMAIN, data=MOCK_HUB_CONFIG)
-    config_entry.add_to_hass(hass)
-    # In this case we are testing the condition where async_setup_entry raises
-    # ConfigEntryNotReady since we don't have mqtt component in the test environment
-    await hass.config_entries.async_setup(config_entry.entry_id)
-    assert config_entry.state == ConfigEntryState.SETUP_RETRY
-    # with pytest.raises(ConfigEntryNotReady):
-    #    assert await hass.config_entries.async_setup(config_entry.entry_id)
+    """Test ConfigEntryNotReady when API raises an exception during entry setup"""
+    async with helpers.MQTTHubEntryMocker(hass, auto_setup=False) as mqtthub_entry_mocker:
+
+        await mqtthub_entry_mocker.async_setup()
+        # In this case we are testing the condition where async_setup_entry raises
+        # ConfigEntryNotReady since we don't have mqtt component in the test environment
+        assert mqtthub_entry_mocker.state == ConfigEntryState.SETUP_RETRY
 
 
 async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
@@ -79,35 +51,46 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
     by communicating to MerossEmulator through the aioclient_mock
     i.e. we're testing something close to http connected devices
     """
-    for emulator in generate_emulators(EMULATOR_TRACES_PATH, MOCK_DEVICE_UUID, MOCK_KEY):
+    for emulator in generate_emulators(
+        tc.EMULATOR_TRACES_PATH, tc.MOCK_DEVICE_UUID, tc.MOCK_KEY
+    ):
 
-        async with devicecontext(emulator, hass, aioclient_mock) as context:
+        async with helpers.DeviceContext(hass, emulator, aioclient_mock) as context:
 
-            device = context.device
+            await context.async_load_config_entry()
+
+            assert (device := context.device)
             device_ability = emulator.descriptor.ability
 
             entity_dnd = None
             if mc.NS_APPLIANCE_SYSTEM_DNDMODE in device_ability:
                 entity_dnd = device.entity_dnd
-                dndstate = hass.states.get(entity_dnd.entity_id)  # type: ignore
-                assert dndstate
-                assert dndstate.state == "unavailable"
+                assert isinstance(entity_dnd, MLDNDLightEntity)
+                dndstate = hass.states.get(entity_dnd.entity_id)
+                assert dndstate and dndstate.state == STATE_UNAVAILABLE
 
             sensor_runtime = None
             if mc.NS_APPLIANCE_SYSTEM_RUNTIME in device_ability:
                 assert isinstance(device, RuntimeMixin)
                 sensor_runtime = device._sensor_runtime
                 runtimestate = hass.states.get(sensor_runtime.entity_id)
-                assert runtimestate
-                assert runtimestate.state == "unavailable"
+                assert runtimestate and runtimestate.state == STATE_UNAVAILABLE
 
             await context.perform_coldstart()
 
             if entity_dnd is not None:
-                dndstate = hass.states.get(entity_dnd.entity_id)  # type: ignore
-                assert dndstate.state in ("on", "off")  # type: ignore
+                dndstate = hass.states.get(entity_dnd.entity_id)
+                assert dndstate and dndstate.state in (STATE_OFF, STATE_ON)
 
             if sensor_runtime is not None:
-                runtimestate = hass.states.get(sensor_runtime.entity_id)  # type: ignore
-                assert runtimestate.state.isdigit()  # type: ignore
+                runtimestate = hass.states.get(sensor_runtime.entity_id)
+                assert runtimestate and runtimestate.state.isdigit()
 
+
+async def test_profile_entry(hass: HomeAssistant, cloudapi_mock: helpers.CloudApiMocker):
+    """
+    Test a Meross cloud profile entry
+    """
+    async with helpers.ProfileEntryMocker(hass):
+
+        assert MerossApi.profiles[tc.MOCK_PROFILE_ID] is not None

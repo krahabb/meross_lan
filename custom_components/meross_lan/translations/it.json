@@ -1,6 +1,44 @@
 {
+    "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Spento",
+                            "custom": "Manuale",
+                            "comfort": "Comfort (caldo)",
+                            "sleep": "Notturno (fresco)",
+                            "away": "Fuori casa (eco)",
+                            "auto": "Auto"
+                        }
+                    }
+                }
+            }
+        },
+        "sensor": {
+            "smoke_alarm_status": {
+                "state": {
+                    "error_temperature": "Errore: Sensore temperatura",
+                    "error_smoke": "Errore: Sensore di fumo",
+                    "error_battery": "Errore: Batteria",
+                    "alarm_test": "Allarme: Test",
+                    "alarm_temperature_high": "Allarme: Alta temperatura",
+                    "alarm_smoke": "Allarme: Fumo",
+                    "ok": "Ok"
+                }
+            },
+            "mts200_overheat_warning": {
+                "state": {
+                    "ok": "Ok",
+                    "overheating": "Surriscaldamento",
+                    "disconnected": "Disconnesso"
+                }
+            }
+        }
+    },
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "Nessun dispositivo trovato",
             "single_instance_allowed": "Già configurato. E' possibile aggiungere solo una configurazione."
@@ -13,6 +51,14 @@
             "invalid_auth": "Errore di autenticazione"
         },
         "step": {
+            "user": {
+                "title": "Scegli un'opzione",
+                "description": "",
+                "menu_options": {
+                    "profile": "Connetti un account Meross",
+                    "device": "Configura un dispositivo manualmente"
+                }
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configura le impostazioni globali di Meross LAN",
@@ -31,13 +77,13 @@
                 "title": "Errore chiave",
                 "description": "La chiave fornita non è valida. Scegli un opzione",
                 "menu_options": {
-                    "cloudkey": "Recupera dall'account Meross",
+                    "profile": "Recupera dall'account Meross",
                     "device": "Riprova"
                 }
             },
-            "cloudkey": {
-                "title": "Recupera chiave dispositivo",
-                "description": "Accedi al tuo account Meross per recuperare",
+            "profile": {
+                "title": "Profilo Meross cloud",
+                "description": "Registra e connetti un profilo Meross",
                 "data": {
                     "username": "Meross login",
                     "password": "Meross password"
@@ -57,7 +103,8 @@
             "already_configured_device": "Il dispositivo è già configurato",
             "cannot_connect": "Impossibile connettersi",
             "invalid_auth": "Errore di autenticazione",
-            "device_id_mismatch": "UUID non corrispondente: il dispositivo non è lo stesso"
+            "device_id_mismatch": "UUID non corrispondente: il dispositivo non è lo stesso",
+            "cloud_profile_mismatch": "Il dispositivo non appartiene al profilo cloud"
         },
         "step": {
             "hub": {
@@ -86,13 +133,13 @@
                 "title": "Errore chiave",
                 "description": "La chiave fornita non è valida. Scegli un opzione",
                 "menu_options": {
-                    "cloudkey": "Recupera dall'account Meross",
+                    "profile": "Recupera dall'account Meross",
                     "device": "Riprova"
                 }
             },
-            "cloudkey": {
-                "title": "Recupera chiave dispositivo",
-                "description": "Accedi al tuo account Meross per recuperare",
+            "profile": {
+                "title": "Profilo Meross cloud",
+                "description": "Registra e connetti un profilo Meross",
                 "data": {
                     "username": "Meross login",
                     "password": "Meross password"

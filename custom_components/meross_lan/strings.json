@@ -1,6 +1,6 @@
 {
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "No devices found on the network",
             "single_instance_allowed": "Already configured. Only a single configuration possible."
@@ -13,6 +13,14 @@
             "invalid_auth": "Authentication error"
         },
         "step": {
+            "user": {
+                "title": "Choose option",
+                "description": "",
+                "menu_options": {
+                    "profile": "Register a Meross cloud profile",
+                    "device": "Manually configure a device"
+                }
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configure global Meross LAN settings",
@@ -31,13 +39,13 @@
                 "title": "Device key error",
                 "description": "The provided key is wrong. Choose an option",
                 "menu_options": {
-                    "cloudkey": "Retrieve from Meross cloud",
+                    "profile": "Retrieve from Meross cloud",
                     "device": "Retry"
                 }
             },
-            "cloudkey": {
-                "title": "Device key retrieve",
-                "description": "Login to your Meross account to retrieve the device key",
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
                 "data": {
                     "username": "Meross login",
                     "password": "Meross password"
@@ -85,13 +93,13 @@
                 "title": "Device key error",
                 "description": "The provided key is wrong. Choose an option",
                 "menu_options": {
-                    "cloudkey": "Retrieve from Meross cloud",
+                    "profile": "Retrieve from Meross cloud",
                     "device": "Retry"
                 }
             },
-            "cloudkey": {
-                "title": "Device key retrieve",
-                "description": "Login to your Meross account to retrieve the device key",
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
                 "data": {
                     "username": "Meross login",
                     "password": "Meross password"

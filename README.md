@@ -5,11 +5,14 @@
 
 # Meross LAN
 
-This [homeassistant](https://www.home-assistant.io/) integration allows you to control your *Meross* devices all over your LAN without any need for cloud connectivity. It supports communication through your own MQTT broker (or any other configured through the homeassistant mqtt integration) or directly via HTTP.
+This [homeassistant](https://www.home-assistant.io/) integration allows you to control your *Meross* devices in a very flexible way. Despite it's name (at the origin this was a project to only support local LAN connectivity) it now supports these communication layers:
+- direct HTTP connection (in LAN) for any reachable device
+- local MQTT broker (the one configured in HA)
+- Meross cloud MQTT brokers
 
 These are the two main use cases:
-- Keep your devices paired with the offical Meross App (and cloud infrastructure) and communicate directly to them via HTTP. This will allow for greater flexibility and less configuration pain since you don't have to setup and configure the MQTT pairing of these devices. The integration will just 'side-communicate' over HTTP to the devices and poll them for status updates. (This is different from https://github.com/albertogeniola/meross-homeassistant since this componenent does not talk to the Meross Cloud service so it doesn't use credentials - except for key retrieval - nor it suffers from throttling or banning)
-- Bind your devices to your 'private' MQTT broker so to completely disconnect them from the Meross infrastructure and interact only locally (The procedure for MQTT binding is here: https://github.com/bytespider/Meross/wiki/MQTT or better, you can use the [pairer app](https://play.google.com/store/apps/details?id=com.albertogeniola.merossconf) from @albertogeniola at https://github.com/albertogeniola/meross_pair)
+- Keep your devices paired with the offical Meross App (and cloud infrastructure) and communicate directly to them via HTTP. This will allow for greater flexibility and less configuration pain since you don't have to setup and configure the MQTT pairing of these devices. The integration will just 'side-communicate' over HTTP (or cloud MQTT) to the devices and poll them for status updates. Starting with release `Cloudy (4.0.0)` it is also able to communicate over the original Meross cloud account infrastructure by using the 'public' Meross MQTT brokers.
+- Bind your devices to your 'private' MQTT broker so to completely disconnect them from the Meross infrastructure and interact only locally (The procedure for MQTT binding is here: https://github.com/bytespider/Meross/wiki/MQTT or better, you can use the [pairer app](https://play.google.com/store/apps/details?id=com.albertogeniola.merossconf) from @albertogeniola at https://github.com/albertogeniola/meross_pair). Private MQTT binding could prove to be a pain though (see the [discussion here](https://github.com/krahabb/meross_lan/discussions/63))
 
 HAVE FUN! 😎
 
@@ -32,16 +35,20 @@ Restart HA to let it play.
 
 ## Setup
 
-Once installed and restarted, your Meross devices should be automatically discovered by the 'dhcp' integration and will then pop-up in your integrations panel ready to be configured (the exact timing will depend since the dhcp discovery has different strategies but a simple boot of the device should be sufficient even if not necessary).
+Once installed and restarted, your Meross devices should be automatically discovered by the HA `dhcp` integration and will then pop-up in your integrations panel ready to be configured.
 
 > ℹ️ If device(s) are not automatically discovered, try powering them off for 10s and then powering them back on. A notification that new devices have been discovered should appear in `notifications`.
 
-If you are using the 'MQTT way' devices will be automatically discovered when they publish any MQTT message topic.
-If you set a non-empty device key when binding your devices to your private broker, you must configure it in the 'MQTT Hub' configuration entry (this will popup too in the discovered integrations). Once the mqtt hub entry is properly set with the correct key, devices should be automatically discovered
+> ℹ️ To manually add your devices or Meross cloud account go to `HA->Settings->Devices & Services->Add Integration->Meross LAN`
+Here, choose what's appropriate and follow up
+
+Depending on how your devices are configured you should proceed as follows:
+- Devices are paired to the Meross cloud account (this is the common use case when you buy and configure the devices with the manufacturer app): In this scenario your devices should be automatically discovered by dhcp or you can manually add their configuration. Configuring a Meross cloud account greatly simplifies the configuration of devices since this will automatically download all of the needed informations from your Meross account. You can still manually add your devices without the cloud account login but keep in mind you'd need the 'device key' which is a secret stored in your Meross profile.
+- Devices are 'privately MQTT binded' to the same HA MQTT configured broker: Here, devices are only automatically discovered as soon as they publish a new message to the broker. You would then need to enter the same device key you have configured when tinkering with the device re-bind config tools to complete the configuration.
 
 You can also manually add your device by adding a new integration entry and providing the host address and device key (repeat this for every device to add).
 
-When configuring a device entry you'll have the option to set:
+When manually configuring a device entry you'll have the option to set:
 - host address: this is available when manually adding a device or when a device is discovered via DHCP: provide the ip address or a valid network host name. When you set the ip address, try to ensure it is 'stable' and not changing between re-boots else the integration could 'loose' access to the device. Starting from version 2.7.0 any dynamic ip change should be recognized by meross_lan so you don't have to manually fix this anymore.
 - device key: this is used to sign messages according to the official Meross protocol behaviour. This should be prefilled with a known key from other devices if you already configured any before. If you enter a wrong or empty key a menu will ask you if you want to manually retry entering a different key or if you want to recover the key from your Meross account. If your device is still paired to the Meross App, this is the way to recover the device key since it is managed by the Meross App and saved in your cloud profile.
 
@@ -74,6 +81,8 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MSH300](https://www.meross.com/Detail/50/Smart%20Wi-Fi%20Hub): Smart WiFi Hub
 - Sensors
   - [MS100](https://www.meross.com/Detail/46/Smart%20Temperature%20and%20Humidity%20Sensor): Smart Temperature/Humidity Sensor
+  - [MS200](https://www.meross.com/en-gc/smart-sensor/smart-door-and-window-sensor/138): Smart Door/Window Sensor
+  - [GS559AH](https://www.meross.com/en-gc/smart-sensor/homekit-smoke-detector/120): Smart Smoke Sensor
 - Thermostats
   - [MTS100](https://www.meross.com/Detail/30/Smart%20Thermostat%20Valve): Smart Thermostat Valve
   - [MTS200](https://www.meross.com/Detail/116/Smart%20Wi-Fi%20Thermostat): Smart Wifi Thermostat
@@ -88,14 +97,12 @@ Most of this software has been developed and tested on my owned Meross devices w
 
 ## Features
 
+See the [wiki](https://github.com/krahabb/meross_lan/wiki/Meross-LAN-details) for some behavior/implementation details on specific devices
+
 The component exposes the basic functionality of the underlying device (toggle on/off, dimm, report consumption through sensors) without any other effort. It should be able to detect if the device goes offline suddenly by using a periodic heartbeat.
 It also features an automatic protocol switching capability so, if you have your MQTT setup and your broker dies or whatever, the integration will try to fallback to HTTP communication and keep the device available returning automatically to MQTT mode as soon as the MQTT infrastructure returns online. The same works for HTTP mode: when the device is not reachable it will try to use MQTT (provided it is available!). This feature is enabled by default for every new configuration entry and you can control it by setting the 'Protocol' field in the configration panel of the integration: setting 'AUTO' (or empty) will do the automatic switch. Setting any fixed protocol 'MQTT' or 'HTTP' will force the use of that option (useful if you're in trouble and want to isolate or investigate inconsistent behaviours). I'd say: leave it empty or 'AUTO' it works good in my tests.
 
 If you have the MSH300 Hub working with this integration, every new subdevice (thermostat or sensor) can be automatically discovered once the subdevice is paired with the hub. When the hub is configured in this integration you don't need to switch back and forth to/from the Meross app in order to 'bind' new devices: just pair the thermostat or sensor to the hub by using the subdevice pairing procedure (fast double press on the hub).
-
-DND mode (status/presence light) is supported through a light entity. This entity is marked as a 'configuration entity' in HA terms and is by default visible in the device page in HA UI. If you want to access it in your lovelace cards you have to manually add it. When the device is in 'do-not-disturb' mode the light will be switched off so the device doesn't pollute your home environment!
-
-Wifi signal strength is available for every meross wifi device and could be accessed on the device page. It is refreshed every 5 minutes.
 
 In general, many device configuration options available in Meross app are not supported in meross_lan though some are. As an example, the thermostats preset temperatures (for heat, cool, eco/away) are accessible in HA/meross_lan exactly as if you were to set them manually on the device or via the app. These, and any other supported configuration options, are available as configuration entities (so they're not added to the default lovelace dashboard) and you can access them by going to the relevant device page in HA Configuration -> Devices
 

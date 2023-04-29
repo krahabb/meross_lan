@@ -1,6 +1,44 @@
 {
+    "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Vypnuto",
+                            "custom": "Ruční",
+                            "comfort": "Komfort (teplo)",
+                            "sleep": "Spánek (v pohodě)",
+                            "away": "Pryč (ekonomika)",
+                            "auto": "Automatický"
+                        }
+                    }
+                }
+            }
+        },
+        "sensor": {
+            "smoke_alarm_status": {
+                "state": {
+                    "error_temperature": "Chyba: Snímač teploty",
+                    "error_smoke": "Chyba: Snímač kouře",
+                    "error_battery": "Chyba: Baterie",
+                    "alarm_test": "Alarm: Test",
+                    "alarm_temperature_high": "Alarm: Vysoká teplota",
+                    "alarm_smoke": "Alarm: Kouř",
+                    "ok": "Žádné problémy"
+                }
+            },
+            "mts200_overheat_warning": {
+                "state": {
+                    "ok": "Ok",
+                    "overheating": "Přehřívání",
+                    "disconnected": "Odpojeno"
+                }
+            }
+        }
+    },
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "V síti nebylo nalezeno žádné zařízení",
             "single_instance_allowed": "Konfigurace již existuje. Více konfigurací není podporováno."
@@ -13,6 +51,14 @@
             "invalid_auth": "Ověření selhalo"
         },
         "step": {
+            "user": {
+                "title": "Choose option",
+                "description": "",
+                "menu_options": {
+                    "profile": "Register a Meross cloud profile",
+                    "device": "Manually configure a device"
+                }
+            },
             "hub": {
                 "title": "Centrum Meross LAN MQTT",
                 "description": "Globální konfigurace nastavení Meross LAN",
@@ -32,11 +78,11 @@
                 "title": "Chyba klíče zařízení",
                 "description": "Zadaný klíč je nesprávný. Vyberte možnost",
                 "menu_options": {
-                    "cloudkey": "Načíst z cloudu Meross",
+                    "profile": "Načíst z cloudu Meross",
                     "device": "Zkuste to znovu"
                 }
             },
-            "cloudkey": {
+            "profile": {
                 "title": "Obnova klíče zařízení",
                 "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
                 "data": {
@@ -58,7 +104,8 @@
             "already_configured_device": "Zařízení již bylo konfigurováno",
             "cannot_connect": "Pokus o připojení se nezdařil",
             "invalid_auth": "Ověření selhalo",
-            "device_id_mismatch": "Neshoda UUID zařízení: zařízení není stejné"
+            "device_id_mismatch": "Neshoda UUID zařízení: zařízení není stejné",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
         },
         "step": {
             "hub": {
@@ -75,6 +122,7 @@
                     "host": "Adresa hostitele zařízení",
                     "key": "Klíč zařízení",
                     "protocol": "Protokol připojení",
+                    "profile_id": "Cloudový profil",
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
                     "trace": "Zapnout ladění zařízení",
@@ -87,11 +135,11 @@
                 "title": "Chyba klíče zařízení",
                 "description": "Zadaný klíč je nesprávný. Vyberte možnost",
                 "menu_options": {
-                    "cloudkey": "Načíst z cloudu Meross",
+                    "profile": "Načíst z cloudu Meross",
                     "device": "Zkuste to znovu"
                 }
             },
-            "cloudkey": {
+            "profile": {
                 "title": "Obnova klíče zařízení",
                 "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
                 "data": {

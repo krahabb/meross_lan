@@ -24,24 +24,27 @@ combine_as_imports = true
 [tool.pylint."MESSAGES CONTROL"]
 ################################################################################
 disable = [
-    "bare-except",
     "broad-except",
+    "broad-exception-raised",
     "global-statement",
     "import-outside-toplevel",
     "invalid-name",
     "missing-class-docstring",
     "missing-function-docstring",
+    "protected-access",
 ]
-# .vscode settings.json
-#        "--disable=missing-function-docstring",
-#        "--disable=missing-class-docstring",
-#        "--disable=invalid-name",
-#        "--disable=bare-except",
-#        "--disable=broad-except"
 
 ################################################################################
 [tool.pytest.ini_options]
 ################################################################################
+python_files = [
+    "test_*.py",
+    "profile_*.py",
+]
+python_functions = [
+    "test_*",
+    "profile_*",
+]
 testpaths = [
     "tests",
 ]

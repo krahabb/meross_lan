@@ -1,14 +1,39 @@
 """"""
 from __future__ import annotations
 
+from random import randint
 import typing
 
 from custom_components.meross_lan.merossclient import const as mc, get_element_by_key
 
-from ..emulator import MerossEmulator
+from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
 class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+    def __init__(self, descriptor: MerossEmulatorDescriptor, key):
+        super().__init__(descriptor, key)
+        self.payload_thermostat_overheat = descriptor.namespaces[
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
+        ]
+
+    def _GET_Appliance_Control_Thermostat_Overheat(self, header, payload):
+        """
+        {
+            "overheat": [
+                {
+                    "channel":0,
+                    "warning":0,
+                    ...
+                }
+            ]
+        }
+        """
+        for p_payload_channel in payload[mc.KEY_OVERHEAT]:
+            channel = p_payload_channel[mc.KEY_CHANNEL]
+            p_overheat = self.payload_thermostat_overheat[mc.KEY_OVERHEAT][channel]
+            p_overheat[mc.KEY_WARNING] = randint(0, 2)
+        return mc.METHOD_GETACK, self.payload_thermostat_overheat
+
     def _SET_Appliance_Control_Thermostat_Mode(self, header, payload):
         p_digest = self.descriptor.digest
         p_digest_mode_list = p_digest[mc.KEY_THERMOSTAT][mc.KEY_MODE]

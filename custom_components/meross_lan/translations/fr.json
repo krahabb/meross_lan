@@ -1,103 +1,151 @@
 {
-  "config": {
-    "flow_title": "Meross {device_type}",
-    "abort": {
-      "no_devices_found": "Pas d'appareils découverts sur le réseau.",
-      "single_instance_allowed": "Déjà configuré. Une seule configuration possible."
+    "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Désactivé",
+                            "custom": "Manuel",
+                            "comfort": "Confort (chaleur)",
+                            "sleep": "Sommeil (froid)",
+                            "away": "Absent (économique)",
+                            "auto": "Auto"
+                        }
+                    }
+                }
+            }
+        },
+        "sensor": {
+            "smoke_alarm_status": {
+                "state": {
+                    "error_temperature": "Erreur : Capteur de température",
+                    "error_smoke": "Erreur : Capteur de fumée",
+                    "error_battery": "Erreur : Batterie",
+                    "alarm_test": "Alarme : Tester",
+                    "alarm_temperature_high": "Alarme : Haute température",
+                    "alarm_smoke": "Alarme : Fumée",
+                    "ok": "Pas d'issues"
+                }
+            },
+            "mts200_overheat_warning": {
+                "state": {
+                    "ok": "Ok",
+                    "overheating": "Surchauffe",
+                    "disconnected": "Débranché"
+                }
+            }
+        }
     },
-    "error": {
-      "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
-      "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
-      "already_configured_device": "Déjà configuré. Un seul appareil possible.",
-      "cannot_connect": "Pas de connect",
-      "invalid_auth": "Authentication"
+    "config": {
+        "flow_title": "{name}",
+        "abort": {
+            "no_devices_found": "Pas d'appareils découverts sur le réseau.",
+            "single_instance_allowed": "Déjà configuré. Une seule configuration possible."
+        },
+        "error": {
+            "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
+            "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
+            "already_configured_device": "Déjà configuré. Un seul appareil possible.",
+            "cannot_connect": "Pas de connect",
+            "invalid_auth": "Authentication"
+        },
+        "step": {
+            "user": {
+                "title": "Choose option",
+                "description": "",
+                "menu_options": {
+                    "profile": "Register a Meross cloud profile",
+                    "device": "Manually configure a device"
+                }
+            },
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Configurer les paramètres LAN globaux de Meross",
+                "data": {
+                    "key": "Clé"
+                }
+            },
+            "device": {
+                "description": "Découvrir l'appareil\nType: {device_type}\nUUID: {device_id}",
+                "data": {
+                    "host": "Adresse",
+                    "key": "Clé"
+                }
+            },
+            "keyerror": {
+                "title": "Erreur de clé de périphérique",
+                "description": "La clé fournie est erronée. Choisis une option",
+                "menu_options": {
+                    "profile": "Récupérer depuis le cloud Meross",
+                    "device": "Retenter"
+                }
+            },
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Connectez-vous à votre compte Meross",
+                "data": {
+                    "username": "Nom d'utilisateur Meross",
+                    "password": "Mot de passe Meross"
+                }
+            },
+            "finalize": {
+                "title": "Configuration de l'appareil",
+                "description": "Type: {device_type}\nUUID: {device_id}",
+                "data": {}
+            }
+        }
     },
-    "step": {
-      "hub": {
-        "title": "Meross LAN MQTT Hub",
-        "description": "Configurer les paramètres LAN globaux de Meross",
-        "data": {
-          "key": "Clé"
+    "options": {
+        "error": {
+            "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
+            "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
+            "already_configured_device": "Déjà configuré. Un seul appareil possible.",
+            "cannot_connect": "Pas de connect",
+            "invalid_auth": "Authentication",
+            "device_id_mismatch": "Non-concordance de l'UUID: l'appareil n'est pas le même",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
+        },
+        "step": {
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Configurer les paramètres LAN globaux de Meross",
+                "data": {
+                    "key": "Clé"
+                }
+            },
+            "device": {
+                "title": "Configuration de l'appareil",
+                "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}",
+                "data": {
+                    "host": "Adresse",
+                    "key": "Clé",
+                    "protocol": "Protocole de connexion",
+                    "profile_id": "Profil Cloud",
+                    "polling_period": "Période de requête",
+                    "timezone": "Fuseau horaire de l'appareil",
+                    "trace": "Activer le traçage de l'appareil",
+                    "trace_timeout": "Debug tracing duration (sec)",
+                    "all": "Appliance.System.All",
+                    "ability": "Appliance.System.Ability"
+                }
+            },
+            "keyerror": {
+                "title": "Erreur de clé de périphérique",
+                "description": "La clé fournie est erronée. Choisis une option",
+                "menu_options": {
+                    "profile": "Récupérer depuis le cloud Meross",
+                    "device": "Retenter"
+                }
+            },
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Connectez-vous à votre compte Meross",
+                "data": {
+                    "username": "Nom d'utilisateur Meross",
+                    "password": "Mot de passe Meross"
+                }
+            }
         }
-      },
-      "device": {
-        "description": "Découvrir l'appareil\nType: {device_type}\nUUID: {device_id}",
-        "data": {
-          "host": "Adresse",
-          "key": "Clé"
-        }
-      },
-      "keyerror": {
-        "title": "Erreur de clé de périphérique",
-        "description": "La clé fournie est erronée. Choisis une option",
-        "menu_options": {
-          "cloudkey": "Récupérer depuis le cloud Meross",
-          "device": "Retenter"
-        }
-      },
-      "cloudkey": {
-        "title": "Récupérer la clé de l'appareil",
-        "description": "Connectez-vous à votre compte Meross pour récupérer la clé",
-        "data": {
-          "username": "Nom d'utilisateur Meross",
-          "password": "Mot de passe Meross"
-        }
-      },
-      "finalize": {
-        "title": "Configuration de l'appareil",
-        "description": "Type: {device_type}\nUUID: {device_id}",
-        "data": {}
-      }
     }
-  },
-  "options": {
-    "error": {
-      "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
-      "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
-      "already_configured_device": "Déjà configuré. Un seul appareil possible.",
-      "cannot_connect": "Pas de connect",
-      "invalid_auth": "Authentication",
-      "device_id_mismatch": "Non-concordance de l'UUID: l'appareil n'est pas le même"
-    },
-    "step": {
-      "hub": {
-        "title": "Meross LAN MQTT Hub",
-        "description": "Configurer les paramètres LAN globaux de Meross",
-        "data": {
-          "key": "Clé"
-        }
-      },
-      "device": {
-        "title": "Configuration de l'appareil",
-        "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}",
-        "data": {
-          "host": "Adresse",
-          "key": "Clé",
-          "protocol": "Protocole de connexion",
-          "polling_period": "Période de requête",
-          "timezone": "Fuseau horaire de l'appareil",
-          "trace": "Activer le traçage de l'appareil",
-          "trace_timeout": "Debug tracing duration (sec)",
-          "all": "Appliance.System.All",
-          "ability": "Appliance.System.Ability"
-        }
-      },
-      "keyerror": {
-        "title": "Erreur de clé de périphérique",
-        "description": "La clé fournie est erronée. Choisis une option",
-        "menu_options": {
-          "cloudkey": "Récupérer depuis le cloud Meross",
-          "device": "Retenter"
-        }
-      },
-      "cloudkey": {
-        "title": "Récupérer la clé de l'appareil",
-        "description": "Connectez-vous à votre compte Meross pour récupérer la clé",
-        "data": {
-          "username": "Nom d'utilisateur Meross",
-          "password": "Mot de passe Meross"
-        }
-      }
-    }
-  }
 }

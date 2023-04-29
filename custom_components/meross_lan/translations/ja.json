@@ -1,6 +1,44 @@
 {
+    "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "オフ",
+                            "custom": "マニュアル",
+                            "comfort": "快適（熱）",
+                            "sleep": "スリープ（クール）",
+                            "away": "アウェイ（エコノミー）",
+                            "auto": "自動"
+                        }
+                    }
+                }
+            }
+        },
+        "sensor": {
+            "smoke_alarm_status": {
+                "state": {
+                    "error_temperature": "エラー: 温度センサー",
+                    "error_smoke": "エラー: 煙センサー",
+                    "error_battery": "エラー: バッテリー",
+                    "alarm_test": "アラーム: テスト",
+                    "alarm_temperature_high": "アラーム: 高温",
+                    "alarm_smoke": "アラーム: 煙",
+                    "ok": "問題ありません"
+                }
+            },
+            "mts200_overheat_warning": {
+                "state": {
+                    "ok": "良い",
+                    "overheating": "過熱",
+                    "disconnected": "切断された"
+                }
+            }
+        }
+    },
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "ネットワーク上でデバイスが見つかりませんでした。",
             "single_instance_allowed": "すでに構成済みです。 構成は一つだけ可能です。"
@@ -13,6 +51,14 @@
             "invalid_auth": "認証エラー"
         },
         "step": {
+            "user": {
+                "title": "Choose option",
+                "description": "",
+                "menu_options": {
+                    "profile": "Register a Meross cloud profile",
+                    "device": "Manually configure a device"
+                }
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Meross LAN のグローバル設定",
@@ -31,13 +77,13 @@
                 "title": "デバイスキーエラー",
                 "description": "指定されたキーが間違っています。オプションを選択",
                 "menu_options": {
-                    "cloudkey": "Merossクラウドから取得",
+                    "profile": "Merossクラウドから取得",
                     "device": "リトライ"
                 }
             },
-            "cloudkey": {
-                "title": "デバイスキーの取得",
-                "description": "Merossアカウントにログインして、デバイスキーを取得します",
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
                 "data": {
                     "username": "メロスログイン",
                     "password": "メロスパスワード"
@@ -57,7 +103,8 @@
             "already_configured_device": "可能なデバイスは1つだけ",
             "cannot_connect": "接続できません",
             "invalid_auth": "認証エラー",
-            "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません"
+            "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
         },
         "step": {
             "hub": {
@@ -74,6 +121,7 @@
                     "host": "デバイスのホストアドレス",
                     "key": "デバイスキー",
                     "protocol": "接続プロトコル",
+                    "profile_id": "クラウド プロファイル",
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
                     "trace": "デバイスのデバグトレースを開始する",
@@ -86,13 +134,13 @@
                 "title": "デバイスキーエラー",
                 "description": "指定されたキーが間違っています。オプションを選択",
                 "menu_options": {
-                    "cloudkey": "Merossクラウドから取得",
+                    "profile": "Merossクラウドから取得",
                     "device": "リトライ"
                 }
             },
-            "cloudkey": {
-                "title": "デバイスキーの取得",
-                "description": "Merossアカウントにログインして、デバイスキーを取得します",
+            "profile": {
+                "title": "Meross cloud profile",
+                "description": "Register and connect to a Meross account",
                 "data": {
                     "username": "メロスログイン",
                     "password": "メロスパスワード"

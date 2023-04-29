@@ -7,12 +7,13 @@
       "type": "python",
       "request": "launch",
       "module": "aiohttp.web",
+      "justMyCode": false,
       "args": [
         "-H",
         "127.0.0.1",
         "-P",
         "40000",
-        "custom_components.meross_lan.emulator:run",
+        "emulator:run",
         "emulator_traces",
         "-K pippo"
         //"-U 01234567890123456789012345678901"
@@ -48,12 +49,27 @@
       ]
     },
     {
-      "name": "Python: Debug Tests",
+      "name": "Debug Tests",
       "type": "python",
       "request": "launch",
       "program": "${file}",
-      "purpose": ["debug-test"],
+      "purpose": [
+        "debug-test"
+      ],
+      "env": {
+        "PYTEST_ADDOPTS": "--no-cov"
+      },
       "justMyCode": false
+    },
+    {
+      "name": "Coverage",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "--cov=custom_components/meross_lan",
+        "--cov-report=html:htmlcov",
+      ],
     }
   ]
 }

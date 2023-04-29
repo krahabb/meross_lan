@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from random import randint
-from time import gmtime, mktime
+from time import gmtime
 import typing
 
 from custom_components.meross_lan.merossclient import const as mc
 
-from ..emulator import MerossEmulator, MerossEmulatorDescriptor
+from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
 class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
@@ -82,7 +82,7 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
         ]
         p_consumptionx: list = self.payload_consumptionx[mc.KEY_CONSUMPTIONX]
-        if (consumptionx_len := len(p_consumptionx)) == 0:
+        if (len(p_consumptionx)) == 0:
             p_consumptionx.append(
                 {
                     mc.KEY_DATE: "1970-01-01",
@@ -99,7 +99,7 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             self.payload_consumptionx[mc.KEY_CONSUMPTIONX] = p_consumptionx
 
         self.consumptionx = p_consumptionx
-        self._epoch_prev = self.epoch
+        self._epoch_prev = 0
         self._power_prev = None
         self._energy_fraction = 0.0  # in Wh
         # REMOVE
@@ -119,11 +119,7 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         }
         """
         # energy will be reset every time we update our consumptionx array
-        if self._power_prev is None:
-            self._energy_fraction += (
-                self.power * (self.epoch - self._epoch_prev) / 3600000
-            )
-        else:
+        if self._power_prev is not None:
             self._energy_fraction += (
                 (self.power + self._power_prev) * (self.epoch - self._epoch_prev) / 7200000
             )
@@ -139,7 +135,7 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(self.epoch)
         ss = min(ss, 59)  # clamp out leap seconds if the platform has them
         devtime = datetime(y, m, d, hh, mm, ss, 0, timezone.utc)
-        if (tzinfo := self.tzinfo) is not None:  # REMOVE
+        if (tzinfo := self.tzinfo) is not None:
             devtime = devtime.astimezone(tzinfo)
 
         date_value = "{:04d}-{:02d}-{:02d}".format(

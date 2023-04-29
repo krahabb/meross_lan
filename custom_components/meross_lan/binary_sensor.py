@@ -1,26 +1,33 @@
 from __future__ import annotations
+
 import typing
 
-from homeassistant.components.binary_sensor import (
-    DOMAIN as PLATFORM_BINARY_SENSOR,
-    BinarySensorEntity,
-    DEVICE_CLASS_WINDOW,
-    DEVICE_CLASS_PROBLEM,
-)
+from homeassistant.components import binary_sensor
 
 from . import meross_entity as me
 
 if typing.TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+
+
+try:
+    BinarySensorDeviceClass = binary_sensor.BinarySensorDeviceClass  # type: ignore
+except Exception:
+    from .helpers import StrEnum
+
+    class BinarySensorDeviceClass(StrEnum):
+        PROBLEM = "problem"
+        WINDOW = "window"
+        CONNECTIVITY = "connectivity"
 
 
 async def async_setup_entry(
-    hass: 'HomeAssistant', config_entry: 'ConfigEntry', async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
-    me.platform_setup_entry(hass, config_entry, async_add_devices, PLATFORM_BINARY_SENSOR)
+    me.platform_setup_entry(hass, config_entry, async_add_devices, binary_sensor.DOMAIN)
 
 
-class MLBinarySensor(me.MerossEntity, BinarySensorEntity):
-
-    PLATFORM = PLATFORM_BINARY_SENSOR
+class MLBinarySensor(me.MerossEntity, binary_sensor.BinarySensorEntity):
+    PLATFORM = binary_sensor.DOMAIN
+    DeviceClass = BinarySensorDeviceClass

@@ -1,6 +1,44 @@
 {
+    "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Aus",
+                            "custom": "Manuell",
+                            "comfort": "Komfort (wärme)",
+                            "sleep": "Schlaf (kühl)",
+                            "away": "Abwesend (wirtschaft)",
+                            "auto": "Automatisch"
+                        }
+                    }
+                }
+            }
+        },
+        "sensor": {
+            "smoke_alarm_status": {
+                "state": {
+                    "error_temperature": "Fehler: Temperatursensor",
+                    "error_smoke": "Fehler: Rauchsensor",
+                    "error_battery": "Fehler: Batterie",
+                    "alarm_test": "Wecker: Test",
+                    "alarm_temperature_high": "Alarm: Hohe Temperatur",
+                    "alarm_smoke": "Alarm: Rauch",
+                    "ok": "Keine Probleme"
+                }
+            },
+            "mts200_overheat_warning": {
+                "state": {
+                    "ok": "Ok",
+                    "overheating": "Überhitzung",
+                    "disconnected": "Getrennt"
+                }
+            }
+        }
+    },
     "config": {
-        "flow_title": "Meross {device_type}",
+        "flow_title": "{name}",
         "abort": {
             "no_devices_found": "Keine Geräte im Netzwerk gefunden",
             "single_instance_allowed": "Das Gerät ist bereits vorhanden. Jedes Gerät kann nur ein mal konfiguriert werden."
@@ -13,6 +51,14 @@
             "invalid_auth": "Fehlerhafte Zugangsdaten"
         },
         "step": {
+            "user": {
+                "title": "Choose option",
+                "description": "",
+                "menu_options": {
+                    "profile": "Register a Meross cloud profile",
+                    "device": "Manually configure a device"
+                }
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Allgemeine Meross LAN Einstellungen",
@@ -31,11 +77,11 @@
                 "title": "Geräteschlüsselfehler",
                 "description": "Der bereitgestellte Schlüssel ist falsch. Wähle eine Option",
                 "menu_options": {
-                    "cloudkey": "Aus der Meross-Cloud abrufen",
+                    "profile": "Aus der Meross-Cloud abrufen",
                     "device": "Wiederholen"
                 }
             },
-            "cloudkey": {
+            "profile": {
                 "title": "Geräteschlüssel übertragen",
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {
@@ -57,7 +103,8 @@
             "already_configured_device": "Das Gerät ist bereits vorhanden",
             "cannot_connect": "Verbindung nicht möglich",
             "invalid_auth": "Fehlerhafte Zugangsdaten",
-            "device_id_mismatch": "Nicht übereinstimmende Geräte-UUID: Das Gerät ist nicht dasselbe"
+            "device_id_mismatch": "Nicht übereinstimmende Geräte-UUID: Das Gerät ist nicht dasselbe",
+            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
         },
         "step": {
             "hub": {
@@ -74,6 +121,7 @@
                     "host": "IP-Adresse des Geräts",
                     "key": "Geräteschlüssel",
                     "protocol": "Verbindungsart",
+                    "profile_id": "Cloud-Profil",
                     "polling_period": "Abfragerate",
                     "timezone": "Gerätezeitzone",
                     "trace": "Debugmodus aktivieren",
@@ -86,11 +134,11 @@
                 "title": "Geräteschlüsselfehler",
                 "description": "Der bereitgestellte Schlüssel ist falsch. Wähle eine Option",
                 "menu_options": {
-                    "cloudkey": "Aus der Meross-Cloud abrufen",
+                    "profile": "Aus der Meross-Cloud abrufen",
                     "device": "Wiederholen"
                 }
             },
-            "cloudkey": {
+            "profile": {
                 "title": "Geräteschlüssel übertragen",
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {
