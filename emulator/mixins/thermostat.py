@@ -12,9 +12,19 @@ from .. import MerossEmulator, MerossEmulatorDescriptor
 class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     def __init__(self, descriptor: MerossEmulatorDescriptor, key):
         super().__init__(descriptor, key)
-        self.payload_thermostat_overheat = descriptor.namespaces[
+        # ensure (despite our trace content..) the mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
+        # list is in place
+        self._thermostat_overheat: list[dict[str, object]] = descriptor.namespaces[
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
-        ]
+        ][mc.KEY_OVERHEAT]
+        for p_digest_thermostat_mode in descriptor.digest[mc.KEY_THERMOSTAT][
+            mc.KEY_MODE
+        ]:
+            channel = p_digest_thermostat_mode[mc.KEY_CHANNEL]
+            try:
+                get_element_by_key(self._thermostat_overheat, mc.KEY_CHANNEL, channel)
+            except Exception:
+                self._thermostat_overheat.append({mc.KEY_CHANNEL: channel})
 
     def _GET_Appliance_Control_Thermostat_Overheat(self, header, payload):
         """
@@ -28,11 +38,15 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             ]
         }
         """
+        response_overheat_list = []
         for p_payload_channel in payload[mc.KEY_OVERHEAT]:
             channel = p_payload_channel[mc.KEY_CHANNEL]
-            p_overheat = self.payload_thermostat_overheat[mc.KEY_OVERHEAT][channel]
+            p_overheat = get_element_by_key(
+                self._thermostat_overheat, mc.KEY_CHANNEL, channel
+            )
             p_overheat[mc.KEY_WARNING] = randint(0, 2)
-        return mc.METHOD_GETACK, self.payload_thermostat_overheat
+            response_overheat_list.append(p_overheat)
+        return mc.METHOD_GETACK, {mc.KEY_OVERHEAT: response_overheat_list}
 
     def _SET_Appliance_Control_Thermostat_Mode(self, header, payload):
         p_digest = self.descriptor.digest

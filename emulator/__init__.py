@@ -331,26 +331,6 @@ class MerossEmulator:
         ]
         return mc.METHOD_SETACK, {}
 
-    def _SET_Appliance_Control_Light(self, header, payload):
-        # need to override basic handler since lights turning on/off is tricky between
-        # various firmwares: some supports onoff in light payload some use the togglex
-        p_light = payload[mc.KEY_LIGHT]
-        p_digest = self.descriptor.digest
-        support_onoff_in_light = mc.KEY_ONOFF in p_digest[mc.KEY_LIGHT]
-        # generally speaking set_light always turns on, unless the payload carries onoff = 0 and
-        # the device is not using togglex
-        if support_onoff_in_light:
-            onoff = p_light.get(mc.KEY_ONOFF, 1)
-            p_light[mc.KEY_ONOFF] = onoff
-        else:
-            onoff = 1
-            p_light.pop(mc.KEY_ONOFF, None)
-        if mc.KEY_TOGGLEX in p_digest:
-            # fixed channel 0..that is..
-            p_digest[mc.KEY_TOGGLEX][0][mc.KEY_ONOFF] = onoff
-        p_digest[mc.KEY_LIGHT].update(p_light)
-        return mc.METHOD_SETACK, {}
-
     def _SET_Appliance_Control_Mp3(self, header, payload):
         if mc.NS_APPLIANCE_CONTROL_MP3 not in self.descriptor.namespaces:
             raise Exception(
@@ -390,6 +370,11 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
         from .mixins.electricity import ConsumptionMixin
 
         mixin_classes.append(ConsumptionMixin)
+
+    if mc.NS_APPLIANCE_CONTROL_LIGHT in descriptor.ability:
+        from .mixins.light import LightMixin
+
+        mixin_classes.append(LightMixin)
 
     mixin_classes.append(MerossEmulator)
     # build a label to cache the set
