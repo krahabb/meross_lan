@@ -300,6 +300,49 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         )
         self.config_entry.add_to_hass(hass)
 
+    async def __aenter__(self):
+        self.time = self._freeze_time.start()
+        self.emulator_context = EmulatorContext(
+            self.emulator, self.aioclient_mock, self.time
+        )
+        self.emulator_context.__enter__()
+
+        @contextlib.contextmanager
+        def _patch_exception_warning(msg: str, *args, **kwargs):
+            try:
+                yield
+            except Exception as exception:
+                # These exceptions are suppresed in 'live' code and
+                # logged as warnings but in tests we want to better see
+                # what's going wrong.
+                # Right now we're strict enough to actually
+                # identify every 'suppressed' exception in real code
+                raise exception
+                if self.device is None:
+                    # at context 'cold start' we still don't have the device instance
+                    raise exception
+                self.device.warning(
+                    f"{exception.__class__.__name__}({str(exception)}) in {msg}",
+                    *args,
+                    **kwargs,
+                )
+
+        self._patch_exception_warning = patch.object(
+            MerossDevice,
+            "exception_warning",
+            side_effect=_patch_exception_warning,
+        )
+        self._mock_exception_warning = self._patch_exception_warning.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        try:
+            await self.async_unload_config_entry()
+        finally:
+            self._patch_exception_warning.stop()
+            self.emulator_context.__exit__(exc_type, exc_value, traceback)
+            self._freeze_time.stop()
+
     async def perform_coldstart(self):
         """
         to be called after setting up a device (context) to actually
@@ -419,21 +462,6 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         self._warp_run = False
         await self._warp_task
         self._warp_task = None
-
-    async def __aenter__(self):
-        self.time = self._freeze_time.start()
-        self._emulator_context = EmulatorContext(
-            self.emulator, self.aioclient_mock, self.time
-        )
-        self._emulator_context.__enter__()
-        return self
-
-    async def __aexit__(self, exc_type, exc_value, traceback):
-        try:
-            await self.async_unload_config_entry()
-        finally:
-            self._emulator_context.__exit__(exc_type, exc_value, traceback)
-            self._freeze_time.stop()
 
 
 class CloudApiMocker(contextlib.AbstractContextManager):
