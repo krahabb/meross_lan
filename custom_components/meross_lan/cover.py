@@ -476,8 +476,9 @@ class GarageMixin(
     number_doorCloseDuration: MLGarageConfigNumber | None = None
 
     def __init__(self, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(descriptor, entry)
         self.garageDoor_config = {}
+        self._polling_payload = []
+        super().__init__(descriptor, entry)
         self.number_signalDuration = MLGarageConfigNumber(
             self, None, mc.KEY_SIGNALDURATION
         )
@@ -489,9 +490,9 @@ class GarageMixin(
                 mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
             ]
         if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in descriptor.ability:
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
-            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG]
+            self.polling_dictionary[mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG] = {
+                mc.KEY_CONFIG: self._polling_payload
+            }
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -501,7 +502,9 @@ class GarageMixin(
         self.number_doorCloseDuration = None
 
     def _init_garageDoor(self, payload: dict):
-        MLGarage(self, payload[mc.KEY_CHANNEL])
+        channel = payload[mc.KEY_CHANNEL]
+        MLGarage(self, channel)
+        self._polling_payload.append({mc.KEY_CHANNEL: channel})
 
     def _handle_Appliance_GarageDoor_State(self, header: dict, payload: dict):
         self._parse__generic(mc.KEY_STATE, payload.get(mc.KEY_STATE))
