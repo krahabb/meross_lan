@@ -51,8 +51,8 @@ class Mts100Climate(MtsClimate):
     }
 
     def __init__(self, subdevice: "MerossSubDevice"):
-        super().__init__(subdevice.hub, subdevice.id, None, None, subdevice)
         self._attr_extra_state_attributes = {}
+        super().__init__(subdevice.hub, subdevice.id, subdevice)
 
     @property
     def scheduleBMode(self):
@@ -188,16 +188,17 @@ class Mts100ScheduleEntry:
 class Mts100Schedule(MLCalendar):
     subdevice: MerossSubDevice
 
-    # ScheduleDict = Dict[str, list] # internal schedule dict type alias
     _schedule: dict[str, list] | None
-    _attr_state: dict[
-        str, list
-    ] | None  # device internal scheduleB representation type hint
+    _attr_state: dict[str, list] | None
+
+    __slots__ = (
+        "climate",
+        "_schedule",
+        "_schedule_unit_time",
+        "_schedule_entry_count",
+    )
 
     def __init__(self, climate: Mts100Climate):
-        super().__init__(
-            climate.device, climate.id, mc.KEY_SCHEDULE, None, climate.subdevice
-        )
         self.climate = climate
         # save a flattened version of the device schedule to ease/optimize CalendarEvent management
         # since the original schedule has a fixed number of contiguous events spanning the day(s) (6 on my MTS100)
@@ -208,21 +209,24 @@ class Mts100Schedule(MLCalendar):
         self._attr_extra_state_attributes = {}
         # get the 'granularity' of the schedule entries i.e. the schedule duration
         # must be a multiple of this time (in minutes)
-        self._scheduleunittime = self.device.descriptor.ability.get(
+        self._schedule_unit_time = climate.device.descriptor.ability.get(
             mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 0)
-        if self._scheduleunittime:
+        if self._schedule_unit_time:
             self._attr_extra_state_attributes[
                 mc.KEY_SCHEDULEUNITTIME
-            ] = self._scheduleunittime
+            ] = self._schedule_unit_time
         else:
-            self._scheduleunittime = (
+            self._schedule_unit_time = (
                 15  # fallback to a reasonable defult for internal calculations
             )
         # number of schedules per day supported by the device. Mines default to 6
         # but we're recovering the value by inspecting the device scheduleB payload.
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
+        super().__init__(
+            climate.device, climate.id, mc.KEY_SCHEDULE, None, climate.subdevice
+        )
 
     @property
     def entity_category(self):
@@ -406,7 +410,7 @@ class Mts100Schedule(MLCalendar):
                 hour=0, minute=0, second=0, microsecond=0
             )
             event_minutes_start = event_start.hour * 60 + event_start.minute
-            event_minutes_start -= event_minutes_start % self._scheduleunittime
+            event_minutes_start -= event_minutes_start % self._schedule_unit_time
             event_day_end = event_day_start + timedelta(days=1)
             if event_end > event_day_end:
                 raise Exception("Events spanning multiple days are not allowed")
@@ -415,15 +419,17 @@ class Mts100Schedule(MLCalendar):
             else:
                 # round up to the next self._scheduleunittime interval
                 event_minutes_end = event_end.hour * 60 + event_end.minute
-                event_minutes_end_remainder = event_minutes_end % self._scheduleunittime
+                event_minutes_end_remainder = (
+                    event_minutes_end % self._schedule_unit_time
+                )
                 if event_minutes_end_remainder:
                     event_minutes_end += (
-                        self._scheduleunittime - event_minutes_end_remainder
+                        self._schedule_unit_time - event_minutes_end_remainder
                     )
             event_minutes_duration = event_minutes_end - event_minutes_start
-            if event_minutes_duration < self._scheduleunittime:
+            if event_minutes_duration < self._schedule_unit_time:
                 raise Exception(
-                    f"Minimum event duration is {self._scheduleunittime} minutes"
+                    f"Minimum event duration is {self._schedule_unit_time} minutes"
                 )
 
             # recognize some basic recurrence scheme: typically the MTS100 has a weekly schedule
@@ -645,7 +651,7 @@ class Mts100Schedule(MLCalendar):
         if schedule := self.schedule:
             payload = {}
             # the time duration step (minimum interval) of the schedule intervals
-            schedule_entry_unittime = self._scheduleunittime
+            schedule_entry_unittime = self._schedule_unit_time
             # unpack our schedule struct to be compliant with the device payload i.e.
             # the weekday_schedule must contain
             for weekday, weekday_schedule in schedule.items():

@@ -36,15 +36,18 @@ class Mts200OverheatThresholdNumber(MLConfigNumber):
     key_value = mc.KEY_VALUE
 
     def __init__(self, device: MerossDevice, channel: object | None):
+        self._attr_native_max_value = 70
+        self._attr_native_min_value = 20
         super().__init__(
             device,
             channel,
             "overheat threshold",
             MLConfigNumber.DeviceClass.TEMPERATURE,
         )
-        self._attr_native_max_value = 70
-        self._attr_native_min_value = 20
-        self._attr_native_step = 0.5
+
+    @property
+    def native_step(self):
+        return 0.5
 
     @property
     def native_unit_of_measurement(self):
@@ -118,38 +121,50 @@ class Mts200Climate(MtsClimate):
         MtsClimate.PRESET_AUTO: mc.KEY_MANUALTEMP,
     }
 
+    __slots__ = (
+        "number_comfort_temperature",
+        "number_sleep_temperature",
+        "number_away_temperature",
+        "binary_sensor_windowOpened",
+        "switch_sensor_mode",
+        "switch_overheat_onoff",
+        "sensor_overheat_warning",
+        "number_overheat_value",
+        "sensor_externalsensor_temperature",
+    )
+
     def __init__(self, device: MerossDevice, channel: object):
-        super().__init__(device, channel, None, None, None)
-        self._comfort_temperature_number = Mts200SetPointNumber(
+        super().__init__(device, channel, None)
+        self.number_comfort_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_COMFORT
         )
-        self._sleep_temperature_number = Mts200SetPointNumber(
+        self.number_sleep_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_SLEEP
         )
-        self._away_temperature_number = Mts200SetPointNumber(
+        self.number_away_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_AWAY
         )
-        self._windowOpened_binary_sensor = MLBinarySensor(
+        self.binary_sensor_windowOpened = MLBinarySensor(
             device, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
         )
         # sensor mode: use internal(0) vs external(1) sensor as temperature loopback
-        self._sensor_mode_switch = Mts200ConfigSwitch(
+        self.switch_sensor_mode = Mts200ConfigSwitch(
             self, "external sensor mode", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
         )
-        self._sensor_mode_switch.key_onoff = mc.KEY_MODE
+        self.switch_sensor_mode.key_onoff = mc.KEY_MODE
         # overheat protection
-        self._overheat_onoff_switch = Mts200ConfigSwitch(
+        self.switch_overheat_onoff = Mts200ConfigSwitch(
             self, "overheat protection", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
         )
-        self._overheat_warning_sensor = MLSensor(
+        self.sensor_overheat_warning = MLSensor(
             device, channel, "overheat warning", MLSensor.DeviceClass.ENUM, None
         )
-        self._overheat_warning_sensor._attr_translation_key = "mts200_overheat_warning"
-        self._overheat_value_number = Mts200OverheatThresholdNumber(
+        self.sensor_overheat_warning._attr_translation_key = "mts200_overheat_warning"
+        self.number_overheat_value = Mts200OverheatThresholdNumber(
             device,
             channel,
         )
-        self._externalsensor_temperature_sensor = MLSensor(
+        self.sensor_externalsensor_temperature = MLSensor(
             device, channel, "external sensor", MLSensor.DeviceClass.TEMPERATURE, None
         )
 
@@ -238,43 +253,43 @@ class Mts200Climate(MtsClimate):
         if isinstance(_t := payload.get(mc.KEY_MAX), int):
             self._attr_max_temp = _t / 10
         if isinstance(_t := payload.get(mc.KEY_HEATTEMP), int):
-            self._comfort_temperature_number.update_native_value(_t)
+            self.number_comfort_temperature.update_native_value(_t)
         if isinstance(_t := payload.get(mc.KEY_COOLTEMP), int):
-            self._sleep_temperature_number.update_native_value(_t)
+            self.number_sleep_temperature.update_native_value(_t)
         if isinstance(_t := payload.get(mc.KEY_ECOTEMP), int):
-            self._away_temperature_number.update_native_value(_t)
+            self.number_away_temperature.update_native_value(_t)
         self.update_modes()
 
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
-        self._windowOpened_binary_sensor.update_onoff(payload.get(mc.KEY_STATUS))
+        self.binary_sensor_windowOpened.update_onoff(payload.get(mc.KEY_STATUS))
 
     def _parse_sensor(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""
-        self._sensor_mode_switch.update_onoff(payload.get(mc.KEY_MODE))
+        self.switch_sensor_mode.update_onoff(payload.get(mc.KEY_MODE))
 
     def _parse_overheat(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}"""
         if mc.KEY_ONOFF in payload:
-            self._overheat_onoff_switch.update_onoff(payload[mc.KEY_ONOFF])
+            self.switch_overheat_onoff.update_onoff(payload[mc.KEY_ONOFF])
         if mc.KEY_WARNING in payload:
             _warning = payload[mc.KEY_WARNING]
-            self._overheat_warning_sensor.update_state(
+            self.sensor_overheat_warning.update_state(
                 mc.MTS200_OVERHEAT_WARNING_MAP.get(_warning, _warning)
             )
         if mc.KEY_MIN in payload:
-            self._overheat_value_number._attr_native_min_value = (
+            self.number_overheat_value._attr_native_min_value = (
                 payload[mc.KEY_MIN] / 10
             )
         if mc.KEY_MAX in payload:
-            self._overheat_value_number._attr_native_max_value = (
+            self.number_overheat_value._attr_native_max_value = (
                 payload[mc.KEY_MAX] / 10
             )
         if mc.KEY_VALUE in payload:
-            self._overheat_value_number.update_native_value(payload[mc.KEY_VALUE])
+            self.number_overheat_value.update_native_value(payload[mc.KEY_VALUE])
         if mc.KEY_CURRENTTEMP in payload:
-            self._externalsensor_temperature_sensor.update_state(
+            self.sensor_externalsensor_temperature.update_state(
                 payload[mc.KEY_CURRENTTEMP] / 10
             )
 

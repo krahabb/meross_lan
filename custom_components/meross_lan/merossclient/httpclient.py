@@ -30,6 +30,16 @@ if typing.TYPE_CHECKING:
 class MerossHttpClient:
     timeout = 5  # total timeout will be 1+2+4: check relaxation algorithm
 
+    __slots__ = (
+        "_host",
+        "_requesturl",
+        "key",
+        "replykey",
+        "_session",
+        "_logger",
+        "_logid",
+    )
+
     def __init__(
         self,
         host: str,

@@ -85,13 +85,21 @@ class MQTTConnection(Loggable, abc.ABC):
     _KEY_REQUESTTIME = "__requesttime"
     _KEY_REQUESTCOUNT = "__requestcount"
 
-    _mqtt_is_connected = False
+    __slots__ = (
+        "id",
+        "profile",
+        "mqttdevices",
+        "mqttdiscovering",
+        "_mqtt_is_connected",
+        "_unsub_discovery_callback",
+    )
 
     def __init__(self, profile: MerossCloudProfile | MerossApi, connection_id: str):
-        self.profile = profile
         self.id = connection_id
+        self.profile = profile
         self.mqttdevices: dict[str, MerossDevice] = {}
         self.mqttdiscovering: dict[str, dict] = {}
+        self._mqtt_is_connected = False
         self._unsub_discovery_callback: asyncio.TimerHandle | None = None
 
     async def async_shutdown(self):
@@ -341,6 +349,13 @@ class MQTTConnection(Loggable, abc.ABC):
 
 
 class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
+
+    __slots__ = (
+        "_host",
+        "_port",
+        "_unsub_random_disconnect",
+    )
+
     def __init__(
         self, profile: MerossCloudProfile, connection_id: str, host: str, port: int
     ):
@@ -486,6 +501,13 @@ class MerossCloudProfile(dict, ApiProfile):
     KEY_DEVICE_INFO: Final = "deviceInfo"
     KEY_DEVICE_INFO_TIME: Final = "deviceInfoTime"
     KEY_SUBDEVICE_INFO: Final = "__subDeviceInfo"
+
+    __slots__ = (
+        "mqttconnections",
+        "linkeddevices",
+        "_unsub_polling_query_devices",
+        "_store",
+    )
 
     def __init__(self, data: MappingProxyType):
         self.mqttconnections: dict[str, MerossMQTTConnection] = {}
