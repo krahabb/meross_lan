@@ -213,14 +213,22 @@ class ProtocolSensor(MLSensor):
             if self._hass_connected:
                 self._async_write_ha_state()
 
-    def update_disconnected_attr(self, *attrnames):
+    def update_disconnected_attr(self, attrname: str):
+        if self._attr_extra_state_attributes.get(attrname) is self.STATE_ACTIVE:
+            # this actually means the device is already online and
+            # conf_protocol is CONF_PROTOCOL_AUTO
+            self._attr_extra_state_attributes[attrname] = self.STATE_INACTIVE
+            if self._hass_connected:
+                self._async_write_ha_state()
+
+    def update_disconnected_attrs(self, *attrnames):
+        flush = False
         for attrname in attrnames:
-            flush = False
             if self._attr_extra_state_attributes.get(attrname) is self.STATE_ACTIVE:
                 self._attr_extra_state_attributes[attrname] = self.STATE_INACTIVE
                 flush = True
-            if flush and self._hass_connected:
-                self._async_write_ha_state()
+        if flush and self._hass_connected:
+            self._async_write_ha_state()
 
 
 class EnergyEstimateSensor(MLSensor):

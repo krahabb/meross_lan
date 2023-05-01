@@ -564,6 +564,7 @@ class MerossDevice(MerossDeviceBase):
         only when HTTPing SET requests. On MQTT we rely on async PUSH and SETACK to manage
         confirmation/status updates
         """
+        self.lastrequest = time()
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
@@ -571,18 +572,25 @@ class MerossDevice(MerossDeviceBase):
                 await self.async_mqtt_request(
                     namespace, method, payload, response_callback
                 )
-                self.lastrequest = self.lastmqttrequest
                 return
             # MQTT not connected
             if self.conf_protocol is CONF_PROTOCOL_MQTT:
-                self.lastrequest = time()
                 return
             # protocol is AUTO
             self._switch_protocol(CONF_PROTOCOL_HTTP)
 
         # curr_protocol is HTTP
-        await self.async_http_request(namespace, method, payload, response_callback)
-        self.lastrequest = self.lasthttprequest
+        if await self.async_http_request(
+            namespace, method, payload, callback=response_callback, attempts=3
+        ) is None:
+            if (
+                self.conf_protocol is CONF_PROTOCOL_AUTO
+            ) and self.lastmqttresponse:
+                if self.curr_protocol is not CONF_PROTOCOL_MQTT:
+                    self._switch_protocol(CONF_PROTOCOL_MQTT)
+                await self.async_mqtt_request(
+                    namespace, method, payload, response_callback
+                )
 
     async def async_request_updates(self, epoch, namespace):
         """
@@ -614,12 +622,12 @@ class MerossDevice(MerossDeviceBase):
         default (received) message handling entry point
         """
         self.lastresponse = epoch = time()
-        namespace = header[mc.KEY_NAMESPACE]
-        method = header[mc.KEY_METHOD]
         if protocol is CONF_PROTOCOL_HTTP:
             self.lasthttpresponse = epoch
         else:
             self.lastmqttresponse = epoch
+        namespace = header[mc.KEY_NAMESPACE]
+        method = header[mc.KEY_METHOD]
 
         if self._trace_file is not None:
             self._trace(epoch, payload, namespace, method, protocol, TRACE_DIRECTION_RX)
@@ -810,8 +818,8 @@ class MerossDevice(MerossDeviceBase):
                 self._set_offline()
                 return
         # run this at the end so it will not double flush
-        self.sensor_protocol.update_disconnected_attr(
-            (ProtocolSensor.ATTR_MQTT_BROKER, ProtocolSensor.ATTR_MQTT)
+        self.sensor_protocol.update_disconnected_attrs(
+            ProtocolSensor.ATTR_MQTT_BROKER, ProtocolSensor.ATTR_MQTT
         )
 
     def mqtt_request(
@@ -867,7 +875,9 @@ class MerossDevice(MerossDeviceBase):
         namespace: str,
         method: str,
         payload: dict,
-        response_callback: ResponseCallbackType | None = None,
+        *,
+        callback: ResponseCallbackType | None = None,
+        attempts: int = 1,
     ):
         with self.exception_warning(
             "async_http_request %s %s",
@@ -881,7 +891,7 @@ class MerossDevice(MerossDeviceBase):
                 )
                 self._http = http
 
-            for attempt in range(3):
+            for attempt in range(attempts):
                 # since we get 'random' connection errors, this is a retry attempts loop
                 # until we get it done. We'd want to break out early on specific events tho (Timeouts)
                 self.lasthttprequest = time()
@@ -902,46 +912,36 @@ class MerossDevice(MerossDeviceBase):
                         )
                     break
                 except Exception as exception:
-                    if not self._online:
-                        raise exception
-                    self.lasthttpresponse = 0
                     self.log_exception(
                         DEBUG,
                         exception,
-                        "async_http_request %s %s attempt(%s)",
+                        "async_http_request %s %s attempt(%d)",
                         method,
                         namespace,
-                        str(attempt),
+                        attempt,
                     )
-                    if (
-                        self.conf_protocol is CONF_PROTOCOL_AUTO
-                    ) and self.lastmqttresponse:
-                        if self.curr_protocol is not CONF_PROTOCOL_MQTT:
-                            self._switch_protocol(CONF_PROTOCOL_MQTT)
-                        else:
-                            self.sensor_protocol.update_disconnected_attr(
-                                ProtocolSensor.ATTR_HTTP
-                            )
-                        await self.async_mqtt_request(
-                            namespace, method, payload, response_callback
+                    if not self._online:
+                        return None
+                    if (self.lasthttpresponse == 0):
+                        self.lasthttpresponse = 0
+                        self.sensor_protocol.update_disconnected_attr(
+                            ProtocolSensor.ATTR_HTTP
                         )
-                        return
-                    elif isinstance(exception, asyncio.TimeoutError):
-                        self._set_offline()
-                        return
+                    if isinstance(exception, asyncio.TimeoutError):
+                        return None
                     await asyncio.sleep(0.1)  # wait a bit before re-issuing request
             else:
-                self.sensor_protocol.update_disconnected_attr(ProtocolSensor.ATTR_HTTP)
-                return
+                return None
 
             r_header = response[mc.KEY_HEADER]
             r_payload = response[mc.KEY_PAYLOAD]
-            if response_callback is not None:
+            if callback is not None:
                 # we're actually only using this for SET->SETACK command confirmation
-                response_callback(
+                callback(
                     r_header[mc.KEY_METHOD] != mc.METHOD_ERROR, r_header, r_payload
                 )
             self.receive(r_header, r_payload, CONF_PROTOCOL_HTTP)
+            return response
 
     @callback
     async def _async_polling_callback(self):
@@ -977,7 +977,7 @@ class MerossDevice(MerossDeviceBase):
                     pass
                 # when we 'fall' offline while on MQTT eventually retrigger HTTP.
                 # the reverse is not needed since we switch HTTP -> MQTT right-away
-                # when HTTP fails (see async_http_request)
+                # when HTTP fails (see async_request)
                 elif (self.conf_protocol is CONF_PROTOCOL_AUTO) and (
                     self.curr_protocol is not CONF_PROTOCOL_HTTP
                 ):
@@ -1031,19 +1031,19 @@ class MerossDevice(MerossDeviceBase):
                 else:
                     self._polling_delay = PARAM_HEARTBEAT_PERIOD
 
-                ns_method_payload = get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                ns_all_request_args = get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self.host:
-                        await self.async_http_request(*ns_method_payload)
+                        await self.async_http_request(*ns_all_request_args)
                         if self._online:
                             return
                     if self._mqtt is not None:
-                        await self.async_mqtt_request(*ns_method_payload)
+                        await self.async_mqtt_request(*ns_all_request_args)
                 elif self.conf_protocol is CONF_PROTOCOL_MQTT:
                     if self._mqtt is not None:
-                        await self.async_mqtt_request(*ns_method_payload)
+                        await self.async_mqtt_request(*ns_all_request_args)
                 else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
-                    await self.async_http_request(*ns_method_payload)
+                    await self.async_http_request(*ns_all_request_args)
         finally:
             self._unsub_polling_callback = schedule_async_callback(
                 ApiProfile.hass, self._polling_delay, self._async_polling_callback
@@ -1314,7 +1314,7 @@ class MerossDevice(MerossDeviceBase):
         # but still we listen for pushes on mqtt so we
         # mantain self._mqtt (which could become stale inside our
         # logic since we're not generally using it and updates from
-        # devices could come in along time). When we prefer mqtt
+        # devices could come in a long time). When we prefer mqtt
         # instead we can drop the self._http since it is likely
         # unused (an mqtt drop will try bring it online)
         if (protocol is CONF_PROTOCOL_MQTT) and (protocol is self.pref_protocol):
@@ -1497,23 +1497,22 @@ class MerossDevice(MerossDeviceBase):
         protocol=CONF_PROTOCOL_AUTO,
         rxtx="",
     ):
-        # expect self._trace_file is not None:
-        if (epoch > self._trace_endtime) or (
-            self._trace_file.tell() > CONF_TRACE_MAXSIZE  # type: ignore
-        ):  # type: ignore
-            self._trace_close()
-            return
-
-        if isinstance(data, dict):
-            # we'll eventually make a deepcopy since data
-            # might be retained by the _trace_data list
-            # and carry over the deobfuscation (which we'll skip now)
-            data = obfuscated_dict_copy(data)
-            textdata = json_dumps(data)
-        else:
-            textdata = data
-
+        # assert self._trace_file is not None:
         try:
+            if (epoch > self._trace_endtime) or (
+                self._trace_file.tell() > CONF_TRACE_MAXSIZE  # type: ignore
+            ):  # type: ignore
+                self._trace_close()
+                return
+
+            if isinstance(data, dict):
+                # we'll eventually make a deepcopy since data
+                # might be retained by the _trace_data list
+                # and carry over the deobfuscation (which we'll skip now)
+                data = obfuscated_dict_copy(data)
+                textdata = json_dumps(data)
+            else:
+                textdata = data
             texttime = strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch))
             columns = [texttime, rxtx, protocol, method, namespace, textdata]
             self._trace_file.write("\t".join(columns) + "\r\n")  # type: ignore
