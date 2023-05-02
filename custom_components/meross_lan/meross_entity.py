@@ -50,6 +50,8 @@ class MerossFakeEntity:
 class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     PLATFORM: str
 
+    EntityCategory = EntityCategory
+
     _attr_device_class: object | str | None
     _attr_entity_category: EntityCategory | str | None
     # provides a class empty default since the state writing api
@@ -63,6 +65,11 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     # used to speed-up checks if entity is enabled and loaded
     _hass_connected: bool
 
+    # helper attribute used to optimize device polling strategy
+    # generally represents the last time the entity 'received' an update
+    # in order to not poll the device state too often
+    device_lastupdate: float
+
     __slots__ = (
         "id",
         "device",
@@ -73,6 +80,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         "_attr_state",
         "_attr_unique_id",
         "_hass_connected",
+        "device_lastupdate",
     )
 
     def __init__(
@@ -116,6 +124,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self._attr_state = None
         self._attr_unique_id = f"{device.id}_{_id}"
         self._hass_connected = False
+        self.device_lastupdate = 0
         device.entities[_id] = self
         async_add_devices = device.platforms.setdefault(self.PLATFORM)
         if async_add_devices is not None:
@@ -204,6 +213,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self._hass_connected = False
 
     def update_state(self, state: StateType):
+        self.device_lastupdate = self.device.lastresponse
         if self._attr_state != state:
             self._attr_state = state
             if self._hass_connected:

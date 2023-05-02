@@ -7,7 +7,6 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.light import MLDNDLightEntity
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.sensor import RuntimeMixin
 from emulator import generate_emulators
 
 from tests import const as tc, helpers
@@ -66,25 +65,24 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
             if mc.NS_APPLIANCE_SYSTEM_DNDMODE in device_ability:
                 entity_dnd = device.entity_dnd
                 assert isinstance(entity_dnd, MLDNDLightEntity)
-                dndstate = hass.states.get(entity_dnd.entity_id)
-                assert dndstate and dndstate.state == STATE_UNAVAILABLE
+                state = hass.states.get(entity_dnd.entity_id)
+                assert state and state.state == STATE_UNAVAILABLE
 
-            sensor_runtime = None
+            sensor_signal_strength = None
             if mc.NS_APPLIANCE_SYSTEM_RUNTIME in device_ability:
-                assert isinstance(device, RuntimeMixin)
-                sensor_runtime = device._sensor_runtime
-                runtimestate = hass.states.get(sensor_runtime.entity_id)
-                assert runtimestate and runtimestate.state == STATE_UNAVAILABLE
+                sensor_signal_strength = device.sensor_signal_strength
+                state = hass.states.get(sensor_signal_strength.entity_id)
+                assert state and state.state == STATE_UNAVAILABLE
 
             await context.perform_coldstart()
 
             if entity_dnd is not None:
-                dndstate = hass.states.get(entity_dnd.entity_id)
-                assert dndstate and dndstate.state in (STATE_OFF, STATE_ON)
+                state = hass.states.get(entity_dnd.entity_id)
+                assert state and state.state in (STATE_OFF, STATE_ON)
 
-            if sensor_runtime is not None:
-                runtimestate = hass.states.get(sensor_runtime.entity_id)
-                assert runtimestate and runtimestate.state.isdigit()
+            if sensor_signal_strength is not None:
+                state = hass.states.get(sensor_signal_strength.entity_id)
+                assert state and state.state.isdigit()
 
 
 async def test_profile_entry(hass: HomeAssistant, cloudapi_mock: helpers.CloudApiMocker):

@@ -227,10 +227,6 @@ class MerossApi(MQTTConnection, ApiProfile):
             from .sensor import ConsumptionMixin
 
             mixin_classes.append(ConsumptionMixin)
-        if mc.NS_APPLIANCE_SYSTEM_RUNTIME in ability:
-            from .sensor import RuntimeMixin
-
-            mixin_classes.append(RuntimeMixin)
         if mc.KEY_SPRAY in digest:
             from .select import SprayMixin
 

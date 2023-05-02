@@ -19,12 +19,7 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
 from . import meross_entity as me
-from .const import (
-    CONF_PROTOCOL_HTTP,
-    CONF_PROTOCOL_MQTT,
-    PARAM_ENERGY_UPDATE_PERIOD,
-    PARAM_SIGNAL_UPDATE_PERIOD,
-)
+from .const import CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT, PARAM_ENERGY_UPDATE_PERIOD
 from .helpers import ApiProfile, StrEnum, get_entity_last_state_available
 from .merossclient import const as mc, get_default_arguments  # mEROSS cONST
 
@@ -677,44 +672,3 @@ class ConsumptionMixin(
         self._yesterday_midnight_epoch = 0
         self._today_midnight_epoch = 0
         self._tomorrow_midnight_epoch = 0
-
-
-class RuntimeMixin(
-    MerossDevice if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    _sensor_runtime: MLSensor
-    _lastupdate_runtime = 0
-
-    def __init__(self, descriptor, entry):
-        super().__init__(descriptor, entry)
-        # DEVICE_CLASS_SIGNAL_STRENGTH is now 'forcing' dB or dBm as unit
-        # so we drop the device_class (none) but we let the 'entitykey' parameter
-        # to keep the same value so the entity id inside HA remains stable (#239)
-        self._sensor_runtime = MLSensor(self, None, "signal_strength", None, None)
-        self._sensor_runtime._attr_entity_category = me.EntityCategory.DIAGNOSTIC
-        self._sensor_runtime._attr_native_unit_of_measurement = PERCENTAGE
-        self._sensor_runtime._attr_icon = "mdi:wifi"
-
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self._sensor_runtime = None  # type: ignore
-
-    def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
-        self._lastupdate_runtime = self.lastresponse
-        if isinstance(runtime := payload.get(mc.KEY_RUNTIME), dict):
-            self._sensor_runtime.update_state(runtime.get(mc.KEY_SIGNAL))
-
-    async def async_request_updates(self, epoch, namespace):
-        await super().async_request_updates(epoch, namespace)
-        if self._sensor_runtime.enabled and (
-            ((epoch - self._lastupdate_runtime) > PARAM_SIGNAL_UPDATE_PERIOD)
-            or (
-                (namespace is not None)
-                and (  # namespace is not None when coming online
-                    namespace != mc.NS_APPLIANCE_SYSTEM_RUNTIME
-                )
-            )
-        ):
-            await self.async_request(
-                *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_RUNTIME)
-            )
