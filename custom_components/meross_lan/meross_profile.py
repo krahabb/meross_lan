@@ -50,8 +50,8 @@ from .merossclient.cloudapi import (
     MerossCloudCredentials,
     MerossMQTTClient,
     async_cloudapi_device_devlist,
-    async_cloudapi_logout,
     async_cloudapi_hub_getsubdevices,
+    async_cloudapi_logout,
     generate_app_id,
     parse_domain,
 )

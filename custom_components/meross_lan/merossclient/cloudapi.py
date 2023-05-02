@@ -7,7 +7,7 @@ from json import dumps as json_dumps
 import logging
 import ssl
 import threading
-from time import time, monotonic
+from time import monotonic, time
 import typing
 from uuid import uuid4
 
