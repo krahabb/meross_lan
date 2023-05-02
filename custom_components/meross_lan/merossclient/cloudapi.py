@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from base64 import b64encode
+from collections import deque
 from hashlib import md5
 from json import dumps as json_dumps
 import logging
 import ssl
 import threading
-from time import time
+from time import time, monotonic
 import typing
 from uuid import uuid4
 
@@ -22,6 +23,9 @@ API_URL = "https://iot.meross.com"
 API_AUTH_LOGIN_PATH = "/v1/Auth/Login"
 API_PROFILE_LOGOUT_PATH = "/v1/Profile/Logout"
 API_DEVICE_DEVLIST_PATH = "/v1/Device/devList"
+API_DEVICE_DEVINFO_PATH = "/v1/Device/devInfo"
+API_DEVICE_DEVEXTRAINFO_PATH = "/v1/device/devExtraInfo"
+API_DEVICE_LATESTVERSION_PATH = "/v1/Device/latestVersion"
 API_HUB_GETSUBDEVICES_PATH = "/v1/Hub/getSubDevices"
 
 APISTATUS_NO_ERROR = 0
@@ -115,7 +119,7 @@ def parse_domain(domain: str):
     if (colon_index := domain.find(":")) != -1:
         return domain[0:colon_index], int(domain[colon_index + 1 :])
     else:
-        return domain, 443
+        return domain, mc.MQTT_DEFAULT_PORT
 
 
 class SubDeviceInfoType(typing.TypedDict, total=False):
@@ -227,18 +231,62 @@ async def async_cloudapi_login(
     return data
 
 
-async def async_cloudapi_devicelist(
+async def async_cloudapi_device_devlist(
     token: str, session: aiohttp.ClientSession | None = None
 ) -> list[DeviceInfoType]:
-    if MEROSSDEBUG and MEROSSDEBUG.cloudapi_devicelist:
-        return MEROSSDEBUG.cloudapi_devicelist
+    """
+    returns the {devInfo} list of all the account-bound devices
+    """
+    if MEROSSDEBUG and MEROSSDEBUG.cloudapi_device_devlist:
+        return MEROSSDEBUG.cloudapi_device_devlist
     response = await async_cloudapi_post(API_DEVICE_DEVLIST_PATH, {}, token, session)
     return response[mc.KEY_DATA]
 
 
-async def async_cloudapi_subdevicelist(
+async def async_cloudapi_device_devinfo(
+    token: str, uuid: str, session: aiohttp.ClientSession | None = None
+) -> DeviceInfoType:
+    """
+    given the uuid, returns the {devInfo}
+    """
+    response = await async_cloudapi_post(
+        API_DEVICE_DEVINFO_PATH, {mc.KEY_UUID: uuid}, token, session
+    )
+    return response[mc.KEY_DATA]
+
+
+async def async_cloudapi_device_devextrainfo(
+    token: str, session: aiohttp.ClientSession | None = None
+) -> DeviceInfoType:
+    """
+    returns a list of all device types with their manuals download link
+    """
+    response = await async_cloudapi_post(
+        API_DEVICE_DEVEXTRAINFO_PATH, {}, token, session
+    )
+    return response[mc.KEY_DATA]
+
+
+async def async_cloudapi_device_latestversion(
+    token: str, session: aiohttp.ClientSession | None = None
+) -> list[DeviceInfoType]:
+    """
+    returns the list of all the account-bound device types latest firmwares
+    """
+    if MEROSSDEBUG and MEROSSDEBUG.cloudapi_device_latestversion:
+        return MEROSSDEBUG.cloudapi_device_latestversion
+    response = await async_cloudapi_post(
+        API_DEVICE_LATESTVERSION_PATH, {}, token, session
+    )
+    return response[mc.KEY_DATA]
+
+
+async def async_cloudapi_hub_getsubdevices(
     token: str, uuid: str, session: aiohttp.ClientSession | None = None
 ) -> list[SubDeviceInfoType]:
+    """
+    given the uuid, returns the list of subdevices binded to the hub
+    """
     response = await async_cloudapi_post(
         API_HUB_GETSUBDEVICES_PATH, {mc.KEY_UUID: uuid}, token, session
     )
@@ -271,6 +319,17 @@ class MerossMQTTClient(mqtt.Client):
     STATE_DISCONNECTING = "disconnecting"
     STATE_DISCONNECTED = "disconnected"
 
+    """
+    Meross cloud traffic need to be rate-limited in order
+    to prevent banning.
+    Here the algorithm is pretty simple:
+    the trasmission rate is limited by RATELIMITER_MINDELAY
+    which poses a minimum interval between successive publish
+    """
+    RATELIMITER_MINDELAY = 10
+    RATELIMITER_MAXQUEUE = 6
+    RATELIMITER_AVGPERIOD_DERATE = 0.1
+
     def __init__(self, credentials: MerossCloudCredentials, app_id: str | None = None):
         self._stateext = self.STATE_DISCONNECTED
         if not isinstance(app_id, str):
@@ -288,6 +347,11 @@ class MerossMQTTClient(mqtt.Client):
         self.on_connect = self._mqttc_connect
         self.on_disconnect = self._mqttc_disconnect
         self.suppress_exceptions = True
+        self._rl_lastpublish = monotonic() - self.RATELIMITER_MINDELAY
+        self._rl_deque = deque(maxlen=self.RATELIMITER_MAXQUEUE)
+        self._rl_queued = False
+        self.rl_dropped = 0
+        self.rl_avgperiod = 0.0
         if MEROSSDEBUG and MEROSSDEBUG.mqtt_client_log_enable:
             self.enable_logger(LOGGER)
 
@@ -329,6 +393,55 @@ class MerossMQTTClient(mqtt.Client):
             self._stateext = self.STATE_DISCONNECTING
             if mqtt.MQTT_ERR_NO_CONN == self.disconnect():
                 self._stateext = self.STATE_DISCONNECTED
+
+    def rl_publish(
+        self,
+        topic: str,
+        payload: str,
+    ) -> mqtt.MQTTMessageInfo | bool:
+        with self.lock:
+            queuelen = len(self._rl_deque)
+            if queuelen >= self.RATELIMITER_MAXQUEUE:
+                # TODO: log dropped message
+                self.rl_dropped += 1
+                return False
+            if queuelen == 0:
+                now = monotonic()
+                period = now - self._rl_lastpublish
+                if period > self.RATELIMITER_MINDELAY:
+                    self._rl_lastpublish = now
+                    self.rl_avgperiod += self.RATELIMITER_AVGPERIOD_DERATE * (
+                        period - self.rl_avgperiod
+                    )
+                    return super().publish(topic, payload)
+
+            self._rl_deque.append((topic, payload))
+            self._rl_queued = True
+            return True
+
+    def loop_misc(self):
+        if self._rl_queued is True:
+            if self.lock.acquire(False):
+                topic_payload = None
+                try:
+                    queuelen = len(self._rl_deque)
+                    if queuelen > 0:
+                        now = monotonic()
+                        period = now - self._rl_lastpublish
+                        if period > self.RATELIMITER_MINDELAY:
+                            topic_payload = self._rl_deque.popleft()
+                            self._rl_lastpublish = now
+                            self.rl_avgperiod += self.RATELIMITER_AVGPERIOD_DERATE * (
+                                period - self.rl_avgperiod
+                            )
+                            self._rl_queued = queuelen > 1
+                    else:
+                        self._rl_queued = False
+                finally:
+                    self.lock.release()
+                    if topic_payload is not None:
+                        super().publish(*topic_payload)
+        return super().loop_misc()
 
     def _mqttc_connect(self, client: mqtt.Client, userdata, rc, other):
         self._stateext = self.STATE_CONNECTED
