@@ -102,6 +102,8 @@ PARAM_COLDSTARTPOLL_DELAY = 2
 PARAM_UNAVAILABILITY_TIMEOUT = 20
 # whatever the connection state periodically inquire the device is there
 PARAM_HEARTBEAT_PERIOD = 295
+# for polled entities over cloud MQTT use 'at least' this
+PARAM_CLOUDMQTT_UPDATE_PERIOD = 1795
 # used when restoring 'calculated' state after HA restart
 PARAM_RESTORESTATE_TIMEOUT = 300
 # read energy consumption only every ... second

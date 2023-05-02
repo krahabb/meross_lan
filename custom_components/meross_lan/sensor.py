@@ -21,7 +21,7 @@ from homeassistant.util import dt as dt_util
 from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT, PARAM_ENERGY_UPDATE_PERIOD
 from .helpers import ApiProfile, StrEnum, get_entity_last_state_available
-from .merossclient import const as mc, get_default_arguments  # mEROSS cONST
+from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -314,6 +314,7 @@ class ElectricityMixin(
     # the consumption reported from the device at least when the
     # power is very low (likely due to power readings being a bit off)
     _sensor_energy_estimate: EnergyEstimateSensor
+    _cancel_energy_reset = None
 
     # This is actually reset in ConsumptionMixin
     _consumption_estimate = 0.0
@@ -334,14 +335,14 @@ class ElectricityMixin(
         super().start()
 
     async def async_shutdown(self):
+        if self._cancel_energy_reset is not None:
+            self._cancel_energy_reset()
+            self._cancel_energy_reset = None
         await super().async_shutdown()
         self._sensor_power = None  # type: ignore
         self._sensor_current = None  # type: ignore
         self._sensor_voltage = None  # type: ignore
         self._sensor_energy_estimate = None  # type: ignore
-        if self._cancel_energy_reset is not None:
-            self._cancel_energy_reset()
-            self._cancel_energy_reset = None
 
     def _handle_Appliance_Control_Electricity(self, header: dict, payload: dict):
         electricity = payload[mc.KEY_ELECTRICITY]
@@ -367,10 +368,14 @@ class ElectricityMixin(
         # there are far too many dependencies for these readings (energy sensor
         # in ConsumptionMixin too depends on us) but it's unlikely all of these
         # are disabled!
-        if self.online:
-            await self.async_request(
-                *get_default_arguments(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
-            )
+        if self.online is False:
+            return
+        await self.async_request_smartpoll(
+            epoch,
+            self._sensor_power,
+            mc.NS_APPLIANCE_CONTROL_ELECTRICITY,
+            0,
+        )
 
     def _schedule_next_reset(self, _now: datetime):
         with self.exception_warning("_schedule_next_reset"):
@@ -393,6 +398,7 @@ class ElectricityMixin(
 
     @callback
     def _energy_reset(self, _now: datetime):
+        self._cancel_energy_reset = None
         self.log(DEBUG, "_energy_reset at %s", _now.isoformat())
         self._sensor_energy_estimate.reset_estimate()
         self._schedule_next_reset(_now)
@@ -497,7 +503,6 @@ class ConsumptionSensor(MLSensor):
 class ConsumptionMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-    _consumption_lastupdate = 0.0
     _consumption_last_value: int | None = None
     _consumption_last_time: int | None = None
     # these are the device actual EPOCHs of the last midnight
@@ -520,7 +525,8 @@ class ConsumptionMixin(
         self._sensor_consumption = None  # type: ignore
 
     def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
-        self._consumption_lastupdate = self.lastresponse
+        _sensor_consumption = self._sensor_consumption
+        _sensor_consumption.device_lastupdate = self.lastresponse
         # we'll look through the device array values to see
         # data timestamped (in device time) after last midnight
         # since we usually reset this around midnight localtime
@@ -568,7 +574,7 @@ class ConsumptionMixin(
             if day[mc.KEY_TIME] >= self._yesterday_midnight_epoch
         ]
         if (days_len := len(days)) == 0:
-            self._sensor_consumption.reset_consumption()
+            _sensor_consumption.reset_consumption()
             return
 
         elif days_len > 1:
@@ -587,12 +593,11 @@ class ConsumptionMixin(
             # (device starts reporting from 1 wh....) so, even if
             # new day has come, new data have not
             self._consumption_last_value = None
-            self._sensor_consumption.reset_consumption()
+            _sensor_consumption.reset_consumption()
             return
 
         # now day_last 'should' contain today data in HA time.
         day_last_value: int = day_last[mc.KEY_VALUE]
-        _sensor_consumption = self._sensor_consumption
         # check if the device tripped its own midnight and started a
         # new day readings
         if days_len > 1 and (
@@ -658,14 +663,14 @@ class ConsumptionMixin(
 
     async def async_request_updates(self, epoch, namespace):
         await super().async_request_updates(epoch, namespace)
-        if (
-            self.online
-            and self._sensor_consumption.enabled
-            and ((epoch - self._consumption_lastupdate) > PARAM_ENERGY_UPDATE_PERIOD)
-        ):
-            await self.async_request(
-                *get_default_arguments(mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX)
-            )
+        if (self.online is False) or (self._sensor_consumption.enabled is False):
+            return
+        await self.async_request_smartpoll(
+            epoch,
+            self._sensor_consumption,
+            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX,
+            PARAM_ENERGY_UPDATE_PERIOD,
+        )
 
     def _set_offline(self):
         super()._set_offline()
