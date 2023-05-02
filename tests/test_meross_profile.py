@@ -25,10 +25,10 @@ async def test_cloudapi(hass, cloudapi_mock: helpers.CloudApiMocker):
     assert result[mc.KEY_TOKEN] == tc.MOCK_PROFILE_TOKEN
 
     token = result[mc.KEY_TOKEN]
-    result = await cloudapi.async_cloudapi_devicelist(token, clientsession)
+    result = await cloudapi.async_cloudapi_device_devlist(token, clientsession)
     assert result == tc.MOCK_PROFILE_CLOUDAPI_DEVLIST
 
-    result = await cloudapi.async_cloudapi_subdevicelist(
+    result = await cloudapi.async_cloudapi_hub_getsubdevices(
         token, tc.MOCK_PROFILE_MSH300_UUID, clientsession
     )
     assert (

@@ -187,10 +187,10 @@ class ProtocolSensor(MLSensor):
             # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
             # if conf_protocol is fixed we'll not set these attrs (redundant)
             self._attr_extra_state_attributes[self.ATTR_HTTP] = self._get_attr_state(
-                device.lasthttpresponse
+                device._http_lastresponse
             )
             self._attr_extra_state_attributes[self.ATTR_MQTT] = self._get_attr_state(
-                device.lastmqttresponse
+                device._mqtt_isactive
             )
             self._attr_extra_state_attributes[
                 self.ATTR_MQTT_BROKER

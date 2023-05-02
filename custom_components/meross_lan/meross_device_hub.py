@@ -267,10 +267,10 @@ class MerossDeviceHub(MerossDevice):
         # (see #167).
         # Also, we check here and there if the hub went offline while polling and we skip
         # the rest of the sequence (see super().async_request_updates for the same logic)
-        if not self._online:
+        if self._online is False:
             return
 
-        needpoll = (namespace is not None) or (self.lastmqttresponse == 0)
+        needpoll = (namespace is not None) or (self._mqtt_isactive is False)
         if self._lastupdate_sensor is not None:
             if needpoll or (self._lastupdate_sensor == 0):
                 await self.async_request(
@@ -281,7 +281,7 @@ class MerossDeviceHub(MerossDevice):
                         mc.NS_APPLIANCE_HUB_SENSOR_ALL, mc.METHOD_GET, {mc.KEY_ALL: p}
                     )
 
-        if not self._online:
+        if self._online is False:
             return
         if self._lastupdate_mts100 is not None:
             if needpoll or (self._lastupdate_mts100 == 0):
@@ -300,7 +300,7 @@ class MerossDeviceHub(MerossDevice):
                             {mc.KEY_SCHEDULE: p},
                         )
 
-        if not self._online:
+        if self._online is False:
             return
         if (epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD:
             await self.async_request(
@@ -310,7 +310,7 @@ class MerossDeviceHub(MerossDevice):
         # we also need to check for TOGGLEX state in case but this is not always needed:
         # for example, if we just have mts100-likes devices, their 'togglex' state is already carried by
         # NS_APPLIANCE_HUB_MTS100_ALL, or we may know some subdevices dont actually have togglex
-        if not self._online:
+        if self._online is False:
             return
         if mc.NS_APPLIANCE_HUB_TOGGLEX in self.descriptor.ability:
             if needpoll:

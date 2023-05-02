@@ -29,7 +29,8 @@ try:
         )
 
         cloudapi_login = data.get("login")
-        cloudapi_devicelist = data.get("devList")
+        cloudapi_device_devlist = data.get("Device_devList")
+        cloudapi_device_latestversion = data.get("Device_latestVersion")
 
         cloud_profiles = [
             {
@@ -76,7 +77,7 @@ try:
         # MerossHTTPClient debug patching
         http_disc_end = 0
         http_disc_duration = 25
-        http_disc_probability = 0
+        http_disc_probability = 20
 
         @staticmethod
         def http_random_timeout():
