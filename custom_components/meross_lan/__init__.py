@@ -497,7 +497,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             for device in api.active_devices():
                 if device.descriptor.userId == profile_id:
                     profile.link(device)
-                    break
             profile.listen_entry_update(entry)
             api.profiles[profile_id] = profile
             return True
@@ -516,16 +515,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 for platform in device.platforms.keys()
             )
         )
-        if profile_id := device.profile_id:
+        profile_id = device.descriptor.userId
+        if profile_id in api.profiles:
             # the profile is somehow configured, either disabled or not
             if (profile := api.profiles[profile_id]) is not None:
                 profile.link(device)
         else:
             # trigger a cloud profile discovery if we guess it reasonable
-            userid = device.descriptor.userId
-            if userid and (entry.data.get(CONF_CLOUD_KEY) == device.key):
+            if profile_id and (entry.data.get(CONF_CLOUD_KEY) == device.key):
                 helper = ConfigEntriesHelper(hass)
-                flow_unique_id = f"profile.{userid}"
+                flow_unique_id = f"profile.{profile_id}"
                 if helper.get_config_flow(flow_unique_id) is None:
                     await hass.config_entries.flow.async_init(
                         DOMAIN,
@@ -535,7 +534,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                             "title_placeholders": {"name": "unknown cloud profile"},
                         },
                         data={
-                            mc.KEY_USERID_: userid,
+                            mc.KEY_USERID_: profile_id,
                         },
                     )
 
