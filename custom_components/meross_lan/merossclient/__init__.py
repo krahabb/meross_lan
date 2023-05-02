@@ -247,6 +247,13 @@ def get_productnametype(producttype: str) -> str:
     return f"{name} ({producttype})" if name is not producttype else producttype
 
 
+def is_device_online(payload: dict) -> bool:
+    try:
+        return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
+    except Exception:
+        return False
+
+
 class MerossDeviceDescriptor:
     """
     Utility class to extract various info from Appliance.System.All

@@ -175,7 +175,7 @@ class ProtocolSensor(MLSensor):
             self._attr_extra_state_attributes = {}
         else:
             self._attr_extra_state_attributes = {
-                self.ATTR_MQTT_BROKER: self._get_attr_state(self.device._mqtt)
+                self.ATTR_MQTT_BROKER: self._get_attr_state(self.device._mqtt_connected)
             }
         if self._hass_connected:
             self._async_write_ha_state()
@@ -190,11 +190,11 @@ class ProtocolSensor(MLSensor):
                 device._http_lastresponse
             )
             self._attr_extra_state_attributes[self.ATTR_MQTT] = self._get_attr_state(
-                device._mqtt_isactive
+                device._mqtt_active
             )
             self._attr_extra_state_attributes[
                 self.ATTR_MQTT_BROKER
-            ] = self._get_attr_state(device._mqtt)
+            ] = self._get_attr_state(device._mqtt_connected)
         if self._hass_connected:
             self._async_write_ha_state()
 
@@ -205,23 +205,27 @@ class ProtocolSensor(MLSensor):
     # and the full state will be flushed by the update_connected call
     # and call them 'after' any eventual disconnection for the same reason
 
-    def update_connected_attr(self, attrname: str):
-        if self._attr_extra_state_attributes.get(attrname) is self.STATE_INACTIVE:
-            # this actually means the device is already online and
-            # conf_protocol is CONF_PROTOCOL_AUTO
+    def update_attr(self, attrname: str, attr_state):
+        if attrname in self._attr_extra_state_attributes:
+            self._attr_extra_state_attributes[attrname] = self._get_attr_state(
+                attr_state
+            )
+            if self._hass_connected:
+                self._async_write_ha_state()
+
+    def update_attr_active(self, attrname: str):
+        if attrname in self._attr_extra_state_attributes:
             self._attr_extra_state_attributes[attrname] = self.STATE_ACTIVE
             if self._hass_connected:
                 self._async_write_ha_state()
 
-    def update_disconnected_attr(self, attrname: str):
-        if self._attr_extra_state_attributes.get(attrname) is self.STATE_ACTIVE:
-            # this actually means the device is already online and
-            # conf_protocol is CONF_PROTOCOL_AUTO
+    def update_attr_inactive(self, attrname: str):
+        if attrname in self._attr_extra_state_attributes:
             self._attr_extra_state_attributes[attrname] = self.STATE_INACTIVE
             if self._hass_connected:
                 self._async_write_ha_state()
 
-    def update_disconnected_attrs(self, *attrnames):
+    def update_attrs_inactive(self, *attrnames):
         flush = False
         for attrname in attrnames:
             if self._attr_extra_state_attributes.get(attrname) is self.STATE_ACTIVE:

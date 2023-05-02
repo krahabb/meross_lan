@@ -16,6 +16,7 @@ from .merossclient import (  # mEROSS cONST
     const as mc,
     get_default_arguments,
     get_productnameuuid,
+    is_device_online,
 )
 from .number import MLHubAdjustNumber
 from .sensor import MLSensor
@@ -181,10 +182,7 @@ class MerossDeviceHub(MerossDevice):
                     # only if it appears this device is online else it
                     # would be a waste since we wouldnt have enough info
                     # to correctly build that
-                    if (
-                        p_subdevice.get(mc.KEY_ONLINE, {}).get(mc.KEY_STATUS)
-                        == mc.STATUS_ONLINE
-                    ):
+                    if is_device_online(p_subdevice):
                         self.request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
                 else:
                     subdevice._parse(key, p_subdevice)
@@ -270,7 +268,7 @@ class MerossDeviceHub(MerossDevice):
         if self._online is False:
             return
 
-        needpoll = (namespace is not None) or (self._mqtt_isactive is False)
+        needpoll = (namespace is not None) or (self._mqtt_active is False)
         if self._lastupdate_sensor is not None:
             if needpoll or (self._lastupdate_sensor == 0):
                 await self.async_request(

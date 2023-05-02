@@ -60,6 +60,7 @@ from .merossclient import (  # mEROSS cONST
     get_default_arguments,
     get_namespacekey,
     get_replykey,
+    is_device_online,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .sensor import ProtocolSensor
@@ -296,8 +297,8 @@ class MerossDevice(MerossDeviceBase):
         "lastresponse",
         "_cloud_profile",
         "_mqtt_connection",
-        "_mqtt",
-        "_mqtt_isactive",
+        "_mqtt_connected",
+        "_mqtt_active",
         "_mqtt_lastrequest",
         "_mqtt_lastresponse",
         "_mqtt_transactions",
@@ -345,8 +346,8 @@ class MerossDevice(MerossDeviceBase):
         self.lastresponse = 0
         self._cloud_profile: MerossCloudProfile | None = None
         self._mqtt_connection: MQTTConnection | None = None
-        self._mqtt: MQTTConnection | None = None
-        self._mqtt_isactive = False
+        self._mqtt_connected: MQTTConnection | None = None
+        self._mqtt_active = False
         self._mqtt_lastrequest = 0
         self._mqtt_lastresponse = 0
         self._http: MerossHttpClient | None = None
@@ -514,7 +515,7 @@ class MerossDevice(MerossDeviceBase):
         This should actually be inferred from system payload but at the moment
         we just euristically guess by the fact we're receiving 'local' MQTT
         """
-        return self._mqtt == ApiProfile.api
+        return self._mqtt_connected == ApiProfile.api
 
     def get_datetime(self, epoch):
         """
@@ -572,7 +573,7 @@ class MerossDevice(MerossDeviceBase):
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
-            if self._mqtt is not None:
+            if self._mqtt_connected is not None:
                 await self.async_mqtt_request(
                     namespace, method, payload, response_callback
                 )
@@ -590,7 +591,9 @@ class MerossDevice(MerossDeviceBase):
             )
             is None
         ):
-            if (self.conf_protocol is CONF_PROTOCOL_AUTO) and self._mqtt_isactive:
+            if (self.conf_protocol is CONF_PROTOCOL_AUTO) and (
+                self._mqtt_active is True
+            ):
                 if self.curr_protocol is not CONF_PROTOCOL_MQTT:
                     self._switch_protocol(CONF_PROTOCOL_MQTT)
                 await self.async_mqtt_request(
@@ -605,7 +608,7 @@ class MerossDevice(MerossDeviceBase):
         else, when MQTT is alive this will fire the requests only once when just switching online
         or when not listening any MQTT over the PARAM_HEARTBEAT_PERIOD
         """
-        if (namespace is not None) or (self._mqtt_isactive is False):
+        if (namespace is not None) or (self._mqtt_active is False):
             if (self._http is not None) and (
                 self.conf_protocol is not CONF_PROTOCOL_MQTT
             ):
@@ -797,7 +800,7 @@ class MerossDevice(MerossDeviceBase):
 
     def mqtt_receive(self, header: dict, payload: dict):
         assert (self.conf_protocol is not CONF_PROTOCOL_HTTP) and (
-            self._mqtt is not None
+            self._mqtt_connected is not None
         )
         messageid = header[mc.KEY_MESSAGEID]
         if messageid in self._mqtt_transactions:
@@ -807,10 +810,10 @@ class MerossDevice(MerossDeviceBase):
                 mqtt_transaction.response_callback(
                     header[mc.KEY_METHOD] != mc.METHOD_ERROR, header, payload
                 )
-        if self._mqtt_isactive is False:
-            self._mqtt_isactive = True
+        if self._mqtt_active is False:
+            self._mqtt_active = True
             if self._online is True:
-                self.sensor_protocol.update_connected_attr(ProtocolSensor.ATTR_MQTT)
+                self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
         self.receive(header, payload, CONF_PROTOCOL_MQTT)
 
     def mqtt_attached(self, mqtt_connection: MQTTConnection):
@@ -822,21 +825,21 @@ class MerossDevice(MerossDeviceBase):
     def mqtt_detached(self):
         assert self._mqtt_connection
         self.log(DEBUG, "mqtt_detached from %s", self._mqtt_connection.logtag)
-        if self._mqtt is not None:
+        if self._mqtt_connected is not None:
             self.mqtt_disconnected()
         self._mqtt_connection = None
 
     def mqtt_connected(self):
         assert self._mqtt_connection
         self.log(DEBUG, "mqtt_connected to %s", self._mqtt_connection.broker)
-        self._mqtt = self._mqtt_connection
-        self.sensor_protocol.update_connected_attr(ProtocolSensor.ATTR_MQTT_BROKER)
+        self._mqtt_connected = self._mqtt_connection
+        self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT_BROKER)
 
     def mqtt_disconnected(self):
         assert self._mqtt_connection
         self.log(DEBUG, "mqtt_disconnected from %s", self._mqtt_connection.broker)
-        self._mqtt = None
-        self._mqtt_isactive = False
+        self._mqtt_connected = None
+        self._mqtt_active = False
         self._mqtt_lastresponse = 0
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             if self.conf_protocol is CONF_PROTOCOL_AUTO:
@@ -847,7 +850,7 @@ class MerossDevice(MerossDeviceBase):
                 self._set_offline()
                 return
         # run this at the end so it will not double flush
-        self.sensor_protocol.update_disconnected_attrs(
+        self.sensor_protocol.update_attrs_inactive(
             ProtocolSensor.ATTR_MQTT_BROKER, ProtocolSensor.ATTR_MQTT
         )
 
@@ -873,7 +876,7 @@ class MerossDevice(MerossDeviceBase):
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ):
-        if self._mqtt is None:
+        if self._mqtt_connected is None:
             # even if we're smart enough to not call async_mqtt_request when no mqtt
             # available, it could happen we loose that when asynchronously coming here
             self.log(
@@ -895,7 +898,7 @@ class MerossDevice(MerossDeviceBase):
                 CONF_PROTOCOL_MQTT,
                 TRACE_DIRECTION_TX,
             )
-        await self._mqtt.async_mqtt_publish(
+        await self._mqtt_connected.async_mqtt_publish(
             self.id, namespace, method, payload, self.key, messageid
         )
 
@@ -936,7 +939,7 @@ class MerossDevice(MerossDeviceBase):
                 try:
                     response = await http.async_request(namespace, method, payload)
                     if (self._online is True) and (self._http_lastresponse == 0):
-                        self.sensor_protocol.update_connected_attr(
+                        self.sensor_protocol.update_attr_active(
                             ProtocolSensor.ATTR_HTTP
                         )
                     break
@@ -953,7 +956,7 @@ class MerossDevice(MerossDeviceBase):
                         return None
                     if self._http_lastresponse != 0:
                         self._http_lastresponse = 0
-                        self.sensor_protocol.update_disconnected_attr(
+                        self.sensor_protocol.update_attr_inactive(
                             ProtocolSensor.ATTR_HTTP
                         )
                     if isinstance(exception, asyncio.TimeoutError):
@@ -1024,9 +1027,7 @@ class MerossDevice(MerossDeviceBase):
                 if (
                     (self.curr_protocol is CONF_PROTOCOL_MQTT)
                     and (self.pref_protocol is CONF_PROTOCOL_HTTP)
-                    and (
-                        (epoch - self._http_lastrequest) > PARAM_HEARTBEAT_PERIOD
-                    )
+                    and ((epoch - self._http_lastrequest) > PARAM_HEARTBEAT_PERIOD)
                 ):
                     await self.async_http_request(
                         *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
@@ -1036,11 +1037,11 @@ class MerossDevice(MerossDeviceBase):
                     # state updates coming through mqtt (since we're still
                     # connected) but now requesting over http as preferred
 
-                if self._mqtt_isactive is True and self.locallybound:
+                if self._mqtt_active is True and self.locallybound:
                     # implement an heartbeat since mqtt might
                     # be unused for quite a bit
                     if (epoch - self._mqtt_lastresponse) > PARAM_HEARTBEAT_PERIOD:
-                        self._mqtt_isactive = False
+                        self._mqtt_active = False
                         self._mqtt_lastresponse = 0
                         await self.async_mqtt_request(
                             *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
@@ -1048,8 +1049,8 @@ class MerossDevice(MerossDeviceBase):
                         # this is rude..we would want to async wait on
                         # the mqtt response but we lack the infrastructure
                         await asyncio.sleep(2)
-                        if self._mqtt_isactive is False:
-                            self.sensor_protocol.update_disconnected_attr(
+                        if self._mqtt_active is False:
+                            self.sensor_protocol.update_attr_inactive(
                                 ProtocolSensor.ATTR_MQTT
                             )
                         # going on could eventually try/switch to HTTP
@@ -1068,10 +1069,10 @@ class MerossDevice(MerossDeviceBase):
                         await self.async_http_request(*ns_all_request_args)
                         if self._online is True:
                             return
-                    if self._mqtt is not None:
+                    if self._mqtt_connected is not None:
                         await self.async_mqtt_request(*ns_all_request_args)
                 elif self.conf_protocol is CONF_PROTOCOL_MQTT:
-                    if self._mqtt is not None:
+                    if self._mqtt_connected is not None:
                         await self.async_mqtt_request(*ns_all_request_args)
                 else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
                     await self.async_http_request(*ns_all_request_args)
@@ -1181,7 +1182,16 @@ class MerossDevice(MerossDeviceBase):
             # persist changes to configentry only when relevant properties change
             self.needsave = True
 
-        descr.system.get(mc.KEY_ONLINE)
+        if self._mqtt_connected is not None:
+            if is_device_online(descr.system):
+                if self._mqtt_active is False:
+                    self._mqtt_active = True
+                    self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
+            else:
+                if self._mqtt_active is True:
+                    self._mqtt_active = False
+                    self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
+
         epoch = int(self.lastresponse)
 
         if self.locallybound:
@@ -1329,7 +1339,7 @@ class MerossDevice(MerossDeviceBase):
         self.log(DEBUG, "going offline!")
         self._online = False
         self._polling_delay = self.polling_period
-        self._mqtt_isactive = False
+        self._mqtt_active = False
         self._mqtt_lastresponse = 0
         self._http_lastresponse = 0
         for entity in self.entities.values():
@@ -1344,10 +1354,8 @@ class MerossDevice(MerossDeviceBase):
         self.curr_protocol = protocol
         # preferred protocol is not treated simmetrically:
         # if we prefer http, we mainly use that (self._http)
-        # but still we listen for pushes on mqtt so we
-        # mantain self._mqtt (which could become stale inside our
-        # logic since we're not generally using it and updates from
-        # devices could come in a long time). When we prefer mqtt
+        # but still we listen for pushes on mqtt so we'll keep
+        # references on that. When we prefer mqtt
         # instead we can drop the self._http since it is likely
         # unused (an mqtt drop will try bring it online)
         if (protocol is CONF_PROTOCOL_MQTT) and (protocol is self.pref_protocol):
