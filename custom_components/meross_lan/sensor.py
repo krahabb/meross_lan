@@ -368,9 +368,7 @@ class ElectricityMixin(
         # there are far too many dependencies for these readings (energy sensor
         # in ConsumptionMixin too depends on us) but it's unlikely all of these
         # are disabled!
-        if self.online is False:
-            return
-        await self.async_request_smartpoll(
+        await self.async_request_smartpoll2(
             epoch,
             self._sensor_power,
             mc.NS_APPLIANCE_CONTROL_ELECTRICITY,
@@ -663,9 +661,7 @@ class ConsumptionMixin(
 
     async def async_request_updates(self, epoch, namespace):
         await super().async_request_updates(epoch, namespace)
-        if (self.online is False) or (self._sensor_consumption.enabled is False):
-            return
-        await self.async_request_smartpoll(
+        await self.async_request_smartpoll2(
             epoch,
             self._sensor_consumption,
             mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX,

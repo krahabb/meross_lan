@@ -319,6 +319,7 @@ class MerossDevice(MerossDeviceBase):
         "_tzinfo",
         "_unsub_entry_update_listener",
         "_unsub_polling_callback",
+        "_queued_poll_requests",
         "sensor_protocol",
         "sensor_signal_strength",
         "entity_dnd",
@@ -407,6 +408,7 @@ class MerossDevice(MerossDeviceBase):
             self.entry_update_listener
         )
         self._unsub_polling_callback = None
+        self._queued_poll_requests = 0
 
         self._set_config_entry(config_entry.data)  # type: ignore
         self.curr_protocol = self.pref_protocol
@@ -624,23 +626,42 @@ class MerossDevice(MerossDeviceBase):
     async def async_request_smartpoll(
         self,
         epoch: float,
+        lastupdate: float | int,
+        polling_ns: str,
+        polling_period_min: int,
+        polling_period_cloud: int = PARAM_CLOUDMQTT_UPDATE_PERIOD,
+    ):
+        if (epoch - lastupdate) < polling_period_min:
+            return False
+        if self.curr_protocol is CONF_PROTOCOL_HTTP:
+            # avoid any protocol auto-switching...
+            await self.async_http_request(*get_default_arguments(polling_ns))
+            return False
+        elif self.locallybound or (
+            (self._queued_poll_requests == 0) and ((epoch - lastupdate) > polling_period_cloud)
+        ):
+            await self.async_request(*get_default_arguments(polling_ns))
+            self._queued_poll_requests += 1
+            return True
+        return False
+
+    async def async_request_smartpoll2(
+        self,
+        epoch: float,
         entity: MerossEntity,
         polling_ns: str,
         polling_period_min: int,
         polling_period_cloud: int = PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        queued_requests: int = 0,
     ):
-        if (epoch - entity.device_lastupdate) < polling_period_min:
-            return
-        if self.curr_protocol is CONF_PROTOCOL_HTTP:
-            # avoid any protocol auto-switching...
-            await self.async_http_request(*get_default_arguments(polling_ns))
-        elif self.locallybound or (
-            (queued_requests == 0)
-            and ((epoch - entity.device_lastupdate) > polling_period_cloud)
-        ):
-            entity.device_lastupdate = epoch
-            await self.async_request(*get_default_arguments(polling_ns))
+        if self.online is True and entity.enabled is True:
+            if await self.async_request_smartpoll(
+                epoch,
+                entity.device_lastupdate,
+                polling_ns,
+                polling_period_min,
+                polling_period_cloud,
+            ):
+                entity.device_lastupdate = epoch
 
     async def async_request_updates(self, epoch, namespace):
         """
@@ -655,7 +676,7 @@ class MerossDevice(MerossDeviceBase):
         likely to be 'NS_ALL', since it's the only message we request when offline.
         If we're connected to an MQTT broker anyway it could be any 'PUSH' message
         """
-        queued_requests = 0
+        self._queued_poll_requests = 0
         if (namespace is not None) or (self._mqtt_active is False):
             if self._http is not None:
                 # this is a special feature to use only on HTTP/AUTO in order to see
@@ -674,7 +695,7 @@ class MerossDevice(MerossDeviceBase):
                         # without wasting execution time here
                         return
                     await self.async_request(_namespace, mc.METHOD_GET, _payload)
-                    queued_requests += 1
+                    self._queued_poll_requests += 1
 
             if self._online is False:
                 return
@@ -686,26 +707,18 @@ class MerossDevice(MerossDeviceBase):
         # The big issue here is to reduce the rate of requests over MQTT when we're
         # binded to a Meross cloud profile
 
-        if self.entity_dnd.enabled is True:
-            await self.async_request_smartpoll(
-                epoch,
-                self.entity_dnd,
-                mc.NS_APPLIANCE_SYSTEM_DNDMODE,
-                0,
-                queued_requests=queued_requests,
-            )
-            if self._online is False:
-                return
-        if self.sensor_signal_strength.enabled is True:
-            await self.async_request_smartpoll(
-                epoch,
-                self.sensor_signal_strength,
-                mc.NS_APPLIANCE_SYSTEM_RUNTIME,
-                PARAM_SIGNAL_UPDATE_PERIOD,
-                queued_requests=queued_requests,
-            )
-            if self._online is False:
-                return
+        await self.async_request_smartpoll2(
+            epoch,
+            self.entity_dnd,
+            mc.NS_APPLIANCE_SYSTEM_DNDMODE,
+            0,
+        )
+        await self.async_request_smartpoll2(
+            epoch,
+            self.sensor_signal_strength,
+            mc.NS_APPLIANCE_SYSTEM_RUNTIME,
+            PARAM_SIGNAL_UPDATE_PERIOD,
+        )
 
     def receive(self, header: dict, payload: dict, protocol) -> bool:
         """
