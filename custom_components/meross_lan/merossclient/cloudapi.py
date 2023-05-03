@@ -326,8 +326,8 @@ class MerossMQTTClient(mqtt.Client):
     the trasmission rate is limited by RATELIMITER_MINDELAY
     which poses a minimum interval between successive publish
     """
-    RATELIMITER_MINDELAY = 10
-    RATELIMITER_MAXQUEUE = 6
+    RATELIMITER_MINDELAY = 12
+    RATELIMITER_MAXQUEUE = 5
     RATELIMITER_AVGPERIOD_DERATE = 0.1
 
     def __init__(self, credentials: MerossCloudCredentials, app_id: str | None = None):
