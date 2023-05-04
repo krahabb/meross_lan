@@ -398,10 +398,11 @@ class MerossMQTTClient(mqtt.Client):
         self,
         topic: str,
         payload: str,
+        priority: bool | None = None
     ) -> mqtt.MQTTMessageInfo | bool:
         with self.lock:
             queuelen = len(self._rl_deque)
-            if queuelen >= self.RATELIMITER_MAXQUEUE:
+            if priority is None and queuelen >= self.RATELIMITER_MAXQUEUE:
                 # TODO: log dropped message
                 self.rl_dropped += 1
                 return False
@@ -415,7 +416,10 @@ class MerossMQTTClient(mqtt.Client):
                     )
                     return super().publish(topic, payload)
 
-            self._rl_deque.append((topic, payload))
+            if priority is True:
+                self._rl_deque.appendleft((topic, payload))
+            else:
+                self._rl_deque.append((topic, payload))
             self._rl_queued = True
             return True
 

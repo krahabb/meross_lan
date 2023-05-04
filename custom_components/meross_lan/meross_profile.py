@@ -349,6 +349,11 @@ class MQTTConnection(Loggable, abc.ABC):
 
 
 class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
+    _MSG_PRIORITY_MAP = {
+        mc.METHOD_SET: True,
+        mc.METHOD_PUSH: False,
+        mc.METHOD_GET: None,
+    }
     __slots__ = (
         "_host",
         "_port",
@@ -445,6 +450,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                         messageid,
                     )
                 ),
+                MerossMQTTConnection._MSG_PRIORITY_MAP[method]
             )
             if ret is False:
                 self.warning(
