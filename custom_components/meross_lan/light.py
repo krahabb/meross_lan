@@ -16,7 +16,7 @@ import homeassistant.util.color as color_util
 
 from . import meross_entity as me
 from .const import DND_ID
-from .helpers import reverse_lookup
+from .helpers import SmartPollingStrategy, reverse_lookup
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
@@ -431,13 +431,13 @@ class LightMixin(
         if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in descriptor.ability:
             self.polling_dictionary[
                 mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT
-            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT]
+            ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT)
 
     def _init_light(self, payload: dict):
         MLLight(self, payload)
 
     def _handle_Appliance_Control_Light(self, header: dict, payload: dict):
-        self._parse_light(payload.get(mc.KEY_LIGHT))
+        self._parse_light(payload[mc.KEY_LIGHT])
 
     def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
         light_effect_map = {}

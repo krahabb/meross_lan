@@ -6,6 +6,7 @@ from homeassistant.components import number
 from homeassistant.const import PERCENTAGE, TEMP_CELSIUS
 
 from . import meross_entity as me
+from .helpers import SmartPollingStrategy
 from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
@@ -228,16 +229,15 @@ class ScreenBrightnessMixin(
             )
             self.polling_dictionary[
                 mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
-            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS]
+            ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS)
 
     def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
-        if isinstance(p_channels := payload.get(mc.KEY_BRIGHTNESS), list):
-            for p_channel in p_channels:
-                if p_channel.get(mc.KEY_CHANNEL) == 0:
-                    self._number_brightness_operation.update_native_value(
-                        p_channel[mc.KEY_OPERATION]
-                    )
-                    self._number_brightness_standby.update_native_value(
-                        p_channel[mc.KEY_STANDBY]
-                    )
-                    break
+        for p_channel in payload[mc.KEY_BRIGHTNESS]:
+            if p_channel.get(mc.KEY_CHANNEL) == 0:
+                self._number_brightness_operation.update_native_value(
+                    p_channel[mc.KEY_OPERATION]
+                )
+                self._number_brightness_standby.update_native_value(
+                    p_channel[mc.KEY_STANDBY]
+                )
+                break

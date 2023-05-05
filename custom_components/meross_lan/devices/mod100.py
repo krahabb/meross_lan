@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing
 
-from ..helpers import reverse_lookup
+from ..helpers import PollingStrategy, reverse_lookup
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -122,7 +122,9 @@ class DiffuserMixin(
         spray = payload.get(mc.KEY_SPRAY)
         if isinstance(spray, list):
             for p_spray in spray:
-                MLSpray(self, p_spray.get(mc.KEY_CHANNEL, 0), DiffuserMixin.SPRAY_MODE_MAP)
+                MLSpray(
+                    self, p_spray.get(mc.KEY_CHANNEL, 0), DiffuserMixin.SPRAY_MODE_MAP
+                )
         if mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR in self.descriptor.ability:
             # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
             # are supporting correct values so we implement them (#243)
@@ -134,7 +136,7 @@ class DiffuserMixin(
             )
             self.polling_dictionary[
                 mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR
-            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR]
+            ] = PollingStrategy(mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR)
 
     def _handle_Appliance_Control_Diffuser_Light(self, header: dict, payload: dict):
         self._parse_diffuser_light(payload.get(mc.KEY_LIGHT))

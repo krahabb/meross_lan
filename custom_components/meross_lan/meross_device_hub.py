@@ -10,7 +10,7 @@ from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
 from .const import DOMAIN, PARAM_HUBBATTERY_UPDATE_PERIOD
-from .helpers import ApiProfile, schedule_async_callback
+from .helpers import ApiProfile, SmartPollingStrategy, schedule_async_callback
 from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (  # mEROSS cONST
     const as mc,
@@ -46,7 +46,6 @@ class MerossDeviceHub(MerossDevice):
 
     __slots__ = (
         "subdevices",
-        "_lastupdate_battery",
         "_lastupdate_sensor",
         "_lastupdate_mts100",
         "_unsub_setup_again",
@@ -54,7 +53,6 @@ class MerossDeviceHub(MerossDevice):
 
     def __init__(self, descriptor, entry):
         self.subdevices: dict[object, MerossSubDevice] = {}
-        self._lastupdate_battery = 0
         self._lastupdate_sensor = None
         self._lastupdate_mts100 = None
         self._unsub_setup_again: asyncio.TimerHandle | None = None
@@ -68,6 +66,10 @@ class MerossDeviceHub(MerossDevice):
         self.platforms[MLHubAdjustNumber.PLATFORM] = None
         self.platforms[MLSwitch.PLATFORM] = None
         self.platforms[MLCalendar.PLATFORM] = None
+
+        self.polling_dictionary[mc.NS_APPLIANCE_HUB_BATTERY] = SmartPollingStrategy(
+            mc.NS_APPLIANCE_HUB_BATTERY, None, PARAM_HUBBATTERY_UPDATE_PERIOD
+        )
 
         # REMOVE
         global TRICK
@@ -136,7 +138,6 @@ class MerossDeviceHub(MerossDevice):
         self._subdevice_parse(mc.KEY_TOGGLEX, payload)
 
     def _handle_Appliance_Hub_Battery(self, header: dict, payload: dict):
-        self._lastupdate_battery = self.lastresponse
         self._subdevice_parse(mc.KEY_BATTERY, payload)
 
     def _handle_Appliance_Hub_Online(self, header: dict, payload: dict):
@@ -166,6 +167,27 @@ class MerossDeviceHub(MerossDevice):
                 _type = hassdevice.model
             except Exception:
                 return None
+
+        if _type in MTS100_ALL_TYPESET:
+            self._lastupdate_mts100 = 0
+            if mc.NS_APPLIANCE_HUB_MTS100_ADJUST not in self.polling_dictionary:
+                self.polling_dictionary[
+                    mc.NS_APPLIANCE_HUB_MTS100_ADJUST
+                ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
+        else:
+            self._lastupdate_sensor = 0
+            if mc.NS_APPLIANCE_HUB_SENSOR_ADJUST not in self.polling_dictionary:
+                self.polling_dictionary[
+                    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
+                ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
+            if mc.NS_APPLIANCE_HUB_TOGGLEX in self.descriptor.ability:
+                # this is a status message irrelevant for mts100(s) and
+                # other types. If not use an MQTT-PUSH friendly startegy
+                if _type not in (mc.TYPE_MS100,):
+                    self.polling_dictionary[
+                        mc.NS_APPLIANCE_HUB_TOGGLEX
+                    ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_TOGGLEX)
+
         deviceclass = WELL_KNOWN_TYPE_MAP.get(_type)  # type: ignore
         if deviceclass is None:
             # build something anyway...
@@ -254,7 +276,7 @@ class MerossDeviceHub(MerossDevice):
         else:
             yield []
 
-    async def async_request_updates(self, epoch, namespace):
+    async def async_request_updates(self, epoch: float, namespace: str | None):
         await super().async_request_updates(epoch, namespace)
         # we just ask for updates when something pops online (_lastupdate_xxxx == 0)
         # relying on push (over MQTT) or base polling updates (only HTTP) for any other changes
@@ -268,12 +290,9 @@ class MerossDeviceHub(MerossDevice):
         if self._online is False:
             return
 
-        needpoll = (namespace is not None) or (self._mqtt_active is False)
+        needpoll = (namespace is not None) or (self._mqtt_active is None)
         if self._lastupdate_sensor is not None:
             if needpoll or (self._lastupdate_sensor == 0):
-                await self.async_request(
-                    *get_default_arguments(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
-                )
                 for p in self._build_subdevices_payload(MTS100_ALL_TYPESET, False, 8):
                     await self.async_request(
                         mc.NS_APPLIANCE_HUB_SENSOR_ALL, mc.METHOD_GET, {mc.KEY_ALL: p}
@@ -283,9 +302,6 @@ class MerossDeviceHub(MerossDevice):
             return
         if self._lastupdate_mts100 is not None:
             if needpoll or (self._lastupdate_mts100 == 0):
-                await self.async_request(
-                    *get_default_arguments(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
-                )
                 for p in self._build_subdevices_payload(MTS100_ALL_TYPESET, True, 8):
                     await self.async_request(
                         mc.NS_APPLIANCE_HUB_MTS100_ALL, mc.METHOD_GET, {mc.KEY_ALL: p}
@@ -297,13 +313,6 @@ class MerossDeviceHub(MerossDevice):
                             mc.METHOD_GET,
                             {mc.KEY_SCHEDULE: p},
                         )
-
-        if self._online is False:
-            return
-        if (epoch - self._lastupdate_battery) >= PARAM_HUBBATTERY_UPDATE_PERIOD:
-            await self.async_request(
-                *get_default_arguments(mc.NS_APPLIANCE_HUB_BATTERY)
-            )
 
         # we also need to check for TOGGLEX state in case but this is not always needed:
         # for example, if we just have mts100-likes devices, their 'togglex' state is already carried by
@@ -405,7 +414,7 @@ class MerossSubDevice(MerossDeviceBase):
         # If instead this online status change is due to the single
         # subdevice coming online then we'll just wait for the next
         # polling cycle by setting the battery update trigger..
-        self.hub._lastupdate_battery = 0
+        pass
 
     def _parse(self, key: str, payload: dict):
         with self.exception_warning("_parse(%s, %s)", key, payload, timeout=14400):

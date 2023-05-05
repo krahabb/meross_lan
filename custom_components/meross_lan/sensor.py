@@ -20,7 +20,12 @@ from homeassistant.util import dt as dt_util
 
 from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT, PARAM_ENERGY_UPDATE_PERIOD
-from .helpers import ApiProfile, StrEnum, get_entity_last_state_available
+from .helpers import (
+    ApiProfile,
+    EntityPollingStrategy,
+    StrEnum,
+    get_entity_last_state_available,
+)
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
@@ -182,7 +187,7 @@ class ProtocolSensor(MLSensor):
             # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
             # if conf_protocol is fixed we'll not set these attrs (redundant)
             self._attr_extra_state_attributes[self.ATTR_HTTP] = self._get_attr_state(
-                device._http_lastresponse
+                device._http_active
             )
             self._attr_extra_state_attributes[self.ATTR_MQTT] = self._get_attr_state(
                 device._mqtt_active
@@ -329,6 +334,11 @@ class ElectricityMixin(
             self, MLSensor.DeviceClass.VOLTAGE
         )
         self._sensor_energy_estimate = EnergyEstimateSensor(self)
+        self.polling_dictionary[
+            mc.NS_APPLIANCE_CONTROL_ELECTRICITY
+        ] = EntityPollingStrategy(
+            mc.NS_APPLIANCE_CONTROL_ELECTRICITY, self._sensor_power
+        )
 
     def start(self):
         self._schedule_next_reset(dt_util.now())
@@ -361,19 +371,6 @@ class ElectricityMixin(
         self._sensor_power.update_state(power)
         self._sensor_current.update_state(electricity[mc.KEY_CURRENT] / 1000)  # type: ignore
         self._sensor_voltage.update_state(electricity[mc.KEY_VOLTAGE] / 10)  # type: ignore
-
-    async def async_request_updates(self, epoch, namespace):
-        await super().async_request_updates(epoch, namespace)
-        # we're always asking updates even if sensors could be disabled since
-        # there are far too many dependencies for these readings (energy sensor
-        # in ConsumptionMixin too depends on us) but it's unlikely all of these
-        # are disabled!
-        await self.async_request_smartpoll2(
-            epoch,
-            self._sensor_power,
-            mc.NS_APPLIANCE_CONTROL_ELECTRICITY,
-            0,
-        )
 
     def _schedule_next_reset(self, _now: datetime):
         with self.exception_warning("_schedule_next_reset"):
@@ -517,6 +514,13 @@ class ConsumptionMixin(
     def __init__(self, descriptor, entry):
         super().__init__(descriptor, entry)
         self._sensor_consumption: ConsumptionSensor = ConsumptionSensor(self)
+        self.polling_dictionary[
+            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
+        ] = EntityPollingStrategy(
+            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX,
+            self._sensor_consumption,
+            PARAM_ENERGY_UPDATE_PERIOD,
+        )
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -658,15 +662,6 @@ class ConsumptionMixin(
         if _sensor_consumption._hass_connected:
             _sensor_consumption.async_write_ha_state()
         self.log(DEBUG, "updating consumption=%d", day_last_value)
-
-    async def async_request_updates(self, epoch, namespace):
-        await super().async_request_updates(epoch, namespace)
-        await self.async_request_smartpoll2(
-            epoch,
-            self._sensor_consumption,
-            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX,
-            PARAM_ENERGY_UPDATE_PERIOD,
-        )
 
     def _set_offline(self):
         super()._set_offline()

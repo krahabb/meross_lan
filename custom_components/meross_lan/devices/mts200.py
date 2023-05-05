@@ -4,7 +4,7 @@ import typing
 
 from ..binary_sensor import MLBinarySensor
 from ..climate import MtsClimate, MtsSetPointNumber
-from ..helpers import reverse_lookup
+from ..helpers import SmartPollingStrategy, reverse_lookup
 from ..meross_entity import EntityCategory
 from ..merossclient import const as mc
 from ..number import MLConfigNumber
@@ -262,11 +262,11 @@ class Mts200Climate(MtsClimate):
 
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
-        self.binary_sensor_windowOpened.update_onoff(payload.get(mc.KEY_STATUS))
+        self.binary_sensor_windowOpened.update_onoff(payload[mc.KEY_STATUS])
 
     def _parse_sensor(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""
-        self.switch_sensor_mode.update_onoff(payload.get(mc.KEY_MODE))
+        self.switch_sensor_mode.update_onoff(payload[mc.KEY_MODE])
 
     def _parse_overheat(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
@@ -279,13 +279,9 @@ class Mts200Climate(MtsClimate):
                 mc.MTS200_OVERHEAT_WARNING_MAP.get(_warning, _warning)
             )
         if mc.KEY_MIN in payload:
-            self.number_overheat_value._attr_native_min_value = (
-                payload[mc.KEY_MIN] / 10
-            )
+            self.number_overheat_value._attr_native_min_value = payload[mc.KEY_MIN] / 10
         if mc.KEY_MAX in payload:
-            self.number_overheat_value._attr_native_max_value = (
-                payload[mc.KEY_MAX] / 10
-            )
+            self.number_overheat_value._attr_native_max_value = payload[mc.KEY_MAX] / 10
         if mc.KEY_VALUE in payload:
             self.number_overheat_value.update_native_value(payload[mc.KEY_VALUE])
         if mc.KEY_CURRENTTEMP in payload:
@@ -308,54 +304,58 @@ class ThermostatMixin(
                 self._polling_payload.append({mc.KEY_CHANNEL: m[mc.KEY_CHANNEL]})
         if self._polling_payload:
             if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR in self.descriptor.ability:
-                self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR] = {
-                    mc.KEY_SENSOR: self._polling_payload
-                }
+                self.polling_dictionary[
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
+                ] = SmartPollingStrategy(
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
+                    {mc.KEY_SENSOR: self._polling_payload},
+                )
             if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT in self.descriptor.ability:
-                self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT] = {
-                    mc.KEY_OVERHEAT: self._polling_payload
-                }
+                self.polling_dictionary[
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
+                ] = SmartPollingStrategy(
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
+                    {mc.KEY_OVERHEAT: self._polling_payload},
+                )
 
     def _handle_Appliance_Control_Thermostat_Mode(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_MODE, payload.get(mc.KEY_MODE))
+        self._parse__generic_array(mc.KEY_MODE, payload[mc.KEY_MODE])
 
     def _handle_Appliance_Control_Thermostat_Calibration(
         self, header: dict, payload: dict
     ):
-        self._parse__generic_array(mc.KEY_CALIBRATION, payload.get(mc.KEY_CALIBRATION))
+        self._parse__generic_array(mc.KEY_CALIBRATION, payload[mc.KEY_CALIBRATION])
 
     def _handle_Appliance_Control_Thermostat_DeadZone(
         self, header: dict, payload: dict
     ):
-        self._parse__generic_array(mc.KEY_DEADZONE, payload.get(mc.KEY_DEADZONE))
+        self._parse__generic_array(mc.KEY_DEADZONE, payload[mc.KEY_DEADZONE])
 
     def _handle_Appliance_Control_Thermostat_Frost(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_FROST, payload.get(mc.KEY_FROST))
+        self._parse__generic_array(mc.KEY_FROST, payload[mc.KEY_FROST])
 
     def _handle_Appliance_Control_Thermostat_Overheat(
         self, header: dict, payload: dict
     ):
-        self._parse__generic_array(mc.KEY_OVERHEAT, payload.get(mc.KEY_OVERHEAT))
+        self._parse__generic_array(mc.KEY_OVERHEAT, payload[mc.KEY_OVERHEAT])
 
     def _handle_Appliance_Control_Thermostat_windowOpened(
         self, header: dict, payload: dict
     ):
-        self._parse__generic_array(
-            mc.KEY_WINDOWOPENED, payload.get(mc.KEY_WINDOWOPENED)
-        )
+        self._parse__generic_array(mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED])
 
     def _handle_Appliance_Control_Thermostat_Schedule(
         self, header: dict, payload: dict
     ):
-        self._parse__generic_array(mc.KEY_SCHEDULE, payload.get(mc.KEY_SCHEDULE))
+        self._parse__generic_array(mc.KEY_SCHEDULE, payload[mc.KEY_SCHEDULE])
 
     def _handle_Appliance_Control_Thermostat_HoldAction(
         self, header: dict, payload: dict
     ):
-        self._parse__generic_array(mc.KEY_HOLDACTION, payload.get(mc.KEY_HOLDACTION))
+        self._parse__generic_array(mc.KEY_HOLDACTION, payload[mc.KEY_HOLDACTION])
 
     def _handle_Appliance_Control_Thermostat_Sensor(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_SENSOR, payload.get(mc.KEY_SENSOR))
+        self._parse__generic_array(mc.KEY_SENSOR, payload[mc.KEY_SENSOR])
 
     def _parse_thermostat(self, payload: dict):
         """

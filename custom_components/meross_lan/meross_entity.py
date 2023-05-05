@@ -46,6 +46,10 @@ class MerossFakeEntity:
 
     enabled = False
 
+    @staticmethod
+    def update_state(state):
+        pass
+
 
 class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     PLATFORM: str
