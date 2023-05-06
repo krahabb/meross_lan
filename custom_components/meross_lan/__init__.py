@@ -173,7 +173,8 @@ class MerossApi(MQTTConnection, ApiProfile):
 
     @property
     def broker(self):
-        return "homeassistant"
+        # TODO: recover the HA MQTT conf BROKER:PORT
+        return "homeassistant", 0
 
     def build_device(self, entry: ConfigEntry) -> MerossDevice:
         """

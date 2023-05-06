@@ -548,13 +548,36 @@ class MerossDevice(MerossDeviceBase):
         return self._online
 
     @property
-    def locallybound(self):
+    def mqtt_locallyactive(self):
         """
-        should report if the device is paired to meross or not
-        This should actually be inferred from system payload but at the moment
-        we just euristically guess by the fact we're receiving 'local' MQTT
+        reports if the device is actively paired to a private (non-meross) MQTT
         """
-        return self._mqtt_connected == ApiProfile.api
+        return self._mqtt_active is ApiProfile.api
+
+    @property
+    def mqtt_broker(self) -> tuple[str, int]:
+        # deciding which broker to connect to might prove to be hard
+        # since devices might fail-over the mqtt connection between 2 hosts
+        def _safe_port(p_dict: dict, key: str) -> int:
+            try:
+                return int(p_dict[key]) or mc.MQTT_DEFAULT_PORT
+            except Exception:
+                return mc.MQTT_DEFAULT_PORT
+
+        if p_debug := self.device_debug:
+            # we have 'current' connection info so this should be very trustable
+            with self.exception_warning(
+                "mqtt_broker - parsing current brokers info", timeout=10
+            ):
+                p_cloud = p_debug[mc.KEY_CLOUD]
+                active_server = p_cloud[mc.KEY_ACTIVESERVER]
+                if active_server == p_cloud[mc.KEY_MAINSERVER]:
+                    return str(active_server), _safe_port(p_cloud, mc.KEY_MAINPORT)
+                elif active_server == p_cloud[mc.KEY_SECONDSERVER]:
+                    return str(active_server), _safe_port(p_cloud, mc.KEY_SECONDPORT)
+
+        fw = self.descriptor.firmware
+        return str(fw[mc.KEY_SERVER]), _safe_port(fw, mc.KEY_PORT)
 
     def get_datetime(self, epoch):
         """
@@ -651,7 +674,7 @@ class MerossDevice(MerossDeviceBase):
             # avoid any protocol auto-switching...
             if await self.async_http_request(*polling_args) is not None:
                 return True
-        if self.locallybound or (
+        if (self.mqtt_locallyactive is True) or (
             (self._queued_poll_requests == 0)
             and ((epoch - lastupdate) > polling_period_cloud)
         ):
@@ -799,7 +822,50 @@ class MerossDevice(MerossDeviceBase):
         self._parse__generic_array(key, payload[key])
 
     def _handle_Appliance_System_All(self, header: dict, payload: dict):
-        self._parse_all(payload)
+        descr = self.descriptor
+        oldfirmware = descr.firmware
+        descr.update(payload)
+
+        if oldfirmware != descr.firmware:
+            # persist changes to configentry only when relevant properties change
+            self.needsave = True
+
+        if self._mqtt_active:
+            if (not is_device_online(descr.system)):
+                self._mqtt_active = None
+                self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
+        elif self._mqtt_connected and is_device_online(descr.system):
+            try:
+                if self._mqtt_connected.broker == self.mqtt_broker:
+                    self._mqtt_active = self._mqtt_connected
+                    self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
+            except Exception:
+                pass
+
+        if self.mqtt_locallyactive:
+            # only deal with time related settings when devices are un-paired
+            # from the meross cloud
+            if self.device_timedelta and mc.NS_APPLIANCE_SYSTEM_CLOCK in descr.ability:
+                # timestamp misalignment: try to fix it
+                # only when devices are paired on our MQTT
+                self.mqtt_request(mc.NS_APPLIANCE_SYSTEM_CLOCK, mc.METHOD_PUSH, {})
+
+            if mc.NS_APPLIANCE_SYSTEM_TIME in descr.ability:
+                # check the appliance timeoffsets are updated (see #36)
+                self._config_timezone(int(self.lastresponse), descr.time.get(mc.KEY_TIMEZONE))  # type: ignore
+
+        for key, value in descr.digest.items():
+            _parse = getattr(self, f"_parse_{key}", None)
+            if _parse is not None:
+                _parse(value)
+        # older firmwares (MSS110 with 1.1.28) look like
+        # carrying 'control' instead of 'digest'
+        if isinstance(p_control := descr.all.get(mc.KEY_CONTROL), dict):
+            for key, value in p_control.items():
+                _parse = getattr(self, f"_parse_{key}", None)
+                if _parse is not None:
+                    _parse(value)
+
         if self.needsave is True:
             self.needsave = False
             self._save_config_entry(payload)
@@ -820,7 +886,9 @@ class MerossDevice(MerossDeviceBase):
         # having NTP opened to setup the device
         # Note: I actually see this NS only on mss310 plugs
         # (msl120j bulb doesnt have it)
-        if self.locallybound and (header[mc.KEY_METHOD] == mc.METHOD_PUSH):
+        if (self.mqtt_locallyactive is True) and (
+            header[mc.KEY_METHOD] == mc.METHOD_PUSH
+        ):
             self.mqtt_request(
                 mc.NS_APPLIANCE_SYSTEM_CLOCK,
                 mc.METHOD_PUSH,
@@ -838,7 +906,9 @@ class MerossDevice(MerossDeviceBase):
         kindly answer a 'SETACK'
         assumption is we're working on mqtt
         """
-        if self.locallybound and (header[mc.KEY_METHOD] == mc.METHOD_SET):
+        if (self.mqtt_locallyactive is True) and (
+            header[mc.KEY_METHOD] == mc.METHOD_SET
+        ):
             self.mqtt_request(
                 mc.NS_APPLIANCE_CONTROL_BIND,
                 mc.METHOD_SETACK,
@@ -886,13 +956,13 @@ class MerossDevice(MerossDeviceBase):
 
     def mqtt_connected(self):
         assert self._mqtt_connection
-        self.log(DEBUG, "mqtt_connected to %s", self._mqtt_connection.broker)
+        self.log(DEBUG, "mqtt_connected to %s:%d", *self._mqtt_connection.broker)
         self._mqtt_connected = self._mqtt_connection
         self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT_BROKER)
 
     def mqtt_disconnected(self):
         assert self._mqtt_connection
-        self.log(DEBUG, "mqtt_disconnected from %s", self._mqtt_connection.broker)
+        self.log(DEBUG, "mqtt_disconnected from %s:%d", *self._mqtt_connection.broker)
         self._mqtt_connected = self._mqtt_active = None
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             if self.conf_protocol is CONF_PROTOCOL_AUTO:
@@ -1098,7 +1168,7 @@ class MerossDevice(MerossDeviceBase):
                     # state updates coming through mqtt (since we're still
                     # connected) but now requesting over http as preferred
 
-                if self._mqtt_active is not None and self.locallybound:
+                if self.mqtt_locallyactive is True:
                     # implement an heartbeat since mqtt might
                     # be unused for quite a bit
                     if (epoch - self._mqtt_lastresponse) > PARAM_HEARTBEAT_PERIOD:
@@ -1149,7 +1219,7 @@ class MerossDevice(MerossDeviceBase):
         and not at the configuration/option level
         see derived implementations
         """
-        if self.locallybound and (
+        if (self.mqtt_locallyactive is True) and (
             mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability
         ):
             global TIMEZONES_SET
@@ -1184,10 +1254,8 @@ class MerossDevice(MerossDeviceBase):
         (this is actually called in sequence with entry_update_listener
         just the latter is async)
         """
-        if (
-            (self._online is True)
-            and self.locallybound
-            and (mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability)
+        if (self.mqtt_locallyactive is True) and (
+            mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability
         ):
             self._config_timezone(int(time()), user_input.get(mc.KEY_TIMEZONE))
 
@@ -1230,66 +1298,13 @@ class MerossDevice(MerossDeviceBase):
         if self._online is False:
             await self.async_request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
 
-    def _parse_all(self, payload: dict):
-        """
-        called internally when we receive an NS_SYSTEM_ALL
-        i.e. global device setup/status
-        we usually don't expect a 'structural' change in the device here
-        except maybe for Hub(s) which we're going to investigate later
-        set 'self.needsave' if we want to persist the payload to the ConfigEntry
-        """
-        descr = self.descriptor
-        oldfirmware = descr.firmware
-        descr.update(payload)
-
-        if oldfirmware != descr.firmware:
-            # persist changes to configentry only when relevant properties change
-            self.needsave = True
-
-        if self._mqtt_connected is not None:
-            if is_device_online(descr.system):
-                if self._mqtt_active is None:
-                    self._mqtt_active = self._mqtt_connection
-                    self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
-            else:
-                if self._mqtt_active is not None:
-                    self._mqtt_active = None
-                    self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
-
-        epoch = int(self.lastresponse)
-
-        if self.locallybound:
-            # only deal with time related settings when devices are un-paired
-            # from the meross cloud
-            if self.device_timedelta and mc.NS_APPLIANCE_SYSTEM_CLOCK in descr.ability:
-                # timestamp misalignment: try to fix it
-                # only when devices are paired on our MQTT
-                self.request(mc.NS_APPLIANCE_SYSTEM_CLOCK, mc.METHOD_PUSH, {})
-
-            if mc.NS_APPLIANCE_SYSTEM_TIME in descr.ability:
-                # check the appliance timeoffsets are updated (see #36)
-                self._config_timezone(epoch, descr.time.get(mc.KEY_TIMEZONE))  # type: ignore
-
-        for key, value in descr.digest.items():
-            _parse = getattr(self, f"_parse_{key}", None)
-            if _parse is not None:
-                _parse(value)
-        # older firmwares (MSS110 with 1.1.28) look like
-        # carrying 'control' instead of 'digest'
-        if isinstance(p_control := descr.all.get(mc.KEY_CONTROL), dict):
-            for key, value in p_control.items():
-                _parse = getattr(self, f"_parse_{key}", None)
-                if _parse is not None:
-                    _parse(value)
-
     def _config_timestamp(self, epoch, device_timedelta):
         if abs(self.device_timedelta - device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
             self.device_timedelta = device_timedelta
         else:  # average the sampled timedelta
             self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
-        if (
-            self.locallybound
-            and mc.NS_APPLIANCE_SYSTEM_CLOCK in self.descriptor.ability
+        if (self.mqtt_locallyactive is True) and (
+            mc.NS_APPLIANCE_SYSTEM_CLOCK in self.descriptor.ability
         ):
             # only deal with time related settings when devices are un-paired
             # from the meross cloud
@@ -1297,7 +1312,7 @@ class MerossDevice(MerossDeviceBase):
             if last_config_delay > 1800:
                 # 30 minutes 'cooldown' in order to avoid restarting
                 # the procedure too often
-                self.request(mc.NS_APPLIANCE_SYSTEM_CLOCK, mc.METHOD_PUSH, {})
+                self.mqtt_request(mc.NS_APPLIANCE_SYSTEM_CLOCK, mc.METHOD_PUSH, {})
                 self.device_timedelta_config_epoch = epoch
                 return
             if last_config_delay < 30:
@@ -1364,7 +1379,7 @@ class MerossDevice(MerossDeviceBase):
                     )
                     timerules = [[0, 0, 0], [epoch + PARAM_TIMEZONE_CHECK_PERIOD, 0, 1]]
 
-                self.request(
+                self.mqtt_request(
                     mc.NS_APPLIANCE_SYSTEM_TIME,
                     mc.METHOD_SET,
                     payload={
@@ -1375,7 +1390,7 @@ class MerossDevice(MerossDeviceBase):
                     },
                 )
             elif p_timezone:  # and !timezone
-                self.request(
+                self.mqtt_request(
                     mc.NS_APPLIANCE_SYSTEM_TIME,
                     mc.METHOD_SET,
                     payload={mc.KEY_TIME: {mc.KEY_TIMEZONE: "", mc.KEY_TIMERULE: []}},

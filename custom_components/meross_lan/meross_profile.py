@@ -117,7 +117,7 @@ class MQTTConnection(Loggable, abc.ABC):
 
     @property
     @abc.abstractmethod
-    def broker(self):
+    def broker(self) -> tuple[str, int]:
         raise NotImplementedError()
 
     def attach(self, device: MerossDevice):
@@ -416,7 +416,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
 
     @property
     def broker(self):
-        return f"{self._host}:{self._port}"
+        return self._host, self._port
 
     def attach(self, device: MerossDevice):
         super().attach(device)
@@ -450,7 +450,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                         messageid,
                     )
                 ),
-                MerossMQTTConnection._MSG_PRIORITY_MAP[method]
+                MerossMQTTConnection._MSG_PRIORITY_MAP[method],
             )
             if ret is False:
                 self.warning(
@@ -654,36 +654,7 @@ class MerossCloudProfile(dict, ApiProfile):
             return
 
         with self.exception_warning("attach_mqtt"):
-            # deciding which broker to connect to might prove to be hard
-            # since devices might fail-over the mqtt connection between 2 hosts
-            def _safe_port(p_dict: dict, key: str) -> int:
-                try:
-                    return int(p_dict[key]) or mc.MQTT_DEFAULT_PORT
-                except Exception:
-                    return mc.MQTT_DEFAULT_PORT
-
-            host = None
-            port = None
-            if p_debug := device.device_debug:
-                # we have 'current' connection info so this should be very trustable
-                with self.exception_warning(
-                    "attach_mqtt - parsing current brokers info"
-                ):
-                    p_cloud = p_debug[mc.KEY_CLOUD]
-                    active_server = p_cloud[mc.KEY_ACTIVESERVER]
-                    if active_server == p_cloud[mc.KEY_MAINSERVER]:
-                        host = str(active_server)
-                        port = _safe_port(p_cloud, mc.KEY_MAINPORT)
-                    elif active_server == p_cloud[mc.KEY_SECONDSERVER]:
-                        host = str(active_server)
-                        port = _safe_port(p_cloud, mc.KEY_SECONDPORT)
-
-            if (not host) or (not port):
-                fw = device.descriptor.firmware
-                host = fw[mc.KEY_SERVER]
-                port = _safe_port(fw, mc.KEY_PORT)
-
-            self._get_or_create_mqttconnection(host, port).attach(device)
+            self._get_or_create_mqttconnection(*device.mqtt_broker).attach(device)
 
     def link(self, device: MerossDevice):
         device_id = device.id
