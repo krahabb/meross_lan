@@ -22,10 +22,19 @@ from homeassistant.util.dt import now
 from . import meross_entity as me
 from .binary_sensor import MLBinarySensor
 from .const import (
+    CONF_PROTOCOL_HTTP,
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
-from .helpers import clamp, get_entity_last_state, schedule_callback, versiontuple
+from .helpers import (
+    PollingStrategy,
+    SmartPollingStrategy,
+    clamp,
+    get_entity_last_state,
+    schedule_async_callback,
+    schedule_callback,
+    versiontuple,
+)
 from .merossclient import const as mc, get_default_arguments
 from .number import MLConfigNumber
 from .switch import MLSwitch
@@ -374,7 +383,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             # update our estimates for transition duration
             if self._open_request != _open:
                 # keep monitoring the transition in less than 1 sec
-                if self._transition_unsub is None:
+                if not self._transition_unsub:
                     self._transition_unsub = schedule_callback(
                         self.hass, 0.9, self._transition_callback
                     )
@@ -414,10 +423,10 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         """
 
     def _transition_cancel(self):
-        if self._transition_unsub is not None:
+        if self._transition_unsub:
             self._transition_unsub.cancel()
             self._transition_unsub = None
-        if self._transition_end_unsub is not None:
+        if self._transition_end_unsub:
             self._transition_end_unsub.cancel()
             self._transition_end_unsub = None
         self._open_request = None
@@ -476,8 +485,9 @@ class GarageMixin(
     number_doorCloseDuration: MLGarageConfigNumber | None = None
 
     def __init__(self, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(descriptor, entry)
         self.garageDoor_config = {}
+        self._polling_payload = []
+        super().__init__(descriptor, entry)
         self.number_signalDuration = MLGarageConfigNumber(
             self, None, mc.KEY_SIGNALDURATION
         )
@@ -485,13 +495,16 @@ class GarageMixin(
         self.number_signalDuration._attr_native_min_value = 0.1
         self.switch_buzzerEnable = MLGarageConfigSwitch(self, mc.KEY_BUZZERENABLE)
         if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in descriptor.ability:
-            self.polling_dictionary[mc.NS_APPLIANCE_GARAGEDOOR_CONFIG] = mc.PAYLOAD_GET[
+            self.polling_dictionary[
                 mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
-            ]
+            ] = SmartPollingStrategy(mc.NS_APPLIANCE_GARAGEDOOR_CONFIG)
         if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in descriptor.ability:
             self.polling_dictionary[
                 mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
-            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG]
+            ] = SmartPollingStrategy(
+                mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
+                {mc.KEY_CONFIG: self._polling_payload},
+            )
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -501,7 +514,9 @@ class GarageMixin(
         self.number_doorCloseDuration = None
 
     def _init_garageDoor(self, payload: dict):
-        MLGarage(self, payload[mc.KEY_CHANNEL])
+        channel = payload[mc.KEY_CHANNEL]
+        MLGarage(self, channel)
+        self._polling_payload.append({mc.KEY_CHANNEL: channel})
 
     def _handle_Appliance_GarageDoor_State(self, header: dict, payload: dict):
         self._parse__generic(mc.KEY_STATE, payload.get(mc.KEY_STATE))
@@ -588,8 +603,6 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         "_position_start",
         "_position_starttime",
         "_position_endtime",
-        "_position_lasttime",
-        "_state_lasttime",
         "_transition_unsub",
         "_transition_end_unsub",
     )
@@ -604,8 +617,6 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         self._position_start = None  # set when when we're controlling a timed position
         self._position_starttime = None  # epoch of transition start
         self._position_endtime = None  # epoch of 'target position reached'
-        self._position_lasttime = 0  # epoch of last POSITION msg received
-        self._state_lasttime = 0  # epoch of last STATE msg received
         self._transition_unsub = None
         self._transition_end_unsub = None
         self._attr_current_cover_position: int | None = None
@@ -712,17 +723,17 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
     async def async_request_position(self, position: int, timeout: float | None = None):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
+                # the _ack_callback might be async'd (on MQTT) so
+                # we re-ensure current transitions are clean
+                self._transition_cancel()
+                self._transition_unsub = schedule_async_callback(
+                    self.hass, 0, self._async_transition_callback
+                )
                 if timeout is not None:
                     self._position_endtime = time() + timeout
                     self._transition_end_unsub = schedule_callback(
                         self.hass, timeout, self._transition_end_callback
                     )
-                # when requesting a position we're not setting up a _transition_callback yet
-                # but we wait for _parse_state to actually decide if there's movement or not
-                # and then start following the transition
-                self.device.request(
-                    *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
-                )
 
         self._transition_cancel()
         await self.device.async_request(
@@ -750,7 +761,6 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         positioning and switch entity behaviour to trust this value
         bypassing all of the 'time based' emulation
         """
-        self._position_lasttime = self.device.lastresponse
         if not isinstance(position := payload.get(mc.KEY_POSITION), int):
             return
 
@@ -778,7 +788,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._async_write_ha_state()
 
     def _parse_state(self, payload: dict):
-        self._state_lasttime = epoch = self.device.lastresponse
+        epoch = self.device.lastresponse
         state = payload.get(mc.KEY_STATE)
         if self._position_native_isgood:
             if state == mc.ROLLERSHUTTER_STATE_OPENING:
@@ -835,10 +845,13 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             # in case our _close_calback has not yet been called or failed
             if epoch >= self._position_endtime:
                 self.request_position(-1)
+                return
 
-        if self._transition_unsub is None:
+        if not self._transition_unsub:
             # ensure we 'follow' cover movement
-            self._transition_callback()
+            self._transition_unsub = schedule_async_callback(
+                self.hass, 2, self._async_transition_callback
+            )
 
     def _parse_config(self, payload: dict):
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
@@ -859,20 +872,19 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 EXTRA_ATTR_DURATION_CLOSE
             ] = self._signalClose
 
-    @callback
-    def _transition_callback(self):
-        self._transition_unsub = schedule_callback(
-            self.hass, 2, self._transition_callback
+    async def _async_transition_callback(self):
+        self._transition_unsub = schedule_async_callback(
+            self.hass, 2, self._async_transition_callback
         )
-        epoch = time()
-        if (epoch - self._state_lasttime) > 1:
-            self.device.request(
+        device = self.device
+        if device.curr_protocol is CONF_PROTOCOL_HTTP and not device._mqtt_active:
+            await device.async_http_request(
                 *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
             )
-        if self._position_native_isgood and ((epoch - self._position_lasttime) > 1):
-            self.device.request(
-                *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
-            )
+            if self._position_native_isgood:
+                await device.async_http_request(
+                    *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
+                )
 
     @callback
     def _transition_end_callback(self):
@@ -882,10 +894,10 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     def _transition_cancel(self):
         self._position_endtime = None
-        if self._transition_end_unsub is not None:
+        if self._transition_end_unsub:
             self._transition_end_unsub.cancel()
             self._transition_end_unsub = None
-        if self._transition_unsub is not None:
+        if self._transition_unsub:
             self._transition_unsub.cancel()
             self._transition_unsub = None
 
@@ -945,13 +957,13 @@ class RollerShutterMixin(
             MLRollerShutter(self, 0)
             self.polling_dictionary[
                 mc.NS_APPLIANCE_ROLLERSHUTTER_STATE
-            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_ROLLERSHUTTER_STATE]
+            ] = PollingStrategy(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
             self.polling_dictionary[
                 mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION
-            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION]
+            ] = PollingStrategy(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
             self.polling_dictionary[
                 mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG
-            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG]
+            ] = SmartPollingStrategy(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG)
 
     def _handle_Appliance_RollerShutter_Position(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_POSITION, payload.get(mc.KEY_POSITION))

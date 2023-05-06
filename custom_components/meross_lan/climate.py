@@ -16,6 +16,9 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .meross_device import MerossDevice
+    from .meross_device_hub import MerossSubDevice
+
 
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
@@ -43,14 +46,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         HVACMode.AUTO: PRESET_AUTO,
     }
 
-    _attr_translation_key = "mts_climate"
-    _attr_current_temperature = None
-    _attr_hvac_action = None
-    _attr_hvac_mode = None
     _attr_hvac_modes: Final = [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO]
-    _attr_max_temp = 35
-    _attr_min_temp = 5
-    _attr_preset_mode = None
     _attr_preset_modes: Final = [
         PRESET_OFF,
         PRESET_CUSTOM,
@@ -59,22 +55,44 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         PRESET_AWAY,
         PRESET_AUTO,
     ]
-    _attr_supported_features = (
+    _attr_supported_features: Final = (
         climate.ClimateEntityFeature.PRESET_MODE
         | climate.ClimateEntityFeature.TARGET_TEMPERATURE
     )
-    _attr_target_temperature = None
-    _attr_target_temperature_step = 0.5
-
-    _mts_mode: int | None = None
-    _mts_onoff = None
-    _mts_heating = None
 
     # these mappings are defined in inherited MtsXXX
     # they'll map between mts device 'mode' and HA 'preset'
     MTS_MODE_AUTO: ClassVar[int]
     MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int, str]]
     PRESET_TO_TEMPERATUREKEY_MAP: ClassVar[dict[str, str]]
+
+    __slots__ = (
+        "_attr_current_temperature",
+        "_attr_hvac_action",
+        "_attr_hvac_mode",
+        "_attr_max_temp",
+        "_attr_min_temp",
+        "_attr_preset_mode",
+        "_attr_target_temperature",
+        "_mts_mode",
+        "_mts_onoff",
+        "_mts_heating",
+    )
+
+    def __init__(
+        self, device: MerossDevice, channel: object, subdevice: MerossSubDevice | None
+    ):
+        self._attr_current_temperature = None
+        self._attr_hvac_action = None
+        self._attr_hvac_mode = None
+        self._attr_max_temp = 35
+        self._attr_min_temp = 5
+        self._attr_preset_mode = None
+        self._attr_target_temperature = None
+        self._mts_mode: int | None = None
+        self._mts_onoff = None
+        self._mts_heating = None
+        super().__init__(device, channel, None, None, subdevice)
 
     def update_modes(self):
         if self._mts_onoff:
@@ -92,7 +110,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
             self._attr_hvac_mode = HVACMode.OFF
             self._attr_hvac_action = HVACAction.OFF
 
-        if self.subdevice is not None:
+        if self.subdevice:
             self._attr_state = self._attr_hvac_mode if self.subdevice.online else None
         else:
             self._attr_state = self._attr_hvac_mode if self.device.online else None
@@ -138,7 +156,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     @property
     def target_temperature_step(self):
-        return self._attr_target_temperature_step
+        return 0.5
 
     @property
     def preset_modes(self):
@@ -147,6 +165,10 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     @property
     def preset_mode(self):
         return self._attr_preset_mode
+
+    @property
+    def translation_key(self):
+        return "mts_climate"
 
     async def async_turn_on(self):
         await self.async_request_onoff(1)
@@ -211,7 +233,7 @@ class MtsSetPointNumber(MLConfigNumber):
 
     @property
     def native_step(self):
-        return self._climate._attr_target_temperature_step
+        return self._climate.target_temperature_step
 
     @property
     def native_unit_of_measurement(self):

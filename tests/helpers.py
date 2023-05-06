@@ -146,7 +146,7 @@ def build_emulator_for_profile(
         if device_info_dict:
             for device_info in cloudprofiledata["deviceInfo"].values():
                 device_type = device_info[mc.KEY_DEVICETYPE]  # type: ignore
-                if (model is not None) and (model != device_type):
+                if model and (model != device_type):
                     # we asked for a specific model
                     continue
                 model = device_type
@@ -234,7 +234,7 @@ class EmulatorContext(contextlib.AbstractContextManager):
         self.emulator = emulator
         self.host = str(id(emulator))
         self.aioclient_mock = aioclient_mock
-        if frozen_time is not None:
+        if frozen_time:
             self.frozen_time = frozen_time
             emulator.update_epoch()
         else:
@@ -253,7 +253,7 @@ class EmulatorContext(contextlib.AbstractContextManager):
 
     async def _handle_http_request(self, method, url, data):
         response = self.emulator.handle(data)
-        if self.frozen_time is not None:
+        if self.frozen_time:
             # emulate http roundtrip time
             self.frozen_time.tick(timedelta(seconds=tc.MOCK_HTTP_RESPONSE_DELAY))
         return AiohttpClientMockResponse(method, url, json=response)
@@ -300,6 +300,49 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         )
         self.config_entry.add_to_hass(hass)
 
+    async def __aenter__(self):
+        self.time = self._freeze_time.start()
+        self.emulator_context = EmulatorContext(
+            self.emulator, self.aioclient_mock, self.time
+        )
+        self.emulator_context.__enter__()
+
+        @contextlib.contextmanager
+        def _patch_exception_warning(msg: str, *args, **kwargs):
+            try:
+                yield
+            except Exception as exception:
+                # These exceptions are suppresed in 'live' code and
+                # logged as warnings but in tests we want to better see
+                # what's going wrong.
+                # Right now we're strict enough to actually
+                # identify every 'suppressed' exception in real code
+                raise exception
+                if self.device is None:
+                    # at context 'cold start' we still don't have the device instance
+                    raise exception
+                self.device.warning(
+                    f"{exception.__class__.__name__}({str(exception)}) in {msg}",
+                    *args,
+                    **kwargs,
+                )
+
+        self._patch_exception_warning = patch.object(
+            MerossDevice,
+            "exception_warning",
+            side_effect=_patch_exception_warning,
+        )
+        self._mock_exception_warning = self._patch_exception_warning.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        try:
+            await self.async_unload_config_entry()
+        finally:
+            self._patch_exception_warning.stop()
+            self.emulator_context.__exit__(exc_type, exc_value, traceback)
+            self._freeze_time.stop()
+
     async def perform_coldstart(self):
         """
         to be called after setting up a device (context) to actually
@@ -307,7 +350,7 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         After this the device should be online and all the polling
         namespaces done
         """
-        if self._config_entry_loaded is False:
+        if not self._config_entry_loaded:
             await self.async_load_config_entry()
         assert self.device
         self.time.tick(timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY))
@@ -317,7 +360,7 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
 
     async def async_load_config_entry(self):
         assert self.device is None
-        assert self._config_entry_loaded is False
+        assert not self._config_entry_loaded
         hass = self.hass
         self._config_entry_loaded = await hass.config_entries.async_setup(
             self.config_entry.entry_id
@@ -419,21 +462,6 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         self._warp_run = False
         await self._warp_task
         self._warp_task = None
-
-    async def __aenter__(self):
-        self.time = self._freeze_time.start()
-        self._emulator_context = EmulatorContext(
-            self.emulator, self.aioclient_mock, self.time
-        )
-        self._emulator_context.__enter__()
-        return self
-
-    async def __aexit__(self, exc_type, exc_value, traceback):
-        try:
-            await self.async_unload_config_entry()
-        finally:
-            self._emulator_context.__exit__(exc_type, exc_value, traceback)
-            self._freeze_time.stop()
 
 
 class CloudApiMocker(contextlib.AbstractContextManager):

@@ -32,7 +32,7 @@ async def async_get_config_entry_diagnostics(
     unique_id = unique_id.split(".")
     if unique_id[0] == "profile":
         # profile entry
-        if (profile := MerossApi.profiles.get(unique_id[1])) is not None:
+        if profile := MerossApi.profiles.get(unique_id[1]):
             data = obfuscated_dict_copy(profile)  # type: ignore
             # the profile contains uuid as keys and obfuscation
             # is not smart enough
@@ -45,8 +45,7 @@ async def async_get_config_entry_diagnostics(
             return obfuscated_dict_copy(entry.data)  # type: ignore
 
     data = obfuscated_dict_copy(entry.data)  # type: ignore
-    device = MerossApi.devices.get(unique_id[0])  # type: ignore
-    if device is not None:
+    if device := MerossApi.devices.get(unique_id[0]):
         data["deviceclass"] = type(device).__name__
         data[CONF_TRACE] = await device.get_diagnostics_trace(
             data.get(CONF_TRACE_TIMEOUT)

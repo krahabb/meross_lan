@@ -7,36 +7,14 @@ from homeassistant.components.media_player import (
     MediaPlayerDeviceClass,
     MediaPlayerEntity,
 )
-
-try:
-    from homeassistant.components.media_player.const import (
-        MEDIA_TYPE_MUSIC,
-        MediaPlayerEntityFeature,
-    )
-
-    SUPPORT_VOLUME_MUTE = MediaPlayerEntityFeature.VOLUME_MUTE
-    SUPPORT_VOLUME_SET = MediaPlayerEntityFeature.VOLUME_SET
-    SUPPORT_VOLUME_STEP = MediaPlayerEntityFeature.VOLUME_STEP
-    SUPPORT_NEXT_TRACK = MediaPlayerEntityFeature.NEXT_TRACK
-    SUPPORT_PREVIOUS_TRACK = MediaPlayerEntityFeature.PREVIOUS_TRACK
-    SUPPORT_PLAY = MediaPlayerEntityFeature.PLAY
-    SUPPORT_STOP = MediaPlayerEntityFeature.STOP
-except Exception:  # fallback (pre 2022.5)
-    from homeassistant.components.media_player.const import (
-        MEDIA_TYPE_MUSIC,
-        SUPPORT_VOLUME_MUTE,
-        SUPPORT_VOLUME_SET,
-        SUPPORT_VOLUME_STEP,
-        SUPPORT_NEXT_TRACK,
-        SUPPORT_PREVIOUS_TRACK,
-        SUPPORT_PLAY,
-        SUPPORT_STOP,
-    )
-
+from homeassistant.components.media_player.const import (
+    MEDIA_TYPE_MUSIC,
+    MediaPlayerEntityFeature,
+)
 from homeassistant.const import STATE_IDLE, STATE_PLAYING
 
 from . import meross_entity as me
-from .helpers import clamp
+from .helpers import PollingStrategy, clamp
 from .light import MLLight
 from .merossclient import const as mc  # mEROSS cONST
 
@@ -57,22 +35,22 @@ async def async_setup_entry(
 
 
 class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
-
     PLATFORM = PLATFORM_MEDIA_PLAYER
+
+    __slots__ = ("_mp3",)
 
     def __init__(self, device: "MerossDevice", channel: object):
         super().__init__(device, channel, mc.KEY_MP3, MediaPlayerDeviceClass.SPEAKER)
         self._mp3 = {}
         self._attr_supported_features = (
-            SUPPORT_VOLUME_MUTE
-            | SUPPORT_VOLUME_SET
-            | SUPPORT_VOLUME_STEP
-            | SUPPORT_NEXT_TRACK
-            | SUPPORT_PREVIOUS_TRACK
-            | SUPPORT_PLAY
-            | SUPPORT_STOP
+            MediaPlayerEntityFeature.VOLUME_MUTE
+            | MediaPlayerEntityFeature.VOLUME_SET
+            | MediaPlayerEntityFeature.VOLUME_STEP
+            | MediaPlayerEntityFeature.NEXT_TRACK
+            | MediaPlayerEntityFeature.PREVIOUS_TRACK
+            | MediaPlayerEntityFeature.PLAY
+            | MediaPlayerEntityFeature.STOP
         )  # type: ignore
-        self._attr_media_content_type = MEDIA_TYPE_MUSIC
 
     @property
     def volume_level(self):
@@ -84,6 +62,10 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
     @property
     def is_volume_muted(self) -> bool | None:
         return self._mp3.get(mc.KEY_MUTE)
+
+    @property
+    def media_content_type(self):
+        return MEDIA_TYPE_MUSIC
 
     @property
     def media_title(self):
@@ -166,12 +148,12 @@ class Mp3Mixin(
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here
             MLMp3Player(self, 0)
-            self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_MP3] = mc.PAYLOAD_GET[
+            self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_MP3] = PollingStrategy(
                 mc.NS_APPLIANCE_CONTROL_MP3
-            ]
+            )
             # cherub light entity should be there...
             light: MLLight = self.entities.get(0)  # type: ignore
-            if light is not None:
+            if light:
                 light.update_effect_map(mc.HP110A_LIGHT_EFFECT_MAP)
 
     def _handle_Appliance_Control_Mp3(self, header: dict, payload: dict):

@@ -16,7 +16,7 @@ import homeassistant.util.color as color_util
 
 from . import meross_entity as me
 from .const import DND_ID
-from .helpers import reverse_lookup
+from .helpers import SmartPollingStrategy, reverse_lookup
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
@@ -110,9 +110,10 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         if (self._light != payload) or not self.available:
             self._light = payload
 
-            onoff = payload.get(mc.KEY_ONOFF)
-            if onoff is not None:
-                self._attr_state = me.STATE_ON if onoff else me.STATE_OFF
+            if mc.KEY_ONOFF in payload:
+                self._attr_state = (
+                    me.STATE_ON if payload[mc.KEY_ONOFF] else me.STATE_OFF
+                )
 
             self._attr_color_mode = ColorMode.UNKNOWN
 
@@ -255,7 +256,7 @@ class MLLight(MLLightBase):
 
         if ATTR_EFFECT in kwargs:
             effect = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
-            if effect is not None:
+            if effect:
                 if isinstance(effect, str) and effect.isdigit():
                     effect = int(effect)
                 light[mc.KEY_EFFECT] = effect
@@ -431,13 +432,13 @@ class LightMixin(
         if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in descriptor.ability:
             self.polling_dictionary[
                 mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT
-            ] = mc.PAYLOAD_GET[mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT]
+            ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT)
 
     def _init_light(self, payload: dict):
         MLLight(self, payload)
 
     def _handle_Appliance_Control_Light(self, header: dict, payload: dict):
-        self._parse_light(payload.get(mc.KEY_LIGHT))
+        self._parse_light(payload[mc.KEY_LIGHT])
 
     def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
         light_effect_map = {}

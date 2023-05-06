@@ -29,7 +29,8 @@ try:
         )
 
         cloudapi_login = data.get("login")
-        cloudapi_devicelist = data.get("devList")
+        cloudapi_device_devlist = data.get("Device_devList")
+        cloudapi_device_latestversion = data.get("Device_latestVersion")
 
         cloud_profiles = [
             {
@@ -76,7 +77,7 @@ try:
         # MerossHTTPClient debug patching
         http_disc_end = 0
         http_disc_duration = 25
-        http_disc_probability = 0
+        http_disc_probability = 20
 
         @staticmethod
         def http_random_timeout():
@@ -145,8 +146,7 @@ def build_payload(
         key[mc.KEY_FROM] = from_
         return {mc.KEY_HEADER: key, mc.KEY_PAYLOAD: payload}
     else:
-        if messageid is None:
-            messageid = uuid4().hex
+        messageid = messageid or uuid4().hex
         timestamp = int(time())
         return {
             mc.KEY_HEADER: {
@@ -244,6 +244,13 @@ def get_productnameuuid(producttype: str, uuid: str) -> str:
 def get_productnametype(producttype: str) -> str:
     name = get_productname(producttype)
     return f"{name} ({producttype})" if name is not producttype else producttype
+
+
+def is_device_online(payload: dict) -> bool:
+    try:
+        return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
+    except Exception:
+        return False
 
 
 class MerossDeviceDescriptor:

@@ -16,7 +16,7 @@ from homeassistant.core import callback
 from homeassistant.util.dt import utcnow
 
 from .const import CONF_CLOUD_KEY, CONF_DEVICE_ID, CONF_HOST, DOMAIN
-from .merossclient import const as mc
+from .merossclient import const as mc, get_default_arguments
 
 try:
     from homeassistant.backports.enum import (
@@ -42,6 +42,7 @@ if typing.TYPE_CHECKING:
 
     from . import MerossApi
     from .meross_device import MerossDevice
+    from .meross_entity import MerossEntity
     from .meross_profile import MerossCloudProfile
 
 
@@ -443,12 +444,103 @@ async def get_entity_last_state_available(
     the last good reading from the device, we need to skip the last
     state since it is 'unavailable'
     """
-    states = await get_entity_last_states(hass, 2, entity_id)
-    if states is not None:
+    if states := await get_entity_last_states(hass, 2, entity_id):
         for state in reversed(states):
             if state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}:
                 return state
     return None
+
+
+class PollingStrategy:
+    """
+    These helper class(es) is used to implement 'smart' polling
+    bases on current state of device, especially regarding MQTT availability.
+    In fact, on MQTT we can receive almost all of the state through async PUSHES
+    and we so avoid any polling. This is not true for everything (for example it looks
+    in general that configurations are not pushed though). We use the namespace
+    to decide which policy is best for.
+    See __call__ implementation(s) for the different behaviors
+    """
+
+    __slots__ = (
+        "namespace",
+        "request",
+        "lastrequest",
+    )
+
+    def __init__(self, namespace: str, payload: dict | None = None):
+        self.namespace = namespace
+        self.request = (
+            get_default_arguments(namespace)
+            if payload is None
+            else (
+                namespace,
+                mc.METHOD_GET,
+                payload,
+            )
+        )
+        self.lastrequest = 0
+
+    async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
+        """
+        This is a basic 'default' policy:
+        - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
+        we expect this namespace to be updated by PUSH(es)
+        - unless the passed in 'namespace' is not None which means we're re-onlining the device and so
+        we like to re-query the full state (even on MQTT)
+        - as an optimization, when onlining, we'll skip the request if it's for the same namespace
+        """
+        if (namespace or (not device._mqtt_active)) and (namespace != self.namespace):
+            await device.async_request(*self.request)
+            self.lastrequest = epoch
+
+
+class SmartPollingStrategy(PollingStrategy):
+    __slots__ = ("polling_period",)
+
+    def __init__(
+        self, namespace: str, payload: dict | None = None, polling_period: int = 0
+    ):
+        super().__init__(namespace, payload)
+        self.polling_period = polling_period
+
+    async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
+        """
+        This is a strategy for polling states which are not actively pushed so we should
+        always query them (eventually with a variable timeout depending on the relevant
+        time dynamics of the sensor/state). When using cloud MQTT though we have to be very
+        conservative on traffic so we delay the request even more
+        """
+        if namespace != self.namespace:
+            if await device.async_request_smartpoll(
+                epoch,
+                self.lastrequest,
+                self.request,
+                self.polling_period,
+            ):
+                self.lastrequest = epoch
+
+
+class EntityPollingStrategy(SmartPollingStrategy):
+    __slots__ = ("entity",)
+
+    def __init__(self, namespace: str, entity: MerossEntity, polling_period: int = 0):
+        super().__init__(namespace, None, polling_period)
+        self.entity = entity
+
+    async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
+        """
+        Same as SmartPollingStrategy but we have a 'relevant' entity associated with
+        the state of this paylod so we'll use that in conditions
+        """
+        if (namespace != self.namespace) and self.entity.enabled:
+            if await device.async_request_smartpoll(
+                epoch,
+                self.entity.device_lastupdate,
+                self.request,
+                self.polling_period,
+            ):
+                self.entity.device_lastupdate = self.lastrequest = epoch
 
 
 class ConfigEntriesHelper:
@@ -495,13 +587,11 @@ class ApiProfile(Loggable, abc.ABC):
 
     @staticmethod
     def active_devices():
-        return (device for device in ApiProfile.devices.values() if device is not None)
+        return (device for device in ApiProfile.devices.values() if device)
 
     @staticmethod
     def active_profiles():
-        return (
-            profile for profile in ApiProfile.profiles.values() if profile is not None
-        )
+        return (profile for profile in ApiProfile.profiles.values() if profile)
 
     @staticmethod
     def get_device_with_mac(macaddress: str):
@@ -529,7 +619,7 @@ class ApiProfile(Loggable, abc.ABC):
         )
 
     def unlisten_entry_update(self):
-        if self.unsub_entry_update_listener is not None:
+        if self.unsub_entry_update_listener:
             self.unsub_entry_update_listener()
             self.unsub_entry_update_listener = None
 

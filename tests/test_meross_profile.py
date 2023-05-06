@@ -25,10 +25,10 @@ async def test_cloudapi(hass, cloudapi_mock: helpers.CloudApiMocker):
     assert result[mc.KEY_TOKEN] == tc.MOCK_PROFILE_TOKEN
 
     token = result[mc.KEY_TOKEN]
-    result = await cloudapi.async_cloudapi_devicelist(token, clientsession)
+    result = await cloudapi.async_cloudapi_device_devlist(token, clientsession)
     assert result == tc.MOCK_PROFILE_CLOUDAPI_DEVLIST
 
-    result = await cloudapi.async_cloudapi_subdevicelist(
+    result = await cloudapi.async_cloudapi_hub_getsubdevices(
         token, tc.MOCK_PROFILE_MSH300_UUID, clientsession
     )
     assert (
@@ -189,7 +189,7 @@ async def test_meross_profile_with_device(
 
         assert device._cloud_profile is profile
         assert device._mqtt_connection in profile.mqttconnections.values()
-        assert device._mqtt is device._mqtt_connection
+        assert device._mqtt_connected is device._mqtt_connection
 
         await devicecontext.perform_coldstart()
 
@@ -225,4 +225,4 @@ async def test_meross_profile_with_device(
         assert api.profiles[tc.MOCK_PROFILE_ID] is None
         assert device._cloud_profile is None
         assert device._mqtt_connection is None
-        assert device._mqtt is None
+        assert device._mqtt_connected is None
