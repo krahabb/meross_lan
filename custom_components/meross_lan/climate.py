@@ -79,7 +79,9 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_heating",
     )
 
-    def __init__(self, device: MerossDevice, channel: object, subdevice: MerossSubDevice | None):
+    def __init__(
+        self, device: MerossDevice, channel: object, subdevice: MerossSubDevice | None
+    ):
         self._attr_current_temperature = None
         self._attr_hvac_action = None
         self._attr_hvac_mode = None
@@ -108,7 +110,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
             self._attr_hvac_mode = HVACMode.OFF
             self._attr_hvac_action = HVACAction.OFF
 
-        if self.subdevice is not None:
+        if self.subdevice:
             self._attr_state = self._attr_hvac_mode if self.subdevice.online else None
         else:
             self._attr_state = self._attr_hvac_mode if self.device.online else None

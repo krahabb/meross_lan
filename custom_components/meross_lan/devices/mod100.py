@@ -179,8 +179,7 @@ class DiffuserMixin(
         }
         """
         for key, value in payload.items():
-            _parse = getattr(self, f"_parse_diffuser_{key}", None)
-            if _parse is not None:
+            if _parse := getattr(self, f"_parse_diffuser_{key}", None):
                 _parse(value)
 
     async def async_request_light(self, payload, callback: ResponseCallbackType):

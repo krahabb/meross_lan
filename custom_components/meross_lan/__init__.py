@@ -105,8 +105,8 @@ class MerossApi(MQTTConnection, ApiProfile):
                         title="Meross LAN service response", message=json_dumps(payload)
                     )
 
-            if device_id is not None:
-                if (device := self.devices.get(device_id)) is not None:
+            if device_id:
+                if device := self.devices.get(device_id):
                     await device.async_request(
                         namespace, method, payload, response_callback
                     )
@@ -117,18 +117,18 @@ class MerossApi(MQTTConnection, ApiProfile):
                         device_id, namespace, method, payload, key
                     )
                     return
-                if host is None:
+                if not host:
                     self.warning(
                         "cannot execute service call on %s - missing MQTT connectivity or device not registered",
                         device_id,
                     )
                     return
-            elif host is None:
+            elif not host:
                 self.warning("cannot execute service call (missing device_id and host)")
                 return
             # host is not None
             for device in self.devices.values():
-                if (device is not None) and (device.host == host):
+                if device and (device.host == host):
                     await device.async_request(
                         namespace, method, payload, response_callback
                     )
@@ -143,16 +143,16 @@ class MerossApi(MQTTConnection, ApiProfile):
         return
 
     async def async_shutdown(self):
-        if self._unsub_random_disconnect is not None:
+        if self._unsub_random_disconnect:
             self._unsub_random_disconnect.cancel()
             self._unsub_random_disconnect = None
-        if self._unsub_mqtt_connected is not None:
+        if self._unsub_mqtt_connected:
             self._unsub_mqtt_connected()
             self._unsub_mqtt_connected = None
-        if self._unsub_mqtt_disconnected is not None:
+        if self._unsub_mqtt_disconnected:
             self._unsub_mqtt_disconnected()
             self._unsub_mqtt_disconnected = None
-        if self._unsub_mqtt_subscribe is not None:
+        if self._unsub_mqtt_subscribe:
             self._unsub_mqtt_subscribe()
             self._unsub_mqtt_subscribe = None
         for device in self.active_devices():
@@ -276,13 +276,13 @@ class MerossApi(MQTTConnection, ApiProfile):
         """
         subscribe to the general meross mqtt 'publish' topic
         """
-        if self._unsub_mqtt_subscribe is not None:
+        if self._unsub_mqtt_subscribe:
             return True
         """
         TODO: use a future to gate the calls instead of the dumb
         _mqtt_subscribing lock
         """
-        if self._mqtt_subscribing is True:
+        if self._mqtt_subscribing:
             return False
 
         with self.exception_warning("async_mqtt_register"):
@@ -411,18 +411,17 @@ class MerossApi(MQTTConnection, ApiProfile):
     ):
         with self.exception_warning("async_http_request"):
             _httpclient: MerossHttpClient = getattr(self, "_httpclient", None)  # type: ignore
-            if _httpclient is None:
-                _httpclient = MerossHttpClient(
-                    host, key, async_get_clientsession(self.hass), LOGGER
-                )
-                self._httpclient = _httpclient
-            else:
+            if _httpclient:
                 _httpclient.host = host
                 _httpclient.key = key
+            else:
+                self._httpclient = _httpclient = MerossHttpClient(
+                    host, key, async_get_clientsession(self.hass), LOGGER
+                )
 
             response = await _httpclient.async_request(namespace, method, payload)
             r_header = response[mc.KEY_HEADER]
-            if callback_or_device is not None:
+            if callback_or_device:
                 if isinstance(callback_or_device, MerossDevice):
                     callback_or_device.receive(
                         r_header, response[mc.KEY_PAYLOAD], CONF_PROTOCOL_HTTP
@@ -515,14 +514,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         profile_id = device.descriptor.userId
         if profile_id in api.profiles:
             # the profile is somehow configured, either disabled or not
-            if (profile := api.profiles[profile_id]) is not None:
+            if profile := api.profiles[profile_id]:
                 profile.link(device)
         else:
             # trigger a cloud profile discovery if we guess it reasonable
             if profile_id and (entry.data.get(CONF_CLOUD_KEY) == device.key):
                 helper = ConfigEntriesHelper(hass)
                 flow_unique_id = f"profile.{profile_id}"
-                if helper.get_config_flow(flow_unique_id) is None:
+                if not helper.get_config_flow(flow_unique_id):
                     await hass.config_entries.flow.async_init(
                         DOMAIN,
                         context={
@@ -560,12 +559,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unique_id = unique_id.split(".")  # type: ignore
     if unique_id[0] == "profile":
         profile = ApiProfile.profiles[unique_id[1]]
-        assert profile is not None
+        assert profile
         await profile.async_shutdown()
         return True
 
     device = ApiProfile.devices[unique_id[0]]
-    assert device is not None
+    assert device
     if not await hass.config_entries.async_unload_platforms(
         entry, device.platforms.keys()
     ):

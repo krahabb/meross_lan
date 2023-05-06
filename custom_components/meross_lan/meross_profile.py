@@ -103,7 +103,7 @@ class MQTTConnection(Loggable, abc.ABC):
         self._unsub_discovery_callback: asyncio.TimerHandle | None = None
 
     async def async_shutdown(self):
-        if self._unsub_discovery_callback is not None:
+        if self._unsub_discovery_callback:
             self._unsub_discovery_callback.cancel()
             self._unsub_discovery_callback = None
         self.mqttdiscovering.clear()
@@ -180,7 +180,7 @@ class MQTTConnection(Loggable, abc.ABC):
                 )
                 return
 
-            if (device := ApiProfile.devices.get(device_id)) is not None:
+            if device := ApiProfile.devices.get(device_id):
                 # we have the device registered but somehow it is not 'mqtt binded'
                 # either it's configuration is ONLY_HTTP or it is paired to the
                 # Meross cloud. In this case we shouldn't receive 'local' MQTT
@@ -195,8 +195,8 @@ class MQTTConnection(Loggable, abc.ABC):
             config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
             if (
                 (self.id is CONF_PROFILE_ID_LOCAL)
-                and (config_entries_helper.get_config_entry(DOMAIN) is None)
-                and (config_entries_helper.get_config_flow(DOMAIN) is None)
+                and (not config_entries_helper.get_config_entry(DOMAIN))
+                and (not config_entries_helper.get_config_flow(DOMAIN))
             ):
                 # not really needed but we would like to always have the
                 # MQTT hub entry in case so if the user removed that..retrigger
@@ -206,16 +206,14 @@ class MQTTConnection(Loggable, abc.ABC):
                     data=None,
                 )
 
-            if (
-                config_entry := config_entries_helper.get_config_entry(device_id)
-            ) is not None:
+            if config_entry := config_entries_helper.get_config_entry(device_id):
                 # entry already present...skip discovery
                 self.log(
                     INFO,
                     "ignoring MQTT discovery for already configured device_id: %s (ConfigEntry is %s)",
                     device_id,
                     "disabled"
-                    if config_entry.disabled_by is not None
+                    if config_entry.disabled_by
                     else "ignored"
                     if config_entry.source == "ignore"
                     else "unknown",
@@ -224,7 +222,7 @@ class MQTTConnection(Loggable, abc.ABC):
                 return
 
             # also skip discovered integrations waiting in HA queue
-            if config_entries_helper.get_config_flow(device_id) is not None:
+            if config_entries_helper.get_config_flow(device_id):
                 self.log(
                     DEBUG,
                     "ignoring discovery for device_id: %s (ConfigFlow is in progress)",
@@ -294,7 +292,7 @@ class MQTTConnection(Loggable, abc.ABC):
                 MQTTConnection._KEY_REQUESTTIME: 0,
                 MQTTConnection._KEY_REQUESTCOUNT: 0,
             }
-            if self._unsub_discovery_callback is None:
+            if not self._unsub_discovery_callback:
                 self._unsub_discovery_callback = schedule_async_callback(
                     ApiProfile.hass,
                     PARAM_UNAVAILABILITY_TIMEOUT + 2,
@@ -395,7 +393,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
             self._unsub_random_disconnect = None
 
     async def async_shutdown(self):
-        if self._unsub_random_disconnect is not None:
+        if self._unsub_random_disconnect:
             self._unsub_random_disconnect.cancel()
             self._unsub_random_disconnect = None
         await super().async_shutdown()
@@ -628,7 +626,7 @@ class MerossCloudProfile(dict, ApiProfile):
         for device in self.linkeddevices.values():
             device.profile_unlinked()
         self.linkeddevices.clear()
-        if self._unsub_polling_query_devices is not None:
+        if self._unsub_polling_query_devices:
             self._unsub_polling_query_devices.cancel()
             self._unsub_polling_query_devices = None
         await super().async_shutdown()
@@ -699,7 +697,7 @@ class MerossCloudProfile(dict, ApiProfile):
 
     async def async_query_devices(self):
         with self._cloud_token_exception_manager("async_query_devices") as token:
-            if token is None:
+            if not token:
                 self.warning("querying device list cancelled: missing api token")
                 return None
             self.log(DEBUG, "querying device list")
@@ -713,7 +711,7 @@ class MerossCloudProfile(dict, ApiProfile):
             # retrigger the poll at the right time since async_query_devices
             # might be called for whatever reason 'asynchronously'
             # at any time (say the user does a new cloud login or so...)
-            if self._unsub_polling_query_devices is not None:
+            if self._unsub_polling_query_devices:
                 self._unsub_polling_query_devices.cancel()
             self._unsub_polling_query_devices = schedule_async_callback(
                 ApiProfile.hass,
@@ -769,7 +767,7 @@ class MerossCloudProfile(dict, ApiProfile):
 
     async def _async_query_subdevices(self, device_id: str):
         with self._cloud_token_exception_manager("_async_query_subdevices") as token:
-            if token is None:
+            if not token:
                 self.warning("querying subdevice list cancelled: missing api token")
                 return None
             self.log(DEBUG, "querying subdevice list")
@@ -848,7 +846,7 @@ class MerossCloudProfile(dict, ApiProfile):
                     sub_device_info_removed.remove(subdeviceid)
 
                 sub_device_info_dict[subdeviceid] = sub_device_info
-                if (subdevice := hub_device.subdevices.get(subdeviceid)) is not None:
+                if subdevice := hub_device.subdevices.get(subdeviceid):
                     subdevice.update_device_info(sub_device_info)
                 else:
                     sub_device_info_unknown.append(sub_device_info)
@@ -869,7 +867,7 @@ class MerossCloudProfile(dict, ApiProfile):
         for device_info in device_info_unknown:
             with self.exception_warning("_process_device_info_unknown"):
                 device_id = device_info[mc.KEY_UUID]
-                if config_entries_helper.get_config_flow(device_id) is not None:
+                if config_entries_helper.get_config_flow(device_id):
                     continue
                 # cloud conf has a new device
                 for hostkey in (mc.KEY_DOMAIN, mc.KEY_RESERVEDDOMAIN):

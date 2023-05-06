@@ -171,12 +171,12 @@ class ProtocolSensor(MLSensor):
 
     def set_unavailable(self):
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED
-        if self.device._mqtt_connection is None:
-            self._attr_extra_state_attributes = {}
-        else:
+        if self.device._mqtt_connection:
             self._attr_extra_state_attributes = {
                 self.ATTR_MQTT_BROKER: self._get_attr_state(self.device._mqtt_connected)
             }
+        else:
+            self._attr_extra_state_attributes = {}
         if self._hass_connected:
             self._async_write_ha_state()
 
@@ -345,7 +345,7 @@ class ElectricityMixin(
         super().start()
 
     async def async_shutdown(self):
-        if self._cancel_energy_reset is not None:
+        if self._cancel_energy_reset:
             self._cancel_energy_reset()
             self._cancel_energy_reset = None
         await super().async_shutdown()

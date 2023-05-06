@@ -215,7 +215,7 @@ class MerossDeviceBase(Loggable, abc.ABC):
             _device_registry_entry = device_registry.async_get(
                 ApiProfile.hass
             ).async_get_device(**self.deviceentry_id)
-            if _device_registry_entry is not None:
+            if _device_registry_entry:
                 self._device_registry_entry = weakref.ref(_device_registry_entry)
         return _device_registry_entry
 
@@ -224,7 +224,7 @@ class MerossDeviceBase(Loggable, abc.ABC):
         """
         returns a proper (friendly) device name for logging purposes
         """
-        if (_device_registry_entry := self.device_registry_entry) is not None:
+        if _device_registry_entry := self.device_registry_entry:
             return (
                 _device_registry_entry.name_by_user
                 or _device_registry_entry.name
@@ -234,7 +234,7 @@ class MerossDeviceBase(Loggable, abc.ABC):
 
     def update_device_info(self, device_info: DeviceInfoType | SubDeviceInfoType):
         self.device_info = device_info
-        if (_device_registry_entry := self.device_registry_entry) is not None:
+        if _device_registry_entry := self.device_registry_entry:
             name = (
                 device_info.get(self._get_device_info_name_key())
                 or self._get_internal_name()
@@ -452,8 +452,7 @@ class MerossDevice(MerossDeviceBase):
         for key, payload in descriptor.digest.items():
             # _init_xxxx methods provided by mixins
             _init_method_name = f"_init_{key}"
-            _init = getattr(self, _init_method_name, None)
-            if _init is not None:
+            if _init := getattr(self, _init_method_name, None):
                 if isinstance(payload, list):
                     for p in payload:
                         with self.exception_warning(_init_method_name):
@@ -478,7 +477,7 @@ class MerossDevice(MerossDeviceBase):
 
         self._unsub_polling_callback = schedule_async_callback(
             ApiProfile.hass,
-            0 if self._mqtt_connection is None else PARAM_COLDSTARTPOLL_DELAY,
+            PARAM_COLDSTARTPOLL_DELAY if self._mqtt_connection else 0,
             self._async_polling_callback,
         )
 
@@ -487,11 +486,11 @@ class MerossDevice(MerossDeviceBase):
         called when the config entry is unloaded
         we'll try to clear everything here
         """
-        if self._mqtt_connection is not None:
+        if self._mqtt_connection:
             self._mqtt_connection.detach(self)
-        if self._cloud_profile is not None:
+        if self._cloud_profile:
             self._cloud_profile.unlink(self)
-        if self._unsub_entry_update_listener is not None:
+        if self._unsub_entry_update_listener:
             self._unsub_entry_update_listener()
             self._unsub_entry_update_listener = None
         while self._unsub_polling_callback is None:
@@ -500,7 +499,7 @@ class MerossDevice(MerossDeviceBase):
         self._unsub_polling_callback.cancel()
         self._unsub_polling_callback = None
         self.polling_dictionary.clear()
-        if self._trace_file is not None:
+        if self._trace_file:
             self._trace_close()
         self.entities.clear()
         self.entity_dnd = None  # type: ignore
@@ -529,7 +528,7 @@ class MerossDevice(MerossDeviceBase):
         tz_name = self.descriptor.timezone
         if not tz_name:
             return timezone.utc
-        if (self._tzinfo is not None) and (self._tzinfo.key == tz_name):
+        if self._tzinfo and (self._tzinfo.key == tz_name):
             return self._tzinfo
         try:
             self._tzinfo = ZoneInfo(tz_name)
@@ -599,12 +598,12 @@ class MerossDevice(MerossDeviceBase):
 
     def log(self, level: int, msg: str, *args, **kwargs):
         LOGGER.log(level, f"MerossDevice({self.name}): {msg}", *args, **kwargs)
-        if self._trace_file is not None:
+        if self._trace_file:
             self._trace(time(), msg % args, logging_getLevelName(level), "LOG")
 
     def warning(self, msg: str, *args, **kwargs):
         LOGGER.warning(f"MerossDevice({self.name}): {msg}", *args, **kwargs)
-        if self._trace_file is not None:
+        if self._trace_file:
             self._trace(time(), msg % args, "WARNING", "LOG")
 
     def request(
@@ -635,7 +634,7 @@ class MerossDevice(MerossDeviceBase):
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             # only publish when mqtt component is really connected else we'd
             # insanely dump lot of mqtt errors in log
-            if self._mqtt_connected is not None:
+            if self._mqtt_connected:
                 await self.async_mqtt_request(
                     namespace, method, payload, response_callback
                 )
@@ -653,9 +652,7 @@ class MerossDevice(MerossDeviceBase):
             )
             is None
         ):
-            if (self.conf_protocol is CONF_PROTOCOL_AUTO) and (
-                self._mqtt_active is not None
-            ):
+            if self._mqtt_active and (self.conf_protocol is CONF_PROTOCOL_AUTO):
                 await self.async_mqtt_request(
                     namespace, method, payload, response_callback
                 )
@@ -674,7 +671,7 @@ class MerossDevice(MerossDeviceBase):
             # avoid any protocol auto-switching...
             if await self.async_http_request(*polling_args) is not None:
                 return True
-        if (self.mqtt_locallyactive is True) or (
+        if self.mqtt_locallyactive or (
             (self._queued_poll_requests == 0)
             and ((epoch - lastupdate) > polling_period_cloud)
         ):
@@ -693,7 +690,7 @@ class MerossDevice(MerossDeviceBase):
         likely to be 'NS_ALL', since it's the only message we request when offline.
         If we're connected to an MQTT broker anyway it could be any 'PUSH' message
         """
-        if self.conf_protocol is CONF_PROTOCOL_AUTO and (self._mqtt_active is None):
+        if self.conf_protocol is CONF_PROTOCOL_AUTO and (not self._mqtt_active):
             # this is a special feature to use only on AUTO in order to see
             # if the device is 'mqtt connected' and where to
             await self.async_http_request(
@@ -709,7 +706,7 @@ class MerossDevice(MerossDeviceBase):
         """
         self._queued_poll_requests = 0
         for _namespace, _strategy in self.polling_dictionary.items():
-            if self._online is False:
+            if not self._online:
                 return
             await _strategy(self, epoch, namespace)
 
@@ -721,7 +718,7 @@ class MerossDevice(MerossDeviceBase):
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
 
-        if self._trace_file is not None:
+        if self._trace_file:
             self._trace(epoch, payload, namespace, method, protocol, TRACE_DIRECTION_RX)
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
@@ -741,7 +738,7 @@ class MerossDevice(MerossDeviceBase):
                 timeout=14400,
             )
 
-        if self._online is False:
+        if not self._online:
             self._set_online()
             ApiProfile.hass.async_create_task(
                 self.async_request_updates(epoch, namespace)
@@ -767,7 +764,7 @@ class MerossDevice(MerossDeviceBase):
         #     handler(header, payload)
         #     return True
         handler = getattr(self, f"_handle_{namespace.replace('.', '_')}", None)
-        if handler is not None:
+        if handler:
             with self.exception_warning(
                 "handle %s %s", method, namespace, timeout=14400
             ):
@@ -831,7 +828,7 @@ class MerossDevice(MerossDeviceBase):
             self.needsave = True
 
         if self._mqtt_active:
-            if (not is_device_online(descr.system)):
+            if not is_device_online(descr.system):
                 self._mqtt_active = None
                 self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
         elif self._mqtt_connected and is_device_online(descr.system):
@@ -855,18 +852,16 @@ class MerossDevice(MerossDeviceBase):
                 self._config_timezone(int(self.lastresponse), descr.time.get(mc.KEY_TIMEZONE))  # type: ignore
 
         for key, value in descr.digest.items():
-            _parse = getattr(self, f"_parse_{key}", None)
-            if _parse is not None:
+            if _parse := getattr(self, f"_parse_{key}", None):
                 _parse(value)
         # older firmwares (MSS110 with 1.1.28) look like
         # carrying 'control' instead of 'digest'
         if isinstance(p_control := descr.all.get(mc.KEY_CONTROL), dict):
             for key, value in p_control.items():
-                _parse = getattr(self, f"_parse_{key}", None)
-                if _parse is not None:
+                if _parse := getattr(self, f"_parse_{key}", None):
                     _parse(value)
 
-        if self.needsave is True:
+        if self.needsave:
             self.needsave = False
             self._save_config_entry(payload)
 
@@ -886,9 +881,7 @@ class MerossDevice(MerossDeviceBase):
         # having NTP opened to setup the device
         # Note: I actually see this NS only on mss310 plugs
         # (msl120j bulb doesnt have it)
-        if (self.mqtt_locallyactive is True) and (
-            header[mc.KEY_METHOD] == mc.METHOD_PUSH
-        ):
+        if self.mqtt_locallyactive and (header[mc.KEY_METHOD] == mc.METHOD_PUSH):
             self.mqtt_request(
                 mc.NS_APPLIANCE_SYSTEM_CLOCK,
                 mc.METHOD_PUSH,
@@ -906,9 +899,7 @@ class MerossDevice(MerossDeviceBase):
         kindly answer a 'SETACK'
         assumption is we're working on mqtt
         """
-        if (self.mqtt_locallyactive is True) and (
-            header[mc.KEY_METHOD] == mc.METHOD_SET
-        ):
+        if self.mqtt_locallyactive and (header[mc.KEY_METHOD] == mc.METHOD_SET):
             self.mqtt_request(
                 mc.NS_APPLIANCE_CONTROL_BIND,
                 mc.METHOD_SETACK,
@@ -918,9 +909,7 @@ class MerossDevice(MerossDeviceBase):
             )
 
     def mqtt_receive(self, header: dict, payload: dict):
-        assert (self.conf_protocol is not CONF_PROTOCOL_HTTP) and (
-            self._mqtt_connected is not None
-        )
+        assert self._mqtt_connected and (self.conf_protocol is not CONF_PROTOCOL_HTTP)
         messageid = header[mc.KEY_MESSAGEID]
         if messageid in self._mqtt_transactions:
             mqtt_transaction = self._mqtt_transactions[messageid]
@@ -929,14 +918,12 @@ class MerossDevice(MerossDeviceBase):
                 mqtt_transaction.response_callback(
                     header[mc.KEY_METHOD] != mc.METHOD_ERROR, header, payload
                 )
-        if self._mqtt_active is None:
+        if not self._mqtt_active:
             self._mqtt_active = self._mqtt_connection
-            if self._online is True:
+            if self._online:
                 self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
         if self.curr_protocol is not CONF_PROTOCOL_MQTT:
-            if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (
-                self._http_active is None
-            ):
+            if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (not self._http_active):
                 self._switch_protocol(CONF_PROTOCOL_MQTT)
         self.receive(header, payload, CONF_PROTOCOL_MQTT)
         self._mqtt_lastresponse = self.lastresponse
@@ -950,7 +937,7 @@ class MerossDevice(MerossDeviceBase):
     def mqtt_detached(self):
         assert self._mqtt_connection
         self.log(DEBUG, "mqtt_detached from %s", self._mqtt_connection.logtag)
-        if self._mqtt_connected is not None:
+        if self._mqtt_connected:
             self.mqtt_disconnected()
         self._mqtt_connection = None
 
@@ -969,7 +956,7 @@ class MerossDevice(MerossDeviceBase):
                 self._switch_protocol(CONF_PROTOCOL_HTTP)
                 return
             # conf_protocol should be CONF_PROTOCOL_MQTT:
-            elif self._online is True:
+            elif self._online:
                 self._set_offline()
                 return
         # run this at the end so it will not double flush
@@ -999,7 +986,7 @@ class MerossDevice(MerossDeviceBase):
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ):
-        if self._mqtt_connected is None:
+        if not self._mqtt_connected:
             # even if we're smart enough to not call async_mqtt_request when no mqtt
             # available, it could happen we loose that when asynchronously coming here
             self.log(
@@ -1007,12 +994,12 @@ class MerossDevice(MerossDeviceBase):
                 "attempting to use async_mqtt_request with no available profile",
             )
             return
-        if response_callback is not None:
+        if response_callback:
             transaction = _MQTTTransaction(namespace, method, response_callback)
             self._mqtt_transactions[transaction.messageid] = transaction
             messageid = transaction.messageid
         self._mqtt_lastrequest = time()
-        if self._trace_file is not None:
+        if self._trace_file:
             self._trace(
                 self._mqtt_lastrequest,
                 payload,
@@ -1040,7 +1027,7 @@ class MerossDevice(MerossDeviceBase):
             namespace,
             timeout=14400,
         ):
-            if (http := self._http) is None:
+            if not (http := self._http):
                 http = MerossHttpClient(
                     self.host, self.key, async_get_clientsession(ApiProfile.hass), LOGGER  # type: ignore
                 )
@@ -1050,7 +1037,7 @@ class MerossDevice(MerossDeviceBase):
                 # since we get 'random' connection errors, this is a retry attempts loop
                 # until we get it done. We'd want to break out early on specific events tho (Timeouts)
                 self._http_lastrequest = time()
-                if self._trace_file is not None:
+                if self._trace_file:
                     self._trace(
                         self._http_lastrequest,
                         payload,
@@ -1071,12 +1058,9 @@ class MerossDevice(MerossDeviceBase):
                         namespace,
                         attempt,
                     )
-                    if self._online is False:
+                    if not self._online:
                         return None
-                    if (
-                        self._http_active is not None
-                        and namespace is mc.NS_APPLIANCE_SYSTEM_ALL
-                    ):
+                    if self._http_active and namespace is mc.NS_APPLIANCE_SYSTEM_ALL:
                         self._http_active = None
                         self.sensor_protocol.update_attr_inactive(
                             ProtocolSensor.ATTR_HTTP
@@ -1087,17 +1071,17 @@ class MerossDevice(MerossDeviceBase):
             else:
                 return None
 
-            if self._http_active is None:
+            if not self._http_active:
                 self._http_active = http
                 self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_HTTP)
             if self.curr_protocol is not CONF_PROTOCOL_HTTP:
                 if (self.pref_protocol is CONF_PROTOCOL_HTTP) or (
-                    self._mqtt_active is None
+                    not self._mqtt_active
                 ):
                     self._switch_protocol(CONF_PROTOCOL_HTTP)
             r_header = response[mc.KEY_HEADER]
             r_payload = response[mc.KEY_PAYLOAD]
-            if callback is not None:
+            if callback:
                 # we're actually only using this for SET->SETACK command confirmation
                 callback(
                     r_header[mc.KEY_METHOD] != mc.METHOD_ERROR, r_header, r_payload
@@ -1128,11 +1112,11 @@ class MerossDevice(MerossDeviceBase):
                         if _mqtt_transaction_stale_list is None:
                             _mqtt_transaction_stale_list = []
                         _mqtt_transaction_stale_list.append(_mqtt_transaction.messageid)
-                if _mqtt_transaction_stale_list is not None:
+                if _mqtt_transaction_stale_list:
                     for messageid in _mqtt_transaction_stale_list:
                         self._mqtt_transactions.pop(messageid)
 
-            if self._online is True:
+            if self._online:
                 # evaluate device availability by checking lastrequest got answered in less than polling_period
                 if (self.lastresponse > self.lastrequest) or (
                     (epoch - self.lastrequest) < (self.polling_period - 2)
@@ -1168,7 +1152,7 @@ class MerossDevice(MerossDeviceBase):
                     # state updates coming through mqtt (since we're still
                     # connected) but now requesting over http as preferred
 
-                if self.mqtt_locallyactive is True:
+                if self.mqtt_locallyactive:
                     # implement an heartbeat since mqtt might
                     # be unused for quite a bit
                     if (epoch - self._mqtt_lastresponse) > PARAM_HEARTBEAT_PERIOD:
@@ -1179,7 +1163,7 @@ class MerossDevice(MerossDeviceBase):
                         # this is rude..we would want to async wait on
                         # the mqtt response but we lack the infrastructure
                         await asyncio.sleep(2)
-                        if self._mqtt_active is None:
+                        if not self._mqtt_active:
                             self.sensor_protocol.update_attr_inactive(
                                 ProtocolSensor.ATTR_MQTT
                             )
@@ -1197,12 +1181,12 @@ class MerossDevice(MerossDeviceBase):
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self.host:
                         await self.async_http_request(*ns_all_request_args)
-                        if self._online is True:
+                        if self._online:
                             return
-                    if self._mqtt_connected is not None:
+                    if self._mqtt_connected:
                         await self.async_mqtt_request(*ns_all_request_args)
                 elif self.conf_protocol is CONF_PROTOCOL_MQTT:
-                    if self._mqtt_connected is not None:
+                    if self._mqtt_connected:
                         await self.async_mqtt_request(*ns_all_request_args)
                 else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
                     await self.async_http_request(*ns_all_request_args)
@@ -1219,7 +1203,7 @@ class MerossDevice(MerossDeviceBase):
         and not at the configuration/option level
         see derived implementations
         """
-        if (self.mqtt_locallyactive is True) and (
+        if self.mqtt_locallyactive and (
             mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability
         ):
             global TIMEZONES_SET
@@ -1254,7 +1238,7 @@ class MerossDevice(MerossDeviceBase):
         (this is actually called in sequence with entry_update_listener
         just the latter is async)
         """
-        if (self.mqtt_locallyactive is True) and (
+        if self.mqtt_locallyactive and (
             mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability
         ):
             self._config_timezone(int(time()), user_input.get(mc.KEY_TIMEZONE))
@@ -1275,7 +1259,7 @@ class MerossDevice(MerossDeviceBase):
             if self.curr_protocol is not self.conf_protocol:
                 self._switch_protocol(self.conf_protocol)
 
-        if (http := self._http) is not None:
+        if http := self._http:
             if self.conf_protocol is CONF_PROTOCOL_MQTT:
                 self._http = self._http_active = None
                 self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
@@ -1287,7 +1271,7 @@ class MerossDevice(MerossDeviceBase):
         # We'll activate debug tracing only when the user turns it on in OptionsFlowHandler so we usually
         # don't care about it on startup ('_set_config_entry'). When updating ConfigEntry
         # we always reset the timeout and so the trace will (eventually) restart
-        if self._trace_file is not None:
+        if self._trace_file:
             self._trace_close()
         endtime = config_entry.data.get(CONF_TRACE, 0)
         epoch = time()
@@ -1295,7 +1279,7 @@ class MerossDevice(MerossDeviceBase):
             self._trace_open(epoch, endtime)
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
-        if self._online is False:
+        if not self._online:
             await self.async_request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
 
     def _config_timestamp(self, epoch, device_timedelta):
@@ -1303,7 +1287,7 @@ class MerossDevice(MerossDeviceBase):
             self.device_timedelta = device_timedelta
         else:  # average the sampled timedelta
             self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
-        if (self.mqtt_locallyactive is True) and (
+        if self.mqtt_locallyactive and (
             mc.NS_APPLIANCE_SYSTEM_CLOCK in self.descriptor.ability
         ):
             # only deal with time related settings when devices are un-paired
@@ -1328,7 +1312,7 @@ class MerossDevice(MerossDeviceBase):
 
     def _config_timezone(self, epoch, tzname):
         p_time = self.descriptor.time
-        assert p_time is not None
+        assert p_time
         p_timerule: list = p_time.get(mc.KEY_TIMERULE, [])
         p_timezone = p_time.get(mc.KEY_TIMEZONE)
         """
@@ -1407,7 +1391,7 @@ class MerossDevice(MerossDeviceBase):
         # as an optimization against asynchronous onlining events (on MQTT)
         # which could come anytime and so the (next)
         # polling might be too early
-        if self._unsub_polling_callback is not None:
+        if self._unsub_polling_callback:
             # might be None when we're already inside a polling loop
             self._unsub_polling_callback.cancel()
             self._unsub_polling_callback = schedule_async_callback(
@@ -1429,14 +1413,13 @@ class MerossDevice(MerossDeviceBase):
             protocol,
         )
         self.curr_protocol = protocol
-        if self._online is True:
+        if self._online:
             self.sensor_protocol.update_connected()
 
     def _save_config_entry(self, payload: dict):
         with self.exception_warning("ConfigEntry update"):
             entries = ApiProfile.hass.config_entries
-            entry = entries.async_get_entry(self.config_entry_id)
-            if entry is not None:
+            if entry := entries.async_get_entry(self.config_entry_id):
                 data = dict(entry.data)
                 data[CONF_PAYLOAD].update(payload)
                 data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
@@ -1472,33 +1455,33 @@ class MerossDevice(MerossDeviceBase):
 
     def profile_linked(self, profile: MerossCloudProfile):
         if self._cloud_profile is not profile:
-            if self._mqtt_connection is not None:
+            if self._mqtt_connection:
                 self._mqtt_connection.detach(self)
-            if self._cloud_profile is not None:
+            if self._cloud_profile:
                 self._cloud_profile.unlink(self)
             self._cloud_profile = profile
             self._check_mqtt_connection_attach()
 
     def profile_unlinked(self):
-        # assert self._cloud_profile is not None
-        if self._mqtt_connection is not None:
+        # assert self._cloud_profile
+        if self._mqtt_connection:
             self._mqtt_connection.detach(self)
         self._cloud_profile = None
 
     def _check_mqtt_connection_attach(self):
         if self.conf_protocol is CONF_PROTOCOL_HTTP:
             # strictly HTTP so detach MQTT in case
-            if self._mqtt_connection is not None:
+            if self._mqtt_connection:
                 self._mqtt_connection.detach(self)
         else:
             profile_id = self.profile_id
-            if self._mqtt_connection is not None:
+            if self._mqtt_connection:
                 if self._mqtt_connection.profile.id == profile_id:
                     return
                 self._mqtt_connection.detach(self)
 
             if profile_id:
-                if self._cloud_profile is not None:
+                if self._cloud_profile:
                     self._cloud_profile.attach_mqtt(self)
             else:
                 # this is the case for when we just want local handling
@@ -1521,10 +1504,10 @@ class MerossDevice(MerossDeviceBase):
         but we also fill in a dict which will set back as the result of the
         Future we're returning to dignostics
         """
-        if self._trace_future is not None:
+        if self._trace_future:
             # avoid re-entry..keep going the running trace
             return self._trace_future
-        if self._trace_file is not None:
+        if self._trace_file:
             self._trace_close()
         self._trace_future = asyncio.get_running_loop().create_future()
         self._trace_data = []
@@ -1563,7 +1546,7 @@ class MerossDevice(MerossDeviceBase):
             self._trace_ability_iter = iter(self.descriptor.ability)
             self._trace_ability()
         except Exception as exception:
-            if self._trace_file is not None:
+            if self._trace_file:
                 self._trace_close()
             self.log_exception_warning(exception, "creating trace file")
 
@@ -1575,7 +1558,7 @@ class MerossDevice(MerossDeviceBase):
             self._trace_file = None
             self.log_exception_warning(exception, "closing trace file")
         self._trace_ability_iter = None
-        if self._trace_future is not None:
+        if self._trace_future:
             self._trace_future.set_result(self._trace_data)
             self._trace_future = None
         self._trace_data = None

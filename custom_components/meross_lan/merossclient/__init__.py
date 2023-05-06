@@ -146,8 +146,7 @@ def build_payload(
         key[mc.KEY_FROM] = from_
         return {mc.KEY_HEADER: key, mc.KEY_PAYLOAD: payload}
     else:
-        if messageid is None:
-            messageid = uuid4().hex
+        messageid = messageid or uuid4().hex
         timestamp = int(time())
         return {
             mc.KEY_HEADER: {

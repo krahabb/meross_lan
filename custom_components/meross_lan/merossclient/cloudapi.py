@@ -348,7 +348,7 @@ class MerossMQTTClient(mqtt.Client):
         self.on_disconnect = self._mqttc_disconnect
         self.suppress_exceptions = True
         self._rl_lastpublish = monotonic() - self.RATELIMITER_MINDELAY
-        self._rl_deque = deque(maxlen=self.RATELIMITER_MAXQUEUE)
+        self._rl_deque = deque()
         self._rl_queued = False
         self.rl_dropped = 0
         self.rl_avgperiod = 0.0
@@ -395,10 +395,7 @@ class MerossMQTTClient(mqtt.Client):
                 self._stateext = self.STATE_DISCONNECTED
 
     def rl_publish(
-        self,
-        topic: str,
-        payload: str,
-        priority: bool | None = None
+        self, topic: str, payload: str, priority: bool | None = None
     ) -> mqtt.MQTTMessageInfo | bool:
         with self.lock:
             queuelen = len(self._rl_deque)
@@ -416,7 +413,7 @@ class MerossMQTTClient(mqtt.Client):
                     )
                     return super().publish(topic, payload)
 
-            if priority is True:
+            if priority:
                 self._rl_deque.appendleft((topic, payload))
             else:
                 self._rl_deque.append((topic, payload))
@@ -424,7 +421,7 @@ class MerossMQTTClient(mqtt.Client):
             return True
 
     def loop_misc(self):
-        if self._rl_queued is True:
+        if self._rl_queued:
             if self.lock.acquire(False):
                 topic_payload = None
                 try:
@@ -443,7 +440,7 @@ class MerossMQTTClient(mqtt.Client):
                         self._rl_queued = False
                 finally:
                     self.lock.release()
-                    if topic_payload is not None:
+                    if topic_payload:
                         super().publish(*topic_payload)
         return super().loop_misc()
 

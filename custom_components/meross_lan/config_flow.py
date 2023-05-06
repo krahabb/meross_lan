@@ -117,16 +117,14 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 helper = ConfigEntriesHelper(self.hass)
                 # abort any eventual duplicate progress flow
                 profile_flow = helper.get_config_flow(unique_id)
-                if (profile_flow is not None) and (
-                    profile_flow["flow_id"] != self.flow_id
-                ):
+                if profile_flow and (profile_flow["flow_id"] != self.flow_id):
                     helper.config_entries.flow.async_abort(profile_flow["flow_id"])
                 profile_entry = helper.get_config_entry(unique_id)
-                if profile_entry is not None:
+                if profile_entry:
                     helper.config_entries.async_update_entry(
                         profile_entry, title=title, data=credentials
                     )
-                    if profile_entry.disabled_by is not None:
+                    if profile_entry.disabled_by:
                         await helper.config_entries.async_set_disabled_by(
                             profile_entry.entry_id, None
                         )
@@ -134,7 +132,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 if self._is_keyerror:
                     # this flow is managing a device
                     self._key = credentials[mc.KEY_KEY]
-                    if profile_entry is None:
+                    if not profile_entry:
                         # no profile configured yet: shutdown any progress on this
                         # profile and directly create the ConfigEntry
                         await helper.config_entries.async_add(
@@ -164,7 +162,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             vol.Required(CONF_USERNAME, description={DESCR: self._username}): str,
             vol.Required(CONF_PASSWORD): str,
         }
-        if _err is not None:
+        if _err:
             config_schema[vol.Optional(CONF_ERROR, description={DESCR: _err})] = str
         return self.async_show_form(
             step_id="profile",
@@ -178,13 +176,13 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         # passing key=None would allow key-hack and we don't want it aymore
         if key is None:
             key = ""
-        if (_httpclient := self._httpclient) is None:
-            _httpclient = self._httpclient = MerossHttpClient(
-                host, key, async_get_clientsession(self.hass), LOGGER  # type: ignore
-            )
-        else:
+        if _httpclient := self._httpclient:
             _httpclient.host = host
             _httpclient.key = key
+        else:
+            self._httpclient = _httpclient = MerossHttpClient(
+                host, key, async_get_clientsession(self.hass), LOGGER  # type: ignore
+            )
 
         payload = (
             await _httpclient.async_request_strict(
@@ -248,7 +246,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
         errors = {}
 
         if user_input is None:
-            if (profile := next(iter(ApiProfile.active_profiles()), None)) is not None:
+            if profile := next(iter(ApiProfile.active_profiles()), None):
                 self._key = profile.key
         else:
             self._host = user_input[CONF_HOST]
@@ -347,7 +345,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
                     pass
                 _device_config = _descriptor = None
 
-            if (_device_config is None) and ((key := ApiProfile.api.key) is not None):
+            if (not _device_config) and (key := ApiProfile.api.key):
                 try:
                     _device_config, _descriptor = await self._async_http_discovery(
                         host, key
@@ -356,7 +354,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
                 except Exception:
                     pass
 
-            if _device_config is not None:
+            if _device_config:
                 return await self._async_set_device_config(_device_config, _descriptor)  # type: ignore
 
         except Exception as exception:
@@ -415,8 +413,8 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
         device_id = descriptor.uuid
         if (
             ((profile_id := descriptor.userId) in ApiProfile.profiles)
-            and ((profile := ApiProfile.profiles.get(profile_id)) is not None)
-            and ((device_info := profile.get_device_info(device_id)) is not None)
+            and (profile := ApiProfile.profiles.get(profile_id))
+            and (device_info := profile.get_device_info(device_id))
         ):
             devname = device_info.get(mc.KEY_DEVNAME, device_id)
         else:
@@ -427,7 +425,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
             CONF_DEVICE_TYPE: descriptor.productnametype,
             CONF_DEVICE_ID: device_id,
         }
-        if await self.async_set_unique_id(device_id) is not None:
+        if await self.async_set_unique_id(device_id):
             raise AbortFlow("already_configured")
 
         return self.async_show_form(
@@ -437,10 +435,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=DOMAI
         )
 
     async def _async_finish_profile(self, title: str, unique_id: str, credentials):
-        if (
-            await self.async_set_unique_id(unique_id, raise_on_progress=False)
-            is not None
-        ):
+        if await self.async_set_unique_id(unique_id, raise_on_progress=False):
             return self.async_abort()
         return self.async_create_entry(title=title, data=credentials)
 
@@ -482,7 +477,7 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         return await self.async_step_device()
 
     async def async_step_hub(self, user_input=None):
-        if user_input is not None:
+        if user_input:
             data = dict(self._config_entry.data)
             data[CONF_KEY] = user_input.get(CONF_KEY)
             self.hass.config_entries.async_update_entry(self._config_entry, data=data)
@@ -504,7 +499,7 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         """
         errors = {}
         device: MerossDevice = ApiProfile.devices[self._device_id]  # type: ignore
-        if user_input is not None:
+        if user_input:
             self._host = user_input.get(CONF_HOST)
             self._key = user_input.get(CONF_KEY)
             self._protocol = user_input.get(CONF_PROTOCOL)
@@ -525,11 +520,12 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     _device_config = None
                     # as a temporary solution we'll optimistically infer http usage
                     # to just check for the key validation
-                    if (_host := _descriptor.innerIp):
+                    if _host := _descriptor.innerIp:
                         try:
-                            _device_config, _descriptor = await self._async_http_discovery(
-                                _host, self._key
-                            )
+                            (
+                                _device_config,
+                                _descriptor,
+                            ) = await self._async_http_discovery(_host, self._key)
                         except MerossKeyError:
                             return self.show_keyerror()
                         except Exception:
@@ -541,9 +537,9 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 if self._device_id != _descriptor.uuid:
                     raise ConfigError(ERR_DEVICE_ID_MISMATCH)
                 data = dict(self._config_entry.data)
-                if self._host is not None:
+                if self._host:
                     data[CONF_HOST] = self._host
-                if _device_config is not None:
+                if _device_config:
                     data[CONF_PAYLOAD] = _device_config[CONF_PAYLOAD]
                 data[CONF_KEY] = self._key
                 data[CONF_PROTOCOL] = self._protocol
@@ -586,7 +582,7 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 errors[ERR_BASE] = ERR_CANNOT_CONNECT
 
         config_schema = {}
-        if self._host is not None:
+        if self._host:
             config_schema[
                 vol.Required(CONF_HOST, description={DESCR: self._host})
             ] = str

@@ -159,7 +159,7 @@ class MerossEmulator:
         tz_name = self.descriptor.timezone
         if not tz_name:
             return None
-        if (self._tzinfo is not None) and (self._tzinfo.key == tz_name):
+        if self._tzinfo and (self._tzinfo.key == tz_name):
             return self._tzinfo
         try:
             self._tzinfo = ZoneInfo(tz_name)
@@ -189,11 +189,9 @@ class MerossEmulator:
                 method = mc.METHOD_ERROR
                 payload = {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}}
 
-            elif (
-                handler := getattr(
-                    self, f"_{method}_{namespace.replace('.', '_')}", None
-                )
-            ) is not None:
+            elif handler := getattr(
+                self, f"_{method}_{namespace.replace('.', '_')}", None
+            ):
                 method, payload = handler(header, payload)
 
             else:
@@ -222,7 +220,7 @@ class MerossEmulator:
         Could be used to (rather asynchronously) trigger internal state changes
         """
         self.epoch = int(time())
-        if self.p_all_system_time is not None:
+        if self.p_all_system_time:
             self.p_all_system_time[mc.KEY_TIMESTAMP] = self.epoch
 
     def _get_key_state(self, namespace: str) -> tuple[str, dict]:

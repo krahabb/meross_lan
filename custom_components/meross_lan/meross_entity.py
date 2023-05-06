@@ -105,7 +105,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         entities for the same channel and usually equal to device_class (but might not be)
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
-        assert (channel is not None) or (
+        assert channel is not None or (
             entitykey is not None
         ), "provide at least channel or entitykey (cannot be 'None' together)"
         self.id = _id = (
@@ -131,7 +131,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.device_lastupdate = 0
         device.entities[_id] = self
         async_add_devices = device.platforms.setdefault(self.PLATFORM)
-        if async_add_devices is not None:
+        if async_add_devices:
             async_add_devices([self])
 
     def __del__(self):
@@ -164,7 +164,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         # device is already registered/updated at the
         # device/subdevice level so we just pass identifiers
         # to reduce overload
-        if (subdevice := self.subdevice) is not None:
+        if subdevice := self.subdevice:
             return subdevice.deviceentry_id
         return self.device.deviceentry_id
 
@@ -190,10 +190,10 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             # newer api...return just the 'local' name
             return self._attr_name
         # compatibility layer....
-        if (subdevice := self.subdevice) is None:
-            devname = self.device.name
-        else:
+        if subdevice := self.subdevice:
             devname = subdevice.name
+        else:
+            devname = self.device.name
         if self._attr_name is not None:
             return f"{devname} - {self._attr_name}"
         return devname
@@ -227,11 +227,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     def set_unavailable(self):
         self.update_state(None)
-
-    # @property
-    # def entryname(self): # ATTR friendly_name in HA api
-    #    return (
-    #        self.registry_entry.name if self.registry_entry is not None else None) or self.name
 
     def _parse_undefined(self, payload):
         # this is a default handler for any message (in protocol routing)
@@ -271,7 +266,7 @@ class MerossToggle(MerossEntity):
         namespace: str | None,
     ):
         super().__init__(device, channel, entitykey, device_class, subdevice)
-        if namespace is not None:
+        if namespace:
             self.namespace = namespace
             self.key_namespace = get_namespacekey(namespace)
 
@@ -283,7 +278,7 @@ class MerossToggle(MerossEntity):
 
     async def async_request_onoff(self, onoff: int):
         assert (
-            self.namespace is not None
+            self.namespace
         ), "either set a nemaspace or override MerossToggle.async_request_onoff"
 
         # this is the meross executor code

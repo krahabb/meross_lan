@@ -352,8 +352,9 @@ class Mts100Schedule(MLCalendar):
     def event(self) -> CalendarEvent | None:
         """Return the next upcoming event."""
         if self.climate._mts_onoff and self.climate._mts_mode == mc.MTS100_MODE_AUTO:
-            event_index = self._get_event_entry(datetime.now(tz=self.device.tzinfo))
-            if event_index is not None:
+            if event_index := self._get_event_entry(
+                datetime.now(tz=self.device.tzinfo)
+            ):
                 return event_index.get_event()
         return None
 
@@ -366,7 +367,7 @@ class Mts100Schedule(MLCalendar):
         """Return calendar events within a datetime range."""
         events = []
         event_entry = self._get_event_entry(start_date.astimezone(self.device.tzinfo))
-        while event_entry is not None:
+        while event_entry:
             event = event_entry.get_event()
             if event.start >= end_date:
                 break

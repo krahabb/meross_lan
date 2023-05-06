@@ -383,7 +383,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             # update our estimates for transition duration
             if self._open_request != _open:
                 # keep monitoring the transition in less than 1 sec
-                if self._transition_unsub is None:
+                if not self._transition_unsub:
                     self._transition_unsub = schedule_callback(
                         self.hass, 0.9, self._transition_callback
                     )
@@ -423,10 +423,10 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         """
 
     def _transition_cancel(self):
-        if self._transition_unsub is not None:
+        if self._transition_unsub:
             self._transition_unsub.cancel()
             self._transition_unsub = None
-        if self._transition_end_unsub is not None:
+        if self._transition_end_unsub:
             self._transition_end_unsub.cancel()
             self._transition_end_unsub = None
         self._open_request = None
@@ -847,7 +847,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 self.request_position(-1)
                 return
 
-        if self._transition_unsub is None:
+        if not self._transition_unsub:
             # ensure we 'follow' cover movement
             self._transition_unsub = schedule_async_callback(
                 self.hass, 2, self._async_transition_callback
@@ -877,7 +877,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self.hass, 2, self._async_transition_callback
         )
         device = self.device
-        if device.curr_protocol is CONF_PROTOCOL_HTTP and device._mqtt_active is None:
+        if device.curr_protocol is CONF_PROTOCOL_HTTP and not device._mqtt_active:
             await device.async_http_request(
                 *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
             )
@@ -894,10 +894,10 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     def _transition_cancel(self):
         self._position_endtime = None
-        if self._transition_end_unsub is not None:
+        if self._transition_end_unsub:
             self._transition_end_unsub.cancel()
             self._transition_end_unsub = None
-        if self._transition_unsub is not None:
+        if self._transition_unsub:
             self._transition_unsub.cancel()
             self._transition_unsub = None
 

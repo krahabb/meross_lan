@@ -71,17 +71,14 @@ class MerossHttpClient:
         self._requesturl = URL(f"http://{value}/config")
 
     def set_logger(self, _logger: Logger):
-        if _logger is None:
-            self._logger = None
-            self._logid = None
-        else:
-            self._logger = _logger
+        self._logger = _logger
+        self._logid = None
 
     async def async_request_raw(self, request: dict) -> dict:
         timeout = 1
         try:
             self._logid = None
-            if self._logger is not None and self._logger.isEnabledFor(DEBUG):
+            if self._logger and self._logger.isEnabledFor(DEBUG):
                 # we catch the 'request' id before json dumping so
                 # to reasonably set the context before any exception
                 self._logid = f"MerossHttpClient({self._host}:{id(request)})"
@@ -109,14 +106,14 @@ class MerossHttpClient:
 
             response.raise_for_status()
             text_body = await response.text()
-            if self._logid is not None:
+            if self._logid:
                 self._logger.debug("%s: HTTP Response (%s)", self._logid, text_body)  # type: ignore
             json_body: dict = json_loads(text_body)
             if self.key is None:
                 self.replykey = get_replykey(json_body[mc.KEY_HEADER], self.key)
         except Exception as e:
             self.replykey = None  # reset the key hack since it could became stale
-            if self._logid is not None:
+            if self._logid:
                 self._logger.debug(  # type: ignore
                     "%s: HTTP %s (%s)",
                     self._logid,
@@ -144,7 +141,7 @@ class MerossHttpClient:
             if key is not None:
                 raise MerossKeyError(response)
             # sign error... hack and fool
-            if self._logid is not None:
+            if self._logid:
                 self._logger.debug(  # type: ignore
                     "%s: Key error on (%s:%s) -> retrying with key-reply hack",
                     self._logid,

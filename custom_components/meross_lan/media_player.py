@@ -153,7 +153,7 @@ class Mp3Mixin(
             )
             # cherub light entity should be there...
             light: MLLight = self.entities.get(0)  # type: ignore
-            if light is not None:
+            if light:
                 light.update_effect_map(mc.HP110A_LIGHT_EFFECT_MAP)
 
     def _handle_Appliance_Control_Mp3(self, header: dict, payload: dict):

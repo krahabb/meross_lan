@@ -12,7 +12,6 @@ from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
 class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
-
     # used to 'fix' and control the power level in tests
     # if None (default) it will generate random values
     _power_set: int | None = None
@@ -62,14 +61,11 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         p_electricity = self.electricity
         p_electricity[mc.KEY_POWER] = self.power = power
         p_electricity[mc.KEY_VOLTAGE] = self.voltage_average + randint(-20, 20)
-        p_electricity[mc.KEY_CURRENT] = int(
-            10 * power / p_electricity[mc.KEY_VOLTAGE]
-        )
+        p_electricity[mc.KEY_CURRENT] = int(10 * power / p_electricity[mc.KEY_VOLTAGE])
         return mc.METHOD_GETACK, self.payload_electricity
 
 
 class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
-
     # this is a static default but we're likely using
     # the current 'power' state managed by the ElectricityMixin
     power = 0.0  # in mW
@@ -121,7 +117,9 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         # energy will be reset every time we update our consumptionx array
         if self._power_prev is not None:
             self._energy_fraction += (
-                (self.power + self._power_prev) * (self.epoch - self._epoch_prev) / 7200000
+                (self.power + self._power_prev)
+                * (self.epoch - self._epoch_prev)
+                / 7200000
             )
         self._epoch_prev = self.epoch
         self._power_prev = self.power
@@ -135,7 +133,7 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(self.epoch)
         ss = min(ss, 59)  # clamp out leap seconds if the platform has them
         devtime = datetime(y, m, d, hh, mm, ss, 0, timezone.utc)
-        if (tzinfo := self.tzinfo) is not None:
+        if tzinfo := self.tzinfo:
             devtime = devtime.astimezone(tzinfo)
 
         date_value = "{:04d}-{:02d}-{:02d}".format(

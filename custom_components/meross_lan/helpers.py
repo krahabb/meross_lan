@@ -444,8 +444,7 @@ async def get_entity_last_state_available(
     the last good reading from the device, we need to skip the last
     state since it is 'unavailable'
     """
-    states = await get_entity_last_states(hass, 2, entity_id)
-    if states is not None:
+    if states := await get_entity_last_states(hass, 2, entity_id):
         for state in reversed(states):
             if state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}:
                 return state
@@ -491,17 +490,13 @@ class PollingStrategy:
         we like to re-query the full state (even on MQTT)
         - as an optimization, when onlining, we'll skip the request if it's for the same namespace
         """
-        if ((namespace is not None) or (device._mqtt_active is None)) and (
-            namespace != self.namespace
-        ):
+        if (namespace or (not device._mqtt_active)) and (namespace != self.namespace):
             await device.async_request(*self.request)
             self.lastrequest = epoch
 
 
 class SmartPollingStrategy(PollingStrategy):
-    __slots__ = (
-        "polling_period",
-    )
+    __slots__ = ("polling_period",)
 
     def __init__(
         self, namespace: str, payload: dict | None = None, polling_period: int = 0
@@ -517,22 +512,17 @@ class SmartPollingStrategy(PollingStrategy):
         conservative on traffic so we delay the request even more
         """
         if namespace != self.namespace:
-            if (
-                await device.async_request_smartpoll(
-                    epoch,
-                    self.lastrequest,
-                    self.request,
-                    self.polling_period,
-                )
-                is True
+            if await device.async_request_smartpoll(
+                epoch,
+                self.lastrequest,
+                self.request,
+                self.polling_period,
             ):
                 self.lastrequest = epoch
 
 
 class EntityPollingStrategy(SmartPollingStrategy):
-    __slots__ = (
-        "entity",
-    )
+    __slots__ = ("entity",)
 
     def __init__(self, namespace: str, entity: MerossEntity, polling_period: int = 0):
         super().__init__(namespace, None, polling_period)
@@ -543,15 +533,12 @@ class EntityPollingStrategy(SmartPollingStrategy):
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
         the state of this paylod so we'll use that in conditions
         """
-        if (namespace != self.namespace) and (self.entity.enabled is True):
-            if (
-                await device.async_request_smartpoll(
-                    epoch,
-                    self.entity.device_lastupdate,
-                    self.request,
-                    self.polling_period,
-                )
-                is True
+        if (namespace != self.namespace) and self.entity.enabled:
+            if await device.async_request_smartpoll(
+                epoch,
+                self.entity.device_lastupdate,
+                self.request,
+                self.polling_period,
             ):
                 self.entity.device_lastupdate = self.lastrequest = epoch
 
@@ -600,13 +587,11 @@ class ApiProfile(Loggable, abc.ABC):
 
     @staticmethod
     def active_devices():
-        return (device for device in ApiProfile.devices.values() if device is not None)
+        return (device for device in ApiProfile.devices.values() if device)
 
     @staticmethod
     def active_profiles():
-        return (
-            profile for profile in ApiProfile.profiles.values() if profile is not None
-        )
+        return (profile for profile in ApiProfile.profiles.values() if profile)
 
     @staticmethod
     def get_device_with_mac(macaddress: str):
@@ -634,7 +619,7 @@ class ApiProfile(Loggable, abc.ABC):
         )
 
     def unlisten_entry_update(self):
-        if self.unsub_entry_update_listener is not None:
+        if self.unsub_entry_update_listener:
             self.unsub_entry_update_listener()
             self.unsub_entry_update_listener = None
 

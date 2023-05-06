@@ -110,9 +110,10 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         if (self._light != payload) or not self.available:
             self._light = payload
 
-            onoff = payload.get(mc.KEY_ONOFF)
-            if onoff is not None:
-                self._attr_state = me.STATE_ON if onoff else me.STATE_OFF
+            if mc.KEY_ONOFF in payload:
+                self._attr_state = (
+                    me.STATE_ON if payload[mc.KEY_ONOFF] else me.STATE_OFF
+                )
 
             self._attr_color_mode = ColorMode.UNKNOWN
 
@@ -255,7 +256,7 @@ class MLLight(MLLightBase):
 
         if ATTR_EFFECT in kwargs:
             effect = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
-            if effect is not None:
+            if effect:
                 if isinstance(effect, str) and effect.isdigit():
                     effect = int(effect)
                 light[mc.KEY_EFFECT] = effect

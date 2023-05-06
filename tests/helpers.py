@@ -146,7 +146,7 @@ def build_emulator_for_profile(
         if device_info_dict:
             for device_info in cloudprofiledata["deviceInfo"].values():
                 device_type = device_info[mc.KEY_DEVICETYPE]  # type: ignore
-                if (model is not None) and (model != device_type):
+                if model and (model != device_type):
                     # we asked for a specific model
                     continue
                 model = device_type
@@ -234,7 +234,7 @@ class EmulatorContext(contextlib.AbstractContextManager):
         self.emulator = emulator
         self.host = str(id(emulator))
         self.aioclient_mock = aioclient_mock
-        if frozen_time is not None:
+        if frozen_time:
             self.frozen_time = frozen_time
             emulator.update_epoch()
         else:
@@ -253,7 +253,7 @@ class EmulatorContext(contextlib.AbstractContextManager):
 
     async def _handle_http_request(self, method, url, data):
         response = self.emulator.handle(data)
-        if self.frozen_time is not None:
+        if self.frozen_time:
             # emulate http roundtrip time
             self.frozen_time.tick(timedelta(seconds=tc.MOCK_HTTP_RESPONSE_DELAY))
         return AiohttpClientMockResponse(method, url, json=response)
@@ -350,7 +350,7 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         After this the device should be online and all the polling
         namespaces done
         """
-        if self._config_entry_loaded is False:
+        if not self._config_entry_loaded:
             await self.async_load_config_entry()
         assert self.device
         self.time.tick(timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY))
@@ -360,7 +360,7 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
 
     async def async_load_config_entry(self):
         assert self.device is None
-        assert self._config_entry_loaded is False
+        assert not self._config_entry_loaded
         hass = self.hass
         self._config_entry_loaded = await hass.config_entries.async_setup(
             self.config_entry.entry_id
