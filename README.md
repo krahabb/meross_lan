@@ -130,11 +130,12 @@ I really thank them for the inspiration and the knowledge that made it possible 
 Special mention also for:
 - [@nao-pon](https://github.com/nao-pon)
 - [@wsw70](https://github.com/wsw70)
-- [@gelokatil](https://github.com/gelokatil)
-- [@scannifn](https://github.com/scannifn)
-- [@almico](https://github.com/almico)
-- [@Gronda74](https://github.com/Gronda74)
-- [@GeorgeCaliment](https://github.com/GeorgeCaliment)
+- [@gelokatil](https://github.com/gelokatil) - contributing spanish [translation](https://github.com/krahabb/meross_lan/pull/44)
+- [@scannifn](https://github.com/scannifn) - GarageDoor (MSG100) [enhancements and fixes](https://github.com/krahabb/meross_lan/issues/29)
+- [@almico](https://github.com/almico) - Meross Hub (MSH300) enhancements
+- [@Gronda74](https://github.com/Gronda74) - fixing [issue](https://github.com/krahabb/meross_lan/issues/69)
+- [@GeorgeCaliment](https://github.com/GeorgeCaliment) - MRS200 [enhancements](https://github.com/krahabb/meross_lan/issues/73)
+- [@ikoz](https://github.com/ikoz) - MTS200 [enhancements](https://github.com/krahabb/meross_lan/discussions/242)
 
 who greatly helped me fixing issues or developing nice enhancements to the component
 
