@@ -85,7 +85,7 @@
                 "title": "Profilo Meross cloud",
                 "description": "Registra e connetti un profilo Meross",
                 "data": {
-                    "username": "Meross login",
+                    "email": "Meross login",
                     "password": "Meross password"
                 }
             },
@@ -141,7 +141,7 @@
                 "title": "Profilo Meross cloud",
                 "description": "Registra e connetti un profilo Meross",
                 "data": {
-                    "username": "Meross login",
+                    "email": "Meross login",
                     "password": "Meross password"
                 }
             }

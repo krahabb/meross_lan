@@ -301,14 +301,15 @@ class MerossDevice(MerossDeviceBase):
         "lastrequest",
         "lastresponse",
         "_cloud_profile",
-        "_mqtt_connection",
-        "_mqtt_connected",
-        "_mqtt_active",
+        "_mqtt_connection",  # we're binded to an MQTT profile/broker
+        "_mqtt_connected",  # the broker is online/connected
+        "_mqtt_publish",  # the broker accepts 'publish' (cloud broker conf might disable publishing)
+        "_mqtt_active",  # the broker receives valid traffic i.e. the device is 'mqtt' reachable
         "_mqtt_lastrequest",
         "_mqtt_lastresponse",
         "_mqtt_transactions",
-        "_http",
-        "_http_active",
+        "_http",  # cached MerossHttpClient
+        "_http_active",  # HTTP is 'online' i.e. reachable
         "_http_lastrequest",
         "_http_lastresponse",
         "_trace_file",
@@ -357,6 +358,7 @@ class MerossDevice(MerossDeviceBase):
         self._cloud_profile: MerossCloudProfile | None = None
         self._mqtt_connection: MQTTConnection | None = None
         self._mqtt_connected: MQTTConnection | None = None
+        self._mqtt_publish: MQTTConnection | None = None
         self._mqtt_active: MQTTConnection | None = None
         self._mqtt_lastrequest = 0
         self._mqtt_lastresponse = 0
@@ -550,6 +552,10 @@ class MerossDevice(MerossDeviceBase):
     def mqtt_locallyactive(self):
         """
         reports if the device is actively paired to a private (non-meross) MQTT
+        in order to decide if we can/should send over a local MQTT with good
+        chances of success.
+        we should also check if the _mqtt_connection is 'publishable' but
+        at the moment the MerossApi MQTTConnection doesn't allow disabling it
         """
         return self._mqtt_active is ApiProfile.api
 
@@ -632,27 +638,26 @@ class MerossDevice(MerossDeviceBase):
         """
         self.lastrequest = time()
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
-            # only publish when mqtt component is really connected else we'd
-            # insanely dump lot of mqtt errors in log
-            if self._mqtt_connected:
+            if self._mqtt_publish:
                 await self.async_mqtt_request(
                     namespace, method, payload, response_callback
                 )
                 return
-            # MQTT not connected
+            # MQTT not connected or not allowing publishing
             if self.conf_protocol is CONF_PROTOCOL_MQTT:
                 return
             # protocol is AUTO
             self._switch_protocol(CONF_PROTOCOL_HTTP)
 
         # curr_protocol is HTTP
-        if (
-            await self.async_http_request(
-                namespace, method, payload, callback=response_callback, attempts=3
-            )
-            is None
+        if not await self.async_http_request(
+            namespace, method, payload, callback=response_callback, attempts=3
         ):
-            if self._mqtt_active and (self.conf_protocol is CONF_PROTOCOL_AUTO):
+            if (
+                self._mqtt_active
+                and self._mqtt_publish
+                and (self.conf_protocol is CONF_PROTOCOL_AUTO)
+            ):
                 await self.async_mqtt_request(
                     namespace, method, payload, response_callback
                 )
@@ -668,9 +673,15 @@ class MerossDevice(MerossDeviceBase):
         if (epoch - lastupdate) < polling_period_min:
             return False
         if self.pref_protocol is CONF_PROTOCOL_HTTP:
-            # avoid any protocol auto-switching...
-            if await self.async_http_request(*polling_args) is not None:
+            # this is likely the scenario for Meross cloud MQTT
+            # or in general local devices with HTTP conf
+            # we try HTTP first without any protocol auto-switching...
+            if await self.async_http_request(*polling_args):
                 return True
+            # going on we should rely on MQTT but we skip it
+            # and all of the autoswitch logic if not feasible
+            if not self._mqtt_publish:
+                return False
         if self.mqtt_locallyactive or (
             (self._queued_poll_requests == 0)
             and ((epoch - lastupdate) > polling_period_cloud)
@@ -705,7 +716,7 @@ class MerossDevice(MerossDeviceBase):
         subsequent polls
         """
         self._queued_poll_requests = 0
-        for _namespace, _strategy in self.polling_dictionary.items():
+        for _strategy in self.polling_dictionary.values():
             if not self._online:
                 return
             await _strategy(self, epoch, namespace)
@@ -942,15 +953,23 @@ class MerossDevice(MerossDeviceBase):
         self._mqtt_connection = None
 
     def mqtt_connected(self):
-        assert self._mqtt_connection
-        self.log(DEBUG, "mqtt_connected to %s:%d", *self._mqtt_connection.broker)
-        self._mqtt_connected = self._mqtt_connection
+        _mqtt_connection = self._mqtt_connection
+        assert _mqtt_connection
+        self.log(DEBUG, "mqtt_connected to %s:%d", *_mqtt_connection.broker)
+        self._mqtt_connected = _mqtt_connection
+        if _mqtt_connection.allow_mqtt_publish:
+            self._mqtt_publish = _mqtt_connection
+        elif self.conf_protocol is CONF_PROTOCOL_MQTT:
+            self.warning(
+                "MQTT connection doesn't allow publishing - device will not be able send commands",
+                timeout=14400,
+            )
         self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT_BROKER)
 
     def mqtt_disconnected(self):
         assert self._mqtt_connection
         self.log(DEBUG, "mqtt_disconnected from %s:%d", *self._mqtt_connection.broker)
-        self._mqtt_connected = self._mqtt_active = None
+        self._mqtt_connected = self._mqtt_publish = self._mqtt_active = None
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             if self.conf_protocol is CONF_PROTOCOL_AUTO:
                 self._switch_protocol(CONF_PROTOCOL_HTTP)
@@ -986,12 +1005,12 @@ class MerossDevice(MerossDeviceBase):
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ):
-        if not self._mqtt_connected:
+        if not self._mqtt_publish:
             # even if we're smart enough to not call async_mqtt_request when no mqtt
             # available, it could happen we loose that when asynchronously coming here
             self.log(
                 DEBUG,
-                "attempting to use async_mqtt_request with no available profile",
+                "attempting to use async_mqtt_request with no publishing profile",
             )
             return
         if response_callback:
@@ -1008,7 +1027,7 @@ class MerossDevice(MerossDeviceBase):
                 CONF_PROTOCOL_MQTT,
                 TRACE_DIRECTION_TX,
             )
-        await self._mqtt_connected.async_mqtt_publish(
+        await self._mqtt_publish.async_mqtt_publish(
             self.id, namespace, method, payload, self.key, messageid
         )
 
@@ -1089,6 +1108,8 @@ class MerossDevice(MerossDeviceBase):
             self.receive(r_header, r_payload, CONF_PROTOCOL_HTTP)
             self._http_lastresponse = self.lastresponse
             return response
+
+        return None
 
     @callback
     async def _async_polling_callback(self):
@@ -1180,13 +1201,12 @@ class MerossDevice(MerossDeviceBase):
                 ns_all_request_args = get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self.host:
-                        await self.async_http_request(*ns_all_request_args)
-                        if self._online:
+                        if await self.async_http_request(*ns_all_request_args):
                             return
-                    if self._mqtt_connected:
+                    if self._mqtt_publish:
                         await self.async_mqtt_request(*ns_all_request_args)
                 elif self.conf_protocol is CONF_PROTOCOL_MQTT:
-                    if self._mqtt_connected:
+                    if self._mqtt_publish:
                         await self.async_mqtt_request(*ns_all_request_args)
                 else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
                     await self.async_http_request(*ns_all_request_args)
@@ -1312,7 +1332,7 @@ class MerossDevice(MerossDeviceBase):
 
     def _config_timezone(self, epoch, tzname):
         p_time = self.descriptor.time
-        assert p_time
+        assert p_time and self.mqtt_locallyactive
         p_timerule: list = p_time.get(mc.KEY_TIMERULE, [])
         p_timezone = p_time.get(mc.KEY_TIMEZONE)
         """

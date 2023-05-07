@@ -85,7 +85,7 @@
                 "title": "Meross cloud profile",
                 "description": "Register and connect to a Meross account",
                 "data": {
-                    "username": "Nombre de usuario de Meross",
+                    "email": "Nombre de usuario de Meross",
                     "password": "Contraseña de Meross"
                 }
             },
@@ -142,7 +142,7 @@
                 "title": "Recuperar clave de dispositivo",
                 "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
                 "data": {
-                    "username": "Nombre de usuario de Meross",
+                    "email": "Nombre de usuario de Meross",
                     "password": "Contraseña de Meross"
                 }
             }

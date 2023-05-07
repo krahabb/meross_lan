@@ -172,6 +172,10 @@ class MerossApi(MQTTConnection, ApiProfile):
         return "MerossApi"
 
     @property
+    def allow_mqtt_publish(self) -> bool:
+        return True
+
+    @property
     def broker(self):
         # TODO: recover the HA MQTT conf BROKER:PORT
         return "homeassistant", 0

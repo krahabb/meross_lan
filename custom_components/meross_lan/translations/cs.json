@@ -86,7 +86,7 @@
                 "title": "Obnova klíče zařízení",
                 "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
                 "data": {
-                    "username": "Uživatelské jméno účtu Meross",
+                    "email": "Uživatelské jméno účtu Meross",
                     "password": "Heslo k účtu Meross"
                 }
             },
@@ -143,7 +143,7 @@
                 "title": "Obnova klíče zařízení",
                 "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
                 "data": {
-                    "username": "Uživatelské jméno účtu Meross",
+                    "email": "Uživatelské jméno účtu Meross",
                     "password": "Heslo k účtu Meross"
                 }
             }

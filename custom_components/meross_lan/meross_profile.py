@@ -17,6 +17,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import paho.mqtt.client as mqtt
 
 from .const import (
+    CONF_ALLOW_MQTT_PUBLISH,
     CONF_DEVICE_ID,
     CONF_KEY,
     CONF_PAYLOAD,
@@ -114,6 +115,11 @@ class MQTTConnection(Loggable, abc.ABC):
     @property
     def logtag(self):
         return f"{self.__class__.__name__}({self.id})"
+
+    @property
+    @abc.abstractmethod
+    def allow_mqtt_publish(self) -> bool:
+        raise NotImplementedError()
 
     @property
     @abc.abstractmethod
@@ -347,6 +353,8 @@ class MQTTConnection(Loggable, abc.ABC):
 
 
 class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
+    profile: MerossCloudProfile
+
     _MSG_PRIORITY_MAP = {
         mc.METHOD_SET: True,
         mc.METHOD_PUSH: False,
@@ -413,6 +421,10 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         return ApiProfile.hass.async_add_executor_job(self.safe_disconnect)
 
     @property
+    def allow_mqtt_publish(self) -> bool:
+        return self.profile.allow_mqtt_publish
+
+    @property
     def broker(self):
         return self._host, self._port
 
@@ -436,6 +448,14 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         messageid: str | None = None,
     ) -> asyncio.Future:
         def _publish():
+            if not self.allow_mqtt_publish:
+                self.warning(
+                    "MQTT publishing is not allowed for this profile (device_id=%s)",
+                    device_id,
+                    timeout=14000,
+                )
+                return
+
             ret = self.rl_publish(
                 mc.TOPIC_REQUEST.format(device_id),
                 json_dumps(
@@ -550,6 +570,10 @@ class MerossCloudProfile(dict, ApiProfile):
         return self[self.KEY_APP_ID]
 
     @property
+    def allow_mqtt_publish(self) -> bool:
+        return self.get(CONF_ALLOW_MQTT_PUBLISH)  # type: ignore
+
+    @property
     def logtag(self):
         return f"MerossCloudProfile({self.id})"
 
@@ -632,6 +656,7 @@ class MerossCloudProfile(dict, ApiProfile):
         await super().async_shutdown()
 
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
+        # TODO: refresh the binded devices ability/inability to MQTT publish
         await self.async_update_credentials(config_entry.data)  # type: ignore
 
     def schedule_save_store(self):

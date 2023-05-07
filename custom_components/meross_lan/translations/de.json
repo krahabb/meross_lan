@@ -85,7 +85,7 @@
                 "title": "Geräteschlüssel übertragen",
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {
-                    "username": "Meross Benutzername",
+                    "email": "Meross Benutzername",
                     "password": "Meross Passwort"
                 }
             },
@@ -142,7 +142,7 @@
                 "title": "Geräteschlüssel übertragen",
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {
-                    "username": "Meross Benutzername",
+                    "email": "Meross Benutzername",
                     "password": "Meross Passwort"
                 }
             }
