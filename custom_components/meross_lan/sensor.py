@@ -444,21 +444,6 @@ class ConsumptionSensor(MLSensor):
             )
             if state.last_updated < devicetime_today_midnight:
                 return
-
-            # check if the restored sample is fresh enough i.e. it was
-            # updated after the device midnight for today..else it is too
-            # old to be good. Since we don't have actual device epoch we
-            # 'guess' it is nicely synchronized so we'll use our time
-            devicetime = self.device.get_datetime(time())
-            devicetime_today_midnight = datetime(
-                devicetime.year,
-                devicetime.month,
-                devicetime.day,
-                tzinfo=devicetime.tzinfo,
-            )
-            if state.last_updated < devicetime_today_midnight:
-                return
-
             # fix beta/preview attr names (sometime REMOVE)
             if "energy_offset" in state.attributes:
                 _attr_value = state.attributes["energy_offset"]
@@ -468,14 +453,12 @@ class ConsumptionSensor(MLSensor):
                 _attr_value = state.attributes["energy_reset_ts"]
                 self._attr_extra_state_attributes[self.ATTR_RESET_TS] = _attr_value
                 setattr(self, self.ATTR_RESET_TS, _attr_value)
-
             for _attr_name in (self.ATTR_OFFSET, self.ATTR_RESET_TS):
                 if _attr_name in state.attributes:
                     _attr_value = state.attributes[_attr_name]
                     self._attr_extra_state_attributes[_attr_name] = _attr_value
                     # we also set the value as an instance attr for faster access
                     setattr(self, _attr_name, _attr_value)
-
             # HA adds decimals when the display precision is set for the entity
             # according to this issue #268. In order to try not mess statistics
             # we're reverting to the old design where the sensor state is
