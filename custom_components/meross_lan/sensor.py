@@ -23,6 +23,7 @@ from .const import CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT, PARAM_ENERGY_UPDATE_P
 from .helpers import (
     ApiProfile,
     EntityPollingStrategy,
+    SmartPollingStrategy,
     StrEnum,
     get_entity_last_state_available,
 )
@@ -336,8 +337,8 @@ class ElectricityMixin(
         self._sensor_energy_estimate = EnergyEstimateSensor(self)
         self.polling_dictionary[
             mc.NS_APPLIANCE_CONTROL_ELECTRICITY
-        ] = EntityPollingStrategy(
-            mc.NS_APPLIANCE_CONTROL_ELECTRICITY, self._sensor_power
+        ] = SmartPollingStrategy(
+            mc.NS_APPLIANCE_CONTROL_ELECTRICITY
         )
 
     def start(self):
@@ -511,7 +512,6 @@ class ConsumptionMixin(
 
     def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
         _sensor_consumption = self._sensor_consumption
-        _sensor_consumption.device_lastupdate = self.lastresponse
         # we'll look through the device array values to see
         # data timestamped (in device time) after last midnight
         # since we usually reset this around midnight localtime

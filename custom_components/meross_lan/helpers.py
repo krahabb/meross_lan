@@ -471,16 +471,16 @@ class EntityPollingStrategy(SmartPollingStrategy):
     async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
         """
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
-        the state of this paylod so we'll use that in conditions
+        the state of this paylod so we'll skip the smartpoll should the entity be disabled
         """
         if (namespace != self.namespace) and self.entity.enabled:
             if await device.async_request_smartpoll(
                 epoch,
-                self.entity.device_lastupdate,
+                self.lastrequest,
                 self.request,
                 self.polling_period,
             ):
-                self.entity.device_lastupdate = self.lastrequest = epoch
+                self.lastrequest = epoch
 
 
 class ConfigEntriesHelper:
