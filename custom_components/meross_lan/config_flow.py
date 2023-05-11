@@ -359,7 +359,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                     )
                     # deeply check the device is really bounded to the profile
                     # since the key might luckily be good even tho the profile not
-                    if _descriptor.userId == profile[mc.KEY_USERID_]:
+                    if _descriptor.userId == profile.id:
                         break
                 except Exception:
                     pass
@@ -396,24 +396,22 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
 
     async def async_step_mqtt(self, discovery_info):
         """manage the MQTT discovery flow"""
-        await self.async_set_unique_id(mlc.DOMAIN)
         # this entry should only ever called once after startup
         # when HA thinks we're interested in discovery.
         # If our MerossApi is already running it will manage the discovery itself
         # so this flow is only useful when MerossLan has no configuration yet
         # and we leverage the default mqtt discovery to setup our manager
-        api = MerossApi.get(self.hass)
-        if api.mqtt_is_subscribed():
+        mqtt_connection = MerossApi.get(self.hass).mqtt_connection
+        if mqtt_connection.mqtt_is_subscribed:
             return self.async_abort()
         # try setup the mqtt subscription
         # this call might not register because of errors or because of an overlapping
         # request from 'async_setup_entry' (we're preventing overlapped calls to MQTT
         # subscription)
-        await api.async_mqtt_register()
-        if api.mqtt_is_subscribed():
+        if await mqtt_connection.async_mqtt_subscribe():
             # ok, now pass along the discovering mqtt message so our MerossApi state machine
             # gets to work on this
-            await api.async_mqtt_message(discovery_info)
+            await mqtt_connection.async_mqtt_message(discovery_info)
         # just in case, setup the MQTT Hub entry to enable the (default) device key configuration
         # if the entry hub is already configured this will disable the discovery
         # subscription (by returning 'already_configured') stopping any subsequent async_step_mqtt message:

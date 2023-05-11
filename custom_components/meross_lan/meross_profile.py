@@ -26,6 +26,7 @@ from .const import (
     PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
     PARAM_UNAVAILABILITY_TIMEOUT,
+    ProfileConfigType,
 )
 from .helpers import (
     LOGGER,
@@ -59,7 +60,6 @@ from .merossclient.cloudapi import (
 
 if typing.TYPE_CHECKING:
     import asyncio
-    from types import MappingProxyType
     from typing import Final
 
     from homeassistant.config_entries import ConfigEntry
@@ -69,8 +69,11 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
     from .merossclient.cloudapi import DeviceInfoType, SubDeviceInfoType
 
+    UuidType = str
+    DeviceInfoDictType = dict[UuidType, DeviceInfoType]
 
-class MQTTConnection(Loggable, abc.ABC):
+
+class MQTTConnection(Loggable):
     """
     Base abstract class representing a connection to an MQTT
     broker. Historically, MQTT support was only through MerossApi
@@ -87,7 +90,6 @@ class MQTTConnection(Loggable, abc.ABC):
     _KEY_REQUESTCOUNT = "__requestcount"
 
     __slots__ = (
-        "id",
         "profile",
         "mqttdevices",
         "mqttdiscovering",
@@ -96,7 +98,7 @@ class MQTTConnection(Loggable, abc.ABC):
     )
 
     def __init__(self, profile: MerossCloudProfile | MerossApi, connection_id: str):
-        self.id = connection_id
+        super().__init__(connection_id)
         self.profile = profile
         self.mqttdevices: dict[str, MerossDevice] = {}
         self.mqttdiscovering: dict[str, dict] = {}
@@ -113,18 +115,13 @@ class MQTTConnection(Loggable, abc.ABC):
         self.mqttdevices.clear()
 
     @property
-    def logtag(self):
-        return f"{self.__class__.__name__}({self.id})"
-
-    @property
-    @abc.abstractmethod
-    def allow_mqtt_publish(self) -> bool:
-        raise NotImplementedError()
+    def allow_mqtt_publish(self):
+        return self.profile.allow_mqtt_publish
 
     @property
     @abc.abstractmethod
     def broker(self) -> tuple[str, int]:
-        raise NotImplementedError()
+        return ""
 
     def attach(self, device: MerossDevice):
         assert device.id not in self.mqttdevices
@@ -369,7 +366,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
     def __init__(
         self, profile: MerossCloudProfile, connection_id: str, host: str, port: int
     ):
-        MerossMQTTClient.__init__(self, profile, profile.app_id)  # type: ignore
+        MerossMQTTClient.__init__(self, profile._config, profile.app_id)
         MQTTConnection.__init__(self, profile, connection_id)
         self._host = host
         self._port = port
@@ -419,10 +416,6 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         # same as connect. safe_disconnect should be even faster and less
         # contending but...
         return ApiProfile.hass.async_add_executor_job(self.safe_disconnect)
-
-    @property
-    def allow_mqtt_publish(self) -> bool:
-        return self.profile.allow_mqtt_publish
 
     @property
     def broker(self):
@@ -520,7 +513,14 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         userdata.add_job(self._mqtt_disconnected)
 
 
-class MerossCloudProfileStore(storage.Store[dict]):
+class MerossCloudProfileStoreType(typing.TypedDict):
+    appId: str
+    token: str | None
+    deviceInfo: DeviceInfoDictType
+    deviceInfoTime: float
+
+
+class MerossCloudProfileStore(storage.Store[MerossCloudProfileStoreType]):
     VERSION = 1
 
     def __init__(self, profile_id: str):
@@ -531,7 +531,7 @@ class MerossCloudProfileStore(storage.Store[dict]):
         )
 
 
-class MerossCloudProfile(dict, ApiProfile):
+class MerossCloudProfile(ApiProfile):
     """
     Represents and manages a cloud account profile used to retrieve keys
     and/or to manage cloud mqtt connection(s)
@@ -542,40 +542,28 @@ class MerossCloudProfile(dict, ApiProfile):
     KEY_DEVICE_INFO_TIME: Final = "deviceInfoTime"
     KEY_SUBDEVICE_INFO: Final = "__subDeviceInfo"
 
+    _config: ProfileConfigType
+    _data: MerossCloudProfileStoreType
+    app_id: str
+
     __slots__ = (
         "mqttconnections",
         "linkeddevices",
-        "_unsub_polling_query_devices",
+        "_config",
+        "_data",
+        "app_id",
         "_store",
+        "_unsub_polling_query_devices",
     )
 
-    def __init__(self, data: MappingProxyType):
+    def __init__(self, config_entry: ConfigEntry):
+        _config: ProfileConfigType = config_entry.data  # type: ignore
+        super().__init__(_config[mc.KEY_USERID_], config_entry)
         self.mqttconnections: dict[str, MerossMQTTConnection] = {}
         self.linkeddevices: dict[str, MerossDevice] = {}
-        self.update(data)
-        self.setdefault(self.KEY_APP_ID, generate_app_id())
-        self._unsub_polling_query_devices: asyncio.TimerHandle | None = None
+        self._config = _config
         self._store = MerossCloudProfileStore(self.id)
-
-    @property
-    def id(self):
-        return self[mc.KEY_USERID_]
-
-    @property
-    def key(self) -> str | None:
-        return self[mc.KEY_KEY]
-
-    @property
-    def app_id(self) -> str:
-        return self[self.KEY_APP_ID]
-
-    @property
-    def allow_mqtt_publish(self) -> bool:
-        return self.get(CONF_ALLOW_MQTT_PUBLISH)  # type: ignore
-
-    @property
-    def logtag(self):
-        return f"MerossCloudProfile({self.id})"
+        self._unsub_polling_query_devices: asyncio.TimerHandle | None = None
 
     async def async_start(self):
         """
@@ -587,15 +575,29 @@ class MerossCloudProfile(dict, ApiProfile):
         the user has binded a new device and we need to 'discover' it.
         """
         if data := await self._store.async_load():
-            self.update(data)
-
-        if not isinstance(self.get(self.KEY_DEVICE_INFO), dict):
-            self[self.KEY_DEVICE_INFO] = {}
-            self[self.KEY_DEVICE_INFO_TIME] = self._last_query_devices = 0.0
-        else:
-            self._last_query_devices = self.get(self.KEY_DEVICE_INFO_TIME, 0.0)
+            self._data = data
+            self.app_id = data.get(MerossCloudProfile.KEY_APP_ID)
+            if not (self.app_id and isinstance(self.app_id, str)):
+                data[MerossCloudProfile.KEY_APP_ID] = self.app_id = generate_app_id()
+            if not isinstance(data.get(MerossCloudProfile.KEY_DEVICE_INFO), dict):
+                data[MerossCloudProfile.KEY_DEVICE_INFO] = {}
+            self._last_query_devices = data.get(
+                MerossCloudProfile.KEY_DEVICE_INFO_TIME, 0.0
+            )
             if not isinstance(self._last_query_devices, float):
-                self._last_query_devices = 0.0
+                data[
+                    MerossCloudProfile.KEY_DEVICE_INFO_TIME
+                ] = self._last_query_devices = 0.0
+        else:
+            self.app_id = generate_app_id()
+            self._last_query_devices = 0.0
+            data: MerossCloudProfileStoreType | None = {
+                MerossCloudProfile.KEY_APP_ID: self.app_id,
+                mc.KEY_TOKEN: self._config[mc.KEY_TOKEN],
+                MerossCloudProfile.KEY_DEVICE_INFO: {},
+                MerossCloudProfile.KEY_DEVICE_INFO_TIME: 0.0,
+            }
+            self._data = data
 
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
@@ -615,7 +617,9 @@ class MerossCloudProfile(dict, ApiProfile):
         # we have and setup the polling
         device_info_unknown = [
             device_info
-            for device_id, device_info in self[self.KEY_DEVICE_INFO].items()
+            for device_id, device_info in data[
+                MerossCloudProfile.KEY_DEVICE_INFO
+            ].items()
             if device_id not in ApiProfile.devices
         ]
         if len(device_info_unknown):
@@ -655,21 +659,19 @@ class MerossCloudProfile(dict, ApiProfile):
             self._unsub_polling_query_devices = None
         await super().async_shutdown()
 
+    # interface: EntityManager
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
+        config: ProfileConfigType = config_entry.data  # type: ignore
         # TODO: refresh the binded devices ability/inability to MQTT publish
-        await self.async_update_credentials(config_entry.data)  # type: ignore
+        await self.async_update_credentials(config)
 
-    def schedule_save_store(self):
-        def _data_func():
-            return self
-
-        self._store.async_delay_save(
-            _data_func, PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT
-        )
+    # interface: ApiProfile
+    @property
+    def allow_mqtt_publish(self):
+        return self._config.get(CONF_ALLOW_MQTT_PUBLISH)
 
     def attach_mqtt(self, device: MerossDevice):
-        device_id = device.id
-        if device_id not in self[self.KEY_DEVICE_INFO]:
+        if device.id not in self._data[MerossCloudProfile.KEY_DEVICE_INFO]:
             self.warning(
                 "cannot connect MQTT for MerossDevice(%s): it does not belong to the current profile",
                 device.name,
@@ -679,10 +681,12 @@ class MerossCloudProfile(dict, ApiProfile):
         with self.exception_warning("attach_mqtt"):
             self._get_or_create_mqttconnection(*device.mqtt_broker).attach(device)
 
+    # interface: self
     def link(self, device: MerossDevice):
         device_id = device.id
         if device_id not in self.linkeddevices:
-            if device_id not in self[self.KEY_DEVICE_INFO]:
+            device_info = self._data[MerossCloudProfile.KEY_DEVICE_INFO].get(device_id)
+            if not device_info:
                 self.warning(
                     "cannot link MerossDevice(%s): does not belong to the current profile",
                     device.name,
@@ -690,7 +694,7 @@ class MerossCloudProfile(dict, ApiProfile):
                 return
             device.profile_linked(self)
             self.linkeddevices[device_id] = device
-            device.update_device_info(self[self.KEY_DEVICE_INFO][device_id])
+            device.update_device_info(device_info)
 
     def unlink(self, device: MerossDevice):
         device_id = device.id
@@ -699,21 +703,22 @@ class MerossCloudProfile(dict, ApiProfile):
             self.linkeddevices.pop(device_id)
 
     def get_device_info(self, device_id: str) -> DeviceInfoType | None:
-        return self[self.KEY_DEVICE_INFO].get(device_id)
+        return self._data[MerossCloudProfile.KEY_DEVICE_INFO].get(device_id)
 
     async def async_update_credentials(self, credentials: MerossCloudCredentials):
         with self.exception_warning("async_update_credentials"):
             self.log(DEBUG, "updating credentials")
-            assert self[mc.KEY_USERID_] == credentials[mc.KEY_USERID_]
-            assert self[mc.KEY_KEY] == credentials[mc.KEY_KEY]
-            if mc.KEY_TOKEN in self and self[mc.KEY_TOKEN] != credentials[mc.KEY_TOKEN]:
+            assert self.id == credentials[mc.KEY_USERID_]
+            assert self.key == credentials[mc.KEY_KEY]
+            token = self._data.get(mc.KEY_TOKEN)
+            if token and (token != credentials[mc.KEY_TOKEN]):
                 # token might be expired: suppress exceptions
                 with self.exception_warning("async_cloudapi_logout"):
                     await async_cloudapi_logout(
-                        self.pop(mc.KEY_TOKEN), async_get_clientsession(ApiProfile.hass)
+                        token, async_get_clientsession(ApiProfile.hass)
                     )
-            self.update(credentials)
-            self.schedule_save_store()
+            self._data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
+            self._schedule_save_store()
             # the 'async_check_query_devices' will only occur if we didn't refresh
             # on our polling schedule for whatever reason (invalid token -
             # no connection - whatsoever) so, having a fresh token and likely
@@ -731,8 +736,8 @@ class MerossCloudProfile(dict, ApiProfile):
                 token, async_get_clientsession(ApiProfile.hass)
             )
             await self._process_device_info_new(device_info_new)
-            self[self.KEY_DEVICE_INFO_TIME] = self._last_query_devices
-            self.schedule_save_store()
+            self._data[self.KEY_DEVICE_INFO_TIME] = self._last_query_devices
+            self._schedule_save_store()
             # retrigger the poll at the right time since async_query_devices
             # might be called for whatever reason 'asynchronously'
             # at any time (say the user does a new cloud login or so...)
@@ -768,10 +773,10 @@ class MerossCloudProfile(dict, ApiProfile):
     @contextmanager
     def _cloud_token_exception_manager(self, msg: str, *args, **kwargs):
         try:
-            yield self.get(mc.KEY_TOKEN)
+            yield self._data.get(mc.KEY_TOKEN)
         except CloudApiError as clouderror:
             if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
-                self.pop(mc.KEY_TOKEN, None)
+                self._data.pop(mc.KEY_TOKEN, None)  # type: ignore
             self.log_exception_warning(clouderror, msg)
         except Exception as exception:
             self.log_exception_warning(exception, msg)
@@ -804,7 +809,7 @@ class MerossCloudProfile(dict, ApiProfile):
     async def _process_device_info_new(
         self, device_info_list_new: list[DeviceInfoType]
     ):
-        device_info_dict: dict[str, DeviceInfoType] = self[self.KEY_DEVICE_INFO]
+        device_info_dict = self._data[MerossCloudProfile.KEY_DEVICE_INFO]
         device_info_removed = {device_id for device_id in device_info_dict.keys()}
         device_info_unknown: list[DeviceInfoType] = []
         for device_info in device_info_list_new:
@@ -817,7 +822,7 @@ class MerossCloudProfile(dict, ApiProfile):
                     # already known device
                     device_info_removed.remove(device_id)
                     sub_device_info_dict = device_info_dict[device_id].get(
-                        self.KEY_SUBDEVICE_INFO
+                        MerossCloudProfile.KEY_SUBDEVICE_INFO
                     )
                 else:
                     # new device
@@ -835,7 +840,9 @@ class MerossCloudProfile(dict, ApiProfile):
                 if isinstance(device, MerossDeviceHub):
                     if sub_device_info_dict is None:
                         sub_device_info_dict = {}
-                    device_info[self.KEY_SUBDEVICE_INFO] = sub_device_info_dict
+                    device_info[
+                        MerossCloudProfile.KEY_SUBDEVICE_INFO
+                    ] = sub_device_info_dict
                     sub_device_info_list_new = await self._async_query_subdevices(
                         device_id
                     )
@@ -900,11 +907,19 @@ class MerossCloudProfile(dict, ApiProfile):
                         f"_process_device_info_unknown: unknown device_id={device_id}"
                     ):
                         host, port = parse_domain(domain := device_info[hostkey])
-                        mqttprofile = self._get_or_create_mqttconnection(host, port)
-                        if mqttprofile.state_inactive:
-                            await mqttprofile.schedule_connect()
-                        mqttprofile.get_or_set_discovering(device_id)
+                        mqttconnection = self._get_or_create_mqttconnection(host, port)
+                        if mqttconnection.state_inactive:
+                            await mqttconnection.schedule_connect()
+                        mqttconnection.get_or_set_discovering(device_id)
                         if domain == device_info[mc.KEY_RESERVEDDOMAIN]:
                             # dirty trick to avoid looping when the 2 hosts
                             # are the same
                             break
+
+    def _schedule_save_store(self):
+        def _data_func():
+            return self._data
+
+        self._store.async_delay_save(
+            _data_func, PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT
+        )

@@ -52,6 +52,14 @@ class MerossFakeEntity:
 
 
 class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
+    """
+    Mixin style base class for all of the entity platform(s)
+    This class must prepend the HA entity class in our custom
+    entity classe definitions like:
+    from homeassistant.components.switch import Switch
+    class MyCustomSwitch(MerossEntity, Switch)
+    """
+
     PLATFORM: str
 
     EntityCategory = EntityCategory
@@ -75,7 +83,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     device_lastupdate: float
 
     __slots__ = (
-        "id",
         "device",
         "channel",
         "subdevice",
@@ -108,13 +115,15 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         assert channel is not None or (
             entitykey is not None
         ), "provide at least channel or entitykey (cannot be 'None' together)"
-        self.id = _id = (
+
+        _id = (
             channel
             if entitykey is None
             else entitykey
             if channel is None
             else f"{channel}_{entitykey}"
         )
+        Loggable.__init__(self, _id)
         assert (
             device.entities.get(_id) is None
         ), "(channel, entitykey) is not unique inside device.entities"
@@ -221,8 +230,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         if self._attr_state != state:
             self._attr_state = state
             if self._hass_connected:
-                # optimize hass checks since we're (pretty)
-                # sure they're ok (DANGER)
                 self._async_write_ha_state()
 
     def set_unavailable(self):
@@ -313,11 +320,13 @@ class MerossToggle(MerossEntity):
 def platform_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices, platform: str
 ):
-    device: MerossDevice = ApiProfile.devices[config_entry.unique_id]  # type: ignore
-    device.platforms[platform] = async_add_devices
-    async_add_devices(
-        [entity for entity in device.entities.values() if entity.PLATFORM is platform]
-    )
     LOGGER.debug(
-        "async_setup_entry device_id = %s - platform = %s", device.id, platform
+        "platform_setup_entry { unique_id: %s, platform: %s }",
+        config_entry.unique_id,
+        platform,
+    )
+    manager = ApiProfile.managers[config_entry.entry_id]
+    manager.platforms[platform] = async_add_devices
+    async_add_devices(
+        [entity for entity in manager.entities.values() if entity.PLATFORM is platform]
     )

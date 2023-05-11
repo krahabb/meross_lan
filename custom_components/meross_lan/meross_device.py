@@ -51,8 +51,8 @@ from .const import (
 from .helpers import (
     LOGGER,
     ApiProfile,
+    EntityManager,
     EntityPollingStrategy,
-    Loggable,
     PollingStrategy,
     obfuscated_dict_copy,
     schedule_async_callback,
@@ -72,8 +72,6 @@ from .sensor import PERCENTAGE, MLSensor, ProtocolSensor
 ResponseCallbackType = typing.Callable[[bool, dict, dict], None]
 
 if typing.TYPE_CHECKING:
-    from typing import Final
-
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -148,19 +146,17 @@ class _MQTTTransaction:
         self.response_callback = response_callback
 
 
-class MerossDeviceBase(Loggable, abc.ABC):
+class MerossDeviceBase(EntityManager):
     """
     Abstract base class for MerossDevice and MerossSubDevice (from hub)
     giving common behaviors like device_registry interface
     """
 
-    id: Final[str]
+    deviceentry_id: dict[str, set]
     # device info dict from meross cloud api
     device_info: DeviceInfoType | SubDeviceInfoType | None
 
     __slots__ = (
-        "id",
-        "config_entry_id",
         "deviceentry_id",
         "device_info",
         "_device_registry_entry",
@@ -168,8 +164,8 @@ class MerossDeviceBase(Loggable, abc.ABC):
 
     def __init__(
         self,
-        _id: str,
-        config_entry_id: str,
+        id_: str,
+        config_entry_or_id: ConfigEntry | str,
         *,
         default_name: str,
         model: str,
@@ -177,21 +173,13 @@ class MerossDeviceBase(Loggable, abc.ABC):
         connections: set[tuple[str, str]] | None = None,
         via_device: tuple[str, str] | None = None,
     ):
-        """
-        lightweight initialization in order to prepare the class to work
-        (logging behavior needs this to be setup). If log anything
-        during the concrete class __init__ this base needs to be initialized
-        internally even though we can't still update the device registry.
-        """
-        self.id = _id
-        self.config_entry_id = config_entry_id
-        self.deviceentry_id = {"identifiers": {(DOMAIN, _id)}}
+        super().__init__(id_, config_entry_or_id, {"identifiers": {(DOMAIN, id_)}})
         self.device_info = None
         self._device_registry_entry = None
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             self._device_registry_entry = weakref.ref(
                 device_registry.async_get(ApiProfile.hass).async_get_or_create(
-                    config_entry_id=config_entry_id,
+                    config_entry_id=self.config_entry_id,
                     connections=connections,
                     default_manufacturer=mc.MANUFACTURER,
                     default_name=default_name,
@@ -203,6 +191,7 @@ class MerossDeviceBase(Loggable, abc.ABC):
             )
 
     async def async_shutdown(self):
+        await super().async_shutdown()
         self._device_registry_entry = None
         self.device_info = None
 
@@ -252,14 +241,6 @@ class MerossDeviceBase(Loggable, abc.ABC):
     def _get_internal_name(self) -> str:
         return ""
 
-    @abc.abstractmethod
-    def log(self, level: int, msg: str, *args, **kwargs):
-        pass
-
-    @abc.abstractmethod
-    def warning(self, msg: str, *args, **kwargs):
-        pass
-
 
 class MerossDevice(MerossDeviceBase):
     """
@@ -268,7 +249,6 @@ class MerossDevice(MerossDeviceBase):
 
     # these are set from ConfigEntry
     _host: str | None
-    key: str
     polling_period: int
     _polling_delay: int
     conf_protocol: str
@@ -284,7 +264,6 @@ class MerossDevice(MerossDeviceBase):
 
     __slots__ = (
         "_host",
-        "key",
         "polling_period",
         "_polling_delay",
         "conf_protocol",
@@ -317,11 +296,9 @@ class MerossDevice(MerossDeviceBase):
         "_trace_data",
         "_trace_endtime",
         "_trace_ability_iter",
-        "entities",
         "polling_dictionary",
         "platforms",
         "_tzinfo",
-        "_unsub_entry_update_listener",
         "_unsub_polling_callback",
         "_queued_poll_requests",
         "sensor_protocol",
@@ -336,7 +313,7 @@ class MerossDevice(MerossDeviceBase):
     ):
         super().__init__(
             config_entry.data[CONF_DEVICE_ID],
-            config_entry.entry_id,
+            config_entry,
             default_name=descriptor.productname,
             model=descriptor.productmodel,
             sw_version=descriptor.firmware.get(mc.KEY_VERSION),
@@ -371,10 +348,6 @@ class MerossDevice(MerossDeviceBase):
         self._trace_data: list | None = None
         self._trace_endtime = 0
         self._trace_ability_iter = None
-        # This is a collection of all of the instanced entities
-        # they're generally built here during __init__ and will be registered
-        # in platforms(s) async_setup_entry with HA
-        self.entities: dict[object, "MerossEntity"] = {}
         # This is mainly for HTTP based devices: we build a dictionary of what we think could be
         # useful to asynchronously poll so the actual polling cycle doesnt waste time in checks
         # TL:DR we'll try to solve everything with just NS_SYS_ALL since it usually carries the full state
@@ -386,14 +359,6 @@ class MerossDevice(MerossDeviceBase):
         self.polling_dictionary[mc.NS_APPLIANCE_SYSTEM_ALL] = PollingStrategy(
             mc.NS_APPLIANCE_SYSTEM_ALL
         )
-
-        # when we build an entity we also add the relative platform name here
-        # so that the async_setup_entry for the integration will be able to forward
-        # the setup to the appropriate platform.
-        # The item value here will be set to the async_add_entities callback
-        # during the corresponding platform async_setup_entry so to be able
-        # to dynamically add more entities should they 'pop-up' (Hub only?)
-        self.platforms: dict[str, typing.Callable | None] = {}
         # Message handling is actually very hybrid:
         # when a message (device reply or originated) is received it gets routed to the
         # device instance in 'receive'. Here, it was traditionally parsed with a
@@ -411,9 +376,6 @@ class MerossDevice(MerossDeviceBase):
         # in order to complete the transaction
         self._mqtt_transactions: dict[str, _MQTTTransaction] = {}
         self._tzinfo = None
-        self._unsub_entry_update_listener = config_entry.add_update_listener(
-            self.entry_update_listener
-        )
         self._unsub_polling_callback = None
         self._queued_poll_requests = 0
 
@@ -451,17 +413,17 @@ class MerossDevice(MerossDeviceBase):
         else:
             self.entity_dnd = MerossFakeEntity  # type: ignore
 
-        for key, payload in descriptor.digest.items():
+        for _key, _payload in descriptor.digest.items():
             # _init_xxxx methods provided by mixins
-            _init_method_name = f"_init_{key}"
+            _init_method_name = f"_init_{_key}"
             if _init := getattr(self, _init_method_name, None):
-                if isinstance(payload, list):
-                    for p in payload:
+                if isinstance(_payload, list):
+                    for p in _payload:
                         with self.exception_warning(_init_method_name):
                             _init(p)
                 else:
                     with self.exception_warning(_init_method_name):
-                        _init(payload)
+                        _init(_payload)
 
     def __del__(self):
         LOGGER.debug("MerossDevice(%s): destroy", self.id)
@@ -492,9 +454,6 @@ class MerossDevice(MerossDeviceBase):
             self._mqtt_connection.detach(self)
         if self._cloud_profile:
             self._cloud_profile.unlink(self)
-        if self._unsub_entry_update_listener:
-            self._unsub_entry_update_listener()
-            self._unsub_entry_update_listener = None
         while self._unsub_polling_callback is None:
             # wait for the polling loop to finish in case
             await asyncio.sleep(1)
@@ -503,7 +462,6 @@ class MerossDevice(MerossDeviceBase):
         self.polling_dictionary.clear()
         if self._trace_file:
             self._trace_close()
-        self.entities.clear()
         self.entity_dnd = None  # type: ignore
         self.sensor_signal_strength = None  # type: ignore
         self.sensor_protocol = None  # type: ignore
@@ -862,15 +820,15 @@ class MerossDevice(MerossDeviceBase):
                 # check the appliance timeoffsets are updated (see #36)
                 self._config_timezone(int(self.lastresponse), descr.time.get(mc.KEY_TIMEZONE))  # type: ignore
 
-        for key, value in descr.digest.items():
-            if _parse := getattr(self, f"_parse_{key}", None):
-                _parse(value)
+        for _key, _value in descr.digest.items():
+            if _parse := getattr(self, f"_parse_{_key}", None):
+                _parse(_value)
         # older firmwares (MSS110 with 1.1.28) look like
         # carrying 'control' instead of 'digest'
         if isinstance(p_control := descr.all.get(mc.KEY_CONTROL), dict):
-            for key, value in p_control.items():
-                if _parse := getattr(self, f"_parse_{key}", None):
-                    _parse(value)
+            for _key, _value in p_control.items():
+                if _parse := getattr(self, f"_parse_{_key}", None):
+                    _parse(_value)
 
         if self.needsave:
             self.needsave = False
@@ -1515,7 +1473,7 @@ class MerossDevice(MerossDeviceBase):
                 # fill our local mqtt structures with unuseful data..
                 # Right now add anyway since it's no harm
                 # (no mqtt messages will come though)
-                ApiProfile.api.attach(self)
+                ApiProfile.api.attach_mqtt(self)
 
     def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
         """

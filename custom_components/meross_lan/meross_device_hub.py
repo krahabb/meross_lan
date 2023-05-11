@@ -212,40 +212,37 @@ class MerossDeviceHub(MerossDevice):
         # Here we'll check the fresh subdevice list against the actual one and
         # eventually manage newly added subdevices or removed ones #119
         # telling the caller to persist the changed configuration (self.needsave)
-        if isinstance(p_subdevices := p_hub.get(mc.KEY_SUBDEVICE), list):
-            subdevices_actual = set(self.subdevices.keys())
-            for p_digest in p_subdevices:
-                p_id = p_digest.get(mc.KEY_ID)
-                if subdevice := self.subdevices.get(p_id):
-                    subdevices_actual.remove(p_id)
-                elif subdevice := self._subdevice_build(p_digest):
-                    self.needsave = True
-                else:
-                    continue
-                subdevice.parse_digest(p_digest)
-
-            if subdevices_actual:
-                # now we're left with non-existent (removed) subdevices
+        subdevices_actual = set(self.subdevices.keys())
+        for p_digest in p_hub[mc.KEY_SUBDEVICE]:
+            p_id = p_digest.get(mc.KEY_ID)
+            if subdevice := self.subdevices.get(p_id):
+                subdevices_actual.remove(p_id)
+            elif subdevice := self._subdevice_build(p_digest):
                 self.needsave = True
-                for p_id in subdevices_actual:
-                    subdevice = self.subdevices[p_id]
-                    self.warning(
-                        "removing subdevice %s(%s) - configuration will be reloaded in 15 sec",
-                        subdevice.name,
-                        p_id,
-                    )
+            else:
+                continue
+            subdevice.parse_digest(p_digest)
 
-                # before reloading we have to be sure configentry data were persisted
-                # so we'll wait a bit..
-                async def _async_setup_again():
-                    self._unsub_setup_again = None
-                    await ApiProfile.hass.config_entries.async_reload(
-                        self.config_entry_id
-                    )
-
-                self._unsub_setup_again = schedule_async_callback(
-                    ApiProfile.hass, 15, _async_setup_again
+        if subdevices_actual:
+            # now we're left with non-existent (removed) subdevices
+            self.needsave = True
+            for p_id in subdevices_actual:
+                subdevice = self.subdevices[p_id]
+                self.warning(
+                    "removing subdevice %s(%s) - configuration will be reloaded in 15 sec",
+                    subdevice.name,
+                    p_id,
                 )
+
+            # before reloading we have to be sure configentry data were persisted
+            # so we'll wait a bit..
+            async def _async_setup_again():
+                self._unsub_setup_again = None
+                await ApiProfile.hass.config_entries.async_reload(self.config_entry_id)
+
+            self._unsub_setup_again = schedule_async_callback(
+                ApiProfile.hass, 15, _async_setup_again
+            )
 
     def _build_subdevices_payload(
         self, types: typing.Collection, included: bool, count: int
@@ -342,11 +339,11 @@ class MerossSubDevice(MerossDeviceBase):
     )
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
-        _id = p_digest[mc.KEY_ID]
+        id_ = p_digest[mc.KEY_ID]
         super().__init__(
-            _id,
+            id_,
             hub.config_entry_id,
-            default_name=get_productnameuuid(_type, _id),
+            default_name=get_productnameuuid(_type, id_),
             model=_type,
             via_device=next(iter(hub.deviceentry_id["identifiers"])),
         )
@@ -354,7 +351,7 @@ class MerossSubDevice(MerossDeviceBase):
         self.type = _type
         self.p_digest = p_digest
         self._online = False
-        hub.subdevices[_id] = self
+        hub.subdevices[id_] = self
         self.sensor_battery = self.build_sensor_c(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
@@ -619,8 +616,9 @@ class MTS100SubDevice(MerossSubDevice):
         "number_comfort_temperature",
         "number_sleep_temperature",
         "number_away_temperature",
-        "schedule",
+        "number_adjust_temperature",
         "binary_sensor_window",
+        "schedule",
         "sensor_temperature",
     )
 
@@ -640,11 +638,6 @@ class MTS100SubDevice(MerossSubDevice):
         self.number_away_temperature = Mts100SetPointNumber(
             self.climate, Mts100Climate.PRESET_AWAY
         )
-        self.schedule = Mts100Schedule(self.climate)
-        self.binary_sensor_window = self.build_binary_sensor_c(
-            MLBinarySensor.DeviceClass.WINDOW
-        )
-        self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
         self.number_adjust_temperature = MLHubAdjustNumber(
             self,
             mc.KEY_TEMPERATURE,
@@ -654,6 +647,11 @@ class MTS100SubDevice(MerossSubDevice):
             5,
             0.1,
         )
+        self.binary_sensor_window = self.build_binary_sensor_c(
+            MLBinarySensor.DeviceClass.WINDOW
+        )
+        self.schedule = Mts100Schedule(self.climate)
+        self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
 
     async def async_shutdown(self):
         await super().async_shutdown()

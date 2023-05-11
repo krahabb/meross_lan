@@ -1,5 +1,3 @@
-# from __future__ import annotations
-
 import typing
 
 from . import MerossApi
@@ -27,13 +25,13 @@ async def async_get_config_entry_diagnostics(
 
     if unique_id == DOMAIN:
         # MQTT Hub entry
-        return obfuscated_dict_copy(entry.data)  # type: ignore
+        return obfuscated_dict_copy(entry.data)
 
     unique_id = unique_id.split(".")
     if unique_id[0] == "profile":
         # profile entry
         if profile := MerossApi.profiles.get(unique_id[1]):
-            data = obfuscated_dict_copy(profile)  # type: ignore
+            data = obfuscated_dict_copy(profile._data)
             # the profile contains uuid as keys and obfuscation
             # is not smart enough
             data[MerossCloudProfile.KEY_DEVICE_INFO] = {
@@ -42,9 +40,9 @@ async def async_get_config_entry_diagnostics(
             }
             return data
         else:
-            return obfuscated_dict_copy(entry.data)  # type: ignore
+            return obfuscated_dict_copy(entry.data)
 
-    data = obfuscated_dict_copy(entry.data)  # type: ignore
+    data = obfuscated_dict_copy(entry.data)
     if device := MerossApi.devices.get(unique_id[0]):
         data["deviceclass"] = type(device).__name__
         data[CONF_TRACE] = await device.get_diagnostics_trace(

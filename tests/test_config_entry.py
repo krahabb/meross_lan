@@ -22,7 +22,7 @@ async def test_mqtthub_entry(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMoc
     async with helpers.MQTTHubEntryMocker(hass):
         api = hass.data[mlc.DOMAIN]
         assert isinstance(api, MerossApi)
-        assert api.mqtt_is_subscribed()
+        assert api._mqtt_connection and api._mqtt_connection.mqtt_is_subscribed
 
     # Unload the entry and verify that the data has not been removed
     # we actually never remove the MerossApi...
