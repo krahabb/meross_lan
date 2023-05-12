@@ -46,6 +46,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         HVACMode.AUTO: PRESET_AUTO,
     }
 
+    manager: MerossDevice
     _attr_hvac_modes: Final = [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO]
     _attr_preset_modes: Final = [
         PRESET_OFF,
@@ -80,7 +81,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     )
 
     def __init__(
-        self, device: MerossDevice, channel: object, subdevice: MerossSubDevice | None
+        self, manager: MerossDevice, channel: object, subdevice: MerossSubDevice | None
     ):
         self._attr_current_temperature = None
         self._attr_hvac_action = None
@@ -92,7 +93,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_mode: int | None = None
         self._mts_onoff = None
         self._mts_heating = None
-        super().__init__(device, channel, None, None, subdevice)
+        super().__init__(manager, channel, None, None, subdevice)
 
     def update_modes(self):
         if self._mts_onoff:
@@ -113,7 +114,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         if self.subdevice:
             self._attr_state = self._attr_hvac_mode if self.subdevice.online else None
         else:
-            self._attr_state = self._attr_hvac_mode if self.device.online else None
+            self._attr_state = self._attr_hvac_mode if self.manager.online else None
 
         if self._hass_connected:
             self._async_write_ha_state()
@@ -216,7 +217,7 @@ class MtsSetPointNumber(MLConfigNumber):
         self._attr_icon = MtsSetPointNumber.PRESET_TO_ICON_MAP[preset_mode]
         self._attr_name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
         super().__init__(
-            climate.device,
+            climate.manager,
             climate.channel,
             f"config_{mc.KEY_TEMPERATURE}_{self.key_value}",
             MLConfigNumber.DeviceClass.TEMPERATURE,

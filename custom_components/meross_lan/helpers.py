@@ -651,6 +651,14 @@ class EntityManager(Loggable):
             self._unsub_entry_update_listener()
             self._unsub_entry_update_listener = None
 
+    @property
+    def name(self) -> str:
+        return self.logtag
+
+    @property
+    def online(self):
+        return True
+
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ):

@@ -333,7 +333,6 @@ class MerossSubDevice(MerossDeviceBase):
         "hub",
         "type",
         "p_digest",
-        "_online",
         "sensor_battery",
         "switch_togglex",
     )
@@ -350,7 +349,6 @@ class MerossSubDevice(MerossDeviceBase):
         self.hub = hub
         self.type = _type
         self.p_digest = p_digest
-        self._online = False
         hub.subdevices[id_] = self
         self.sensor_battery = self.build_sensor_c(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
@@ -394,10 +392,6 @@ class MerossSubDevice(MerossDeviceBase):
 
     def build_binary_sensor_c(self, device_class: MLBinarySensor.DeviceClass):
         return MLBinarySensor(self.hub, self.id, str(device_class), device_class, self)
-
-    @property
-    def online(self):
-        return self._online
 
     def _setonline(self):
         # here we should request updates for all entities but

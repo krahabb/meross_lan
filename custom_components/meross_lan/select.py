@@ -11,6 +11,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .devices.mod100 import DiffuserMixin
     from .meross_device import MerossDevice, ResponseCallbackType
 
 
@@ -20,8 +21,8 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
 
 
-OPTION_SPRAY_MODE_OFF = 'off'
-OPTION_SPRAY_MODE_CONTINUOUS = 'on'
+OPTION_SPRAY_MODE_OFF = "off"
+OPTION_SPRAY_MODE_CONTINUOUS = "on"
 OPTION_SPRAY_MODE_ECO = "eco"
 
 """
@@ -34,18 +35,19 @@ OPTION_SPRAY_MODE_ECO = "eco"
 
 
 class MLSpray(me.MerossEntity, select.SelectEntity):
-
     PLATFORM = select.DOMAIN
 
-    device: SprayMixin
+    manager: SprayMixin | DiffuserMixin
     """
     a dict containing mapping between meross modes <-> HA select options
     like { mc.SPRAY_MODE_OFF: OPTION_SPRAY_MODE_OFF }
     """
     _spray_mode_map: dict[object, str]
 
-    def __init__(self, device: "MerossDevice", channel: object, spraymode_map: dict):
-        super().__init__(device, channel, mc.KEY_SPRAY, mc.KEY_SPRAY)
+    def __init__(
+        self, manager: SprayMixin | DiffuserMixin, channel: object, spraymode_map: dict
+    ):
+        super().__init__(manager, channel, mc.KEY_SPRAY, mc.KEY_SPRAY)
         # we could use the shared instance but different device firmwares
         # could bring in unwanted global options...
         self._spray_mode_map = dict(spraymode_map)
@@ -68,7 +70,7 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
             if acknowledge:
                 self.update_state(option)
 
-        await self.device.async_request_spray(
+        await self.manager.async_request_spray(
             {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}, _ack_callback
         )
 
@@ -104,7 +106,6 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
 class SprayMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
-
     SPRAY_MODE_MAP = {
         mc.SPRAY_MODE_OFF: OPTION_SPRAY_MODE_OFF,
         mc.SPRAY_MODE_INTERMITTENT: OPTION_SPRAY_MODE_ECO,

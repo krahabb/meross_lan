@@ -33,6 +33,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .helpers import EntityManager
     from .meross_device import MerossDevice
     from .meross_device_hub import MerossSubDevice
 
@@ -96,13 +97,13 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
 
     def __init__(
         self,
-        device: MerossDevice,
+        manager: EntityManager,
         channel: object | None,
         entitykey: str | None,
         device_class: SensorDeviceClass | None,
         subdevice: MerossSubDevice | None,
     ):
-        super().__init__(device, channel, entitykey, device_class, subdevice)
+        super().__init__(manager, channel, entitykey, device_class, subdevice)
         self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(
             device_class
         )
@@ -139,6 +140,7 @@ class ProtocolSensor(MLSensor):
     ATTR_MQTT = CONF_PROTOCOL_MQTT
     ATTR_MQTT_BROKER = "mqtt_broker"
 
+    manager: MerossDevice
     _attr_state: str
     _attr_options = [STATE_DISCONNECTED, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP]
 
@@ -148,10 +150,10 @@ class ProtocolSensor(MLSensor):
 
     def __init__(
         self,
-        device: MerossDevice,
+        manager: MerossDevice,
     ):
         self._attr_extra_state_attributes = {}
-        super().__init__(device, None, "sensor_protocol", self.DeviceClass.ENUM, None)
+        super().__init__(manager, None, "sensor_protocol", self.DeviceClass.ENUM, None)
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED
 
     @property
@@ -172,9 +174,11 @@ class ProtocolSensor(MLSensor):
 
     def set_unavailable(self):
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED
-        if self.device._mqtt_connection:
+        if self.manager._mqtt_connection:
             self._attr_extra_state_attributes = {
-                self.ATTR_MQTT_BROKER: self._get_attr_state(self.device._mqtt_connected)
+                self.ATTR_MQTT_BROKER: self._get_attr_state(
+                    self.manager._mqtt_connected
+                )
             }
         else:
             self._attr_extra_state_attributes = {}
@@ -182,20 +186,20 @@ class ProtocolSensor(MLSensor):
             self._async_write_ha_state()
 
     def update_connected(self):
-        device = self.device
-        self._attr_state = device.curr_protocol
-        if device.conf_protocol is not device.curr_protocol:
+        manager = self.manager
+        self._attr_state = manager.curr_protocol
+        if manager.conf_protocol is not manager.curr_protocol:
             # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
             # if conf_protocol is fixed we'll not set these attrs (redundant)
             self._attr_extra_state_attributes[self.ATTR_HTTP] = self._get_attr_state(
-                device._http_active
+                manager._http_active
             )
             self._attr_extra_state_attributes[self.ATTR_MQTT] = self._get_attr_state(
-                device._mqtt_active
+                manager._mqtt_active
             )
             self._attr_extra_state_attributes[
                 self.ATTR_MQTT_BROKER
-            ] = self._get_attr_state(device._mqtt_connected)
+            ] = self._get_attr_state(manager._mqtt_connected)
         if self._hass_connected:
             self._async_write_ha_state()
 
@@ -240,8 +244,8 @@ class EnergyEstimateSensor(MLSensor):
     _attr_state: int
     _attr_state_float: float = 0.0
 
-    def __init__(self, device: MerossDevice):
-        super().__init__(device, None, "energy_estimate", self.DeviceClass.ENERGY, None)
+    def __init__(self, manager: MerossDevice):
+        super().__init__(manager, None, "energy_estimate", self.DeviceClass.ENERGY, None)
         self._attr_state = 0
 
     @property
@@ -337,9 +341,7 @@ class ElectricityMixin(
         self._sensor_energy_estimate = EnergyEstimateSensor(self)
         self.polling_dictionary[
             mc.NS_APPLIANCE_CONTROL_ELECTRICITY
-        ] = SmartPollingStrategy(
-            mc.NS_APPLIANCE_CONTROL_ELECTRICITY
-        )
+        ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
 
     def start(self):
         self._schedule_next_reset(dt_util.now())
@@ -406,12 +408,13 @@ class ConsumptionSensor(MLSensor):
     ATTR_RESET_TS = "reset_ts"
     reset_ts: int = 0
 
+    manager: MerossDevice
     _attr_state: int | None
 
-    def __init__(self, device: MerossDevice):
+    def __init__(self, manager: MerossDevice):
         self._attr_extra_state_attributes = {}
         super().__init__(
-            device, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY, None
+            manager, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY, None
         )
 
     async def async_added_to_hass(self):
@@ -436,7 +439,7 @@ class ConsumptionSensor(MLSensor):
             # updated after the device midnight for today..else it is too
             # old to be good. Since we don't have actual device epoch we
             # 'guess' it is nicely synchronized so we'll use our time
-            devicetime = self.device.get_datetime(time())
+            devicetime = self.manager.get_datetime(time())
             devicetime_today_midnight = datetime(
                 devicetime.year,
                 devicetime.month,

@@ -159,6 +159,7 @@ class MerossDeviceBase(EntityManager):
     __slots__ = (
         "deviceentry_id",
         "device_info",
+        "_online",
         "_device_registry_entry",
     )
 
@@ -175,6 +176,7 @@ class MerossDeviceBase(EntityManager):
     ):
         super().__init__(id_, config_entry_or_id, {"identifiers": {(DOMAIN, id_)}})
         self.device_info = None
+        self._online = False
         self._device_registry_entry = None
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             self._device_registry_entry = weakref.ref(
@@ -190,23 +192,11 @@ class MerossDeviceBase(EntityManager):
                 )
             )
 
+    # interface: EntityManager
     async def async_shutdown(self):
         await super().async_shutdown()
         self._device_registry_entry = None
         self.device_info = None
-
-    @property
-    def device_registry_entry(self):
-        _device_registry_entry = (
-            self._device_registry_entry and self._device_registry_entry()
-        )
-        if _device_registry_entry is None:
-            _device_registry_entry = device_registry.async_get(
-                ApiProfile.hass
-            ).async_get_device(**self.deviceentry_id)
-            if _device_registry_entry:
-                self._device_registry_entry = weakref.ref(_device_registry_entry)
-        return _device_registry_entry
 
     @property
     def name(self) -> str:
@@ -220,6 +210,24 @@ class MerossDeviceBase(EntityManager):
                 or self._get_internal_name()
             )
         return self._get_internal_name()
+
+    @property
+    def online(self):
+        return self._online
+
+    # interface: self
+    @property
+    def device_registry_entry(self):
+        _device_registry_entry = (
+            self._device_registry_entry and self._device_registry_entry()
+        )
+        if _device_registry_entry is None:
+            _device_registry_entry = device_registry.async_get(
+                ApiProfile.hass
+            ).async_get_device(**self.deviceentry_id)
+            if _device_registry_entry:
+                self._device_registry_entry = weakref.ref(_device_registry_entry)
+        return _device_registry_entry
 
     def update_device_info(self, device_info: DeviceInfoType | SubDeviceInfoType):
         self.device_info = device_info
@@ -276,7 +284,6 @@ class MerossDevice(MerossDeviceBase):
         "device_timedelta_log_epoch",
         "device_timedelta_config_epoch",
         "device_debug",
-        "_online",
         "lastrequest",
         "lastresponse",
         "_cloud_profile",
@@ -329,7 +336,6 @@ class MerossDevice(MerossDeviceBase):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.device_debug = {}
-        self._online = False
         self.lastrequest = 0
         self.lastresponse = 0
         self._cloud_profile: MerossCloudProfile | None = None
@@ -501,10 +507,6 @@ class MerossDevice(MerossDeviceBase):
             )
             self._tzinfo = None
         return timezone.utc
-
-    @property
-    def online(self):
-        return self._online
 
     @property
     def mqtt_locallyactive(self):

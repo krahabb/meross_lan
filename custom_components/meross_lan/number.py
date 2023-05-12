@@ -53,6 +53,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     PLATFORM = number.DOMAIN
     DeviceClass = NumberDeviceClass
 
+    manager: MerossDevice
     _attr_native_max_value: float
     _attr_native_min_value: float
     _attr_native_step: float
@@ -111,7 +112,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
             if acknowledge:
                 self.update_native_value(device_value)
 
-        await self.device.async_request(
+        await self.manager.async_request(
             self.namespace,
             mc.METHOD_SET,
             {
@@ -164,14 +165,14 @@ class MLHubAdjustNumber(MLConfigNumber):
 
 
 class MLScreenBrightnessNumber(MLConfigNumber):
-    device: ScreenBrightnessMixin
+    manager: ScreenBrightnessMixin
 
     _attr_icon = "mdi:brightness-percent"
 
-    def __init__(self, device: "MerossDevice", channel: object, key: str):
+    def __init__(self, manager: ScreenBrightnessMixin, channel: object, key: str):
         self.key_value = key
         self._attr_name = f"Screen brightness ({key})"
-        super().__init__(device, channel, f"screenbrightness_{key}")
+        super().__init__(manager, channel, f"screenbrightness_{key}")
 
     @property
     def native_max_value(self):
@@ -192,8 +193,8 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     async def async_set_native_value(self, value: float):
         brightness = {
             mc.KEY_CHANNEL: self.channel,
-            mc.KEY_OPERATION: self.device._number_brightness_operation.native_value,
-            mc.KEY_STANDBY: self.device._number_brightness_standby.native_value,
+            mc.KEY_OPERATION: self.manager._number_brightness_operation.native_value,
+            mc.KEY_STANDBY: self.manager._number_brightness_standby.native_value,
         }
         brightness[self.key_value] = value
 
@@ -201,7 +202,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
             if acknowledge:
                 self.update_native_value(value)
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
             mc.METHOD_SET,
             {mc.KEY_BRIGHTNESS: [brightness]},

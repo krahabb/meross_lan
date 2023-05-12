@@ -22,6 +22,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .helpers import EntityManager
     from .meross_device import MerossDevice
     from .meross_device_hub import MerossSubDevice
 
@@ -78,7 +79,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     _hass_connected: bool
 
     __slots__ = (
-        "device",
+        "manager",
         "channel",
         "subdevice",
         "_attr_device_class",
@@ -90,7 +91,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     def __init__(
         self,
-        device: MerossDevice,
+        manager: EntityManager,
         channel: object | None,
         entitykey: str | None = None,
         device_class: object | str | None = None,
@@ -119,9 +120,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         )
         Loggable.__init__(self, _id)
         assert (
-            device.entities.get(_id) is None
-        ), "(channel, entitykey) is not unique inside device.entities"
-        self.device = device
+            manager.entities.get(_id) is None
+        ), "(channel, entitykey) is not unique inside manager.entities"
+        self.manager = manager
         self.channel = channel
         self.subdevice = subdevice
         self._attr_device_class = device_class
@@ -129,10 +130,10 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         if self._attr_name is None:
             self._attr_name = entitykey or device_class  # type: ignore
         self._attr_state = None
-        self._attr_unique_id = f"{device.id}_{_id}"
+        self._attr_unique_id = f"{manager.id}_{_id}"
         self._hass_connected = False
-        device.entities[_id] = self
-        async_add_devices = device.platforms.setdefault(self.PLATFORM)
+        manager.entities[_id] = self
+        async_add_devices = manager.platforms.setdefault(self.PLATFORM)
         if async_add_devices:
             async_add_devices([self])
 
@@ -140,12 +141,12 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         LOGGER.debug("MerossEntity(%s): destroy", self.unique_id)
 
     def log(self, level: int, msg: str, *args, **kwargs):
-        self.device.log(
+        self.manager.log(
             level, f"{self.__class__.__name__}({self.entity_id}) {msg}", *args, **kwargs
         )
 
     def warning(self, msg: str, *args, **kwargs):
-        self.device.warning(
+        self.manager.warning(
             f"{self.__class__.__name__}({self.entity_id}) {msg}", *args, **kwargs
         )
 
@@ -168,7 +169,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         # to reduce overload
         if subdevice := self.subdevice:
             return subdevice.deviceentry_id
-        return self.device.deviceentry_id
+        return self.manager.deviceentry_id
 
     @property
     def entity_category(self):
@@ -195,7 +196,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         if subdevice := self.subdevice:
             devname = subdevice.name
         else:
-            devname = self.device.name
+            devname = self.manager.name
         if self._attr_name is not None:
             return f"{devname} - {self._attr_name}"
         return devname
@@ -248,6 +249,8 @@ class MerossToggle(MerossEntity):
     effective switches or the likes (light for example)
     """
 
+    manager: MerossDevice
+
     # customize the request payload for different
     # devices api. see 'request_onoff' to see how
     namespace: str | None
@@ -257,14 +260,14 @@ class MerossToggle(MerossEntity):
 
     def __init__(
         self,
-        device: "MerossDevice",
+        manager: MerossDevice,
         channel: object,
         entitykey: str | None,
         device_class: object | None,
         subdevice: "MerossSubDevice" | None,
         namespace: str | None,
     ):
-        super().__init__(device, channel, entitykey, device_class, subdevice)
+        super().__init__(manager, channel, entitykey, device_class, subdevice)
         if namespace:
             self.namespace = namespace
             self.key_namespace = get_namespacekey(namespace)
@@ -287,7 +290,7 @@ class MerossToggle(MerossEntity):
             if acknowledge:
                 self.update_onoff(onoff)
 
-        await self.device.async_request(
+        await self.manager.async_request(
             self.namespace,
             mc.METHOD_SET,
             {

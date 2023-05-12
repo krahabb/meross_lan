@@ -22,7 +22,7 @@ from ..helpers import clamp, reverse_lookup
 from ..merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from ..meross_device_hub import MerossSubDevice
+    from ..meross_device_hub import MerossDeviceHub, MerossSubDevice
 
 
 class Mts100Climate(MtsClimate):
@@ -49,6 +49,8 @@ class Mts100Climate(MtsClimate):
         MtsClimate.PRESET_AWAY: mc.KEY_AWAY,
         MtsClimate.PRESET_AUTO: mc.KEY_CUSTOM,
     }
+
+    manager: MerossDeviceHub
 
     def __init__(self, subdevice: "MerossSubDevice"):
         self._attr_extra_state_attributes = {}
@@ -77,7 +79,7 @@ class Mts100Climate(MtsClimate):
                         self._mts_mode = mode
                         self.update_modes()
 
-                await self.device.async_request(
+                await self.manager.async_request(
                     mc.NS_APPLIANCE_HUB_MTS100_MODE,
                     mc.METHOD_SET,
                     {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
@@ -100,7 +102,7 @@ class Mts100Climate(MtsClimate):
 
         # when sending a temp this way the device will automatically
         # exit auto mode if needed
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
             {
@@ -115,7 +117,7 @@ class Mts100Climate(MtsClimate):
                 self._mts_onoff = onoff
                 self.update_modes()
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
             mc.METHOD_SET,
             {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: onoff}]},
@@ -186,6 +188,7 @@ class Mts100ScheduleEntry:
 
 
 class Mts100Schedule(MLCalendar):
+    manager: MerossDeviceHub
     subdevice: MerossSubDevice
 
     _schedule: dict[str, list] | None
@@ -209,7 +212,7 @@ class Mts100Schedule(MLCalendar):
         self._attr_extra_state_attributes = {}
         # get the 'granularity' of the schedule entries i.e. the schedule duration
         # must be a multiple of this time (in minutes)
-        self._schedule_unit_time = climate.device.descriptor.ability.get(
+        self._schedule_unit_time = climate.manager.descriptor.ability.get(
             mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 0)
         if self._schedule_unit_time:
@@ -225,7 +228,7 @@ class Mts100Schedule(MLCalendar):
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
         super().__init__(
-            climate.device, climate.id, mc.KEY_SCHEDULE, None, climate.subdevice
+            climate.manager, climate.id, mc.KEY_SCHEDULE, None, climate.subdevice
         )
 
     @property
@@ -353,7 +356,7 @@ class Mts100Schedule(MLCalendar):
         """Return the next upcoming event."""
         if self.climate._mts_onoff and self.climate._mts_mode == mc.MTS100_MODE_AUTO:
             if event_index := self._get_event_entry(
-                datetime.now(tz=self.device.tzinfo)
+                datetime.now(tz=self.manager.tzinfo)
             ):
                 return event_index.get_event()
         return None
@@ -366,7 +369,7 @@ class Mts100Schedule(MLCalendar):
     ) -> list[CalendarEvent]:
         """Return calendar events within a datetime range."""
         events = []
-        event_entry = self._get_event_entry(start_date.astimezone(self.device.tzinfo))
+        event_entry = self._get_event_entry(start_date.astimezone(self.manager.tzinfo))
         while event_entry:
             event = event_entry.get_event()
             if event.start >= end_date:
@@ -693,13 +696,13 @@ class Mts100Schedule(MLCalendar):
 
             def _ack_callback(acknowledge: bool, header: dict, payload: dict):
                 if not acknowledge:
-                    self.device.request(
+                    self.manager.request(
                         mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
                         mc.METHOD_GET,
                         {mc.KEY_SCHEDULE: [{mc.KEY_ID: self.channel}]},
                     )
 
-            await self.device.async_request(
+            await self.manager.async_request(
                 mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
                 mc.METHOD_SET,
                 {mc.KEY_SCHEDULE: [payload]},
