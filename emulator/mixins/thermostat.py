@@ -24,16 +24,26 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             try:
                 get_element_by_key(self._thermostat_overheat, mc.KEY_CHANNEL, channel)
             except Exception:
-                self._thermostat_overheat.append({mc.KEY_CHANNEL: channel})
+                self._thermostat_overheat.append(
+                    {
+                        mc.KEY_CHANNEL: channel,
+                        mc.KEY_WARNING: 0,
+                        mc.KEY_VALUE: 335,
+                        mc.KEY_ONOFF: 0,
+                        mc.KEY_MIN: 200,
+                        mc.KEY_MAX: 700,
+                        mc.KEY_CURRENTTEMP: 355,
+                        mc.KEY_LMTIME: 0
+                    }
+                )
 
     def _GET_Appliance_Control_Thermostat_Overheat(self, header, payload):
         """
         {
             "overheat": [
                 {
-                    "channel":0,
-                    "warning":0,
-                    ...
+                    "channel":0, "warning":0, "value": 335, "onoff": 1,
+                    "min": 200, "max": 700, "lmTime": 1674121910, "currentTemp": 355,
                 }
             ]
         }
@@ -45,6 +55,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 self._thermostat_overheat, mc.KEY_CHANNEL, channel
             )
             p_overheat[mc.KEY_WARNING] = randint(0, 2)
+            p_overheat[mc.KEY_LMTIME] = self.epoch
             response_overheat_list.append(p_overheat)
         return mc.METHOD_GETACK, {mc.KEY_OVERHEAT: response_overheat_list}
 
