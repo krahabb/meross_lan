@@ -68,7 +68,6 @@ class Mts200ConfigSwitch(MLSwitch):
             climate.channel,
             entitykey,
             MLSwitch.DeviceClass.SWITCH,
-            None,
             namespace,
         )
 
@@ -122,7 +121,7 @@ class Mts200Climate(MtsClimate):
     }
 
     manager: ThermostatMixin
-    
+
     __slots__ = (
         "number_comfort_temperature",
         "number_sleep_temperature",
@@ -136,7 +135,10 @@ class Mts200Climate(MtsClimate):
     )
 
     def __init__(self, manager: ThermostatMixin, channel: object):
-        super().__init__(manager, channel, None)
+        super().__init__(manager, channel)
+        # TODO: better cleanup since these circular dependencies
+        # prevent proper object release (likely the Mts200SetPointNumber
+        # which keeps a reference to this climate)
         self.number_comfort_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_COMFORT
         )
@@ -159,7 +161,7 @@ class Mts200Climate(MtsClimate):
             self, "overheat protection", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
         )
         self.sensor_overheat_warning = MLSensor(
-            manager, channel, "overheat warning", MLSensor.DeviceClass.ENUM, None
+            manager, channel, "overheat warning", MLSensor.DeviceClass.ENUM
         )
         self.sensor_overheat_warning._attr_translation_key = "mts200_overheat_warning"
         self.number_overheat_value = Mts200OverheatThresholdNumber(
@@ -167,7 +169,7 @@ class Mts200Climate(MtsClimate):
             channel,
         )
         self.sensor_externalsensor_temperature = MLSensor(
-            manager, channel, "external sensor", MLSensor.DeviceClass.TEMPERATURE, None
+            manager, channel, "external sensor", MLSensor.DeviceClass.TEMPERATURE
         )
 
     async def async_set_preset_mode(self, preset_mode: str):

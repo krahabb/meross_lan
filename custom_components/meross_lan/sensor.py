@@ -35,7 +35,6 @@ if typing.TYPE_CHECKING:
 
     from .helpers import EntityManager
     from .meross_device import MerossDevice
-    from .meross_device_hub import MerossSubDevice
 
 SensorStateClass = sensor.SensorStateClass
 try:
@@ -101,9 +100,8 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         channel: object | None,
         entitykey: str | None,
         device_class: SensorDeviceClass | None,
-        subdevice: MerossSubDevice | None,
     ):
-        super().__init__(manager, channel, entitykey, device_class, subdevice)
+        super().__init__(manager, channel, entitykey, device_class)
         self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(
             device_class
         )
@@ -113,7 +111,7 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
 
     @staticmethod
     def build_for_device(device: MerossDevice, device_class: SensorDeviceClass):
-        return MLSensor(device, None, str(device_class), device_class, None)
+        return MLSensor(device, None, str(device_class), device_class)
 
     @property
     def last_reset(self) -> datetime | None:
@@ -153,7 +151,7 @@ class ProtocolSensor(MLSensor):
         manager: MerossDevice,
     ):
         self._attr_extra_state_attributes = {}
-        super().__init__(manager, None, "sensor_protocol", self.DeviceClass.ENUM, None)
+        super().__init__(manager, None, "sensor_protocol", self.DeviceClass.ENUM)
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED
 
     @property
@@ -244,8 +242,8 @@ class EnergyEstimateSensor(MLSensor):
     _attr_state: int
     _attr_state_float: float = 0.0
 
-    def __init__(self, manager: MerossDevice):
-        super().__init__(manager, None, "energy_estimate", self.DeviceClass.ENERGY, None)
+    def __init__(self, manager: ElectricityMixin):
+        super().__init__(manager, None, "energy_estimate", self.DeviceClass.ENERGY)
         self._attr_state = 0
 
     @property
@@ -408,13 +406,13 @@ class ConsumptionSensor(MLSensor):
     ATTR_RESET_TS = "reset_ts"
     reset_ts: int = 0
 
-    manager: MerossDevice
+    manager: ConsumptionMixin
     _attr_state: int | None
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: ConsumptionMixin):
         self._attr_extra_state_attributes = {}
         super().__init__(
-            manager, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY, None
+            manager, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY
         )
 
     async def async_added_to_hass(self):

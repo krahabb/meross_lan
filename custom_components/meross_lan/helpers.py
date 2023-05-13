@@ -531,6 +531,7 @@ class Loggable(abc.ABC):
     def __init__(self, id, logtag: str | None = None):
         self.id = id
         self.logtag = logtag or f"{self.__class__.__name__}({id})"
+        LOGGER.debug("%s: init", self.logtag)
 
     def log(self, level: int, msg: str, *args, **kwargs):
         LOGGER.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
@@ -565,6 +566,10 @@ class Loggable(abc.ABC):
                 *args,
                 **kwargs,
             )
+
+    def __del__(self):
+        LOGGER.debug("%s: destroy", self.logtag)
+        return
 
 
 class EntityManager(Loggable):
@@ -617,6 +622,14 @@ class EntityManager(Loggable):
             self.key = config_entry_or_id.data.get(CONF_KEY) or ""
         self._unsub_entry_update_listener = None
 
+    @property
+    def name(self) -> str:
+        return self.logtag
+
+    @property
+    def online(self):
+        return True
+
     async def async_shutdown(self):
         # extra-safety cleanup: in an ideal world the config_entry
         # shouldnt be loaded/listened at this point
@@ -651,13 +664,21 @@ class EntityManager(Loggable):
             self._unsub_entry_update_listener()
             self._unsub_entry_update_listener = None
 
-    @property
-    def name(self) -> str:
-        return self.logtag
+    def managed_entities(self, platform):
+        """entities list for platform setup"""
+        return [
+            entity for entity in self.entities.values() if entity.PLATFORM is platform
+        ]
 
-    @property
-    def online(self):
-        return True
+    def generate_unique_id(self, entity: MerossEntity):
+        """
+        flexible policy in order to generate unique_ids for entities:
+        This is an helper needed to better control migrations in code
+        which could/would lead to a unique_id change.
+        We could put here code checks in order to avoid entity_registry
+        migrations
+        """
+        return f"{self.id}_{entity.id}"
 
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry

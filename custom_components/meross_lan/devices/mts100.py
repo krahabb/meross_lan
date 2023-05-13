@@ -22,7 +22,7 @@ from ..helpers import clamp, reverse_lookup
 from ..merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from ..meross_device_hub import MerossDeviceHub, MerossSubDevice
+    from ..meross_device_hub import MTS100SubDevice
 
 
 class Mts100Climate(MtsClimate):
@@ -50,11 +50,11 @@ class Mts100Climate(MtsClimate):
         MtsClimate.PRESET_AUTO: mc.KEY_CUSTOM,
     }
 
-    manager: MerossDeviceHub
+    manager: MTS100SubDevice
 
-    def __init__(self, subdevice: "MerossSubDevice"):
+    def __init__(self, manager: MTS100SubDevice):
         self._attr_extra_state_attributes = {}
-        super().__init__(subdevice.hub, subdevice.id, subdevice)
+        super().__init__(manager, manager.id)
 
     @property
     def scheduleBMode(self):
@@ -188,8 +188,7 @@ class Mts100ScheduleEntry:
 
 
 class Mts100Schedule(MLCalendar):
-    manager: MerossDeviceHub
-    subdevice: MerossSubDevice
+    manager: MTS100SubDevice
 
     _schedule: dict[str, list] | None
     _attr_state: dict[str, list] | None
@@ -212,7 +211,7 @@ class Mts100Schedule(MLCalendar):
         self._attr_extra_state_attributes = {}
         # get the 'granularity' of the schedule entries i.e. the schedule duration
         # must be a multiple of this time (in minutes)
-        self._schedule_unit_time = climate.manager.descriptor.ability.get(
+        self._schedule_unit_time = climate.manager.hub.descriptor.ability.get(
             mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 0)
         if self._schedule_unit_time:
@@ -227,9 +226,7 @@ class Mts100Schedule(MLCalendar):
         # but we're recovering the value by inspecting the device scheduleB payload.
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
-        super().__init__(
-            climate.manager, climate.id, mc.KEY_SCHEDULE, None, climate.subdevice
-        )
+        super().__init__(climate.manager, climate.id, mc.KEY_SCHEDULE, None)
 
     @property
     def entity_category(self):
@@ -356,7 +353,7 @@ class Mts100Schedule(MLCalendar):
         """Return the next upcoming event."""
         if self.climate._mts_onoff and self.climate._mts_mode == mc.MTS100_MODE_AUTO:
             if event_index := self._get_event_entry(
-                datetime.now(tz=self.manager.tzinfo)
+                datetime.now(tz=self.manager.hub.tzinfo)
             ):
                 return event_index.get_event()
         return None
@@ -369,7 +366,7 @@ class Mts100Schedule(MLCalendar):
     ) -> list[CalendarEvent]:
         """Return calendar events within a datetime range."""
         events = []
-        event_entry = self._get_event_entry(start_date.astimezone(self.manager.tzinfo))
+        event_entry = self._get_event_entry(start_date.astimezone(self.manager.hub.tzinfo))
         while event_entry:
             event = event_entry.get_event()
             if event.start >= end_date:
@@ -692,7 +689,7 @@ class Mts100Schedule(MLCalendar):
                     )
                 payload[weekday] = payload_weekday_schedule
 
-            payload[mc.KEY_ID] = self.subdevice.id
+            payload[mc.KEY_ID] = self.channel
 
             def _ack_callback(acknowledge: bool, header: dict, payload: dict):
                 if not acknowledge:

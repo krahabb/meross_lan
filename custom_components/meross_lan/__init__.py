@@ -62,7 +62,7 @@ class HAMQTTConnection(MQTTConnection):
     )
 
     def __init__(self, api: MerossApi):
-        super().__init__(api, CONF_PROFILE_ID_LOCAL)
+        super().__init__(api, CONF_PROFILE_ID_LOCAL, ("homeassistant", 0))
         self._unsub_mqtt_subscribe: Callable | None = None
         self._unsub_mqtt_disconnected: Callable | None = None
         self._unsub_mqtt_connected: Callable | None = None
@@ -90,18 +90,13 @@ class HAMQTTConnection(MQTTConnection):
         else:
             self._unsub_random_disconnect = None
 
+    # interface: MQTTConnection
     async def async_shutdown(self):
         if self._unsub_random_disconnect:
             self._unsub_random_disconnect.cancel()
             self._unsub_random_disconnect = None
         await self.async_mqtt_unsubscribe()
         await super().async_shutdown()
-
-    # interface: MQTTConnection
-    @property
-    def broker(self):
-        # TODO: recover the HA MQTT conf BROKER:PORT
-        return "homeassistant", 0
 
     def mqtt_publish(
         self,
@@ -173,6 +168,12 @@ class HAMQTTConnection(MQTTConnection):
                 self._unsub_mqtt_connected = async_dispatcher_connect(
                     hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
                 )
+                # try to also get the HA broker conf
+                with self.exception_warning("async_mqtt_subscribe: recovering broker conf"):
+                    mqtt_data = mqtt.get_mqtt_data(hass)
+                    if mqtt_data and mqtt_data.client:
+                        conf = mqtt_data.client.conf
+                        self.broker = (conf[mqtt.CONF_BROKER], conf[mqtt.CONF_PORT])
                 if mqtt.is_connected(hass):
                     self._mqtt_connected()
             self._mqtt_subscribing = False
@@ -285,6 +286,7 @@ class MerossApi(ApiProfile):
         hass.services.async_register(DOMAIN, SERVICE_REQUEST, async_service_request)
         return
 
+    # interface: EntityManager
     async def async_shutdown(self):
         if self._mqtt_connection:
             await self._mqtt_connection.async_shutdown()
@@ -297,7 +299,6 @@ class MerossApi(ApiProfile):
         ApiProfile.hass = None  # type: ignore
         ApiProfile.api = None  # type: ignore
 
-    # interface: EntityManager
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
         self.key = config_entry.data.get(CONF_KEY) or ""
 

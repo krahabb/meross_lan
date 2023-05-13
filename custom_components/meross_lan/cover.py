@@ -115,7 +115,7 @@ class MLGarageConfigSwitch(MLSwitch):
     def __init__(self, manager: GarageMixin, key: str):
         self.key_onoff = key
         self._attr_name = key
-        super().__init__(manager, None, f"config_{key}", None, None, None)
+        super().__init__(manager, None, f"config_{key}", None)
 
     @property
     def entity_category(self):
@@ -345,6 +345,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                             )
                             timeout = self.number_doorCloseDuration.native_value
 
+                    self._transition_unsub = schedule_async_callback(
+                        self.hass, 0.9, self._async_transition_callback
+                    )
                     # check the timeout 1 sec after expected to account
                     # for delays in communication
                     self._transition_end_unsub = schedule_callback(
@@ -384,8 +387,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             if self._open_request != _open:
                 # keep monitoring the transition in less than 1 sec
                 if not self._transition_unsub:
-                    self._transition_unsub = schedule_callback(
-                        self.hass, 0.9, self._transition_callback
+                    self._transition_unsub = schedule_async_callback(
+                        self.hass, 0.9, self._async_transition_callback
                     )
             else:
                 # we can monitor the (sampled) exact time when the garage closes to
@@ -407,7 +410,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
     def _parse_config(self, payload):
         pass
 
-    def update_onoff(self, onoff):
+    def _parse_togglex(self, payload: dict):
         """
         MSG100 exposes a 'togglex' interface so my code interprets that as a switch state
         Here we'll intercept that behaviour and right now the guess is:
@@ -421,6 +424,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                 self._start_transition(STATE_CLOSED)
         #else: RIP!
         """
+        pass
 
     def _transition_cancel(self):
         if self._transition_unsub:
@@ -432,10 +436,11 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         self._open_request = None
         self._transition_start = None
 
-    @callback
-    def _transition_callback(self):
+    async def _async_transition_callback(self):
         self._transition_unsub = None
-        self.manager.request(*get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE))
+        manager = self.manager
+        if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
+            await manager.async_http_request(*get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE))
 
     @callback
     def _transition_end_callback(self):

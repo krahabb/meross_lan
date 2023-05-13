@@ -93,7 +93,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     def __init__(self, manager: MerossDevice, payload: dict):
         self._light = {}
         super().__init__(
-            manager, payload.get(mc.KEY_CHANNEL, 0), None, None, None, None
+            manager, payload.get(mc.KEY_CHANNEL, 0), None, None, None
         )
 
     def update_onoff(self, onoff):
@@ -365,7 +365,7 @@ class MLLight(MLLightBase):
                         self._attr_effect = effects[effect]  # type: ignore
 
 
-class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
+class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)
@@ -373,10 +373,11 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
 
     PLATFORM = light.DOMAIN
 
+    manager: MerossDevice
     _attr_supported_color_modes = {ColorMode.ONOFF}
 
     def __init__(self, manager: MerossDevice):
-        super().__init__(manager, None, DND_ID, mc.KEY_DNDMODE, None, None)
+        super().__init__(manager, None, DND_ID, mc.KEY_DNDMODE)
 
     @property
     def entity_category(self):

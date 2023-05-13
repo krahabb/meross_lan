@@ -91,15 +91,22 @@ class MQTTConnection(Loggable):
 
     __slots__ = (
         "profile",
+        "broker",
         "mqttdevices",
         "mqttdiscovering",
         "_mqtt_is_connected",
         "_unsub_discovery_callback",
     )
 
-    def __init__(self, profile: MerossCloudProfile | MerossApi, connection_id: str):
+    def __init__(
+        self,
+        profile: MerossCloudProfile | MerossApi,
+        connection_id: str,
+        broker: tuple[str, int],
+    ):
         super().__init__(connection_id)
         self.profile = profile
+        self.broker = broker
         self.mqttdevices: dict[str, MerossDevice] = {}
         self.mqttdiscovering: dict[str, dict] = {}
         self._mqtt_is_connected = False
@@ -117,11 +124,6 @@ class MQTTConnection(Loggable):
     @property
     def allow_mqtt_publish(self):
         return self.profile.allow_mqtt_publish
-
-    @property
-    @abc.abstractmethod
-    def broker(self) -> tuple[str, int]:
-        return ""
 
     def attach(self, device: MerossDevice):
         assert device.id not in self.mqttdevices
@@ -253,7 +255,7 @@ class MQTTConnection(Loggable):
                 ):
                     discovered.update(message[mc.KEY_PAYLOAD])
 
-            if await self.async_progress_discovery(discovered, device_id):
+            if await self._async_progress_discovery(discovered, device_id):
                 return
 
             self.mqttdiscovering.pop(device_id)
@@ -303,7 +305,7 @@ class MQTTConnection(Loggable):
                 )
         return self.mqttdiscovering[device_id]
 
-    async def async_progress_discovery(self, discovered: dict, device_id: str):
+    async def _async_progress_discovery(self, discovered: dict, device_id: str):
         for namespace in (mc.NS_APPLIANCE_SYSTEM_ALL, mc.NS_APPLIANCE_SYSTEM_ABILITY):
             if get_namespacekey(namespace) not in discovered:
                 await self.async_mqtt_publish(
@@ -339,7 +341,7 @@ class MQTTConnection(Loggable):
             if (
                 epoch - discovered[MQTTConnection._KEY_REQUESTTIME]
             ) > PARAM_UNAVAILABILITY_TIMEOUT:
-                await self.async_progress_discovery(discovered, device_id)
+                await self._async_progress_discovery(discovered, device_id)
 
         if len(discovering):
             self._unsub_discovery_callback = schedule_async_callback(
@@ -350,26 +352,20 @@ class MQTTConnection(Loggable):
 
 
 class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
-    profile: MerossCloudProfile
+    profile: MerossCloudProfile  # Type: ignore
 
     _MSG_PRIORITY_MAP = {
         mc.METHOD_SET: True,
         mc.METHOD_PUSH: False,
         mc.METHOD_GET: None,
     }
-    __slots__ = (
-        "_host",
-        "_port",
-        "_unsub_random_disconnect",
-    )
+    __slots__ = ("_unsub_random_disconnect",)
 
     def __init__(
-        self, profile: MerossCloudProfile, connection_id: str, host: str, port: int
+        self, profile: MerossCloudProfile, connection_id: str, broker: tuple[str, int]
     ):
         MerossMQTTClient.__init__(self, profile._config, profile.app_id)
-        MQTTConnection.__init__(self, profile, connection_id)
-        self._host = host
-        self._port = port
+        MQTTConnection.__init__(self, profile, connection_id, broker)
         self.user_data_set(ApiProfile.hass)  # speedup hass lookup in callbacks
         self.on_message = self._mqttc_message
         self.on_connect = self._mqttc_connect
@@ -382,7 +378,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                 if self.state_inactive:
                     if MEROSSDEBUG.mqtt_random_connect():
                         self.log(DEBUG, "random connect")
-                        self.safe_connect(self._host, self._port)
+                        self.safe_connect(*self.broker)
                 else:
                     if MEROSSDEBUG.mqtt_random_disconnect():
                         self.log(DEBUG, "random disconnect")
@@ -408,18 +404,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         # even if safe_connect should be as fast as possible and thread-safe
         # we still might incur some contention with thread stop/restart
         # so we delegate its call to an executor
-        return ApiProfile.hass.async_add_executor_job(
-            self.safe_connect, self._host, self._port
-        )
+        return ApiProfile.hass.async_add_executor_job(self.safe_connect, *self.broker)
 
     def schedule_disconnect(self):
         # same as connect. safe_disconnect should be even faster and less
         # contending but...
         return ApiProfile.hass.async_add_executor_job(self.safe_disconnect)
-
-    @property
-    def broker(self):
-        return self._host, self._port
 
     def attach(self, device: MerossDevice):
         super().attach(device)
@@ -679,7 +669,7 @@ class MerossCloudProfile(ApiProfile):
             return
 
         with self.exception_warning("attach_mqtt"):
-            self._get_or_create_mqttconnection(*device.mqtt_broker).attach(device)
+            self._get_or_create_mqttconnection(device.mqtt_broker).attach(device)
 
     # interface: self
     def link(self, device: MerossDevice):
@@ -762,11 +752,11 @@ class MerossCloudProfile(ApiProfile):
             return await self.async_query_devices()
         return None
 
-    def _get_or_create_mqttconnection(self, host: str, port: int):
-        connection_id = f"{self.id}:{host}:{port}"
+    def _get_or_create_mqttconnection(self, broker: tuple[str, int]):
+        connection_id = f"{self.id}:{broker[0]}:{broker[1]}"
         if connection_id not in self.mqttconnections:
             self.mqttconnections[connection_id] = MerossMQTTConnection(
-                self, connection_id, host, port
+                self, connection_id, broker
             )
         return self.mqttconnections[connection_id]
 
@@ -906,8 +896,8 @@ class MerossCloudProfile(ApiProfile):
                     with self.exception_warning(
                         f"_process_device_info_unknown: unknown device_id={device_id}"
                     ):
-                        host, port = parse_domain(domain := device_info[hostkey])
-                        mqttconnection = self._get_or_create_mqttconnection(host, port)
+                        broker = parse_domain(domain := device_info[hostkey])
+                        mqttconnection = self._get_or_create_mqttconnection(broker)
                         if mqttconnection.state_inactive:
                             await mqttconnection.schedule_connect()
                         mqttconnection.get_or_set_discovering(device_id)

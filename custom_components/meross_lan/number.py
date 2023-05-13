@@ -133,7 +133,7 @@ class MLHubAdjustNumber(MLConfigNumber):
 
     def __init__(
         self,
-        subdevice: "MerossSubDevice",
+        manager: "MerossSubDevice",
         key: str,
         namespace: str,
         device_class: NumberDeviceClass,
@@ -152,11 +152,10 @@ class MLHubAdjustNumber(MLConfigNumber):
         )
         self._attr_name = f"Adjust {device_class}"
         super().__init__(
-            subdevice.hub,
-            subdevice.id,
+            manager,
+            manager.id,
             f"config_{self.key_namespace}_{key}",
             device_class,
-            subdevice,
         )
 
     @property
