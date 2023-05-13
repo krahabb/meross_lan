@@ -138,6 +138,13 @@ class DiffuserMixin(
                 mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR
             ] = PollingStrategy(mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR)
 
+    # interface: MerossDevice
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self._sensor_humidity = None
+        self._sensor_temperature = None
+
+    # interface: self
     def _handle_Appliance_Control_Diffuser_Light(self, header: dict, payload: dict):
         self._parse_diffuser_light(payload.get(mc.KEY_LIGHT))
 
