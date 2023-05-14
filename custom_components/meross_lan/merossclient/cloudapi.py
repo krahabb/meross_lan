@@ -67,10 +67,13 @@ APISTATUS_MAP = {
     APISTATUS_TOO_MANY_TOKENS: "Too many tokens",
     APISTATUS_GENERIC_ERROR: "Generic error",
 }
+# this is a guessed list of errors possibly due to invalid token
 APISTATUS_TOKEN_ERRORS = {
+    APISTATUS_DISABLED_OR_DELETED_ACCOUNT,
     APISTATUS_TOKEN_INVALID,
     APISTATUS_TOKEN_ERROR,
     APISTATUS_TOKEN_EXPIRED,
+    APISTATUS_TOO_MANY_TOKENS,
 }
 
 LOGGER = logging.getLogger(__name__)
@@ -134,16 +137,6 @@ class SubDeviceInfoType(typing.TypedDict, total=False):
     subDeviceIconId: str
 
 
-"""
-actually unused since we cant force cast the devList elements
-class MerossDeviceInfo(dict):
-
-    @property
-    def uuid(self):
-        return self[mc.KEY_UUID]
-"""
-
-
 class CloudApiError(MerossProtocolError):
     """
     signals an error when connecting to the public API endpoint
@@ -151,15 +144,13 @@ class CloudApiError(MerossProtocolError):
 
     def __init__(self, response: dict, reason: object | None = None):
         self.apistatus = response.get(mc.KEY_APISTATUS)
-        if reason is None:
-            reason = APISTATUS_MAP.get(self.apistatus)  # type: ignore
-        if reason is None:
-            # 'info' sometimes carries useful msg
-            reason = response.get(mc.KEY_INFO)
-        if not reason:
-            # fallback to raise the entire response
-            reason = json_dumps(response)
-        super().__init__(response, reason)
+        super().__init__(
+            response,
+            reason
+            or APISTATUS_MAP.get(self.apistatus)  # type: ignore
+            or response.get(mc.KEY_INFO)
+            or json_dumps(response),
+        )
 
 
 async def async_cloudapi_post_raw(
@@ -299,16 +290,25 @@ async def async_cloudapi_logout(
     await async_cloudapi_post(API_PROFILE_LOGOUT_PATH, {}, token, session)
 
 
+async def async_cloudapi_logout_safe(
+    token: str, session: aiohttp.ClientSession | None = None
+):
+    try:
+        await async_cloudapi_post(API_PROFILE_LOGOUT_PATH, {}, token, session)
+    except Exception:
+        # this is very broad and might catch errors at the http layer which
+        # mean we're not effectively invalidating the token but we don't
+        # want to be too strict on token releases
+        pass
+
+
 async def async_get_cloud_key(
     username: str, password: str, session: aiohttp.ClientSession | None = None
 ) -> str:
     credentials = await async_cloudapi_login(username, password, session)
     # everything good:
     # kindly invalidate login token so to not exhaust our pool...
-    try:
-        await async_cloudapi_logout(credentials[mc.KEY_TOKEN], session)
-    except Exception:
-        pass  # don't care if any failure here: we have the key anyway
+    await async_cloudapi_logout_safe(credentials[mc.KEY_TOKEN], session)
     return credentials[mc.KEY_KEY]
 
 
