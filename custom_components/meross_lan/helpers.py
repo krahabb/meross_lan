@@ -36,8 +36,8 @@ except Exception:
 
 
 if typing.TYPE_CHECKING:
-    from typing import Callable, ClassVar, Coroutine, Final
     from datetime import tzinfo
+    from typing import Callable, ClassVar, Coroutine, Final
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, State

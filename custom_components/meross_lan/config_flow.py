@@ -20,7 +20,11 @@ from .merossclient import (
     const as mc,
     get_default_arguments,
 )
-from .merossclient.cloudapi import CloudApiError, async_cloudapi_login
+from .merossclient.cloudapi import (
+    CloudApiError,
+    async_cloudapi_login,
+    async_cloudapi_logout_safe,
+)
 from .merossclient.httpclient import MerossHttpClient
 
 if typing.TYPE_CHECKING:
@@ -54,10 +58,13 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         "menu_options": ["profile", "device"],
     }
 
+    # this is set for an OptionsFlow
+    _profile_entry: config_entries.ConfigEntry | None = None
+
     # These values are just buffers for UI state persistance
-    hub_config: mlc.HubConfigType = None  # type: ignore[assignment]
-    device_config: mlc.DeviceConfigType = None  # type: ignore[assignment]
-    profile_config: mlc.ProfileConfigType = None  # type: ignore[assignment]
+    hub_config: mlc.HubConfigType
+    device_config: mlc.DeviceConfigType
+    profile_config: mlc.ProfileConfigType
 
     _placeholders = {
         CONF_DEVICE_TYPE: "",
@@ -74,29 +81,20 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 
     def show_keyerror(self):
         self._is_keyerror = True
+        self.profile_config = {}  # type: ignore[assignment]
         return self.async_show_menu(**self._MENU_KEYERROR)
 
     async def async_step_profile(self, user_input=None):
         """configure a Meross cloud profile"""
         errors = {}
-        _err = None
+        _err = profile = None
         profile_config = self.profile_config
 
-        if user_input is None:
-            if profile_config is None:
-                self.profile_config = profile_config = {}  # type: ignore[assignment]
-        else:
+        if user_input:
+            # profile_config has both user set keys (updated through user_input)
+            # and MerossCloudCredentials keys (updated when logging into Meross http api)
             profile_config.update(user_input)
             try:
-                credentials = await async_cloudapi_login(
-                    user_input[mlc.CONF_EMAIL],
-                    user_input[mlc.CONF_PASSWORD],
-                    async_get_clientsession(self.hass),
-                )
-                profile_config.update(credentials)  # type: ignore
-                if not user_input.get(mlc.CONF_SAVE_PASSWORD):
-                    profile_config.pop(mlc.CONF_PASSWORD, None)
-
                 # this flow step is really hybrid: it could come from
                 # a user flow deciding to create a profile or a user flow
                 # when a device key is needed. Or, it could be an OptionFlow
@@ -104,77 +102,135 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 # or a profile configuration. In any case, we 'force' a bit
                 # all of the flows logic and try to directly manage the
                 # underlying ConfigEntry in a sort of a crazy generalization
-                unique_id = f"profile.{credentials[mc.KEY_USERID_]}"
-                title = credentials[mc.KEY_EMAIL]
-                helper = ConfigEntriesHelper(self.hass)
+                if mlc.CONF_PASSWORD in user_input:
+                    credentials = await async_cloudapi_login(
+                        profile_config[mlc.CONF_EMAIL],
+                        user_input[mlc.CONF_PASSWORD],
+                        async_get_clientsession(self.hass),
+                    )
+                    if (
+                        mc.KEY_USERID_ in profile_config
+                        and credentials[mc.KEY_USERID_]
+                        != profile_config[mc.KEY_USERID_]
+                    ):
+                        await async_cloudapi_logout_safe(
+                            credentials[mc.KEY_TOKEN],
+                            async_get_clientsession(self.hass),
+                        )
+                        raise ConfigError(ERR_CLOUD_PROFILE_MISMATCH)
+                    profile_config.update(credentials)  # type: ignore
+                    if not user_input.get(mlc.CONF_SAVE_PASSWORD):
+                        profile_config.pop(mlc.CONF_PASSWORD, None)
+
+                if self._profile_entry:
+                    # we were managing a profile OptionsFlow: fast save
+                    self.hass.config_entries.async_update_entry(
+                        self._profile_entry, data=profile_config
+                    )
+                    return self.async_create_entry(data=None)  # type: ignore
+
                 # abort any eventual duplicate progress flow
+                # also, even if the user was creating a new profile,
+                # updates any eventually existing one...
+                # we will eventually abort this flow later
+                unique_id = f"profile.{profile_config[mc.KEY_USERID_]}"
+                helper = ConfigEntriesHelper(self.hass)
                 profile_flow = helper.get_config_flow(unique_id)
                 if profile_flow and (profile_flow["flow_id"] != self.flow_id):
                     helper.config_entries.flow.async_abort(profile_flow["flow_id"])
                 profile_entry = helper.get_config_entry(unique_id)
                 if profile_entry:
                     helper.config_entries.async_update_entry(
-                        profile_entry, title=title, data=profile_config
+                        profile_entry,
+                        title=profile_config[mc.KEY_EMAIL],
+                        data=profile_config,
                     )
-                    if profile_entry.disabled_by:
-                        await helper.config_entries.async_set_disabled_by(
-                            profile_entry.entry_id, None
-                        )
-
-                if self._is_keyerror:
-                    # this flow is managing a device
-                    self.device_config[mlc.CONF_KEY] = credentials[mc.KEY_KEY]
-                    if not profile_entry:
-                        # no profile configured yet: shutdown any progress on this
-                        # profile and directly create the ConfigEntry
+                    if not self._is_keyerror:
+                        # this flow was creating a profile but it's entry is
+                        # already in place (and updated)
+                        return self.async_abort()
+                else:
+                    if self._is_keyerror:
+                        # this flow is managing a device but since the profile
+                        # entry is new, we'll directly setup that
                         await helper.config_entries.async_add(
                             config_entries.ConfigEntry(
                                 version=self.VERSION,
                                 domain=mlc.DOMAIN,
-                                title=title,
+                                title=profile_config[mc.KEY_EMAIL],
                                 data=profile_config,
                                 source=config_entries.SOURCE_USER,
                                 unique_id=unique_id,
                             )
                         )
-                    return await self.async_step_device()  # type: ignore
+                    else:
+                        # this ConfigFlow was creating(user) a profile and looks like
+                        # no entry exists
+                        if await self.async_set_unique_id(unique_id, raise_on_progress=False):  # type: ignore
+                            return self.async_abort()
+                        return self.async_create_entry(
+                            title=profile_config[mc.KEY_EMAIL], data=profile_config
+                        )
 
-                # this flow was managing a profile be it a user initiated one
-                # or an OptionsFlow.
-                return await self._async_finish_profile(title, unique_id)
+                # this flow is managing a device: assert self._is_keyerror
+                self.device_config[mlc.CONF_KEY] = profile_config[mc.KEY_KEY]
+                return await self.async_step_device()
 
             except CloudApiError as error:
                 errors[CONF_ERROR] = ERR_INVALID_AUTH
                 _err = str(error)
+            except ConfigError as error:
+                errors[CONF_ERROR] = ERR_INVALID_AUTH
+                _err = error.reason
             except Exception as error:
                 errors[CONF_ERROR] = ERR_CANNOT_CONNECT
                 _err = str(error) or type(error).__name__
 
-        config_schema: dict[object, object] = {
-            vol.Required(
-                mlc.CONF_EMAIL, description={DESCR: profile_config.get(mlc.CONF_EMAIL)}
-            ): str,
-            vol.Required(
-                mlc.CONF_PASSWORD,
-                description={DESCR: profile_config.get(mlc.CONF_PASSWORD)},
-            ): str,
-            vol.Optional(
-                mlc.CONF_SAVE_PASSWORD,
-                description={DESCR: profile_config.get(mlc.CONF_SAVE_PASSWORD)},
-            ): bool,
+        config_schema = {}
+        if _err:
+            config_schema[vol.Optional(CONF_ERROR, description={DESCR: _err})] = str
+        if self._profile_entry:
+            profile = ApiProfile.profiles.get(profile_config[mc.KEY_USERID_])
+            require_login = not (profile and profile.token)
+        else:
+            # this is not a profile OptionsFlow so we'd need to login for sure
+            # with full credentials
+            config_schema[
+                vol.Required(
+                    mlc.CONF_EMAIL,
+                    description={DESCR: profile_config.get(mlc.CONF_EMAIL)},
+                )
+            ] = str
+            require_login = True
+        if require_login:
+            # token expired or not a profile OptionFlow: we'd need to login again
+            config_schema[
+                vol.Required(
+                    mlc.CONF_PASSWORD,
+                    description={DESCR: profile_config.get(mlc.CONF_PASSWORD)},
+                )
+            ] = str
+            config_schema[
+                vol.Optional(
+                    mlc.CONF_SAVE_PASSWORD,
+                    description={DESCR: profile_config.get(mlc.CONF_SAVE_PASSWORD)},
+                )
+            ] = bool
+        config_schema[
             vol.Optional(
                 mlc.CONF_ALLOW_MQTT_PUBLISH,
                 description={DESCR: profile_config.get(mlc.CONF_ALLOW_MQTT_PUBLISH)},
-            ): bool,
+            )
+        ] = bool
+        config_schema[
             vol.Optional(
                 mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES,
                 description={
                     DESCR: profile_config.get(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES)
                 },
-            ): bool,
-        }
-        if _err:
-            config_schema[vol.Optional(CONF_ERROR, description={DESCR: _err})] = str
+            )
+        ] = bool
+
         return self.async_show_form(
             step_id="profile",
             data_schema=vol.Schema(config_schema),
@@ -218,7 +274,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             descriptor,
         )
 
-    async def _async_finish_profile(self, title: str, unique_id: str):
+    async def async_step_device(self, user_input=None):
         raise NotImplementedError()
 
 
@@ -234,9 +290,11 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
 
     @staticmethod
     def async_get_options_flow(config_entry):
-        return OptionsFlowHandler(config_entry)
+        return OptionsFlow(config_entry)
 
     async def async_step_user(self, user_input=None):
+        self.device_config = {}  # type: ignore[assignment]
+        self.profile_config = {}  # type: ignore[assignment]
         return self.async_show_menu(**self._MENU_USER)
 
     async def async_step_hub(self, user_input=None):
@@ -256,8 +314,6 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         device_config = self.device_config
 
         if user_input is None:
-            if device_config is None:
-                self.device_config = device_config = {}  # type: ignore[assignment]
             if profile := next(iter(ApiProfile.active_profiles()), None):
                 device_config[mlc.CONF_KEY] = profile.key
         else:
@@ -301,13 +357,14 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         )
 
     async def async_step_integration_discovery(
-        self, discovery_info: mlc.DeviceConfigType
+        self, discovery_info: mlc.DeviceConfigType | mlc.ProfileConfigType
     ):
         """
         this is actually the entry point for devices discovered through our MQTTConnection(s)
         or to trigger a cloud profile configuration when migrating older config entries
         """
         if mc.KEY_USERID_ in discovery_info:
+            self.profile_config = discovery_info  # type: ignore
             return await self.async_step_profile()
 
         return await self._async_set_device_config(
@@ -421,7 +478,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
     async def async_step_finalize(self, user_input=None):
         return self.async_create_entry(
             title=self._title,
-            data=self.device_config,  # type: ignore
+            data=self.device_config,
         )
 
     async def _async_set_device_config(
@@ -453,13 +510,8 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
             description_placeholders=self._placeholders,
         )
 
-    async def _async_finish_profile(self, title: str, unique_id: str):
-        if await self.async_set_unique_id(unique_id, raise_on_progress=False):
-            return self.async_abort()
-        return self.async_create_entry(title=title, data=self.profile_config)
 
-
-class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
+class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
     """
     Manage device options configuration
     """
@@ -475,6 +527,7 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
 
         unique_id = unique_id.split(".")  # type: ignore
         if unique_id[0] == "profile":
+            self._profile_entry = self._config_entry
             self.profile_config = dict(self._config_entry.data)  # type: ignore
             return await self.async_step_profile()
 
@@ -637,6 +690,3 @@ class OptionsFlowHandler(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             description_placeholders=self._placeholders,
             errors=errors,
         )
-
-    async def _async_finish_profile(self, title: str, unique_id: str):
-        return self.async_create_entry(data=None)  # type: ignore

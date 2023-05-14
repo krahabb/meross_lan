@@ -18,6 +18,7 @@ import paho.mqtt.client as mqtt
 
 from .const import (
     CONF_ALLOW_MQTT_PUBLISH,
+    CONF_CREATE_DIAGNOSTIC_ENTITIES,
     CONF_DEVICE_ID,
     CONF_KEY,
     CONF_PAYLOAD,
@@ -436,7 +437,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                 self.warning(
                     "MQTT publishing is not allowed for this profile (device_id=%s)",
                     device_id,
-                    timeout=14000,
+                    timeout=14400,
                 )
                 return
 
@@ -652,9 +653,19 @@ class MerossCloudProfile(ApiProfile):
 
     # interface: EntityManager
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
-        self._config = config_entry.data  # type: ignore
-        # TODO: refresh the binded devices ability/inability to MQTT publish
-        await self.async_update_credentials(self._config)  # type: ignore
+        config: ProfileConfigType = config_entry.data  # type: ignore
+        allow_mqtt_publish = config.get(CONF_ALLOW_MQTT_PUBLISH)
+        if allow_mqtt_publish != self.allow_mqtt_publish:
+            # device._mqtt_publish is rather 'passive' so
+            # we do some fast 'smart' updates:
+            if allow_mqtt_publish:
+                for device in self.linkeddevices.values():
+                    device._mqtt_publish = device._mqtt_connected
+            else:
+                for device in self.linkeddevices.values():
+                    device._mqtt_publish = None
+        self._config = config
+        await self.async_update_credentials(config)
 
     # interface: ApiProfile
     @property
@@ -673,6 +684,10 @@ class MerossCloudProfile(ApiProfile):
             self._get_or_create_mqttconnection(device.mqtt_broker).attach(device)
 
     # interface: self
+    @property
+    def create_diagnostic_entities(self):
+        return self._config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
+
     @property
     def token(self):
         return self._data.get(mc.KEY_TOKEN)
@@ -895,6 +910,13 @@ class MerossCloudProfile(ApiProfile):
     async def _process_device_info_unknown(
         self, device_info_unknown: list[DeviceInfoType]
     ):
+        if not self.allow_mqtt_publish:
+            self.warning(
+                "Meross cloud api reported new devices but MQTT publishing is disabled: skipping automatic discovery",
+                timeout=604800,  # 1 week
+            )
+            return
+
         config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
         for device_info in device_info_unknown:
             with self.exception_warning("_process_device_info_unknown"):
