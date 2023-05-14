@@ -11,7 +11,6 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
     CONF_CLOUD_KEY,
@@ -162,10 +161,10 @@ class HAMQTTConnection(MQTTConnection):
                 self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
                     hass, mc.TOPIC_DISCOVERY, self.async_mqtt_message
                 )
-                self._unsub_mqtt_disconnected = async_dispatcher_connect(
+                self._unsub_mqtt_disconnected = mqtt.async_dispatcher_connect(
                     hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected
                 )
-                self._unsub_mqtt_connected = async_dispatcher_connect(
+                self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
                     hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
                 )
                 # try to also get the HA broker conf
