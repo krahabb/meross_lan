@@ -7,7 +7,7 @@ from io import TextIOWrapper
 from json import dumps as json_dumps
 from logging import DEBUG, getLevelName as logging_getLevelName
 import os
-from time import gmtime, localtime, strftime, time
+from time import localtime, strftime, time
 import typing
 from uuid import uuid4
 import weakref
@@ -54,6 +54,7 @@ from .helpers import (
     EntityManager,
     EntityPollingStrategy,
     PollingStrategy,
+    datetime_from_epoch,
     obfuscated_dict_copy,
     schedule_async_callback,
     schedule_callback,
@@ -697,12 +698,7 @@ class MerossDevice(MerossDeviceBase):
         given the epoch (utc timestamp) returns the datetime
         in device local timezone
         """
-        y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
-        ss = min(ss, 59)  # clamp out leap seconds if the platform has them
-        devtime_utc = datetime(y, m, d, hh, mm, ss, 0, timezone.utc)
-        if (tz := self.tzinfo) is timezone.utc:
-            return devtime_utc
-        return devtime_utc.astimezone(tz)
+        return datetime_from_epoch(epoch, self.tzinfo)
 
     async def async_request_smartpoll(
         self,

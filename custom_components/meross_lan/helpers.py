@@ -6,14 +6,15 @@ from __future__ import annotations
 import abc
 import asyncio
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from functools import partial
 import logging
-from time import time
+from time import gmtime, time
 import typing
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
-from homeassistant.util.dt import utcnow
+from homeassistant.util.dt import DEFAULT_TIME_ZONE, utcnow
 
 from .const import CONF_CLOUD_KEY, CONF_DEVICE_ID, CONF_HOST, CONF_KEY, DOMAIN
 from .merossclient import const as mc, get_default_arguments
@@ -36,6 +37,7 @@ except Exception:
 
 if typing.TYPE_CHECKING:
     from typing import Callable, ClassVar, Coroutine, Final
+    from datetime import tzinfo
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, State
@@ -76,11 +78,25 @@ def versiontuple(version: str):
     return tuple(map(int, (version.split("."))))
 
 
-"""
-    LOGGER:
-    Customize logging library to 'trap' repeated messages under a
-    short timeout
-"""
+def utcdatetime_from_epoch(epoch):
+    """
+    converts an epoch (UTC seconds) in a non-naive datetime.
+    Faster than datetime.fromtimestamp with less checks
+    and no care for milliseconds
+    """
+    y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
+    return datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
+
+
+def datetime_from_epoch(epoch, tz: tzinfo | None = None):
+    """
+    converts an epoch (UTC seconds) in a non-naive datetime.
+    Faster than datetime.fromtimestamp with less checks
+    and no care for milliseconds
+    """
+    y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
+    utcdt = datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
+    return utcdt if tz is timezone.utc else utcdt.astimezone(tz or DEFAULT_TIME_ZONE)
 
 
 def getLogger(name):

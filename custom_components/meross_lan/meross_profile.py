@@ -33,6 +33,7 @@ from .helpers import (
     ApiProfile,
     ConfigEntriesHelper,
     Loggable,
+    datetime_from_epoch,
     schedule_async_callback,
     schedule_callback,
 )
@@ -651,9 +652,9 @@ class MerossCloudProfile(ApiProfile):
 
     # interface: EntityManager
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
-        config: ProfileConfigType = config_entry.data  # type: ignore
+        self._config = config_entry.data  # type: ignore
         # TODO: refresh the binded devices ability/inability to MQTT publish
-        await self.async_update_credentials(config)
+        await self.async_update_credentials(self._config)  # type: ignore
 
     # interface: ApiProfile
     @property
@@ -672,6 +673,10 @@ class MerossCloudProfile(ApiProfile):
             self._get_or_create_mqttconnection(device.mqtt_broker).attach(device)
 
     # interface: self
+    @property
+    def token(self):
+        return self._data.get(mc.KEY_TOKEN)
+
     def link(self, device: MerossDevice):
         device_id = device.id
         if device_id not in self.linkeddevices:
@@ -697,30 +702,35 @@ class MerossCloudProfile(ApiProfile):
 
     async def async_update_credentials(self, credentials: MerossCloudCredentials):
         with self.exception_warning("async_update_credentials"):
-            self.log(DEBUG, "updating credentials")
             assert self.id == credentials[mc.KEY_USERID_]
             assert self.key == credentials[mc.KEY_KEY]
             token = self._data.get(mc.KEY_TOKEN)
-            if token and (token != credentials[mc.KEY_TOKEN]):
-                # token might be expired: suppress exceptions
-                with self.exception_warning("async_cloudapi_logout"):
-                    await async_cloudapi_logout(
-                        token, async_get_clientsession(ApiProfile.hass)
-                    )
-            self._data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
-            self._schedule_save_store()
-            # the 'async_check_query_devices' will only occur if we didn't refresh
-            # on our polling schedule for whatever reason (invalid token -
-            # no connection - whatsoever) so, having a fresh token and likely
-            # good connectivity we're going to retrigger that
-            await self.async_check_query_devices()
+            if token != credentials[mc.KEY_TOKEN]:
+                self.log(DEBUG, "updating credentials with new token")
+                if token:
+                    # discard old one to play it nice but token might be expired
+                    with self.exception_warning("async_cloudapi_logout"):
+                        await async_cloudapi_logout(
+                            token, async_get_clientsession(ApiProfile.hass)
+                        )
+                self._data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
+                self._schedule_save_store()
+                # the 'async_check_query_devices' will only occur if we didn't refresh
+                # on our polling schedule for whatever reason (invalid token -
+                # no connection - whatsoever) so, having a fresh token and likely
+                # good connectivity we're going to retrigger that
+                await self.async_check_query_devices()
 
     async def async_query_devices(self):
         with self._cloud_token_exception_manager("async_query_devices") as token:
+            self.log(
+                DEBUG,
+                "querying device list - last query was at: %s",
+                datetime_from_epoch(self._last_query_devices).isoformat(),
+            )
             if not token:
                 self.warning("querying device list cancelled: missing api token")
                 return None
-            self.log(DEBUG, "querying device list")
             self._last_query_devices = time()
             device_info_new = await async_cloudapi_device_devlist(
                 token, async_get_clientsession(ApiProfile.hass)
