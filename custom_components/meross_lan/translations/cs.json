@@ -40,23 +40,25 @@
     "config": {
         "flow_title": "{name}",
         "abort": {
+            "already_configured": "Vstup je již nakonfigurován",
             "no_devices_found": "V síti nebylo nalezeno žádné zařízení",
             "single_instance_allowed": "Konfigurace již existuje. Více konfigurací není podporováno."
         },
         "error": {
-            "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
             "already_configured_device": "Zařízení již bylo konfigurováno",
             "cannot_connect": "Pokus o připojení se nezdařil",
-            "invalid_auth": "Ověření selhalo"
+            "cloud_profile_mismatch": "Cloudový profil neodpovídá konfiguraci",
+            "invalid_auth": "Ověření selhalo",
+            "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key"
         },
         "step": {
             "user": {
-                "title": "Choose option",
+                "title": "Vyberte možnost",
                 "description": "",
                 "menu_options": {
-                    "profile": "Register a Meross cloud profile",
-                    "device": "Manually configure a device"
+                    "profile": "Zaregistrujte si cloudový profil Meross",
+                    "device": "Ručně nakonfigurujte zařízení"
                 }
             },
             "hub": {
@@ -87,7 +89,10 @@
                 "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
                 "data": {
                     "email": "Uživatelské jméno účtu Meross",
-                    "password": "Heslo k účtu Meross"
+                    "password": "Heslo k účtu Meross",
+                    "save_password": "Uložit heslo",
+                    "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
+                    "create_diagnostic_entities": "Vytvářejte diagnostické entity"
                 }
             },
             "finalize": {
@@ -99,13 +104,13 @@
     },
     "options": {
         "error": {
-            "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
             "already_configured_device": "Zařízení již bylo konfigurováno",
             "cannot_connect": "Pokus o připojení se nezdařil",
-            "invalid_auth": "Ověření selhalo",
+            "cloud_profile_mismatch": "Cloudový profil neodpovídá konfiguraci",
             "device_id_mismatch": "Neshoda UUID zařízení: zařízení není stejné",
-            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
+            "invalid_auth": "Ověření selhalo",
+            "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key"
         },
         "step": {
             "hub": {
@@ -144,7 +149,10 @@
                 "description": "Přihlaste se k účtu Meross a obnovte klíč zařízení",
                 "data": {
                     "email": "Uživatelské jméno účtu Meross",
-                    "password": "Heslo k účtu Meross"
+                    "password": "Heslo k účtu Meross",
+                    "save_password": "Uložit heslo",
+                    "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
+                    "create_diagnostic_entities": "Vytvářejte diagnostické entity"
                 }
             }
         }

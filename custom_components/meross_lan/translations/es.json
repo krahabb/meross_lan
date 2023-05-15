@@ -40,23 +40,25 @@
     "config": {
         "flow_title": "{name}",
         "abort": {
+            "already_configured": "Entrada ya configurada",
             "no_devices_found": "No se han encontrado dispositivos en la red",
             "single_instance_allowed": "Ya esta configurada la Integración. Solo se puede configurar una vez."
         },
         "error": {
-            "invalid_key": "Error clave: seleccione 'Cloud retrieve' para obtener de Meross",
-            "invalid_nullkey": "Error clave: seleccione 'Hack mode' para permitir la clave vacía",
             "already_configured_device": "Este dispositivo ya esta configurado",
             "cannot_connect": "No es posible conectarse",
-            "invalid_auth": "Error de autenticación"
+            "cloud_profile_mismatch": "El perfil de la nube no coincide con la configuración",
+            "invalid_auth": "Error de autenticación",
+            "invalid_key": "Error clave: seleccione 'Cloud retrieve' para obtener de Meross",
+            "invalid_nullkey": "Error clave: seleccione 'Hack mode' para permitir la clave vacía"
         },
         "step": {
             "user": {
-                "title": "Choose option",
+                "title": "Elegir opción",
                 "description": "",
                 "menu_options": {
-                    "profile": "Register a Meross cloud profile",
-                    "device": "Manually configure a device"
+                    "profile": "Registrar un perfil en la nube de Meross",
+                    "device": "Configurar manualmente un dispositivo"
                 }
             },
             "hub": {
@@ -86,7 +88,10 @@
                 "description": "Register and connect to a Meross account",
                 "data": {
                     "email": "Nombre de usuario de Meross",
-                    "password": "Contraseña de Meross"
+                    "password": "Contraseña de Meross",
+                    "save_password": "Guardar contraseña",
+                    "allow_mqtt_publish": "Permitir la publicación de MQTT en la nube",
+                    "create_diagnostic_entities": "Crear entidades de diagnóstico"
                 }
             },
             "finalize": {
@@ -98,13 +103,13 @@
     },
     "options": {
         "error": {
-            "invalid_key": "Error clave: seleccione 'Cloud retrieve' para obtener de Meross",
-            "invalid_nullkey": "Error clave: seleccione 'Hack mode' para permitir la clave vacía",
             "already_configured_device": "Este dispositivo ya esta configurado",
             "cannot_connect": "No es posible conectarse",
-            "invalid_auth": "Error de autenticación",
+            "cloud_profile_mismatch": "El perfil de la nube no coincide con la configuración",
             "device_id_mismatch": "Discrepancia de UUID: el dispositivo no es el mismo",
-            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
+            "invalid_auth": "Error de autenticación",
+            "invalid_key": "Error clave: seleccione 'Cloud retrieve' para obtener de Meross",
+            "invalid_nullkey": "Error clave: seleccione 'Hack mode' para permitir la clave vacía"
         },
         "step": {
             "hub": {
@@ -143,7 +148,10 @@
                 "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
                 "data": {
                     "email": "Nombre de usuario de Meross",
-                    "password": "Contraseña de Meross"
+                    "password": "Contraseña de Meross",
+                    "save_password": "Guardar contraseña",
+                    "allow_mqtt_publish": "Permitir la publicación de MQTT en la nube",
+                    "create_diagnostic_entities": "Crear entidades de diagnóstico"
                 }
             }
         }
