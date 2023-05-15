@@ -10,7 +10,12 @@ from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
 from .const import DOMAIN, PARAM_HUBBATTERY_UPDATE_PERIOD
-from .helpers import ApiProfile, SmartPollingStrategy, schedule_async_callback
+from .helpers import (
+    ApiProfile,
+    PollingStrategy,
+    SmartPollingStrategy,
+    schedule_async_callback,
+)
 from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (  # mEROSS cONST
     const as mc,
@@ -159,38 +164,27 @@ class MerossDeviceHub(MerossDevice):
                             {mc.KEY_SCHEDULE: p},
                         )
 
-        # we also need to check for TOGGLEX state in case but this is not always needed:
-        # for example, if we just have mts100-likes devices, their 'togglex' state is already carried by
-        # NS_APPLIANCE_HUB_MTS100_ALL, or we may know some subdevices dont actually have togglex
-        if not self._online:
-            return
-        if mc.NS_APPLIANCE_HUB_TOGGLEX in self.descriptor.ability:
-            if needpoll:
-                _excluded = (
-                    mc.TYPE_MS100,
-                    mc.TYPE_MTS100,
-                    mc.TYPE_MTS100V3,
-                    mc.TYPE_MTS150,
-                )
-                for subdevice in self.subdevices.values():
-                    if subdevice.type not in _excluded:
-                        await self.async_request(
-                            *get_default_arguments(mc.NS_APPLIANCE_HUB_TOGGLEX)
-                        )
-                        break
-
     # interface: self
+    def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
+        self._parse_hub(payload[mc.KEY_HUB])
+
+    def _handle_Appliance_Hub_Sensor_Adjust(self, header: dict, payload: dict):
+        self._subdevice_parse(mc.KEY_ADJUST, payload)
+
     def _handle_Appliance_Hub_Sensor_All(self, header: dict, payload: dict):
         self._lastupdate_sensor = self.lastresponse
         self._subdevice_parse(mc.KEY_ALL, payload)
 
-    def _handle_Appliance_Hub_Sensor_TempHum(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_TEMPHUM, payload)
+    def _handle_Appliance_Hub_Sensor_DoorWindow(self, header: dict, payload: dict):
+        self._subdevice_parse(mc.KEY_DOORWINDOW, payload)
 
     def _handle_Appliance_Hub_Sensor_Smoke(self, header: dict, payload: dict):
         self._subdevice_parse(mc.KEY_SMOKEALARM, payload)
 
-    def _handle_Appliance_Hub_Sensor_Adjust(self, header: dict, payload: dict):
+    def _handle_Appliance_Hub_Sensor_TempHum(self, header: dict, payload: dict):
+        self._subdevice_parse(mc.KEY_TEMPHUM, payload)
+
+    def _handle_Appliance_Hub_Mts100_Adjust(self, header: dict, payload: dict):
         self._subdevice_parse(mc.KEY_ADJUST, payload)
 
     def _handle_Appliance_Hub_Mts100_All(self, header: dict, payload: dict):
@@ -200,17 +194,11 @@ class MerossDeviceHub(MerossDevice):
     def _handle_Appliance_Hub_Mts100_Mode(self, header: dict, payload: dict):
         self._subdevice_parse(mc.KEY_MODE, payload)
 
-    def _handle_Appliance_Hub_Mts100_Temperature(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_TEMPERATURE, payload)
-
-    def _handle_Appliance_Hub_Mts100_Adjust(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_ADJUST, payload)
-
     def _handle_Appliance_Hub_Mts100_ScheduleB(self, header: dict, payload: dict):
         self._subdevice_parse(mc.KEY_SCHEDULE, payload)
 
-    def _handle_Appliance_Hub_ToggleX(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_TOGGLEX, payload)
+    def _handle_Appliance_Hub_Mts100_Temperature(self, header: dict, payload: dict):
+        self._subdevice_parse(mc.KEY_TEMPERATURE, payload)
 
     def _handle_Appliance_Hub_Battery(self, header: dict, payload: dict):
         self._subdevice_parse(mc.KEY_BATTERY, payload)
@@ -238,8 +226,45 @@ class MerossDeviceHub(MerossDevice):
             # is it likely unpaired?
             pass
 
-    def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
-        self._parse_hub(payload[mc.KEY_HUB])
+    def _handle_Appliance_Hub_ToggleX(self, header: dict, payload: dict):
+        self._subdevice_parse(mc.KEY_TOGGLEX, payload)
+
+    def _parse_hub(self, p_hub: dict):
+        # This is usually called inside _parse_all as part of the digest parsing
+        # Here we'll check the fresh subdevice list against the actual one and
+        # eventually manage newly added subdevices or removed ones #119
+        # telling the caller to persist the changed configuration (self.needsave)
+        subdevices_actual = set(self.subdevices.keys())
+        for p_digest in p_hub[mc.KEY_SUBDEVICE]:
+            p_id = p_digest.get(mc.KEY_ID)
+            if subdevice := self.subdevices.get(p_id):
+                subdevices_actual.remove(p_id)
+            elif subdevice := self._subdevice_build(p_digest):
+                self.needsave = True
+            else:
+                continue
+            subdevice.parse_digest(p_digest)
+
+        if subdevices_actual:
+            # now we're left with non-existent (removed) subdevices
+            self.needsave = True
+            for p_id in subdevices_actual:
+                subdevice = self.subdevices[p_id]
+                self.warning(
+                    "removing subdevice %s(%s) - configuration will be reloaded in 15 sec",
+                    subdevice.name,
+                    p_id,
+                )
+
+            # before reloading we have to be sure configentry data were persisted
+            # so we'll wait a bit..
+            async def _async_setup_again():
+                self._unsub_setup_again = None
+                await ApiProfile.hass.config_entries.async_reload(self.config_entry_id)
+
+            self._unsub_setup_again = schedule_async_callback(
+                ApiProfile.hass, 15, _async_setup_again
+            )
 
     def _subdevice_build(self, p_subdevice: dict):
         # parses the subdevice payload in 'digest' to look for a well-known type
@@ -281,7 +306,7 @@ class MerossDeviceHub(MerossDevice):
                 if _type not in (mc.TYPE_MS100,):
                     self.polling_dictionary[
                         mc.NS_APPLIANCE_HUB_TOGGLEX
-                    ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_TOGGLEX)
+                    ] = PollingStrategy(mc.NS_APPLIANCE_HUB_TOGGLEX)
 
         if deviceclass := WELL_KNOWN_TYPE_MAP.get(_type):  # type: ignore
             return deviceclass(self, p_subdevice)
@@ -289,55 +314,16 @@ class MerossDeviceHub(MerossDevice):
         return MerossSubDevice(self, p_subdevice, _type)  # type: ignore
 
     def _subdevice_parse(self, key: str, payload: dict):
-        if isinstance(p_subdevices := payload.get(key), list):
-            for p_subdevice in p_subdevices:
-                p_id = p_subdevice[mc.KEY_ID]
-                if subdevice := self.subdevices.get(p_id):
-                    subdevice._parse(key, p_subdevice)
-                else:
-                    # force a rescan since we discovered a new subdevice
-                    # only if it appears this device is online else it
-                    # would be a waste since we wouldnt have enough info
-                    # to correctly build that
-                    if is_device_online(p_subdevice):
-                        self.request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
-
-    def _parse_hub(self, p_hub: dict):
-        # This is usually called inside _parse_all as part of the digest parsing
-        # Here we'll check the fresh subdevice list against the actual one and
-        # eventually manage newly added subdevices or removed ones #119
-        # telling the caller to persist the changed configuration (self.needsave)
-        subdevices_actual = set(self.subdevices.keys())
-        for p_digest in p_hub[mc.KEY_SUBDEVICE]:
-            p_id = p_digest.get(mc.KEY_ID)
-            if subdevice := self.subdevices.get(p_id):
-                subdevices_actual.remove(p_id)
-            elif subdevice := self._subdevice_build(p_digest):
-                self.needsave = True
+        for p_subdevice in payload[key]:
+            if subdevice := self.subdevices.get(p_subdevice[mc.KEY_ID]):
+                subdevice._parse(key, p_subdevice)
             else:
-                continue
-            subdevice.parse_digest(p_digest)
-
-        if subdevices_actual:
-            # now we're left with non-existent (removed) subdevices
-            self.needsave = True
-            for p_id in subdevices_actual:
-                subdevice = self.subdevices[p_id]
-                self.warning(
-                    "removing subdevice %s(%s) - configuration will be reloaded in 15 sec",
-                    subdevice.name,
-                    p_id,
-                )
-
-            # before reloading we have to be sure configentry data were persisted
-            # so we'll wait a bit..
-            async def _async_setup_again():
-                self._unsub_setup_again = None
-                await ApiProfile.hass.config_entries.async_reload(self.config_entry_id)
-
-            self._unsub_setup_again = schedule_async_callback(
-                ApiProfile.hass, 15, _async_setup_again
-            )
+                # force a rescan since we discovered a new subdevice
+                # only if it appears this device is online else it
+                # would be a waste since we wouldnt have enough info
+                # to correctly build that
+                if is_device_online(p_subdevice):
+                    self.request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
 
     def _build_subdevices_payload(
         self, types: typing.Collection, included: bool, count: int
@@ -474,11 +460,17 @@ class MerossSubDevice(MerossDeviceBase):
             # so we'll euristically generate sensors for device properties
             # This is the case for when we see newer devices and we don't know
             # their payloads and features.
-            # as for know we've seen "smokeAlarm" and "doorWindow" subdevices
+            # as for now we've seen "smokeAlarm" and "doorWindow" subdevices
             # carrying similar payloads structures. We'll be conservative
-            # and generate generic sensors for any key, except "lmTime"
+            # and generate generic sensors for any key carrying a non structured
+            # type (dict or list), except "lmTime" and few others known one
             for subkey, subvalue in payload.items():
-                if subkey in {mc.KEY_LMTIME, mc.KEY_LMTIME_}:
+                if (
+                    subkey
+                    in {mc.KEY_ID, mc.KEY_LMTIME, mc.KEY_LMTIME_, mc.KEY_SYNCEDTIME}
+                    or isinstance(subvalue, list)
+                    or isinstance(subvalue, dict)
+                ):
                     continue
                 entitykey = f"{key}_{subkey}"
                 sensorattr = f"sensor_{entitykey}"
