@@ -59,6 +59,7 @@ from .merossclient.cloudapi import (
     generate_app_id,
     parse_domain,
 )
+from .sensor import MLSensor
 
 if typing.TYPE_CHECKING:
     import asyncio
@@ -73,6 +74,98 @@ if typing.TYPE_CHECKING:
 
     UuidType = str
     DeviceInfoDictType = dict[UuidType, DeviceInfoType]
+
+
+class ConnectionSensor(MLSensor):
+    STATE_DISCONNECTED: Final = "disconnected"
+    STATE_CONNECTED: Final = "connected"
+    STATE_QUEUING: Final = "queuing"
+    STATE_DROPPING: Final = "dropping"
+
+    class AttrDictType(typing.TypedDict):
+        devices: dict[str, str]
+        received: int
+        published: int
+        dropped: int
+        queued: int
+        queue_length: int
+
+    ATTR_DEVICES: Final = "devices"
+    ATTR_RECEIVED: Final = "received"
+    ATTR_PUBLISHED: Final = "published"
+    ATTR_DROPPED: Final = "dropped"
+    ATTR_QUEUED: Final = "queued"
+    ATTR_QUEUE_LENGTH: Final = "queue_length"
+
+    manager: ApiProfile
+    _attr_extra_state_attributes: AttrDictType
+    _attr_state: str
+    _attr_options = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_QUEUING, STATE_DROPPING]
+
+    def __init__(self, connection: MQTTConnection):
+        broker = connection.broker
+        self._attr_name = f"{broker[0]}:{broker[1]}"
+        self._attr_extra_state_attributes = {
+            ConnectionSensor.ATTR_DEVICES: {},
+            ConnectionSensor.ATTR_RECEIVED: 0,
+            ConnectionSensor.ATTR_PUBLISHED: 0,
+            ConnectionSensor.ATTR_DROPPED: 0,
+            ConnectionSensor.ATTR_QUEUED: 0,
+            ConnectionSensor.ATTR_QUEUE_LENGTH: 0,
+        }
+        super().__init__(
+            connection.profile, connection.id, None, MLSensor.DeviceClass.ENUM
+        )
+
+    @property
+    def available(self):
+        return True
+
+    @property
+    def entity_category(self):
+        return self.EntityCategory.DIAGNOSTIC
+
+    @property
+    def options(self) -> list[str] | None:
+        return self._attr_options
+
+    def set_unavailable(self):
+        raise NotImplementedError
+
+    # interface: self
+    def add_device(self, device: MerossDevice):
+        self._attr_extra_state_attributes[ConnectionSensor.ATTR_DEVICES][
+            device.id
+        ] = device.name
+        if self._hass_connected:
+            self._async_write_ha_state()
+
+    def remove_device(self, device: MerossDevice):
+        self._attr_extra_state_attributes[ConnectionSensor.ATTR_DEVICES].pop(
+            device.id, None
+        )
+        if self._hass_connected:
+            self._async_write_ha_state()
+
+    def inc_counter(self, attr_name: str):
+        self._attr_extra_state_attributes[attr_name] += 1
+        if self._hass_connected:
+            self._async_write_ha_state()
+
+    def inc_counter_with_state(self, attr_name: str, state: str):
+        self._attr_extra_state_attributes[attr_name] += 1
+        self._attr_state = state
+        if self._hass_connected:
+            self._async_write_ha_state()
+
+    def inc_queued(self, queue_length: int):
+        self._attr_extra_state_attributes[ConnectionSensor.ATTR_QUEUED] += 1
+        self._attr_extra_state_attributes[
+            ConnectionSensor.ATTR_QUEUE_LENGTH
+        ] = queue_length
+        self._attr_state = ConnectionSensor.STATE_QUEUING
+        if self._hass_connected:
+            self._async_write_ha_state()
 
 
 class MQTTConnection(Loggable):
@@ -96,6 +189,7 @@ class MQTTConnection(Loggable):
         "broker",
         "mqttdevices",
         "mqttdiscovering",
+        "sensor_connection",
         "_mqtt_is_connected",
         "_unsub_discovery_callback",
     )
@@ -106,13 +200,16 @@ class MQTTConnection(Loggable):
         connection_id: str,
         broker: tuple[str, int],
     ):
-        super().__init__(connection_id)
         self.profile = profile
         self.broker = broker
         self.mqttdevices: dict[str, MerossDevice] = {}
         self.mqttdiscovering: dict[str, dict] = {}
+        self.sensor_connection = None
         self._mqtt_is_connected = False
         self._unsub_discovery_callback: asyncio.TimerHandle | None = None
+        super().__init__(connection_id)
+        if profile.create_diagnostic_entities:
+            self.create_diagnostic_entities()
 
     async def async_shutdown(self):
         if self._unsub_discovery_callback:
@@ -122,20 +219,41 @@ class MQTTConnection(Loggable):
         for device in self.mqttdevices.values():
             device.mqtt_detached()
         self.mqttdevices.clear()
+        self.destroy_diagnostic_entities()
 
     @property
     def allow_mqtt_publish(self):
         return self.profile.allow_mqtt_publish
 
+    @property
+    def mqtt_is_connected(self):
+        return self._mqtt_is_connected
+
     def attach(self, device: MerossDevice):
         assert device.id not in self.mqttdevices
         self.mqttdevices[device.id] = device
         device.mqtt_attached(self)
+        if sensor_connection := self.sensor_connection:
+            sensor_connection.add_device(device)
 
     def detach(self, device: MerossDevice):
         assert device.id in self.mqttdevices
         device.mqtt_detached()
         self.mqttdevices.pop(device.id)
+        if sensor_connection := self.sensor_connection:
+            sensor_connection.remove_device(device)
+
+    def create_diagnostic_entities(self):
+        assert not self.sensor_connection
+        self.sensor_connection = ConnectionSensor(self)
+        if self.mqttdevices:
+            _add_device = self.sensor_connection.add_device
+            for device in self.mqttdevices.values():
+                _add_device(device)
+
+    def destroy_diagnostic_entities(self):
+        # TODO: broadcast remove to HA !?
+        self.sensor_connection = None
 
     @abc.abstractmethod
     def mqtt_publish(
@@ -170,6 +288,8 @@ class MQTTConnection(Loggable):
 
     async def async_mqtt_message(self, msg):
         with self.exception_warning("async_mqtt_message"):
+            if sensor_connection := self.sensor_connection:
+                sensor_connection.inc_counter(ConnectionSensor.ATTR_RECEIVED)
             message = json_loads(msg.payload)
             header = message[mc.KEY_HEADER]
             device_id = header[mc.KEY_FROM].split("/")[2]
@@ -274,22 +394,6 @@ class MQTTConnection(Loggable):
                 },
             )
 
-    @property
-    def mqtt_is_connected(self):
-        return self._mqtt_is_connected
-
-    @callback
-    def _mqtt_connected(self):
-        for device in self.mqttdevices.values():
-            device.mqtt_connected()
-        self._mqtt_is_connected = True
-
-    @callback
-    def _mqtt_disconnected(self):
-        for device in self.mqttdevices.values():
-            device.mqtt_disconnected()
-        self._mqtt_is_connected = False
-
     def get_or_set_discovering(self, device_id: str):
         if device_id not in self.mqttdiscovering:
             self.log(DEBUG, "starting discovery for device_id: %s", device_id)
@@ -352,6 +456,30 @@ class MQTTConnection(Loggable):
                 self._async_discovery_callback,
             )
 
+    @callback
+    def _mqtt_connected(self):
+        """called when the underlying mqtt.Client connects to the broker"""
+        for device in self.mqttdevices.values():
+            device.mqtt_connected()
+        self._mqtt_is_connected = True
+        if sensor_connection := self.sensor_connection:
+            sensor_connection.update_state(ConnectionSensor.STATE_CONNECTED)
+
+    @callback
+    def _mqtt_disconnected(self):
+        """called when the underlying mqtt.Client disconnects from the broker"""
+        for device in self.mqttdevices.values():
+            device.mqtt_disconnected()
+        self._mqtt_is_connected = False
+        if sensor_connection := self.sensor_connection:
+            sensor_connection.update_state(ConnectionSensor.STATE_DISCONNECTED)
+
+    @callback
+    def _mqtt_published(self, mid):
+        """called when the underlying mqtt.Client successfully publishes a message"""
+        if sensor_connection := self.sensor_connection:
+            sensor_connection.inc_counter(ConnectionSensor.ATTR_PUBLISHED)
+
 
 class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
     profile: MerossCloudProfile  # Type: ignore
@@ -366,12 +494,13 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
     def __init__(
         self, profile: MerossCloudProfile, connection_id: str, broker: tuple[str, int]
     ):
-        MerossMQTTClient.__init__(self, profile._config, profile.app_id)
+        MerossMQTTClient.__init__(self, profile.config, profile.app_id)
         MQTTConnection.__init__(self, profile, connection_id, broker)
         self.user_data_set(ApiProfile.hass)  # speedup hass lookup in callbacks
-        self.on_message = self._mqttc_message
         self.on_connect = self._mqttc_connect
         self.on_disconnect = self._mqttc_disconnect
+        self.on_message = self._mqttc_message
+        self.on_publish = self._mqttc_publish
 
         if MEROSSDEBUG:
 
@@ -395,23 +524,13 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         else:
             self._unsub_random_disconnect = None
 
+    # interface: MQTTConnection
     async def async_shutdown(self):
         if self._unsub_random_disconnect:
             self._unsub_random_disconnect.cancel()
             self._unsub_random_disconnect = None
         await super().async_shutdown()
         await self.schedule_disconnect()
-
-    def schedule_connect(self):
-        # even if safe_connect should be as fast as possible and thread-safe
-        # we still might incur some contention with thread stop/restart
-        # so we delegate its call to an executor
-        return ApiProfile.hass.async_add_executor_job(self.safe_connect, *self.broker)
-
-    def schedule_disconnect(self):
-        # same as connect. safe_disconnect should be even faster and less
-        # contending but...
-        return ApiProfile.hass.async_add_executor_job(self.safe_disconnect)
 
     def attach(self, device: MerossDevice):
         super().attach(device)
@@ -432,6 +551,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         key: KeyType = None,
         messageid: str | None = None,
     ) -> asyncio.Future:
+        """
+        this function runs in an executor since the mqtt.Client is synchronous code.
+        Beware when calling HA api's (like when we want to update sensors)
+        """
+
         def _publish():
             if not self.allow_mqtt_publish:
                 self.warning(
@@ -456,6 +580,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                 MerossMQTTConnection._MSG_PRIORITY_MAP[method],
             )
             if ret is False:
+                if sensor_connection := self.sensor_connection:
+                    ApiProfile.hass.loop.call_soon_threadsafe(
+                        sensor_connection.inc_counter_with_state,
+                        ConnectionSensor.ATTR_DROPPED,
+                        ConnectionSensor.STATE_DROPPING,
+                    )
                 self.warning(
                     "MQTT DROP device_id:(%s) method:(%s) namespace:(%s)",
                     device_id,
@@ -464,6 +594,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                     timeout=14000,
                 )
             elif ret is True:
+                if sensor_connection := self.sensor_connection:
+                    ApiProfile.hass.loop.call_soon_threadsafe(
+                        sensor_connection.inc_queued,
+                        self.rl_queue_length,
+                    )
                 self.log(
                     DEBUG,
                     "MQTT QUEUE device_id:(%s) method:(%s) namespace:(%s)",
@@ -474,7 +609,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
             else:
                 self.log(
                     DEBUG,
-                    "MQTT SEND device_id:(%s) method:(%s) namespace:(%s)",
+                    "MQTT PUBLISH device_id:(%s) method:(%s) namespace:(%s)",
                     device_id,
                     method,
                     namespace,
@@ -493,8 +628,42 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
     ):
         await self.mqtt_publish(device_id, namespace, method, payload, key, messageid)
 
-    def _mqttc_message(self, client, userdata: HomeAssistant, msg: mqtt.MQTTMessage):
-        userdata.create_task(self.async_mqtt_message(msg))
+    @callback
+    def _mqtt_published(self, mid):
+        if sensor_connection := self.sensor_connection:
+            queue_length = self.rl_queue_length
+            # queue_length and dropped are exactly calculated
+            # inside our MerossMQTTClient so we'll update/force
+            # the sensor with 'real' values here..just to be sure
+            # this is especially true for 'dropped' since
+            # the client itself could drop packets at any time
+            # from its (de)queue
+            sensor_connection._attr_extra_state_attributes[
+                ConnectionSensor.ATTR_QUEUE_LENGTH
+            ] = queue_length
+            sensor_connection._attr_extra_state_attributes[
+                ConnectionSensor.ATTR_DROPPED
+            ] = self.rl_dropped
+            sensor_connection._attr_extra_state_attributes[
+                ConnectionSensor.ATTR_PUBLISHED
+            ] += 1
+            if self.mqtt_is_connected and not queue_length:
+                # enforce the state eventually cancelling queued, dropped...
+                sensor_connection._attr_state = ConnectionSensor.STATE_CONNECTED
+            if sensor_connection._hass_connected:
+                sensor_connection._async_write_ha_state()
+
+    # interface: self
+    def schedule_connect(self):
+        # even if safe_connect should be as fast as possible and thread-safe
+        # we still might incur some contention with thread stop/restart
+        # so we delegate its call to an executor
+        return ApiProfile.hass.async_add_executor_job(self.safe_connect, *self.broker)
+
+    def schedule_disconnect(self):
+        # same as connect. safe_disconnect should be even faster and less
+        # contending but...
+        return ApiProfile.hass.async_add_executor_job(self.safe_disconnect)
 
     def _mqttc_connect(self, client, userdata: HomeAssistant, rc, other):
         MerossMQTTClient._mqttc_connect(self, client, userdata, rc, other)
@@ -503,6 +672,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
     def _mqttc_disconnect(self, client, userdata: HomeAssistant, rc):
         MerossMQTTClient._mqttc_disconnect(self, client, userdata, rc)
         userdata.add_job(self._mqtt_disconnected)
+
+    def _mqttc_message(self, client, userdata: HomeAssistant, msg: mqtt.MQTTMessage):
+        userdata.create_task(self.async_mqtt_message(msg))
+
+    def _mqttc_publish(self, client, userdata: HomeAssistant, mid):
+        userdata.add_job(self._mqtt_published, mid)
 
 
 class MerossCloudProfileStoreType(typing.TypedDict):
@@ -534,14 +709,13 @@ class MerossCloudProfile(ApiProfile):
     KEY_DEVICE_INFO_TIME: Final = "deviceInfoTime"
     KEY_SUBDEVICE_INFO: Final = "__subDeviceInfo"
 
-    _config: ProfileConfigType
+    config: ProfileConfigType
     _data: MerossCloudProfileStoreType
     app_id: str
 
     __slots__ = (
         "mqttconnections",
         "linkeddevices",
-        "_config",
         "_data",
         "app_id",
         "_store",
@@ -549,11 +723,10 @@ class MerossCloudProfile(ApiProfile):
     )
 
     def __init__(self, config_entry: ConfigEntry):
-        _config: ProfileConfigType = config_entry.data  # type: ignore
-        super().__init__(_config[mc.KEY_USERID_], config_entry)
+        super().__init__(config_entry.data[mc.KEY_USERID_], config_entry)
+        self.platforms[MLSensor.PLATFORM] = None
         self.mqttconnections: dict[str, MerossMQTTConnection] = {}
         self.linkeddevices: dict[str, MerossDevice] = {}
-        self._config = _config
         self._store = MerossCloudProfileStore(self.id)
         self._unsub_polling_query_devices: asyncio.TimerHandle | None = None
 
@@ -585,7 +758,7 @@ class MerossCloudProfile(ApiProfile):
             self._last_query_devices = 0.0
             data: MerossCloudProfileStoreType | None = {
                 MerossCloudProfile.KEY_APP_ID: self.app_id,
-                mc.KEY_TOKEN: self._config[mc.KEY_TOKEN],
+                mc.KEY_TOKEN: self.config[mc.KEY_TOKEN],
                 MerossCloudProfile.KEY_DEVICE_INFO: {},
                 MerossCloudProfile.KEY_DEVICE_INFO_TIME: 0.0,
             }
@@ -654,8 +827,9 @@ class MerossCloudProfile(ApiProfile):
     # interface: EntityManager
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
         config: ProfileConfigType = config_entry.data  # type: ignore
-        allow_mqtt_publish = config.get(CONF_ALLOW_MQTT_PUBLISH)
-        if allow_mqtt_publish != self.allow_mqtt_publish:
+        if (
+            allow_mqtt_publish := config.get(CONF_ALLOW_MQTT_PUBLISH)
+        ) != self.allow_mqtt_publish:
             # device._mqtt_publish is rather 'passive' so
             # we do some fast 'smart' updates:
             if allow_mqtt_publish:
@@ -664,14 +838,19 @@ class MerossCloudProfile(ApiProfile):
             else:
                 for device in self.linkeddevices.values():
                     device._mqtt_publish = None
-        self._config = config
+        if (
+            create_diagnostic_entities := config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
+        ) != self.create_diagnostic_entities:
+            if create_diagnostic_entities:
+                for mqttconnection in self.mqttconnections.values():
+                    mqttconnection.create_diagnostic_entities()
+            else:
+                for mqttconnection in self.mqttconnections.values():
+                    mqttconnection.destroy_diagnostic_entities()
         await self.async_update_credentials(config)
+        await super().entry_update_listener(hass, config_entry)
 
     # interface: ApiProfile
-    @property
-    def allow_mqtt_publish(self):
-        return self._config.get(CONF_ALLOW_MQTT_PUBLISH)
-
     def attach_mqtt(self, device: MerossDevice):
         if device.id not in self._data[MerossCloudProfile.KEY_DEVICE_INFO]:
             self.warning(
@@ -684,10 +863,6 @@ class MerossCloudProfile(ApiProfile):
             self._get_or_create_mqttconnection(device.mqtt_broker).attach(device)
 
     # interface: self
-    @property
-    def create_diagnostic_entities(self):
-        return self._config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
-
     @property
     def token(self):
         return self._data.get(mc.KEY_TOKEN)

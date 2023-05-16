@@ -16,7 +16,15 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
 from homeassistant.util.dt import DEFAULT_TIME_ZONE, utcnow
 
-from .const import CONF_CLOUD_KEY, CONF_DEVICE_ID, CONF_HOST, CONF_KEY, DOMAIN
+from .const import (
+    CONF_ALLOW_MQTT_PUBLISH,
+    CONF_CLOUD_KEY,
+    CONF_CREATE_DIAGNOSTIC_ENTITIES,
+    CONF_DEVICE_ID,
+    CONF_HOST,
+    CONF_KEY,
+    DOMAIN,
+)
 from .merossclient import const as mc, get_default_arguments
 
 try:
@@ -607,6 +615,7 @@ class EntityManager(Loggable):
         "entities",
         "platforms",
         "key",
+        "config",
         "_unsub_entry_update_listener",
     )
 
@@ -633,8 +642,10 @@ class EntityManager(Loggable):
         if isinstance(config_entry_or_id, str):
             self.config_entry_id = config_entry_or_id
             self.key = ""
+            self.config = {}
         else:
             self.config_entry_id = config_entry_or_id.entry_id
+            self.config = config_entry_or_id.data
             self.key = config_entry_or_id.data.get(CONF_KEY) or ""
         self._unsub_entry_update_listener = None
 
@@ -658,6 +669,7 @@ class EntityManager(Loggable):
         assert not self._unsub_entry_update_listener
         assert config_entry.entry_id not in ApiProfile.managers
         self.config_entry_id = config_entry.entry_id  # type: ignore
+        self.config = config_entry.data
         ApiProfile.managers[self.config_entry_id] = self
         await hass.config_entries.async_forward_entry_setups(
             config_entry, self.platforms.keys()
@@ -699,7 +711,8 @@ class EntityManager(Loggable):
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ):
-        pass
+        self.config = config_entry.data
+        self.key = config_entry.data.get(CONF_KEY) or ""
 
 
 class ApiProfile(EntityManager):
@@ -740,9 +753,12 @@ class ApiProfile(EntityManager):
         return None
 
     @property
-    @abc.abstractmethod
     def allow_mqtt_publish(self):
-        return False
+        return self.config.get(CONF_ALLOW_MQTT_PUBLISH)
+
+    @property
+    def create_diagnostic_entities(self):
+        return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
 
     @abc.abstractmethod
     def attach_mqtt(self, device: MerossDevice):

@@ -168,7 +168,9 @@ class HAMQTTConnection(MQTTConnection):
                     hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
                 )
                 # try to also get the HA broker conf
-                with self.exception_warning("async_mqtt_subscribe: recovering broker conf"):
+                with self.exception_warning(
+                    "async_mqtt_subscribe: recovering broker conf"
+                ):
                     mqtt_data = mqtt.get_mqtt_data(hass)
                     if mqtt_data and mqtt_data.client:
                         conf = mqtt_data.client.conf
@@ -298,13 +300,10 @@ class MerossApi(ApiProfile):
         ApiProfile.hass = None  # type: ignore
         ApiProfile.api = None  # type: ignore
 
-    async def entry_update_listener(self, hass, config_entry: ConfigEntry):
-        self.key = config_entry.data.get(CONF_KEY) or ""
-
     # interface: ApiProfile
     @property
     def allow_mqtt_publish(self):
-        return True
+        return True  # MerossApi still doesnt support configuring entry for this
 
     def attach_mqtt(self, device: MerossDevice):
         self.mqtt_connection.attach(device)

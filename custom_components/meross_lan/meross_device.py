@@ -21,7 +21,6 @@ import voluptuous as vol
 from .const import (
     CONF_DEVICE_ID,
     CONF_HOST,
-    CONF_KEY,
     CONF_PAYLOAD,
     CONF_POLLING_PERIOD,
     CONF_POLLING_PERIOD_DEFAULT,
@@ -288,7 +287,7 @@ class MerossDevice(MerossDeviceBase):
     """
 
     # these are set from ConfigEntry
-    _host: str | None
+    config: DeviceConfigType
     polling_period: int
     _polling_delay: int
     conf_protocol: str
@@ -303,7 +302,6 @@ class MerossDevice(MerossDeviceBase):
     entity_dnd: MerossEntity
 
     __slots__ = (
-        "_host",
         "polling_period",
         "_polling_delay",
         "conf_protocol",
@@ -416,7 +414,7 @@ class MerossDevice(MerossDeviceBase):
         self._unsub_polling_callback = None
         self._queued_poll_requests = 0
 
-        self._set_config_entry(config_entry.data)  # type: ignore
+        self._update_config()
         self.curr_protocol = self.pref_protocol
 
         self.sensor_protocol = ProtocolSensor(self)
@@ -478,11 +476,8 @@ class MerossDevice(MerossDeviceBase):
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ):
-        """
-        callback after user changed configuration through OptionsFlowHandler
-        deviceid and/or host are not changed so we're still referring to the same device
-        """
-        self._set_config_entry(config_entry.data)  # type: ignore
+        await super().entry_update_listener(hass, config_entry)
+        self._update_config()
 
         self._check_mqtt_connection_attach()
 
@@ -609,7 +604,7 @@ class MerossDevice(MerossDeviceBase):
     # interface: self
     @property
     def host(self):
-        return self._host or self.descriptor.innerIp
+        return self.config.get(CONF_HOST) or self.descriptor.innerIp
 
     @property
     def profile_id(self):
@@ -1434,21 +1429,20 @@ class MerossDevice(MerossDeviceBase):
                 data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
                 entries.async_update_entry(entry, data=data)
 
-    def _set_config_entry(self, data: DeviceConfigType):
+    def _update_config(self):
         """
-        common properties read from ConfigEntry on __init__ or when a configentry updates
+        common properties caches, read from ConfigEntry on __init__ or when a configentry updates
         """
-        self._host = data.get(CONF_HOST)
-        self.key = data.get(CONF_KEY) or ""
+        config = self.config
         self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(
-            data.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO
+            config.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO
         )
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
             # and eventually fallback (curr_protocol) until some good news allow us
             # to retry pref_protocol. When binded to a cloud_profile always prefer
             # 'local' http since it should be faster and less prone to cloud 'issues'
-            if self._host or self.profile_id:
+            if config.get(CONF_HOST) or self.profile_id:
                 self.pref_protocol = CONF_PROTOCOL_HTTP
             else:
                 self.pref_protocol = CONF_PROTOCOL_MQTT
@@ -1456,7 +1450,7 @@ class MerossDevice(MerossDeviceBase):
             self.pref_protocol = self.conf_protocol
 
         self.polling_period = (
-            data.get(CONF_POLLING_PERIOD) or CONF_POLLING_PERIOD_DEFAULT
+            config.get(CONF_POLLING_PERIOD) or CONF_POLLING_PERIOD_DEFAULT
         )
         if self.polling_period < CONF_POLLING_PERIOD_MIN:
             self.polling_period = CONF_POLLING_PERIOD_MIN
