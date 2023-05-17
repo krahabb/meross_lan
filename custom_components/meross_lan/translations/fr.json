@@ -155,5 +155,25 @@
                 }
             }
         }
+    },
+    "issues": {
+        "cloud_token_expired": {
+            "title": "Le jeton cloud a expiré pour {email}",
+            "fix_flow": {
+                "step": {
+                    "profile": {
+                        "title": "Meross cloud profile",
+                        "description": "Connectez-vous à votre compte Meross",
+                        "data": {
+                            "email": "Nom d'utilisateur Meross",
+                            "password": "Mot de passe Meross",
+                            "save_password": "Enregistrer le mot de passe",
+                            "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
+                            "create_diagnostic_entities": "Créer des entités de diagnostic"
+                        }
+                    }
+                }
+            }
+        }
     }
 }

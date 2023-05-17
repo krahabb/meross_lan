@@ -84,8 +84,8 @@
                 }
             },
             "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
+                "title": "Meross クラウドプロファイル",
+                "description": "Meross アカウントに登録して接続する",
                 "data": {
                     "email": "メロスログイン",
                     "password": "メロスパスワード",
@@ -144,14 +144,34 @@
                 }
             },
             "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
+                "title": "Meross クラウドプロファイル",
+                "description": "Meross アカウントに登録して接続する",
                 "data": {
                     "email": "メロスログイン",
                     "password": "メロスパスワード",
                     "save_password": "パスワードを保存する",
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "create_diagnostic_entities": "診断エンティティの作成"
+                }
+            }
+        }
+    },
+    "issues": {
+        "cloud_token_expired": {
+            "title": "{email} のクラウド トークンの有効期限が切れました",
+            "fix_flow": {
+                "step": {
+                    "profile": {
+                        "title": "Meross クラウドプロファイル",
+                        "description": "Meross アカウントに登録して接続する",
+                        "data": {
+                            "email": "メロスログイン",
+                            "password": "メロスパスワード",
+                            "save_password": "パスワードを保存する",
+                            "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
+                            "create_diagnostic_entities": "診断エンティティの作成"
+                        }
+                    }
                 }
             }
         }

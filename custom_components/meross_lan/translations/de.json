@@ -155,5 +155,25 @@
                 }
             }
         }
+    },
+    "issues": {
+        "cloud_token_expired": {
+            "title": "Cloud-Token für {email} abgelaufen",
+            "fix_flow": {
+                "step": {
+                    "profile": {
+                        "title": "Geräteschlüssel übertragen",
+                        "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
+                        "data": {
+                            "email": "Meross Benutzername",
+                            "password": "Meross Passwort",
+                            "save_password": "Passwort speichern",
+                            "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
+                            "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten"
+                        }
+                    }
+                }
+            }
+        }
     }
 }
