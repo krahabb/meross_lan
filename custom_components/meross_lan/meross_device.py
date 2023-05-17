@@ -62,8 +62,8 @@ from .meross_entity import MerossFakeEntity
 from .merossclient import (  # mEROSS cONST
     const as mc,
     get_default_arguments,
+    get_message_signature,
     get_namespacekey,
-    get_replykey,
     is_device_online,
 )
 from .merossclient.httpclient import MerossHttpClient
@@ -779,10 +779,14 @@ class MerossDevice(MerossDeviceBase):
         else:
             self.device_timedelta = 0
 
-        if get_replykey(header, self.key) is not self.key:
+        sign = get_message_signature(
+            header[mc.KEY_MESSAGEID], self.key, header[mc.KEY_TIMESTAMP]
+        )
+        if sign != header[mc.KEY_SIGN]:
             self.warning(
-                "received signature error (incorrect key?)",
-                timeout=14400,
+                "received signature error: computed=%s, header=%s",
+                sign,
+                json_dumps(header)
             )
 
         if not self._online:

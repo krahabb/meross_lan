@@ -77,7 +77,7 @@ try:
         # MerossHTTPClient debug patching
         http_disc_end = 0
         http_disc_duration = 25
-        http_disc_probability = 20
+        http_disc_probability = 0
 
         @staticmethod
         def http_random_timeout():
@@ -159,10 +159,7 @@ def build_payload(
                 # "from": "/appliance/9109182170548290882048e1e9522946/publish",
                 mc.KEY_TIMESTAMP: timestamp,
                 mc.KEY_TIMESTAMPMS: 0,
-                mc.KEY_SIGN: md5(
-                    (messageid + (key or "") + str(timestamp)).encode("utf-8"),
-                    usedforsecurity=False,
-                ).hexdigest(),
+                mc.KEY_SIGN: get_message_signature(messageid, key or "", timestamp),
             },
             mc.KEY_PAYLOAD: payload,
         }
@@ -197,6 +194,12 @@ def get_default_arguments(namespace: str):
     return namespace, mc.METHOD_GET, get_default_payload(namespace)
 
 
+def get_message_signature(messageid: str, key: str, timestamp):
+    return md5(
+        "".join((messageid, key, str(timestamp))).encode("utf-8"), usedforsecurity=False
+    ).hexdigest()
+
+
 def get_replykey(header: dict, key: KeyType = None) -> KeyType:
     """
     checks header signature against key:
@@ -207,11 +210,9 @@ def get_replykey(header: dict, key: KeyType = None) -> KeyType:
     anyway and could be reused in a future attempt
     """
     if isinstance(key, str):
-        sign = md5(
-            (header[mc.KEY_MESSAGEID] + key + str(header[mc.KEY_TIMESTAMP])).encode(
-                "utf-8"
-            )
-        ).hexdigest()
+        sign = get_message_signature(
+            header[mc.KEY_MESSAGEID], key, header[mc.KEY_TIMESTAMP]
+        )
         if sign == header[mc.KEY_SIGN]:
             return key
 
