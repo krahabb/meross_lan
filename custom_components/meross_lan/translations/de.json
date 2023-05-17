@@ -40,23 +40,25 @@
     "config": {
         "flow_title": "{name}",
         "abort": {
+            "already_configured": "Eintrag bereits konfiguriert",
             "no_devices_found": "Keine Geräte im Netzwerk gefunden",
             "single_instance_allowed": "Das Gerät ist bereits vorhanden. Jedes Gerät kann nur ein mal konfiguriert werden."
         },
         "error": {
-            "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
-            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
             "already_configured_device": "Das Gerät ist bereits vorhanden",
             "cannot_connect": "Verbindung nicht möglich",
-            "invalid_auth": "Fehlerhafte Zugangsdaten"
+            "cloud_profile_mismatch": "Das Cloud-Profil stimmt nicht mit der Konfiguration überein",
+            "invalid_auth": "Fehlerhafte Zugangsdaten",
+            "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
+            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen"
         },
         "step": {
             "user": {
-                "title": "Choose option",
+                "title": "Option wählen",
                 "description": "",
                 "menu_options": {
-                    "profile": "Register a Meross cloud profile",
-                    "device": "Manually configure a device"
+                    "profile": "Registrieren Sie ein Meross-Cloud-Profil",
+                    "device": "Konfigurieren Sie ein Gerät manuell"
                 }
             },
             "hub": {
@@ -85,8 +87,11 @@
                 "title": "Geräteschlüssel übertragen",
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {
-                    "username": "Meross Benutzername",
-                    "password": "Meross Passwort"
+                    "email": "Meross Benutzername",
+                    "password": "Meross Passwort",
+                    "save_password": "Passwort speichern",
+                    "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
+                    "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten"
                 }
             },
             "finalize": {
@@ -98,13 +103,13 @@
     },
     "options": {
         "error": {
-            "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
-            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
             "already_configured_device": "Das Gerät ist bereits vorhanden",
             "cannot_connect": "Verbindung nicht möglich",
-            "invalid_auth": "Fehlerhafte Zugangsdaten",
+            "cloud_profile_mismatch": "Das Cloud-Profil stimmt nicht mit der Konfiguration überein",
             "device_id_mismatch": "Nicht übereinstimmende Geräte-UUID: Das Gerät ist nicht dasselbe",
-            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
+            "invalid_auth": "Fehlerhafte Zugangsdaten",
+            "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
+            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen"
         },
         "step": {
             "hub": {
@@ -142,8 +147,31 @@
                 "title": "Geräteschlüssel übertragen",
                 "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
                 "data": {
-                    "username": "Meross Benutzername",
-                    "password": "Meross Passwort"
+                    "email": "Meross Benutzername",
+                    "password": "Meross Passwort",
+                    "save_password": "Passwort speichern",
+                    "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
+                    "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten"
+                }
+            }
+        }
+    },
+    "issues": {
+        "cloud_token_expired": {
+            "title": "Cloud-Token für {email} abgelaufen",
+            "fix_flow": {
+                "step": {
+                    "profile": {
+                        "title": "Geräteschlüssel übertragen",
+                        "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
+                        "data": {
+                            "email": "Meross Benutzername",
+                            "password": "Meross Passwort",
+                            "save_password": "Passwort speichern",
+                            "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
+                            "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten"
+                        }
+                    }
                 }
             }
         }

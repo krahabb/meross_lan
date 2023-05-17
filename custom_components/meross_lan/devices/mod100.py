@@ -31,7 +31,7 @@ class MLDiffuserLight(MLLightBase):
     light entity for Meross diffuser (MOD100)
     """
 
-    device: DiffuserMixin
+    manager: DiffuserMixin
 
     _light_effect_map = mc.DIFFUSER_LIGHT_EFFECT_MAP
     _attr_effect_list = list(_light_effect_map.values())
@@ -70,14 +70,14 @@ class MLDiffuserLight(MLLightBase):
             if acknowledge:
                 self._parse_light(light)
 
-        await self.device.async_request_light(light, _ack_callback)
+        await self.manager.async_request_light(light, _ack_callback)
 
     async def async_turn_off(self, **kwargs):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
                 self.update_onoff(0)
 
-        await self.device.async_request_light(
+        await self.manager.async_request_light(
             {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}, _ack_callback
         )
 
@@ -138,6 +138,13 @@ class DiffuserMixin(
                 mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR
             ] = PollingStrategy(mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR)
 
+    # interface: MerossDevice
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self._sensor_humidity = None
+        self._sensor_temperature = None
+
+    # interface: self
     def _handle_Appliance_Control_Diffuser_Light(self, header: dict, payload: dict):
         self._parse_diffuser_light(payload.get(mc.KEY_LIGHT))
 

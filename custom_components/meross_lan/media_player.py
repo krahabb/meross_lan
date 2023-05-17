@@ -23,7 +23,6 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .light import LightMixin
-    from .meross_device import MerossDevice
 
 
 async def async_setup_entry(
@@ -37,10 +36,11 @@ async def async_setup_entry(
 class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
     PLATFORM = PLATFORM_MEDIA_PLAYER
 
+    manager: Mp3Mixin
     __slots__ = ("_mp3",)
 
-    def __init__(self, device: "MerossDevice", channel: object):
-        super().__init__(device, channel, mc.KEY_MP3, MediaPlayerDeviceClass.SPEAKER)
+    def __init__(self, manager: Mp3Mixin, channel: object):
+        super().__init__(manager, channel, mc.KEY_MP3, MediaPlayerDeviceClass.SPEAKER)
         self._mp3 = {}
         self._attr_supported_features = (
             MediaPlayerEntityFeature.VOLUME_MUTE
@@ -120,7 +120,7 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
                 if self._hass_connected:
                     self._async_write_ha_state()
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_CONTROL_MP3,
             mc.METHOD_SET,
             {mc.KEY_MP3: {mc.KEY_CHANNEL: self.channel, key: value}},

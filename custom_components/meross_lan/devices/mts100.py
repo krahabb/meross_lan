@@ -22,7 +22,7 @@ from ..helpers import clamp, reverse_lookup
 from ..merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from ..meross_device_hub import MerossSubDevice
+    from ..meross_device_hub import MTS100SubDevice
 
 
 class Mts100Climate(MtsClimate):
@@ -50,9 +50,11 @@ class Mts100Climate(MtsClimate):
         MtsClimate.PRESET_AUTO: mc.KEY_CUSTOM,
     }
 
-    def __init__(self, subdevice: "MerossSubDevice"):
+    manager: MTS100SubDevice
+
+    def __init__(self, manager: MTS100SubDevice):
         self._attr_extra_state_attributes = {}
-        super().__init__(subdevice.hub, subdevice.id, subdevice)
+        super().__init__(manager, manager.id)
 
     @property
     def scheduleBMode(self):
@@ -77,7 +79,7 @@ class Mts100Climate(MtsClimate):
                         self._mts_mode = mode
                         self.update_modes()
 
-                await self.device.async_request(
+                await self.manager.async_request(
                     mc.NS_APPLIANCE_HUB_MTS100_MODE,
                     mc.METHOD_SET,
                     {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
@@ -100,7 +102,7 @@ class Mts100Climate(MtsClimate):
 
         # when sending a temp this way the device will automatically
         # exit auto mode if needed
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
             {
@@ -115,7 +117,7 @@ class Mts100Climate(MtsClimate):
                 self._mts_onoff = onoff
                 self.update_modes()
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
             mc.METHOD_SET,
             {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: onoff}]},
@@ -186,7 +188,7 @@ class Mts100ScheduleEntry:
 
 
 class Mts100Schedule(MLCalendar):
-    subdevice: MerossSubDevice
+    manager: MTS100SubDevice
 
     _schedule: dict[str, list] | None
     _attr_state: dict[str, list] | None
@@ -209,7 +211,7 @@ class Mts100Schedule(MLCalendar):
         self._attr_extra_state_attributes = {}
         # get the 'granularity' of the schedule entries i.e. the schedule duration
         # must be a multiple of this time (in minutes)
-        self._schedule_unit_time = climate.device.descriptor.ability.get(
+        self._schedule_unit_time = climate.manager.hub.descriptor.ability.get(
             mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 0)
         if self._schedule_unit_time:
@@ -224,9 +226,7 @@ class Mts100Schedule(MLCalendar):
         # but we're recovering the value by inspecting the device scheduleB payload.
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
-        super().__init__(
-            climate.device, climate.id, mc.KEY_SCHEDULE, None, climate.subdevice
-        )
+        super().__init__(climate.manager, climate.id, mc.KEY_SCHEDULE, None)
 
     @property
     def entity_category(self):
@@ -353,7 +353,7 @@ class Mts100Schedule(MLCalendar):
         """Return the next upcoming event."""
         if self.climate._mts_onoff and self.climate._mts_mode == mc.MTS100_MODE_AUTO:
             if event_index := self._get_event_entry(
-                datetime.now(tz=self.device.tzinfo)
+                datetime.now(tz=self.manager.hub.tzinfo)
             ):
                 return event_index.get_event()
         return None
@@ -366,7 +366,7 @@ class Mts100Schedule(MLCalendar):
     ) -> list[CalendarEvent]:
         """Return calendar events within a datetime range."""
         events = []
-        event_entry = self._get_event_entry(start_date.astimezone(self.device.tzinfo))
+        event_entry = self._get_event_entry(start_date.astimezone(self.manager.hub.tzinfo))
         while event_entry:
             event = event_entry.get_event()
             if event.start >= end_date:
@@ -689,17 +689,17 @@ class Mts100Schedule(MLCalendar):
                     )
                 payload[weekday] = payload_weekday_schedule
 
-            payload[mc.KEY_ID] = self.subdevice.id
+            payload[mc.KEY_ID] = self.channel
 
             def _ack_callback(acknowledge: bool, header: dict, payload: dict):
                 if not acknowledge:
-                    self.device.request(
+                    self.manager.request(
                         mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
                         mc.METHOD_GET,
                         {mc.KEY_SCHEDULE: [{mc.KEY_ID: self.channel}]},
                     )
 
-            await self.device.async_request(
+            await self.manager.async_request(
                 mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
                 mc.METHOD_SET,
                 {mc.KEY_SCHEDULE: [payload]},

@@ -1,7 +1,9 @@
-![GitHub last commit](https://img.shields.io/github/last-commit/krahabb/meross_lan?style=for-the-badge)
-[![GitHub](https://img.shields.io/github/license/krahabb/meross_lan?style=for-the-badge)](LICENCE)
 [![hacs][hacsbadge]][hacs]
-
+![GitHub Downloads (total)](https://img.shields.io/github/downloads/krahabb/meross_lan/total?style=for-the-badge)
+![GitHub Downloads (latest)](https://img.shields.io/github/downloads/krahabb/meross_lan/latest/total?style=for-the-badge)
+![GitHub last commit](https://img.shields.io/github/last-commit/krahabb/meross_lan?style=for-the-badge)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/krahabb/meross_lan/cron.yaml?label=Cron&style=for-the-badge)
+[![GitHub](https://img.shields.io/github/license/krahabb/meross_lan?style=for-the-badge)](LICENCE)
 
 # Meross LAN
 
@@ -128,11 +130,12 @@ I really thank them for the inspiration and the knowledge that made it possible 
 Special mention also for:
 - [@nao-pon](https://github.com/nao-pon)
 - [@wsw70](https://github.com/wsw70)
-- [@gelokatil](https://github.com/gelokatil)
-- [@scannifn](https://github.com/scannifn)
-- [@almico](https://github.com/almico)
-- [@Gronda74](https://github.com/Gronda74)
-- [@GeorgeCaliment](https://github.com/GeorgeCaliment)
+- [@gelokatil](https://github.com/gelokatil) - contributing spanish [translation](https://github.com/krahabb/meross_lan/pull/44)
+- [@scannifn](https://github.com/scannifn) - GarageDoor (MSG100) [enhancements and fixes](https://github.com/krahabb/meross_lan/issues/29)
+- [@almico](https://github.com/almico) - Meross Hub (MSH300) enhancements
+- [@Gronda74](https://github.com/Gronda74) - fixing [issue](https://github.com/krahabb/meross_lan/issues/69)
+- [@GeorgeCaliment](https://github.com/GeorgeCaliment) - MRS200 [enhancements](https://github.com/krahabb/meross_lan/issues/73)
+- [@ikoz](https://github.com/ikoz) - MTS200 [enhancements](https://github.com/krahabb/meross_lan/discussions/242)
 
 who greatly helped me fixing issues or developing nice enhancements to the component
 

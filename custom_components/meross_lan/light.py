@@ -76,6 +76,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     """
 
     PLATFORM = light.DOMAIN
+    manager: MerossDevice
     """
     internal copy of the actual meross light state
     """
@@ -89,9 +90,11 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
 
     __slots__ = ("_light",)
 
-    def __init__(self, device: MerossDevice, payload: dict):
+    def __init__(self, manager: MerossDevice, payload: dict):
         self._light = {}
-        super().__init__(device, payload.get(mc.KEY_CHANNEL, 0), None, None, None, None)
+        super().__init__(
+            manager, payload.get(mc.KEY_CHANNEL, 0), None, None, None
+        )
 
     def update_onoff(self, onoff):
         if mc.KEY_ONOFF in self._light:
@@ -155,7 +158,7 @@ class MLLight(MLLightBase):
     (identified from devices carrying 'light' node in SYSTEM_ALL payload)
     """
 
-    device: LightMixin
+    manager: LightMixin
 
     _attr_max_mireds = MSLANY_MIRED_MAX
     _attr_min_mireds = MSLANY_MIRED_MIN
@@ -168,7 +171,7 @@ class MLLight(MLLightBase):
         "_hastogglex",
     )
 
-    def __init__(self, device: MerossDevice, payload: dict):
+    def __init__(self, manager: LightMixin, payload: dict):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
         # with msl120j (fw 3.1.4) I've discovered that any 'light' payload sent will turn on the light
@@ -181,9 +184,9 @@ class MLLight(MLLightBase):
         # api and show a glitch when used this way (ToggleX + Light)
         # we'll try implement a new command flow where we'll just use the 'Light' payload to turn on the device
         # skipping the initial 'ToggleX' assuming this behaviour works on any fw
-        super().__init__(device, payload)
+        super().__init__(manager, payload)
         channel = payload.get(mc.KEY_CHANNEL, 0)
-        descr = device.descriptor
+        descr = manager.descriptor
         self._hastogglex = False
         p_togglex = descr.digest.get(mc.KEY_TOGGLEX)
         if isinstance(p_togglex, list):
@@ -278,11 +281,11 @@ class MLLight(MLLightBase):
                 self._light = {}  # invalidate so _parse_light will force-flush
                 self._parse_light(light)
 
-        await self.device.async_request_light(light, _ack_callback)
+        await self.manager.async_request_light(light, _ack_callback)
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
-            if self.device.descriptor.firmware.get(mc.KEY_VERSION) == "2.1.2":
-                await self.device.async_request_light(light, None)
+            if self.manager.descriptor.firmware.get(mc.KEY_VERSION) == "2.1.2":
+                await self.manager.async_request_light(light, None)
 
         if self._hastogglex:
             # since lights could be repeatedtly 'async_turn_on' when changing attributes
@@ -305,7 +308,7 @@ class MLLight(MLLightBase):
                 if acknowledge:
                     self.update_onoff(0)
 
-            await self.device.async_request_light(
+            await self.manager.async_request_light(
                 {
                     mc.KEY_CHANNEL: self.channel,
                     mc.KEY_ONOFF: 0,
@@ -362,7 +365,7 @@ class MLLight(MLLightBase):
                         self._attr_effect = effects[effect]  # type: ignore
 
 
-class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
+class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)
@@ -370,10 +373,11 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
 
     PLATFORM = light.DOMAIN
 
+    manager: MerossDevice
     _attr_supported_color_modes = {ColorMode.ONOFF}
 
-    def __init__(self, device: MerossDevice):
-        super().__init__(device, None, DND_ID, mc.KEY_DNDMODE, None, None)
+    def __init__(self, manager: MerossDevice):
+        super().__init__(manager, None, DND_ID, mc.KEY_DNDMODE)
 
     @property
     def entity_category(self):
@@ -392,7 +396,7 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
             if acknowledge:
                 self.update_state(me.STATE_ON)
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},
@@ -404,7 +408,7 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
             if acknowledge:
                 self.update_state(me.STATE_OFF)
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},

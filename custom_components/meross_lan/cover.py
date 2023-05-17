@@ -81,7 +81,7 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
     def __init__(self, cover: MLGarage):
         self._attr_extra_state_attributes = {}
         super().__init__(
-            cover.device, cover.channel, "problem", self.DeviceClass.PROBLEM
+            cover.manager, cover.channel, "problem", self.DeviceClass.PROBLEM
         )
         self._attr_state = me.STATE_OFF
 
@@ -110,27 +110,27 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
 
 
 class MLGarageConfigSwitch(MLSwitch):
-    device: GarageMixin
+    manager: GarageMixin
 
-    def __init__(self, device, key: str):
+    def __init__(self, manager: GarageMixin, key: str):
         self.key_onoff = key
         self._attr_name = key
-        super().__init__(device, None, f"config_{key}", None, None, None)
+        super().__init__(manager, None, f"config_{key}", None)
 
     @property
     def entity_category(self):
         return me.EntityCategory.CONFIG
 
     async def async_request_onoff(self, onoff: int):
-        config = dict(self.device.garageDoor_config)
+        config = dict(self.manager.garageDoor_config)
         config[self.key_onoff] = onoff
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
                 self.update_onoff(onoff)
-                self.device.garageDoor_config[self.key_onoff] = config[self.key_onoff]
+                self.manager.garageDoor_config[self.key_onoff] = config[self.key_onoff]
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
             mc.METHOD_SET,
             {mc.KEY_CONFIG: config},
@@ -143,9 +143,9 @@ class MLGarageConfigNumber(MLConfigNumber):
     Helper entity to configure MSG open/close duration
     """
 
-    device: GarageMixin
+    manager: GarageMixin
 
-    def __init__(self, device, channel, key: str):
+    def __init__(self, manager: GarageMixin, channel, key: str):
         self.key_value = key
         self._attr_name = key
         # these are ok for 2 of the 3 config numbers
@@ -153,22 +153,22 @@ class MLGarageConfigNumber(MLConfigNumber):
         self._attr_native_max_value = 60
         self._attr_native_min_value = 1
         self._attr_native_step = 1
-        super().__init__(device, channel, f"config_{key}")
+        super().__init__(manager, channel, f"config_{key}")
 
     @property
     def native_unit_of_measurement(self):
         return TIME_SECONDS
 
     async def async_set_native_value(self, value: float):
-        config: dict[str, object] = dict(self.device.garageDoor_config)
+        config: dict[str, object] = dict(self.manager.garageDoor_config)
         config[self.key_value] = int(value * self.ml_multiplier)
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
                 self.update_native_value(config[self.key_value])
-                self.device.garageDoor_config[self.key_value] = config[self.key_value]
+                self.manager.garageDoor_config[self.key_value] = config[self.key_value]
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
             mc.METHOD_SET,
             {mc.KEY_CONFIG: config},
@@ -195,7 +195,7 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
 
     def __init__(self, cover: MLGarage, key: str):
         super().__init__(
-            cover.device,
+            cover.manager,
             cover.channel,
             key,
         )
@@ -228,7 +228,7 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
 class MLGarage(me.MerossEntity, cover.CoverEntity):
     PLATFORM = cover.DOMAIN
 
-    device: GarageMixin
+    manager: GarageMixin
 
     __slots__ = (
         "_transition_duration",
@@ -242,8 +242,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         "number_doorCloseDuration",
     )
 
-    def __init__(self, device: "MerossDevice", channel: object):
-        super().__init__(device, channel, None, CoverDeviceClass.GARAGE)
+    def __init__(self, manager: GarageMixin, channel: object):
+        super().__init__(manager, channel, None, CoverDeviceClass.GARAGE)
         self._transition_duration = (
             PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
             + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
@@ -345,6 +345,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                             )
                             timeout = self.number_doorCloseDuration.native_value
 
+                    self._transition_unsub = schedule_async_callback(
+                        self.hass, 0.9, self._async_transition_callback
+                    )
                     # check the timeout 1 sec after expected to account
                     # for delays in communication
                     self._transition_end_unsub = schedule_callback(
@@ -353,7 +356,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                         self._transition_end_callback,
                     )
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_GARAGEDOOR_STATE,
             mc.METHOD_SET,
             {mc.KEY_STATE: {mc.KEY_CHANNEL: self.channel, mc.KEY_OPEN: open_request}},
@@ -372,7 +375,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
     def _parse_state(self, payload: dict):
         # {"channel": 0, "open": 1, "lmTime": 0}
         self._open = _open = payload[mc.KEY_OPEN]
-        epoch = self.device.lastresponse
+        epoch = self.manager.lastresponse
         if self._transition_start is None:
             # our state machine is idle and we could be polling a
             # state change triggered by any external means (app, remote)
@@ -384,8 +387,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             if self._open_request != _open:
                 # keep monitoring the transition in less than 1 sec
                 if not self._transition_unsub:
-                    self._transition_unsub = schedule_callback(
-                        self.hass, 0.9, self._transition_callback
+                    self._transition_unsub = schedule_async_callback(
+                        self.hass, 0.9, self._async_transition_callback
                     )
             else:
                 # we can monitor the (sampled) exact time when the garage closes to
@@ -407,7 +410,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
     def _parse_config(self, payload):
         pass
 
-    def update_onoff(self, onoff):
+    def _parse_togglex(self, payload: dict):
         """
         MSG100 exposes a 'togglex' interface so my code interprets that as a switch state
         Here we'll intercept that behaviour and right now the guess is:
@@ -421,6 +424,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                 self._start_transition(STATE_CLOSED)
         #else: RIP!
         """
+        pass
 
     def _transition_cancel(self):
         if self._transition_unsub:
@@ -432,10 +436,11 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         self._open_request = None
         self._transition_start = None
 
-    @callback
-    def _transition_callback(self):
+    async def _async_transition_callback(self):
         self._transition_unsub = None
-        self.device.request(*get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE))
+        manager = self.manager
+        if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
+            await manager.async_http_request(*get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE))
 
     @callback
     def _transition_end_callback(self):
@@ -592,7 +597,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     PLATFORM = cover.DOMAIN
 
-    device: RollerShutterMixin
+    manager: RollerShutterMixin
 
     __slots__ = (
         "number_signalOpen",
@@ -607,8 +612,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         "_transition_end_unsub",
     )
 
-    def __init__(self, device: "MerossDevice", channel: object):
-        super().__init__(device, channel, None, CoverDeviceClass.SHUTTER)
+    def __init__(self, manager: RollerShutterMixin, channel: object):
+        super().__init__(manager, channel, None, CoverDeviceClass.SHUTTER)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         self._signalOpen: int = 30000  # msec to fully open (config'd on device)
@@ -625,7 +630,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
             self._position_native_isgood = versiontuple(
-                device.descriptor.firmware.get(mc.KEY_VERSION, "")
+                manager.descriptor.firmware.get(mc.KEY_VERSION, "")
             ) >= versiontuple("7.6.10")
         except Exception:
             self._position_native_isgood = None
@@ -736,7 +741,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     )
 
         self._transition_cancel()
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
             mc.METHOD_SET,
             {
@@ -788,7 +793,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._async_write_ha_state()
 
     def _parse_state(self, payload: dict):
-        epoch = self.device.lastresponse
+        epoch = self.manager.lastresponse
         state = payload.get(mc.KEY_STATE)
         if self._position_native_isgood:
             if state == mc.ROLLERSHUTTER_STATE_OPENING:
@@ -876,13 +881,13 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         self._transition_unsub = schedule_async_callback(
             self.hass, 2, self._async_transition_callback
         )
-        device = self.device
-        if device.curr_protocol is CONF_PROTOCOL_HTTP and not device._mqtt_active:
-            await device.async_http_request(
+        manager = self.manager
+        if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
+            await manager.async_http_request(
                 *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
             )
             if self._position_native_isgood:
-                await device.async_http_request(
+                await manager.async_http_request(
                     *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
                 )
 
@@ -916,7 +921,7 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
         self._attr_native_max_value = 60
         self._attr_native_min_value = 1
         self._attr_native_step = 1
-        super().__init__(cover.device, cover.channel, f"config_{key}")
+        super().__init__(cover.manager, cover.channel, f"config_{key}")
 
     @property
     def native_unit_of_measurement(self):
@@ -934,7 +939,7 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
             if acknowledge:
                 self._cover._parse_config(config)
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG,
             mc.METHOD_SET,
             {mc.KEY_CONFIG: [config]},

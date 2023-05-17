@@ -6,16 +6,25 @@ from __future__ import annotations
 import abc
 import asyncio
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from functools import partial
 import logging
-from time import time
+from time import gmtime, time
 import typing
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
-from homeassistant.util.dt import utcnow
+from homeassistant.util.dt import DEFAULT_TIME_ZONE, utcnow
 
-from .const import CONF_CLOUD_KEY, CONF_DEVICE_ID, CONF_HOST, DOMAIN
+from .const import (
+    CONF_ALLOW_MQTT_PUBLISH,
+    CONF_CLOUD_KEY,
+    CONF_CREATE_DIAGNOSTIC_ENTITIES,
+    CONF_DEVICE_ID,
+    CONF_HOST,
+    CONF_KEY,
+    DOMAIN,
+)
 from .merossclient import const as mc, get_default_arguments
 
 try:
@@ -35,7 +44,8 @@ except Exception:
 
 
 if typing.TYPE_CHECKING:
-    from typing import Callable, ClassVar, Coroutine
+    from datetime import tzinfo
+    from typing import Callable, ClassVar, Coroutine, Final
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, State
@@ -76,11 +86,25 @@ def versiontuple(version: str):
     return tuple(map(int, (version.split("."))))
 
 
-"""
-    LOGGER:
-    Customize logging library to 'trap' repeated messages under a
-    short timeout
-"""
+def utcdatetime_from_epoch(epoch):
+    """
+    converts an epoch (UTC seconds) in a non-naive datetime.
+    Faster than datetime.fromtimestamp with less checks
+    and no care for milliseconds
+    """
+    y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
+    return datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
+
+
+def datetime_from_epoch(epoch, tz: tzinfo | None = None):
+    """
+    converts an epoch (UTC seconds) in a non-naive datetime.
+    Faster than datetime.fromtimestamp with less checks
+    and no care for milliseconds
+    """
+    y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
+    utcdt = datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
+    return utcdt if tz is timezone.utc else utcdt.astimezone(tz or DEFAULT_TIME_ZONE)
 
 
 def getLogger(name):
@@ -137,66 +161,6 @@ class _Logger(logging.Logger if typing.TYPE_CHECKING else object):
 
 
 LOGGER = getLogger(__name__[:-8])  # get base custom_component name for logging
-
-
-class Loggable:
-    """
-    Helper base class for logging instance name/id related info.
-    Derived classes can customize this in different flavours:
-    Basic is to override 'logtag' to provide a custom name when
-    logging. By overriding 'log' (together with 'warning' since
-    the basic implementation doesnt call 'log' in order to optimize/skip
-    a call and forwards itself the log message to the underlying LOGGER)
-    like in 'MerossDevice' we can intercept log messages
-    Here, since most of our logs are WARNINGS, the 'warning' interface
-    is just a small optimization in order to reduce parameters pushing
-    """
-
-    @property
-    def logtag(self):
-        return self.__class__.__name__
-
-    def log(self, level: int, msg: str, *args, **kwargs):
-        LOGGER.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
-
-    def warning(self, msg: str, *args, **kwargs):
-        LOGGER.warning(f"{self.logtag}: {msg}", *args, **kwargs)
-
-    def log_exception(
-        self, level: int, exception: Exception, msg: str, *args, **kwargs
-    ):
-        self.log(
-            level,
-            f"{exception.__class__.__name__}({str(exception)}) in {msg}",
-            *args,
-            **kwargs,
-        )
-
-    def log_exception_warning(self, exception: Exception, msg: str, *args, **kwargs):
-        self.warning(
-            f"{exception.__class__.__name__}({str(exception)}) in {msg}",
-            *args,
-            **kwargs,
-        )
-
-    @contextmanager
-    def exception_warning(self, msg: str, *args, **kwargs):
-        try:
-            yield
-        except Exception as exception:
-            self.warning(
-                f"{exception.__class__.__name__}({str(exception)}) in {msg}",
-                *args,
-                **kwargs,
-            )
-
-
-@contextmanager
-def log_exceptions(logger: logging.Logger = LOGGER):
-    try:
-        yield
-    except Exception as error:
-        logger.error("Unexpected %s: %s", type(error).__name__, str(error))
 
 
 """
@@ -352,9 +316,9 @@ def deobfuscate(payload: dict, obfuscated: dict):
             payload[key] = value
 
 
-def obfuscated_list_copy(data: typing.Sequence):
+def obfuscated_list_copy(data: list):
     return [
-        obfuscated_dict_copy(value)  # type: ignore
+        obfuscated_dict_copy(value)
         if isinstance(value, dict)
         else obfuscated_list_copy(value)
         if isinstance(value, list)
@@ -363,7 +327,7 @@ def obfuscated_list_copy(data: typing.Sequence):
     ]
 
 
-def obfuscated_dict_copy(data: dict):
+def obfuscated_dict_copy(data: typing.Mapping[str, typing.Any]):
     return {
         key: obfuscated_dict_copy(value)
         if isinstance(value, dict)
@@ -531,16 +495,16 @@ class EntityPollingStrategy(SmartPollingStrategy):
     async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
         """
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
-        the state of this paylod so we'll use that in conditions
+        the state of this paylod so we'll skip the smartpoll should the entity be disabled
         """
         if (namespace != self.namespace) and self.entity.enabled:
             if await device.async_request_smartpoll(
                 epoch,
-                self.entity.device_lastupdate,
+                self.lastrequest,
                 self.request,
                 self.polling_period,
             ):
-                self.entity.device_lastupdate = self.lastrequest = epoch
+                self.lastrequest = epoch
 
 
 class ConfigEntriesHelper:
@@ -567,7 +531,191 @@ class ConfigEntriesHelper:
         return None
 
 
-class ApiProfile(Loggable, abc.ABC):
+class Loggable(abc.ABC):
+    """
+    Helper base class for logging instance name/id related info.
+    Derived classes can customize this in different flavours:
+    Basic is to override 'logtag' to provide a custom name when
+    logging. By overriding 'log' (together with 'warning' since
+    the basic implementation doesnt call 'log' in order to optimize/skip
+    a call and forwards itself the log message to the underlying LOGGER)
+    like in 'MerossDevice' we can intercept log messages
+    Here, since most of our logs are WARNINGS, the 'warning' interface
+    is just a small optimization in order to reduce parameters pushing
+    """
+
+    id: Final
+    logtag: Final[str]
+
+    __slots__ = (
+        "id",
+        "logtag",
+    )
+
+    def __init__(self, id, logtag: str | None = None):
+        self.id = id
+        self.logtag = logtag or f"{self.__class__.__name__}({id})"
+        LOGGER.debug("%s: init", self.logtag)
+
+    def log(self, level: int, msg: str, *args, **kwargs):
+        LOGGER.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
+
+    def warning(self, msg: str, *args, **kwargs):
+        LOGGER.warning(f"{self.logtag}: {msg}", *args, **kwargs)
+
+    def log_exception(
+        self, level: int, exception: Exception, msg: str, *args, **kwargs
+    ):
+        self.log(
+            level,
+            f"{exception.__class__.__name__}({str(exception)}) in {msg}",
+            *args,
+            **kwargs,
+        )
+
+    def log_exception_warning(self, exception: Exception, msg: str, *args, **kwargs):
+        self.warning(
+            f"{exception.__class__.__name__}({str(exception)}) in {msg}",
+            *args,
+            **kwargs,
+        )
+
+    @contextmanager
+    def exception_warning(self, msg: str, *args, **kwargs):
+        try:
+            yield
+        except Exception as exception:
+            self.warning(
+                f"{exception.__class__.__name__}({str(exception)}) in {msg}",
+                *args,
+                **kwargs,
+            )
+
+    def __del__(self):
+        LOGGER.debug("%s: destroy", self.logtag)
+        return
+
+
+class EntityManager(Loggable):
+    """
+    This is an abstraction of an actual (device or other) container
+    for MerossEntity(s). This container is very 'hybrid', end its main purpose
+    is to provide interfaces to their owned MerossEntities.
+    It could represent a MerossDevice, a MerossSubDevice or an ApiProfile
+    and groups entities associated with a ConfigEntry
+    """
+
+    config_entry_id: Final[str]
+    deviceentry_id: dict[str, set] | None
+    key: str
+
+    __slots__ = (
+        "config_entry_id",
+        "deviceentry_id",
+        "entities",
+        "platforms",
+        "key",
+        "config",
+        "_unsub_entry_update_listener",
+    )
+
+    def __init__(
+        self,
+        id: str,
+        config_entry_or_id: ConfigEntry | str = "",
+        deviceentry_id: dict[str, set] | None = None,
+    ):
+        super().__init__(id)
+        self.deviceentry_id = deviceentry_id
+        # This is a collection of all of the instanced entities
+        # they're generally built here during inherited __init__ and will be registered
+        # in platforms(s) async_setup_entry with their corresponding platform
+        self.entities: dict[object, "MerossEntity"] = {}
+        # when we build an entity we also add the relative platform name here
+        # so that the async_setup_entry for this integration will be able to forward
+        # the setup to the appropriate platform(s).
+        # The item value here will be set to the async_add_entities callback
+        # during the corresponding platform async_setup_entry so to be able
+        # to dynamically add more entities should they 'pop-up' (Hub only?)
+        self.platforms: dict[str, Callable | None] = {}
+
+        if isinstance(config_entry_or_id, str):
+            self.config_entry_id = config_entry_or_id
+            self.key = ""
+            self.config = {}
+        else:
+            self.config_entry_id = config_entry_or_id.entry_id
+            self.config = config_entry_or_id.data
+            self.key = config_entry_or_id.data.get(CONF_KEY) or ""
+        self._unsub_entry_update_listener = None
+
+    @property
+    def name(self) -> str:
+        return self.logtag
+
+    @property
+    def online(self):
+        return True
+
+    async def async_shutdown(self):
+        # extra-safety cleanup: in an ideal world the config_entry
+        # shouldnt be loaded/listened at this point
+        self.unlisten_entry_update()
+        ApiProfile.managers.pop(self.config_entry_id, None)
+        self.entities.clear()
+        self.platforms.clear()
+
+    async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
+        assert not self._unsub_entry_update_listener
+        assert config_entry.entry_id not in ApiProfile.managers
+        self.config_entry_id = config_entry.entry_id  # type: ignore
+        self.config = config_entry.data
+        ApiProfile.managers[self.config_entry_id] = self
+        await hass.config_entries.async_forward_entry_setups(
+            config_entry, self.platforms.keys()
+        )
+        self._unsub_entry_update_listener = config_entry.add_update_listener(
+            self.entry_update_listener
+        )
+
+    async def async_unload_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
+        if not await hass.config_entries.async_unload_platforms(
+            config_entry, self.platforms.keys()
+        ):
+            return False
+        self.unlisten_entry_update()
+        ApiProfile.managers.pop(self.config_entry_id)
+        return True
+
+    def unlisten_entry_update(self):
+        if self._unsub_entry_update_listener:
+            self._unsub_entry_update_listener()
+            self._unsub_entry_update_listener = None
+
+    def managed_entities(self, platform):
+        """entities list for platform setup"""
+        return [
+            entity for entity in self.entities.values() if entity.PLATFORM is platform
+        ]
+
+    def generate_unique_id(self, entity: MerossEntity):
+        """
+        flexible policy in order to generate unique_ids for entities:
+        This is an helper needed to better control migrations in code
+        which could/would lead to a unique_id change.
+        We could put here code checks in order to avoid entity_registry
+        migrations
+        """
+        return f"{self.id}_{entity.id}"
+
+    async def entry_update_listener(
+        self, hass: HomeAssistant, config_entry: ConfigEntry
+    ):
+        self.config = config_entry.data
+        self.key = config_entry.data.get(CONF_KEY) or ""
+
+
+class ApiProfile(EntityManager):
     """
     base class for both MerossCloudProfile and MerossApi
     allowing lightweight sharing of globals and defining
@@ -584,6 +732,8 @@ class ApiProfile(Loggable, abc.ABC):
     devices: ClassVar[dict[str, MerossDevice | None]] = {}
     # profiles: list of known cloud profiles (same as devices)
     profiles: ClassVar[dict[str, MerossCloudProfile | None]] = {}
+    # managers: represents the container of entities belonging to a ConfigEntry
+    managers: ClassVar[dict[str, EntityManager]] = {}
 
     @staticmethod
     def active_devices():
@@ -602,27 +752,14 @@ class ApiProfile(Loggable, abc.ABC):
                 return device
         return None
 
-    # instance attributes
-    async def async_shutdown(self):
-        self.unlisten_entry_update()
+    @property
+    def allow_mqtt_publish(self):
+        return self.config.get(CONF_ALLOW_MQTT_PUBLISH)
 
     @property
-    @abc.abstractmethod
-    def key(self) -> str | None:
-        return NotImplemented
-
-    unsub_entry_update_listener: Callable | None = None
-
-    def listen_entry_update(self, config_entry: ConfigEntry):
-        self.unsub_entry_update_listener = config_entry.add_update_listener(
-            self.entry_update_listener
-        )
-
-    def unlisten_entry_update(self):
-        if self.unsub_entry_update_listener:
-            self.unsub_entry_update_listener()
-            self.unsub_entry_update_listener = None
+    def create_diagnostic_entities(self):
+        return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
 
     @abc.abstractmethod
-    async def entry_update_listener(self, hass, config_entry: ConfigEntry):
-        raise NotImplementedError()
+    def attach_mqtt(self, device: MerossDevice):
+        pass

@@ -2,15 +2,17 @@
     "config": {
         "flow_title": "{name}",
         "abort": {
+            "already_configured": "Entry already configured",
             "no_devices_found": "No devices found on the network",
             "single_instance_allowed": "Already configured. Only a single configuration possible."
         },
         "error": {
-            "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
-            "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
             "already_configured_device": "Device is already configured",
             "cannot_connect": "Unable to connect",
-            "invalid_auth": "Authentication error"
+            "cloud_profile_mismatch": "Cloud profile does not match configuration",
+            "invalid_auth": "Authentication error",
+            "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
+            "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key"
         },
         "step": {
             "user": {
@@ -47,8 +49,11 @@
                 "title": "Meross cloud profile",
                 "description": "Register and connect to a Meross account",
                 "data": {
-                    "username": "Meross login",
-                    "password": "Meross password"
+                    "email": "Meross login",
+                    "password": "Meross password",
+                    "save_password": "Save password",
+                    "allow_mqtt_publish": "Allow cloud MQTT publish",
+                    "create_diagnostic_entities": "Create diagnostic entities"
                 }
             },
             "finalize": {
@@ -60,10 +65,12 @@
     },
     "options": {
         "error": {
-            "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
-            "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
             "already_configured_device": "Device is already configured",
             "cannot_connect": "Unable to connect",
+            "cloud_profile_mismatch": "Cloud profile does not match configuration",
+            "device_id_mismatch": "Device UUID mismatch: the device is not the same",
+            "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
+            "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
             "invalid_auth": "Authentication error"
         },
         "step": {
@@ -101,8 +108,11 @@
                 "title": "Meross cloud profile",
                 "description": "Register and connect to a Meross account",
                 "data": {
-                    "username": "Meross login",
-                    "password": "Meross password"
+                    "email": "Meross login",
+                    "password": "Meross password",
+                    "save_password": "Save password",
+                    "allow_mqtt_publish": "Allow cloud MQTT publish",
+                    "create_diagnostic_entities": "Create diagnostic entities"
                 }
             }
         }

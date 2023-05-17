@@ -40,23 +40,25 @@
     "config": {
         "flow_title": "{name}",
         "abort": {
+            "already_configured": "エントリはすでに構成されています",
             "no_devices_found": "ネットワーク上でデバイスが見つかりませんでした。",
             "single_instance_allowed": "すでに構成済みです。 構成は一つだけ可能です。"
         },
         "error": {
-            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
             "already_configured_device": "可能なデバイスは1つだけ",
             "cannot_connect": "接続できません",
-            "invalid_auth": "認証エラー"
+            "cloud_profile_mismatch": "クラウドプロファイルが構成と一致しません",
+            "invalid_auth": "認証エラー",
+            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key"
         },
         "step": {
             "user": {
-                "title": "Choose option",
+                "title": "オプションを選択してください",
                 "description": "",
                 "menu_options": {
-                    "profile": "Register a Meross cloud profile",
-                    "device": "Manually configure a device"
+                    "profile": "Meross クラウド プロファイルを登録する",
+                    "device": "デバイスを手動で構成する"
                 }
             },
             "hub": {
@@ -82,11 +84,14 @@
                 }
             },
             "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
+                "title": "Meross クラウドプロファイル",
+                "description": "Meross アカウントに登録して接続する",
                 "data": {
-                    "username": "メロスログイン",
-                    "password": "メロスパスワード"
+                    "email": "メロスログイン",
+                    "password": "メロスパスワード",
+                    "save_password": "パスワードを保存する",
+                    "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
+                    "create_diagnostic_entities": "診断エンティティの作成"
                 }
             },
             "finalize": {
@@ -98,13 +103,13 @@
     },
     "options": {
         "error": {
-            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
             "already_configured_device": "可能なデバイスは1つだけ",
             "cannot_connect": "接続できません",
-            "invalid_auth": "認証エラー",
+            "cloud_profile_mismatch": "クラウドプロファイルが構成と一致しません",
             "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません",
-            "cloud_profile_mismatch": "Cloud profile does not match device configuration"
+            "invalid_auth": "認証エラー",
+            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key"
         },
         "step": {
             "hub": {
@@ -139,11 +144,34 @@
                 }
             },
             "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
+                "title": "Meross クラウドプロファイル",
+                "description": "Meross アカウントに登録して接続する",
                 "data": {
-                    "username": "メロスログイン",
-                    "password": "メロスパスワード"
+                    "email": "メロスログイン",
+                    "password": "メロスパスワード",
+                    "save_password": "パスワードを保存する",
+                    "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
+                    "create_diagnostic_entities": "診断エンティティの作成"
+                }
+            }
+        }
+    },
+    "issues": {
+        "cloud_token_expired": {
+            "title": "{email} のクラウド トークンの有効期限が切れました",
+            "fix_flow": {
+                "step": {
+                    "profile": {
+                        "title": "Meross クラウドプロファイル",
+                        "description": "Meross アカウントに登録して接続する",
+                        "data": {
+                            "email": "メロスログイン",
+                            "password": "メロスパスワード",
+                            "save_password": "パスワードを保存する",
+                            "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
+                            "create_diagnostic_entities": "診断エンティティの作成"
+                        }
+                    }
                 }
             }
         }

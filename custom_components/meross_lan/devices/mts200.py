@@ -35,11 +35,11 @@ class Mts200OverheatThresholdNumber(MLConfigNumber):
     key_namespace = mc.KEY_OVERHEAT
     key_value = mc.KEY_VALUE
 
-    def __init__(self, device: MerossDevice, channel: object | None):
+    def __init__(self, manager: ThermostatMixin, channel: object | None):
         self._attr_native_max_value = 70
         self._attr_native_min_value = 20
         super().__init__(
-            device,
+            manager,
             channel,
             "overheat threshold",
             MLConfigNumber.DeviceClass.TEMPERATURE,
@@ -64,11 +64,10 @@ class Mts200ConfigSwitch(MLSwitch):
     def __init__(self, climate: Mts200Climate, entitykey: str, namespace: str):
         self._attr_name = entitykey
         super().__init__(
-            climate.device,
+            climate.manager,
             climate.channel,
             entitykey,
             MLSwitch.DeviceClass.SWITCH,
-            None,
             namespace,
         )
 
@@ -81,7 +80,7 @@ class Mts200ConfigSwitch(MLSwitch):
             if acknowledge:
                 self.update_onoff(onoff)
 
-        await self.device.async_request(
+        await self.manager.async_request(
             self.namespace,
             mc.METHOD_SET,
             {
@@ -121,6 +120,8 @@ class Mts200Climate(MtsClimate):
         MtsClimate.PRESET_AUTO: mc.KEY_MANUALTEMP,
     }
 
+    manager: ThermostatMixin
+
     __slots__ = (
         "number_comfort_temperature",
         "number_sleep_temperature",
@@ -133,8 +134,11 @@ class Mts200Climate(MtsClimate):
         "sensor_externalsensor_temperature",
     )
 
-    def __init__(self, device: MerossDevice, channel: object):
-        super().__init__(device, channel, None)
+    def __init__(self, manager: ThermostatMixin, channel: object):
+        super().__init__(manager, channel)
+        # TODO: better cleanup since these circular dependencies
+        # prevent proper object release (likely the Mts200SetPointNumber
+        # which keeps a reference to this climate)
         self.number_comfort_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_COMFORT
         )
@@ -145,7 +149,7 @@ class Mts200Climate(MtsClimate):
             self, MtsClimate.PRESET_AWAY
         )
         self.binary_sensor_windowOpened = MLBinarySensor(
-            device, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
+            manager, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
         )
         # sensor mode: use internal(0) vs external(1) sensor as temperature loopback
         self.switch_sensor_mode = Mts200ConfigSwitch(
@@ -157,15 +161,15 @@ class Mts200Climate(MtsClimate):
             self, "overheat protection", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
         )
         self.sensor_overheat_warning = MLSensor(
-            device, channel, "overheat warning", MLSensor.DeviceClass.ENUM, None
+            manager, channel, "overheat warning", MLSensor.DeviceClass.ENUM
         )
         self.sensor_overheat_warning._attr_translation_key = "mts200_overheat_warning"
         self.number_overheat_value = Mts200OverheatThresholdNumber(
-            device,
+            manager,
             channel,
         )
         self.sensor_externalsensor_temperature = MLSensor(
-            device, channel, "external sensor", MLSensor.DeviceClass.TEMPERATURE, None
+            manager, channel, "external sensor", MLSensor.DeviceClass.TEMPERATURE
         )
 
     async def async_set_preset_mode(self, preset_mode: str):
@@ -180,7 +184,7 @@ class Mts200Climate(MtsClimate):
                         self._mts_mode = mode
                         self.update_modes()
 
-                await self.device.async_request(
+                await self.manager.async_request(
                     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
                     mc.METHOD_SET,
                     {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}]},
@@ -201,7 +205,7 @@ class Mts200Climate(MtsClimate):
                 self._attr_target_temperature = t
                 self.update_modes()
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
             {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, key: int(t * 10)}]},
@@ -214,7 +218,7 @@ class Mts200Climate(MtsClimate):
                 self._mts_onoff = onoff
                 self.update_modes()
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
             {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}]},

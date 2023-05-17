@@ -95,7 +95,7 @@ async def test_profile_config_flow(
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         user_input={
-            mlc.CONF_USERNAME: tc.MOCK_PROFILE_EMAIL,
+            mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: "",
         },
     )
@@ -108,7 +108,7 @@ async def test_profile_config_flow(
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         user_input={
-            mlc.CONF_USERNAME: tc.MOCK_PROFILE_EMAIL,
+            mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
         },
     )
@@ -121,7 +121,7 @@ async def test_profile_config_flow(
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"],
         user_input={
-            mlc.CONF_USERNAME: tc.MOCK_PROFILE_EMAIL,
+            mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
         },
     )

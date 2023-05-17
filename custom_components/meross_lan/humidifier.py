@@ -57,17 +57,17 @@ SPRAY_MODE_TO_MODE_MAP = {
 
 
 class MerossLanSpray(me.MerossEntity, humidifier.HumidifierEntity):
-
     PLATFORM = humidifier.DOMAIN
 
+    manager: MerossDevice
     _attr_available_modes: list[str] = list(MODE_TO_SPRAY_MODE_MAP.keys())
     # _attr_max_humidity: int = DEFAULT_MAX_HUMIDITY
     # _attr_min_humidity: int = DEFAULT_MAX_HUMIDITY
 
     _spray_mode: int | None = None
 
-    def __init__(self, device: 'MerossDevice', channel: object):
-        super().__init__(device, channel, None, DEVICE_CLASS_HUMIDIFIER)
+    def __init__(self, manager: MerossDevice, channel: object):
+        super().__init__(manager, channel, None, DEVICE_CLASS_HUMIDIFIER)
 
     @property
     def supported_features(self):
@@ -96,7 +96,7 @@ class MerossLanSpray(me.MerossEntity, humidifier.HumidifierEntity):
             if acknowledge:
                 self.update_mode(spray_mode)
 
-        await self.device.async_request(
+        await self.manager.async_request(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
             {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: spray_mode}},

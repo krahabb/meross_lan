@@ -23,6 +23,7 @@ from .const import CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT, PARAM_ENERGY_UPDATE_P
 from .helpers import (
     ApiProfile,
     EntityPollingStrategy,
+    SmartPollingStrategy,
     StrEnum,
     get_entity_last_state_available,
 )
@@ -32,8 +33,8 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .helpers import EntityManager
     from .meross_device import MerossDevice
-    from .meross_device_hub import MerossSubDevice
 
 SensorStateClass = sensor.SensorStateClass
 try:
@@ -95,13 +96,12 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
 
     def __init__(
         self,
-        device: MerossDevice,
+        manager: EntityManager,
         channel: object | None,
         entitykey: str | None,
         device_class: SensorDeviceClass | None,
-        subdevice: MerossSubDevice | None,
     ):
-        super().__init__(device, channel, entitykey, device_class, subdevice)
+        super().__init__(manager, channel, entitykey, device_class)
         self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(
             device_class
         )
@@ -111,7 +111,7 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
 
     @staticmethod
     def build_for_device(device: MerossDevice, device_class: SensorDeviceClass):
-        return MLSensor(device, None, str(device_class), device_class, None)
+        return MLSensor(device, None, str(device_class), device_class)
 
     @property
     def last_reset(self) -> datetime | None:
@@ -138,6 +138,7 @@ class ProtocolSensor(MLSensor):
     ATTR_MQTT = CONF_PROTOCOL_MQTT
     ATTR_MQTT_BROKER = "mqtt_broker"
 
+    manager: MerossDevice
     _attr_state: str
     _attr_options = [STATE_DISCONNECTED, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP]
 
@@ -147,10 +148,10 @@ class ProtocolSensor(MLSensor):
 
     def __init__(
         self,
-        device: MerossDevice,
+        manager: MerossDevice,
     ):
         self._attr_extra_state_attributes = {}
-        super().__init__(device, None, "sensor_protocol", self.DeviceClass.ENUM, None)
+        super().__init__(manager, None, "sensor_protocol", self.DeviceClass.ENUM)
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED
 
     @property
@@ -171,9 +172,11 @@ class ProtocolSensor(MLSensor):
 
     def set_unavailable(self):
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED
-        if self.device._mqtt_connection:
+        if self.manager._mqtt_connection:
             self._attr_extra_state_attributes = {
-                self.ATTR_MQTT_BROKER: self._get_attr_state(self.device._mqtt_connected)
+                self.ATTR_MQTT_BROKER: self._get_attr_state(
+                    self.manager._mqtt_connected
+                )
             }
         else:
             self._attr_extra_state_attributes = {}
@@ -181,20 +184,20 @@ class ProtocolSensor(MLSensor):
             self._async_write_ha_state()
 
     def update_connected(self):
-        device = self.device
-        self._attr_state = device.curr_protocol
-        if device.conf_protocol is not device.curr_protocol:
+        manager = self.manager
+        self._attr_state = manager.curr_protocol
+        if manager.conf_protocol is not manager.curr_protocol:
             # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
             # if conf_protocol is fixed we'll not set these attrs (redundant)
             self._attr_extra_state_attributes[self.ATTR_HTTP] = self._get_attr_state(
-                device._http_active
+                manager._http_active
             )
             self._attr_extra_state_attributes[self.ATTR_MQTT] = self._get_attr_state(
-                device._mqtt_active
+                manager._mqtt_active
             )
             self._attr_extra_state_attributes[
                 self.ATTR_MQTT_BROKER
-            ] = self._get_attr_state(device._mqtt_connected)
+            ] = self._get_attr_state(manager._mqtt_connected)
         if self._hass_connected:
             self._async_write_ha_state()
 
@@ -239,8 +242,8 @@ class EnergyEstimateSensor(MLSensor):
     _attr_state: int
     _attr_state_float: float = 0.0
 
-    def __init__(self, device: MerossDevice):
-        super().__init__(device, None, "energy_estimate", self.DeviceClass.ENERGY, None)
+    def __init__(self, manager: ElectricityMixin):
+        super().__init__(manager, None, "energy_estimate", self.DeviceClass.ENERGY)
         self._attr_state = 0
 
     @property
@@ -336,9 +339,7 @@ class ElectricityMixin(
         self._sensor_energy_estimate = EnergyEstimateSensor(self)
         self.polling_dictionary[
             mc.NS_APPLIANCE_CONTROL_ELECTRICITY
-        ] = EntityPollingStrategy(
-            mc.NS_APPLIANCE_CONTROL_ELECTRICITY, self._sensor_power
-        )
+        ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
 
     def start(self):
         self._schedule_next_reset(dt_util.now())
@@ -405,12 +406,13 @@ class ConsumptionSensor(MLSensor):
     ATTR_RESET_TS = "reset_ts"
     reset_ts: int = 0
 
+    manager: ConsumptionMixin
     _attr_state: int | None
 
-    def __init__(self, device: MerossDevice):
+    def __init__(self, manager: ConsumptionMixin):
         self._attr_extra_state_attributes = {}
         super().__init__(
-            device, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY, None
+            manager, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY
         )
 
     async def async_added_to_hass(self):
@@ -435,7 +437,7 @@ class ConsumptionSensor(MLSensor):
             # updated after the device midnight for today..else it is too
             # old to be good. Since we don't have actual device epoch we
             # 'guess' it is nicely synchronized so we'll use our time
-            devicetime = self.device.get_datetime(time())
+            devicetime = self.manager.get_datetime(time())
             devicetime_today_midnight = datetime(
                 devicetime.year,
                 devicetime.month,
@@ -444,21 +446,6 @@ class ConsumptionSensor(MLSensor):
             )
             if state.last_updated < devicetime_today_midnight:
                 return
-
-            # check if the restored sample is fresh enough i.e. it was
-            # updated after the device midnight for today..else it is too
-            # old to be good. Since we don't have actual device epoch we
-            # 'guess' it is nicely synchronized so we'll use our time
-            devicetime = self.device.get_datetime(time())
-            devicetime_today_midnight = datetime(
-                devicetime.year,
-                devicetime.month,
-                devicetime.day,
-                tzinfo=devicetime.tzinfo,
-            )
-            if state.last_updated < devicetime_today_midnight:
-                return
-
             # fix beta/preview attr names (sometime REMOVE)
             if "energy_offset" in state.attributes:
                 _attr_value = state.attributes["energy_offset"]
@@ -468,14 +455,12 @@ class ConsumptionSensor(MLSensor):
                 _attr_value = state.attributes["energy_reset_ts"]
                 self._attr_extra_state_attributes[self.ATTR_RESET_TS] = _attr_value
                 setattr(self, self.ATTR_RESET_TS, _attr_value)
-
             for _attr_name in (self.ATTR_OFFSET, self.ATTR_RESET_TS):
                 if _attr_name in state.attributes:
                     _attr_value = state.attributes[_attr_name]
                     self._attr_extra_state_attributes[_attr_name] = _attr_value
                     # we also set the value as an instance attr for faster access
                     setattr(self, _attr_name, _attr_value)
-
             # HA adds decimals when the display precision is set for the entity
             # according to this issue #268. In order to try not mess statistics
             # we're reverting to the old design where the sensor state is
@@ -528,7 +513,6 @@ class ConsumptionMixin(
 
     def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
         _sensor_consumption = self._sensor_consumption
-        _sensor_consumption.device_lastupdate = self.lastresponse
         # we'll look through the device array values to see
         # data timestamped (in device time) after last midnight
         # since we usually reset this around midnight localtime

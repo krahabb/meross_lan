@@ -16,8 +16,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import MerossDevice
-    from .meross_device_hub import MerossSubDevice
+    from .meross_device import MerossDeviceBase
 
 
 async def async_setup_entry(
@@ -46,6 +45,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         HVACMode.AUTO: PRESET_AUTO,
     }
 
+    manager: MerossDeviceBase
     _attr_hvac_modes: Final = [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO]
     _attr_preset_modes: Final = [
         PRESET_OFF,
@@ -79,9 +79,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_heating",
     )
 
-    def __init__(
-        self, device: MerossDevice, channel: object, subdevice: MerossSubDevice | None
-    ):
+    def __init__(self, manager: MerossDeviceBase, channel: object):
         self._attr_current_temperature = None
         self._attr_hvac_action = None
         self._attr_hvac_mode = None
@@ -92,7 +90,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_mode: int | None = None
         self._mts_onoff = None
         self._mts_heating = None
-        super().__init__(device, channel, None, None, subdevice)
+        super().__init__(manager, channel, None, None)
 
     def update_modes(self):
         if self._mts_onoff:
@@ -110,10 +108,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
             self._attr_hvac_mode = HVACMode.OFF
             self._attr_hvac_action = HVACAction.OFF
 
-        if self.subdevice:
-            self._attr_state = self._attr_hvac_mode if self.subdevice.online else None
-        else:
-            self._attr_state = self._attr_hvac_mode if self.device.online else None
+        self._attr_state = self._attr_hvac_mode if self.manager.online else None
 
         if self._hass_connected:
             self._async_write_ha_state()
@@ -216,11 +211,10 @@ class MtsSetPointNumber(MLConfigNumber):
         self._attr_icon = MtsSetPointNumber.PRESET_TO_ICON_MAP[preset_mode]
         self._attr_name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
         super().__init__(
-            climate.device,
+            climate.manager,
             climate.channel,
             f"config_{mc.KEY_TEMPERATURE}_{self.key_value}",
             MLConfigNumber.DeviceClass.TEMPERATURE,
-            climate.subdevice,
         )
 
     @property

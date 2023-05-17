@@ -131,8 +131,7 @@ class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         self._energy_fraction -= energy
 
         y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(self.epoch)
-        ss = min(ss, 59)  # clamp out leap seconds if the platform has them
-        devtime = datetime(y, m, d, hh, mm, ss, 0, timezone.utc)
+        devtime = datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
         if tzinfo := self.tzinfo:
             devtime = devtime.astimezone(tzinfo)
 

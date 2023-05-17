@@ -36,16 +36,22 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
     def __init__(
         self,
         hass: HomeAssistant,
-        config_entry: MockConfigEntry,
+        unique_id: str,
+        *,
+        data: dict | None = None,
         auto_add: bool = True,
         auto_setup: bool = True,
     ) -> None:
         super().__init__()
         self.hass = hass
-        self.config_entry = config_entry
+        self.config_entry = MockConfigEntry(
+            domain=mlc.DOMAIN,
+            data=data,
+            unique_id=unique_id,
+        )
         self.auto_setup = auto_setup
         if auto_add:
-            config_entry.add_to_hass(hass)
+            self.config_entry.add_to_hass(hass)
 
     @property
     def state(self):
@@ -74,16 +80,15 @@ class MQTTHubEntryMocker(ConfigEntryMocker):
     def __init__(
         self,
         hass: HomeAssistant,
+        *,
+        data=tc.MOCK_HUB_CONFIG,
         auto_add: bool = True,
         auto_setup: bool = True,
     ):
         super().__init__(
             hass,
-            MockConfigEntry(
-                domain=mlc.DOMAIN,
-                data=tc.MOCK_HUB_CONFIG,
-                unique_id=mlc.DOMAIN,
-            ),
+            mlc.DOMAIN,
+            data=data,
             auto_add=auto_add,
             auto_setup=auto_setup,
         )
@@ -93,16 +98,15 @@ class ProfileEntryMocker(ConfigEntryMocker):
     def __init__(
         self,
         hass: HomeAssistant,
+        *,
+        data=tc.MOCK_PROFILE_CONFIG,
         auto_add: bool = True,
         auto_setup: bool = True,
     ):
         super().__init__(
             hass,
-            MockConfigEntry(
-                domain=mlc.DOMAIN,
-                data=tc.MOCK_PROFILE_CONFIG,
-                unique_id=f"profile.{tc.MOCK_PROFILE_CONFIG[mc.KEY_USERID_]}",
-            ),
+            f"profile.{data[mc.KEY_USERID_]}",
+            data=data,
             auto_add=auto_add,
             auto_setup=auto_setup,
         )

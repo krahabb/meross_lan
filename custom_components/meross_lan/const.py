@@ -48,10 +48,14 @@ CONF_TRACE_FILENAME: Final = "{}-{}.csv"
 CONF_TIMESTAMP: Final = mc.KEY_TIMESTAMP
 
 
+class HubConfigType(TypedDict):
+    """MQTT Hub config_entry keys"""
+
+    key: str
+
+
 class DeviceConfigTypeMinimal(TypedDict):
-    """
-    Device config_entry required keys
-    """
+    """Device config_entry required keys"""
 
     device_id: str
     payload: dict
@@ -76,16 +80,22 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     timestamp: float | None
 
 
-CONF_USERNAME: Final = hac.CONF_USERNAME
+CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
+CONF_SAVE_PASSWORD: Final = "save_password"
+CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
+CONF_CREATE_DIAGNOSTIC_ENTITIES: Final = "create_diagnostic_entities"
 
 
-class ProfileConfigType(cloudapi.MerossCloudCredentials):
+class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
     """
     Meross cloud profile config_entry keys
     """
 
-    pass
+    password: str | None
+    save_password: bool | None
+    allow_mqtt_publish: bool | None
+    create_diagnostic_entities: bool | None
 
 
 SERVICE_REQUEST = "request"
@@ -123,4 +133,4 @@ PARAM_TIMESTAMP_TOLERANCE = 5
 # used to delay the iteration of abilities while tracing
 PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400
-PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 10
+PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30
