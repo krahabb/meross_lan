@@ -155,5 +155,25 @@
                 }
             }
         }
+    },
+    "issues": {
+        "cloud_token_expired": {
+            "title": "Cloud token expired for {email}",
+            "fix_flow": {
+                "step": {
+                    "profile": {
+                        "title": "Meross cloud profile",
+                        "description": "Register and connect to a Meross account",
+                        "data": {
+                            "email": "Meross login",
+                            "password": "Meross password",
+                            "save_password": "Save password",
+                            "allow_mqtt_publish": "Allow cloud MQTT publish",
+                            "create_diagnostic_entities": "Create diagnostic entities"
+                        }
+                    }
+                }
+            }
+        }
     }
 }
