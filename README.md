@@ -1,6 +1,4 @@
 [![hacs][hacsbadge]][hacs]
-![GitHub Downloads (total)](https://img.shields.io/github/downloads/krahabb/meross_lan/total?style=for-the-badge)
-![GitHub Downloads (latest)](https://img.shields.io/github/downloads/krahabb/meross_lan/latest/total?style=for-the-badge)
 ![GitHub last commit](https://img.shields.io/github/last-commit/krahabb/meross_lan?style=for-the-badge)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/krahabb/meross_lan/cron.yaml?label=Cron&style=for-the-badge)
 [![GitHub](https://img.shields.io/github/license/krahabb/meross_lan?style=for-the-badge)](LICENCE)
