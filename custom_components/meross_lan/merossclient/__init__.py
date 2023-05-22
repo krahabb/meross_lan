@@ -267,10 +267,12 @@ class MerossDeviceDescriptor:
     hardware: dict
     firmware: dict
     type: str
+    subType: str
     uuid: str
     macAddress: str
     innerIp: str | None
     userId: str | None
+    firmwareVersion: str
     time: dict
     timezone: str | None
     productname: str
@@ -289,12 +291,14 @@ class MerossDeviceDescriptor:
         mc.KEY_HARDWARE: lambda _self: _self.system.get(mc.KEY_HARDWARE, {}),
         mc.KEY_FIRMWARE: lambda _self: _self.system.get(mc.KEY_FIRMWARE, {}),
         mc.KEY_TYPE: lambda _self: _self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER),
+        mc.KEY_SUBTYPE: lambda _self: _self.hardware.get(mc.KEY_SUBTYPE, ""),
         mc.KEY_UUID: lambda _self: _self.hardware.get(mc.KEY_UUID),
         mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(
             mc.KEY_MACADDRESS, mc.MEROSS_MACADDRESS
         ),
         mc.KEY_INNERIP: lambda _self: _self.firmware.get(mc.KEY_INNERIP),
         mc.KEY_USERID: lambda _self: str(_self.firmware.get(mc.KEY_USERID)),
+        "firmwareVersion": lambda _self: _self.firmware.get(mc.KEY_VERSION, ""),
         mc.KEY_TIME: lambda _self: _self.system.get(mc.KEY_TIME, {}),
         mc.KEY_TIMEZONE: lambda _self: _self.time.get(mc.KEY_TIMEZONE),
         "productname": lambda _self: get_productnameuuid(_self.type, _self.uuid),

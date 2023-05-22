@@ -440,7 +440,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         self._transition_unsub = None
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
-            await manager.async_http_request(*get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE))
+            await manager.async_http_request(
+                *get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+            )
 
     @callback
     def _transition_end_callback(self):
@@ -630,7 +632,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
             self._position_native_isgood = versiontuple(
-                manager.descriptor.firmware.get(mc.KEY_VERSION, "")
+                manager.descriptor.firmwareVersion
             ) >= versiontuple("7.6.10")
         except Exception:
             self._position_native_isgood = None

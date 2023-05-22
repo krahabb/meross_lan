@@ -92,9 +92,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
 
     def __init__(self, manager: MerossDevice, payload: dict):
         self._light = {}
-        super().__init__(
-            manager, payload.get(mc.KEY_CHANNEL, 0), None, None, None
-        )
+        super().__init__(manager, payload.get(mc.KEY_CHANNEL, 0), None, None, None)
 
     def update_onoff(self, onoff):
         if mc.KEY_ONOFF in self._light:
@@ -284,7 +282,7 @@ class MLLight(MLLightBase):
         await self.manager.async_request_light(light, _ack_callback)
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
-            if self.manager.descriptor.firmware.get(mc.KEY_VERSION) == "2.1.2":
+            if self.manager.descriptor.firmwareVersion == "2.1.2":
                 await self.manager.async_request_light(light, None)
 
         if self._hastogglex:
