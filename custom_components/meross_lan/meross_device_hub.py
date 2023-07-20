@@ -371,6 +371,11 @@ class MerossSubDevice(MerossDeviceBase):
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
         id_ = p_digest[mc.KEY_ID]
+        self.hub = hub
+        self.type = _type
+        self.p_digest = p_digest
+        self.platforms = hub.platforms
+        # base init after setting some key properties needed for logging
         super().__init__(
             id_,
             hub.config_entry_id,
@@ -378,10 +383,6 @@ class MerossSubDevice(MerossDeviceBase):
             model=_type,
             via_device=next(iter(hub.deviceentry_id["identifiers"])),
         )
-        self.hub = hub
-        self.type = _type
-        self.p_digest = p_digest
-        self.platforms = hub.platforms
         hub.subdevices[id_] = self
         self.sensor_battery = self.build_sensor_c(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice

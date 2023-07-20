@@ -184,8 +184,8 @@ class MerossDeviceBase(EntityManager):
                 device_registry.async_get(ApiProfile.hass).async_get_or_create(
                     config_entry_id=self.config_entry_id,
                     connections=connections,
-                    default_manufacturer=mc.MANUFACTURER,
-                    default_name=default_name,
+                    manufacturer=mc.MANUFACTURER,
+                    name=default_name,
                     model=model,
                     sw_version=sw_version,
                     via_device=via_device,
@@ -350,16 +350,6 @@ class MerossDevice(MerossDeviceBase):
         descriptor: MerossDeviceDescriptor,
         config_entry: ConfigEntry,
     ):
-        super().__init__(
-            config_entry.data[CONF_DEVICE_ID],
-            config_entry,
-            default_name=descriptor.productname,
-            model=descriptor.productmodel,
-            sw_version=descriptor.firmwareVersion,
-            connections={
-                (device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)
-            },
-        )
         self.descriptor = descriptor
         self.needsave = False
         self.device_timestamp = 0.0
@@ -415,6 +405,18 @@ class MerossDevice(MerossDeviceBase):
         self._tzinfo = None
         self._unsub_polling_callback = None
         self._queued_poll_requests = 0
+
+        # base init after setting some key properties needed for logging
+        super().__init__(
+            config_entry.data[CONF_DEVICE_ID],
+            config_entry,
+            default_name=descriptor.productname,
+            model=descriptor.productmodel,
+            sw_version=descriptor.firmwareVersion,
+            connections={
+                (device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)
+            },
+        )
 
         self._update_config()
         self.curr_protocol = self.pref_protocol
