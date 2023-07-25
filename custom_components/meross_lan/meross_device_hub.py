@@ -468,18 +468,15 @@ class MerossSubDevice(MerossDeviceBase):
             for subkey, subvalue in payload.items():
                 if (
                     subkey
-                    in {mc.KEY_ID, mc.KEY_LMTIME, mc.KEY_LMTIME_, mc.KEY_SYNCEDTIME}
+                    in {mc.KEY_ID, mc.KEY_LMTIME, mc.KEY_LMTIME_, mc.KEY_SYNCEDTIME, mc.KEY_LATESTSAMPLETIME}
                     or isinstance(subvalue, list)
                     or isinstance(subvalue, dict)
                 ):
                     continue
                 entitykey = f"{key}_{subkey}"
-                sensorattr = f"sensor_{entitykey}"
-                sensor: MLSensor
-                sensor = getattr(self, sensorattr, None)  # type: ignore
+                sensor = self.entities.get(f"{self.id}_{entitykey}")
                 if not sensor:
                     sensor = self.build_sensor(entitykey)
-                    setattr(self, sensorattr, sensor)
                 sensor.update_state(subvalue)
 
     def parse_digest(self, p_digest: dict):
@@ -651,6 +648,10 @@ class MS100SubDevice(MerossSubDevice):
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
+# there's a new temp/hum sensor in town (MS100FH - see #303)
+# and it is likely presented as tempHum in digest
+# (need confirmation from device tracing though)
+WELL_KNOWN_TYPE_MAP[mc.KEY_TEMPHUM] = MS100SubDevice
 
 
 class MTS100SubDevice(MerossSubDevice):
