@@ -91,6 +91,7 @@
                     "password": "Mot de passe Meross",
                     "save_password": "Enregistrer le mot de passe",
                     "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
+                    "check_firmware_updates": "Vérifier les mises à jour du firmware",
                     "create_diagnostic_entities": "Créer des entités de diagnostic"
                 }
             },
@@ -151,6 +152,7 @@
                     "password": "Mot de passe Meross",
                     "save_password": "Enregistrer le mot de passe",
                     "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
+                    "check_firmware_updates": "Vérifier les mises à jour du firmware",
                     "create_diagnostic_entities": "Créer des entités de diagnostic"
                 }
             }
@@ -169,6 +171,7 @@
                             "password": "Mot de passe Meross",
                             "save_password": "Enregistrer le mot de passe",
                             "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
+                            "check_firmware_updates": "Vérifier les mises à jour du firmware",
                             "create_diagnostic_entities": "Créer des entités de diagnostic"
                         }
                     }

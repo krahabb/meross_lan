@@ -84,6 +84,7 @@ CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
 CONF_SAVE_PASSWORD: Final = "save_password"
 CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
+CONF_CHECK_FIRMWARE_UPDATES: Final = "check_firmware_updates"
 CONF_CREATE_DIAGNOSTIC_ENTITIES: Final = "create_diagnostic_entities"
 
 
@@ -95,6 +96,7 @@ class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
     password: str | None
     save_password: bool | None
     allow_mqtt_publish: bool | None
+    check_firmware_updates: bool | None
     create_diagnostic_entities: bool | None
 
 

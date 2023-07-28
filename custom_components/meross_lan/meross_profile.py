@@ -18,6 +18,7 @@ import paho.mqtt.client as mqtt
 
 from .const import (
     CONF_ALLOW_MQTT_PUBLISH,
+    CONF_CHECK_FIRMWARE_UPDATES,
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
     CONF_DEVICE_ID,
     CONF_EMAIL,
@@ -1025,16 +1026,17 @@ class MerossCloudProfile(ApiProfile):
         return None
 
     async def async_check_query_latest_version(self, epoch: float, token: str):
-        if (
+        if self.config.get(CONF_CHECK_FIRMWARE_UPDATES) and (
             epoch - self._data[MerossCloudProfile.KEY_LATEST_VERSION_TIME]
         ) > PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT:
             self._data[MerossCloudProfile.KEY_LATEST_VERSION_TIME] = epoch
-            with self.exception_warning("async_check_query_latestversion"):
+            with self.exception_warning("async_check_query_latest_version"):
                 self._data[
                     MerossCloudProfile.KEY_LATEST_VERSION
                 ] = await async_cloudapi_device_latestversion(
                     token, async_get_clientsession(ApiProfile.hass)
                 )
+                self._schedule_save_store()
                 for device in ApiProfile.active_devices():
                     if latest_version := self.get_latest_version(device.descriptor):
                         device.update_latest_version(latest_version)
