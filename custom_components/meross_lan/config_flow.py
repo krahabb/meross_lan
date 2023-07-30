@@ -224,6 +224,12 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         ] = bool
         config_schema[
             vol.Optional(
+                mlc.CONF_CHECK_FIRMWARE_UPDATES,
+                description={DESCR: profile_config.get(mlc.CONF_CHECK_FIRMWARE_UPDATES)},
+            )
+        ] = bool
+        config_schema[
+            vol.Optional(
                 mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES,
                 description={
                     DESCR: profile_config.get(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES)

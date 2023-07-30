@@ -24,7 +24,7 @@ API_AUTH_LOGIN_PATH = "/v1/Auth/Login"
 API_PROFILE_LOGOUT_PATH = "/v1/Profile/Logout"
 API_DEVICE_DEVLIST_PATH = "/v1/Device/devList"
 API_DEVICE_DEVINFO_PATH = "/v1/Device/devInfo"
-API_DEVICE_DEVEXTRAINFO_PATH = "/v1/device/devExtraInfo"
+API_DEVICE_DEVEXTRAINFO_PATH = "/v1/Device/devExtraInfo"
 API_DEVICE_LATESTVERSION_PATH = "/v1/Device/latestVersion"
 API_HUB_GETSUBDEVICES_PATH = "/v1/Hub/getSubDevices"
 
@@ -112,6 +112,22 @@ class DeviceInfoType(typing.TypedDict, total=False):
     domain: str  # optionally formatted as host:port
     reservedDomain: str  # optionally formatted as host:port
     __subDeviceInfo: dict[str, SubDeviceInfoType]  # this key is not from meross api
+
+
+class LatestVersionType(typing.TypedDict, total=False):
+    """
+    firmware latest version(s) as recovered from meross cloud api "/Device/latestVersion"
+    """
+
+    type: str
+    subType: str
+    md5: str
+    url: str
+    version: str
+    alias: str
+    mcu: list
+    upgradeType: str
+    description: str
 
 
 def generate_app_id():
@@ -260,7 +276,7 @@ async def async_cloudapi_device_devextrainfo(
 
 async def async_cloudapi_device_latestversion(
     token: str, session: aiohttp.ClientSession | None = None
-) -> list[DeviceInfoType]:
+) -> list[LatestVersionType]:
     """
     returns the list of all the account-bound device types latest firmwares
     """

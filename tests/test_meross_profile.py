@@ -56,7 +56,7 @@ async def test_meross_profile(
     async with helpers.ProfileEntryMocker(hass) as profile_entry_mock:
         assert (profile := MerossApi.profiles.get(tc.MOCK_PROFILE_ID))
         # check we have refreshed our device list
-        assert len(cloudapi_mock.api_calls) == 1
+        assert len(cloudapi_mock.api_calls) >= 1
         assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_DEVLIST_PATH] == 1
         # check the cloud profile connected the mqtt server(s)
         # for discovery of devices. Our truth comes from

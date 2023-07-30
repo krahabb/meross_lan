@@ -92,6 +92,7 @@
                     "password": "Heslo k účtu Meross",
                     "save_password": "Uložit heslo",
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
+                    "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                     "create_diagnostic_entities": "Vytvářejte diagnostické entity"
                 }
             },
@@ -152,6 +153,7 @@
                     "password": "Heslo k účtu Meross",
                     "save_password": "Uložit heslo",
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
+                    "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                     "create_diagnostic_entities": "Vytvářejte diagnostické entity"
                 }
             }
@@ -170,6 +172,7 @@
                             "password": "Heslo k účtu Meross",
                             "save_password": "Uložit heslo",
                             "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
+                            "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                             "create_diagnostic_entities": "Vytvářejte diagnostické entity"
                         }
                     }

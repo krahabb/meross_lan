@@ -3,4 +3,5 @@ aiodiscover
 aiohttp-cors
 scapy
 janus
-pytest-homeassistant-custom-component==0.13.22
+fnv-hash-fast
+pytest-homeassistant-custom-component==0.13.45

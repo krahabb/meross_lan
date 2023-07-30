@@ -2,27 +2,15 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Run Home Assistant on port 9123",
+            "label": "Run Home Assistant on port 8123",
             "type": "shell",
-            "command": "container start",
-            "problemMatcher": []
-        },
-        {
-            "label": "Run Home Assistant configuration against /config",
-            "type": "shell",
-            "command": "container check",
+            "command": "scripts/develop",
             "problemMatcher": []
         },
         {
             "label": "Upgrade Home Assistant to latest dev",
             "type": "shell",
-            "command": "container install",
-            "problemMatcher": []
-        },
-        {
-            "label": "Install a specific version of Home Assistant",
-            "type": "shell",
-            "command": "container set-version",
+            "command": "pip3 install --upgrade git+https://github.com/home-assistant/core.git@dev",
             "problemMatcher": []
         }
     ]

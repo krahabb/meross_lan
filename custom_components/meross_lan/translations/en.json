@@ -91,6 +91,7 @@
                     "password": "Meross password",
                     "save_password": "Save password",
                     "allow_mqtt_publish": "Allow cloud MQTT publish",
+                    "check_firmware_updates": "Check firmware updates",
                     "create_diagnostic_entities": "Create diagnostic entities"
                 }
             },
@@ -151,6 +152,7 @@
                     "password": "Meross password",
                     "save_password": "Save password",
                     "allow_mqtt_publish": "Allow cloud MQTT publish",
+                    "check_firmware_updates": "Check firmware updates",
                     "create_diagnostic_entities": "Create diagnostic entities"
                 }
             }
@@ -169,6 +171,7 @@
                             "password": "Meross password",
                             "save_password": "Save password",
                             "allow_mqtt_publish": "Allow cloud MQTT publish",
+                            "check_firmware_updates": "Check firmware updates",
                             "create_diagnostic_entities": "Create diagnostic entities"
                         }
                     }

@@ -91,6 +91,7 @@
                     "password": "メロスパスワード",
                     "save_password": "パスワードを保存する",
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
+                    "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "create_diagnostic_entities": "診断エンティティの作成"
                 }
             },
@@ -151,6 +152,7 @@
                     "password": "メロスパスワード",
                     "save_password": "パスワードを保存する",
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
+                    "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "create_diagnostic_entities": "診断エンティティの作成"
                 }
             }
@@ -169,6 +171,7 @@
                             "password": "メロスパスワード",
                             "save_password": "パスワードを保存する",
                             "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
+                            "check_firmware_updates": "ファームウェアのアップデートを確認する",
                             "create_diagnostic_entities": "診断エンティティの作成"
                         }
                     }

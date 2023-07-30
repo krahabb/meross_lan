@@ -12,14 +12,13 @@ import typing
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
-from homeassistant.helpers import issue_registry
-from homeassistant.helpers import storage
+from homeassistant.helpers import issue_registry, storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
 import paho.mqtt.client as mqtt
 
 from .const import (
     CONF_ALLOW_MQTT_PUBLISH,
+    CONF_CHECK_FIRMWARE_UPDATES,
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
     CONF_DEVICE_ID,
     CONF_EMAIL,
@@ -30,8 +29,8 @@ from .const import (
     DOMAIN,
     PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
+    PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT,
     PARAM_UNAVAILABILITY_TIMEOUT,
-    ProfileConfigType,
 )
 from .helpers import (
     LOGGER,
@@ -41,11 +40,11 @@ from .helpers import (
     datetime_from_epoch,
     schedule_async_callback,
     schedule_callback,
+    versiontuple,
 )
 from .meross_device_hub import MerossDeviceHub
 from .merossclient import (
     MEROSSDEBUG,
-    KeyType,
     build_payload,
     const as mc,
     get_default_arguments,
@@ -55,9 +54,9 @@ from .merossclient import (
 from .merossclient.cloudapi import (
     APISTATUS_TOKEN_ERRORS,
     CloudApiError,
-    MerossCloudCredentials,
     MerossMQTTClient,
     async_cloudapi_device_devlist,
+    async_cloudapi_device_latestversion,
     async_cloudapi_hub_getsubdevices,
     async_cloudapi_login,
     async_cloudapi_logout,
@@ -74,8 +73,15 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from . import MerossApi
-    from .meross_device import MerossDevice
-    from .merossclient.cloudapi import DeviceInfoType, SubDeviceInfoType
+    from .const import ProfileConfigType
+    from .meross_device import MerossDevice, MerossDeviceDescriptor
+    from .merossclient import KeyType
+    from .merossclient.cloudapi import (
+        DeviceInfoType,
+        LatestVersionType,
+        MerossCloudCredentials,
+        SubDeviceInfoType,
+    )
 
     UuidType = str
     DeviceInfoDictType = dict[UuidType, DeviceInfoType]
@@ -691,6 +697,8 @@ class MerossCloudProfileStoreType(typing.TypedDict):
     appId: str
     deviceInfo: DeviceInfoDictType
     deviceInfoTime: float
+    latestVersion: list[LatestVersionType]
+    latestVersionTime: float
     token: str | None
     tokenRequestTime: float
 
@@ -716,6 +724,8 @@ class MerossCloudProfile(ApiProfile):
     KEY_DEVICE_INFO: Final = "deviceInfo"
     KEY_DEVICE_INFO_TIME: Final = "deviceInfoTime"
     KEY_SUBDEVICE_INFO: Final = "__subDeviceInfo"
+    KEY_LATEST_VERSION: Final = "latestVersion"
+    KEY_LATEST_VERSION_TIME: Final = "latestVersionTime"
     KEY_TOKEN_REQUEST_TIME: Final = "tokenRequestTime"
 
     config: ProfileConfigType
@@ -736,7 +746,7 @@ class MerossCloudProfile(ApiProfile):
         self.mqttconnections: dict[str, MerossMQTTConnection] = {}
         self.linkeddevices: dict[str, MerossDevice] = {}
         self._store = MerossCloudProfileStore(self.id)
-        self._unsub_polling_query_devices: asyncio.TimerHandle | None = None
+        self._unsub_polling_query_device_info: asyncio.TimerHandle | None = None
 
     async def async_start(self):
         """
@@ -760,6 +770,10 @@ class MerossCloudProfile(ApiProfile):
                 data[
                     MerossCloudProfile.KEY_DEVICE_INFO_TIME
                 ] = self._device_info_time = 0.0
+            if not isinstance(data.get(MerossCloudProfile.KEY_LATEST_VERSION), list):
+                data[MerossCloudProfile.KEY_LATEST_VERSION] = []
+            if MerossCloudProfile.KEY_LATEST_VERSION_TIME not in data:
+                data[MerossCloudProfile.KEY_LATEST_VERSION_TIME] = 0.0
             if MerossCloudProfile.KEY_TOKEN_REQUEST_TIME not in data:
                 data[MerossCloudProfile.KEY_TOKEN_REQUEST_TIME] = 0.0
 
@@ -776,6 +790,8 @@ class MerossCloudProfile(ApiProfile):
                 mc.KEY_TOKEN: self.config[mc.KEY_TOKEN],
                 MerossCloudProfile.KEY_DEVICE_INFO: {},
                 MerossCloudProfile.KEY_DEVICE_INFO_TIME: 0.0,
+                MerossCloudProfile.KEY_LATEST_VERSION: [],
+                MerossCloudProfile.KEY_LATEST_VERSION_TIME: 0.0,
                 MerossCloudProfile.KEY_TOKEN_REQUEST_TIME: 0.0,
             }
             self._data = data
@@ -788,7 +804,7 @@ class MerossCloudProfile(ApiProfile):
         if next_query_delay < 60:
             # schedule immediately when it's about to come
             # or if the timer elapsed in the past
-            if await self.async_query_devices() is not None:
+            if await self.async_query_device_info() is not None:
                 # the 'unknown' devices discovery already kicked in
                 # when the "async_query_devices" processed data
                 return
@@ -820,11 +836,11 @@ class MerossCloudProfile(ApiProfile):
                         json_dumps(_data),
                     )
         """
-        assert self._unsub_polling_query_devices is None
-        self._unsub_polling_query_devices = schedule_async_callback(
+        assert self._unsub_polling_query_device_info is None
+        self._unsub_polling_query_device_info = schedule_async_callback(
             ApiProfile.hass,
             next_query_delay,
-            self._async_polling_query_devices,
+            self._async_polling_query_device_info,
         )
 
     async def async_shutdown(self):
@@ -835,9 +851,9 @@ class MerossCloudProfile(ApiProfile):
         for device in self.linkeddevices.values():
             device.profile_unlinked()
         self.linkeddevices.clear()
-        if self._unsub_polling_query_devices:
-            self._unsub_polling_query_devices.cancel()
-            self._unsub_polling_query_devices = None
+        if self._unsub_polling_query_device_info:
+            self._unsub_polling_query_device_info.cancel()
+            self._unsub_polling_query_device_info = None
         await super().async_shutdown()
 
     # interface: EntityManager
@@ -900,6 +916,8 @@ class MerossCloudProfile(ApiProfile):
             device.profile_linked(self)
             self.linkeddevices[device_id] = device
             device.update_device_info(device_info)
+            if latest_version := self.get_latest_version(device.descriptor):
+                device.update_latest_version(latest_version)
 
     def unlink(self, device: MerossDevice):
         device_id = device.id
@@ -907,8 +925,33 @@ class MerossCloudProfile(ApiProfile):
             device.profile_unlinked()
             self.linkeddevices.pop(device_id)
 
-    def get_device_info(self, device_id: str) -> DeviceInfoType | None:
+    def get_device_info(self, device_id: str):
         return self._data[MerossCloudProfile.KEY_DEVICE_INFO].get(device_id)
+
+    def get_latest_version(self, descriptor: MerossDeviceDescriptor):
+        """returns LatestVersionType info if device has an update available"""
+        _type = descriptor.type
+        _version = versiontuple(descriptor.firmwareVersion)
+        # the LatestVersionType struct reports also the subType for the firmware
+        # but the meaning of this field is a bit confusing since a lot of traces
+        # are reporting the value "un" (undefined?) for the vast majority.
+        # Also, the mcu field (should contain a list of supported mcus?) is not
+        # reported in my api queries and I don't have enough data to guess anything
+        # at any rate, actual implementation is not proceeding with effective
+        # update so these infos we gather and show are just cosmethic right now and
+        # will not harm anyone ;)
+        # _subtype = descriptor.subType
+        for latest_version in self._data[MerossCloudProfile.KEY_LATEST_VERSION]:
+            if (
+                latest_version.get(mc.KEY_TYPE)
+                == _type
+                # and latest_version.get(mc.KEY_SUBTYPE) == _subtype
+            ):
+                if versiontuple(latest_version.get(mc.KEY_VERSION, "")) > _version:
+                    return latest_version
+                else:
+                    return None
+        return None
 
     async def async_update_credentials(self, credentials: MerossCloudCredentials):
         with self.exception_warning("async_update_credentials"):
@@ -934,10 +977,10 @@ class MerossCloudProfile(ApiProfile):
                 # on our polling schedule for whatever reason (invalid token -
                 # no connection - whatsoever) so, having a fresh token and likely
                 # good connectivity we're going to retrigger that
-                await self.async_check_query_devices()
+                await self.async_check_query_device_info()
 
-    async def async_query_devices(self):
-        async with self._async_token_manager("async_query_devices") as token:
+    async def async_query_device_info(self):
+        async with self._async_token_manager("async_query_device_info") as token:
             self.log(
                 DEBUG,
                 "querying device list - last query was at: %s",
@@ -951,31 +994,52 @@ class MerossCloudProfile(ApiProfile):
                 token, async_get_clientsession(ApiProfile.hass)
             )
             await self._process_device_info_new(device_info_new)
-            self._data[self.KEY_DEVICE_INFO_TIME] = self._device_info_time
+            self._data[MerossCloudProfile.KEY_DEVICE_INFO_TIME] = self._device_info_time
             self._schedule_save_store()
             # retrigger the poll at the right time since async_query_devices
             # might be called for whatever reason 'asynchronously'
             # at any time (say the user does a new cloud login or so...)
-            if self._unsub_polling_query_devices:
-                self._unsub_polling_query_devices.cancel()
-            self._unsub_polling_query_devices = schedule_async_callback(
+            if self._unsub_polling_query_device_info:
+                self._unsub_polling_query_device_info.cancel()
+            self._unsub_polling_query_device_info = schedule_async_callback(
                 ApiProfile.hass,
                 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
-                self._async_polling_query_devices,
+                self._async_polling_query_device_info,
             )
+            # this is a 'low relevance task' as a new feature (in 4.3.0) to just provide hints
+            # when new updates are available: we're not going (yet) to manage the
+            # effective update since we're not able to do any basic validation
+            # of the whole process and it might be a bit 'dangerous'
+            await self.async_check_query_latest_version(self._device_info_time, token)
             return device_info_new
 
         return None
 
-    def need_query_devices(self):
+    def need_query_device_info(self):
         return (
             time() - self._device_info_time
         ) > PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
 
-    async def async_check_query_devices(self):
-        if self.need_query_devices():
-            return await self.async_query_devices()
+    async def async_check_query_device_info(self):
+        if self.need_query_device_info():
+            return await self.async_query_device_info()
         return None
+
+    async def async_check_query_latest_version(self, epoch: float, token: str):
+        if self.config.get(CONF_CHECK_FIRMWARE_UPDATES) and (
+            epoch - self._data[MerossCloudProfile.KEY_LATEST_VERSION_TIME]
+        ) > PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT:
+            self._data[MerossCloudProfile.KEY_LATEST_VERSION_TIME] = epoch
+            with self.exception_warning("async_check_query_latest_version"):
+                self._data[
+                    MerossCloudProfile.KEY_LATEST_VERSION
+                ] = await async_cloudapi_device_latestversion(
+                    token, async_get_clientsession(ApiProfile.hass)
+                )
+                self._schedule_save_store()
+                for device in ApiProfile.active_devices():
+                    if latest_version := self.get_latest_version(device.descriptor):
+                        device.update_latest_version(latest_version)
 
     def _get_or_create_mqttconnection(self, broker: tuple[str, int]):
         connection_id = f"{self.id}:{broker[0]}:{broker[1]}"
@@ -1059,18 +1123,18 @@ class MerossCloudProfile(ApiProfile):
         except Exception as exception:
             self.log_exception_warning(exception, msg)
 
-    async def _async_polling_query_devices(self):
+    async def _async_polling_query_device_info(self):
         try:
-            self._unsub_polling_query_devices = None
-            await self.async_query_devices()
+            self._unsub_polling_query_device_info = None
+            await self.async_query_device_info()
         finally:
-            if self._unsub_polling_query_devices is None:
+            if self._unsub_polling_query_device_info is None:
                 # this happens when 'async_query_devices' is unable to
                 # retrieve fresh cloud data for whatever reason
-                self._unsub_polling_query_devices = schedule_async_callback(
+                self._unsub_polling_query_device_info = schedule_async_callback(
                     ApiProfile.hass,
                     PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
-                    self._async_polling_query_devices,
+                    self._async_polling_query_device_info,
                 )
 
     async def _async_query_subdevices(self, device_id: str):

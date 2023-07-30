@@ -84,6 +84,7 @@ CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
 CONF_SAVE_PASSWORD: Final = "save_password"
 CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
+CONF_CHECK_FIRMWARE_UPDATES: Final = "check_firmware_updates"
 CONF_CREATE_DIAGNOSTIC_ENTITIES: Final = "create_diagnostic_entities"
 
 
@@ -95,6 +96,7 @@ class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
     password: str | None
     save_password: bool | None
     allow_mqtt_publish: bool | None
+    check_firmware_updates: bool | None
     create_diagnostic_entities: bool | None
 
 
@@ -132,5 +134,8 @@ PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
 PARAM_TIMESTAMP_TOLERANCE = 5
 # used to delay the iteration of abilities while tracing
 PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
-PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400
+# timeout for querying cloud api deviceInfo endpoint
+PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day
+# timeout for querying cloud api latestVersion endpoint
+PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT = 604800  # 1 week
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30

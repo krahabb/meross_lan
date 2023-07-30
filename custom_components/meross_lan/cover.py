@@ -31,6 +31,7 @@ from .helpers import (
     SmartPollingStrategy,
     clamp,
     get_entity_last_state,
+    get_entity_last_state_available,
     schedule_async_callback,
     schedule_callback,
     versiontuple,
@@ -141,13 +142,17 @@ class MLGarageConfigSwitch(MLSwitch):
 class MLGarageConfigNumber(MLConfigNumber):
     """
     Helper entity to configure MSG open/close duration
+    this entity reflects the configuration 'per device' and
+    is managed through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG namespace
     """
 
     manager: GarageMixin
 
-    def __init__(self, manager: GarageMixin, channel, key: str):
+    def __init__(self, manager: GarageMixin, channel, key: str, value=None):
         self.key_value = key
         self._attr_name = key
+        if value:
+            self._attr_state = value / self.ml_multiplier
         # these are ok for 2 of the 3 config numbers
         # customize those when instantiating
         self._attr_native_max_value = 60
@@ -185,24 +190,26 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
     Helper entity to configure MSG open/close duration
     This entity is bound to the garage channel (i.e. we have
     a pair of open/close for each garage entity) and
-    is not linked to 'Appliance.GarageDoor.Config'.
-    Newer msg devices appear to have a door/open configuration
+    is not linked to mc.NS_APPLIANCE_GARAGEDOOR_CONFIG.
+    Newer MSG devices appear to have a door/open configuration
     for each channel but we're still lacking the knowledge
     in order to configure them. These MLGarageOpenCloseDurationNumber
-    entities will therefore be just 'emulated' in meross_lan and
-    the state is managed inside this component
+    will try their best (ganbatte neee!) to work out the
+    mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG namespace
+    trying to atleast preserve th elocal (HA) state in case the
+    protocol is not working as expected
     """
 
-    def __init__(self, cover: MLGarage, key: str):
+    namespace = mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
+    key_namespace = mc.KEY_CONFIG
+
+    def __init__(self, cover: MLGarage, key: str, value=None):
         super().__init__(
             cover.manager,
             cover.channel,
             key,
+            value,
         )
-        self._attr_state = (
-            PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
-            + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
-        ) / 2
 
     @property
     def available(self):
@@ -213,22 +220,32 @@ class MLGarageOpenCloseDurationNumber(MLGarageConfigNumber):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        with self.exception_warning("restoring previous state"):
-            if last_state := await get_entity_last_state(self.hass, self.entity_id):
-                self._attr_state = float(last_state.state)  # type: ignore
+        if self._attr_state is None:
+            # this is for when we're unsure we can correctly manage MULTIPLECONFIG namespace
+            # this way we'll at least provide a 'locally managed' entity
+            self._attr_state = (
+                PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
+                + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
+            ) / 2
+            with self.exception_warning("restoring previous state"):
+                if last_state := await get_entity_last_state_available(
+                    self.hass, self.entity_id
+                ):
+                    self._attr_state = float(last_state.state)  # type: ignore
 
     async def async_set_native_value(self, value: float):
-        self.update_native_value(value)
-
-    @property
-    def ml_multiplier(self):
-        return 1
+        if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in self.manager.descriptor.ability:
+            await MLConfigNumber.async_set_native_value(self, value)
+        else:
+            self.update_state(value)
 
 
 class MLGarage(me.MerossEntity, cover.CoverEntity):
     PLATFORM = cover.DOMAIN
 
     manager: GarageMixin
+    number_doorOpenDuration: MLGarageConfigNumber | None
+    number_doorCloseDuration: MLGarageConfigNumber | None
 
     __slots__ = (
         "_transition_duration",
@@ -259,8 +276,16 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             EXTRA_ATTR_TRANSITION_DURATION: self._transition_duration
         }
         self.binary_sensor_timeout = MLGarageTimeoutBinarySensor(self)
-        self.number_doorOpenDuration: MLGarageConfigNumber | None = None
-        self.number_doorCloseDuration: MLGarageConfigNumber | None = None
+        if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in self.manager.descriptor.ability:
+            self.number_doorOpenDuration = MLGarageOpenCloseDurationNumber(
+                self, mc.KEY_DOOROPENDURATION
+            )
+            self.number_doorCloseDuration = MLGarageOpenCloseDurationNumber(
+                self, mc.KEY_DOORCLOSEDURATION
+            )
+        else:
+            self.number_doorOpenDuration = None
+            self.number_doorCloseDuration = None
 
     @property
     def supported_features(self):
@@ -408,7 +433,24 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                     self.update_state(STATE_CLOSED)
 
     def _parse_config(self, payload):
-        pass
+        if mc.KEY_DOOROPENDURATION in payload:
+            if self.number_doorOpenDuration:
+                self.number_doorOpenDuration.update_native_value(
+                    payload[mc.KEY_DOOROPENDURATION]
+                )
+            else:
+                self.number_doorOpenDuration = MLGarageOpenCloseDurationNumber(
+                    self, mc.KEY_DOOROPENDURATION, payload[mc.KEY_DOOROPENDURATION]
+                )
+        if mc.KEY_DOORCLOSEDURATION in payload:
+            if self.number_doorCloseDuration:
+                self.number_doorCloseDuration.update_native_value(
+                    payload[mc.KEY_DOORCLOSEDURATION]
+                )
+            else:
+                self.number_doorCloseDuration = MLGarageOpenCloseDurationNumber(
+                    self, mc.KEY_DOORCLOSEDURATION, payload[mc.KEY_DOORCLOSEDURATION]
+                )
 
     def _parse_togglex(self, payload: dict):
         """
@@ -440,7 +482,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         self._transition_unsub = None
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
-            await manager.async_http_request(*get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE))
+            await manager.async_http_request(
+                *get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+            )
 
     @callback
     def _transition_end_callback(self):
@@ -553,14 +597,23 @@ class GarageMixin(
                         self,
                         None,
                         mc.KEY_DOOROPENDURATION,
-                    )
-                    _number_doorOpenDuration.update_native_value(
-                        payload[mc.KEY_DOOROPENDURATION]
+                        payload[mc.KEY_DOOROPENDURATION],
                     )
                     self.number_doorOpenDuration = _number_doorOpenDuration
-                    for entity in self.entities.values():
-                        if isinstance(entity, MLGarage):
-                            entity.number_doorOpenDuration = _number_doorOpenDuration
+                    for i in self._polling_payload:
+                        garage: MLGarage = self.entities[i[mc.KEY_CHANNEL]]  # type: ignore
+                        garage.number_doorOpenDuration = _number_doorOpenDuration
+            else:
+                # no config for doorOpenDuration: we'll let every channel manage it's own
+                if not self.number_doorOpenDuration:  # use as a guard...
+                    for i in self._polling_payload:
+                        garage: MLGarage = self.entities[i[mc.KEY_CHANNEL]]  # type: ignore
+                        garage.number_doorOpenDuration = (
+                            MLGarageOpenCloseDurationNumber(
+                                garage, mc.KEY_DOOROPENDURATION
+                            )
+                        )
+                        self.number_doorOpenDuration = garage.number_doorOpenDuration
 
             if mc.KEY_DOORCLOSEDURATION in payload:
                 # this config key has been removed in recent firmwares
@@ -574,14 +627,23 @@ class GarageMixin(
                         self,
                         None,
                         mc.KEY_DOORCLOSEDURATION,
-                    )
-                    _number_doorCloseDuration.update_native_value(
-                        payload[mc.KEY_DOORCLOSEDURATION]
+                        payload[mc.KEY_DOORCLOSEDURATION],
                     )
                     self.number_doorCloseDuration = _number_doorCloseDuration
-                    for entity in self.entities.values():
-                        if isinstance(entity, MLGarage):
-                            entity.number_doorCloseDuration = _number_doorCloseDuration
+                    for i in self._polling_payload:
+                        garage: MLGarage = self.entities[i[mc.KEY_CHANNEL]]  # type: ignore
+                        garage.number_doorCloseDuration = _number_doorCloseDuration
+            else:
+                # no config for doorCloseDuration: we'll let every channel manage it's own
+                if not self.number_doorCloseDuration:  # use as a guard...
+                    for i in self._polling_payload:
+                        garage: MLGarage = self.entities[i[mc.KEY_CHANNEL]]  # type: ignore
+                        garage.number_doorCloseDuration = (
+                            MLGarageOpenCloseDurationNumber(
+                                garage, mc.KEY_DOORCLOSEDURATION
+                            )
+                        )
+                        self.number_doorCloseDuration = garage.number_doorCloseDuration
 
     def _handle_Appliance_GarageDoor_MultipleConfig(self, header: dict, payload: dict):
         self._parse__generic(mc.KEY_CONFIG, payload.get(mc.KEY_CONFIG))
@@ -630,7 +692,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
             self._position_native_isgood = versiontuple(
-                manager.descriptor.firmware.get(mc.KEY_VERSION, "")
+                manager.descriptor.firmwareVersion
             ) >= versiontuple("7.6.10")
         except Exception:
             self._position_native_isgood = None

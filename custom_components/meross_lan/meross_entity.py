@@ -118,7 +118,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         Loggable.__init__(self, _id)
         assert (
             manager.entities.get(_id) is None
-        ), "(channel, entitykey) is not unique inside manager.entities"
+        ), f"(channel:{channel}, entitykey:{entitykey}) is not unique inside manager.entities"
         self.manager = manager
         self.channel = channel
         self._attr_device_class = device_class

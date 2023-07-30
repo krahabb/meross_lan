@@ -68,6 +68,7 @@ from .merossclient import (  # mEROSS cONST
 )
 from .merossclient.httpclient import MerossHttpClient
 from .sensor import PERCENTAGE, MLSensor, ProtocolSensor
+from .update import MLUpdate
 
 ResponseCallbackType = typing.Callable[[bool, dict, dict], None]
 
@@ -76,13 +77,13 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .meross_entity import MerossEntity
-    from .meross_profile import (
+    from .meross_profile import MerossCloudProfile, MQTTConnection
+    from .merossclient import MerossDeviceDescriptor
+    from .merossclient.cloudapi import (
         DeviceInfoType,
-        MerossCloudProfile,
-        MQTTConnection,
+        LatestVersionType,
         SubDeviceInfoType,
     )
-    from .merossclient import MerossDeviceDescriptor
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
 # this list will be excluded from enumeration since it's redundant/exposing sensitive info
@@ -183,8 +184,8 @@ class MerossDeviceBase(EntityManager):
                 device_registry.async_get(ApiProfile.hass).async_get_or_create(
                     config_entry_id=self.config_entry_id,
                     connections=connections,
-                    default_manufacturer=mc.MANUFACTURER,
-                    default_name=default_name,
+                    manufacturer=mc.MANUFACTURER,
+                    name=default_name,
                     model=model,
                     sw_version=sw_version,
                     via_device=via_device,
@@ -297,9 +298,10 @@ class MerossDevice(MerossDeviceBase):
     _tzinfo: ZoneInfo | None  # smart cache of device tzinfo
     _unsub_polling_callback: asyncio.TimerHandle | None
 
+    entity_dnd: MerossEntity
     sensor_protocol: ProtocolSensor
     sensor_signal_strength: MLSensor
-    entity_dnd: MerossEntity
+    update_firmware: MLUpdate | None
 
     __slots__ = (
         "polling_period",
@@ -334,13 +336,13 @@ class MerossDevice(MerossDeviceBase):
         "_trace_endtime",
         "_trace_ability_iter",
         "polling_dictionary",
-        "platforms",
         "_tzinfo",
         "_unsub_polling_callback",
         "_queued_poll_requests",
+        "entity_dnd",
         "sensor_protocol",
         "sensor_signal_strength",
-        "entity_dnd",
+        "update_firmware",
     )
 
     def __init__(
@@ -348,16 +350,6 @@ class MerossDevice(MerossDeviceBase):
         descriptor: MerossDeviceDescriptor,
         config_entry: ConfigEntry,
     ):
-        super().__init__(
-            config_entry.data[CONF_DEVICE_ID],
-            config_entry,
-            default_name=descriptor.productname,
-            model=descriptor.productmodel,
-            sw_version=descriptor.firmware.get(mc.KEY_VERSION),
-            connections={
-                (device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)
-            },
-        )
         self.descriptor = descriptor
         self.needsave = False
         self.device_timestamp = 0.0
@@ -414,8 +406,30 @@ class MerossDevice(MerossDeviceBase):
         self._unsub_polling_callback = None
         self._queued_poll_requests = 0
 
+        # base init after setting some key properties needed for logging
+        super().__init__(
+            config_entry.data[CONF_DEVICE_ID],
+            config_entry,
+            default_name=descriptor.productname,
+            model=descriptor.productmodel,
+            sw_version=descriptor.firmwareVersion,
+            connections={
+                (device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)
+            },
+        )
+
         self._update_config()
         self.curr_protocol = self.pref_protocol
+
+        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
+            from .light import MLDNDLightEntity
+
+            self.entity_dnd = MLDNDLightEntity(self)
+            self.polling_dictionary[
+                mc.NS_APPLIANCE_SYSTEM_DNDMODE
+            ] = EntityPollingStrategy(mc.NS_APPLIANCE_SYSTEM_DNDMODE, self.entity_dnd)
+        else:
+            self.entity_dnd = MerossFakeEntity  # type: ignore
 
         self.sensor_protocol = ProtocolSensor(self)
 
@@ -438,15 +452,10 @@ class MerossDevice(MerossDeviceBase):
         else:
             self.sensor_signal_strength = MerossFakeEntity  # type: ignore
 
-        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
-            from .light import MLDNDLightEntity
-
-            self.entity_dnd = MLDNDLightEntity(self)
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_SYSTEM_DNDMODE
-            ] = EntityPollingStrategy(mc.NS_APPLIANCE_SYSTEM_DNDMODE, self.entity_dnd)
-        else:
-            self.entity_dnd = MerossFakeEntity  # type: ignore
+        # the update entity will only be instantiated 'on demand' since
+        # we might not have this for devices not related to a cloud profile
+        self.platforms[MLUpdate.PLATFORM] = None
+        self.update_firmware = None
 
         for _key, _payload in descriptor.digest.items():
             # _init_xxxx methods provided by mixins
@@ -529,6 +538,7 @@ class MerossDevice(MerossDeviceBase):
         self.entity_dnd = None  # type: ignore
         self.sensor_signal_strength = None  # type: ignore
         self.sensor_protocol = None  # type: ignore
+        self.update_firmware = None
         await super().async_shutdown()
         ApiProfile.devices[self.id] = None
 
@@ -786,7 +796,7 @@ class MerossDevice(MerossDeviceBase):
             self.warning(
                 "received signature error: computed=%s, header=%s",
                 sign,
-                json_dumps(header)
+                json_dumps(header),
             )
 
         if not self._online:
@@ -890,6 +900,12 @@ class MerossDevice(MerossDeviceBase):
         if oldfirmware != descr.firmware:
             # persist changes to configentry only when relevant properties change
             self.needsave = True
+            if update_firmware := self.update_firmware:
+                # self.update_firmware is dynamically created only when the cloud api
+                # reports a newer fw
+                update_firmware._attr_installed_version = descr.firmwareVersion
+                if update_firmware._hass_connected:
+                    update_firmware._async_write_ha_state()
 
         if self._mqtt_active:
             if not is_device_online(descr.system):
@@ -1503,6 +1519,15 @@ class MerossDevice(MerossDeviceBase):
                 # Right now add anyway since it's no harm
                 # (no mqtt messages will come though)
                 ApiProfile.api.attach_mqtt(self)
+
+    def update_latest_version(self, latest_version: LatestVersionType):
+        if not (update_firmware := self.update_firmware):
+            self.update_firmware = update_firmware = MLUpdate(self)
+        update_firmware._attr_installed_version = self.descriptor.firmwareVersion
+        update_firmware._attr_latest_version = latest_version.get(mc.KEY_VERSION)
+        update_firmware._attr_release_summary = latest_version.get(mc.KEY_DESCRIPTION)
+        if update_firmware._hass_connected:
+            update_firmware._async_write_ha_state()
 
     def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
         """
