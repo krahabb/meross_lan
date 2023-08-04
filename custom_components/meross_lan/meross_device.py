@@ -60,6 +60,7 @@ from .helpers import (
 )
 from .meross_entity import MerossFakeEntity
 from .merossclient import (  # mEROSS cONST
+    MEROSSDEBUG,
     const as mc,
     get_default_arguments,
     get_message_signature,
@@ -789,15 +790,19 @@ class MerossDevice(MerossDeviceBase):
         else:
             self.device_timedelta = 0
 
-        sign = get_message_signature(
-            header[mc.KEY_MESSAGEID], self.key, header[mc.KEY_TIMESTAMP]
-        )
-        if sign != header[mc.KEY_SIGN]:
-            self.warning(
-                "received signature error: computed=%s, header=%s",
-                sign,
-                json_dumps(header),
+        if MEROSSDEBUG:
+            # it appears sometimes the devices
+            # send an incorrect signature hash
+            # but at the moment this is unlikely to be critical
+            sign = get_message_signature(
+                header[mc.KEY_MESSAGEID], self.key, header[mc.KEY_TIMESTAMP]
             )
+            if sign != header[mc.KEY_SIGN]:
+                self.warning(
+                    "received signature error: computed=%s, header=%s",
+                    sign,
+                    json_dumps(header),
+                )
 
         if not self._online:
             self._set_online()
