@@ -67,6 +67,7 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MSS110](https://www.meross.com/Detail/58/Smart%20Wi-Fi%20Plug%20Mini): Smart Wifi plug mini
   - [MSS210](https://www.meross.com/Detail/3/Smart%20Wi-Fi%20Plug): Smart Wifi plug
   - [MSS310](https://www.meross.com/Detail/38/Smart%20Wi-Fi%20Plug%20with%20Energy%20Monitor): power plug with metering capabilties
+  - [MSS315](https://www.meross.com/en-gc/smart-plug/matter-smart-plug/159): Matter power plug with metering capabilties
   - [MSS425](https://www.meross.com/Detail/16/Smart%20Wi-Fi%20Surge%20Protector): Smart WiFi Surge Protector (multiple sockets power strip)
   - [MSS510](https://www.meross.com/Detail/23/Smart%20Wi-Fi%20Single%20Pole%20Switch): Smart WiFi single pole switch
   - [MSS550](https://www.meross.com/Detail/24/Smart%20Wi-Fi%203-Way%20Switch): Smart WiFi 2 way switch
