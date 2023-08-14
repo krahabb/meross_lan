@@ -28,19 +28,24 @@ from .const import (
 from .merossclient import const as mc, get_default_arguments
 
 try:
-    from homeassistant.backports.enum import (
-        StrEnum,  # type: ignore pylint: disable=unused-import
-    )
+    # since we're likely on python3.11 this should quickly
+    # set our StrEnum symbol
+    from enum import StrEnum  # type: ignore pylint: disable=unused-import
 except Exception:
-    import enum
+    try:
+        from homeassistant.backports.enum import (
+            StrEnum,  # type: ignore pylint: disable=unused-import
+        )
+    except Exception:
+        import enum
 
-    class StrEnum(enum.Enum):
-        """
-        convenience alias for homeassistant.backports.StrEnum
-        """
+        class StrEnum(enum.Enum):
+            """
+            convenience alias for homeassistant.backports.StrEnum
+            """
 
-        def __str__(self):
-            return str(self.value)
+            def __str__(self):
+                return str(self.value)
 
 
 if typing.TYPE_CHECKING:
