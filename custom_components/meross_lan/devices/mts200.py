@@ -348,6 +348,11 @@ class ThermostatMixin(
     ):
         self._parse__generic_array(mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED])
 
+    def _handle_Appliance_Control_Thermostat_WindowOpened(
+        self, header: dict, payload: dict
+    ):
+        self._parse__generic_array(mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED])
+
     def _handle_Appliance_Control_Thermostat_Schedule(
         self, header: dict, payload: dict
     ):
