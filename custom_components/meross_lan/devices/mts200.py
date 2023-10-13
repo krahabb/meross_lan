@@ -24,6 +24,40 @@ class Mts200SetPointNumber(MtsSetPointNumber):
     key_namespace = mc.KEY_MODE
 
 
+class Mts200CalibrationNumber(MLConfigNumber):
+    """
+    customize MLConfigNumber to interact with thermostat calibration
+    """
+
+    _attr_name = "Calibration"
+
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
+    key_namespace = mc.KEY_CALIBRATION
+    key_value = mc.KEY_VALUE
+
+    def __init__(self, manager: ThermostatMixin, channel: object | None):
+        self._attr_native_max_value = 8
+        self._attr_native_min_value = -8
+        super().__init__(
+            manager,
+            channel,
+            mc.KEY_CALIBRATION,
+            MLConfigNumber.DeviceClass.TEMPERATURE,
+        )
+
+    @property
+    def native_step(self):
+        return 0.1
+
+    @property
+    def native_unit_of_measurement(self):
+        return MtsClimate.TEMP_CELSIUS
+
+    @property
+    def ml_multiplier(self):
+        return 10
+
+
 class Mts200OverheatThresholdNumber(MLConfigNumber):
     """
     customize MLConfigNumber to interact with overheat protection value
@@ -126,12 +160,13 @@ class Mts200Climate(MtsClimate):
         "number_comfort_temperature",
         "number_sleep_temperature",
         "number_away_temperature",
-        "binary_sensor_windowOpened",
-        "switch_sensor_mode",
+        "number_calibration_value",
         "switch_overheat_onoff",
         "sensor_overheat_warning",
         "number_overheat_value",
+        "switch_sensor_mode",
         "sensor_externalsensor_temperature",
+        "binary_sensor_windowOpened",
     )
 
     def __init__(self, manager: ThermostatMixin, channel: object):
@@ -148,14 +183,11 @@ class Mts200Climate(MtsClimate):
         self.number_away_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_AWAY
         )
-        self.binary_sensor_windowOpened = MLBinarySensor(
-            manager, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
+        # calibration
+        self.number_calibration_value = Mts200CalibrationNumber(
+            manager,
+            channel,
         )
-        # sensor mode: use internal(0) vs external(1) sensor as temperature loopback
-        self.switch_sensor_mode = Mts200ConfigSwitch(
-            self, "external sensor mode", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
-        )
-        self.switch_sensor_mode.key_onoff = mc.KEY_MODE
         # overheat protection
         self.switch_overheat_onoff = Mts200ConfigSwitch(
             self, "overheat protection", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
@@ -168,8 +200,17 @@ class Mts200Climate(MtsClimate):
             manager,
             channel,
         )
+        # sensor mode: use internal(0) vs external(1) sensor as temperature loopback
+        self.switch_sensor_mode = Mts200ConfigSwitch(
+            self, "external sensor mode", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
+        )
+        self.switch_sensor_mode.key_onoff = mc.KEY_MODE
         self.sensor_externalsensor_temperature = MLSensor(
             manager, channel, "external sensor", MLSensor.DeviceClass.TEMPERATURE
+        )
+        # windowOpened
+        self.binary_sensor_windowOpened = MLBinarySensor(
+            manager, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
         )
 
     async def async_set_preset_mode(self, preset_mode: str):
@@ -225,6 +266,15 @@ class Mts200Climate(MtsClimate):
             _ack_callback,
         )
 
+    # message handlers
+    def _parse_calibration(self, payload: dict):
+        """{"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}"""
+        if mc.KEY_MIN in payload:
+            self.number_calibration_value._attr_native_min_value = payload[mc.KEY_MIN] / 10
+        if mc.KEY_MAX in payload:
+            self.number_calibration_value._attr_native_max_value = payload[mc.KEY_MAX] / 10
+        self.number_calibration_value.update_native_value(payload[mc.KEY_VALUE])
+
     def _parse_mode(self, payload: dict):
         """{
             "channel": 0,
@@ -264,14 +314,6 @@ class Mts200Climate(MtsClimate):
             self.number_away_temperature.update_native_value(_t)
         self.update_modes()
 
-    def _parse_windowOpened(self, payload: dict):
-        """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
-        self.binary_sensor_windowOpened.update_onoff(payload[mc.KEY_STATUS])
-
-    def _parse_sensor(self, payload: dict):
-        """{ "channel": 0, "mode": 0 }"""
-        self.switch_sensor_mode.update_onoff(payload[mc.KEY_MODE])
-
     def _parse_overheat(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}"""
@@ -292,6 +334,18 @@ class Mts200Climate(MtsClimate):
             self.sensor_externalsensor_temperature.update_state(
                 payload[mc.KEY_CURRENTTEMP] / 10
             )
+
+    def _parse_sensor(self, payload: dict):
+        """{ "channel": 0, "mode": 0 }"""
+        self.switch_sensor_mode.update_onoff(payload[mc.KEY_MODE])
+
+    def _parse_summerMode(self, payload: dict):
+        """{ "channel": 0, "mode": 0 }"""
+        pass
+
+    def _parse_windowOpened(self, payload: dict):
+        """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
+        self.binary_sensor_windowOpened.update_onoff(payload[mc.KEY_STATUS])
 
 
 class ThermostatMixin(
@@ -322,9 +376,6 @@ class ThermostatMixin(
                     {mc.KEY_OVERHEAT: self._polling_payload},
                 )
 
-    def _handle_Appliance_Control_Thermostat_Mode(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_MODE, payload[mc.KEY_MODE])
-
     def _handle_Appliance_Control_Thermostat_Calibration(
         self, header: dict, payload: dict
     ):
@@ -338,33 +389,34 @@ class ThermostatMixin(
     def _handle_Appliance_Control_Thermostat_Frost(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_FROST, payload[mc.KEY_FROST])
 
+    def _handle_Appliance_Control_Thermostat_HoldAction(
+        self, header: dict, payload: dict
+    ):
+        self._parse__generic_array(mc.KEY_HOLDACTION, payload[mc.KEY_HOLDACTION])
+
+    def _handle_Appliance_Control_Thermostat_Mode(self, header: dict, payload: dict):
+        self._parse__generic_array(mc.KEY_MODE, payload[mc.KEY_MODE])
+
     def _handle_Appliance_Control_Thermostat_Overheat(
         self, header: dict, payload: dict
     ):
         self._parse__generic_array(mc.KEY_OVERHEAT, payload[mc.KEY_OVERHEAT])
-
-    def _handle_Appliance_Control_Thermostat_windowOpened(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED])
-
-    def _handle_Appliance_Control_Thermostat_WindowOpened(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED])
 
     def _handle_Appliance_Control_Thermostat_Schedule(
         self, header: dict, payload: dict
     ):
         self._parse__generic_array(mc.KEY_SCHEDULE, payload[mc.KEY_SCHEDULE])
 
-    def _handle_Appliance_Control_Thermostat_HoldAction(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_HOLDACTION, payload[mc.KEY_HOLDACTION])
-
     def _handle_Appliance_Control_Thermostat_Sensor(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_SENSOR, payload[mc.KEY_SENSOR])
+
+    def _handle_Appliance_Control_Thermostat_SummerMode(self, header: dict, payload: dict):
+        self._parse__generic_array(mc.KEY_SUMMERMODE, payload[mc.KEY_SUMMERMODE])
+
+    def _handle_Appliance_Control_Thermostat_WindowOpened(
+        self, header: dict, payload: dict
+    ):
+        self._parse__generic_array(mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED])
 
     def _parse_thermostat(self, payload: dict):
         """
