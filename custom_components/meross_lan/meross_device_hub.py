@@ -728,14 +728,14 @@ class MTS100SubDevice(MerossSubDevice):
         if isinstance(p_temperature := p_all.get(mc.KEY_TEMPERATURE), dict):
             self._parse_temperature(p_temperature)
         else:
-            climate.update_modes()
-            self.schedule.update_climate_modes()
+            climate.update_mts_state()
+            self.schedule.update_mts_state()
 
     def _parse_mode(self, p_mode: dict):
         climate = self.climate
         climate._mts_mode = p_mode.get(mc.KEY_STATE)
-        climate.update_modes()
-        self.schedule.update_climate_modes()
+        climate.update_mts_state()
+        self.schedule.update_mts_state()
 
     def _parse_mts100(self, p_mts100: dict):
         pass
@@ -755,9 +755,9 @@ class MTS100SubDevice(MerossSubDevice):
         if isinstance(_t := p_temperature.get(mc.KEY_MAX), int):
             climate._attr_max_temp = _t / 10
         if mc.KEY_HEATING in p_temperature:
-            climate._mts_heating = p_temperature[mc.KEY_HEATING]
-        climate.update_modes()
-        self.schedule.update_climate_modes()
+            climate._mts_active = p_temperature[mc.KEY_HEATING]
+        climate.update_mts_state()
+        self.schedule.update_mts_state()
 
         if isinstance(_t := p_temperature.get(mc.KEY_COMFORT), int):
             self.number_comfort_temperature.update_native_value(_t)
@@ -772,8 +772,8 @@ class MTS100SubDevice(MerossSubDevice):
     def _parse_togglex(self, p_togglex: dict):
         climate = self.climate
         climate._mts_onoff = p_togglex.get(mc.KEY_ONOFF)
-        climate.update_modes()
-        self.schedule.update_climate_modes()
+        climate.update_mts_state()
+        self.schedule.update_mts_state()
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100] = MTS100SubDevice

@@ -31,24 +31,15 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     ATTR_TEMPERATURE: Final = climate.ATTR_TEMPERATURE
     TEMP_CELSIUS: Final = hac.TEMP_CELSIUS
 
-    PRESET_OFF: Final = "off"
     PRESET_CUSTOM: Final = "custom"
     PRESET_COMFORT: Final = "comfort"
     PRESET_SLEEP: Final = "sleep"
     PRESET_AWAY: Final = "away"
     PRESET_AUTO: Final = "auto"
 
-    # when HA requests an HVAC mode we'll map it to a 'preset'
-    HVAC_TO_PRESET_MAP: Final = {
-        HVACMode.OFF: PRESET_OFF,
-        HVACMode.HEAT: PRESET_CUSTOM,
-        HVACMode.AUTO: PRESET_AUTO,
-    }
-
     manager: MerossDeviceBase
-    _attr_hvac_modes: Final = [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO]
+
     _attr_preset_modes: Final = [
-        PRESET_OFF,
         PRESET_CUSTOM,
         PRESET_COMFORT,
         PRESET_SLEEP,
@@ -62,49 +53,55 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     # these mappings are defined in inherited MtsXXX
     # they'll map between mts device 'mode' and HA 'preset'
-    MTS_MODE_AUTO: ClassVar[int]
     MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int, str]]
     PRESET_TO_TEMPERATUREKEY_MAP: ClassVar[dict[str, str]]
+    # in general Mts thermostats are only heating..MTS200 with 'summer mode' could override this
+    MTS_HVAC_MODES: Final = [HVACMode.OFF, HVACMode.HEAT]
 
     __slots__ = (
         "_attr_current_temperature",
         "_attr_hvac_action",
         "_attr_hvac_mode",
+        "_attr_hvac_modes",
         "_attr_max_temp",
         "_attr_min_temp",
         "_attr_preset_mode",
         "_attr_target_temperature",
+        "_mts_active",
         "_mts_mode",
         "_mts_onoff",
-        "_mts_heating",
+        "_mts_summermode",
     )
 
     def __init__(self, manager: MerossDeviceBase, channel: object):
         self._attr_current_temperature = None
         self._attr_hvac_action = None
         self._attr_hvac_mode = None
+        self._attr_hvac_modes = self.MTS_HVAC_MODES
         self._attr_max_temp = 35
         self._attr_min_temp = 5
         self._attr_preset_mode = None
         self._attr_target_temperature = None
+        self._mts_active = None
         self._mts_mode: int | None = None
         self._mts_onoff = None
-        self._mts_heating = None
+        self._mts_summermode = None
         super().__init__(manager, channel, None, None)
 
-    def update_modes(self):
+    def update_mts_state(self):
+        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
         if self._mts_onoff:
-            self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
-            self._attr_hvac_mode = (
-                HVACMode.AUTO
-                if self._attr_preset_mode is MtsClimate.PRESET_AUTO
-                else HVACMode.HEAT
-            )
-            self._attr_hvac_action = (
-                HVACAction.HEATING if self._mts_heating else HVACAction.IDLE
-            )
+            if self._mts_summermode:
+                self._attr_hvac_mode = HVACMode.COOL
+                self._attr_hvac_action = (
+                    HVACAction.COOLING if self._mts_active else HVACAction.IDLE
+                )
+            else:
+                self._attr_hvac_mode = HVACMode.HEAT
+                self._attr_hvac_action = (
+                    HVACAction.HEATING if self._mts_active else HVACAction.IDLE
+                )
         else:
-            self._attr_preset_mode = MtsClimate.PRESET_OFF
             self._attr_hvac_mode = HVACMode.OFF
             self._attr_hvac_action = HVACAction.OFF
 
@@ -170,17 +167,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     async def async_turn_off(self):
         await self.async_request_onoff(0)
-
-    async def async_set_hvac_mode(self, hvac_mode: HVACMode):
-        if hvac_mode == HVACMode.HEAT:
-            # when requesting HEAT we'll just switch ON the MTS
-            # while leaving it's own mode (#48) if it's one of
-            # the manual modes, else switch it to MTS100MODE_CUSTOM
-            # through HVAC_TO_PRESET_MAP
-            if self._mts_mode != self.MTS_MODE_AUTO:
-                await self.async_request_onoff(1)
-                return
-        await self.async_set_preset_mode(MtsClimate.HVAC_TO_PRESET_MAP[hvac_mode])
 
     async def async_set_preset_mode(self, preset_mode: str):
         raise NotImplementedError()

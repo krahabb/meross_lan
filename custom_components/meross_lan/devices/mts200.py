@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from ..binary_sensor import MLBinarySensor
-from ..climate import MtsClimate, MtsSetPointNumber
+from ..climate import HVACMode, MtsClimate, MtsSetPointNumber
 from ..helpers import SmartPollingStrategy, reverse_lookup
 from ..meross_entity import EntityCategory
 from ..merossclient import const as mc
@@ -132,7 +132,6 @@ class Mts200ConfigSwitch(MLSwitch):
 class Mts200Climate(MtsClimate):
     """Climate entity for MTS200 devices"""
 
-    MTS_MODE_AUTO = mc.MTS200_MODE_AUTO
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
         mc.MTS200_MODE_HEAT: MtsClimate.PRESET_COMFORT,
@@ -146,7 +145,6 @@ class Mts200Climate(MtsClimate):
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
     PRESET_TO_TEMPERATUREKEY_MAP = {
-        MtsClimate.PRESET_OFF: mc.KEY_MANUALTEMP,
         MtsClimate.PRESET_CUSTOM: mc.KEY_MANUALTEMP,
         MtsClimate.PRESET_COMFORT: mc.KEY_HEATTEMP,
         MtsClimate.PRESET_SLEEP: mc.KEY_COOLTEMP,
@@ -213,27 +211,61 @@ class Mts200Climate(MtsClimate):
             manager, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
         )
 
-    async def async_set_preset_mode(self, preset_mode: str):
-        if preset_mode == MtsClimate.PRESET_OFF:
+        if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in manager.descriptor.ability:
+            self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]
+
+    async def async_set_hvac_mode(self, hvac_mode: HVACMode):
+        if hvac_mode == HVACMode.OFF:
             await self.async_request_onoff(0)
-        else:
-            mode = reverse_lookup(Mts200Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
-            if mode is not None:
+            return
+
+        if hvac_mode == HVACMode.COOL:
+            if not self._mts_summermode:
 
                 def _ack_callback(acknowledge: bool, header: dict, payload: dict):
                     if acknowledge:
-                        self._mts_mode = mode
-                        self.update_modes()
+                        self._mts_summermode = 1
+                        self.update_mts_state()
 
                 await self.manager.async_request(
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
                     mc.METHOD_SET,
-                    {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}]},
+                    {mc.KEY_SUMMERMODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: 1}]},
+                    _ack_callback,
+                )
+        elif hvac_mode == HVACMode.HEAT:
+            if self._mts_summermode:
+
+                def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+                    if acknowledge:
+                        self._mts_summermode = 0
+                        self.update_mts_state()
+
+                await self.manager.async_request(
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+                    mc.METHOD_SET,
+                    {mc.KEY_SUMMERMODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: 0}]},
                     _ack_callback,
                 )
 
-                if not self._mts_onoff:
-                    await self.async_request_onoff(1)
+        await self.async_request_onoff(1)
+
+    async def async_set_preset_mode(self, preset_mode: str):
+        mode = reverse_lookup(Mts200Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
+        if mode is not None:
+
+            def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+                if acknowledge:
+                    self._mts_mode = mode
+                    self._mts_onoff = 1
+                    self.update_mts_state()
+
+            await self.manager.async_request(
+                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
+                mc.METHOD_SET,
+                {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode, mc.KEY_ONOFF: 1}]},
+                _ack_callback,
+            )
 
     async def async_set_temperature(self, **kwargs):
         t = kwargs[Mts200Climate.ATTR_TEMPERATURE]
@@ -244,7 +276,7 @@ class Mts200Climate(MtsClimate):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
                 self._attr_target_temperature = t
-                self.update_modes()
+                self.update_mts_state()
 
         await self.manager.async_request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
@@ -257,7 +289,7 @@ class Mts200Climate(MtsClimate):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
                 self._mts_onoff = onoff
-                self.update_modes()
+                self.update_mts_state()
 
         await self.manager.async_request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
@@ -297,7 +329,7 @@ class Mts200Climate(MtsClimate):
         if mc.KEY_ONOFF in payload:
             self._mts_onoff = payload[mc.KEY_ONOFF]
         if mc.KEY_STATE in payload:
-            self._mts_heating = payload[mc.KEY_STATE]
+            self._mts_active = payload[mc.KEY_STATE]
         if isinstance(_t := payload.get(mc.KEY_CURRENTTEMP), int):
             self._attr_current_temperature = _t / 10
         if isinstance(_t := payload.get(mc.KEY_TARGETTEMP), int):
@@ -312,7 +344,7 @@ class Mts200Climate(MtsClimate):
             self.number_sleep_temperature.update_native_value(_t)
         if isinstance(_t := payload.get(mc.KEY_ECOTEMP), int):
             self.number_away_temperature.update_native_value(_t)
-        self.update_modes()
+        self.update_mts_state()
 
     def _parse_overheat(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
@@ -341,7 +373,12 @@ class Mts200Climate(MtsClimate):
 
     def _parse_summerMode(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""
-        pass
+        # guessed code right now since we don't have any summerMode payload example
+        if mc.KEY_MODE in payload:
+            summermode = payload[mc.KEY_MODE]
+            if self._mts_summermode != summermode:
+                self._mts_summermode = summermode
+                self.update_mts_state()
 
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
@@ -361,12 +398,12 @@ class ThermostatMixin(
                 Mts200Climate(self, m[mc.KEY_CHANNEL])
                 self._polling_payload.append({mc.KEY_CHANNEL: m[mc.KEY_CHANNEL]})
         if self._polling_payload:
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR in self.descriptor.ability:
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION in self.descriptor.ability:
                 self.polling_dictionary[
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
                 ] = SmartPollingStrategy(
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
-                    {mc.KEY_SENSOR: self._polling_payload},
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION,
+                    {mc.KEY_CALIBRATION: self._polling_payload},
                 )
             if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT in self.descriptor.ability:
                 self.polling_dictionary[
@@ -374,6 +411,20 @@ class ThermostatMixin(
                 ] = SmartPollingStrategy(
                     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
                     {mc.KEY_OVERHEAT: self._polling_payload},
+                )
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR in self.descriptor.ability:
+                self.polling_dictionary[
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
+                ] = SmartPollingStrategy(
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
+                    {mc.KEY_SENSOR: self._polling_payload},
+                )
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in self.descriptor.ability:
+                self.polling_dictionary[
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE
+                ] = SmartPollingStrategy(
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+                    {mc.KEY_SUMMERMODE: self._polling_payload},
                 )
 
     def _handle_Appliance_Control_Thermostat_Calibration(
