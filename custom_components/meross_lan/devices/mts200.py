@@ -153,6 +153,16 @@ class Mts200Climate(MtsClimate):
     }
 
     manager: ThermostatMixin
+    number_comfort_temperature: Mts200SetPointNumber
+    number_sleep_temperature: Mts200SetPointNumber
+    number_away_temperature: Mts200SetPointNumber
+    number_calibration_value: Mts200CalibrationNumber
+    switch_overheat_onoff: Mts200ConfigSwitch
+    sensor_overheat_warning: MLSensor
+    number_overheat_value: Mts200OverheatThresholdNumber
+    switch_sensor_mode: Mts200ConfigSwitch
+    sensor_externalsensor_temperature: MLSensor
+    binary_sensor_windowOpened: MLBinarySensor
 
     __slots__ = (
         "number_comfort_temperature",
@@ -169,9 +179,6 @@ class Mts200Climate(MtsClimate):
 
     def __init__(self, manager: ThermostatMixin, channel: object):
         super().__init__(manager, channel)
-        # TODO: better cleanup since these circular dependencies
-        # prevent proper object release (likely the Mts200SetPointNumber
-        # which keeps a reference to this climate)
         self.number_comfort_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_COMFORT
         )
@@ -213,6 +220,20 @@ class Mts200Climate(MtsClimate):
 
         if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in manager.descriptor.ability:
             self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]
+
+    # interface: MtsClimate
+    async def async_shutdown(self):
+        self.number_comfort_temperature = None  # type: ignore
+        self.number_sleep_temperature = None  # type: ignore
+        self.number_away_temperature = None  # type: ignore
+        self.number_calibration_value = None  # type: ignore
+        self.switch_overheat_onoff = None  # type: ignore
+        self.sensor_overheat_warning = None  # type: ignore
+        self.number_overheat_value = None  # type: ignore
+        self.switch_sensor_mode = None  # type: ignore
+        self.sensor_externalsensor_temperature = None  # type: ignore
+        self.binary_sensor_windowOpened = None  # type: ignore
+        await super().async_shutdown()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode):
         if hvac_mode == HVACMode.OFF:
@@ -390,6 +411,7 @@ class ThermostatMixin(
 ):  # pylint: disable=used-before-assignment
     _polling_payload: list
 
+    # interface: self
     def _init_thermostat(self, payload: dict):
         self._polling_payload = []
         mode = payload.get(mc.KEY_MODE)

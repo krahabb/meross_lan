@@ -667,6 +667,8 @@ class EntityManager(Loggable):
         # shouldnt be loaded/listened at this point
         self.unlisten_entry_update()
         ApiProfile.managers.pop(self.config_entry_id, None)
+        for entity in self.entities.values():
+            await entity.async_shutdown()
         self.entities.clear()
         self.platforms.clear()
 

@@ -206,6 +206,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self._hass_connected = False
 
     # interface: self
+    async def async_shutdown(self):
+        pass
+
     def update_state(self, state: StateType):
         if self._attr_state != state:
             self._attr_state = state
