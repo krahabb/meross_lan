@@ -520,10 +520,6 @@ class MerossDevice(MerossDeviceBase):
 
     # interface: MerossDeviceBase
     async def async_shutdown(self):
-        """
-        called when the config entry is unloaded
-        we'll try to clear everything here
-        """
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
         if self._cloud_profile:
@@ -536,12 +532,12 @@ class MerossDevice(MerossDeviceBase):
         self.polling_dictionary.clear()
         if self._trace_file:
             self._trace_close()
+        await super().async_shutdown()
+        ApiProfile.devices[self.id] = None
         self.entity_dnd = None  # type: ignore
         self.sensor_signal_strength = None  # type: ignore
         self.sensor_protocol = None  # type: ignore
         self.update_firmware = None
-        await super().async_shutdown()
-        ApiProfile.devices[self.id] = None
 
     async def async_request(
         self,

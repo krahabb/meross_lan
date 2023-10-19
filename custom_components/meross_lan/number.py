@@ -212,6 +212,9 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 class ScreenBrightnessMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
+    _number_brightness_operation: MLScreenBrightnessNumber
+    _number_brightness_standby: MLScreenBrightnessNumber
+
     def __init__(self, descriptor, entry):
         super().__init__(descriptor, entry)
 
@@ -231,6 +234,13 @@ class ScreenBrightnessMixin(
                 mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
             ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS)
 
+    # interface: MerossDevice
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self._number_brightness_operation = None  # type: ignore
+        self._number_brightness_standby = None  # type: ignore
+
+    # interface: self
     def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
         for p_channel in payload[mc.KEY_BRIGHTNESS]:
             if p_channel.get(mc.KEY_CHANNEL) == 0:

@@ -663,9 +663,15 @@ class EntityManager(Loggable):
         return True
 
     async def async_shutdown(self):
-        # extra-safety cleanup: in an ideal world the config_entry
-        # shouldnt be loaded/listened at this point
-        self.unlisten_entry_update()
+        """
+        Cleanup code called when the config entry is unloaded.
+        Beware, when a derived class owns some direct member pointers to entities,
+        be sure to invalidate them after calling the super() implementation.
+        This is especially true for MerossDevice(s) classes which need to stop
+        their async polling before invalidating the member pointers (which are
+        usually referred to inside the polling /parsing code)
+        """
+        self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
         ApiProfile.managers.pop(self.config_entry_id, None)
         for entity in self.entities.values():
             await entity.async_shutdown()
