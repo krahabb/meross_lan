@@ -622,6 +622,7 @@ class EntityManager(Loggable):
         "key",
         "config",
         "_unsub_entry_update_listener",
+        "_unsub_entry_reload_scheduler",
     )
 
     def __init__(
@@ -653,6 +654,7 @@ class EntityManager(Loggable):
             self.config = config_entry_or_id.data
             self.key = config_entry_or_id.data.get(CONF_KEY) or ""
         self._unsub_entry_update_listener = None
+        self._unsub_entry_reload_scheduler: asyncio.TimerHandle | None = None
 
     @property
     def name(self) -> str:
@@ -672,6 +674,7 @@ class EntityManager(Loggable):
         usually referred to inside the polling /parsing code)
         """
         self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
+        self.unschedule_entry_reload()
         ApiProfile.managers.pop(self.config_entry_id, None)
         for entity in self.entities.values():
             await entity.async_shutdown()
@@ -697,6 +700,7 @@ class EntityManager(Loggable):
         ):
             return False
         self.unlisten_entry_update()
+        self.unschedule_entry_reload()
         ApiProfile.managers.pop(self.config_entry_id)
         return True
 
@@ -704,6 +708,23 @@ class EntityManager(Loggable):
         if self._unsub_entry_update_listener:
             self._unsub_entry_update_listener()
             self._unsub_entry_update_listener = None
+
+    def schedule_entry_reload(self):
+        """Schedules a reload (in 15 sec) of the config_entry performing a full re-initialization"""
+        self.unschedule_entry_reload()
+
+        async def _async_entry_reload():
+            self._unsub_entry_reload_scheduler = None
+            await ApiProfile.hass.config_entries.async_reload(self.config_entry_id)
+
+        self._unsub_entry_reload_scheduler = schedule_async_callback(
+            ApiProfile.hass, 15, _async_entry_reload
+        )
+
+    def unschedule_entry_reload(self):
+        if self._unsub_entry_reload_scheduler:
+            self._unsub_entry_reload_scheduler.cancel()
+            self._unsub_entry_reload_scheduler = None
 
     def managed_entities(self, platform):
         """entities list for platform setup"""

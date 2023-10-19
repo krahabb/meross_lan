@@ -893,13 +893,39 @@ class MerossDevice(MerossDeviceBase):
         key = get_namespacekey(header[mc.KEY_NAMESPACE])
         self._parse__generic_array(key, payload[key])
 
+    def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
+        # This is only requested when we want to update a config_entry due
+        # to a detected fw change or whatever...
+        # before saving, we're checking the abilities did (or didn't) change too
+        self.needsave = False
+        with self.exception_warning("ConfigEntry update"):
+            entries = ApiProfile.hass.config_entries
+            if entry := entries.async_get_entry(self.config_entry_id):
+                data = dict(entry.data)
+                descr = self.descriptor
+                data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+                data[CONF_PAYLOAD][mc.KEY_ALL] = descr.all
+
+                oldability = descr.ability
+                newability = payload[mc.KEY_ABILITY]
+                if oldability != newability:
+                    data[CONF_PAYLOAD][mc.KEY_ABILITY] = newability
+                    oldabilities = oldability.keys()
+                    newabilities = newability.keys()
+                    self.warning(
+                        "Trying schedule device configuration reload since the abilities changed (added: %s - removed: %s)",
+                        str(newabilities - oldabilities),
+                        str(oldabilities - newabilities),
+                    )
+                    self.schedule_entry_reload()
+                entries.async_update_entry(entry, data=data)
+
     def _handle_Appliance_System_All(self, header: dict, payload: dict):
         descr = self.descriptor
         oldfirmware = descr.firmware
         descr.update(payload)
 
         if oldfirmware != descr.firmware:
-            # persist changes to configentry only when relevant properties change
             self.needsave = True
             if update_firmware := self.update_firmware:
                 # self.update_firmware is dynamically created only when the cloud api
@@ -943,8 +969,9 @@ class MerossDevice(MerossDeviceBase):
                     _parse(_value)
 
         if self.needsave:
-            self.needsave = False
-            self._save_config_entry(payload)
+            # fw update or whatever might have modified the device abilities.
+            # we refresh the abilities list before saving the new config_entry
+            self.request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY))
 
     def _handle_Appliance_System_Debug(self, header: dict, payload: dict):
         self.device_debug = p_debug = payload[mc.KEY_DEBUG]
@@ -1224,7 +1251,6 @@ class MerossDevice(MerossDeviceBase):
                     self._set_offline()
                     return
 
-                # assert self._online
                 # when mqtt is working as a fallback for HTTP
                 # we should periodically check if http comes back
                 # in case our self.pref_protocol is HTTP.
@@ -1441,15 +1467,6 @@ class MerossDevice(MerossDeviceBase):
         if self._online:
             self.sensor_protocol.update_connected()
 
-    def _save_config_entry(self, payload: dict):
-        with self.exception_warning("ConfigEntry update"):
-            entries = ApiProfile.hass.config_entries
-            if entry := entries.async_get_entry(self.config_entry_id):
-                data = dict(entry.data)
-                data[CONF_PAYLOAD].update(payload)
-                data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
-                entries.async_update_entry(entry, data=data)
-
     def _update_config(self):
         """
         common properties caches, read from ConfigEntry on __init__ or when a configentry updates
@@ -1558,25 +1575,21 @@ class MerossDevice(MerossDeviceBase):
                 "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
             )
             os.makedirs(tracedir, exist_ok=True)
+            descr = self.descriptor
             self._trace_file = open(
                 os.path.join(
                     tracedir,
-                    CONF_TRACE_FILENAME.format(self.descriptor.type, int(endtime)),
+                    CONF_TRACE_FILENAME.format(descr.type, int(endtime)),
                 ),
                 mode="w",
                 encoding="utf8",
             )
             self._trace_endtime = endtime
+            self._trace(epoch, descr.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
             self._trace(
-                epoch, self.descriptor.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK
+                epoch, descr.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK
             )
-            self._trace(
-                epoch,
-                self.descriptor.ability,
-                mc.NS_APPLIANCE_SYSTEM_ABILITY,
-                mc.METHOD_GETACK,
-            )
-            self._trace_ability_iter = iter(self.descriptor.ability)
+            self._trace_ability_iter = iter(descr.ability)
             self._trace_ability()
         except Exception as exception:
             if self._trace_file:

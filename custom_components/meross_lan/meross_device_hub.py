@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import typing
 
 from homeassistant.helpers import device_registry
@@ -14,7 +13,6 @@ from .helpers import (
     ApiProfile,
     PollingStrategy,
     SmartPollingStrategy,
-    schedule_async_callback,
 )
 from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (  # mEROSS cONST
@@ -56,14 +54,12 @@ class MerossDeviceHub(MerossDevice):
         "subdevices",
         "_lastupdate_sensor",
         "_lastupdate_mts100",
-        "_unsub_setup_again",
     )
 
     def __init__(self, descriptor, entry):
         self.subdevices: dict[object, MerossSubDevice] = {}
         self._lastupdate_sensor = None
         self._lastupdate_mts100 = None
-        self._unsub_setup_again: asyncio.TimerHandle | None = None
         super().__init__(descriptor, entry)
         # invoke platform(s) async_setup_entry
         # in order to be able to eventually add entities when they 'pop up'
@@ -108,10 +104,6 @@ class MerossDeviceHub(MerossDevice):
 
     # interface: MerossDevice
     async def async_shutdown(self):
-        if self._unsub_setup_again:
-            self._unsub_setup_again.cancel()
-            self._unsub_setup_again = None
-        # shutdown the base first to stop polling in case
         await super().async_shutdown()
         for subdevice in self.subdevices.values():
             await subdevice.async_shutdown()
@@ -251,20 +243,11 @@ class MerossDeviceHub(MerossDevice):
             for p_id in subdevices_actual:
                 subdevice = self.subdevices[p_id]
                 self.warning(
-                    "removing subdevice %s(%s) - configuration will be reloaded in 15 sec",
+                    "removing subdevice %s(%s) - configuration will be reloaded in few sec",
                     subdevice.name,
                     p_id,
                 )
-
-            # before reloading we have to be sure configentry data were persisted
-            # so we'll wait a bit..
-            async def _async_setup_again():
-                self._unsub_setup_again = None
-                await ApiProfile.hass.config_entries.async_reload(self.config_entry_id)
-
-            self._unsub_setup_again = schedule_async_callback(
-                ApiProfile.hass, 15, _async_setup_again
-            )
+            self.schedule_entry_reload()
 
     def _subdevice_build(self, p_subdevice: dict):
         # parses the subdevice payload in 'digest' to look for a well-known type
