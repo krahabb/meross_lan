@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from hashlib import md5
+from time import time
 from typing import Union
 from uuid import uuid4
 
@@ -15,7 +16,6 @@ try:
     import asyncio
     import json
     from random import randint
-    from time import time
 
     class MEROSSDEBUG:
         # this will raise an OSError on non-dev machines missing the
@@ -223,12 +223,26 @@ def get_element_by_key(payload: list, key: str, value: object) -> dict:
     """
     scans the payload(list) looking for the first item matching
     the key value. Usually looking for the matching channel payload
-    inside list paylaods
+    inside list payloads
     """
     for p in payload:
         if p.get(key) == value:
             return p
-    raise KeyError(f"No match for key '{key}' on value:'{value}'")
+    raise KeyError(f"No match for key '{key}' on value:'{str(value)}' in {str(payload)}")
+
+
+def get_element_by_key_safe(payload, key: str, value) -> dict | None:
+    """
+    scans the payload (expecting a list) looking for the first item matching
+    the key value. Usually looking for the matching channel payload
+    inside list payloads
+    """
+    try:
+        for p in payload:
+            if p.get(key) == value:
+                return p
+    except Exception:
+        return None
 
 
 def get_productname(producttype: str) -> str:
