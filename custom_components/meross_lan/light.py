@@ -41,17 +41,18 @@ async def async_setup_entry(
 
 
 def _rgb_to_int(rgb) -> int:
-    if isinstance(rgb, int):
-        return rgb
-    elif isinstance(rgb, tuple):
-        red, green, blue = rgb
-    elif isinstance(rgb, dict):
-        red = rgb["red"]
-        green = rgb["green"]
-        blue = rgb["blue"]
-    else:
-        raise ValueError("Invalid value for RGB!")
-    return (red << 16) + (green << 8) + blue
+    try:
+        if isinstance(rgb, int):
+            return rgb
+        if isinstance(rgb, tuple):
+            red, green, blue = rgb
+        else:  # assume dict
+            red = rgb["red"]
+            green = rgb["green"]
+            blue = rgb["blue"]
+        return (red << 16) + (green << 8) + blue
+    except Exception as exception:
+        raise ValueError(f"Invalid value for RGB (value: {str(rgb)} - type: {rgb.__class__.__name__} - error: {str(exception)})")
 
 
 def _int_to_rgb(rgb: int):
