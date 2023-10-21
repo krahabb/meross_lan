@@ -41,16 +41,17 @@ async def async_setup_entry(
 
 
 def _rgb_to_int(rgb) -> int:
+    if isinstance(rgb, int):
+        return rgb
     try:
-        if isinstance(rgb, int):
-            return rgb
         if isinstance(rgb, tuple):
             red, green, blue = rgb
         else:  # assume dict
             red = rgb["red"]
             green = rgb["green"]
             blue = rgb["blue"]
-        return (red << 16) + (green << 8) + blue
+        # even if HA states the tuple should be int we have float(s) in the wild (#309)
+        return (round(red) << 16) + (round(green) << 8) + round(blue)
     except Exception as exception:
         raise ValueError(f"Invalid value for RGB (value: {str(rgb)} - type: {rgb.__class__.__name__} - error: {str(exception)})")
 
