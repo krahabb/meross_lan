@@ -354,13 +354,13 @@ class MerossApi(ApiProfile):
 
             mixin_classes.append(LightMixin)
         if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
-            from .sensor import ElectricityMixin
+            from .devices.mss import ElectricityMixin
 
             mixin_classes.append(ElectricityMixin)
         if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
-            from .sensor import ConsumptionMixin
+            from .devices.mss import ConsumptionXMixin
 
-            mixin_classes.append(ConsumptionMixin)
+            mixin_classes.append(ConsumptionXMixin)
         if mc.KEY_SPRAY in digest:
             from .select import SprayMixin
 
@@ -382,7 +382,7 @@ class MerossApi(ApiProfile):
 
             mixin_classes.append(DiffuserMixin)
         if mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS in ability:
-            from .number import ScreenBrightnessMixin
+            from .devices.mts200 import ScreenBrightnessMixin
 
             mixin_classes.append(ScreenBrightnessMixin)
         # We must be careful when ordering the mixin and leave MerossDevice as last class.

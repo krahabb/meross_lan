@@ -7,7 +7,7 @@ from ..climate import HVACMode, MtsClimate, MtsSetPointNumber
 from ..helpers import SmartPollingStrategy, reverse_lookup
 from ..meross_entity import EntityCategory
 from ..merossclient import const as mc
-from ..number import MLConfigNumber
+from ..number import PERCENTAGE, MLConfigNumber
 from ..sensor import MLSensor
 from ..switch import MLSwitch
 
@@ -251,7 +251,11 @@ class Mts200Climate(MtsClimate):
                 await self.manager.async_request(
                     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
                     mc.METHOD_SET,
-                    {mc.KEY_SUMMERMODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: 1}]},
+                    {
+                        mc.KEY_SUMMERMODE: [
+                            {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: 1}
+                        ]
+                    },
                     _ack_callback,
                 )
         elif hvac_mode == HVACMode.HEAT:
@@ -265,7 +269,11 @@ class Mts200Climate(MtsClimate):
                 await self.manager.async_request(
                     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
                     mc.METHOD_SET,
-                    {mc.KEY_SUMMERMODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: 0}]},
+                    {
+                        mc.KEY_SUMMERMODE: [
+                            {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: 0}
+                        ]
+                    },
                     _ack_callback,
                 )
 
@@ -284,7 +292,15 @@ class Mts200Climate(MtsClimate):
             await self.manager.async_request(
                 mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
                 mc.METHOD_SET,
-                {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode, mc.KEY_ONOFF: 1}]},
+                {
+                    mc.KEY_MODE: [
+                        {
+                            mc.KEY_CHANNEL: self.channel,
+                            mc.KEY_MODE: mode,
+                            mc.KEY_ONOFF: 1,
+                        }
+                    ]
+                },
                 _ack_callback,
             )
 
@@ -323,9 +339,13 @@ class Mts200Climate(MtsClimate):
     def _parse_calibration(self, payload: dict):
         """{"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}"""
         if mc.KEY_MIN in payload:
-            self.number_calibration_value._attr_native_min_value = payload[mc.KEY_MIN] / 10
+            self.number_calibration_value._attr_native_min_value = (
+                payload[mc.KEY_MIN] / 10
+            )
         if mc.KEY_MAX in payload:
-            self.number_calibration_value._attr_native_max_value = payload[mc.KEY_MAX] / 10
+            self.number_calibration_value._attr_native_max_value = (
+                payload[mc.KEY_MAX] / 10
+            )
         self.number_calibration_value.update_native_value(payload[mc.KEY_VALUE])
 
     def _parse_mode(self, payload: dict):
@@ -420,7 +440,10 @@ class ThermostatMixin(
                 Mts200Climate(self, m[mc.KEY_CHANNEL])
                 self._polling_payload.append({mc.KEY_CHANNEL: m[mc.KEY_CHANNEL]})
         if self._polling_payload:
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION in self.descriptor.ability:
+            if (
+                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
+                in self.descriptor.ability
+            ):
                 self.polling_dictionary[
                     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
                 ] = SmartPollingStrategy(
@@ -483,7 +506,9 @@ class ThermostatMixin(
     def _handle_Appliance_Control_Thermostat_Sensor(self, header: dict, payload: dict):
         self._parse__generic_array(mc.KEY_SENSOR, payload[mc.KEY_SENSOR])
 
-    def _handle_Appliance_Control_Thermostat_SummerMode(self, header: dict, payload: dict):
+    def _handle_Appliance_Control_Thermostat_SummerMode(
+        self, header: dict, payload: dict
+    ):
         self._parse__generic_array(mc.KEY_SUMMERMODE, payload[mc.KEY_SUMMERMODE])
 
     def _handle_Appliance_Control_Thermostat_WindowOpened(
@@ -519,3 +544,93 @@ class ThermostatMixin(
         """
         for key, value in payload.items():
             self._parse__generic_array(key, value)
+
+
+class MLScreenBrightnessNumber(MLConfigNumber):
+    manager: ScreenBrightnessMixin
+
+    _attr_icon = "mdi:brightness-percent"
+
+    def __init__(self, manager: ScreenBrightnessMixin, channel: object, key: str):
+        self.key_value = key
+        self._attr_name = f"Screen brightness ({key})"
+        super().__init__(manager, channel, f"screenbrightness_{key}")
+
+    @property
+    def native_max_value(self):
+        return 100
+
+    @property
+    def native_min_value(self):
+        return 0
+
+    @property
+    def native_step(self):
+        return 12.5
+
+    @property
+    def native_unit_of_measurement(self):
+        return PERCENTAGE
+
+    async def async_set_native_value(self, value: float):
+        brightness = {
+            mc.KEY_CHANNEL: self.channel,
+            mc.KEY_OPERATION: self.manager._number_brightness_operation.native_value,
+            mc.KEY_STANDBY: self.manager._number_brightness_standby.native_value,
+        }
+        brightness[self.key_value] = value
+
+        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+            if acknowledge:
+                self.update_native_value(value)
+
+        await self.manager.async_request(
+            mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
+            mc.METHOD_SET,
+            {mc.KEY_BRIGHTNESS: [brightness]},
+            _ack_callback,
+        )
+
+
+class ScreenBrightnessMixin(
+    MerossDevice if typing.TYPE_CHECKING else object
+):  # pylint: disable=used-before-assignment
+    _number_brightness_operation: MLScreenBrightnessNumber
+    _number_brightness_standby: MLScreenBrightnessNumber
+
+    def __init__(self, descriptor, entry):
+        super().__init__(descriptor, entry)
+
+        with self.exception_warning("ScreenBrightnessMixin init"):
+            # the 'ScreenBrightnessMixin' actually doesnt have a clue of how many  entities
+            # are controllable since the digest payload doesnt carry anything (like MerossShutter)
+            # So we're not implementing _init_xxx and _parse_xxx methods here and
+            # we'll just add a couple of number entities to control 'active' and 'standby' brightness
+            # on channel 0 which will likely be the only one available
+            self._number_brightness_operation = MLScreenBrightnessNumber(
+                self, 0, mc.KEY_OPERATION
+            )
+            self._number_brightness_standby = MLScreenBrightnessNumber(
+                self, 0, mc.KEY_STANDBY
+            )
+            self.polling_dictionary[
+                mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
+            ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS)
+
+    # interface: MerossDevice
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self._number_brightness_operation = None  # type: ignore
+        self._number_brightness_standby = None  # type: ignore
+
+    # interface: self
+    def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
+        for p_channel in payload[mc.KEY_BRIGHTNESS]:
+            if p_channel.get(mc.KEY_CHANNEL) == 0:
+                self._number_brightness_operation.update_native_value(
+                    p_channel[mc.KEY_OPERATION]
+                )
+                self._number_brightness_standby.update_native_value(
+                    p_channel[mc.KEY_STANDBY]
+                )
+                break
