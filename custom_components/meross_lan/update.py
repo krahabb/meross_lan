@@ -18,6 +18,8 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
     PLATFORM = update.DOMAIN
     DeviceClass = update.UpdateDeviceClass
 
+    _attr_entity_category = me.EntityCategory.DIAGNOSTIC
+
     def __init__(self, manager: MerossDevice):
         super().__init__(manager, None, "update_firmware", self.DeviceClass.FIRMWARE)
 
@@ -26,16 +28,14 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
         return True
 
     @property
-    def entity_category(self):
-        return me.EntityCategory.DIAGNOSTIC
-
-    @property
     def supported_features(self):
         """Flag supported features."""
         return update.UpdateEntityFeature.INSTALL
 
     async def async_install(self, version: str | None, backup: bool, **kwargs) -> None:
-        self.warning("The firmware update feature is not (yet) available: use the Meross app to carry the process")
+        self.warning(
+            "The firmware update feature is not (yet) available: use the Meross app to carry the process"
+        )
 
     def set_unavailable(self):
         pass

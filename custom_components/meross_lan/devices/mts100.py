@@ -7,7 +7,6 @@ import typing
 from homeassistant.exceptions import HomeAssistantError
 import homeassistant.util.dt as dt
 
-from .. import meross_entity as me
 from ..calendar import (
     EVENT_END,
     EVENT_RRULE,
@@ -191,8 +190,10 @@ class Mts100ScheduleEntry:
 class Mts100Schedule(MLCalendar):
     manager: MTS100SubDevice
 
-    _schedule: dict[str, list] | None
+    _attr_entity_category = MLCalendar.EntityCategory.CONFIG
     _attr_state: dict[str, list] | None
+
+    _schedule: dict[str, list] | None
 
     __slots__ = (
         "climate",
@@ -228,10 +229,6 @@ class Mts100Schedule(MLCalendar):
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
         super().__init__(climate.manager, climate.id, mc.KEY_SCHEDULE, None)
-
-    @property
-    def entity_category(self):
-        return me.EntityCategory.CONFIG
 
     @property
     def schedule(self):

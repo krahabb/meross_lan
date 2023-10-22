@@ -53,6 +53,8 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     DeviceClass = NumberDeviceClass
 
     manager: MerossDevice
+
+    _attr_entity_category = me.EntityCategory.CONFIG
     _attr_native_max_value: float
     _attr_native_min_value: float
     _attr_native_step: float
@@ -71,10 +73,6 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         "_attr_native_step",
         "_attr_native_unit_of_measurement",
     )
-
-    @property
-    def entity_category(self):
-        return me.EntityCategory.CONFIG
 
     @property
     def mode(self) -> number.NumberMode:

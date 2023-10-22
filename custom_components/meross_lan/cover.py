@@ -79,6 +79,8 @@ async def async_setup_entry(
 
 
 class MLGarageTimeoutBinarySensor(MLBinarySensor):
+    _attr_entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
+
     def __init__(self, cover: MLGarage):
         self._attr_extra_state_attributes = {}
         super().__init__(
@@ -89,10 +91,6 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
     @property
     def available(self):
         return True
-
-    @property
-    def entity_category(self):
-        return me.EntityCategory.DIAGNOSTIC
 
     def set_unavailable(self):
         pass
@@ -113,14 +111,12 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
 class MLGarageConfigSwitch(MLSwitch):
     manager: GarageMixin
 
+    _attr_entity_category = MLSwitch.EntityCategory.CONFIG
+
     def __init__(self, manager: GarageMixin, key: str):
         self.key_onoff = key
         self._attr_name = key
         super().__init__(manager, None, f"config_{key}", None)
-
-    @property
-    def entity_category(self):
-        return me.EntityCategory.CONFIG
 
     async def async_request_onoff(self, onoff: int):
         config = dict(self.manager.garageDoor_config)

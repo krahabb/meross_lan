@@ -5,7 +5,6 @@ import typing
 from ..binary_sensor import MLBinarySensor
 from ..climate import HVACMode, MtsClimate, MtsSetPointNumber
 from ..helpers import SmartPollingStrategy, reverse_lookup
-from ..meross_entity import EntityCategory
 from ..merossclient import const as mc
 from ..number import PERCENTAGE, MLConfigNumber
 from ..sensor import MLSensor
@@ -93,6 +92,8 @@ class Mts200OverheatThresholdNumber(MLConfigNumber):
 
 
 class Mts200ConfigSwitch(MLSwitch):
+    _attr_entity_category = MLSwitch.EntityCategory.CONFIG
+
     namespace: str
 
     def __init__(self, climate: Mts200Climate, entitykey: str, namespace: str):
@@ -104,10 +105,6 @@ class Mts200ConfigSwitch(MLSwitch):
             MLSwitch.DeviceClass.SWITCH,
             namespace,
         )
-
-    @property
-    def entity_category(self):
-        return EntityCategory.CONFIG
 
     async def async_request_onoff(self, onoff: int):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):

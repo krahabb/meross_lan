@@ -111,6 +111,8 @@ class ConnectionSensor(MLSensor):
     ATTR_QUEUE_LENGTH: Final = "queue_length"
 
     manager: ApiProfile
+
+    _attr_entity_category = MLSensor.EntityCategory.DIAGNOSTIC
     _attr_extra_state_attributes: AttrDictType
     _attr_state: str
     _attr_options = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_QUEUING, STATE_DROPPING]
@@ -133,10 +135,6 @@ class ConnectionSensor(MLSensor):
     @property
     def available(self):
         return True
-
-    @property
-    def entity_category(self):
-        return self.EntityCategory.DIAGNOSTIC
 
     @property
     def options(self) -> list[str] | None:

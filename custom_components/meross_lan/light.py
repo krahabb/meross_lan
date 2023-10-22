@@ -53,7 +53,9 @@ def _rgb_to_int(rgb) -> int:
         # even if HA states the tuple should be int we have float(s) in the wild (#309)
         return (round(red) << 16) + (round(green) << 8) + round(blue)
     except Exception as exception:
-        raise ValueError(f"Invalid value for RGB (value: {str(rgb)} - type: {rgb.__class__.__name__} - error: {str(exception)})")
+        raise ValueError(
+            f"Invalid value for RGB (value: {str(rgb)} - type: {rgb.__class__.__name__} - error: {str(exception)})"
+        )
 
 
 def _int_to_rgb(rgb: int):
@@ -391,17 +393,15 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
     through a light feature (presence light or so)
     """
 
+    manager: MerossDevice
+
     PLATFORM = light.DOMAIN
 
-    manager: MerossDevice
+    _attr_entity_category = me.EntityCategory.CONFIG
     _attr_supported_color_modes = {ColorMode.ONOFF}
 
     def __init__(self, manager: MerossDevice):
         super().__init__(manager, None, DND_ID, mc.KEY_DNDMODE)
-
-    @property
-    def entity_category(self):
-        return me.EntityCategory.CONFIG
 
     @property
     def supported_color_modes(self):

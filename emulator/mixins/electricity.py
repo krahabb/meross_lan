@@ -65,7 +65,7 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return mc.METHOD_GETACK, self.payload_electricity
 
 
-class ConsumptionMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     # this is a static default but we're likely using
     # the current 'power' state managed by the ElectricityMixin
     power = 0.0  # in mW

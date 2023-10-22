@@ -33,12 +33,14 @@ NS_APPLIANCE_SYSTEM_DEBUG = "Appliance.System.Debug"
 NS_APPLIANCE_SYSTEM_TIME = "Appliance.System.Time"
 NS_APPLIANCE_SYSTEM_DNDMODE = "Appliance.System.DNDMode"
 NS_APPLIANCE_SYSTEM_RUNTIME = "Appliance.System.Runtime"
+NS_APPLIANCE_SYSTEM_POSITION = "Appliance.System.Position"
 NS_APPLIANCE_CONFIG_KEY = "Appliance.Config.Key"
 NS_APPLIANCE_CONFIG_WIFI = "Appliance.Config.Wifi"
 NS_APPLIANCE_CONFIG_WIFIX = "Appliance.Config.WifiX"
 NS_APPLIANCE_CONFIG_WIFILIST = "Appliance.Config.WifiList"
 NS_APPLIANCE_CONFIG_TRACE = "Appliance.Config.Trace"
 NS_APPLIANCE_CONFIG_INFO = "Appliance.Config.Info"
+NS_APPLIANCE_CONFIG_OVERTEMP = "Appliance.Config.OverTemp"
 NS_APPLIANCE_DIGEST_TRIGGERX = "Appliance.Digest.TriggerX"
 NS_APPLIANCE_DIGEST_TIMERX = "Appliance.Digest.TimerX"
 NS_APPLIANCE_CONTROL_MULTIPLE = "Appliance.Control.Multiple"
@@ -52,7 +54,9 @@ NS_APPLIANCE_CONTROL_TRIGGERX = "Appliance.Control.TriggerX"
 NS_APPLIANCE_CONTROL_TIMERX = "Appliance.Control.TimerX"
 NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG = "Appliance.Control.ConsumptionConfig"
 NS_APPLIANCE_CONTROL_CONSUMPTIONX = "Appliance.Control.ConsumptionX"
+NS_APPLIANCE_CONTROL_CONSUMPTIONH = "Appliance.Control.ConsumptionH"
 NS_APPLIANCE_CONTROL_ELECTRICITY = "Appliance.Control.Electricity"
+NS_APPLIANCE_CONTROL_OVERTEMP = "Appliance.Control.OverTemp"
 # Light Abilities
 NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
 NS_APPLIANCE_CONTROL_LIGHT_EFFECT = "Appliance.Control.Light.Effect"
@@ -218,7 +222,10 @@ KEY_POWER = "power"
 KEY_CURRENT = "current"
 KEY_VOLTAGE = "voltage"
 KEY_CONSUMPTIONX = "consumptionx"
+KEY_CONSUMPTIONH = "consumptionH"
 KEY_CONSUMPTIONCONFIG = "consumptionconfig"
+KEY_OVERTEMP = "overTemp"
+KEY_ENABLE = "enable"
 KEY_DATE = "date"
 KEY_GARAGEDOOR = "garageDoor"
 KEY_STATE = "state"
@@ -315,6 +322,7 @@ PAYLOAD_GET = {
     NS_APPLIANCE_CONTROL_LIGHT_EFFECT: {KEY_EFFECT: []},
     NS_APPLIANCE_CONTROL_SPRAY: {KEY_SPRAY: {}},
     NS_APPLIANCE_CONTROL_MP3: {KEY_MP3: {}},
+    NS_APPLIANCE_CONTROL_OVERTEMP: {KEY_OVERTEMP: [{KEY_CHANNEL: 0}]},
     NS_APPLIANCE_ROLLERSHUTTER_POSITION: {KEY_POSITION: []},
     NS_APPLIANCE_ROLLERSHUTTER_STATE: {KEY_STATE: []},
     NS_APPLIANCE_ROLLERSHUTTER_CONFIG: {KEY_CONFIG: []},

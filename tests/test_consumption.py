@@ -1,5 +1,5 @@
 """
-    Test the ConsumptionMixin works, especially on reset bugs (#264,#268)
+    Test the ConsumptionxMixin works, especially on reset bugs (#264,#268)
 """
 import datetime as dt
 import typing
@@ -15,9 +15,9 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 
 from custom_components.meross_lan.const import PARAM_ENERGY_UPDATE_PERIOD
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.sensor import ConsumptionMixin, ElectricityMixin
+from custom_components.meross_lan.devices.mss import ConsumptionXMixin, ElectricityMixin
 from emulator.mixins.electricity import (
-    ConsumptionMixin as EmulatorConsumptionMixin,
+    ConsumptionXMixin as EmulatorConsumptionMixin,
     ElectricityMixin as EmulatorElectricityMixin,
 )
 
@@ -41,7 +41,6 @@ DEVICE_TIMEZONE = "Asia/Baku"
 
 
 def _configure_dates(tz):
-
     today = dt.datetime.now(tz)
     today = dt.datetime(
         today.year,
@@ -62,7 +61,6 @@ def _configure_dates(tz):
 
 
 async def _async_configure_context(context: "DeviceContext", timezone: str):
-
     emulator = context.emulator
     assert isinstance(emulator, EmulatorConsumptionMixin)
     assert isinstance(emulator, EmulatorElectricityMixin)
@@ -72,7 +70,7 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
     await context.async_load_config_entry()
 
     device = context.device
-    assert isinstance(device, ConsumptionMixin)
+    assert isinstance(device, ConsumptionXMixin)
     assert isinstance(device, ElectricityMixin)
     assert (
         device.polling_period < 60
@@ -110,8 +108,9 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
     """
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock, today) as context:
-
+    async with helpers.DeviceContext(
+        hass, mc.TYPE_MSS310, aioclient_mock, today
+    ) as context:
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, dt_util.DEFAULT_TIME_ZONE.key  # type: ignore
         )
@@ -195,8 +194,9 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
     """
     today, tomorrow, todayseconds = _configure_dates(ZoneInfo(DEVICE_TIMEZONE))
 
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock, today) as context:
-
+    async with helpers.DeviceContext(
+        hass, mc.TYPE_MSS310, aioclient_mock, today
+    ) as context:
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, DEVICE_TIMEZONE
         )
@@ -274,8 +274,9 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
 
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock, today) as context:
-
+    async with helpers.DeviceContext(
+        hass, mc.TYPE_MSS310, aioclient_mock, today
+    ) as context:
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, dt_util.DEFAULT_TIME_ZONE.key  # type: ignore
         )
@@ -310,7 +311,6 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
             ), f"consumption in {msg}"
 
         async def _async_unload_reload(msg: str, offset: int):
-
             estimatestate = hass.states.get(sensor_estimate_entity_id)
             assert estimatestate
             saved_estimated_energy_value = estimatestate.state

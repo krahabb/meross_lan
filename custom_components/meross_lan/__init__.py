@@ -361,6 +361,10 @@ class MerossApi(ApiProfile):
             from .devices.mss import ConsumptionXMixin
 
             mixin_classes.append(ConsumptionXMixin)
+        if mc.NS_APPLIANCE_CONFIG_OVERTEMP in ability:
+            from .devices.mss import OverTempMixin
+
+            mixin_classes.append(OverTempMixin)
         if mc.KEY_SPRAY in digest:
             from .select import SprayMixin
 

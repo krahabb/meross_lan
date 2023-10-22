@@ -365,9 +365,9 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
 
         mixin_classes.append(ElectricityMixin)
     if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in descriptor.ability:
-        from .mixins.electricity import ConsumptionMixin
+        from .mixins.electricity import ConsumptionXMixin
 
-        mixin_classes.append(ConsumptionMixin)
+        mixin_classes.append(ConsumptionXMixin)
 
     if mc.NS_APPLIANCE_CONTROL_LIGHT in descriptor.ability:
         from .mixins.light import LightMixin

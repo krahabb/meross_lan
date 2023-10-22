@@ -127,6 +127,8 @@ class ProtocolSensor(MLSensor):
     ATTR_MQTT_BROKER = "mqtt_broker"
 
     manager: MerossDevice
+
+    _attr_entity_category = me.EntityCategory.DIAGNOSTIC
     _attr_state: str
     _attr_options = [STATE_DISCONNECTED, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP]
 
@@ -145,10 +147,6 @@ class ProtocolSensor(MLSensor):
     @property
     def available(self):
         return True
-
-    @property
-    def entity_category(self):
-        return me.EntityCategory.DIAGNOSTIC
 
     @property
     def entity_registry_enabled_default(self):
