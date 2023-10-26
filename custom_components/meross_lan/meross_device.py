@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import asyncio
+import bisect
 from datetime import datetime, timezone
 from io import TextIOWrapper
 from json import dumps as json_dumps
@@ -41,9 +42,11 @@ from .const import (
     PARAM_CLOUDMQTT_UPDATE_PERIOD,
     PARAM_COLDSTARTPOLL_DELAY,
     PARAM_HEARTBEAT_PERIOD,
+    PARAM_INFINITE_EPOCH,
     PARAM_SIGNAL_UPDATE_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
-    PARAM_TIMEZONE_CHECK_PERIOD,
+    PARAM_TIMEZONE_CHECK_NOTOK_PERIOD,
+    PARAM_TIMEZONE_CHECK_OK_PERIOD,
     PARAM_TRACING_ABILITY_POLL_TIMEOUT,
     DeviceConfigType,
 )
@@ -338,9 +341,10 @@ class MerossDevice(MerossDeviceBase):
         "_trace_endtime",
         "_trace_ability_iter",
         "polling_dictionary",
-        "_tzinfo",
         "_unsub_polling_callback",
         "_queued_poll_requests",
+        "_tzinfo",
+        "_timezone_next_check",
         "entity_dnd",
         "sensor_protocol",
         "sensor_signal_strength",
@@ -354,13 +358,13 @@ class MerossDevice(MerossDeviceBase):
     ):
         self.descriptor = descriptor
         self.needsave = False
-        self.device_timestamp = 0.0
+        self.device_timestamp: int = 0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.device_debug = {}
-        self.lastrequest = 0
-        self.lastresponse = 0
+        self.lastrequest = 0.0
+        self.lastresponse = 0.0
         self._cloud_profile: MerossCloudProfile | None = None
         self._mqtt_connection: MQTTConnection | None = None
         self._mqtt_connected: MQTTConnection | None = None
@@ -388,6 +392,8 @@ class MerossDevice(MerossDeviceBase):
         self.polling_dictionary[mc.NS_APPLIANCE_SYSTEM_ALL] = PollingStrategy(
             mc.NS_APPLIANCE_SYSTEM_ALL
         )
+        self._unsub_polling_callback = None
+        self._queued_poll_requests = 0
         # Message handling is actually very hybrid:
         # when a message (device reply or originated) is received it gets routed to the
         # device instance in 'receive'. Here, it was traditionally parsed with a
@@ -401,12 +407,17 @@ class MerossDevice(MerossDeviceBase):
         # The dicionary keys are Meross namespaces matched against when the message enters the handling
         # self.handlers: Dict[str, Callable] = {} actually disabled!
 
-        # The list of pending MQTT requests (SET or GET) which are waiting their SETACK (or GETACK)
-        # in order to complete the transaction
         self._mqtt_transactions: dict[str, _MQTTTransaction] = {}
+        """The list of pending MQTT requests (SET or GET) which are waiting their SETACK (or GETACK)
+        in order to complete the transaction"""
         self._tzinfo = None
-        self._unsub_polling_callback = None
-        self._queued_poll_requests = 0
+        self._timezone_next_check = (
+            0
+            if mc.NS_APPLIANCE_SYSTEM_TIME in descriptor.ability
+            else PARAM_INFINITE_EPOCH
+        )
+        """Indicates the (next) time we shoulc to perform a check (only when localmqtt)
+        in order to see if the device has correct timezone/dst configuration"""
 
         # base init after setting some key properties needed for logging
         super().__init__(
@@ -622,10 +633,6 @@ class MerossDevice(MerossDeviceBase):
         )
 
     @property
-    def tzname(self):
-        return self.descriptor.timezone
-
-    @property
     def tzinfo(self):
         tz_name = self.descriptor.timezone
         if not tz_name:
@@ -696,7 +703,7 @@ class MerossDevice(MerossDeviceBase):
             self._async_polling_callback,
         )
 
-    def get_datetime(self, epoch):
+    def get_device_datetime(self, epoch):
         """
         given the epoch (utc timestamp) returns the datetime
         in device local timezone
@@ -780,10 +787,20 @@ class MerossDevice(MerossDeviceBase):
         # and we want to 'translate' this timings in our (local) time.
         # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
         # we'll always be a bit late in processing
-        self.device_timestamp = float(header.get(mc.KEY_TIMESTAMP, epoch))
+        self.device_timestamp: int = header[mc.KEY_TIMESTAMP]
         device_timedelta = epoch - self.device_timestamp
         if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-            self._config_timestamp(epoch, device_timedelta)
+            if (
+                abs(self.device_timedelta - device_timedelta)
+                > PARAM_TIMESTAMP_TOLERANCE
+            ):
+                # big step so we're not averaging
+                self.device_timedelta = device_timedelta
+            else:  # average the sampled timedelta
+                self.device_timedelta = (
+                    4 * self.device_timedelta + device_timedelta
+                ) / 5
+            self._config_device_timestamp(epoch)
         else:
             self.device_timedelta = 0
 
@@ -947,18 +964,6 @@ class MerossDevice(MerossDeviceBase):
             except Exception:
                 pass
 
-        if self.mqtt_locallyactive:
-            # only deal with time related settings when devices are un-paired
-            # from the meross cloud
-            if self.device_timedelta and mc.NS_APPLIANCE_SYSTEM_CLOCK in descr.ability:
-                # timestamp misalignment: try to fix it
-                # only when devices are paired on our MQTT
-                self.mqtt_request(mc.NS_APPLIANCE_SYSTEM_CLOCK, mc.METHOD_PUSH, {})
-
-            if mc.NS_APPLIANCE_SYSTEM_TIME in descr.ability:
-                # check the appliance timeoffsets are updated (see #36)
-                self._config_timezone(int(self.lastresponse), descr.time.get(mc.KEY_TIMEZONE))  # type: ignore
-
         for _key, _value in descr.digest.items():
             if _parse := getattr(self, f"_parse_{_key}", None):
                 _parse(_value)
@@ -1028,7 +1033,7 @@ class MerossDevice(MerossDeviceBase):
                     header[mc.KEY_METHOD] != mc.METHOD_ERROR, header, payload
                 )
         if not self._mqtt_active:
-            self._mqtt_active = self._mqtt_connection
+            self._mqtt_active = self._mqtt_connected
             if self._online:
                 self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
         if self.curr_protocol is not CONF_PROTOCOL_MQTT:
@@ -1286,6 +1291,27 @@ class MerossDevice(MerossDeviceBase):
                                 ProtocolSensor.ATTR_MQTT
                             )
                         # going on could eventually try/switch to HTTP
+                    elif epoch > self._timezone_next_check:
+                        # when on local mqtt we have the responsibility for
+                        # setting the device timezone/dst transition times
+                        # but this is a process potentially consuming a lot
+                        # (checking future DST) so we'll be lazy on this by
+                        # scheduling not so often and depending on a bunch of
+                        # side conditions (like the device being time-aligned)
+                        self._timezone_next_check = (
+                            epoch + PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
+                        )
+                        if self.device_timedelta < PARAM_TIMESTAMP_TOLERANCE:
+                            with self.exception_warning("_check_device_timezone"):
+                                if self._check_device_timezone():
+                                    # timezone trans not good..fix and check again soon
+                                    self._config_device_timezone(
+                                        self.descriptor.timezone
+                                    )
+                                else:  # timezone trans good..check again in more time
+                                    self._timezone_next_check = (
+                                        epoch + PARAM_TIMEZONE_CHECK_OK_PERIOD
+                                    )
 
                 await self.async_request_updates(epoch, None)
 
@@ -1358,13 +1384,9 @@ class MerossDevice(MerossDeviceBase):
         if self.mqtt_locallyactive and (
             mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability
         ):
-            self._config_timezone(int(time()), user_input.get(mc.KEY_TIMEZONE))
+            self._config_device_timezone(user_input.get(mc.KEY_TIMEZONE))
 
-    def _config_timestamp(self, epoch, device_timedelta):
-        if abs(self.device_timedelta - device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-            self.device_timedelta = device_timedelta
-        else:  # average the sampled timedelta
-            self.device_timedelta = (4 * self.device_timedelta + device_timedelta) / 5
+    def _config_device_timestamp(self, epoch):
         if self.mqtt_locallyactive and (
             mc.NS_APPLIANCE_SYSTEM_CLOCK in self.descriptor.ability
         ):
@@ -1388,75 +1410,168 @@ class MerossDevice(MerossDeviceBase):
                 int(self.device_timedelta),
             )
 
-    def _config_timezone(self, epoch, tzname):
-        p_time = self.descriptor.time
-        assert p_time and self.mqtt_locallyactive
-        p_timerule: list = p_time.get(mc.KEY_TIMERULE, [])
-        p_timezone = p_time.get(mc.KEY_TIMEZONE)
+    def _check_device_timezone(self) -> bool:
         """
-        timeRule should contain 2 entries: the actual time offsets and
-        the next (incoming). If 'now' is after 'incoming' it means the
-        first entry became stale and so we'll update the daylight offsets
-        to current/next DST time window
+        verify the data about DST changes in the configured timezone are ok by checking
+        the "time" key in the Appliance.System.All payload:
+        "time": {
+            "timestamp": 1560670665,
+            "timezone": "Australia/Sydney",
+            "timeRule": [
+                [1554566400,36000,0],
+                [1570291200,39600,1],
+                ...
+            ]
+        }
+        returns True in case we need to fix the device configuration
+        see https://github.com/arandall/meross/blob/main/doc/protocol.md#appliancesystemtime
         """
-        if (p_timezone != tzname) or len(p_timerule) < 2 or p_timerule[1][0] < epoch:
-            if tzname:
-                """
-                we'll look through the list of transition times for current tz
-                and provide the actual (last past daylight) and the next to the
-                appliance so it knows how and when to offset utc to localtime
-                """
-                timerules = []
-                try:
-                    import bisect
+        timestamp = self.device_timestamp  # we'll check against its own timestamp
+        time = self.descriptor.time
+        timerules: list = time.get(mc.KEY_TIMERULE, [])
+        timezone = time.get(mc.KEY_TIMEZONE)
+        if timezone:
+            # assume "timeRule" entries are ordered on epoch(s)
+            # timerule: [1554566400,36000,0] -> [epoch, utcoffset, isdst]
+            if not timerules:
+                # array empty?
+                return True
 
+            def _get_epoch(_timerule: list):
+                return _timerule[0]
+
+            idx = bisect.bisect_right(timerules, timestamp, key=_get_epoch)
+            if idx == 0:
+                # epoch is not (yet) covered in timerules
+                return True
+
+            timerule = timerules[idx - 1]  # timerule in effect at the 'epoch'
+            device_tzinfo = self.tzinfo
+
+            def _check_incorrect_timerule(_epoch, _timerule):
+                _device_datetime = datetime_from_epoch(_epoch, device_tzinfo)
+                _utcoffset = device_tzinfo.utcoffset(_device_datetime)
+                if _timerule[1] != (_utcoffset.seconds if _utcoffset else 0):
+                    return True
+                _dstoffset = device_tzinfo.dst(_device_datetime)
+                return _timerule[2] != (1 if _dstoffset else 0)
+
+            if _check_incorrect_timerule(timestamp, timerule):
+                return True
+            # actual device time is covered but we also check if the device timerules
+            # are ok in the near future
+            timestamp_future = timestamp + PARAM_TIMEZONE_CHECK_OK_PERIOD
+            # we have to search (again) in the timerules but we do some
+            # short-circuit checks to see if epoch_future is still
+            # contained in current timerule
+            if idx == len(timerules):
+                # timerule is already the last in the list so it will be the only active
+                # from now on
+                pass
+            else:
+                timerule_next = timerules[idx]
+                timestamp_next = timerule_next[0]
+                if timestamp_future >= timestamp_next:
+                    # the next timerule will take over
+                    # so we check if the transition time set in the device
+                    # is correct with the tz database
+                    if _check_incorrect_timerule(timestamp_next - 1, timerule):
+                        return True
+                    if _check_incorrect_timerule(timestamp_next + 1, timerule_next):
+                        return True
+                    # transition set in timerule_next is coming soon
+                    # and will be ok
+                    return False
+
+            if _check_incorrect_timerule(timestamp_future, timerule):
+                return True
+
+        else:
+            # no timezone set in the device so we'd expect an empty timerules
+            if timerules:
+                return True
+
+        return False
+
+    def _config_device_timezone(self, tzname):
+        # assert self.mqtt_locallyactive
+        timestamp = self.device_timestamp
+        timerules = []
+        if tzname:
+            """
+            we'll look through the list of transition times for current tz
+            and provide the actual (last past daylight) and the next to the
+            appliance so it knows how and when to offset utc to localtime
+            """
+            try:
+                try:
                     import pytz
 
                     tz_local = pytz.timezone(tzname)
-                    idx = bisect.bisect_right(
-                        tz_local._utc_transition_times,  # type: ignore
-                        datetime.utcfromtimestamp(epoch),
-                    )
-                    # idx would be the next transition offset index
-                    _transition_info = tz_local._transition_info[idx - 1]  # type: ignore
-                    timerules.append(
-                        [
-                            int(tz_local._utc_transition_times[idx - 1].timestamp()),  # type: ignore
-                            int(_transition_info[0].total_seconds()),
-                            1 if _transition_info[1].total_seconds() else 0,
-                        ]
-                    )
-                    _transition_info = tz_local._transition_info[idx]  # type: ignore
-                    timerules.append(
-                        [
-                            int(tz_local._utc_transition_times[idx].timestamp()),  # type: ignore
-                            int(_transition_info[0].total_seconds()),
-                            1 if _transition_info[1].total_seconds() else 0,
-                        ]
-                    )
+                    if isinstance(tz_local, pytz.tzinfo.DstTzInfo):
+                        idx = bisect.bisect_right(
+                            tz_local._utc_transition_times,  # type: ignore
+                            datetime.utcfromtimestamp(timestamp),
+                        )
+                        # idx would be the next transition offset index
+                        _transition_info = tz_local._transition_info[idx - 1]  # type: ignore
+                        timerules.append(
+                            [
+                                int(tz_local._utc_transition_times[idx - 1].timestamp()),  # type: ignore
+                                int(_transition_info[0].total_seconds()),
+                                1 if _transition_info[1].total_seconds() else 0,
+                            ]
+                        )
+                        _transition_info = tz_local._transition_info[idx]  # type: ignore
+                        timerules.append(
+                            [
+                                int(tz_local._utc_transition_times[idx].timestamp()),  # type: ignore
+                                int(_transition_info[0].total_seconds()),
+                                1 if _transition_info[1].total_seconds() else 0,
+                            ]
+                        )
+                    elif isinstance(tz_local, pytz.tzinfo.StaticTzInfo):
+                        timerules = [[0, tz_local.utcoffset(None), 0]]
+
                 except Exception as e:
                     self.warning(
-                        "error while building timezone info (%s)",
+                        "error(%s) while using pytz to build timezone(%s) ",
                         str(e),
+                        tzname,
                     )
-                    timerules = [[0, 0, 0], [epoch + PARAM_TIMEZONE_CHECK_PERIOD, 0, 1]]
+                    # if pytx fails we'll fall-back to some euristics
+                    device_tzinfo = ZoneInfo(tzname)
+                    device_datetime = datetime_from_epoch(timestamp, device_tzinfo)
+                    utcoffset = device_tzinfo.utcoffset(device_datetime)
+                    utcoffset = utcoffset.seconds if utcoffset else 0
+                    isdst = device_tzinfo.dst(device_datetime)
+                    timerules = [[timestamp, utcoffset, 1 if isdst else 0]]
 
-                self.mqtt_request(
+            except Exception as e:
+                self.warning(
+                    "error(%s) while building timezone(%s) info for %s",
+                    str(e),
+                    tzname,
                     mc.NS_APPLIANCE_SYSTEM_TIME,
-                    mc.METHOD_SET,
-                    payload={
-                        mc.KEY_TIME: {
-                            mc.KEY_TIMEZONE: tzname,
-                            mc.KEY_TIMERULE: timerules,
-                        }
-                    },
                 )
-            elif p_timezone:  # and !timezone
-                self.mqtt_request(
-                    mc.NS_APPLIANCE_SYSTEM_TIME,
-                    mc.METHOD_SET,
-                    payload={mc.KEY_TIME: {mc.KEY_TIMEZONE: "", mc.KEY_TIMERULE: []}},
-                )
+                timerules = [
+                    [0, 0, 0],
+                    [timestamp + PARAM_TIMEZONE_CHECK_OK_PERIOD, 0, 1],
+                ]
+
+        else:
+            tzname = ""
+
+        self.mqtt_request(
+            mc.NS_APPLIANCE_SYSTEM_TIME,
+            mc.METHOD_SET,
+            payload={
+                mc.KEY_TIME: {
+                    mc.KEY_TIMEZONE: tzname,
+                    mc.KEY_TIMERULE: timerules,
+                }
+            },
+        )
 
     def _switch_protocol(self, protocol):
         self.log(

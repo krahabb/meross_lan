@@ -223,7 +223,7 @@ class ConsumptionXSensor(MLSensor):
             # updated after the device midnight for today..else it is too
             # old to be good. Since we don't have actual device epoch we
             # 'guess' it is nicely synchronized so we'll use our time
-            devicetime = self.manager.get_datetime(time())
+            devicetime = self.manager.get_device_datetime(time())
             devicetime_today_midnight = datetime(
                 devicetime.year,
                 devicetime.month,
@@ -306,7 +306,7 @@ class ConsumptionXMixin(
         # against it's own midnight and we'll see a delayed 'sawtooth'
         if self.device_timestamp > self._tomorrow_midnight_epoch:
             # catch the device starting a new day since our last update (yesterday)
-            devtime = self.get_datetime(self.device_timestamp)
+            devtime = self.get_device_datetime(self.device_timestamp)
             devtime_today_midnight = datetime(
                 devtime.year,
                 devtime.month,
@@ -441,11 +441,12 @@ class ConsumptionXMixin(
 
 
 class OverTempEnableSwitch(MLSwitch):
-
     _attr_entity_category = MLSwitch.EntityCategory.CONFIG
 
     def __init__(self, manager: OverTempMixin):
-        super().__init__(manager, None, "config_overtemp_enable", self.DeviceClass.SWITCH)
+        super().__init__(
+            manager, None, "config_overtemp_enable", self.DeviceClass.SWITCH
+        )
 
     async def async_request_onoff(self, onoff: int):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
@@ -466,7 +467,9 @@ class OverTempMixin(
     def __init__(self, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(descriptor, entry)
         self._switch_overtemp_enable: OverTempEnableSwitch = OverTempEnableSwitch(self)
-        self._sensor_overtemp_type: MLSensor = MLSensor(self, None, "config_overtemp_type", MLSensor.DeviceClass.ENUM)
+        self._sensor_overtemp_type: MLSensor = MLSensor(
+            self, None, "config_overtemp_type", MLSensor.DeviceClass.ENUM
+        )
         self.polling_dictionary[
             mc.NS_APPLIANCE_CONFIG_OVERTEMP
         ] = EntityPollingStrategy(
