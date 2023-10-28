@@ -689,7 +689,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         try:
             self._position_native_isgood = versiontuple(
                 manager.descriptor.firmwareVersion
-            ) >= versiontuple("7.6.10")
+            ) >= versiontuple("6.6.6")
         except Exception:
             self._position_native_isgood = None
 
