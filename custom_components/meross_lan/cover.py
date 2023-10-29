@@ -30,7 +30,6 @@ from .helpers import (
     PollingStrategy,
     SmartPollingStrategy,
     clamp,
-    get_entity_last_state,
     get_entity_last_state_available,
     schedule_async_callback,
     schedule_callback,
@@ -45,11 +44,6 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .meross_device import MerossDevice, MerossDeviceDescriptor
-
-SUPPORT_OPEN = CoverEntityFeature.OPEN
-SUPPORT_CLOSE = CoverEntityFeature.CLOSE
-SUPPORT_SET_POSITION = CoverEntityFeature.SET_POSITION
-SUPPORT_STOP = CoverEntityFeature.STOP
 
 STATE_MAP = {0: STATE_CLOSED, 1: STATE_OPEN}
 
@@ -285,7 +279,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
 
     @property
     def supported_features(self):
-        return SUPPORT_OPEN | SUPPORT_CLOSE
+        return CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
 
     @property
     def is_opening(self):
@@ -305,7 +299,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         we're trying to recover the '_transition_duration' from previous state
         """
         with self.exception_warning("restoring previous state"):
-            if last_state := await get_entity_last_state(self.hass, self.entity_id):
+            if last_state := await get_entity_last_state_available(
+                self.hass, self.entity_id
+            ):
                 _attr = last_state.attributes  # type: ignore
                 if EXTRA_ATTR_TRANSITION_DURATION in _attr:
                     # restore anyway besides PARAM_RESTORESTATE_TIMEOUT
@@ -331,13 +327,14 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             "execute" represents command ack (I guess: never seen this == 0)
             Beware: if the garage is 'closed' and we send a 'close' "execute" will
             be replied as "1" and the garage will stay closed
+            Update (2023-10-29): the trace in issue #272 shows "execute" == 0 when
+            the command is not executed because already opened (maybe fw is smarter now)
             """
             if acknowledge:
+                self._transition_cancel()
                 p_state = payload.get(mc.KEY_STATE, {})
-                if p_state.get(mc.KEY_EXECUTE) and open_request != p_state.get(
-                    mc.KEY_OPEN
-                ):
-                    self._transition_cancel()
+                self._open = p_state.get(mc.KEY_OPEN)
+                if p_state.get(mc.KEY_EXECUTE) and open_request != self._open:
                     self._open_request = open_request
                     self._transition_start = time()
                     self.update_state(STATE_OPENING if open_request else STATE_CLOSING)
@@ -376,6 +373,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                         timeout + 1,  # type: ignore
                         self._transition_end_callback,
                     )
+                else:
+                    self.update_state(STATE_MAP.get(self._open))
 
         await self.manager.async_request(
             mc.NS_APPLIANCE_GARAGEDOOR_STATE,
@@ -396,37 +395,42 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
     def _parse_state(self, payload: dict):
         # {"channel": 0, "open": 1, "lmTime": 0}
         self._open = _open = payload[mc.KEY_OPEN]
-        epoch = self.manager.lastresponse
-        if self._transition_start is None:
-            # our state machine is idle and we could be polling a
+        if not self._transition_start:
+            # our state machine is idle and we could be receiving a
             # state change triggered by any external means (app, remote)
             self.update_state(STATE_MAP.get(_open))
-        else:
-            # state will be updated on _transition_end_callback
-            # but we monitor the contact switch in order to
-            # update our estimates for transition duration
-            if self._open_request != _open:
-                # keep monitoring the transition in less than 1 sec
-                if not self._transition_unsub:
-                    self._transition_unsub = schedule_async_callback(
-                        self.hass, 0.9, self._async_transition_callback
-                    )
-            else:
-                # we can monitor the (sampled) exact time when the garage closes to
-                # estimate the transition_duration and dynamically update it since
-                # during the transition the state will be closed only at the end
-                # while during opening the garagedoor contact will open right at the beginning
-                # and so will be unuseful
-                # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
-                # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
-                if not _open:
-                    transition_duration = epoch - self._transition_start
-                    # autoregression filtering applying 20% of last updated sample
-                    self._update_transition_duration(
-                        int((4 * self._transition_duration + transition_duration) / 5)
-                    )
-                    self._transition_cancel()
-                    self.update_state(STATE_CLOSED)
+            return
+
+        # state will be updated on _transition_end_callback
+        # but we monitor the contact switch in order to
+        # update our estimates for transition duration
+        if self._open_request != _open:
+            # keep monitoring the transition in less than 1 sec
+            if not self._transition_unsub:
+                self._transition_unsub = schedule_async_callback(
+                    self.hass, 0.9, self._async_transition_callback
+                )
+            return
+
+        # We're "in transition" and the physical contact has reached the target.
+        # we can monitor the (sampled) exact time when the garage closes to
+        # estimate the transition_duration and dynamically update it since
+        # during the transition the state will be closed only at the end
+        # while during opening the garagedoor contact will open right at the beginning
+        # and so will be unuseful
+        # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
+        # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
+        if not _open:
+            transition_duration = self.manager.lastresponse - self._transition_start
+            # autoregression filtering applying 20% of last updated sample
+            self._update_transition_duration(
+                int((4 * self._transition_duration + transition_duration) / 5)
+            )
+            self._transition_cancel()
+            self.update_state(STATE_CLOSED)
+
+        # garage contact is opened but since it opens way sooner than the transition
+        # ending we'll wait our transition_end in order to update the state
 
     def _parse_config(self, payload):
         if mc.KEY_DOOROPENDURATION in payload:
@@ -499,12 +503,10 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             if self._transition_duration < transition_duration:
                 self._update_transition_duration(self._transition_duration + 1)
 
+        self.update_state(STATE_MAP.get(self._open))  # type: ignore
         if self._open_request == self._open:
-            # transition correctly ended: set the state according to our last known hardware status
             self.binary_sensor_timeout.update_ok()
-            self.update_state(STATE_MAP.get(self._open_request))  # type: ignore
         else:
-            # let the current opening/closing state be updated only on subsequent poll
             self.binary_sensor_timeout.update_timeout(STATE_MAP.get(self._open_request))  # type: ignore
 
         self._open_request = None
@@ -700,7 +702,12 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     @property
     def supported_features(self):
-        return SUPPORT_OPEN | SUPPORT_CLOSE | SUPPORT_STOP | SUPPORT_SET_POSITION
+        return (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
+        )
 
     @property
     def is_opening(self):
@@ -721,7 +728,9 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         if it happens it wasn't updated too far in time
         """
         with self.exception_warning("restoring previous state"):
-            if last_state := await get_entity_last_state(self.hass, self.entity_id):
+            if last_state := await get_entity_last_state_available(
+                self.hass, self.entity_id
+            ):
                 _attr = last_state.attributes  # type: ignore
                 if EXTRA_ATTR_DURATION_OPEN in _attr:
                     self._signalOpen = _attr[EXTRA_ATTR_DURATION_OPEN]
