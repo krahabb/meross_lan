@@ -879,7 +879,7 @@ class MerossDevice(MerossDeviceBase):
             "handler undefined for method:(%s) namespace:(%s) payload:(%s)",
             header[mc.KEY_METHOD],
             header[mc.KEY_NAMESPACE],
-            payload,
+            obfuscated_dict_copy(payload),
         )
 
     def _handle_generic(self, header: dict, payload: dict):
