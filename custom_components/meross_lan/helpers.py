@@ -455,21 +455,29 @@ class PollingStrategy:
         )
         self.lastrequest = 0
 
-    async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
+    async def poll(self, device: MerossDevice, epoch: float, namespace: str | None):
         """
         This is a basic 'default' policy:
         - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
         we expect this namespace to be updated by PUSH(es)
         - unless the passed in 'namespace' is not None which means we're re-onlining the device and so
         we like to re-query the full state (even on MQTT)
-        - as an optimization, when onlining, we'll skip the request if it's for the same namespace
+        - as an optimization, when onlining (namespace == None), we'll skip the request if it's for
+        the same namespace by not calling this strategy (see MerossDevice.async_request_updates)
         """
-        if (namespace or (not device._mqtt_active)) and (namespace != self.namespace):
+        if namespace or (not device._mqtt_active):
             await device.async_request(*self.request)
             self.lastrequest = epoch
 
 
 class SmartPollingStrategy(PollingStrategy):
+    """
+    This is a strategy for polling states which are not actively pushed so we should
+    always query them (eventually with a variable timeout depending on the relevant
+    time dynamics of the sensor/state). When using cloud MQTT though we have to be very
+    conservative on traffic so we delay the request even more
+    """
+
     __slots__ = ("polling_period",)
 
     def __init__(
@@ -478,19 +486,12 @@ class SmartPollingStrategy(PollingStrategy):
         super().__init__(namespace, payload)
         self.polling_period = polling_period
 
-    async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
-        """
-        This is a strategy for polling states which are not actively pushed so we should
-        always query them (eventually with a variable timeout depending on the relevant
-        time dynamics of the sensor/state). When using cloud MQTT though we have to be very
-        conservative on traffic so we delay the request even more
-        """
-        if namespace != self.namespace:
+    async def poll(self, device: MerossDevice, epoch: float, namespace: str | None):
+        if (epoch - self.lastrequest) >= self.polling_period:
             if await device.async_request_smartpoll(
                 epoch,
                 self.lastrequest,
                 self.request,
-                self.polling_period,
             ):
                 self.lastrequest = epoch
 
@@ -502,19 +503,13 @@ class EntityPollingStrategy(SmartPollingStrategy):
         super().__init__(namespace, None, polling_period)
         self.entity = entity
 
-    async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
+    async def poll(self, device: MerossDevice, epoch: float, namespace: str | None):
         """
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
         the state of this paylod so we'll skip the smartpoll should the entity be disabled
         """
-        if (namespace != self.namespace) and self.entity.enabled:
-            if await device.async_request_smartpoll(
-                epoch,
-                self.lastrequest,
-                self.request,
-                self.polling_period,
-            ):
-                self.lastrequest = epoch
+        if self.entity.enabled:
+            await super().poll(device, epoch, namespace)
 
 
 class ConfigEntriesHelper:

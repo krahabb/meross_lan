@@ -714,12 +714,11 @@ class MerossDevice(MerossDeviceBase):
         self,
         epoch: float,
         lastupdate: float | int,
-        polling_args: tuple,
-        polling_period_min: int,
-        polling_period_cloud: int = PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        requests_args: tuple,
+        *,
+        cloud_polling_period: int = PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        cloud_queue_max: int = 1,
     ):
-        if (epoch - lastupdate) < polling_period_min:
-            return False
         if (
             self.pref_protocol is CONF_PROTOCOL_HTTP
             or self.curr_protocol is CONF_PROTOCOL_HTTP
@@ -727,17 +726,17 @@ class MerossDevice(MerossDeviceBase):
             # this is likely the scenario for Meross cloud MQTT
             # or in general local devices with HTTP conf
             # we try HTTP first without any protocol auto-switching...
-            if await self.async_http_request(*polling_args):
+            if await self.async_http_request(*requests_args):
                 return True
             # going on we should rely on MQTT but we skip it
             # and all of the autoswitch logic if not feasible
             if not self._mqtt_publish:
                 return False
         if self.mqtt_locallyactive or (
-            (self._queued_poll_requests == 0)
-            and ((epoch - lastupdate) > polling_period_cloud)
+            (self._queued_poll_requests < cloud_queue_max)
+            and ((epoch - lastupdate) > cloud_polling_period)
         ):
-            await self.async_request(*polling_args)
+            await self.async_request(*requests_args)
             self._queued_poll_requests += 1
             return True
         return False
@@ -770,7 +769,8 @@ class MerossDevice(MerossDeviceBase):
         for _strategy in self.polling_dictionary.values():
             if not self._online:
                 return
-            await _strategy(self, epoch, namespace)
+            if namespace != _strategy.namespace:
+                await _strategy.poll(self, epoch, namespace)
 
     def receive(self, header: dict, payload: dict, protocol) -> bool:
         """
