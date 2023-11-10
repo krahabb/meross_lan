@@ -8,8 +8,8 @@ import typing
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
+from homeassistant.core import HomeAssistant, SupportsResponse
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
@@ -17,7 +17,6 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_KEY,
-    CONF_NOTIFYRESPONSE,
     CONF_PAYLOAD,
     CONF_PROFILE_ID_LOCAL,
     CONF_PROTOCOL_HTTP,
@@ -40,6 +39,7 @@ from .merossclient.httpclient import MerossHttpClient
 if typing.TYPE_CHECKING:
     from typing import Callable
 
+    from homeassistant.core import ServiceCall, ServiceResponse
     from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
 
@@ -229,12 +229,16 @@ class MerossApi(ApiProfile):
             else:
                 self.devices[unique_id[0]] = None
 
-        async def async_service_request(service_call):
+        async def async_service_request(service_call: ServiceCall) -> ServiceResponse:
+            service_response = {}
             device_id = service_call.data.get(CONF_DEVICE_ID)
             namespace = service_call.data[mc.KEY_NAMESPACE]
             method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
             if mc.KEY_PAYLOAD in service_call.data:
-                payload = json_loads(service_call.data[mc.KEY_PAYLOAD])
+                try:
+                    payload = json_loads(service_call.data[mc.KEY_PAYLOAD])
+                except Exception as e:
+                    raise HomeAssistantError("Payload is not a valid JSON") from e
             elif method == mc.METHOD_GET:
                 payload = get_default_payload(namespace)
             else:
@@ -243,17 +247,14 @@ class MerossApi(ApiProfile):
             host = service_call.data.get(CONF_HOST)
 
             def response_callback(acknowledge: bool, header: dict, payload: dict):
-                if service_call.data.get(CONF_NOTIFYRESPONSE):
-                    self.hass.components.persistent_notification.async_create(
-                        title="Meross LAN service response", message=json_dumps(payload)
-                    )
+                service_response["response"] = {mc.KEY_HEADER: header, mc.KEY_PAYLOAD: payload}
 
             if device_id:
                 if device := self.devices.get(device_id):
                     await device.async_request(
                         namespace, method, payload, response_callback
                     )
-                    return
+                    return service_response
                 # device not registered (yet?) try direct MQTT
                 if (
                     mqtt_connection := self._mqtt_connection
@@ -261,30 +262,30 @@ class MerossApi(ApiProfile):
                     await mqtt_connection.async_mqtt_publish(
                         device_id, namespace, method, payload, key
                     )
-                    return
+                    return service_response
                 if not host:
-                    self.warning(
-                        "cannot execute service call on %s - missing MQTT connectivity or device not registered",
-                        device_id,
-                    )
-                    return
+                    raise HomeAssistantError(f"Missing MQTT connectivity or {device_id} not registered")
             elif not host:
-                self.warning("cannot execute service call (missing device_id and host)")
-                return
+                raise HomeAssistantError("Missing both device_id and host: provide at least one valid entry")
             # host is not None
             for device in self.active_devices():
                 if device.host == host:
                     await device.async_request(
                         namespace, method, payload, response_callback
                     )
-                    return
-            self.hass.async_create_task(
-                self.async_http_request(
-                    host, namespace, method, payload, key, response_callback
-                )
-            )
+                    return service_response
 
-        hass.services.async_register(DOMAIN, SERVICE_REQUEST, async_service_request)
+            await self.async_http_request(
+                host, namespace, method, payload, key, response_callback
+            )
+            return service_response
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_REQUEST,
+            async_service_request,
+            supports_response=SupportsResponse.ONLY,
+        )
         return
 
     # interface: EntityManager
