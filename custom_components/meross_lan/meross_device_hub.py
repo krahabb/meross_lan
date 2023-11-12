@@ -28,7 +28,7 @@ from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
     from .devices.mts100 import Mts100Climate, Mts100Schedule, Mts100SetPointNumber
-    from .meross_device import ResponseCallbackType
+    from .meross_device import MerossPayloadType, ResponseCallbackType
     from .meross_entity import MerossEntity
 
 
@@ -67,9 +67,7 @@ class SubDevicePollingStrategy(PollingStrategy):
         self._included = included
         self._count = count
 
-    async def poll(
-        self, device: MerossDeviceHub, epoch: float, namespace: str | None
-    ):
+    async def poll(self, device: MerossDeviceHub, epoch: float, namespace: str | None):
         if namespace or (not device._mqtt_active) or (self.lastrequest == 0):
             max_queuable = 1
             # for hubs, this payload request might be splitted
@@ -339,7 +337,7 @@ class MerossDeviceHub(MerossDevice):
         # build something anyway...
         return MerossSubDevice(self, p_subdevice, _type)  # type: ignore
 
-    def _subdevice_parse(self, key: str, payload: dict):
+    def _subdevice_parse(self, key: str, payload: MerossPayloadType):
         for p_subdevice in payload[key]:
             if subdevice := self.subdevices.get(p_subdevice[mc.KEY_ID]):
                 subdevice._parse(key, p_subdevice)
@@ -452,7 +450,7 @@ class MerossSubDevice(MerossDeviceBase):
         payload: dict,
         response_callback: ResponseCallbackType | None = None,
     ):
-        await self.hub.async_request(namespace, method, payload, response_callback)
+        return await self.hub.async_request(namespace, method, payload, response_callback)
 
     def _get_device_info_name_key(self) -> str:
         return mc.KEY_SUBDEVICENAME

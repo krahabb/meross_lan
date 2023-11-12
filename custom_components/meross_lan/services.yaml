@@ -109,11 +109,3 @@ request:
       default: '{}'
       selector:
         text:
-    notifyresponse:
-      name: Notify response
-      description: Forwards the device response to homeassistant persistent notifications
-      required: false
-      advanced: false
-      default: True
-      selector:
-        boolean:

@@ -51,7 +51,7 @@ from aiohttp import web
 # homeassistant.helpers.storage
 from custom_components.meross_lan.merossclient import (
     MerossDeviceDescriptor,
-    build_payload,
+    build_message,
     const as mc,
     get_namespacekey,
     get_replykey,
@@ -201,7 +201,7 @@ class MerossEmulator:
             method = mc.METHOD_ERROR
             payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
 
-        data = build_payload(
+        data = build_message(
             namespace,
             method,
             payload,

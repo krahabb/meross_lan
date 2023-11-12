@@ -3,17 +3,36 @@
 """
 from __future__ import annotations
 
+import asyncio
 from hashlib import md5
 from time import time
-from typing import Union
+import typing
 from uuid import uuid4
 
 from . import const as mc
 
-KeyType = Union[dict, str, None]
+MerossHeaderType = typing.TypedDict(
+    "MerossHeaderType",
+    {
+        "messageId": str,
+        "namespace": str,
+        "method": str,
+        "payloadVersion": int,
+        "from": str,
+        "timestamp": int,
+        "timestampMs": int,
+        "sign": str,
+    },
+)
+MerossPayloadType = dict[str, typing.Any]
+MerossMessageType = typing.TypedDict(
+    "MerossMessageType", {"header": MerossHeaderType, "payload": MerossPayloadType}
+)
+KeyType = typing.Union[MerossHeaderType, str, None]
+ResponseCallbackType = typing.Callable[[bool, dict, dict], None]
+
 
 try:
-    import asyncio
     import json
     from random import randint
 
@@ -105,7 +124,7 @@ class MerossProtocolError(Exception):
     - reason is an additional context error
     """
 
-    def __init__(self, response: dict, reason: object | None = None):
+    def __init__(self, response, reason: object | None = None):
         self.response = response
         self.reason = reason
         super().__init__(reason)
@@ -117,7 +136,7 @@ class MerossKeyError(MerossProtocolError):
     reported by device
     """
 
-    def __init__(self, response: dict):
+    def __init__(self, response: MerossMessageType):
         super().__init__(response, "Invalid key")
 
 
@@ -127,18 +146,18 @@ class MerossSignatureError(MerossProtocolError):
     when validating the received header
     """
 
-    def __init__(self, response: dict):
+    def __init__(self, response: MerossMessageType):
         super().__init__(response, "Signature error")
 
 
-def build_payload(
+def build_message(
     namespace: str,
     method: str,
-    payload: dict,
+    payload: MerossPayloadType,
     key: KeyType,
     from_: str,
     messageid: str | None = None,
-) -> dict:
+) -> MerossMessageType:
     if isinstance(key, dict):
         key[mc.KEY_NAMESPACE] = namespace
         key[mc.KEY_METHOD] = method
@@ -200,7 +219,7 @@ def get_message_signature(messageid: str, key: str, timestamp):
     ).hexdigest()
 
 
-def get_replykey(header: dict, key: KeyType = None) -> KeyType:
+def get_replykey(header: MerossHeaderType, key: KeyType = None) -> KeyType:
     """
     checks header signature against key:
     if ok return sign itsef else return the full header { "messageId", "timestamp", "sign", ...}
@@ -228,7 +247,9 @@ def get_element_by_key(payload: list, key: str, value: object) -> dict:
     for p in payload:
         if p.get(key) == value:
             return p
-    raise KeyError(f"No match for key '{key}' on value:'{str(value)}' in {str(payload)}")
+    raise KeyError(
+        f"No match for key '{key}' on value:'{str(value)}' in {str(payload)}"
+    )
 
 
 def get_element_by_key_safe(payload, key: str, value) -> dict | None:

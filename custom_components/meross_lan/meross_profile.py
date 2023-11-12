@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import abc
+import asyncio
 from contextlib import asynccontextmanager
 from json import dumps as json_dumps, loads as json_loads
 from logging import DEBUG, INFO
 from time import time
 import typing
+from uuid import uuid4
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
@@ -45,7 +47,7 @@ from .helpers import (
 from .meross_device_hub import MerossDeviceHub
 from .merossclient import (
     MEROSSDEBUG,
-    build_payload,
+    build_message,
     const as mc,
     get_default_arguments,
     get_namespacekey,
@@ -66,7 +68,6 @@ from .merossclient.cloudapi import (
 from .sensor import MLSensor
 
 if typing.TYPE_CHECKING:
-    import asyncio
     from typing import Final
 
     from homeassistant.config_entries import ConfigEntry
@@ -75,7 +76,7 @@ if typing.TYPE_CHECKING:
     from . import MerossApi
     from .const import ProfileConfigType
     from .meross_device import MerossDevice, MerossDeviceDescriptor
-    from .merossclient import KeyType
+    from .merossclient import KeyType, ResponseCallbackType
     from .merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
@@ -179,6 +180,34 @@ class ConnectionSensor(MLSensor):
             self._async_write_ha_state()
 
 
+class _MQTTTransaction:
+    """Context for pending MQTT publish(es) waiting for responses.
+    This will allow to synchronize message request-response flow on MQTT
+    """
+
+    __slots__ = (
+        "namespace",
+        "messageid",
+        "method",
+        "request_time",
+        "response_callback",
+        "response_future",
+    )
+
+    def __init__(
+        self,
+        namespace: str,
+        method: str,
+        response_callback: ResponseCallbackType,
+    ):
+        self.namespace = namespace
+        self.messageid = uuid4().hex
+        self.method = method
+        self.request_time = time()
+        self.response_callback = response_callback
+        self.response_future = asyncio.get_running_loop().create_future()
+
+
 class MQTTConnection(Loggable):
     """
     Base abstract class representing a connection to an MQTT
@@ -195,12 +224,15 @@ class MQTTConnection(Loggable):
     _KEY_REQUESTTIME = "__requesttime"
     _KEY_REQUESTCOUNT = "__requestcount"
 
+    DEFAULT_RESPONSE_TIMEOUT = 5
+
     __slots__ = (
         "profile",
         "broker",
         "mqttdevices",
         "mqttdiscovering",
         "sensor_connection",
+        "_mqtt_transactions",
         "_mqtt_is_connected",
         "_unsub_discovery_callback",
     )
@@ -216,6 +248,7 @@ class MQTTConnection(Loggable):
         self.mqttdevices: dict[str, MerossDevice] = {}
         self.mqttdiscovering: dict[str, dict] = {}
         self.sensor_connection = None
+        self._mqtt_transactions: dict[str, _MQTTTransaction] = {}
         self._mqtt_is_connected = False
         self._unsub_discovery_callback: asyncio.TimerHandle | None = None
         super().__init__(connection_id)
@@ -274,6 +307,7 @@ class MQTTConnection(Loggable):
         method: str,
         payload: dict,
         key: KeyType = None,
+        response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ) -> asyncio.Future:
         """
@@ -290,6 +324,7 @@ class MQTTConnection(Loggable):
         method: str,
         payload: dict,
         key: KeyType = None,
+        response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ):
         """
@@ -312,6 +347,18 @@ class MQTTConnection(Loggable):
                     header[mc.KEY_METHOD],
                     header[mc.KEY_NAMESPACE],
                 )
+            messageid = header[mc.KEY_MESSAGEID]
+            if messageid in self._mqtt_transactions:
+                mqtt_transaction = self._mqtt_transactions[messageid]
+                if mqtt_transaction.namespace == header[mc.KEY_NAMESPACE]:
+                    self._mqtt_transactions.pop(messageid, None)
+                    mqtt_transaction.response_future.set_result(message)
+                    mqtt_transaction.response_callback(
+                        header[mc.KEY_METHOD] != mc.METHOD_ERROR,
+                        header,
+                        message[mc.KEY_PAYLOAD],
+                    )
+
             if device_id in self.mqttdevices:
                 self.mqttdevices[device_id].mqtt_receive(
                     header, message[mc.KEY_PAYLOAD]
@@ -467,6 +514,39 @@ class MQTTConnection(Loggable):
                 self._async_discovery_callback,
             )
 
+    def _mqtt_transaction_init(
+        self, namespace: str, method: str, response_callback: ResponseCallbackType
+    ):
+        transaction = _MQTTTransaction(namespace, method, response_callback)
+        self._mqtt_transactions[transaction.messageid] = transaction
+        return transaction
+
+    async def _async_mqtt_transaction_wait(
+        self, transaction: _MQTTTransaction, timeout=DEFAULT_RESPONSE_TIMEOUT
+    ):
+        try:
+            return await asyncio.wait_for(transaction.response_future, timeout)
+        except Exception as e:
+            self.log_exception(DEBUG, e, "")
+            return None
+        finally:
+            self._mqtt_transactions.pop(transaction.messageid, None)
+
+    def _mqtt_transaction_cancel(self, transaction: _MQTTTransaction):
+        transaction.response_future.cancel()
+        self._mqtt_transactions.pop(transaction.messageid, None)
+
+    def _mqtt_transactions_clean(self):
+        if self._mqtt_transactions:
+            # check and cleanup stale transactions
+            _mqtt_transaction_stale_list = []
+            epoch = time()
+            for _mqtt_transaction in self._mqtt_transactions.values():
+                if (epoch - _mqtt_transaction.request_time) > 15:
+                    _mqtt_transaction_stale_list.append(_mqtt_transaction.messageid)
+            for messageid in _mqtt_transaction_stale_list:
+                self._mqtt_transactions.pop(messageid)
+
     @callback
     def _mqtt_connected(self):
         """called when the underlying mqtt.Client connects to the broker"""
@@ -560,26 +640,38 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         method: str,
         payload: dict,
         key: KeyType = None,
+        response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
-    ) -> asyncio.Future:
-        """
-        this function runs in an executor since the mqtt.Client is synchronous code.
-        Beware when calling HA api's (like when we want to update sensors)
-        """
+    ) -> asyncio.Future[_MQTTTransaction | mqtt.MQTTMessageInfo | bool]:
+        if response_callback:
+            transaction = self._mqtt_transaction_init(
+                namespace, method, response_callback
+            )
+            messageid = transaction.messageid
+        else:
+            transaction = None
 
-        def _publish():
+        def _publish() -> _MQTTTransaction | mqtt.MQTTMessageInfo | bool:
+            """
+            this function runs in an executor since the mqtt.Client is synchronous code.
+            Beware when calling HA api's (like when we want to update sensors)
+            """
             if not self.allow_mqtt_publish:
                 self.warning(
                     "MQTT publishing is not allowed for this profile (device_id=%s)",
                     device_id,
                     timeout=14400,
                 )
-                return
+                if transaction:
+                    ApiProfile.hass.loop.call_soon_threadsafe(
+                        self._mqtt_transaction_cancel, transaction
+                    )
+                return False
 
             ret = self.rl_publish(
                 mc.TOPIC_REQUEST.format(device_id),
                 json_dumps(
-                    build_payload(
+                    build_message(
                         namespace,
                         method,
                         payload,
@@ -604,7 +696,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                     namespace,
                     timeout=14000,
                 )
-            elif ret is True:
+                if transaction:
+                    ApiProfile.hass.loop.call_soon_threadsafe(
+                        self._mqtt_transaction_cancel, transaction
+                    )
+                return False
+            if ret is True:
                 if sensor_connection := self.sensor_connection:
                     ApiProfile.hass.loop.call_soon_threadsafe(
                         sensor_connection.inc_queued,
@@ -625,6 +722,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                     method,
                     namespace,
                 )
+            return transaction or ret
 
         return ApiProfile.hass.async_add_executor_job(_publish)
 
@@ -635,9 +733,17 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         method: str,
         payload: dict,
         key: KeyType = None,
+        response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ):
-        await self.mqtt_publish(device_id, namespace, method, payload, key, messageid)
+        result = await self.mqtt_publish(
+            device_id, namespace, method, payload, key, response_callback, messageid
+        )
+
+        if isinstance(result, _MQTTTransaction):
+            return await self._async_mqtt_transaction_wait(
+                result, self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT
+            )
 
     @callback
     def _mqtt_published(self, mid):
@@ -1024,9 +1130,11 @@ class MerossCloudProfile(ApiProfile):
         return None
 
     async def async_check_query_latest_version(self, epoch: float, token: str):
-        if self.config.get(CONF_CHECK_FIRMWARE_UPDATES) and (
-            epoch - self._data[MerossCloudProfile.KEY_LATEST_VERSION_TIME]
-        ) > PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT:
+        if (
+            self.config.get(CONF_CHECK_FIRMWARE_UPDATES)
+            and (epoch - self._data[MerossCloudProfile.KEY_LATEST_VERSION_TIME])
+            > PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
+        ):
             self._data[MerossCloudProfile.KEY_LATEST_VERSION_TIME] = epoch
             with self.exception_warning("async_check_query_latest_version"):
                 self._data[

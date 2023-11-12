@@ -17,8 +17,10 @@ from . import (
     MEROSSDEBUG,
     KeyType,
     MerossKeyError,
+    MerossMessageType,
+    MerossPayloadType,
     MerossProtocolError,
-    build_payload,
+    build_message,
     const as mc,
     get_replykey,
 )
@@ -74,7 +76,7 @@ class MerossHttpClient:
         self._logger = _logger
         self._logid = None
 
-    async def async_request_raw(self, request: dict) -> dict:
+    async def async_request_raw(self, request: MerossMessageType) -> MerossMessageType:
         timeout = 1
         try:
             self._logid = None
@@ -108,7 +110,7 @@ class MerossHttpClient:
             text_body = await response.text()
             if self._logid:
                 self._logger.debug("%s: HTTP Response (%s)", self._logid, text_body)  # type: ignore
-            json_body: dict = json_loads(text_body)
+            json_body: MerossMessageType = json_loads(text_body)
             if self.key is None:
                 self.replykey = get_replykey(json_body[mc.KEY_HEADER], self.key)
         except Exception as e:
@@ -124,9 +126,11 @@ class MerossHttpClient:
 
         return json_body
 
-    async def async_request(self, namespace: str, method: str, payload: dict) -> dict:
+    async def async_request(
+        self, namespace: str, method: str, payload: MerossPayloadType
+    ) -> MerossMessageType:
         key = self.key
-        request = build_payload(
+        request = build_message(
             namespace,
             method,
             payload,
@@ -163,18 +167,18 @@ class MerossHttpClient:
         return response
 
     async def async_request_strict(
-        self, namespace: str, method: str, payload: dict
-    ) -> dict:
+        self, namespace: str, method: str, payload: MerossPayloadType
+    ) -> MerossMessageType:
         """
         check the protocol layer is correct and no protocol ERROR
         is being reported
         """
         response = await self.async_request(namespace, method, payload)
         try:
-            r_header: dict = response[mc.KEY_HEADER]
+            r_header = response[mc.KEY_HEADER]
             r_header[mc.KEY_NAMESPACE]
-            r_method: str = r_header[mc.KEY_METHOD]
-            r_payload: dict = response[mc.KEY_PAYLOAD]
+            r_method = r_header[mc.KEY_METHOD]
+            r_payload = response[mc.KEY_PAYLOAD]
         except Exception as e:
             raise MerossProtocolError(response, str(e)) from e
 
