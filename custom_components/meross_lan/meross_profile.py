@@ -76,7 +76,7 @@ if typing.TYPE_CHECKING:
     from . import MerossApi
     from .const import ProfileConfigType
     from .meross_device import MerossDevice, MerossDeviceDescriptor
-    from .merossclient import KeyType, ResponseCallbackType
+    from .merossclient import KeyType, MerossMessageType, ResponseCallbackType
     from .merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
@@ -326,7 +326,7 @@ class MQTTConnection(Loggable):
         key: KeyType = None,
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
-    ):
+    ) -> MerossMessageType | None:
         """
         awaits message publish in asyncio style
         """
@@ -359,16 +359,13 @@ class MQTTConnection(Loggable):
                         message[mc.KEY_PAYLOAD],
                     )
 
-            if device_id in self.mqttdevices:
-                self.mqttdevices[device_id].mqtt_receive(
-                    header, message[mc.KEY_PAYLOAD]
-                )
-                return
-
             if device := ApiProfile.devices.get(device_id):
+                if device._mqtt_connection == self:
+                    device.mqtt_receive(header, message[mc.KEY_PAYLOAD])
+                    return
                 # we have the device registered but somehow it is not 'mqtt binded'
-                # either it's configuration is ONLY_HTTP or it is paired to the
-                # Meross cloud. In this case we shouldn't receive 'local' MQTT
+                # either it's configuration is ONLY_HTTP or it is paired to
+                # another profile. In this case we shouldn't receive 'local' MQTT
                 self.warning(
                     "device(%s) not registered for MQTT handling on this profile",
                     device.name,
@@ -472,13 +469,13 @@ class MQTTConnection(Loggable):
     async def _async_progress_discovery(self, discovered: dict, device_id: str):
         for namespace in (mc.NS_APPLIANCE_SYSTEM_ALL, mc.NS_APPLIANCE_SYSTEM_ABILITY):
             if get_namespacekey(namespace) not in discovered:
+                discovered[MQTTConnection._KEY_REQUESTTIME] = time()
+                discovered[MQTTConnection._KEY_REQUESTCOUNT] += 1
                 await self.async_mqtt_publish(
                     device_id,
                     *get_default_arguments(namespace),
                     self.profile.key,
                 )
-                discovered[MQTTConnection._KEY_REQUESTTIME] = time()
-                discovered[MQTTConnection._KEY_REQUESTCOUNT] += 1
                 return True
 
         return False
@@ -523,11 +520,18 @@ class MQTTConnection(Loggable):
 
     async def _async_mqtt_transaction_wait(
         self, transaction: _MQTTTransaction, timeout=DEFAULT_RESPONSE_TIMEOUT
-    ):
+    ) -> MerossMessageType | None:
         try:
             return await asyncio.wait_for(transaction.response_future, timeout)
         except Exception as e:
-            self.log_exception(DEBUG, e, "")
+            self.log_exception(
+                DEBUG,
+                e,
+                "waiting for MQTT reply on message %s %s (messageId: %s)",
+                transaction.method,
+                transaction.namespace,
+                transaction.messageid,
+            )
             return None
         finally:
             self._mqtt_transactions.pop(transaction.messageid, None)
