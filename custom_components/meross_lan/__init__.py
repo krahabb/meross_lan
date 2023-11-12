@@ -16,16 +16,7 @@ from homeassistant.exceptions import (
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import (
-    CONF_CLOUD_KEY,
-    CONF_DEVICE_ID,
-    CONF_HOST,
-    CONF_KEY,
-    CONF_PAYLOAD,
-    CONF_PROFILE_ID_LOCAL,
-    DOMAIN,
-    SERVICE_REQUEST,
-)
+from . import const as mlc
 from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, schedule_async_callback
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
@@ -64,7 +55,7 @@ class HAMQTTConnection(MQTTConnection):
     )
 
     def __init__(self, api: MerossApi):
-        super().__init__(api, CONF_PROFILE_ID_LOCAL, ("homeassistant", 0))
+        super().__init__(api, mlc.CONF_PROFILE_ID_LOCAL, ("homeassistant", 0))
         self._unsub_mqtt_subscribe: Callable | None = None
         self._unsub_mqtt_disconnected: Callable | None = None
         self._unsub_mqtt_connected: Callable | None = None
@@ -134,7 +125,7 @@ class HAMQTTConnection(MQTTConnection):
 
         self.log(
             DEBUG,
-            "MQTT SEND device_id:(%s) method:(%s) namespace:(%s)",
+            "MQTT PUBLISH device_id:(%s) method:(%s) namespace:(%s)",
             device_id,
             method,
             namespace,
@@ -221,20 +212,20 @@ class MerossApi(ApiProfile):
 
     @staticmethod
     def get(hass: HomeAssistant) -> MerossApi:
-        if DOMAIN not in hass.data:
-            hass.data[DOMAIN] = MerossApi(hass)
-        return hass.data[DOMAIN]
+        if mlc.DOMAIN not in hass.data:
+            hass.data[mlc.DOMAIN] = MerossApi(hass)
+        return hass.data[mlc.DOMAIN]
 
     def __init__(self, hass: HomeAssistant):
         ApiProfile.hass = hass
         ApiProfile.api = self
-        super().__init__(CONF_PROFILE_ID_LOCAL)
+        super().__init__(mlc.CONF_PROFILE_ID_LOCAL)
         self._deviceclasses: dict[str, type] = {}
         self._mqtt_connection: HAMQTTConnection | None = None
 
-        for config_entry in hass.config_entries.async_entries(DOMAIN):
+        for config_entry in hass.config_entries.async_entries(mlc.DOMAIN):
             unique_id = config_entry.unique_id
-            if (unique_id is None) or (unique_id == DOMAIN):
+            if (unique_id is None) or (unique_id == mlc.DOMAIN):
                 continue
             unique_id = unique_id.split(".")
             if unique_id[0] == "profile":
@@ -244,7 +235,15 @@ class MerossApi(ApiProfile):
 
         async def async_service_request(service_call: ServiceCall) -> ServiceResponse:
             service_response = {}
-            device_id = service_call.data.get(CONF_DEVICE_ID)
+            device_id = service_call.data.get(mlc.CONF_DEVICE_ID)
+            host = service_call.data.get(mlc.CONF_HOST)
+            if not device_id and not host:
+                raise HomeAssistantError(
+                    "Missing both device_id and host: provide at least one valid entry"
+                )
+            protocol = mlc.CONF_PROTOCOL_OPTIONS.get(
+                service_call.data.get(mlc.CONF_PROTOCOL), mlc.CONF_PROTOCOL_AUTO
+            )
             namespace = service_call.data[mc.KEY_NAMESPACE]
             method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
             if mc.KEY_PAYLOAD in service_call.data:
@@ -256,8 +255,7 @@ class MerossApi(ApiProfile):
                 payload = get_default_payload(namespace)
             else:
                 payload = {}  # likely failing the request...
-            key = service_call.data.get(CONF_KEY, self.key)
-            host = service_call.data.get(CONF_HOST)
+            key = service_call.data.get(mlc.CONF_KEY, self.key)
 
             def response_callback(acknowledge: bool, header, payload):
                 service_response["response"] = {
@@ -265,44 +263,58 @@ class MerossApi(ApiProfile):
                     mc.KEY_PAYLOAD: payload,
                 }
 
+            async def _async_device_request(device: MerossDevice):
+                if protocol is mlc.CONF_PROTOCOL_MQTT:
+                    return await device.async_mqtt_request(
+                        namespace, method, payload, response_callback
+                    )
+                elif protocol is mlc.CONF_PROTOCOL_HTTP:
+                    return await device.async_http_request(
+                        namespace, method, payload, response_callback
+                    )
+                else:
+                    return await device.async_request(
+                        namespace, method, payload, response_callback
+                    )
+
             if device_id:
                 if device := self.devices.get(device_id):
-                    await device.async_request(
-                        namespace, method, payload, response_callback
-                    )
+                    await _async_device_request(device)
                     return service_response
-                # device not registered (yet?) try direct MQTT
                 if (
-                    mqtt_connection := self._mqtt_connection
-                ) and mqtt_connection.mqtt_is_connected:
+                    protocol is not mlc.CONF_PROTOCOL_HTTP
+                    and (mqtt_connection := self._mqtt_connection)
+                    and mqtt_connection.mqtt_is_connected
+                ):
                     await mqtt_connection.async_mqtt_publish(
-                        device_id, namespace, method, payload, key, response_callback
-                    )
-                    return service_response
-                if not host:
-                    raise HomeAssistantError(
-                        f"Missing MQTT connectivity or {device_id} not registered"
-                    )
-            elif not host:
-                raise HomeAssistantError(
-                    "Missing both device_id and host: provide at least one valid entry"
-                )
-            # host is not None
-            for device in self.active_devices():
-                if device.host == host:
-                    await device.async_request(
-                        namespace, method, payload, response_callback
+                        device_id,
+                        namespace,
+                        method,
+                        payload,
+                        key,
+                        response_callback,
                     )
                     return service_response
 
-            service_response["response"] = await self.async_http_request(
-                host, namespace, method, payload, key
+            if host:
+                for device in self.active_devices():
+                    if device.host == host:
+                        await _async_device_request(device)
+                        return service_response
+
+                if protocol is not mlc.CONF_PROTOCOL_MQTT:
+                    service_response["response"] = await self.async_http_request(
+                        host, namespace, method, payload, key
+                    )
+                    return service_response
+
+            raise HomeAssistantError(
+                f"Unable to find a route to {device_id or host} using {protocol} protocol"
             )
-            return service_response
 
         hass.services.async_register(
-            DOMAIN,
-            SERVICE_REQUEST,
+            mlc.DOMAIN,
+            mlc.SERVICE_REQUEST,
             async_service_request,
             supports_response=SupportsResponse.OPTIONAL,
         )
@@ -336,7 +348,7 @@ class MerossApi(ApiProfile):
         The base MerossDevice class is a bulk 'do it all' implementation
         but some devices (i.e. Hub) need a (radically?) different behaviour
         """
-        descriptor = MerossDeviceDescriptor(config_entry.data.get(CONF_PAYLOAD))
+        descriptor = MerossDeviceDescriptor(config_entry.data.get(mlc.CONF_PAYLOAD))
         ability = descriptor.ability
         digest = descriptor.digest
 
@@ -467,7 +479,7 @@ async def async_setup(hass: HomeAssistant, config: dict):
 
     async def _async_unload_merossapi(_event) -> None:
         await api.async_shutdown()
-        hass.data.pop(DOMAIN)
+        hass.data.pop(mlc.DOMAIN)
 
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi)
 
@@ -485,7 +497,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     )
     api = ApiProfile.api
 
-    if unique_id == DOMAIN:
+    if unique_id == mlc.DOMAIN:
         # MQTT Hub entry
         await api.entry_update_listener(hass, config_entry)
         if not await api.mqtt_connection.async_mqtt_subscribe():
@@ -539,12 +551,12 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
                 profile.link(device)
         else:
             # trigger a cloud profile discovery if we guess it reasonable
-            if profile_id and (config_entry.data.get(CONF_CLOUD_KEY) == device.key):
+            if profile_id and (config_entry.data.get(mlc.CONF_CLOUD_KEY) == device.key):
                 helper = ConfigEntriesHelper(hass)
                 flow_unique_id = f"profile.{profile_id}"
                 if not helper.get_config_flow(flow_unique_id):
                     await hass.config_entries.flow.async_init(
-                        DOMAIN,
+                        mlc.DOMAIN,
                         context={
                             "source": SOURCE_INTEGRATION_DISCOVERY,
                             "unique_id": flow_unique_id,
@@ -584,7 +596,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
         unique_id,
         entry.entry_id,
     )
-    if unique_id == DOMAIN:
+    if unique_id == mlc.DOMAIN:
         return
 
     assert unique_id
