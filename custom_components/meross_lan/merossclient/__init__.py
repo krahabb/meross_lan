@@ -94,6 +94,7 @@ try:
             return randint(0, 99) < MEROSSDEBUG.mqtt_disconnect_probability
 
         # MerossHTTPClient debug patching
+        http_client_log_enable = False
         http_disc_end = 0
         http_disc_duration = 25
         http_disc_probability = 0
