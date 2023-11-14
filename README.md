@@ -85,10 +85,12 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [GS559AH](https://www.meross.com/en-gc/smart-sensor/homekit-smoke-detector/120): Smart Smoke Sensor
 - Thermostats
   - [MTS100](https://www.meross.com/Detail/30/Smart%20Thermostat%20Valve): Smart Thermostat Valve
+  - [MTS150](https://www.meross.com/en-gc/smart-thermostat/smart-thermostat-valve/99): Smart Thermostat Valve
   - [MTS200](https://www.meross.com/Detail/116/Smart%20Wi-Fi%20Thermostat): Smart Wifi Thermostat
 - Covers
   - [MRS100](https://www.meross.com/product/91/article/): Smart WiFi Roller Shutter
   - [MSG100](https://www.meross.com/product/29/article/): Smart WiFi Garage Door Opener
+  - [MSG200](https://www.meross.com/en-gc/smart-garage-door-opener/homekit-garage-door-opener/68): Smart WiFi Garage Door Opener (3 channels)
 - Humidifiers
   - [MSXH0](https://www.meross.com/Detail/47/Smart%20Wi-Fi%20Humidifier) [experimental]: Smart WiFi Humidifier
   - [MOD100](https://www.meross.com/Detail/93/Smart%20Wi-Fi%20Essential%20Oil%20Diffuser) [experimental]: Smart WiFi Essential Oil Diffuser
@@ -109,7 +111,7 @@ In general, many device configuration options available in Meross app are not su
 ## Service
 
 There is a service called `meross_lan.request` exposed to simplify communication with the device and play with it a bit. It basically requires the needed informations to setup a command request and send it over MQTT or HTTP without the hassle of signatures and timestamps computations. You can check it in the 'Developer Tools' of the HA instance, everything should be enough self-explanatory there.
-Since version 3.0.2 the service allows you to publish the device response as a persistent_notification message in HA so you don't have to dig into logs in order to see the reply. The notification is optional and you have to add the `notifyresponse` key to the service call with a value of `true`
+Since version 4.4.0 the service allows you to receive the 'original' device response through the new [HA service response feature](https://www.home-assistant.io/blog/2023/07/05/release-20237/#services-can-now-respond)
 
 ## Troubleshooting
 
