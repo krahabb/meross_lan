@@ -122,7 +122,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.channel = channel
         self._attr_device_class = device_class
         if self._attr_name is None:
-            self._attr_name = entitykey or device_class  # type: ignore
+            self._attr_name = f"{entitykey or device_class}"
+        if channel:  # when channel == 0 it might be the only one so skip it
+            self._attr_name = f"{self._attr_name} {channel}"
         self._attr_state = None
         self._attr_unique_id = manager.generate_unique_id(self)
         self._hass_connected = False
