@@ -1134,7 +1134,9 @@ class MerossDevice(MerossDeviceBase):
                     self.host,  # type: ignore
                     self.key,
                     async_get_clientsession(ApiProfile.hass),
-                    LOGGER if MEROSSDEBUG.http_client_log_enable else None,
+                    LOGGER
+                    if MEROSSDEBUG and MEROSSDEBUG.http_client_log_enable
+                    else None,
                 )
                 self._http = http
 

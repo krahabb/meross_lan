@@ -50,15 +50,15 @@ def skip_notifications_fixture():
 
 @pytest.fixture(name="disable_debug", autouse=True)
 def disable_debug_fixture():
-    """Skip notification calls."""
+    """Disable development debug code so to test in a production env."""
     with patch("custom_components.meross_lan.MEROSSDEBUG", None), patch(
         "custom_components.meross_lan.meross_profile.MEROSSDEBUG", None
-    ), patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None), patch(
-        "custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG",
-        None,
+    ), patch("custom_components.meross_lan.meross_device.MEROSSDEBUG", None), patch(
+        "custom_components.meross_lan.merossclient.MEROSSDEBUG", None
     ), patch(
-        "custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG",
-        None,
+        "custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None
+    ), patch(
+        "custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", None
     ):
         yield
 
