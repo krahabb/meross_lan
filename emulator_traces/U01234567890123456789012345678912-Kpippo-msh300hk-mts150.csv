@@ -1,0 +1,175 @@
+2023/11/07 - 11:28:24		auto	GETACK	Appliance.System.All	{"system": {"hardware": {"type": "msh300hk", "subType": "un", "version": "5.0.0", "chipType": "MT7686", "uuid": "###############################0", "macAddress": "################0"}, "firmware": {"version": "5.5.32", "homekitVersion": "4.1", "compileTime": "2023/10/11 11:31:05 GMT +08:00", "encrypt": 1, "wifiMac": "################1", "innerIp": "############0", "server": "###################0", "port": "@0", "userId": "@0"}, "time": {"timestamp": 1699348685, "timezone": "Europe/Rome", "timeRule": [[1679792400, 7200, 1], [1698541200, 3600, 0], [1711846800, 7200, 1], [1729990800, 3600, 0], [1743296400, 7200, 1], [1761440400, 3600, 0], [1774746000, 7200, 1], [1792890000, 3600, 0], [1806195600, 7200, 1], [1824944400, 3600, 0], [1837645200, 7200, 1], [1856394000, 3600, 0], [1869094800, 7200, 1], [1887843600, 3600, 0], [1901149200, 7200, 1], [1919293200, 3600, 0], [1932598800, 7200, 1], [1950742800, 3600, 0], [1964048400, 7200, 1], [1982797200, 3600, 0]]}, "online": {"status": 1, "bindId": "agvgaM9yldlrGDya", "who": 1}}, "digest": {"hub": {"hubId": 3922155501, "mode": 0, "nvdmChl": 0, "workChl": 1, "curChl": 1, "subdevice": [{"id": "03002B0E", "status": 1, "scheduleBMode": 6, "onoff": 1, "lastActiveTime": 1699348536, "mts150": {"mode": 1, "currentSet": 210, "updateMode": 1, "updateTemp": 175, "motorCurLocation": 248, "motorStartCtr": 670, "motorTotalPath": 66522}}, {"id": "03004B5A", "status": 1, "scheduleBMode": 6, "onoff": 1, "lastActiveTime": 1699348681, "mts150": {"mode": 1, "currentSet": 210, "updateMode": 1, "updateTemp": 210, "motorCurLocation": 1296, "motorStartCtr": 977, "motorTotalPath": 111890}}]}}}
+2023/11/07 - 11:28:24		auto	GETACK	Appliance.System.Ability	{"Appliance.Config.Key": {}, "Appliance.Config.WifiList": {}, "Appliance.Config.Wifi": {}, "Appliance.Config.WifiX": {}, "Appliance.Config.Trace": {}, "Appliance.Config.Info": {}, "Appliance.System.All": {}, "Appliance.System.Hardware": {}, "Appliance.System.Firmware": {}, "Appliance.System.Debug": {}, "Appliance.System.Online": {}, "Appliance.System.Time": {}, "Appliance.System.Clock": {}, "Appliance.System.Ability": {}, "Appliance.System.Runtime": {}, "Appliance.System.Report": {}, "Appliance.System.Position": {}, "Appliance.System.DNDMode": {}, "Appliance.Control.Multiple": {"maxCmdNum": 5}, "Appliance.Control.Bind": {}, "Appliance.Control.Unbind": {}, "Appliance.Control.Upgrade": {}, "Appliance.Hub.Online": {}, "Appliance.Hub.ToggleX": {}, "Appliance.Hub.SubdeviceList": {}, "Appliance.Hub.Battery": {}, "Appliance.Hub.Sensitivity": {}, "Appliance.Hub.PairSubDev": {}, "Appliance.Hub.Report": {}, "Appliance.Hub.Mts100.All": {}, "Appliance.Hub.Mts100.Temperature": {}, "Appliance.Hub.Mts100.ScheduleB": {"scheduleUnitTime": 15}, "Appliance.Hub.Mts100.Mode": {}, "Appliance.Hub.Mts100.Adjust": {}, "Appliance.Hub.Mts100.SuperCtl": {}, "Appliance.Hub.SubDevice.MotorAdjust": {}, "Appliance.Hub.SubDevice.Beep": {}, "Appliance.Hub.Sensor.All": {}, "Appliance.Hub.Sensor.WaterLeak": {}, "Appliance.Hub.Sensor.TempHum": {}, "Appliance.Hub.Sensor.Adjust": {}, "Appliance.Hub.Sensor.Motion": {}, "Appliance.Hub.Sensor.DoorWindow": {}, "Appliance.Hub.Sensor.Smoke": {}, "Appliance.Hub.Sensor.Alert": {}}
+2023/11/07 - 11:28:24	TX	http	GET	Appliance.Config.Info	{"info": {}}
+2023/11/07 - 11:28:24	RX	http	GETACK	Appliance.Config.Info	{"info": {"homekit": {"model": "MSH300HK", "sn": "620802230500553", "category": 2, "setupId": "BT19", "setupCode": "621-48-139", "uuid": "###################################1", "token": "#######################################################################################################################################################################################################################################0"}}}
+2023/11/07 - 11:28:24		auto	LOG	DEBUG	handler undefined for method:(GETACK) namespace:(Appliance.Config.Info) payload:({'info': {'homekit': {'model': 'MSH300HK', 'sn': '620802230500553', 'category': 2, 'setupId': 'BT19', 'setupCode': '621-48-139', 'uuid': '23052603-4102-ff27-7236-1d60163235bd', 'token': 'MYGpME4CAQECAQEERjBEAiBDLRNlj4zpSuJlCDKF4EusN/YeYiQOOJ4hWSXcv6GeWQIgUUBP5iMc2t6nCCwORM0HlCAd6GL/6TgEbq1/Fmoj0E4wVwIBAgIBAQRPMU0wCQIBZgIBAQQBATAQAgFlAgEBBAge5B9WiAEAADAUAgIAyQIBAQQLMjUzNjY4LTAwNDcwGAIBZwIBAQQQz+PctqJ3SZK+5ohyZRC6XA=='}}})
+2023/11/07 - 11:28:26	TX	http	GET	Appliance.System.Runtime	{"runtime": {}}
+2023/11/07 - 11:28:26	RX	http	GETACK	Appliance.System.Runtime	{"runtime": {"signal": 100}}
+2023/11/07 - 11:28:28	TX	http	GET	Appliance.System.Position	{"position": {}}
+2023/11/07 - 11:28:28	RX	http	GETACK	Appliance.System.Position	{"position": {"longitude": 8701752, "latitude": 45680761}}
+2023/11/07 - 11:28:28		auto	LOG	DEBUG	handler undefined for method:(GETACK) namespace:(Appliance.System.Position) payload:({'position': {'longitude': 8701752, 'latitude': 45680761}})
+2023/11/07 - 11:28:30	TX	http	GET	Appliance.Hub.Online	{"online": []}
+2023/11/07 - 11:28:30	RX	http	GETACK	Appliance.Hub.Online	{"online": [{"id": "03002B0E", "status": 1, "lastActiveTime": 1699352777}, {"id": "03004B5A", "status": 1, "lastActiveTime": 1699352830}]}
+2023/11/07 - 11:28:32	TX	http	GET	Appliance.Hub.ToggleX	{"toggleX": []}
+2023/11/07 - 11:28:32	RX	http	GETACK	Appliance.Hub.ToggleX	{"togglex": [{"id": "03002B0E", "onoff": 1}, {"id": "03004B5A", "onoff": 1}]}
+2023/11/07 - 11:28:34	TX	http	GET	Appliance.Hub.Battery	{"battery": []}
+2023/11/07 - 11:28:34	RX	http	GETACK	Appliance.Hub.Battery	{"battery": [{"id": "03002B0E", "value": 100}, {"id": "03004B5A", "value": 100}]}
+2023/11/07 - 11:28:36	TX	http	GET	Appliance.Hub.Sensitivity	{"sensitivity": []}
+2023/11/07 - 11:28:36	RX	http	GETACK	Appliance.Hub.Sensitivity	{"sensitivity": []}
+2023/11/07 - 11:28:36		auto	LOG	DEBUG	handler undefined for method:(GETACK) namespace:(Appliance.Hub.Sensitivity) payload:({'sensitivity': []})
+2023/11/07 - 11:28:38	TX	http	GET	Appliance.Hub.Mts100.All	{"all": []}
+2023/11/07 - 11:28:38	RX	http	GETACK	Appliance.Hub.Mts100.All	{"all": [{"id": "03002B0E", "scheduleBMode": 6, "online": {"status": 1, "lastActiveTime": 1699352777}, "togglex": {"onoff": 1}, "timeSync": {"state": 1}, "mode": {"state": 3}, "temperature": {"room": 185, "currentSet": 180, "custom": 200, "comfort": 210, "economy": 180, "away": 150, "max": 350, "min": 50, "heating": 0, "openWindow": 0, "id": "03002B0E"}}, {"id": "03004B5A", "scheduleBMode": 6, "online": {"status": 1, "lastActiveTime": 1699352830}, "togglex": {"onoff": 1}, "timeSync": {"state": 1}, "mode": {"state": 1}, "temperature": {"room": 205, "currentSet": 210, "custom": 210, "comfort": 210, "economy": 180, "away": 150, "max": 350, "min": 50, "heating": 0, "openWindow": 0, "id": "03004B5A"}}]}
+2023/11/07 - 11:28:40	TX	http	GET	Appliance.Hub.Mts100.Temperature	{"temperature": []}
+2023/11/07 - 11:28:40	RX	http	GETACK	Appliance.Hub.Mts100.Temperature	{"temperature": [{"room": 185, "currentSet": 180, "custom": 200, "comfort": 210, "economy": 180, "away": 150, "max": 350, "min": 50, "heating": 0, "openWindow": 0, "id": "03002B0E"}, {"room": 205, "currentSet": 210, "custom": 210, "comfort": 210, "economy": 180, "away": 150, "max": 350, "min": 50, "heating": 0, "openWindow": 0, "id": "03004B5A"}]}
+2023/11/07 - 11:28:42	TX	http	GET	Appliance.Hub.Mts100.ScheduleB	{"schedule": []}
+2023/11/07 - 11:28:42	RX	http	GETACK	Appliance.Hub.Mts100.ScheduleB	{"schedule": [{"id": "03002B0E", "mon": [[390, 150], [90, 180], [300, 180], [300, 210], [210, 210], [150, 150]], "tue": [[390, 150], [90, 180], [300, 180], [300, 210], [210, 210], [150, 150]], "wed": [[390, 150], [90, 180], [300, 180], [300, 210], [210, 210], [150, 150]], "thu": [[390, 150], [90, 180], [300, 180], [300, 210], [210, 210], [150, 150]], "fri": [[390, 150], [90, 180], [300, 180], [300, 210], [210, 210], [150, 150]], "sat": [[390, 155], [165, 170], [225, 210], [300, 210], [195, 210], [165, 150]], "sun": [[390, 155], [165, 170], [225, 210], [300, 210], [195, 210], [165, 150]]}, {"id": "03004B5A", "mon": [[360, 150], [180, 150], [510, 180], [135, 210], [135, 215], [120, 150]], "tue": [[360, 150], [180, 150], [510, 180], [135, 210], [135, 215], [120, 150]], "wed": [[360, 150], [180, 150], [510, 180], [135, 210], [135, 215], [120, 150]], "thu": [[360, 150], [180, 150], [510, 180], [135, 210], [135, 215], [120, 150]], "fri": [[360, 150], [180, 150], [510, 180], [135, 210], [135, 215], [120, 150]], "sat": [[390, 150], [180, 150], [180, 200], [330, 210], [255, 220], [105, 150]], "sun": [[390, 150], [180, 150], [180, 200], [330, 200], [255, 220], [105, 150]]}]}
+2023/11/07 - 11:28:44	TX	http	GET	Appliance.Hub.Mts100.Mode	{"mode": []}
+2023/11/07 - 11:28:44	RX	http	GETACK	Appliance.Hub.Mts100.Mode	{"mode": [{"id": "03002B0E", "state": 3}, {"id": "03004B5A", "state": 1}]}
+2023/11/07 - 11:28:46	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:28:46	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:28:48	TX	http	GET	Appliance.Hub.Mts100.SuperCtl	{"superCtl": []}
+2023/11/07 - 11:28:48	RX	http	GETACK	Appliance.Hub.Mts100.SuperCtl	{"superCtl": [{"id": "03002B0E", "enable": 1, "level": 1, "alert": 1}, {"id": "03004B5A", "enable": 1, "level": 1, "alert": 1}]}
+2023/11/07 - 11:28:48		auto	LOG	DEBUG	handler undefined for method:(GETACK) namespace:(Appliance.Hub.Mts100.SuperCtl) payload:({'superCtl': [{'id': '03002B0E', 'enable': 1, 'level': 1, 'alert': 1}, {'id': '03004B5A', 'enable': 1, 'level': 1, 'alert': 1}]})
+2023/11/07 - 11:28:50	TX	http	GET	Appliance.Hub.SubDevice.MotorAdjust	{"adjust": []}
+2023/11/07 - 11:28:50	RX	http	ERROR	Appliance.Hub.SubDevice.MotorAdjust	{"error": {"code": 5000}}
+2023/11/07 - 11:28:50		auto	LOG	WARNING	protocol error: namespace = 'Appliance.Hub.SubDevice.MotorAdjust' payload = '{"error": {"code": 5000}}'
+2023/11/07 - 11:28:52		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:28:52	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:28:52	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:28:52	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:28:52	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:28:52		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:28:52	TX	http	GET	Appliance.Hub.SubDevice.Beep	{"beep": []}
+2023/11/07 - 11:28:52	RX	http	ERROR	Appliance.Hub.SubDevice.Beep	{"error": {"code": 5000}}
+2023/11/07 - 11:28:52		auto	LOG	WARNING	protocol error: namespace = 'Appliance.Hub.SubDevice.Beep' payload = '{"error": {"code": 5000}}'
+2023/11/07 - 11:28:54	TX	http	GET	Appliance.Hub.Sensor.All	{"all": []}
+2023/11/07 - 11:28:54	RX	http	GETACK	Appliance.Hub.Sensor.All	{"all": []}
+2023/11/07 - 11:28:56	TX	http	GET	Appliance.Hub.Sensor.WaterLeak	{"waterLeak": []}
+2023/11/07 - 11:28:56	RX	http	GETACK	Appliance.Hub.Sensor.WaterLeak	{"waterLeak": []}
+2023/11/07 - 11:28:56		auto	LOG	DEBUG	handler undefined for method:(GETACK) namespace:(Appliance.Hub.Sensor.WaterLeak) payload:({'waterLeak': []})
+2023/11/07 - 11:28:58	TX	http	GET	Appliance.Hub.Sensor.TempHum	{"tempHum": []}
+2023/11/07 - 11:28:58	RX	http	GETACK	Appliance.Hub.Sensor.TempHum	{"tempHum": []}
+2023/11/07 - 11:29:00	TX	http	GET	Appliance.Hub.Sensor.Adjust	{"adjust": []}
+2023/11/07 - 11:29:00	RX	http	GETACK	Appliance.Hub.Sensor.Adjust	{"adjust": []}
+2023/11/07 - 11:29:02	TX	http	GET	Appliance.Hub.Sensor.Motion	{"motion": []}
+2023/11/07 - 11:29:02	RX	http	GETACK	Appliance.Hub.Sensor.Motion	{"motion": []}
+2023/11/07 - 11:29:02		auto	LOG	DEBUG	handler undefined for method:(GETACK) namespace:(Appliance.Hub.Sensor.Motion) payload:({'motion': []})
+2023/11/07 - 11:29:04	TX	http	GET	Appliance.Hub.Sensor.DoorWindow	{"doorWindow": []}
+2023/11/07 - 11:29:04	RX	http	GETACK	Appliance.Hub.Sensor.DoorWindow	{"doorWindow": []}
+2023/11/07 - 11:29:06	TX	http	GET	Appliance.Hub.Sensor.Smoke	{"smokeAlarm": []}
+2023/11/07 - 11:29:06	RX	http	GETACK	Appliance.Hub.Sensor.Smoke	{"smokeAlarm": []}
+2023/11/07 - 11:29:08	TX	http	GET	Appliance.Hub.Sensor.Alert	{"alert": []}
+2023/11/07 - 11:29:08	RX	http	GETACK	Appliance.Hub.Sensor.Alert	{"alert": []}
+2023/11/07 - 11:29:08		auto	LOG	DEBUG	handler undefined for method:(GETACK) namespace:(Appliance.Hub.Sensor.Alert) payload:({'alert': []})
+2023/11/07 - 11:29:22		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:29:22	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:29:22	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:29:22	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:29:22	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:29:22		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:29:52		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:29:52	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:29:53	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:29:53	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:29:53	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:29:53		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:30:23		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:30:23	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:30:23	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:30:23	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:30:23	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:30:23		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:30:53		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:30:53	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:30:53	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:30:53	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:30:53	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:30:53		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:31:23		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:31:23	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:31:23	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:31:23	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:31:23	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:31:23		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:31:53		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:31:53	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:31:53	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:31:53	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:31:53	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:31:53		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:32:23		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:32:23	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:32:23	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:32:23	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:32:23	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:32:23		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:32:53		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:32:53	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:32:53	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:32:53	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:32:53	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:32:53		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:33:23		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:33:23	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:33:23	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:33:23	TX	http	GET	Appliance.System.Runtime	{"runtime": {}}
+2023/11/07 - 11:33:23	RX	http	GETACK	Appliance.System.Runtime	{"runtime": {"signal": 100}}
+2023/11/07 - 11:33:23	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:33:23	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:33:23		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:33:53		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:33:53	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:33:53	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:33:53	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:33:53	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:33:53		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:34:23		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:34:23	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:34:23	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:34:23	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:34:23	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:34:23		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:34:53		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:34:53	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:34:53	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:34:53	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:34:53	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:34:53		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:35:23		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:35:23	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:35:24	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:35:24	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:35:24	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:35:24		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:35:54		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:35:54	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:35:54	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:35:54	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:35:54	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:35:54		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:36:24		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:36:24	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:36:24	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:36:24	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:36:24	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:36:24		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:36:54		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:36:54	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:36:54	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:36:54	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:36:54	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:36:54		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:37:24		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:37:24	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:37:24	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:37:24	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:37:24	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:37:24		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:37:54		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:37:54	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}
+2023/11/07 - 11:37:54	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode": {"mode": 0}}
+2023/11/07 - 11:37:54	TX	http	GET	Appliance.Hub.Mts100.Adjust	{"adjust": []}
+2023/11/07 - 11:37:54	RX	http	GETACK	Appliance.Hub.Mts100.Adjust	{"adjust": [{"id": "03002B0E", "temperature": -150}, {"id": "03004B5A", "temperature": -350}]}
+2023/11/07 - 11:37:54		auto	LOG	DEBUG	polling end
+2023/11/07 - 11:38:24		auto	LOG	DEBUG	polling start
+2023/11/07 - 11:38:24	TX	http	GET	Appliance.System.DNDMode	{"DNDMode": {}}

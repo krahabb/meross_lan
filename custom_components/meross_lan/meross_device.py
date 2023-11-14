@@ -1131,7 +1131,10 @@ class MerossDevice(MerossDeviceBase):
         ):
             if not (http := self._http):
                 http = MerossHttpClient(
-                    self.host, self.key, async_get_clientsession(ApiProfile.hass), LOGGER  # type: ignore
+                    self.host,  # type: ignore
+                    self.key,
+                    async_get_clientsession(ApiProfile.hass),
+                    LOGGER if MEROSSDEBUG.http_client_log_enable else None,
                 )
                 self._http = http
 
@@ -1186,7 +1189,7 @@ class MerossDevice(MerossDeviceBase):
             if response_callback:
                 # we're actually only using this for SET->SETACK command confirmation
                 response_callback(
-                    r_header[mc.KEY_METHOD] != mc.METHOD_ERROR, r_header, r_payload
+                    r_header[mc.KEY_METHOD] != mc.METHOD_ERROR, r_header, r_payload  # type: ignore
                 )
             self.receive(r_header, r_payload, CONF_PROTOCOL_HTTP)
             self._http_lastresponse = self.lastresponse
