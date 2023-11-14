@@ -212,8 +212,22 @@ class MerossApi(ApiProfile):
 
     @staticmethod
     def get(hass: HomeAssistant) -> MerossApi:
+        """
+        Set up the MerossApi component.
+        'Our' truth singleton is saved in hass.data[DOMAIN] and
+        ApiProfile.api is just a cache to speed access
+        """
         if mlc.DOMAIN not in hass.data:
-            hass.data[mlc.DOMAIN] = MerossApi(hass)
+            hass.data[mlc.DOMAIN] = api = MerossApi(hass)
+
+            async def _async_unload_merossapi(_event) -> None:
+                await api.async_shutdown()
+                hass.data.pop(mlc.DOMAIN)
+
+            hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi
+            )
+            return api
         return hass.data[mlc.DOMAIN]
 
     def __init__(self, hass: HomeAssistant):
@@ -466,26 +480,6 @@ class MerossApi(ApiProfile):
         return None
 
 
-async def async_setup(hass: HomeAssistant, config: dict):
-    """
-    Set up the Meross IoT local LAN component.
-    "async_setup" is just called when loading entries for
-    the first time after boot but the api might need
-    initialization for the ConfigFlow.
-    'Our' truth singleton is saved in hass.data[DOMAIN] and
-    ApiProfile.api is just a cache to speed access
-    """
-    api = MerossApi.get(hass)
-
-    async def _async_unload_merossapi(_event) -> None:
-        await api.async_shutdown()
-        hass.data.pop(mlc.DOMAIN)
-
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi)
-
-    return True
-
-
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     """Set up Meross IoT local LAN from a config entry."""
     unique_id = config_entry.unique_id
@@ -495,7 +489,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
         unique_id,
         config_entry.entry_id,
     )
-    api = ApiProfile.api
+    api = MerossApi.api or MerossApi.get(hass)
 
     if unique_id == mlc.DOMAIN:
         # MQTT Hub entry
