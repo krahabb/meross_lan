@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 import re
+import time
 from typing import Any, Callable, Coroutine
 from unittest.mock import MagicMock, Mock, patch
 
@@ -412,7 +413,7 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         await self.perform_coldstart()
 
     async def async_tick(self, tick: timedelta):
-        print(f"async_tick: time={self.time} tick={tick}")
+        # print(f"async_tick: time={self.time} tick={tick}")
         self.time.tick(tick)
         async_fire_time_changed_exact(self.hass)
         await self.hass.async_block_till_done()
@@ -452,16 +453,21 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
             tick = timedelta(seconds=tick)
 
         def _warp():
+            print("DeviceContext.warp: entering executor")
             count = 0
             while self._warp_run:
+                _time = self.time()
                 run_coroutine_threadsafe(self.async_tick(tick), self.hass.loop)
-                print(f"Executor: _warp count={count}")
+                while _time == self.time():
+                    time.sleep(0.01)
                 count += 1
+            print(f"DeviceContext.warp: exiting executor (_warp count={count})")
 
         self._warp_run = True
         self._warp_task = self.hass.async_add_executor_job(_warp)
 
     async def async_stopwarp(self):
+        print("DeviceContext.warp: stopping executor")
         assert self._warp_task
         self._warp_run = False
         await self._warp_task

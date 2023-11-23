@@ -381,6 +381,10 @@ class MerossMQTTClient(mqtt.Client):
         return self._rl_queue_length
 
     @property
+    def rl_queue_duration(self):
+        return self._rl_queue_length * self.RATELIMITER_MINDELAY
+
+    @property
     def stateext(self):
         return self._stateext
 

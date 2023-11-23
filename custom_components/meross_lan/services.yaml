@@ -34,6 +34,19 @@ request:
       example: "192.168.1.1"
       selector:
         text:
+    protocol:
+      name: Protocol
+      description: The protocol used to make the request
+      required: false
+      advanced: false
+      example: "auto"
+      default: "auto"
+      selector:
+        select:
+          options:
+            - "auto"
+            - "mqtt"
+            - "http"
     method:
       name: Method
       description: The method to set in the message
@@ -95,7 +108,7 @@ request:
             - "Appliance.Hub.Mts100.Mode"
     key:
       name: Key
-      description: The key used to encrypt message signatures (unneeded if device already configured)
+      description: The key used to encrypt message signatures (ignored if device already configured)
       required: false
       advanced: false
       selector:
@@ -109,11 +122,3 @@ request:
       default: '{}'
       selector:
         text:
-    notifyresponse:
-      name: Notify response
-      description: Forwards the device response to homeassistant persistent notifications
-      required: false
-      advanced: false
-      default: True
-      selector:
-        boolean:

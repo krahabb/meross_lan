@@ -44,19 +44,16 @@ class MLDiffuserLight(MLLightBase):
         light[mc.KEY_ONOFF] = 1
 
         if ATTR_RGB_COLOR in kwargs:
-            rgb = kwargs[ATTR_RGB_COLOR]
-            light[mc.KEY_RGB] = _rgb_to_int(rgb)
+            light[mc.KEY_RGB] = _rgb_to_int(kwargs[ATTR_RGB_COLOR])
 
         # Brightness must always be set in payload
         if ATTR_BRIGHTNESS in kwargs:
             light[mc.KEY_LUMINANCE] = _sat_1_100(kwargs[ATTR_BRIGHTNESS] * 100 // 255)
-        else:
-            if mc.KEY_LUMINANCE not in light:
-                light[mc.KEY_LUMINANCE] = 100
+        elif not light.get(mc.KEY_LUMINANCE, 0):
+            light[mc.KEY_LUMINANCE] = 100
 
         if ATTR_EFFECT in kwargs:
-            effect = kwargs[ATTR_EFFECT]
-            mode = reverse_lookup(self._light_effect_map, effect)
+            mode = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
             if mode is not None:
                 light[mc.KEY_MODE] = mode
             else:

@@ -26,7 +26,7 @@ async def test_mqtthub_entry(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMoc
 
     # Unload the entry and verify that the data has not been removed
     # we actually never remove the MerossApi...
-    assert type(hass.data[mlc.DOMAIN]) == MerossApi
+    assert type(hass.data[mlc.DOMAIN]) is MerossApi
 
 
 async def test_mqtthub_entry_notready(hass: HomeAssistant):

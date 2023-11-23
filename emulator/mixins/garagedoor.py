@@ -20,6 +20,17 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 p_config[_key] = _value
         return mc.METHOD_SETACK, {}
 
+    def _SET_Appliance_GarageDoor_MultipleConfig(self, header, payload):
+        p_config = self.descriptor.namespaces[
+            mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
+        ][mc.KEY_CONFIG]
+        for p_payload_channel in payload[mc.KEY_CONFIG]:
+            channel = p_payload_channel[mc.KEY_CHANNEL]
+            p_config_channel = get_element_by_key(p_config, mc.KEY_CHANNEL, channel)
+            p_config_channel.update(p_payload_channel)
+            p_config_channel[mc.KEY_TIMESTAMP] = self.epoch
+        return mc.METHOD_SETACK, {}
+
     def _GET_Appliance_GarageDoor_State(self, header, payload):
         # return everything...at the moment we always query all
         p_garageDoor: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]
@@ -34,10 +45,9 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         p_request = payload[mc.KEY_STATE]
         request_channel = p_request[mc.KEY_CHANNEL]
         request_open = p_request[mc.KEY_OPEN]
-        p_digest = self.descriptor.digest
 
         p_state = get_element_by_key(
-            p_digest[mc.KEY_GARAGEDOOR], mc.KEY_CHANNEL, request_channel
+            self.descriptor.digest[mc.KEY_GARAGEDOOR], mc.KEY_CHANNEL, request_channel
         )
 
         p_response = dict(p_state)

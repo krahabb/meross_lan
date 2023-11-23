@@ -101,41 +101,45 @@ class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
 
 
 SERVICE_REQUEST = "request"
-# key used in service 'request' call
+"""name of the general purpose device send request service exposed by meross_lan"""
 CONF_NOTIFYRESPONSE = "notifyresponse"
-# label for MerossApi as a 'fake' cloud profile
+"""key used in service 'request' call"""
 CONF_PROFILE_ID_LOCAL: Final = ""
-"""
- general working/configuration parameters (waiting to be moved to CONF_ENTRY)
-"""
-# (maximum) delay of initial poll after device setup
+"""label for MerossApi as a 'fake' cloud profile"""
+
+# general working/configuration parameters
+PARAM_INFINITE_EPOCH = 2147483647  # inifinite epoch (2038 bug?)
+"""the (infinite) timeout in order to disable timed schedules"""
 PARAM_COLDSTARTPOLL_DELAY = 2
-# number of seconds since last inquiry to consider the device unavailable
+"""(maximum) delay of initial poll after device setup"""
 PARAM_UNAVAILABILITY_TIMEOUT = 20
-# whatever the connection state periodically inquire the device is there
+"""number of seconds since last inquiry/response to consider the device unavailable"""
 PARAM_HEARTBEAT_PERIOD = 295
-# for polled entities over cloud MQTT use 'at least' this
+"""whatever the connection state periodically inquire the device is available"""
+PARAM_TIMEZONE_CHECK_OK_PERIOD = 604800
+"""period between checks of timezone infos on locally mqtt binded devices"""
+PARAM_TIMEZONE_CHECK_NOTOK_PERIOD = 86400
+"""period between checks of failing timezone infos on locally mqtt binded devices"""
+PARAM_TIMESTAMP_TOLERANCE = 5
+"""max device timestamp diff against our and trigger warning and (eventually) fix it"""
+PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
+"""used to delay the iteration of abilities while tracing"""
 PARAM_CLOUDMQTT_UPDATE_PERIOD = 1795
-# used when restoring 'calculated' state after HA restart
+"""for polled entities over cloud MQTT use 'at least' this"""
 PARAM_RESTORESTATE_TIMEOUT = 300
-# read energy consumption only every ... second
+"""used when restoring 'calculated' state after HA restart"""
 PARAM_ENERGY_UPDATE_PERIOD = 55
-# read energy consumption only every ... second
+"""read energy consumption only every ... second"""
 PARAM_SIGNAL_UPDATE_PERIOD = 295
-# read battery levels only every ... second
+"""read energy consumption only every ... second"""
 PARAM_HUBBATTERY_UPDATE_PERIOD = 3595
+"""read battery levels only every ... second"""
 PARAM_HUBSENSOR_UPDATE_PERIOD = 55
-# 1 week before retrying timezone updates
-PARAM_TIMEZONE_CHECK_PERIOD = 604800
-# PARAM_STALE_DEVICE_REMOVE_TIMEOUT = 60 # disable config_entry when device is offline for more than...
 PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
-# max device timestamp diff against our and trigger warning and (eventually) fix it
-PARAM_TIMESTAMP_TOLERANCE = 5
-# used to delay the iteration of abilities while tracing
-PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
-# timeout for querying cloud api deviceInfo endpoint
 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day
-# timeout for querying cloud api latestVersion endpoint
+"""timeout for querying cloud api deviceInfo endpoint"""
 PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT = 604800  # 1 week
+"""timeout for querying cloud api latestVersion endpoint"""
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30
+"""used to delay updated profile data to storage"""

@@ -28,19 +28,24 @@ from .const import (
 from .merossclient import const as mc, get_default_arguments
 
 try:
-    from homeassistant.backports.enum import (
-        StrEnum,  # type: ignore pylint: disable=unused-import
-    )
+    # since we're likely on python3.11 this should quickly
+    # set our StrEnum symbol
+    from enum import StrEnum  # type: ignore pylint: disable=unused-import
 except Exception:
-    import enum
+    try:
+        from homeassistant.backports.enum import (
+            StrEnum,  # type: ignore pylint: disable=unused-import
+        )
+    except Exception:
+        import enum
 
-    class StrEnum(enum.Enum):
-        """
-        convenience alias for homeassistant.backports.StrEnum
-        """
+        class StrEnum(enum.Enum):
+            """
+            convenience alias for homeassistant.backports.StrEnum
+            """
 
-        def __str__(self):
-            return str(self.value)
+            def __str__(self):
+                return str(self.value)
 
 
 if typing.TYPE_CHECKING:
@@ -194,11 +199,16 @@ OBFUSCATE_KEYS = {
     mc.KEY_UUID: OBFUSCATE_DEVICE_ID_MAP,
     mc.KEY_MACADDRESS: {},
     mc.KEY_WIFIMAC: {},
+    mc.KEY_SSID: {},
+    mc.KEY_GATEWAYMAC: {},
     mc.KEY_INNERIP: OBFUSCATE_HOST_MAP,
     mc.KEY_SERVER: OBFUSCATE_SERVER_MAP,
     mc.KEY_PORT: OBFUSCATE_PORT_MAP,
     mc.KEY_SECONDSERVER: OBFUSCATE_SERVER_MAP,
     mc.KEY_SECONDPORT: OBFUSCATE_PORT_MAP,
+    mc.KEY_ACTIVESERVER: OBFUSCATE_SERVER_MAP,
+    mc.KEY_MAINSERVER: OBFUSCATE_SERVER_MAP,
+    mc.KEY_MAINPORT: OBFUSCATE_PORT_MAP,
     mc.KEY_USERID: OBFUSCATE_USERID_MAP,
     mc.KEY_TOKEN: {},
     mc.KEY_KEY: OBFUSCATE_KEY_MAP,
@@ -445,21 +455,29 @@ class PollingStrategy:
         )
         self.lastrequest = 0
 
-    async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
+    async def poll(self, device: MerossDevice, epoch: float, namespace: str | None):
         """
         This is a basic 'default' policy:
         - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
         we expect this namespace to be updated by PUSH(es)
         - unless the passed in 'namespace' is not None which means we're re-onlining the device and so
         we like to re-query the full state (even on MQTT)
-        - as an optimization, when onlining, we'll skip the request if it's for the same namespace
+        - as an optimization, when onlining (namespace == None), we'll skip the request if it's for
+        the same namespace by not calling this strategy (see MerossDevice.async_request_updates)
         """
-        if (namespace or (not device._mqtt_active)) and (namespace != self.namespace):
+        if namespace or (not device._mqtt_active):
             await device.async_request(*self.request)
             self.lastrequest = epoch
 
 
 class SmartPollingStrategy(PollingStrategy):
+    """
+    This is a strategy for polling states which are not actively pushed so we should
+    always query them (eventually with a variable timeout depending on the relevant
+    time dynamics of the sensor/state). When using cloud MQTT though we have to be very
+    conservative on traffic so we delay the request even more
+    """
+
     __slots__ = ("polling_period",)
 
     def __init__(
@@ -468,19 +486,12 @@ class SmartPollingStrategy(PollingStrategy):
         super().__init__(namespace, payload)
         self.polling_period = polling_period
 
-    async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
-        """
-        This is a strategy for polling states which are not actively pushed so we should
-        always query them (eventually with a variable timeout depending on the relevant
-        time dynamics of the sensor/state). When using cloud MQTT though we have to be very
-        conservative on traffic so we delay the request even more
-        """
-        if namespace != self.namespace:
+    async def poll(self, device: MerossDevice, epoch: float, namespace: str | None):
+        if (epoch - self.lastrequest) >= self.polling_period:
             if await device.async_request_smartpoll(
                 epoch,
                 self.lastrequest,
                 self.request,
-                self.polling_period,
             ):
                 self.lastrequest = epoch
 
@@ -492,19 +503,13 @@ class EntityPollingStrategy(SmartPollingStrategy):
         super().__init__(namespace, None, polling_period)
         self.entity = entity
 
-    async def __call__(self, device: MerossDevice, epoch: float, namespace: str | None):
+    async def poll(self, device: MerossDevice, epoch: float, namespace: str | None):
         """
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
         the state of this paylod so we'll skip the smartpoll should the entity be disabled
         """
-        if (namespace != self.namespace) and self.entity.enabled:
-            if await device.async_request_smartpoll(
-                epoch,
-                self.lastrequest,
-                self.request,
-                self.polling_period,
-            ):
-                self.lastrequest = epoch
+        if self.entity.enabled:
+            await super().poll(device, epoch, namespace)
 
 
 class ConfigEntriesHelper:
@@ -617,6 +622,7 @@ class EntityManager(Loggable):
         "key",
         "config",
         "_unsub_entry_update_listener",
+        "_unsub_entry_reload_scheduler",
     )
 
     def __init__(
@@ -648,6 +654,7 @@ class EntityManager(Loggable):
             self.config = config_entry_or_id.data
             self.key = config_entry_or_id.data.get(CONF_KEY) or ""
         self._unsub_entry_update_listener = None
+        self._unsub_entry_reload_scheduler: asyncio.TimerHandle | None = None
 
     @property
     def name(self) -> str:
@@ -658,10 +665,19 @@ class EntityManager(Loggable):
         return True
 
     async def async_shutdown(self):
-        # extra-safety cleanup: in an ideal world the config_entry
-        # shouldnt be loaded/listened at this point
-        self.unlisten_entry_update()
+        """
+        Cleanup code called when the config entry is unloaded.
+        Beware, when a derived class owns some direct member pointers to entities,
+        be sure to invalidate them after calling the super() implementation.
+        This is especially true for MerossDevice(s) classes which need to stop
+        their async polling before invalidating the member pointers (which are
+        usually referred to inside the polling /parsing code)
+        """
+        self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
+        self.unschedule_entry_reload()
         ApiProfile.managers.pop(self.config_entry_id, None)
+        for entity in self.entities.values():
+            await entity.async_shutdown()
         self.entities.clear()
         self.platforms.clear()
 
@@ -684,6 +700,7 @@ class EntityManager(Loggable):
         ):
             return False
         self.unlisten_entry_update()
+        self.unschedule_entry_reload()
         ApiProfile.managers.pop(self.config_entry_id)
         return True
 
@@ -691,6 +708,23 @@ class EntityManager(Loggable):
         if self._unsub_entry_update_listener:
             self._unsub_entry_update_listener()
             self._unsub_entry_update_listener = None
+
+    def schedule_entry_reload(self):
+        """Schedules a reload (in 15 sec) of the config_entry performing a full re-initialization"""
+        self.unschedule_entry_reload()
+
+        async def _async_entry_reload():
+            self._unsub_entry_reload_scheduler = None
+            await ApiProfile.hass.config_entries.async_reload(self.config_entry_id)
+
+        self._unsub_entry_reload_scheduler = schedule_async_callback(
+            ApiProfile.hass, 15, _async_entry_reload
+        )
+
+    def unschedule_entry_reload(self):
+        if self._unsub_entry_reload_scheduler:
+            self._unsub_entry_reload_scheduler.cancel()
+            self._unsub_entry_reload_scheduler = None
 
     def managed_entities(self, platform):
         """entities list for platform setup"""

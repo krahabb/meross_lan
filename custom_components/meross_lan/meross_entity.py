@@ -65,7 +65,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     EntityCategory = EntityCategory
 
     _attr_device_class: object | str | None
-    _attr_entity_category: EntityCategory | str | None
+    _attr_entity_category: EntityCategory | str | None = None
     # provides a class empty default since the state writing api
     # would create an empty anyway....
     _attr_extra_state_attributes: dict[str, object] = {}
@@ -81,7 +81,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         "manager",
         "channel",
         "_attr_device_class",
-        "_attr_entity_category",
         "_attr_state",
         "_attr_unique_id",
         "_hass_connected",
@@ -122,9 +121,10 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.manager = manager
         self.channel = channel
         self._attr_device_class = device_class
-        self._attr_entity_category = None
         if self._attr_name is None:
-            self._attr_name = entitykey or device_class  # type: ignore
+            self._attr_name = f"{entitykey or device_class}"
+        if channel:  # when channel == 0 it might be the only one so skip it
+            self._attr_name = f"{self._attr_name} {channel}"
         self._attr_state = None
         self._attr_unique_id = manager.generate_unique_id(self)
         self._hass_connected = False
@@ -206,6 +206,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self._hass_connected = False
 
     # interface: self
+    async def async_shutdown(self):
+        pass
+
     def update_state(self, state: StateType):
         if self._attr_state != state:
             self._attr_state = state

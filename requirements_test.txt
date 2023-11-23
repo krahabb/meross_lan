@@ -4,4 +4,5 @@ aiohttp-cors
 scapy
 janus
 fnv-hash-fast
-pytest-homeassistant-custom-component==0.13.45
+psutil-home-assistant
+pytest-homeassistant-custom-component==0.13.76

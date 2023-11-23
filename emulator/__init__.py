@@ -51,7 +51,7 @@ from aiohttp import web
 # homeassistant.helpers.storage
 from custom_components.meross_lan.merossclient import (
     MerossDeviceDescriptor,
-    build_payload,
+    build_message,
     const as mc,
     get_namespacekey,
     get_replykey,
@@ -201,7 +201,7 @@ class MerossEmulator:
             method = mc.METHOD_ERROR
             payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
 
-        data = build_payload(
+        data = build_message(
             namespace,
             method,
             payload,
@@ -365,9 +365,9 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
 
         mixin_classes.append(ElectricityMixin)
     if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in descriptor.ability:
-        from .mixins.electricity import ConsumptionMixin
+        from .mixins.electricity import ConsumptionXMixin
 
-        mixin_classes.append(ConsumptionMixin)
+        mixin_classes.append(ConsumptionXMixin)
 
     if mc.NS_APPLIANCE_CONTROL_LIGHT in descriptor.ability:
         from .mixins.light import LightMixin

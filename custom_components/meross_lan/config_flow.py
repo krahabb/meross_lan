@@ -53,11 +53,6 @@ class ConfigError(Exception):
 class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     """Mixin providing commons for Config and Option flows"""
 
-    _MENU_KEYERROR = {
-        "step_id": "keyerror",
-        "menu_options": ["profile", "device"],
-    }
-
     # this is set for an OptionsFlow
     _profile_entry: config_entries.ConfigEntry | None = None
 
@@ -78,11 +73,6 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     @callback
     def async_abort(self, *, reason: str = "already_configured"):
         return super().async_abort(reason=reason)
-
-    def show_keyerror(self):
-        self._is_keyerror = True
-        self.profile_config = {}  # type: ignore[assignment]
-        return self.async_show_menu(**self._MENU_KEYERROR)
 
     async def async_step_profile(self, user_input=None):
         """configure a Meross cloud profile"""
@@ -225,7 +215,9 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         config_schema[
             vol.Optional(
                 mlc.CONF_CHECK_FIRMWARE_UPDATES,
-                description={DESCR: profile_config.get(mlc.CONF_CHECK_FIRMWARE_UPDATES)},
+                description={
+                    DESCR: profile_config.get(mlc.CONF_CHECK_FIRMWARE_UPDATES)
+                },
             )
         ] = bool
         config_schema[
@@ -241,6 +233,16 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             step_id="profile",
             data_schema=vol.Schema(config_schema),
             errors=errors,
+        )
+
+    async def async_step_device(self, user_input=None):
+        raise NotImplementedError()
+
+    async def async_step_keyerror(self, user_input=None):
+        self._is_keyerror = True
+        self.profile_config = {}  # type: ignore[assignment]
+        return self.async_show_menu(
+            step_id="keyerror", menu_options=["profile", "device"]
         )
 
     async def _async_http_discovery(
@@ -279,9 +281,6 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             },
             descriptor,
         )
-
-    async def async_step_device(self, user_input=None):
-        raise NotImplementedError()
 
 
 class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.DOMAIN):
@@ -333,7 +332,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
             except ConfigError as error:
                 errors[ERR_BASE] = error.reason
             except MerossKeyError:
-                return self.show_keyerror()
+                return await self.async_step_keyerror()
             except AbortFlow:
                 errors[ERR_BASE] = ERR_ALREADY_CONFIGURED_DEVICE
             except Exception as error:
@@ -598,7 +597,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                                 _host, device_config.get(mlc.CONF_KEY)
                             )
                         except MerossKeyError:
-                            return self.show_keyerror()
+                            return await self.async_step_keyerror()
                         except Exception:
                             pass
                 if self._device_id != _descriptor.uuid:
@@ -636,7 +635,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 return self.async_create_entry(data=None)  # type: ignore
 
             except MerossKeyError:
-                return self.show_keyerror()
+                return await self.async_step_keyerror()
             except ConfigError as error:
                 errors[ERR_BASE] = error.reason
             except Exception:

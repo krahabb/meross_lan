@@ -7,7 +7,6 @@ import typing
 from homeassistant.exceptions import HomeAssistantError
 import homeassistant.util.dt as dt
 
-from .. import meross_entity as me
 from ..calendar import (
     EVENT_END,
     EVENT_RRULE,
@@ -17,7 +16,7 @@ from ..calendar import (
     CalendarEvent,
     MLCalendar,
 )
-from ..climate import MtsClimate, MtsSetPointNumber
+from ..climate import HVACMode, MtsClimate, MtsSetPointNumber
 from ..helpers import clamp, reverse_lookup
 from ..merossclient import const as mc  # mEROSS cONST
 
@@ -28,7 +27,6 @@ if typing.TYPE_CHECKING:
 class Mts100Climate(MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
 
-    MTS_MODE_AUTO = mc.MTS100_MODE_AUTO
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS100_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
         mc.MTS100_MODE_HEAT: MtsClimate.PRESET_COMFORT,
@@ -42,7 +40,6 @@ class Mts100Climate(MtsClimate):
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
     PRESET_TO_TEMPERATUREKEY_MAP = {
-        MtsClimate.PRESET_OFF: mc.KEY_CUSTOM,
         MtsClimate.PRESET_CUSTOM: mc.KEY_CUSTOM,
         MtsClimate.PRESET_COMFORT: mc.KEY_COMFORT,
         MtsClimate.PRESET_SLEEP: mc.KEY_ECONOMY,
@@ -67,27 +64,30 @@ class Mts100Climate(MtsClimate):
         else:
             self._attr_extra_state_attributes.pop(mc.KEY_SCHEDULEBMODE)
 
-    async def async_set_preset_mode(self, preset_mode: str):
-        if preset_mode == MtsClimate.PRESET_OFF:
+    async def async_set_hvac_mode(self, hvac_mode: HVACMode):
+        if hvac_mode == HVACMode.OFF:
             await self.async_request_onoff(0)
         else:
-            mode = reverse_lookup(Mts100Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
-            if mode is not None:
+            await self.async_request_onoff(1)
 
-                def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-                    if acknowledge:
-                        self._mts_mode = mode
-                        self.update_modes()
+    async def async_set_preset_mode(self, preset_mode: str):
+        mode = reverse_lookup(Mts100Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
+        if mode is not None:
 
-                await self.manager.async_request(
-                    mc.NS_APPLIANCE_HUB_MTS100_MODE,
-                    mc.METHOD_SET,
-                    {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
-                    _ack_callback,
-                )
+            def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+                if acknowledge:
+                    self._mts_mode = mode
+                    self.update_mts_state()
 
-                if not self._mts_onoff:
-                    await self.async_request_onoff(1)
+            await self.manager.async_request(
+                mc.NS_APPLIANCE_HUB_MTS100_MODE,
+                mc.METHOD_SET,
+                {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
+                _ack_callback,
+            )
+
+            if not self._mts_onoff:
+                await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
         t = kwargs[Mts100Climate.ATTR_TEMPERATURE]
@@ -98,7 +98,7 @@ class Mts100Climate(MtsClimate):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
                 self._attr_target_temperature = t
-                self.update_modes()
+                self.update_mts_state()
 
         # when sending a temp this way the device will automatically
         # exit auto mode if needed
@@ -115,7 +115,7 @@ class Mts100Climate(MtsClimate):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
                 self._mts_onoff = onoff
-                self.update_modes()
+                self.update_mts_state()
 
         await self.manager.async_request(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
@@ -190,8 +190,10 @@ class Mts100ScheduleEntry:
 class Mts100Schedule(MLCalendar):
     manager: MTS100SubDevice
 
-    _schedule: dict[str, list] | None
+    _attr_entity_category = MLCalendar.EntityCategory.CONFIG
     _attr_state: dict[str, list] | None
+
+    _schedule: dict[str, list] | None
 
     __slots__ = (
         "climate",
@@ -227,10 +229,6 @@ class Mts100Schedule(MLCalendar):
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
         super().__init__(climate.manager, climate.id, mc.KEY_SCHEDULE, None)
-
-    @property
-    def entity_category(self):
-        return me.EntityCategory.CONFIG
 
     @property
     def schedule(self):
@@ -366,7 +364,9 @@ class Mts100Schedule(MLCalendar):
     ) -> list[CalendarEvent]:
         """Return calendar events within a datetime range."""
         events = []
-        event_entry = self._get_event_entry(start_date.astimezone(self.manager.hub.tzinfo))
+        event_entry = self._get_event_entry(
+            start_date.astimezone(self.manager.hub.tzinfo)
+        )
         while event_entry:
             event = event_entry.get_event()
             if event.start >= end_date:
@@ -642,7 +642,7 @@ class Mts100Schedule(MLCalendar):
         if self._hass_connected:
             self._async_write_ha_state()
 
-    def update_climate_modes(self):
+    def update_mts_state(self):
         # since our state/active event is dependent on climate mode
         # we'll force a state update when the climate entity
         if self._hass_connected:

@@ -10,7 +10,7 @@ from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import (
-    build_payload,
+    build_message,
     cloudapi,
     const as mc,
 )
@@ -146,7 +146,7 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
     emulator.key = ""  # patch the key so the default hub key will work
     device_id = emulator.descriptor.uuid
     topic = mc.TOPIC_RESPONSE.format(device_id)
-    payload = build_payload(
+    payload = build_message(
         mc.NS_APPLIANCE_CONTROL_TOGGLEX,
         mc.METHOD_PUSH,
         {mc.KEY_TOGGLEX: {mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 0}},
