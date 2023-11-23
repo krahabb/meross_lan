@@ -189,6 +189,9 @@ class MerossDeviceHub(MerossDevice):
     def _handle_Appliance_Hub_Sensor_TempHum(self, header: dict, payload: dict):
         self._subdevice_parse(mc.KEY_TEMPHUM, payload)
 
+    def _handle_Appliance_Hub_Sensor_WaterLeak(self, header: dict, payload: dict):
+        self._subdevice_parse(mc.KEY_WATERLEAK, payload)
+
     def _handle_Appliance_Hub_Mts100_Adjust(self, header: dict, payload: dict):
         self._subdevice_parse(mc.KEY_ADJUST, payload)
 
@@ -869,7 +872,9 @@ class GS559SubDevice(MerossSubDevice):
         self.sensor_interConn = self.build_sensor(
             mc.KEY_INTERCONN, MLSensor.DeviceClass.ENUM
         )
-        self.binary_sensor_alarm = self.build_binary_sensor("alarm")
+        self.binary_sensor_alarm = self.build_binary_sensor(
+            "alarm", MLBinarySensor.DeviceClass.SAFETY
+        )
         self.binary_sensor_error = self.build_binary_sensor(
             "error", MLBinarySensor.DeviceClass.PROBLEM
         )
@@ -920,3 +925,26 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS200] = MS200SubDevice
 # doorWindow devices (mc.TYPE_MS200) are presented as
 # mc.KEY_DOORWINDOW in digest(s) so we have to map that too
 WELL_KNOWN_TYPE_MAP[mc.KEY_DOORWINDOW] = MS200SubDevice
+
+
+class MS400SubDevice(MerossSubDevice):
+    __slots__ = ("binary_sensor_waterleak",)
+
+    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+        super().__init__(hub, p_digest, mc.TYPE_MS400)
+        self.binary_sensor_waterleak = self.build_binary_sensor(
+            mc.KEY_WATERLEAK, MLBinarySensor.DeviceClass.SAFETY
+        )
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.binary_sensor_waterleak: MLBinarySensor = None  # type: ignore
+
+    def _parse_waterLeak(self, p_waterleak: dict):
+        self.binary_sensor_waterleak.update_onoff(p_waterleak[mc.KEY_LATESTWATERLEAK])
+
+
+WELL_KNOWN_TYPE_MAP[mc.TYPE_MS400] = MS400SubDevice
+# waterLeak devices (mc.TYPE_MS400) are presented as
+# mc.KEY_WATERLEAK in digest(s) so we have to map that too
+WELL_KNOWN_TYPE_MAP[mc.KEY_WATERLEAK] = MS400SubDevice

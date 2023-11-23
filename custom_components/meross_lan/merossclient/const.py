@@ -218,6 +218,8 @@ KEY_LATESTHUMIDITY = "latestHumidity"
 KEY_SMOKEALARM = "smokeAlarm"
 KEY_INTERCONN = "interConn"
 KEY_DOORWINDOW = "doorWindow"
+KEY_WATERLEAK = "waterLeak"
+KEY_LATESTWATERLEAK = "latestWaterLeak"
 KEY_SCHEDULE = "schedule"
 KEY_SCHEDULEBMODE = "scheduleBMode"
 KEY_SCHEDULEUNITTIME = "scheduleUnitTime"
@@ -512,6 +514,9 @@ TYPE_NAME_MAP[TYPE_GS559] = "Smart Smoke Alarm"
 
 TYPE_MS200 = "ms200"
 TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"
+
+TYPE_MS400 = "ms400"
+TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
 
 """
     GP constants
