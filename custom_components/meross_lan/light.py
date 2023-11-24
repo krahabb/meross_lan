@@ -98,7 +98,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     def update_onoff(self, onoff):
         if mc.KEY_ONOFF in self._light:
             self._light[mc.KEY_ONOFF] = onoff
-        self.update_state(me.STATE_ON if onoff else me.STATE_OFF)
+        self.update_state(self.STATE_ON if onoff else self.STATE_OFF)
 
     def _inherited_parse_light(self, payload: dict):
         """
@@ -114,7 +114,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
 
             if mc.KEY_ONOFF in payload:
                 self._attr_state = (
-                    me.STATE_ON if payload[mc.KEY_ONOFF] else me.STATE_OFF
+                    self.STATE_ON if payload[mc.KEY_ONOFF] else self.STATE_OFF
                 )
 
             self._attr_color_mode = ColorMode.UNKNOWN
@@ -414,7 +414,7 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
     async def async_turn_on(self, **kwargs):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
-                self.update_state(me.STATE_ON)
+                self.update_state(self.STATE_ON)
 
         await self.manager.async_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
@@ -426,7 +426,7 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
     async def async_turn_off(self, **kwargs):
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
-                self.update_state(me.STATE_OFF)
+                self.update_state(self.STATE_OFF)
 
         await self.manager.async_request(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
@@ -436,7 +436,7 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
         )
 
     def update_onoff(self, onoff):
-        self.update_state(me.STATE_OFF if onoff else me.STATE_ON)
+        self.update_state(self.STATE_OFF if onoff else self.STATE_ON)
 
 
 class LightMixin(

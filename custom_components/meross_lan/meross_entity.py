@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import typing
 
-from homeassistant.const import STATE_OFF, STATE_ON
+from homeassistant import const as hac
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import StateType
 
@@ -225,12 +225,15 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     # even though these are toggle/binary_sensor properties
     # we provide a base-implement-all
+    STATE_ON: typing.Final = hac.STATE_ON
+    STATE_OFF: typing.Final = hac.STATE_OFF
+
     @property
     def is_on(self):
-        return self._attr_state == STATE_ON
+        return self._attr_state == self.STATE_ON
 
     def update_onoff(self, onoff):
-        self.update_state(STATE_ON if onoff else STATE_OFF)
+        self.update_state(self.STATE_ON if onoff else self.STATE_OFF)
 
 
 class MerossToggle(MerossEntity):
