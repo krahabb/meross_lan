@@ -5,7 +5,7 @@ import typing
 from ..binary_sensor import MLBinarySensor
 from ..climate import HVACMode, MtsClimate, MtsSetPointNumber
 from ..helpers import SmartPollingStrategy, reverse_lookup
-from ..merossclient import const as mc
+from ..merossclient import const as mc, get_namespacekey
 from ..number import PERCENTAGE, MLConfigNumber
 from ..sensor import MLSensor
 from ..switch import MLSwitch
@@ -437,37 +437,18 @@ class ThermostatMixin(
                 Mts200Climate(self, m[mc.KEY_CHANNEL])
                 self._polling_payload.append({mc.KEY_CHANNEL: m[mc.KEY_CHANNEL]})
         if self._polling_payload:
-            if (
-                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
-                in self.descriptor.ability
-            ):
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
-                ] = SmartPollingStrategy(
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION,
-                    {mc.KEY_CALIBRATION: self._polling_payload},
-                )
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT in self.descriptor.ability:
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
-                ] = SmartPollingStrategy(
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
-                    {mc.KEY_OVERHEAT: self._polling_payload},
-                )
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR in self.descriptor.ability:
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
-                ] = SmartPollingStrategy(
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
-                    {mc.KEY_SENSOR: self._polling_payload},
-                )
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in self.descriptor.ability:
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE
-                ] = SmartPollingStrategy(
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
-                    {mc.KEY_SUMMERMODE: self._polling_payload},
-                )
+            ability = self.descriptor.ability
+            for ns in {
+                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION,
+                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
+                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
+                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+            }:
+                if ns in ability:
+                    self.polling_dictionary[ns] = SmartPollingStrategy(
+                        ns,
+                        {get_namespacekey(ns): self._polling_payload},
+                    )
 
     def _handle_Appliance_Control_Thermostat_Calibration(
         self, header: dict, payload: dict
