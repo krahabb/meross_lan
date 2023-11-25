@@ -215,8 +215,10 @@ class Mts200Climate(MtsClimate):
             manager, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
         )
 
+        """
         if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in manager.descriptor.ability:
             self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]
+        """
 
     # interface: MtsClimate
     async def async_shutdown(self):
@@ -237,6 +239,7 @@ class Mts200Climate(MtsClimate):
             await self.async_request_onoff(0)
             return
 
+        """
         if hvac_mode == HVACMode.COOL:
             if not self._mts_summermode:
 
@@ -273,7 +276,7 @@ class Mts200Climate(MtsClimate):
                     },
                     _ack_callback,
                 )
-
+        """
         await self.async_request_onoff(1)
 
     async def async_set_preset_mode(self, preset_mode: str):
@@ -412,12 +415,14 @@ class Mts200Climate(MtsClimate):
     def _parse_summerMode(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""
         # guessed code right now since we don't have any summerMode payload example
+        """
         if mc.KEY_MODE in payload:
             summermode = payload[mc.KEY_MODE]
             if self._mts_summermode != summermode:
                 self._mts_summermode = summermode
                 self.update_mts_state()
-
+        """
+        
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
         self.binary_sensor_windowOpened.update_onoff(payload[mc.KEY_STATUS])
