@@ -168,10 +168,10 @@ class DiffuserMixin(
             self._sensor_temperature.update_state(temperature.get(mc.KEY_VALUE) / 10)  # type: ignore
 
     def _parse_diffuser_light(self, payload):
-        self._parse__generic_array(mc.KEY_LIGHT, payload)
+        self._parse__array(mc.KEY_LIGHT, payload)
 
     def _parse_diffuser_spray(self, payload):
-        self._parse__generic_array(mc.KEY_SPRAY, payload, mc.KEY_SPRAY)
+        self._parse__array_key(mc.KEY_SPRAY, payload, mc.KEY_SPRAY)
 
     def _parse_diffuser(self, payload: dict):
         """

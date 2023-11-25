@@ -1110,10 +1110,10 @@ class RollerShutterMixin(
             ] = SmartPollingStrategy(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG)
 
     def _handle_Appliance_RollerShutter_Position(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_POSITION, payload.get(mc.KEY_POSITION))
+        self._parse__array(mc.KEY_POSITION, payload.get(mc.KEY_POSITION))
 
     def _handle_Appliance_RollerShutter_State(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_STATE, payload.get(mc.KEY_STATE))
+        self._parse__array(mc.KEY_STATE, payload.get(mc.KEY_STATE))
 
     def _handle_Appliance_RollerShutter_Config(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_CONFIG, payload.get(mc.KEY_CONFIG))
+        self._parse__array(mc.KEY_CONFIG, payload.get(mc.KEY_CONFIG))

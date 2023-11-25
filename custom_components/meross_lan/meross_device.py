@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import asyncio
 import bisect
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from io import TextIOWrapper
 from json import dumps as json_dumps
 from logging import DEBUG, getLevelName as logging_getLevelName
@@ -251,6 +251,11 @@ class MerossDeviceBase(EntityManager):
         response_callback: ResponseCallbackType | None = None,
     ) -> MerossMessageType | None:
         raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def tz(self) -> tzinfo:
+        return None
 
     @abc.abstractmethod
     def _get_device_info_name_key(self) -> str:
@@ -622,7 +627,7 @@ class MerossDevice(MerossDeviceBase):
         )
 
     @property
-    def tzinfo(self):
+    def tz(self) -> tzinfo:
         tz_name = self.descriptor.timezone
         if not tz_name:
             return timezone.utc
@@ -697,7 +702,7 @@ class MerossDevice(MerossDeviceBase):
         given the epoch (utc timestamp) returns the datetime
         in device local timezone
         """
-        return datetime_from_epoch(epoch, self.tzinfo)
+        return datetime_from_epoch(epoch, self.tz)
 
     async def async_request_smartpoll(
         self,
@@ -861,8 +866,8 @@ class MerossDevice(MerossDeviceBase):
             ]
             getattr(entity, f"_parse_{key}", entity._parse_undefined)(payload)
         elif isinstance(payload, list):
-            for p in payload:
-                self._parse__generic(key, p, entitykey)
+            for p_channel in payload:
+                self._parse__generic(key, p_channel, entitykey)
 
     def _handle_undefined(self, header: MerossHeaderType, payload: MerossPayloadType):
         self.log(
@@ -882,16 +887,21 @@ class MerossDevice(MerossDeviceBase):
         key = get_namespacekey(header[mc.KEY_NAMESPACE])
         self._parse__generic(key, payload[key])
 
-    def _parse__generic_array(self, key: str, payload, entitykey: str | None = None):
+    def _parse__array(self, key: str, payload):
         # optimized version for well-known payloads which carry channel structs
         # play it safe for empty (None) payloads
-        for channel_payload in payload or []:
+        for p_channel in payload or []:
+            entity = self.entities[p_channel[mc.KEY_CHANNEL]]
+            getattr(entity, f"_parse_{key}", entity._parse_undefined)(p_channel)
+
+    def _parse__array_key(self, key: str, payload, entitykey: str):
+        # optimized version for well-known payloads which carry channel structs
+        # play it safe for empty (None) payloads
+        for p_channel in payload or []:
             entity = self.entities[
-                channel_payload[mc.KEY_CHANNEL]
-                if entitykey is None
-                else f"{channel_payload[mc.KEY_CHANNEL]}_{entitykey}"
+                f"{p_channel[mc.KEY_CHANNEL]}_{entitykey}"
             ]
-            getattr(entity, f"_parse_{key}", entity._parse_undefined)(channel_payload)
+            getattr(entity, f"_parse_{key}", entity._parse_undefined)(p_channel)
 
     def _handle_generic_array(
         self, header: MerossHeaderType, payload: MerossPayloadType
@@ -902,7 +912,7 @@ class MerossDevice(MerossDeviceBase):
         pass along to entities
         """
         key = get_namespacekey(header[mc.KEY_NAMESPACE])
-        self._parse__generic_array(key, payload[key])
+        self._parse__array(key, payload[key])
 
     def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
         # This is only requested when we want to update a config_entry due
@@ -1408,7 +1418,7 @@ class MerossDevice(MerossDeviceBase):
                 return True
 
             timerule = timerules[idx - 1]  # timerule in effect at the 'epoch'
-            device_tzinfo = self.tzinfo
+            device_tzinfo = self.tz
 
             def _check_incorrect_timerule(_epoch, _timerule):
                 _device_datetime = datetime_from_epoch(_epoch, device_tzinfo)
