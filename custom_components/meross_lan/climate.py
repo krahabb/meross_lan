@@ -4,7 +4,6 @@ import typing
 
 from homeassistant import const as hac
 from homeassistant.components import climate
-from homeassistant.components.climate import HVACAction, HVACMode
 
 from . import meross_entity as me
 from .merossclient import const as mc  # mEROSS cONST
@@ -17,6 +16,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .meross_device import MerossDeviceBase
+    from .calendar import MtsSchedule
 
 
 async def async_setup_entry(
@@ -31,6 +31,9 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     ATTR_TEMPERATURE: Final = climate.ATTR_TEMPERATURE
     TEMP_CELSIUS: Final = hac.TEMP_CELSIUS
 
+    HVACAction = climate.HVACAction
+    HVACMode = climate.HVACMode
+
     PRESET_CUSTOM: Final = "custom"
     PRESET_COMFORT: Final = "comfort"
     PRESET_SLEEP: Final = "sleep"
@@ -38,6 +41,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PRESET_AUTO: Final = "auto"
 
     manager: MerossDeviceBase
+    schedule: MtsSchedule
 
     _attr_preset_modes: Final = [
         PRESET_CUSTOM,
@@ -70,10 +74,10 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
-        "_mts_summermode",
+        "schedule",
     )
 
-    def __init__(self, manager: MerossDeviceBase, channel: object):
+    def __init__(self, manager: MerossDeviceBase, channel: object, schedule: MtsSchedule):
         self._attr_current_temperature = None
         self._attr_hvac_action = None
         self._attr_hvac_mode = None
@@ -85,30 +89,12 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_active = None
         self._mts_mode: int | None = None
         self._mts_onoff = None
-        self._mts_summermode = None
+        self.schedule = schedule
         super().__init__(manager, channel, None, None)
 
-    def update_mts_state(self):
-        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
-        if self._mts_onoff:
-            if self._mts_summermode:
-                self._attr_hvac_mode = HVACMode.COOL
-                self._attr_hvac_action = (
-                    HVACAction.COOLING if self._mts_active else HVACAction.IDLE
-                )
-            else:
-                self._attr_hvac_mode = HVACMode.HEAT
-                self._attr_hvac_action = (
-                    HVACAction.HEATING if self._mts_active else HVACAction.IDLE
-                )
-        else:
-            self._attr_hvac_mode = HVACMode.OFF
-            self._attr_hvac_action = HVACAction.OFF
-
-        self._attr_state = self._attr_hvac_mode if self.manager.online else None
-
-        if self._hass_connected:
-            self._async_write_ha_state()
+    async def async_shutdown(self):
+        self.schedule = None  # type: ignore
+        await super().async_shutdown()
 
     @property
     def supported_features(self):
@@ -177,6 +163,15 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     async def async_request_onoff(self, onoff: int):
         raise NotImplementedError()
 
+    def is_mts_scheduled(self):
+        raise NotImplementedError()
+
+    def update_mts_state(self):
+        self._attr_state = self._attr_hvac_mode if self.manager.online else None
+        if self._hass_connected:
+            self._async_write_ha_state()
+        self.schedule.update_mts_state()
+
 
 class MtsSetPointNumber(MLConfigNumber):
     """
@@ -222,3 +217,5 @@ class MtsSetPointNumber(MLConfigNumber):
     @property
     def ml_multiplier(self):
         return 10
+
+

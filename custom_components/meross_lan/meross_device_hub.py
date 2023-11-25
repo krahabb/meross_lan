@@ -27,7 +27,7 @@ from .sensor import MLSensor
 from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from .devices.mts100 import Mts100Climate, Mts100Schedule, Mts100SetPointNumber
+    from .devices.mts100 import Mts100Climate, Mts100SetPointNumber
     from .meross_device import MerossPayloadType, ResponseCallbackType
     from .meross_entity import MerossEntity
 
@@ -453,7 +453,13 @@ class MerossSubDevice(MerossDeviceBase):
         payload: dict,
         response_callback: ResponseCallbackType | None = None,
     ):
-        return await self.hub.async_request(namespace, method, payload, response_callback)
+        return await self.hub.async_request(
+            namespace, method, payload, response_callback
+        )
+
+    @property
+    def tz(self):
+        return self.hub.tz
 
     def _get_device_info_name_key(self) -> str:
         return mc.KEY_SUBDEVICENAME
@@ -702,7 +708,6 @@ class MTS100SubDevice(MerossSubDevice):
         "number_away_temperature",
         "number_adjust_temperature",
         "binary_sensor_window",
-        "schedule",
         "sensor_temperature",
     )
 
@@ -710,7 +715,7 @@ class MTS100SubDevice(MerossSubDevice):
         self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100
     ):
         super().__init__(hub, p_digest, _type)
-        from .devices.mts100 import Mts100Climate, Mts100Schedule, Mts100SetPointNumber
+        from .devices.mts100 import Mts100Climate, Mts100SetPointNumber
 
         self.climate = Mts100Climate(self)
         self.number_comfort_temperature = Mts100SetPointNumber(
@@ -734,7 +739,6 @@ class MTS100SubDevice(MerossSubDevice):
         self.binary_sensor_window = self.build_binary_sensor_c(
             MLBinarySensor.DeviceClass.WINDOW
         )
-        self.schedule = Mts100Schedule(self.climate)
         self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
 
     async def async_shutdown(self):
@@ -743,7 +747,6 @@ class MTS100SubDevice(MerossSubDevice):
         self.number_comfort_temperature: Mts100SetPointNumber = None  # type: ignore
         self.number_sleep_temperature: Mts100SetPointNumber = None  # type: ignore
         self.number_away_temperature: Mts100SetPointNumber = None  # type: ignore
-        self.schedule: Mts100Schedule = None  # type: ignore
         self.binary_sensor_window: MLBinarySensor = None  # type: ignore
         self.sensor_temperature: MLSensor = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
@@ -765,19 +768,17 @@ class MTS100SubDevice(MerossSubDevice):
             self._parse_temperature(p_temperature)
         else:
             climate.update_mts_state()
-            self.schedule.update_mts_state()
 
     def _parse_mode(self, p_mode: dict):
         climate = self.climate
         climate._mts_mode = p_mode.get(mc.KEY_STATE)
         climate.update_mts_state()
-        self.schedule.update_mts_state()
 
     def _parse_mts100(self, p_mts100: dict):
         pass
 
     def _parse_schedule(self, p_schedule: dict):
-        self.schedule._parse_schedule(p_schedule)
+        self.climate.schedule._parse_schedule(p_schedule)
 
     def _parse_temperature(self, p_temperature: dict):
         climate = self.climate
@@ -793,7 +794,6 @@ class MTS100SubDevice(MerossSubDevice):
         if mc.KEY_HEATING in p_temperature:
             climate._mts_active = p_temperature[mc.KEY_HEATING]
         climate.update_mts_state()
-        self.schedule.update_mts_state()
 
         if isinstance(_t := p_temperature.get(mc.KEY_COMFORT), int):
             self.number_comfort_temperature.update_native_value(_t)
@@ -809,7 +809,6 @@ class MTS100SubDevice(MerossSubDevice):
         climate = self.climate
         climate._mts_onoff = p_togglex.get(mc.KEY_ONOFF)
         climate.update_mts_state()
-        self.schedule.update_mts_state()
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100] = MTS100SubDevice

@@ -3,8 +3,9 @@ from __future__ import annotations
 import typing
 
 from ..binary_sensor import MLBinarySensor
-from ..climate import HVACMode, MtsClimate, MtsSetPointNumber
-from ..helpers import SmartPollingStrategy, reverse_lookup
+from ..calendar import MtsSchedule
+from ..climate import MtsClimate, MtsSetPointNumber
+from ..helpers import PollingStrategy, SmartPollingStrategy, reverse_lookup
 from ..merossclient import const as mc, get_namespacekey
 from ..number import PERCENTAGE, MLConfigNumber
 from ..sensor import MLSensor
@@ -136,6 +137,16 @@ class Mts200Climate(MtsClimate):
         mc.MTS200_MODE_ECO: MtsClimate.PRESET_AWAY,
         mc.MTS200_MODE_AUTO: MtsClimate.PRESET_AUTO,
     }
+    # right now we're only sure summermode == '1' is 'HEAT'
+    SUMMERMODE_TO_HVACMODE = {
+        None: MtsClimate.HVACMode.HEAT,  # mapping when no summerMode avail
+        mc.MTS200_SUMMERMODE_COOL: MtsClimate.HVACMode.COOL,
+        mc.MTS200_SUMMERMODE_HEAT: MtsClimate.HVACMode.HEAT,
+    }
+    HVACMODE_TO_SUMMERMODE = {
+        MtsClimate.HVACMode.HEAT: mc.MTS200_SUMMERMODE_HEAT,
+        MtsClimate.HVACMode.COOL: mc.MTS200_SUMMERMODE_COOL,
+    }
     # when setting target temp we'll set an appropriate payload key
     # for the mts100 depending on current 'preset' mode.
     # if mts100 is in any of 'off', 'auto' we just set the 'custom'
@@ -162,6 +173,7 @@ class Mts200Climate(MtsClimate):
     binary_sensor_windowOpened: MLBinarySensor
 
     __slots__ = (
+        "_mts_summermode",
         "number_comfort_temperature",
         "number_sleep_temperature",
         "number_away_temperature",
@@ -175,7 +187,8 @@ class Mts200Climate(MtsClimate):
     )
 
     def __init__(self, manager: ThermostatMixin, channel: object):
-        super().__init__(manager, channel)
+        super().__init__(manager, channel, Mts200Schedule(manager, channel, self))
+        self._mts_summermode = None
         self.number_comfort_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_COMFORT
         )
@@ -216,7 +229,7 @@ class Mts200Climate(MtsClimate):
         )
 
         if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in manager.descriptor.ability:
-            self._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL]
+            self._attr_hvac_modes = [MtsClimate.HVACMode.OFF, MtsClimate.HVACMode.HEAT, MtsClimate.HVACMode.COOL]
 
     # interface: MtsClimate
     async def async_shutdown(self):
@@ -232,47 +245,16 @@ class Mts200Climate(MtsClimate):
         self.binary_sensor_windowOpened = None  # type: ignore
         await super().async_shutdown()
 
-    async def async_set_hvac_mode(self, hvac_mode: HVACMode):
-        if hvac_mode == HVACMode.OFF:
+    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
+        if hvac_mode == MtsClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
             return
 
-        if hvac_mode == HVACMode.COOL:
-            if not self._mts_summermode:
-
-                def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-                    if acknowledge:
-                        self._mts_summermode = 1
-                        self.update_mts_state()
-
-                await self.manager.async_request(
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
-                    mc.METHOD_SET,
-                    {
-                        mc.KEY_SUMMERMODE: [
-                            {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: 1}
-                        ]
-                    },
-                    _ack_callback,
-                )
-        elif hvac_mode == HVACMode.HEAT:
-            if self._mts_summermode:
-
-                def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-                    if acknowledge:
-                        self._mts_summermode = 0
-                        self.update_mts_state()
-
-                await self.manager.async_request(
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
-                    mc.METHOD_SET,
-                    {
-                        mc.KEY_SUMMERMODE: [
-                            {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: 0}
-                        ]
-                    },
-                    _ack_callback,
-                )
+        if not (self._mts_summermode is None):
+            # this is an indicator the device supports it
+            summermode = self.HVACMODE_TO_SUMMERMODE[hvac_mode]
+            if self._mts_summermode != summermode:
+                await self.async_request_summermode(summermode)
 
         await self.async_request_onoff(1)
 
@@ -331,6 +313,48 @@ class Mts200Climate(MtsClimate):
             {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}]},
             _ack_callback,
         )
+
+    async def async_request_summermode(self, summermode: int):
+        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
+            if acknowledge:
+                # it looks that (at least when sending '0') even
+                # if acknowledged the mts doesnt really update it
+                self._mts_summermode = summermode
+                self.update_mts_state()
+
+        await self.manager.async_request(
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+            mc.METHOD_SET,
+            {
+                mc.KEY_SUMMERMODE: [
+                    {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: summermode}
+                ]
+            },
+            _ack_callback,
+        )
+
+    def is_mts_scheduled(self):
+        return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
+
+    def update_mts_state(self):
+        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
+        if self._mts_onoff:
+            self._attr_hvac_mode = self.SUMMERMODE_TO_HVACMODE.get(
+                self._mts_summermode, MtsClimate.HVACMode.HEAT
+            )
+            if self._mts_active:
+                self._attr_hvac_action = (
+                    MtsClimate.HVACAction.HEATING
+                    if self._attr_hvac_mode is MtsClimate.HVACMode.HEAT
+                    else MtsClimate.HVACAction.COOLING
+                )
+            else:
+                self._attr_hvac_action = MtsClimate.HVACAction.IDLE
+        else:
+            self._attr_hvac_mode = MtsClimate.HVACMode.OFF
+            self._attr_hvac_action = MtsClimate.HVACAction.OFF
+
+        super().update_mts_state()
 
     # message handlers
     def _parse_calibration(self, payload: dict):
@@ -411,7 +435,6 @@ class Mts200Climate(MtsClimate):
 
     def _parse_summerMode(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""
-        # guessed code right now since we don't have any summerMode payload example
         if mc.KEY_MODE in payload:
             summermode = payload[mc.KEY_MODE]
             if self._mts_summermode != summermode:
@@ -421,6 +444,17 @@ class Mts200Climate(MtsClimate):
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
         self.binary_sensor_windowOpened.update_onoff(payload[mc.KEY_STATUS])
+
+
+class Mts200Schedule(MtsSchedule):
+    def __init__(self, manager: ThermostatMixin, channel, climate: Mts200Climate):
+        super().__init__(
+            manager,
+            channel,
+            climate,
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE,
+            mc.KEY_CHANNEL,
+        )
 
 
 class ThermostatMixin(
@@ -438,11 +472,23 @@ class ThermostatMixin(
                 self._polling_payload.append({mc.KEY_CHANNEL: m[mc.KEY_CHANNEL]})
         if self._polling_payload:
             ability = self.descriptor.ability
+            """
+            "Mode","SummerMode","WindowOpened" are carried in digest so we don't poll them
+            "Schedule" is pushed over mqtt
+            The rest are actually guesses
+            """
+            for ns in {
+                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
+                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE,
+                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
+            }:
+                if ns in ability:
+                    self.polling_dictionary[ns] = PollingStrategy(
+                        ns,
+                        {get_namespacekey(ns): self._polling_payload},
+                    )
             for ns in {
                 mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION,
-                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
-                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
-                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
             }:
                 if ns in ability:
                     self.polling_dictionary[ns] = SmartPollingStrategy(
@@ -450,49 +496,37 @@ class ThermostatMixin(
                         {get_namespacekey(ns): self._polling_payload},
                     )
 
-    def _handle_Appliance_Control_Thermostat_Calibration(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_CALIBRATION, payload[mc.KEY_CALIBRATION])
+    def _handle_Appliance_Control_Thermostat_Calibration(self, header, payload):
+        self._parse__array(mc.KEY_CALIBRATION, payload[mc.KEY_CALIBRATION])
 
-    def _handle_Appliance_Control_Thermostat_DeadZone(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_DEADZONE, payload[mc.KEY_DEADZONE])
+    def _handle_Appliance_Control_Thermostat_DeadZone(self, header, payload):
+        self._parse__array(mc.KEY_DEADZONE, payload[mc.KEY_DEADZONE])
 
-    def _handle_Appliance_Control_Thermostat_Frost(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_FROST, payload[mc.KEY_FROST])
+    def _handle_Appliance_Control_Thermostat_Frost(self, header, payload):
+        self._parse__array(mc.KEY_FROST, payload[mc.KEY_FROST])
 
-    def _handle_Appliance_Control_Thermostat_HoldAction(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_HOLDACTION, payload[mc.KEY_HOLDACTION])
+    def _handle_Appliance_Control_Thermostat_HoldAction(self, header, payload):
+        self._parse__array(mc.KEY_HOLDACTION, payload[mc.KEY_HOLDACTION])
 
-    def _handle_Appliance_Control_Thermostat_Mode(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_MODE, payload[mc.KEY_MODE])
+    def _handle_Appliance_Control_Thermostat_Mode(self, header, payload):
+        self._parse__array(mc.KEY_MODE, payload[mc.KEY_MODE])
 
-    def _handle_Appliance_Control_Thermostat_Overheat(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_OVERHEAT, payload[mc.KEY_OVERHEAT])
+    def _handle_Appliance_Control_Thermostat_Overheat(self, header, payload):
+        self._parse__array(mc.KEY_OVERHEAT, payload[mc.KEY_OVERHEAT])
 
-    def _handle_Appliance_Control_Thermostat_Schedule(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_SCHEDULE, payload[mc.KEY_SCHEDULE])
+    def _handle_Appliance_Control_Thermostat_Schedule(self, header, payload):
+        self._parse__array_key(
+            mc.KEY_SCHEDULE, payload[mc.KEY_SCHEDULE], mc.KEY_SCHEDULE
+        )
 
-    def _handle_Appliance_Control_Thermostat_Sensor(self, header: dict, payload: dict):
-        self._parse__generic_array(mc.KEY_SENSOR, payload[mc.KEY_SENSOR])
+    def _handle_Appliance_Control_Thermostat_Sensor(self, header, payload):
+        self._parse__array(mc.KEY_SENSOR, payload[mc.KEY_SENSOR])
 
-    def _handle_Appliance_Control_Thermostat_SummerMode(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_SUMMERMODE, payload[mc.KEY_SUMMERMODE])
+    def _handle_Appliance_Control_Thermostat_SummerMode(self, header, payload):
+        self._parse__array(mc.KEY_SUMMERMODE, payload[mc.KEY_SUMMERMODE])
 
-    def _handle_Appliance_Control_Thermostat_WindowOpened(
-        self, header: dict, payload: dict
-    ):
-        self._parse__generic_array(mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED])
+    def _handle_Appliance_Control_Thermostat_WindowOpened(self, header, payload):
+        self._parse__array(mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED])
 
     def _parse_thermostat(self, payload: dict):
         """
@@ -513,15 +547,22 @@ class ThermostatMixin(
                 "max": 350,
                 "lmTime": 1642425303
             }],
+            "summerMode": [
+              {
+                "channel": 0,
+                "mode": 1
+              }
+            ],
             "windowOpened": [{
                 "channel": 0,
                 "status": 0,
+                "detect": 1,
                 "lmTime": 1642425303
             }]
         }
         """
         for key, value in payload.items():
-            self._parse__generic_array(key, value)
+            self._parse__array(key, value)
 
 
 class MLScreenBrightnessNumber(MLConfigNumber):

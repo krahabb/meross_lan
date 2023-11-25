@@ -401,6 +401,9 @@ MTS200_MODE_COOL = 1
 MTS200_MODE_ECO = 2
 MTS200_MODE_AUTO = 3
 MTS200_MODE_CUSTOM = 4
+# looks like with 'summerMode' disabled (i.e. in winter) the MTS reports '1'
+MTS200_SUMMERMODE_HEAT = 1
+MTS200_SUMMERMODE_COOL = 0
 
 # MTS200 external sensor status (overheat protection)
 MTS200_OVERHEAT_WARNING_OK = 0
