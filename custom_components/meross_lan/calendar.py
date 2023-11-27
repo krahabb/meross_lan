@@ -132,7 +132,7 @@ class MtsSchedule(MLCalendar):
         self.climate = climate
         self.namespace = namespace
         self.key_channel = key_channel
-        self._flatten = False
+        self._flatten = True
         # save a flattened version of the device schedule to ease/optimize CalendarEvent management
         # since the original schedule has a fixed number of contiguous events spanning the day(s) (6 on my MTS100)
         # we might 'compress' these when 2 or more consecutive entries don't change the temperature
@@ -190,203 +190,11 @@ class MtsSchedule(MLCalendar):
 
     async def async_create_event(self, **kwargs):
         try:
-            schedule = self.schedule
-            if not schedule:
-                raise Exception("Internal state unavailable")
-            # get the number of maximum entries for the day from device state
-            if self._schedule_entry_count < 1:
-                raise Exception("Not enough schedule space available")
-            (
-                event_start,
-                event_end,
-                event_temperature,
-            ) = self._extract_rfc5545_info(kwargs)
-            # allow only schedule up to midnight: i.e. not spanning multiple days
-            event_day_start = event_start.replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
-            event_minutes_start = event_start.hour * 60 + event_start.minute
-            event_minutes_start -= event_minutes_start % self._schedule_unit_time
-            event_day_end = event_day_start + timedelta(days=1)
-            if event_end > event_day_end:
-                raise Exception("Events spanning multiple days are not allowed")
-            if event_end == event_day_end:
-                event_minutes_end = 1440
-            else:
-                # round up to the next self._scheduleunittime interval
-                event_minutes_end = event_end.hour * 60 + event_end.minute
-                event_minutes_end_remainder = (
-                    event_minutes_end % self._schedule_unit_time
-                )
-                if event_minutes_end_remainder:
-                    event_minutes_end += (
-                        self._schedule_unit_time - event_minutes_end_remainder
-                    )
-            event_minutes_duration = event_minutes_end - event_minutes_start
-            if event_minutes_duration < self._schedule_unit_time:
-                raise Exception(
-                    f"Minimum event duration is {self._schedule_unit_time} minutes"
-                )
-
-            # recognize some basic recurrence scheme: typically the MTS100 has a weekly schedule
-            # and that's by default but we let the user select a daily schedule to setup
-            # the same entry among all of the week days
-            recurrencedays: tuple
-            if event_rrule := kwargs.get(EVENT_RRULE):
-                rule_parts = dict(s.split("=", 1) for s in event_rrule.split(";"))
-                if not (freq := rule_parts.get("FREQ")):
-                    raise Exception("Recurrence rule did not contain FREQ")
-                if freq == "DAILY":
-                    if len(rule_parts) > 1:
-                        raise Exception("Daily recurrence too complex")
-                    recurrencedays = MTS_SCHEDULE_WEEKDAY
-                elif freq == "WEEKLY":
-                    if len(rule_parts) > 1:
-                        raise Exception("Weekly recurrence too complex")
-                    recurrencedays = (MTS_SCHEDULE_WEEKDAY[event_start.weekday()],)
-                else:
-                    raise Exception(f"Invalid frequency for rule: {event_rrule}")
-            else:
-                recurrencedays = (MTS_SCHEDULE_WEEKDAY[event_start.weekday()],)
-
-            for weekday in recurrencedays:
-                weekday_schedule = schedule[weekday]
-                schedule_minutes_begin = 0
-                schedule_index = 0
-                schedule_index_insert = None
-                for schedule_entry in weekday_schedule:
-                    schedule_minutes_end = schedule_minutes_begin + schedule_entry[0]
-                    if event_minutes_start < schedule_minutes_begin:
-                        # if our code is good this shouldnt happen!
-                        raise Exception("Inconsistent schedule state")
-                    elif event_minutes_start == schedule_minutes_begin:
-                        # insert before
-                        schedule_index_insert = schedule_index
-                        weekday_schedule.insert(
-                            schedule_index_insert,
-                            [event_minutes_duration, event_temperature],
-                        )
-                        # now remove event_minutes_duration of schedule events
-                        schedule_index += 1
-                        _event_minutes_duration = event_minutes_duration
-                        while _event_minutes_duration:
-                            schedule_entry_minutes_duration = schedule_entry[0]
-                            if (
-                                schedule_entry_minutes_duration
-                                > _event_minutes_duration
-                            ):
-                                # schedule entry ends after our new event: just resize
-                                schedule_entry[0] = (
-                                    schedule_entry_minutes_duration
-                                    - _event_minutes_duration
-                                )
-                                break
-                            # schedule_entry totally overlapped from newer so we'll discard this
-                            # and check the next
-                            weekday_schedule.pop(schedule_index)
-                            if (
-                                _event_minutes_duration
-                                == schedule_entry_minutes_duration
-                            ):
-                                break  # exit before accessing maybe non-existing schedule_index
-                            assert (
-                                _event_minutes_duration
-                                >= schedule_entry_minutes_duration
-                            ), "Something wrong in our schedule"
-                            _event_minutes_duration -= schedule_entry_minutes_duration
-                            schedule_entry = weekday_schedule[schedule_index]
-                            # end while _event_minutes_duration:
-                        break
-                    elif event_minutes_start < schedule_minutes_end:
-                        # shorten the previous since the new one is tarting before end
-                        schedule_entry[0] = event_minutes_start - schedule_minutes_begin
-                        schedule_index_insert = schedule_index + 1
-                        weekday_schedule.insert(
-                            schedule_index_insert,
-                            [event_minutes_duration, event_temperature],
-                        )
-                        if event_minutes_end < schedule_minutes_end:
-                            # new event spans a range contained in the existing schedule_entry
-                            # so we add an entry filling the gap between the new end and the old one
-                            weekday_schedule.insert(
-                                schedule_index + 2,
-                                [
-                                    schedule_minutes_end - event_minutes_end,
-                                    schedule_entry[1],
-                                ],
-                            )
-                        elif event_minutes_end == schedule_minutes_end:
-                            # end of new event aligned to the overwritten existing event: no work to do
-                            pass
-                        else:
-                            # new event overlaps more entries: sayaku!
-                            _event_minutes_duration = (
-                                event_minutes_duration
-                                - schedule_minutes_end
-                                - event_minutes_start
-                            )
-                            schedule_index += 2
-                            while _event_minutes_duration > 0:
-                                schedule_entry = weekday_schedule[schedule_index]
-                                schedule_entry_minutes_duration = schedule_entry[0]
-                                if (
-                                    schedule_entry_minutes_duration
-                                    > _event_minutes_duration
-                                ):
-                                    # schedule entry ends after our new event: just resize
-                                    schedule_entry[0] = (
-                                        schedule_entry_minutes_duration
-                                        - _event_minutes_duration
-                                    )
-                                    break
-                                weekday_schedule.pop(schedule_index)
-                                _event_minutes_duration -= (
-                                    schedule_entry_minutes_duration
-                                )
-                            assert (
-                                _event_minutes_duration == 0
-                            ), "Something wrong in our schedule"
-                        break
-                    schedule_minutes_begin = schedule_minutes_end
-                    schedule_index += 1
-                    # end for schedule_entry in weekday_schedule:
-
-                # at this point our schedule is set but might have too many events in it
-                # (total schedules entry need to be less than so we'll reparse and kindly coalesce some events
-                assert schedule_index_insert is not None, "New event was not added"
-                while len(weekday_schedule) > self._schedule_entry_count:
-                    # note that len(weekday_schedule) will always be >= 2 since we floored schedule_count
-                    if schedule_index_insert > 1:
-                        # remove event before if not inserted as first or second
-                        schedule_index_insert -= 1
-                        schedule_entry = weekday_schedule.pop(schedule_index_insert)
-                        # add its duration to its previous
-                        weekday_schedule[schedule_index_insert - 1][
-                            0
-                        ] += schedule_entry[0]
-                        continue
-                    schedule_entries_after = (
-                        len(weekday_schedule) - schedule_index_insert - 1
-                    )
-                    if schedule_entries_after > 1:
-                        # remove event after
-                        schedule_entry = weekday_schedule.pop(schedule_index_insert + 1)
-                        # add its duration to its next
-                        weekday_schedule[schedule_index_insert + 1][
-                            0
-                        ] += schedule_entry[0]
-                        continue
-                    # we're left with an array of 2 entry where 1 is the newly added so
-                    # we discard the other and enlarge the last addition to cover the full day
-                    schedule_entry = weekday_schedule.pop(1 - schedule_index_insert)
-                    weekday_schedule[0][0] += schedule_entry[0]
-                    # end while (len(weekday_schedule) > schedule_count):
-
-                # end for weekday
+            await self._internal_create_event(**kwargs)
             await self._async_request_schedule()
-
         except Exception as exception:
-            self.log_exception_warning(exception, "async_create_event")
+            # invalidate working data (might be dirty)
+            self._schedule = None
             raise HomeAssistantError(
                 f"{type(exception).__name__} {str(exception)}"
             ) from exception
@@ -398,28 +206,13 @@ class MtsSchedule(MLCalendar):
         recurrence_range: str | None = None,
     ):
         try:
-            schedule = self.schedule
-            if not schedule:
-                raise Exception("Internal state unavailable")
-
-            uid_split = uid.split("#")
-            weekday_schedule: list = schedule[uid_split[0]]
-            # our schedule cannot be empty: it must fill the 24 hours
-            if len(weekday_schedule) <= 1:
-                raise Exception("The daily schedule must contain at least one event")
-            schedule_index = int(uid_split[1])
-            schedule_entry = weekday_schedule.pop(schedule_index)
-            # we have to fill up the schedule by extending the preceding
-            # or the following schedule_entry in order to keep the overall
-            # weekday_schedule duration equal to 24 hours
-            if schedule_index > 0:
-                # add the duration of the removed entry to the preceeding
-                weekday_schedule[schedule_index - 1][0] += schedule_entry[0]
+            if self._internal_delete_event(uid):
+                await self._async_request_schedule()
             else:
-                # we removed the first so we'll add to the next (now first)
-                weekday_schedule[0][0] += schedule_entry[0]
-            await self._async_request_schedule()
+                raise Exception("The daily schedule must contain at least one event")
         except Exception as error:
+            # invalidate working data (might be dirty)
+            self._schedule = None
             raise HomeAssistantError(str(error)) from error
 
     async def async_update_event(
@@ -430,22 +223,12 @@ class MtsSchedule(MLCalendar):
         recurrence_range: str | None = None,
     ) -> None:
         try:
-            schedule = self.schedule
-            if not schedule:
-                raise Exception("Internal state unavailable")
-
-            uid_split = uid.split("#")
-            weekday_schedule = schedule[uid_split[0]]
-            schedule_index = int(uid_split[1])
-            schedule_entry = weekday_schedule[schedule_index]
-            (
-                event_start,
-                event_end,
-                event_temperature,
-            ) = self._extract_rfc5545_info(event)
-            schedule_entry[1] = event_temperature
+            self._internal_delete_event(uid)
+            await self._internal_create_event(**event)
             await self._async_request_schedule()
         except Exception as error:
+            # invalidate working data (might be dirty)
+            self._schedule = None
             raise HomeAssistantError(str(error)) from error
 
     # interface: self
@@ -675,7 +458,7 @@ class MtsSchedule(MLCalendar):
         weekday_schedule: list = schedule[uid_split[0]]
         # our schedule cannot be empty: it must fill the 24 hours
         if len(weekday_schedule) <= 1:
-            raise Exception("The daily schedule must contain at least one event")
+            return False
         schedule_index = int(uid_split[1])
         schedule_entry = weekday_schedule.pop(schedule_index)
         # we have to fill up the schedule by extending the preceding
@@ -687,6 +470,203 @@ class MtsSchedule(MLCalendar):
         else:
             # we removed the first so we'll add to the next (now first)
             weekday_schedule[0][0] += schedule_entry[0]
+        return True
+
+    async def _internal_create_event(self, **kwargs):
+
+        schedule = self.schedule
+        if not schedule:
+            raise Exception("Internal state unavailable")
+        # get the number of maximum entries for the day from device state
+        if self._schedule_entry_count < 1:
+            raise Exception("Not enough schedule space available")
+        (
+            event_start,
+            event_end,
+            event_temperature,
+        ) = self._extract_rfc5545_info(kwargs)
+        # allow only schedule up to midnight: i.e. not spanning multiple days
+        event_day_start = event_start.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        event_minutes_start = event_start.hour * 60 + event_start.minute
+        event_minutes_start -= event_minutes_start % self._schedule_unit_time
+        event_day_end = event_day_start + timedelta(days=1)
+        if event_end > event_day_end:
+            raise Exception("Events spanning multiple days are not allowed")
+        if event_end == event_day_end:
+            event_minutes_end = 1440
+        else:
+            # round up to the next self._scheduleunittime interval
+            event_minutes_end = event_end.hour * 60 + event_end.minute
+            event_minutes_end_remainder = (
+                event_minutes_end % self._schedule_unit_time
+            )
+            if event_minutes_end_remainder:
+                event_minutes_end += (
+                    self._schedule_unit_time - event_minutes_end_remainder
+                )
+        event_minutes_duration = event_minutes_end - event_minutes_start
+        if event_minutes_duration < self._schedule_unit_time:
+            raise Exception(
+                f"Minimum event duration is {self._schedule_unit_time} minutes"
+            )
+
+        # recognize some basic recurrence scheme: typically the MTS100 has a weekly schedule
+        # and that's by default but we let the user select a daily schedule to setup
+        # the same entry among all of the week days
+        recurrencedays: tuple
+        if event_rrule := kwargs.get(EVENT_RRULE):
+            rule_parts = dict(s.split("=", 1) for s in event_rrule.split(";"))
+            if not (freq := rule_parts.get("FREQ")):
+                raise Exception("Recurrence rule did not contain FREQ")
+            if freq == "DAILY":
+                if len(rule_parts) > 1:
+                    raise Exception("Daily recurrence too complex")
+                recurrencedays = MTS_SCHEDULE_WEEKDAY
+            elif freq == "WEEKLY":
+                if len(rule_parts) > 1:
+                    raise Exception("Weekly recurrence too complex")
+                recurrencedays = (MTS_SCHEDULE_WEEKDAY[event_start.weekday()],)
+            else:
+                raise Exception(f"Invalid frequency for rule: {event_rrule}")
+        else:
+            recurrencedays = (MTS_SCHEDULE_WEEKDAY[event_start.weekday()],)
+
+        for weekday in recurrencedays:
+            weekday_schedule = schedule[weekday]
+            schedule_minutes_begin = 0
+            schedule_index = 0
+            schedule_index_insert = None
+            for schedule_entry in weekday_schedule:
+                schedule_minutes_end = schedule_minutes_begin + schedule_entry[0]
+                if event_minutes_start < schedule_minutes_begin:
+                    # if our code is good this shouldnt happen!
+                    raise Exception("Inconsistent schedule state")
+                elif event_minutes_start == schedule_minutes_begin:
+                    # insert before
+                    schedule_index_insert = schedule_index
+                    weekday_schedule.insert(
+                        schedule_index_insert,
+                        [event_minutes_duration, event_temperature],
+                    )
+                    # now remove event_minutes_duration of schedule events
+                    schedule_index += 1
+                    _event_minutes_duration = event_minutes_duration
+                    while _event_minutes_duration:
+                        schedule_entry_minutes_duration = schedule_entry[0]
+                        if (
+                            schedule_entry_minutes_duration
+                            > _event_minutes_duration
+                        ):
+                            # schedule entry ends after our new event: just resize
+                            schedule_entry[0] = (
+                                schedule_entry_minutes_duration
+                                - _event_minutes_duration
+                            )
+                            break
+                        # schedule_entry totally overlapped from newer so we'll discard this
+                        # and check the next
+                        weekday_schedule.pop(schedule_index)
+                        if (
+                            _event_minutes_duration
+                            == schedule_entry_minutes_duration
+                        ):
+                            break  # exit before accessing maybe non-existing schedule_index
+                        assert (
+                            _event_minutes_duration
+                            >= schedule_entry_minutes_duration
+                        ), "Something wrong in our schedule"
+                        _event_minutes_duration -= schedule_entry_minutes_duration
+                        schedule_entry = weekday_schedule[schedule_index]
+                        # end while _event_minutes_duration:
+                    break
+                elif event_minutes_start < schedule_minutes_end:
+                    # shorten the previous since the new one is tarting before end
+                    schedule_entry[0] = event_minutes_start - schedule_minutes_begin
+                    schedule_index_insert = schedule_index + 1
+                    weekday_schedule.insert(
+                        schedule_index_insert,
+                        [event_minutes_duration, event_temperature],
+                    )
+                    if event_minutes_end < schedule_minutes_end:
+                        # new event spans a range contained in the existing schedule_entry
+                        # so we add an entry filling the gap between the new end and the old one
+                        weekday_schedule.insert(
+                            schedule_index + 2,
+                            [
+                                schedule_minutes_end - event_minutes_end,
+                                schedule_entry[1],
+                            ],
+                        )
+                    elif event_minutes_end == schedule_minutes_end:
+                        # end of new event aligned to the overwritten existing event: no work to do
+                        pass
+                    else:
+                        # new event overlaps more entries: sayaku!
+                        _event_minutes_duration = (
+                            event_minutes_duration
+                            - schedule_minutes_end
+                            - event_minutes_start
+                        )
+                        schedule_index += 2
+                        while _event_minutes_duration > 0:
+                            schedule_entry = weekday_schedule[schedule_index]
+                            schedule_entry_minutes_duration = schedule_entry[0]
+                            if (
+                                schedule_entry_minutes_duration
+                                > _event_minutes_duration
+                            ):
+                                # schedule entry ends after our new event: just resize
+                                schedule_entry[0] = (
+                                    schedule_entry_minutes_duration
+                                    - _event_minutes_duration
+                                )
+                                break
+                            weekday_schedule.pop(schedule_index)
+                            _event_minutes_duration -= (
+                                schedule_entry_minutes_duration
+                            )
+                        assert (
+                            _event_minutes_duration == 0
+                        ), "Something wrong in our schedule"
+                    break
+                schedule_minutes_begin = schedule_minutes_end
+                schedule_index += 1
+                # end for schedule_entry in weekday_schedule:
+
+            # at this point our schedule is set but might have too many events in it
+            # (total schedules entry need to be less than so we'll reparse and kindly coalesce some events
+            assert schedule_index_insert is not None, "New event was not added"
+            while len(weekday_schedule) > self._schedule_entry_count:
+                # note that len(weekday_schedule) will always be >= 2 since we floored schedule_count
+                if schedule_index_insert > 1:
+                    # remove event before if not inserted as first or second
+                    schedule_index_insert -= 1
+                    schedule_entry = weekday_schedule.pop(schedule_index_insert)
+                    # add its duration to its previous
+                    weekday_schedule[schedule_index_insert - 1][
+                        0
+                    ] += schedule_entry[0]
+                    continue
+                schedule_entries_after = (
+                    len(weekday_schedule) - schedule_index_insert - 1
+                )
+                if schedule_entries_after > 1:
+                    # remove event after
+                    schedule_entry = weekday_schedule.pop(schedule_index_insert + 1)
+                    # add its duration to its next
+                    weekday_schedule[schedule_index_insert + 1][
+                        0
+                    ] += schedule_entry[0]
+                    continue
+                # we're left with an array of 2 entry where 1 is the newly added so
+                # we discard the other and enlarge the last addition to cover the full day
+                schedule_entry = weekday_schedule.pop(1 - schedule_index_insert)
+                weekday_schedule[0][0] += schedule_entry[0]
+                # end while (len(weekday_schedule) > schedule_count):
+
+            # end for weekday
 
     # message handlers
     def _parse_schedule(self, payload: dict):
