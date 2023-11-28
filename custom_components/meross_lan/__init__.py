@@ -117,11 +117,13 @@ class HAMQTTConnection(MQTTConnection):
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ):
-        if response_callback:
+        if method in mc.METHOD_ACK_MAP.keys():
             transaction = self._mqtt_transaction_init(
                 namespace, method, response_callback
             )
             messageid = transaction.messageid
+        else:
+            transaction = None
 
         self.log(
             DEBUG,
@@ -144,7 +146,7 @@ class HAMQTTConnection(MQTTConnection):
                 )
             ),
         )
-        if response_callback:
+        if transaction:
             return await self._async_mqtt_transaction_wait(transaction)  # type: ignore
 
     # interface: self

@@ -198,7 +198,7 @@ class _MQTTTransaction:
         self,
         namespace: str,
         method: str,
-        response_callback: ResponseCallbackType,
+        response_callback: ResponseCallbackType | None,
     ):
         self.namespace = namespace
         self.messageid = uuid4().hex
@@ -353,11 +353,12 @@ class MQTTConnection(Loggable):
                 if mqtt_transaction.namespace == header[mc.KEY_NAMESPACE]:
                     self._mqtt_transactions.pop(messageid, None)
                     mqtt_transaction.response_future.set_result(message)
-                    mqtt_transaction.response_callback(
-                        header[mc.KEY_METHOD] != mc.METHOD_ERROR,
-                        header,
-                        message[mc.KEY_PAYLOAD],
-                    )
+                    if mqtt_transaction.response_callback:
+                        mqtt_transaction.response_callback(
+                            header[mc.KEY_METHOD] != mc.METHOD_ERROR,
+                            header,
+                            message[mc.KEY_PAYLOAD],
+                        )
 
             if device := ApiProfile.devices.get(device_id):
                 if device._mqtt_connection == self:
@@ -512,7 +513,7 @@ class MQTTConnection(Loggable):
             )
 
     def _mqtt_transaction_init(
-        self, namespace: str, method: str, response_callback: ResponseCallbackType
+        self, namespace: str, method: str, response_callback: ResponseCallbackType | None
     ):
         transaction = _MQTTTransaction(namespace, method, response_callback)
         self._mqtt_transactions[transaction.messageid] = transaction
@@ -647,7 +648,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ) -> asyncio.Future[_MQTTTransaction | mqtt.MQTTMessageInfo | bool]:
-        if response_callback:
+        if method in mc.METHOD_ACK_MAP.keys():
             transaction = self._mqtt_transaction_init(
                 namespace, method, response_callback
             )
@@ -743,11 +744,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         result = await self.mqtt_publish(
             device_id, namespace, method, payload, key, response_callback, messageid
         )
-
         if isinstance(result, _MQTTTransaction):
             return await self._async_mqtt_transaction_wait(
                 result, self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT
             )
+        return result
 
     @callback
     def _mqtt_published(self, mid):
