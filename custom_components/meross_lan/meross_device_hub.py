@@ -23,6 +23,7 @@ from .merossclient import (  # mEROSS cONST
     is_device_online,
 )
 from .number import MLHubAdjustNumber
+from .select import MtsTrackedSensor
 from .sensor import MLSensor
 from .switch import MLSwitch
 
@@ -119,6 +120,7 @@ class MerossDeviceHub(MerossDevice):
         self.platforms[MLSensor.PLATFORM] = None
         self.platforms[MLBinarySensor.PLATFORM] = None
         self.platforms[MtsClimate.PLATFORM] = None
+        self.platforms[MtsTrackedSensor.PLATFORM] = None
         self.platforms[MLHubAdjustNumber.PLATFORM] = None
         self.platforms[MLSwitch.PLATFORM] = None
         self.platforms[MLCalendar.PLATFORM] = None
@@ -401,7 +403,6 @@ class MerossSubDevice(MerossDeviceBase):
         self.hub = hub
         self.type = _type
         self.p_digest = p_digest
-        self.platforms = hub.platforms
         # base init after setting some key properties needed for logging
         super().__init__(
             id_,
@@ -410,6 +411,7 @@ class MerossSubDevice(MerossDeviceBase):
             model=_type,
             via_device=next(iter(hub.deviceentry_id["identifiers"])),
         )
+        self.platforms = hub.platforms
         hub.subdevices[id_] = self
         self.sensor_battery = self.build_sensor_c(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
@@ -706,7 +708,6 @@ class MTS100SubDevice(MerossSubDevice):
         "number_comfort_temperature",
         "number_sleep_temperature",
         "number_away_temperature",
-        "number_adjust_temperature",
         "binary_sensor_window",
         "sensor_temperature",
     )
@@ -727,15 +728,6 @@ class MTS100SubDevice(MerossSubDevice):
         self.number_away_temperature = Mts100SetPointNumber(
             self.climate, Mts100Climate.PRESET_AWAY
         )
-        self.number_adjust_temperature = MLHubAdjustNumber(
-            self,
-            mc.KEY_TEMPERATURE,
-            mc.NS_APPLIANCE_HUB_MTS100_ADJUST,
-            MLHubAdjustNumber.DeviceClass.TEMPERATURE,
-            -5,
-            5,
-            0.1,
-        )
         self.binary_sensor_window = self.build_binary_sensor_c(
             MLBinarySensor.DeviceClass.WINDOW
         )
@@ -749,7 +741,6 @@ class MTS100SubDevice(MerossSubDevice):
         self.number_away_temperature: Mts100SetPointNumber = None  # type: ignore
         self.binary_sensor_window: MLBinarySensor = None  # type: ignore
         self.sensor_temperature: MLSensor = None  # type: ignore
-        self.number_adjust_temperature = None  # type: ignore
 
     def _parse_all(self, p_all: dict):
         self._parse_online(p_all.get(mc.KEY_ONLINE, {}))
@@ -783,14 +774,15 @@ class MTS100SubDevice(MerossSubDevice):
     def _parse_temperature(self, p_temperature: dict):
         climate = self.climate
         if isinstance(_t := p_temperature.get(mc.KEY_ROOM), int):
-            climate._attr_current_temperature = _t / 10
+            climate._attr_current_temperature = _t / mc.MTS_TEMP_SCALE
+            climate.select_tracked_sensor.check_tracking()
             self.sensor_temperature.update_state(climate._attr_current_temperature)
         if isinstance(_t := p_temperature.get(mc.KEY_CURRENTSET), int):
-            climate._attr_target_temperature = _t / 10
+            climate._attr_target_temperature = _t / mc.MTS_TEMP_SCALE
         if isinstance(_t := p_temperature.get(mc.KEY_MIN), int):
-            climate._attr_min_temp = _t / 10
+            climate._attr_min_temp = _t / mc.MTS_TEMP_SCALE
         if isinstance(_t := p_temperature.get(mc.KEY_MAX), int):
-            climate._attr_max_temp = _t / 10
+            climate._attr_max_temp = _t / mc.MTS_TEMP_SCALE
         if mc.KEY_HEATING in p_temperature:
             climate._mts_active = p_temperature[mc.KEY_HEATING]
         climate.update_mts_state()

@@ -55,7 +55,7 @@ class Mts200CalibrationNumber(MLConfigNumber):
 
     @property
     def ml_multiplier(self):
-        return 10
+        return mc.MTS_TEMP_SCALE
 
 
 class Mts200OverheatThresholdNumber(MLConfigNumber):
@@ -89,7 +89,7 @@ class Mts200OverheatThresholdNumber(MLConfigNumber):
 
     @property
     def ml_multiplier(self):
-        return 10
+        return mc.MTS_TEMP_SCALE
 
 
 class Mts200ConfigSwitch(MLSwitch):
@@ -164,7 +164,6 @@ class Mts200Climate(MtsClimate):
     number_comfort_temperature: Mts200SetPointNumber
     number_sleep_temperature: Mts200SetPointNumber
     number_away_temperature: Mts200SetPointNumber
-    number_calibration_value: Mts200CalibrationNumber
     switch_overheat_onoff: Mts200ConfigSwitch
     sensor_overheat_warning: MLSensor
     number_overheat_value: Mts200OverheatThresholdNumber
@@ -177,7 +176,6 @@ class Mts200Climate(MtsClimate):
         "number_comfort_temperature",
         "number_sleep_temperature",
         "number_away_temperature",
-        "number_calibration_value",
         "switch_overheat_onoff",
         "sensor_overheat_warning",
         "number_overheat_value",
@@ -187,7 +185,15 @@ class Mts200Climate(MtsClimate):
     )
 
     def __init__(self, manager: ThermostatMixin, channel: object):
-        super().__init__(manager, channel, Mts200Schedule(manager, channel, self))
+        super().__init__(
+            manager,
+            channel,
+            Mts200Schedule(manager, channel, self),
+            Mts200CalibrationNumber(
+                manager,
+                channel,
+            ),
+        )
         self._mts_summermode = None
         self.number_comfort_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_COMFORT
@@ -197,11 +203,6 @@ class Mts200Climate(MtsClimate):
         )
         self.number_away_temperature = Mts200SetPointNumber(
             self, MtsClimate.PRESET_AWAY
-        )
-        # calibration
-        self.number_calibration_value = Mts200CalibrationNumber(
-            manager,
-            channel,
         )
         # overheat protection
         self.switch_overheat_onoff = Mts200ConfigSwitch(
@@ -229,14 +230,17 @@ class Mts200Climate(MtsClimate):
         )
 
         if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in manager.descriptor.ability:
-            self._attr_hvac_modes = [MtsClimate.HVACMode.OFF, MtsClimate.HVACMode.HEAT, MtsClimate.HVACMode.COOL]
+            self._attr_hvac_modes = [
+                MtsClimate.HVACMode.OFF,
+                MtsClimate.HVACMode.HEAT,
+                MtsClimate.HVACMode.COOL,
+            ]
 
     # interface: MtsClimate
     async def async_shutdown(self):
         self.number_comfort_temperature = None  # type: ignore
         self.number_sleep_temperature = None  # type: ignore
         self.number_away_temperature = None  # type: ignore
-        self.number_calibration_value = None  # type: ignore
         self.switch_overheat_onoff = None  # type: ignore
         self.sensor_overheat_warning = None  # type: ignore
         self.number_overheat_value = None  # type: ignore
@@ -297,7 +301,11 @@ class Mts200Climate(MtsClimate):
         await self.manager.async_request(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
-            {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, key: int(t * 10)}]},
+            {
+                mc.KEY_MODE: [
+                    {mc.KEY_CHANNEL: self.channel, key: int(t * mc.MTS_TEMP_SCALE)}
+                ]
+            },
             _ack_callback,
         )
 
@@ -360,14 +368,14 @@ class Mts200Climate(MtsClimate):
     def _parse_calibration(self, payload: dict):
         """{"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}"""
         if mc.KEY_MIN in payload:
-            self.number_calibration_value._attr_native_min_value = (
-                payload[mc.KEY_MIN] / 10
+            self.number_adjust_temperature._attr_native_min_value = (
+                payload[mc.KEY_MIN] / mc.MTS_TEMP_SCALE
             )
         if mc.KEY_MAX in payload:
-            self.number_calibration_value._attr_native_max_value = (
-                payload[mc.KEY_MAX] / 10
+            self.number_adjust_temperature._attr_native_max_value = (
+                payload[mc.KEY_MAX] / mc.MTS_TEMP_SCALE
             )
-        self.number_calibration_value.update_native_value(payload[mc.KEY_VALUE])
+        self.number_adjust_temperature.update_native_value(payload[mc.KEY_VALUE])
 
     def _parse_mode(self, payload: dict):
         """{
@@ -393,13 +401,14 @@ class Mts200Climate(MtsClimate):
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE]
         if isinstance(_t := payload.get(mc.KEY_CURRENTTEMP), int):
-            self._attr_current_temperature = _t / 10
+            self._attr_current_temperature = _t / mc.MTS_TEMP_SCALE
+            self.select_tracked_sensor.check_tracking()
         if isinstance(_t := payload.get(mc.KEY_TARGETTEMP), int):
-            self._attr_target_temperature = _t / 10
+            self._attr_target_temperature = _t / mc.MTS_TEMP_SCALE
         if isinstance(_t := payload.get(mc.KEY_MIN), int):
-            self._attr_min_temp = _t / 10
+            self._attr_min_temp = _t / mc.MTS_TEMP_SCALE
         if isinstance(_t := payload.get(mc.KEY_MAX), int):
-            self._attr_max_temp = _t / 10
+            self._attr_max_temp = _t / mc.MTS_TEMP_SCALE
         if isinstance(_t := payload.get(mc.KEY_HEATTEMP), int):
             self.number_comfort_temperature.update_native_value(_t)
         if isinstance(_t := payload.get(mc.KEY_COOLTEMP), int):
@@ -419,14 +428,18 @@ class Mts200Climate(MtsClimate):
                 mc.MTS200_OVERHEAT_WARNING_MAP.get(_warning, _warning)
             )
         if mc.KEY_MIN in payload:
-            self.number_overheat_value._attr_native_min_value = payload[mc.KEY_MIN] / 10
+            self.number_overheat_value._attr_native_min_value = (
+                payload[mc.KEY_MIN] / mc.MTS_TEMP_SCALE
+            )
         if mc.KEY_MAX in payload:
-            self.number_overheat_value._attr_native_max_value = payload[mc.KEY_MAX] / 10
+            self.number_overheat_value._attr_native_max_value = (
+                payload[mc.KEY_MAX] / mc.MTS_TEMP_SCALE
+            )
         if mc.KEY_VALUE in payload:
             self.number_overheat_value.update_native_value(payload[mc.KEY_VALUE])
         if mc.KEY_CURRENTTEMP in payload:
             self.sensor_externalsensor_temperature.update_state(
-                payload[mc.KEY_CURRENTTEMP] / 10
+                payload[mc.KEY_CURRENTTEMP] / mc.MTS_TEMP_SCALE
             )
 
     def _parse_sensor(self, payload: dict):

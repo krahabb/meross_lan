@@ -388,6 +388,8 @@ ROLLERSHUTTER_STATE_IDLE = 0
 ROLLERSHUTTER_STATE_OPENING = 1
 ROLLERSHUTTER_STATE_CLOSING = 2
 
+MTS_TEMP_SCALE = 10  # native mts temperatures expressed in tenth of °C
+
 # mts100 (and the likes..) valves mode
 MTS100_MODE_CUSTOM = 0
 MTS100_MODE_HEAT = 1

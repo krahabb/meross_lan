@@ -6,6 +6,7 @@ from ..calendar import MtsSchedule
 from ..climate import MtsClimate, MtsSetPointNumber
 from ..helpers import reverse_lookup
 from ..merossclient import const as mc
+from ..number import MLHubAdjustNumber
 
 if typing.TYPE_CHECKING:
     from ..meross_device_hub import MTS100SubDevice
@@ -38,7 +39,20 @@ class Mts100Climate(MtsClimate):
 
     def __init__(self, manager: MTS100SubDevice):
         self._attr_extra_state_attributes = {}
-        super().__init__(manager, manager.id, Mts100Schedule(manager, manager.id, self))
+        super().__init__(
+            manager,
+            manager.id,
+            Mts100Schedule(manager, manager.id, self),
+            MLHubAdjustNumber(
+                manager,
+                mc.KEY_TEMPERATURE,
+                mc.NS_APPLIANCE_HUB_MTS100_ADJUST,
+                MLHubAdjustNumber.DeviceClass.TEMPERATURE,
+                -5,
+                5,
+                0.1,
+            ),
+        )
 
     @property
     def scheduleBMode(self):
@@ -93,7 +107,9 @@ class Mts100Climate(MtsClimate):
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
             {
-                mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.id, key: int(t * 10)}]
+                mc.KEY_TEMPERATURE: [
+                    {mc.KEY_ID: self.id, key: int(t * mc.MTS_TEMP_SCALE)}
+                ]
             },  # the device rounds down ?!
             _ack_callback,
         )
@@ -119,7 +135,9 @@ class Mts100Climate(MtsClimate):
         if self._mts_onoff:
             self._attr_hvac_mode = MtsClimate.HVACMode.HEAT
             self._attr_hvac_action = (
-                MtsClimate.HVACAction.HEATING if self._mts_active else MtsClimate.HVACAction.IDLE
+                MtsClimate.HVACAction.HEATING
+                if self._mts_active
+                else MtsClimate.HVACAction.IDLE
             )
         else:
             self._attr_hvac_mode = MtsClimate.HVACMode.OFF

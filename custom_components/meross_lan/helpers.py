@@ -675,11 +675,9 @@ class EntityManager(Loggable):
         """
         self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
         self.unschedule_entry_reload()
-        ApiProfile.managers.pop(self.config_entry_id, None)
         for entity in self.entities.values():
             await entity.async_shutdown()
         self.entities.clear()
-        self.platforms.clear()
 
     async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
         assert not self._unsub_entry_update_listener

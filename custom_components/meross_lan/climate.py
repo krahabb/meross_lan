@@ -8,6 +8,7 @@ from homeassistant.components import climate
 from . import meross_entity as me
 from .merossclient import const as mc  # mEROSS cONST
 from .number import MLConfigNumber
+from .select import MtsTrackedSensor
 
 if typing.TYPE_CHECKING:
     from typing import ClassVar, Final
@@ -41,6 +42,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PRESET_AUTO: Final = "auto"
 
     manager: MerossDeviceBase
+    number_adjust_temperature: MLConfigNumber
     schedule: MtsSchedule
 
     _attr_preset_modes: Final = [
@@ -74,10 +76,18 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
+        "number_adjust_temperature",
         "schedule",
+        "select_tracked_sensor",
     )
 
-    def __init__(self, manager: MerossDeviceBase, channel: object, schedule: MtsSchedule):
+    def __init__(
+        self,
+        manager: MerossDeviceBase,
+        channel: object,
+        schedule: MtsSchedule,
+        number_adjust_temperature: MLConfigNumber,
+    ):
         self._attr_current_temperature = None
         self._attr_hvac_action = None
         self._attr_hvac_mode = None
@@ -89,13 +99,19 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_active = None
         self._mts_mode: int | None = None
         self._mts_onoff = None
+        self.number_adjust_temperature = number_adjust_temperature
         self.schedule = schedule
+        self.select_tracked_sensor = MtsTrackedSensor(manager, channel, self)
         super().__init__(manager, channel, None, None)
 
+    # interface: MerossEntity
     async def async_shutdown(self):
+        self.select_tracked_sensor: MtsTrackedSensor = None  # type: ignore
         self.schedule = None  # type: ignore
+        self.number_adjust_temperature = None  # type: ignore
         await super().async_shutdown()
 
+    # interface: ClimateEntity
     @property
     def supported_features(self):
         return self._attr_supported_features
@@ -160,6 +176,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     async def async_set_temperature(self, **kwargs):
         raise NotImplementedError()
 
+    # interface: self
     async def async_request_onoff(self, onoff: int):
         raise NotImplementedError()
 
@@ -216,6 +233,4 @@ class MtsSetPointNumber(MLConfigNumber):
 
     @property
     def ml_multiplier(self):
-        return 10
-
-
+        return mc.MTS_TEMP_SCALE

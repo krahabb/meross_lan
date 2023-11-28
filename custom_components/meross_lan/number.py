@@ -59,6 +59,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     _attr_native_min_value: float
     _attr_native_step: float
     _attr_native_unit_of_measurement: str | None
+    _attr_state: int | float | None
 
     # customize the request payload for different
     # devices api. see 'async_set_native_value' to see how
