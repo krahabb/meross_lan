@@ -161,49 +161,36 @@ class Mts200Climate(MtsClimate):
     }
 
     manager: ThermostatMixin
-    number_comfort_temperature: Mts200SetPointNumber
-    number_sleep_temperature: Mts200SetPointNumber
-    number_away_temperature: Mts200SetPointNumber
     switch_overheat_onoff: Mts200ConfigSwitch
     sensor_overheat_warning: MLSensor
     number_overheat_value: Mts200OverheatThresholdNumber
     switch_sensor_mode: Mts200ConfigSwitch
     sensor_externalsensor_temperature: MLSensor
-    binary_sensor_windowOpened: MLBinarySensor
 
     __slots__ = (
         "_mts_summermode",
-        "number_comfort_temperature",
-        "number_sleep_temperature",
-        "number_away_temperature",
         "switch_overheat_onoff",
         "sensor_overheat_warning",
         "number_overheat_value",
         "switch_sensor_mode",
         "sensor_externalsensor_temperature",
-        "binary_sensor_windowOpened",
     )
 
     def __init__(self, manager: ThermostatMixin, channel: object):
         super().__init__(
             manager,
             channel,
-            Mts200Schedule(manager, channel, self),
+            MLBinarySensor(
+                manager, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
+            ),
             Mts200CalibrationNumber(
                 manager,
                 channel,
             ),
+            Mts200SetPointNumber,
+            Mts200Schedule,
         )
         self._mts_summermode = None
-        self.number_comfort_temperature = Mts200SetPointNumber(
-            self, MtsClimate.PRESET_COMFORT
-        )
-        self.number_sleep_temperature = Mts200SetPointNumber(
-            self, MtsClimate.PRESET_SLEEP
-        )
-        self.number_away_temperature = Mts200SetPointNumber(
-            self, MtsClimate.PRESET_AWAY
-        )
         # overheat protection
         self.switch_overheat_onoff = Mts200ConfigSwitch(
             self, "overheat protection", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
@@ -224,11 +211,6 @@ class Mts200Climate(MtsClimate):
         self.sensor_externalsensor_temperature = MLSensor(
             manager, channel, "external sensor", MLSensor.DeviceClass.TEMPERATURE
         )
-        # windowOpened
-        self.binary_sensor_windowOpened = MLBinarySensor(
-            manager, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
-        )
-
         if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in manager.descriptor.ability:
             self._attr_hvac_modes = [
                 MtsClimate.HVACMode.OFF,
@@ -238,15 +220,11 @@ class Mts200Climate(MtsClimate):
 
     # interface: MtsClimate
     async def async_shutdown(self):
-        self.number_comfort_temperature = None  # type: ignore
-        self.number_sleep_temperature = None  # type: ignore
-        self.number_away_temperature = None  # type: ignore
         self.switch_overheat_onoff = None  # type: ignore
         self.sensor_overheat_warning = None  # type: ignore
         self.number_overheat_value = None  # type: ignore
         self.switch_sensor_mode = None  # type: ignore
         self.sensor_externalsensor_temperature = None  # type: ignore
-        self.binary_sensor_windowOpened = None  # type: ignore
         await super().async_shutdown()
 
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
@@ -456,18 +434,15 @@ class Mts200Climate(MtsClimate):
 
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
-        self.binary_sensor_windowOpened.update_onoff(payload[mc.KEY_STATUS])
+        self.binary_sensor_window.update_onoff(payload[mc.KEY_STATUS])
 
 
 class Mts200Schedule(MtsSchedule):
-    def __init__(self, manager: ThermostatMixin, channel, climate: Mts200Climate):
-        super().__init__(
-            manager,
-            channel,
-            climate,
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE,
-            mc.KEY_CHANNEL,
-        )
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE
+    key_channel = mc.KEY_CHANNEL
+
+    def __init__(self, climate: Mts200Climate):
+        super().__init__(climate)
 
 
 class ThermostatMixin(

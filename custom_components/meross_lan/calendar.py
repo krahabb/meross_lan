@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import dataclasses
 from datetime import datetime, timedelta
 import re
@@ -6,16 +7,16 @@ import typing
 
 from homeassistant.components import calendar
 from homeassistant.components.calendar.const import (
+    EVENT_END,
     EVENT_RRULE,
     EVENT_START,
-    EVENT_END,
     EVENT_SUMMARY,
 )
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt
 
-from .climate import MtsClimate
 from . import meross_entity as me
+from .climate import MtsClimate
 from .helpers import clamp
 from .merossclient import const as mc
 
@@ -97,8 +98,9 @@ class MtsScheduleEntry:
 class MtsSchedule(MLCalendar):
     manager: MerossDeviceBase
     climate: typing.Final[MtsClimate]
-    namespace: typing.Final[str]
-    key_channel: typing.Final[str]
+
+    namespace: str  # set in descendant class def
+    key_channel: str  # set in descendant class def
 
     _attr_entity_category = me.EntityCategory.CONFIG
     _attr_state: MtsScheduleNativeType | None
@@ -112,8 +114,6 @@ class MtsSchedule(MLCalendar):
 
     __slots__ = (
         "climate",
-        "namespace",
-        "key_channel",
         "_flatten",
         "_schedule",
         "_schedule_unit_time",
@@ -122,16 +122,9 @@ class MtsSchedule(MLCalendar):
 
     def __init__(
         self,
-        manager: MerossDeviceBase,
-        channel,
         climate: MtsClimate,
-        namespace: str,
-        key_channel: str,
     ):
-        # BEWARE! the climate entity is not initialized so don't use it here
         self.climate = climate
-        self.namespace = namespace
-        self.key_channel = key_channel
         self._flatten = True
         # save a flattened version of the device schedule to ease/optimize CalendarEvent management
         # since the original schedule has a fixed number of contiguous events spanning the day(s) (6 on my MTS100)
@@ -148,7 +141,7 @@ class MtsSchedule(MLCalendar):
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
         self._attr_extra_state_attributes = {}
-        super().__init__(manager, channel, mc.KEY_SCHEDULE, None)
+        super().__init__(climate.manager, climate.channel, mc.KEY_SCHEDULE, None)
 
     # interface: MerossEntity
     async def async_shutdown(self):
@@ -473,7 +466,6 @@ class MtsSchedule(MLCalendar):
         return True
 
     async def _internal_create_event(self, **kwargs):
-
         schedule = self.schedule
         if not schedule:
             raise Exception("Internal state unavailable")
@@ -486,9 +478,7 @@ class MtsSchedule(MLCalendar):
             event_temperature,
         ) = self._extract_rfc5545_info(kwargs)
         # allow only schedule up to midnight: i.e. not spanning multiple days
-        event_day_start = event_start.replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        event_day_start = event_start.replace(hour=0, minute=0, second=0, microsecond=0)
         event_minutes_start = event_start.hour * 60 + event_start.minute
         event_minutes_start -= event_minutes_start % self._schedule_unit_time
         event_day_end = event_day_start + timedelta(days=1)
@@ -499,9 +489,7 @@ class MtsSchedule(MLCalendar):
         else:
             # round up to the next self._scheduleunittime interval
             event_minutes_end = event_end.hour * 60 + event_end.minute
-            event_minutes_end_remainder = (
-                event_minutes_end % self._schedule_unit_time
-            )
+            event_minutes_end_remainder = event_minutes_end % self._schedule_unit_time
             if event_minutes_end_remainder:
                 event_minutes_end += (
                     self._schedule_unit_time - event_minutes_end_remainder
@@ -555,10 +543,7 @@ class MtsSchedule(MLCalendar):
                     _event_minutes_duration = event_minutes_duration
                     while _event_minutes_duration:
                         schedule_entry_minutes_duration = schedule_entry[0]
-                        if (
-                            schedule_entry_minutes_duration
-                            > _event_minutes_duration
-                        ):
+                        if schedule_entry_minutes_duration > _event_minutes_duration:
                             # schedule entry ends after our new event: just resize
                             schedule_entry[0] = (
                                 schedule_entry_minutes_duration
@@ -568,14 +553,10 @@ class MtsSchedule(MLCalendar):
                         # schedule_entry totally overlapped from newer so we'll discard this
                         # and check the next
                         weekday_schedule.pop(schedule_index)
-                        if (
-                            _event_minutes_duration
-                            == schedule_entry_minutes_duration
-                        ):
+                        if _event_minutes_duration == schedule_entry_minutes_duration:
                             break  # exit before accessing maybe non-existing schedule_index
                         assert (
-                            _event_minutes_duration
-                            >= schedule_entry_minutes_duration
+                            _event_minutes_duration >= schedule_entry_minutes_duration
                         ), "Something wrong in our schedule"
                         _event_minutes_duration -= schedule_entry_minutes_duration
                         schedule_entry = weekday_schedule[schedule_index]
@@ -624,9 +605,7 @@ class MtsSchedule(MLCalendar):
                                 )
                                 break
                             weekday_schedule.pop(schedule_index)
-                            _event_minutes_duration -= (
-                                schedule_entry_minutes_duration
-                            )
+                            _event_minutes_duration -= schedule_entry_minutes_duration
                         assert (
                             _event_minutes_duration == 0
                         ), "Something wrong in our schedule"
@@ -645,9 +624,7 @@ class MtsSchedule(MLCalendar):
                     schedule_index_insert -= 1
                     schedule_entry = weekday_schedule.pop(schedule_index_insert)
                     # add its duration to its previous
-                    weekday_schedule[schedule_index_insert - 1][
-                        0
-                    ] += schedule_entry[0]
+                    weekday_schedule[schedule_index_insert - 1][0] += schedule_entry[0]
                     continue
                 schedule_entries_after = (
                     len(weekday_schedule) - schedule_index_insert - 1
@@ -656,9 +633,7 @@ class MtsSchedule(MLCalendar):
                     # remove event after
                     schedule_entry = weekday_schedule.pop(schedule_index_insert + 1)
                     # add its duration to its next
-                    weekday_schedule[schedule_index_insert + 1][
-                        0
-                    ] += schedule_entry[0]
+                    weekday_schedule[schedule_index_insert + 1][0] += schedule_entry[0]
                     continue
                 # we're left with an array of 2 entry where 1 is the newly added so
                 # we discard the other and enlarge the last addition to cover the full day

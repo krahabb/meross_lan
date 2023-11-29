@@ -104,18 +104,18 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         self.update_state(value / self.ml_multiplier)
 
     async def async_set_native_value(self, value: float):
-        device_value = int(value * self.ml_multiplier)
+        value = round(value * self.ml_multiplier)
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
-                self.update_native_value(device_value)
+                self.update_native_value(value)
 
         await self.manager.async_request(
             self.namespace,
             mc.METHOD_SET,
             {
                 self.key_namespace: [
-                    {self.key_channel: self.channel, self.key_value: device_value}
+                    {self.key_channel: self.channel, self.key_value: value}
                 ]
             },
             _ack_callback,

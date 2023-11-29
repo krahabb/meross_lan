@@ -42,7 +42,7 @@ class Mts100Climate(MtsClimate):
         super().__init__(
             manager,
             manager.id,
-            Mts100Schedule(manager, manager.id, self),
+            manager.build_binary_sensor_window(),
             MLHubAdjustNumber(
                 manager,
                 mc.KEY_TEMPERATURE,
@@ -52,6 +52,8 @@ class Mts100Climate(MtsClimate):
                 5,
                 0.1,
             ),
+            Mts100SetPointNumber,
+            Mts100Schedule,
         )
 
     @property
@@ -91,15 +93,18 @@ class Mts100Climate(MtsClimate):
                 await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        t = kwargs[Mts100Climate.ATTR_TEMPERATURE]
+        device_temperature = round(
+            kwargs[Mts100Climate.ATTR_TEMPERATURE] * mc.MTS_TEMP_SCALE
+        )
         key = Mts100Climate.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or Mts100Climate.PRESET_CUSTOM
         ]
 
         def _ack_callback(acknowledge: bool, header: dict, payload: dict):
             if acknowledge:
-                self._attr_target_temperature = t
-                self.update_mts_state()
+                self._parse_temperature(payload[mc.KEY_TEMPERATURE][0])
+                # self._attr_target_temperature = device_temperature / mc.MTS_TEMP_SCALE
+                # self.update_mts_state()
 
         # when sending a temp this way the device will automatically
         # exit auto mode if needed
@@ -107,9 +112,7 @@ class Mts100Climate(MtsClimate):
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
             {
-                mc.KEY_TEMPERATURE: [
-                    {mc.KEY_ID: self.id, key: int(t * mc.MTS_TEMP_SCALE)}
-                ]
+                mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.id, key: device_temperature}]
             },  # the device rounds down ?!
             _ack_callback,
         )
@@ -145,6 +148,39 @@ class Mts100Climate(MtsClimate):
 
         super().update_mts_state()
 
+    # message handlers
+    def _parse_temperature(self, p_temperature: dict):
+        if mc.KEY_ROOM in p_temperature:
+            self._attr_current_temperature = (
+                p_temperature[mc.KEY_ROOM] / mc.MTS_TEMP_SCALE
+            )
+            self.select_tracked_sensor.check_tracking()
+            self.manager.sensor_temperature.update_state(self._attr_current_temperature)
+        if mc.KEY_CURRENTSET in p_temperature:
+            self._attr_target_temperature = (
+                p_temperature[mc.KEY_CURRENTSET] / mc.MTS_TEMP_SCALE
+            )
+        if mc.KEY_MIN in p_temperature:
+            self._attr_min_temp = p_temperature[mc.KEY_MIN] / mc.MTS_TEMP_SCALE
+        if mc.KEY_MAX in p_temperature:
+            self._attr_max_temp = p_temperature[mc.KEY_MAX] / mc.MTS_TEMP_SCALE
+        if mc.KEY_HEATING in p_temperature:
+            self._mts_active = p_temperature[mc.KEY_HEATING]
+        if mc.KEY_COMFORT in p_temperature:
+            self.number_comfort_temperature.update_native_value(
+                p_temperature[mc.KEY_COMFORT]
+            )
+        if mc.KEY_ECONOMY in p_temperature:
+            self.number_sleep_temperature.update_native_value(
+                p_temperature[mc.KEY_ECONOMY]
+            )
+        if mc.KEY_AWAY in p_temperature:
+            self.number_away_temperature.update_native_value(p_temperature[mc.KEY_AWAY])
+        if mc.KEY_OPENWINDOW in p_temperature:
+            self.binary_sensor_window.update_onoff(p_temperature[mc.KEY_OPENWINDOW])
+
+        self.update_mts_state()
+
 
 class Mts100SetPointNumber(MtsSetPointNumber):
     """
@@ -157,10 +193,11 @@ class Mts100SetPointNumber(MtsSetPointNumber):
 
 
 class Mts100Schedule(MtsSchedule):
-    def __init__(self, manager: MTS100SubDevice, channel, climate: Mts100Climate):
-        super().__init__(
-            manager, channel, climate, mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, mc.KEY_ID
-        )
-        self._schedule_unit_time = manager.hub.descriptor.ability.get(
+    namespace = mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB
+    key_channel = mc.KEY_ID
+
+    def __init__(self, climate: Mts100Climate):
+        super().__init__(climate)
+        self._schedule_unit_time = climate.manager.hub.descriptor.ability.get(
             mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, {}
         ).get(mc.KEY_SCHEDULEUNITTIME, 15)

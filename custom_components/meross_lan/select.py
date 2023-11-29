@@ -1,25 +1,29 @@
 from __future__ import annotations
 
+from logging import DEBUG
+from time import time
 import typing
 
 from homeassistant import const as hac
 from homeassistant.components import select
+from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.util.unit_conversion import TemperatureConverter
 
-from .helpers import EntityManager, get_entity_last_state_available
 from . import meross_entity as me
+from .helpers import get_entity_last_state_available, schedule_callback
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import HomeAssistant, State
     from homeassistant.helpers.entity_component import EntityComponent
     from homeassistant.helpers.event import EventStateChangedData
     from homeassistant.helpers.typing import EventType
 
-    from .devices.mod100 import DiffuserMixin
     from .climate import MtsClimate
+    from .devices.mod100 import DiffuserMixin
     from .meross_device import MerossDevice, ResponseCallbackType
 
 
@@ -148,7 +152,8 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
 
     PLATFORM = select.DOMAIN
 
-    ATTR_TRACKED_STATE: typing.Final = "tracked_state"
+    TRACKING_DEADTIME = 300
+    """minimum delay (dead-time) between trying to adjust the climate entity"""
 
     climate: MtsClimate
     _attr_entity_category = me.EntityCategory.CONFIG
@@ -157,26 +162,27 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     __slots__ = (
         "climate",
         "_attr_options",
+        "_delayed_tracking_timestamp",
         "_tracked_state",
-        "_untrack_state_callback",
+        "_unsub_track_state",
+        "_unsub_tracking_delayed",
     )
 
     def __init__(
         self,
-        manager: EntityManager,
-        channel: object | None,
         climate: MtsClimate,
     ):
         # BEWARE! the climate entity is not initialized so don't use it here
         self.climate = climate
         self._attr_options = []
+        self._delayed_tracking_timestamp = 0
         self._tracked_state = None
-        self._untrack_state_callback = None
-        super().__init__(manager, channel, "tracked_sensor", None)
+        self._unsub_track_state = None
+        self._unsub_tracking_delayed = None
+        super().__init__(climate.manager, climate.channel, "tracked_sensor", None)
 
     # interface: MerossEntity
     async def async_shutdown(self):
-        self._tracked_state = None
         self.climate = None  # type: ignore
         await super().async_shutdown()
 
@@ -185,11 +191,13 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         return True
 
     @property
-    def extra_state_attributes(self):
-        return {self.ATTR_TRACKED_STATE: self._tracked_state}
+    def entity_registry_enabled_default(self):
+        return False
 
     def set_unavailable(self):
-        pass
+        # reset the timeout 8and the eventual callback) when the device
+        # offlines so we promptly re-track when the device onlines again
+        self._reset_delayed_tracking(0)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -227,57 +235,120 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         self._start_tracking()
 
     # interface: self
-    @property
-    def is_tracking(self):
-        return bool(self._untrack_state_callback)
-
     def check_tracking(self):
         """
         called when either the climate or the tracked_entity has a new
         temperature reading in order to see if the climate needs to be adjusted
         """
-        if not self._tracked_state or self._tracked_state.state in (
+        tracked_state = self._tracked_state
+        if not tracked_state or tracked_state.state in (
             hac.STATE_UNAVAILABLE,
             hac.STATE_UNKNOWN,
         ):
             return
         if not self.manager.online:
             return
+        epoch = time()
+        delay = self._delayed_tracking_timestamp - epoch
+        if delay > 0:
+            if not self._unsub_tracking_delayed:
+                self._unsub_tracking_delayed = schedule_callback(
+                    self.hass, delay, self._delayed_tracking_callback
+                )
+            return
         climate = self.climate
-        with self.exception_warning("check_tracking"):
-            tracked_temperature = float(self._tracked_state.state)
-            """TODO: ensure tracked temperature is °C"""
+        with self.exception_warning("check_tracking", timeout=900):
+            tracked_temperature = float(tracked_state.state)
+            # ensure tracked_temperature is °C
+            tracked_temperature_unit = tracked_state.attributes.get(
+                hac.ATTR_UNIT_OF_MEASUREMENT
+            )
+            if not tracked_temperature_unit:
+                raise ValueError("tracked entity has no unit of measure")
+            if tracked_temperature_unit != climate.TEMP_CELSIUS:
+                tracked_temperature = TemperatureConverter.convert(
+                    tracked_temperature,
+                    tracked_temperature_unit,
+                    climate.TEMP_CELSIUS,
+                )
             error_temperature: float = tracked_temperature - climate.current_temperature  # type: ignore
-            native_error_temperature = error_temperature * mc.MTS_TEMP_SCALE
-            if native_error_temperature:
-                number_adjust_temperature = climate.number_adjust_temperature
-                current_adjust_temperature = number_adjust_temperature.native_value
-                if current_adjust_temperature is not None:
-                    adjust_temperature = current_adjust_temperature + error_temperature
-                    self.hass.async_create_task(
-                        number_adjust_temperature.async_set_native_value(
-                            adjust_temperature
-                        )
-                    )
+            native_error_temperature = round(error_temperature * mc.MTS_TEMP_SCALE)
+            if not native_error_temperature:
+                # tracking error within device resolution limits..we're ok
+                return
+            number_adjust_temperature = climate.number_adjust_temperature
+            current_adjust_temperature = number_adjust_temperature.native_value
+            if current_adjust_temperature is None:
+                # adjust entity not available (yet?) should be transitory - just a safety check
+                return
+            adjust_temperature = current_adjust_temperature + error_temperature
+            # check if our correction is within the native adjust limits
+            # and avoid sending (useless) adjust commands
+            if adjust_temperature > number_adjust_temperature.native_max_value:
+                if (
+                    current_adjust_temperature
+                    >= number_adjust_temperature.native_max_value
+                ):
+                    return
+                adjust_temperature = number_adjust_temperature.native_max_value
+            elif adjust_temperature < number_adjust_temperature.native_min_value:
+                if (
+                    current_adjust_temperature
+                    <= number_adjust_temperature.native_min_value
+                ):
+                    return
+                adjust_temperature = number_adjust_temperature.native_min_value
+            self._reset_delayed_tracking(epoch + self.TRACKING_DEADTIME)
+            self.hass.async_create_task(
+                number_adjust_temperature.async_set_native_value(adjust_temperature)
+            )
+            self.log(
+                DEBUG,
+                "applying correction of %s %s to %s",
+                adjust_temperature,
+                climate.TEMP_CELSIUS,
+                climate.entity_id,
+            )
 
     def _start_tracking(self):
         self._stop_tracking()
         entity_id = self._attr_state
         if entity_id and entity_id != hac.STATE_UNKNOWN:
 
-            def _callback(event: EventType[EventStateChangedData]):
+            @callback
+            def _track_state_callback(event: EventType[EventStateChangedData]):
                 with self.exception_warning("processing state update event"):
-                    self._tracked_state = event.data.get("new_state")
-                    self.check_tracking()
+                    self._update_tracked_state(event.data.get("new_state"))
 
-            self._untrack_state_callback = async_track_state_change_event(
-                self.hass, entity_id, _callback
+            self._unsub_track_state = async_track_state_change_event(
+                self.hass, entity_id, _track_state_callback
             )
-            self._tracked_state = self.hass.states.get(entity_id)
-            self.check_tracking()
+            self._update_tracked_state(self.hass.states.get(entity_id))
 
     def _stop_tracking(self):
-        if self._untrack_state_callback:
-            self._untrack_state_callback()
-            self._untrack_state_callback = None
+        if self._unsub_track_state:
+            self._unsub_track_state()
+            self._unsub_track_state = None
             self._tracked_state = None
+            self._reset_delayed_tracking(0)
+
+    def _update_tracked_state(self, tracked_state: State | None):
+        self._tracked_state = tracked_state
+        self.check_tracking()
+
+    @callback
+    def _delayed_tracking_callback(self):
+        self._unsub_tracking_delayed = None
+        self.check_tracking()
+
+    def _reset_delayed_tracking(self, delayed_tracking_timestamp):
+        """
+        cancels the delayed callback (if pending). This is called when either
+        the tracking is fired (and a new deadtime is set) or when tracking
+        is disabled for whatever reason (offlining, config change, ...)
+        and prepares the state for eventually rescheduling the callback
+        """
+        self._delayed_tracking_timestamp = delayed_tracking_timestamp
+        if self._unsub_tracking_delayed:
+            self._unsub_tracking_delayed.cancel()
+            self._unsub_tracking_delayed = None

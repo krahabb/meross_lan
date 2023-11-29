@@ -16,8 +16,9 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import MerossDeviceBase
+    from .binary_sensor import MLBinarySensor
     from .calendar import MtsSchedule
+    from .meross_device import MerossDeviceBase
 
 
 async def async_setup_entry(
@@ -42,8 +43,13 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PRESET_AUTO: Final = "auto"
 
     manager: MerossDeviceBase
+    binary_sensor_window: MLBinarySensor
     number_adjust_temperature: MLConfigNumber
+    number_away_temperature: MtsSetPointNumber
+    number_comfort_temperature: MtsSetPointNumber
+    number_sleep_temperature: MtsSetPointNumber
     schedule: MtsSchedule
+    select_tracked_sensor: MtsTrackedSensor
 
     _attr_preset_modes: Final = [
         PRESET_CUSTOM,
@@ -76,7 +82,11 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
+        "binary_sensor_window",
         "number_adjust_temperature",
+        "number_comfort_temperature",
+        "number_sleep_temperature",
+        "number_away_temperature",
         "schedule",
         "select_tracked_sensor",
     )
@@ -85,8 +95,10 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self,
         manager: MerossDeviceBase,
         channel: object,
-        schedule: MtsSchedule,
+        binary_sensor_window: MLBinarySensor,
         number_adjust_temperature: MLConfigNumber,
+        preset_number_class: typing.Type[MtsSetPointNumber],
+        calendar_class: typing.Type[MtsSchedule],
     ):
         self._attr_current_temperature = None
         self._attr_hvac_action = None
@@ -99,16 +111,28 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_active = None
         self._mts_mode: int | None = None
         self._mts_onoff = None
-        self.number_adjust_temperature = number_adjust_temperature
-        self.schedule = schedule
-        self.select_tracked_sensor = MtsTrackedSensor(manager, channel, self)
         super().__init__(manager, channel, None, None)
+        self.binary_sensor_window = binary_sensor_window
+        self.number_adjust_temperature = number_adjust_temperature
+        self.number_away_temperature = preset_number_class(self, MtsClimate.PRESET_AWAY)
+        self.number_comfort_temperature = preset_number_class(
+            self, MtsClimate.PRESET_COMFORT
+        )
+        self.number_sleep_temperature = preset_number_class(
+            self, MtsClimate.PRESET_SLEEP
+        )
+        self.schedule = calendar_class(self)
+        self.select_tracked_sensor = MtsTrackedSensor(self)
 
     # interface: MerossEntity
     async def async_shutdown(self):
-        self.select_tracked_sensor: MtsTrackedSensor = None  # type: ignore
+        self.select_tracked_sensor = None  # type: ignore
         self.schedule = None  # type: ignore
+        self.number_sleep_temperature = None  # type: ignore
+        self.number_comfort_temperature = None  # type: ignore
+        self.number_away_temperature = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
+        self.binary_sensor_window = None  # type: ignore
         await super().async_shutdown()
 
     # interface: ClimateEntity
@@ -202,8 +226,10 @@ class MtsSetPointNumber(MLConfigNumber):
         MtsClimate.PRESET_AWAY: "mdi:bag-checked",
     }
 
+    __slots__ = ("climate",)
+
     def __init__(self, climate: MtsClimate, preset_mode: str):
-        self._climate = climate
+        self.climate = climate
         self._preset_mode = preset_mode
         self.key_value = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
         self._attr_icon = MtsSetPointNumber.PRESET_TO_ICON_MAP[preset_mode]
@@ -217,15 +243,15 @@ class MtsSetPointNumber(MLConfigNumber):
 
     @property
     def native_max_value(self):
-        return self._climate._attr_max_temp
+        return self.climate._attr_max_temp
 
     @property
     def native_min_value(self):
-        return self._climate._attr_min_temp
+        return self.climate._attr_min_temp
 
     @property
     def native_step(self):
-        return self._climate.target_temperature_step
+        return self.climate.target_temperature_step
 
     @property
     def native_unit_of_measurement(self):
