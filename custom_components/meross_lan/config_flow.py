@@ -386,19 +386,47 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         try:
             entries = self.hass.config_entries
             for entry in entries.async_entries(mlc.DOMAIN):
-                descriptor = MerossDeviceDescriptor(entry.data.get(mlc.CONF_PAYLOAD))
-                if descriptor.macAddress.replace(":", "").lower() != macaddress:
+                entry_data = entry.data
+                entry_descriptor = MerossDeviceDescriptor(
+                    entry_data.get(mlc.CONF_PAYLOAD)
+                )
+                if entry_descriptor.macAddress.replace(":", "").lower() != macaddress:
                     continue
-                if entry.data.get(mlc.CONF_HOST) != host:
-                    data = dict(entry.data)
-                    data[mlc.CONF_HOST] = host
-                    data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
-                    entries.async_update_entry(entry, data=data)
-                    LOGGER.info(
-                        "DHCP updated device ip address (%s) for device %s",
-                        host,
-                        descriptor.uuid,
-                    )
+                if entry_data.get(mlc.CONF_HOST) != host:
+                    # before updating, check the host ip is 'really' valid
+                    try:
+                        _device_config, _descriptor = await self._async_http_discovery(
+                            host, entry_data.get(mlc.CONF_KEY)
+                        )
+                        if _descriptor.uuid == entry_descriptor.uuid:
+                            data = dict(entry_data)
+                            data.update(_device_config)
+                            data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+                            entries.async_update_entry(entry, data=data)
+                            LOGGER.info(
+                                "DHCP updated {ip=%s, mac=%s} for device %s",
+                                host,
+                                discovery_info.macaddress,
+                                entry_descriptor.uuid,
+                            )
+                        else:
+                            LOGGER.warning(
+                                "received a DHCP update {ip=%s, mac=%s} but the new device {uuid=%s} doesn't match the configured one {uuid=%s}",
+                                host,
+                                discovery_info.macaddress,
+                                _descriptor.uuid,
+                                entry_descriptor.uuid,
+                            )
+
+                    except Exception as error:
+                        LOGGER.warning(
+                            "DHCP update error %s trying to identify device {uuid=%s} at {ip=%s, mac=%s}",
+                            str(error),
+                            entry_descriptor.uuid,
+                            host,
+                            discovery_info.macaddress,
+                        )
+
                 return self.async_abort()
         except Exception as error:
             LOGGER.warning("DHCP update internal error: %s", str(error))
