@@ -202,7 +202,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
 
-        self._attr_options = [hac.STATE_UNKNOWN]
+        self._attr_options = [hac.STATE_OFF]
         component: EntityComponent[SensorEntity] = self.hass.data["sensor"]
         entities = list(component.entities)
         for entity in entities:
@@ -211,6 +211,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
                 self._attr_options.append(entity.entity_id)
 
         if self._attr_state is None:
+            self._attr_state = hac.STATE_OFF
             with self.exception_warning("restoring previous state"):
                 if last_state := await get_entity_last_state_available(
                     self.hass, self.entity_id
@@ -313,7 +314,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     def _start_tracking(self):
         self._stop_tracking()
         entity_id = self._attr_state
-        if entity_id and entity_id != hac.STATE_UNKNOWN:
+        if entity_id and entity_id not in (hac.STATE_OFF, hac.STATE_UNKNOWN, hac.STATE_UNAVAILABLE):
 
             @callback
             def _track_state_callback(event: EventType[EventStateChangedData]):
