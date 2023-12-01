@@ -27,9 +27,6 @@ from .merossclient.cloudapi import (
 )
 from .merossclient.httpclient import MerossHttpClient
 
-if typing.TYPE_CHECKING:
-    from .meross_device import MerossDevice
-
 
 # helper conf keys not persisted to config
 CONF_DEVICE_TYPE = "device_type"
@@ -60,6 +57,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     hub_config: mlc.HubConfigType
     device_config: mlc.DeviceConfigType
     profile_config: mlc.ProfileConfigType
+    device_descriptor: MerossDeviceDescriptor
 
     _placeholders = {
         CONF_DEVICE_TYPE: "",
@@ -401,7 +399,9 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                         if _descriptor.uuid == entry_descriptor.uuid:
                             data = dict(entry_data)
                             data.update(_device_config)
-                            data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+                            data[
+                                mlc.CONF_TIMESTAMP
+                            ] = time()  # force ConfigEntry update..
                             entries.async_update_entry(entry, data=data)
                             LOGGER.info(
                                 "DHCP updated {ip=%s, mac=%s} for device %s",
@@ -567,8 +567,16 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         self.device_config = dict(self._config_entry.data)  # type: ignore
         self._device_id = unique_id[0]
         assert self._device_id == self.device_config.get(mlc.CONF_DEVICE_ID)
+        device = ApiProfile.devices[self._device_id]
+        # if config not loaded the device is None
+        self.device_descriptor = (
+            device.descriptor
+            if device
+            else MerossDeviceDescriptor(self.device_config.get(mlc.CONF_PAYLOAD))
+        )
         self._placeholders = {
             mlc.CONF_DEVICE_ID: self._device_id,
+            CONF_DEVICE_TYPE: self.device_descriptor.productnametype,
         }
         return await self.async_step_device()
 
@@ -596,7 +604,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         general parameters to be entered/modified
         """
         errors = {}
-        device: MerossDevice = ApiProfile.devices[self._device_id]  # type: ignore
+        device = ApiProfile.devices[self._device_id]
         device_config = self.device_config
         if user_input is not None:
             device_config.update(user_input)
@@ -612,7 +620,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     # most of the users should have added devices discovered on http
                     # which would be treated in the other branch
                     # TODO: implement mqtt connection check and validation
-                    _descriptor = device.descriptor
+                    _descriptor = self.device_descriptor
                     _device_config = None
                     # as a temporary solution we'll optimistically infer http usage
                     # to just check for the key validation
@@ -639,10 +647,11 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     )
                 else:
                     device_config.pop(mlc.CONF_TRACE, None)
-                try:
-                    device.entry_option_update(user_input)
-                except Exception:
-                    pass  # forgive any error
+                if device:
+                    try:
+                        device.entry_option_update(user_input)
+                    except Exception:
+                        pass  # forgive any error
 
                 if mlc.CONF_CLOUD_KEY in device_config:
                     # cloud_key functionality has been superseeded by
@@ -658,6 +667,8 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 self.hass.config_entries.async_update_entry(
                     self._config_entry, data=device_config
                 )
+                if self._config_entry.state == config_entries.ConfigEntryState.SETUP_ERROR:
+                    await self.hass.config_entries.async_reload(self._config_entry.entry_id)
                 # return None in data so the async_update_entry is not called for the
                 # options to be updated
                 return self.async_create_entry(data=None)  # type: ignore
@@ -694,11 +705,11 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             )
         ] = cv.positive_int
         # setup device specific config right before last option
-        self._placeholders[CONF_DEVICE_TYPE] = device.descriptor.productnametype
-        try:
-            device.entry_option_setup(config_schema)
-        except Exception:
-            pass  # forgive any error
+        if device:
+            try:
+                device.entry_option_setup(config_schema)
+            except Exception:
+                pass  # forgive any error
 
         config_schema[
             vol.Optional(

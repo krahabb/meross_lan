@@ -6,8 +6,9 @@ import bisect
 from datetime import datetime, timezone, tzinfo
 from io import TextIOWrapper
 from json import dumps as json_dumps
-from logging import DEBUG, getLevelName as logging_getLevelName
+from logging import DEBUG, ERROR, getLevelName as logging_getLevelName
 import os
+import re
 from time import localtime, strftime, time
 import typing
 import weakref
@@ -291,11 +292,12 @@ class MerossDevice(MerossDeviceBase):
     # other default property values
     _tzinfo: ZoneInfo | None  # smart cache of device tzinfo
     _unsub_polling_callback: asyncio.TimerHandle | None
-
     entity_dnd: MerossEntity
     sensor_protocol: ProtocolSensor
     sensor_signal_strength: MLSensor
     update_firmware: MLUpdate | None
+
+    RE_PATTERN_MATCH_UUID = re.compile(r"/.+/(.*)/.+")
 
     __slots__ = (
         "polling_period",
@@ -898,9 +900,7 @@ class MerossDevice(MerossDeviceBase):
         # optimized version for well-known payloads which carry channel structs
         # play it safe for empty (None) payloads
         for p_channel in payload or []:
-            entity = self.entities[
-                f"{p_channel[mc.KEY_CHANNEL]}_{entitykey}"
-            ]
+            entity = self.entities[f"{p_channel[mc.KEY_CHANNEL]}_{entitykey}"]
             getattr(entity, f"_parse_{key}", entity._parse_undefined)(p_channel)
 
     def _handle_generic_array(
@@ -942,6 +942,15 @@ class MerossDevice(MerossDeviceBase):
                 entries.async_update_entry(entry, data=data)
 
     def _handle_Appliance_System_All(self, header: dict, payload: dict):
+        # see issue #341. In case we receive a formally correct response from a
+        # mismatched device we should stop everything and obviously don't update our
+        # ConfigEntry. Here we check first the identity of the device sending this payload
+        # in order to not mess our configuration
+        if self._check_uuid_mismatch(
+            payload[mc.KEY_ALL][mc.KEY_SYSTEM][mc.KEY_HARDWARE][mc.KEY_UUID]
+        ):
+            return
+
         descr = self.descriptor
         oldfirmware = descr.firmware
         descr.update(payload)
@@ -1165,6 +1174,23 @@ class MerossDevice(MerossDeviceBase):
                     )
                 try:
                     response = await http.async_request(namespace, method, payload)
+                    r_header = response[mc.KEY_HEADER]
+                    r_payload = response[mc.KEY_PAYLOAD]
+                    # add a sanity check here since we have some issues (#341)
+                    # that might be related to misconfigured devices where the
+                    # host address points to a different device than configured.
+                    # Our current device.id in fact points (or should) to the uuid discovered
+                    # in configuration but if by chance the device changes ip and we miss
+                    # the dynamic change (eitehr dhcp not working or HA down while dhcp updating)
+                    # we might end up with our configured host pointing to a different device
+                    # and this might (unluckily) be another Meross with the same key
+                    # so it could rightly respond here. This shouldnt happen over MQTT
+                    # since the device.id is being taken care of by the routing mechanism
+                    match_uuid = self.RE_PATTERN_MATCH_UUID.search(
+                        r_header[mc.KEY_FROM]
+                    )
+                    if match_uuid and self._check_uuid_mismatch(match_uuid.group(1)):
+                        return None
                     break
                 except Exception as exception:
                     self.log_exception(
@@ -1196,8 +1222,6 @@ class MerossDevice(MerossDeviceBase):
                     not self._mqtt_active
                 ):
                     self._switch_protocol(CONF_PROTOCOL_HTTP)
-            r_header = response[mc.KEY_HEADER]
-            r_payload = response[mc.KEY_PAYLOAD]
             if response_callback:
                 # we're actually only using this for SET->SETACK command confirmation
                 response_callback(
@@ -1581,6 +1605,21 @@ class MerossDevice(MerossDeviceBase):
         if self.polling_period < CONF_POLLING_PERIOD_MIN:
             self.polling_period = CONF_POLLING_PERIOD_MIN
         self._polling_delay = self.polling_period
+
+    def _check_uuid_mismatch(self, response_uuid: str):
+        """when detecting a wrong uuid from a response we offline the device"""
+        if response_uuid != self.id:
+            self.log(
+                ERROR,
+                "received a response from a mismatching device (received uuid:%s, configured uuid:%s)",
+                response_uuid,
+                self.id,
+                timeout=900,
+            )
+            if self._online:
+                self._set_offline()
+            return True
+        return False
 
     def profile_linked(self, profile: MerossCloudProfile):
         if self._cloud_profile is not profile:
