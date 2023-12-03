@@ -94,7 +94,7 @@ try:
             return randint(0, 99) < MEROSSDEBUG.mqtt_disconnect_probability
 
         # MerossHTTPClient debug patching
-        http_client_log_enable = False
+        http_client_log_enable = True
         http_disc_end = 0
         http_disc_duration = 25
         http_disc_probability = 0
@@ -304,6 +304,7 @@ class MerossDeviceDescriptor:
     firmware: dict
     type: str
     subType: str
+    hardwareVersion: str
     uuid: str
     macAddress: str
     innerIp: str | None
@@ -328,6 +329,7 @@ class MerossDeviceDescriptor:
         mc.KEY_FIRMWARE: lambda _self: _self.system.get(mc.KEY_FIRMWARE, {}),
         mc.KEY_TYPE: lambda _self: _self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER),
         mc.KEY_SUBTYPE: lambda _self: _self.hardware.get(mc.KEY_SUBTYPE, ""),
+        "hardwareVersion": lambda _self: _self.hardware.get(mc.KEY_VERSION, ""),
         mc.KEY_UUID: lambda _self: _self.hardware.get(mc.KEY_UUID),
         mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(
             mc.KEY_MACADDRESS, mc.MEROSS_MACADDRESS

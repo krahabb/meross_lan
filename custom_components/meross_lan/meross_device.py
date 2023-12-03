@@ -162,6 +162,7 @@ class MerossDeviceBase(EntityManager):
         *,
         default_name: str,
         model: str,
+        hw_version: str | None = None,
         sw_version: str | None = None,
         connections: set[tuple[str, str]] | None = None,
         via_device: tuple[str, str] | None = None,
@@ -178,6 +179,7 @@ class MerossDeviceBase(EntityManager):
                     manufacturer=mc.MANUFACTURER,
                     name=default_name,
                     model=model,
+                    hw_version=hw_version,
                     sw_version=sw_version,
                     via_device=via_device,
                     **self.deviceentry_id,  # type: ignore
@@ -415,6 +417,7 @@ class MerossDevice(MerossDeviceBase):
             config_entry,
             default_name=descriptor.productname,
             model=descriptor.productmodel,
+            hw_version=descriptor.hardwareVersion,
             sw_version=descriptor.firmwareVersion,
             connections={
                 (device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)
