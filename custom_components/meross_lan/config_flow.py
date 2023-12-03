@@ -8,7 +8,7 @@ import typing
 from homeassistant import config_entries
 from homeassistant.const import CONF_ERROR
 from homeassistant.data_entry_flow import AbortFlow, FlowHandler, callback
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
@@ -729,6 +729,51 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     self._config_entry.state
                     == config_entries.ConfigEntryState.SETUP_ERROR
                 ):
+                    try:  # to fix the device registry in case it was corrupted by #341
+                        device_registry = dr.async_get(self.hass)
+                        device_identifiers = {(str(mlc.DOMAIN), self._device_id)}
+                        device_entry = device_registry.async_get_device(
+                            identifiers=device_identifiers
+                        )
+                        if device_entry and (
+                            len(device_entry.connections) > 1
+                            or len(device_entry.config_entries) > 1
+                        ):
+                            _area_id = device_entry.area_id
+                            _name_by_user = device_entry.name_by_user
+                            device_registry.async_remove_device(device_entry.id)
+                            device_registry.async_get_or_create(
+                                config_entry_id=self._config_entry.entry_id,
+                                suggested_area=_area_id,
+                                name=descriptor_update.productname,
+                                model=descriptor_update.productmodel,
+                                hw_version=descriptor_update.hardwareVersion,
+                                sw_version=descriptor_update.firmwareVersion,
+                                manufacturer=mc.MANUFACTURER,
+                                connections={
+                                    (
+                                        dr.CONNECTION_NETWORK_MAC,
+                                        descriptor_update.macAddress,
+                                    )
+                                },
+                                identifiers=device_identifiers,
+                            )
+                            LOGGER.warning(
+                                "Device registry entry for %s (uuid:%s) was updated in order to fix it. The friendly name ('%s') has been lost and needs to be manually re-entered",
+                                descriptor_update.productmodel,
+                                self._device_id,
+                                _name_by_user,
+                            )
+
+                    except Exception as error:
+                        LOGGER.warning(
+                            "error (%s) while trying to repair device registry for %s (uuid:%s)",
+                            str(error),
+                            descriptor_update.productmodel,
+                            self._device_id
+                        )
+                        pass
+
                     await self.hass.config_entries.async_reload(
                         self._config_entry.entry_id
                     )
