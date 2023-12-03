@@ -274,7 +274,13 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             assert device.host == DHCP_GOOD_HOST, "device host was wrongly updated"
 
 
-async def test_options_flow(hass, aioclient_mock):
+async def test_options_flow(hass, aioclient_mock, hamqtt_mock, merossmqtt_mock):
+    """
+    Tests the device config entry option flow. This code could potentially use
+    either HTTP or MQTT so we accordingly mock both. TODO: perform the test check
+    against different config options (namely: the protocol) in order to see if
+    they behave as expected
+    """
     async with helpers.DeviceContext(hass, mc.TYPE_MTS200, aioclient_mock) as context:
         await context.perform_coldstart()
 
@@ -287,7 +293,11 @@ async def test_options_flow(hass, aioclient_mock):
 
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={mlc.CONF_HOST: device.host, mlc.CONF_KEY: "wrongkey"},
+            user_input={
+                mlc.CONF_HOST: device.host,
+                mlc.CONF_KEY: "wrongkey",
+                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
+            },
         )
 
         assert result["type"] == FlowResultType.MENU
@@ -295,7 +305,9 @@ async def test_options_flow(hass, aioclient_mock):
 
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={"next_step_id": "device"},
+            user_input={
+                "next_step_id": "device",
+            },
         )
 
         assert result["type"] == FlowResultType.FORM
@@ -303,7 +315,11 @@ async def test_options_flow(hass, aioclient_mock):
 
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={mlc.CONF_HOST: device.host, mlc.CONF_KEY: device.key},
+            user_input={
+                mlc.CONF_HOST: device.host,
+                mlc.CONF_KEY: device.key,
+                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
+            },
         )
 
         assert result["type"] == FlowResultType.CREATE_ENTRY

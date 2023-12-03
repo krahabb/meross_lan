@@ -214,6 +214,7 @@ def build_emulator_config_entry(
         },
         mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
         mlc.CONF_POLLING_PERIOD: tc.MOCK_POLLING_PERIOD,
+        mlc.CONF_TRACE_TIMEOUT: tc.MOCK_TRACE_TIMEOUT,
     }
 
     if config_data:
