@@ -512,7 +512,10 @@ class MQTTConnection(Loggable):
             )
 
     def _mqtt_transaction_init(
-        self, namespace: str, method: str, response_callback: ResponseCallbackType | None
+        self,
+        namespace: str,
+        method: str,
+        response_callback: ResponseCallbackType | None,
     ):
         transaction = _MQTTTransaction(namespace, method, response_callback)
         self._mqtt_transactions[transaction.messageid] = transaction
@@ -618,6 +621,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
             )
         else:
             self._unsub_random_disconnect = None
+        self.schedule_connect()
 
     # interface: MQTTConnection
     async def async_shutdown(self):
@@ -629,13 +633,9 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
 
     def attach(self, device: MerossDevice):
         super().attach(device)
-        if self.state_inactive:
-            self.schedule_connect()
 
     def detach(self, device: MerossDevice):
         super().detach(device)
-        if not self.mqttdevices:
-            self.schedule_disconnect()
 
     def mqtt_publish(
         self,
@@ -1151,6 +1151,21 @@ class MerossCloudProfile(ApiProfile):
                     if latest_version := self.get_latest_version(device.descriptor):
                         device.update_latest_version(latest_version)
 
+    def get_or_create_mqttconnections(self, device_id: str):
+        mqttconnections: list[MerossMQTTConnection] = []
+        device_info = self.get_device_info(device_id)
+        if device_info:
+            if domain := device_info.get(mc.KEY_DOMAIN):
+                mqttconnections.append(
+                    self._get_or_create_mqttconnection(parse_domain(domain))
+                )
+            if reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN):
+                if reserveddomain != domain:
+                    mqttconnections.append(
+                        self._get_or_create_mqttconnection(parse_domain(reserveddomain))
+                    )
+        return mqttconnections
+
     def _get_or_create_mqttconnection(self, broker: tuple[str, int]):
         connection_id = f"{self.id}:{broker[0]}:{broker[1]}"
         if connection_id not in self.mqttconnections:
@@ -1361,19 +1376,8 @@ class MerossCloudProfile(ApiProfile):
                 if config_entries_helper.get_config_flow(device_id):
                     continue
                 # cloud conf has a new device
-                for hostkey in (mc.KEY_DOMAIN, mc.KEY_RESERVEDDOMAIN):
-                    with self.exception_warning(
-                        f"_process_device_info_unknown: unknown device_id={device_id}"
-                    ):
-                        broker = parse_domain(domain := device_info[hostkey])
-                        mqttconnection = self._get_or_create_mqttconnection(broker)
-                        if mqttconnection.state_inactive:
-                            await mqttconnection.schedule_connect()
-                        mqttconnection.get_or_set_discovering(device_id)
-                        if domain == device_info[mc.KEY_RESERVEDDOMAIN]:
-                            # dirty trick to avoid looping when the 2 hosts
-                            # are the same
-                            break
+                for mqttconnection in self.get_or_create_mqttconnections(device_id):
+                    mqttconnection.get_or_set_discovering(device_id)
 
     def _schedule_save_store(self):
         def _data_func():
