@@ -661,6 +661,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         if user_input is not None:
             device_config.update(user_input)
             try:
+                inner_exception = None
                 device_config_update = None
                 descriptor_update = None
                 _host = user_input.get(mlc.CONF_HOST)
@@ -677,8 +678,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                             self._device_id, _key, self.device_descriptor.userId
                         )
                     except Exception as e:
-                        if _conf_protocol is mlc.CONF_PROTOCOL_MQTT:
-                            raise e
+                        inner_exception = e
                 if _conf_protocol is not mlc.CONF_PROTOCOL_MQTT:
                     if _host:
                         try:
@@ -687,11 +687,10 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                                 descriptor_update,
                             ) = await self._async_http_discovery(_host, _key)
                         except Exception as e:
-                            if _conf_protocol is mlc.CONF_PROTOCOL_HTTP:
-                                raise e
+                            inner_exception = e
 
                 if not device_config_update or not descriptor_update:
-                    raise ConfigError(ERR_CANNOT_CONNECT)
+                    raise inner_exception or ConfigError(ERR_CANNOT_CONNECT)
                 if self._device_id != device_config_update[mlc.CONF_DEVICE_ID]:
                     raise ConfigError(ERR_DEVICE_ID_MISMATCH)
                 if _host:
