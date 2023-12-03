@@ -15,7 +15,7 @@ import weakref
 from zoneinfo import ZoneInfo
 
 from homeassistant.core import callback
-from homeassistant.helpers import device_registry
+from homeassistant.helpers import device_registry, issue_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import voluptuous as vol
 
@@ -39,6 +39,7 @@ from .const import (
     CONF_TRACE_MAXSIZE,
     CONF_TRACE_TIMEOUT_DEFAULT,
     DOMAIN,
+    ISSUE_DEVICE_ID_MISMATCH,
     PARAM_CLOUDMQTT_UPDATE_PERIOD,
     PARAM_COLDSTARTPOLL_DELAY,
     PARAM_HEARTBEAT_PERIOD,
@@ -314,6 +315,7 @@ class MerossDevice(MerossDeviceBase):
         "device_debug",
         "lastrequest",
         "lastresponse",
+        "_has_issue_id",
         "_cloud_profile",
         "_mqtt_connection",  # we're binded to an MQTT profile/broker
         "_mqtt_connected",  # the broker is online/connected
@@ -355,6 +357,7 @@ class MerossDevice(MerossDeviceBase):
         self.device_debug = {}
         self.lastrequest = 0.0
         self.lastresponse = 0.0
+        self._has_issue_id = None
         self._cloud_profile: MerossCloudProfile | None = None
         self._mqtt_connection: MQTTConnection | None = None
         self._mqtt_connected: MQTTConnection | None = None
@@ -945,11 +948,20 @@ class MerossDevice(MerossDeviceBase):
         # see issue #341. In case we receive a formally correct response from a
         # mismatched device we should stop everything and obviously don't update our
         # ConfigEntry. Here we check first the identity of the device sending this payload
-        # in order to not mess our configuration
+        # in order to not mess our configuration. All in all this check should be not
+        # needed since the only reasonable source of 'device mismatch' is the HTTP protocol
+        # which is already guarded in our async_http_request
         if self._check_uuid_mismatch(
             payload[mc.KEY_ALL][mc.KEY_SYSTEM][mc.KEY_HARDWARE][mc.KEY_UUID]
         ):
             return
+        elif self._has_issue_id:
+            issue_registry.async_delete_issue(
+                ApiProfile.hass,
+                DOMAIN,
+                self._has_issue_id,
+            )
+            self._has_issue_id = None
 
         descr = self.descriptor
         oldfirmware = descr.firmware
@@ -1609,6 +1621,17 @@ class MerossDevice(MerossDeviceBase):
     def _check_uuid_mismatch(self, response_uuid: str):
         """when detecting a wrong uuid from a response we offline the device"""
         if response_uuid != self.id:
+            if not self._has_issue_id:
+                self._has_issue_id = f"{ISSUE_DEVICE_ID_MISMATCH}.{self.id}"
+                issue_registry.async_create_issue(
+                    ApiProfile.hass,
+                    DOMAIN,
+                    self._has_issue_id,
+                    is_fixable=True,
+                    severity=issue_registry.IssueSeverity.CRITICAL,
+                    translation_key=ISSUE_DEVICE_ID_MISMATCH,
+                    translation_placeholders={"device_name": self.name},
+                )
             self.log(
                 ERROR,
                 "received a response from a mismatching device (received uuid:%s, configured uuid:%s)",

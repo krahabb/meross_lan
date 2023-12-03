@@ -376,7 +376,7 @@ class MerossApi(ApiProfile):
             # 'suddenly' starts talking with another one and doesn't recognize
             # the mismatch (the issue appears as the device usually keeps updating
             # the config_entry data from live communication). This behavior is being
-            # fixed in 4.5.1 so that devices don't update wrong configurations 'in the wild'
+            # fixed in 4.5.0 so that devices don't update wrong configurations 'in the wild'
             raise ConfigEntryError("Configuration data mismatch. Please refresh "
                                    "the configuration by hitting 'Configure' "
                                    "in the integration configuration page")

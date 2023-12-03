@@ -29,6 +29,7 @@ from .const import (
     CONF_PAYLOAD,
     CONF_PROFILE_ID_LOCAL,
     DOMAIN,
+    ISSUE_CLOUD_TOKEN_EXPIRED,
     PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT,
@@ -86,8 +87,6 @@ if typing.TYPE_CHECKING:
 
     UuidType = str
     DeviceInfoDictType = dict[UuidType, DeviceInfoType]
-
-ISSUE_CLOUD_TOKEN_EXPIRED = "cloud_token_expired"
 
 
 class ConnectionSensor(MLSensor):
