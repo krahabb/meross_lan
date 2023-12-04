@@ -24,7 +24,7 @@ if typing.TYPE_CHECKING:
 
     from .climate import MtsClimate
     from .devices.mod100 import DiffuserMixin
-    from .meross_device import MerossDevice, ResponseCallbackType
+    from .meross_device import MerossDevice
 
 
 async def async_setup_entry(
@@ -84,13 +84,10 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
         else:
             raise NotImplementedError()
 
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_state(option)
-
-        await self.manager.async_request_spray(
-            {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}, _ack_callback
-        )
+        if await self.manager.async_request_spray_ack(
+            {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}
+        ):
+            self.update_state(option)
 
     def _parse_spray(self, payload: dict):
         """
@@ -132,12 +129,11 @@ class SprayMixin(
     def _parse_spray(self, payload):
         self._parse__generic(mc.KEY_SPRAY, payload, mc.KEY_SPRAY)
 
-    async def async_request_spray(self, payload, callback: ResponseCallbackType):
-        await self.async_request(
+    async def async_request_spray_ack(self, payload):
+        return await self.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
             {mc.KEY_SPRAY: payload},
-            callback,
         )
 
 
@@ -314,7 +310,11 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     def _start_tracking(self):
         self._stop_tracking()
         entity_id = self._attr_state
-        if entity_id and entity_id not in (hac.STATE_OFF, hac.STATE_UNKNOWN, hac.STATE_UNAVAILABLE):
+        if entity_id and entity_id not in (
+            hac.STATE_OFF,
+            hac.STATE_UNKNOWN,
+            hac.STATE_UNAVAILABLE,
+        ):
 
             @callback
             def _track_state_callback(event: EventType[EventStateChangedData]):

@@ -110,7 +110,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._attr_target_temperature = None
         self._mts_active = None
         self._mts_mode: int | None = None
-        self._mts_onoff = None
+        self._mts_onoff: int | None = None
         super().__init__(manager, channel, None, None)
         self.binary_sensor_window = binary_sensor_window
         self.number_adjust_temperature = number_adjust_temperature

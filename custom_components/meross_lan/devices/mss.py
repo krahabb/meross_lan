@@ -449,16 +449,12 @@ class OverTempEnableSwitch(MLSwitch):
         )
 
     async def async_request_onoff(self, onoff: int):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_onoff(onoff)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONFIG_OVERTEMP,
             mc.METHOD_SET,
             {mc.KEY_OVERTEMP: {mc.KEY_ENABLE: onoff}},
-            _ack_callback,
-        )
+        ):
+            self.update_onoff(onoff)
 
 
 class OverTempMixin(

@@ -256,6 +256,19 @@ class MerossDeviceBase(EntityManager):
     ) -> MerossMessageType | None:
         raise NotImplementedError
 
+    async def async_request_ack(
+        self,
+        namespace: str,
+        method: str,
+        payload: dict,
+    ) -> MerossMessageType | None:
+        response = await self.async_request(namespace, method, payload)
+        return (
+            response
+            if response and response[mc.KEY_HEADER][mc.KEY_METHOD] != mc.METHOD_ERROR
+            else None
+        )
+
     @property
     @abc.abstractmethod
     def tz(self) -> tzinfo:

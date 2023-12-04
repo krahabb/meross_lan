@@ -90,16 +90,12 @@ class MerossLanSpray(me.MerossEntity, humidifier.HumidifierEntity):
         )
 
     async def async_request_spray(self, spray_mode: int):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_mode(spray_mode)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
             {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: spray_mode}},
-            _ack_callback,
-        )
+        ):
+            self.update_mode(spray_mode)
 
     def update_mode(self, spray_mode: int | None):
         if spray_mode == mc.SPRAY_MODE_OFF:

@@ -108,11 +108,7 @@ class Mts200ConfigSwitch(MLSwitch):
         )
 
     async def async_request_onoff(self, onoff: int):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_onoff(onoff)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             self.namespace,
             mc.METHOD_SET,
             {
@@ -123,8 +119,8 @@ class Mts200ConfigSwitch(MLSwitch):
                     }
                 ]
             },
-            _ack_callback,
-        )
+        ):
+            self.update_onoff(onoff)
 
 
 class Mts200Climate(MtsClimate):
@@ -242,41 +238,29 @@ class Mts200Climate(MtsClimate):
 
     async def async_set_preset_mode(self, preset_mode: str):
         mode = reverse_lookup(Mts200Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
-        if mode is not None:
-
-            def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-                if acknowledge:
-                    self._mts_mode = mode
-                    self._mts_onoff = 1
-                    self.update_mts_state()
-
-            await self.manager.async_request(
-                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
-                mc.METHOD_SET,
-                {
-                    mc.KEY_MODE: [
-                        {
-                            mc.KEY_CHANNEL: self.channel,
-                            mc.KEY_MODE: mode,
-                            mc.KEY_ONOFF: 1,
-                        }
-                    ]
-                },
-                _ack_callback,
-            )
+        if (mode is not None) and await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
+            mc.METHOD_SET,
+            {
+                mc.KEY_MODE: [
+                    {
+                        mc.KEY_CHANNEL: self.channel,
+                        mc.KEY_MODE: mode,
+                        mc.KEY_ONOFF: 1,
+                    }
+                ]
+            },
+        ):
+            self._mts_mode = mode
+            self._mts_onoff = 1
+            self.update_mts_state()
 
     async def async_set_temperature(self, **kwargs):
         t = kwargs[Mts200Climate.ATTR_TEMPERATURE]
         key = Mts200Climate.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or Mts200Climate.PRESET_CUSTOM
         ]
-
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self._attr_target_temperature = t
-                self.update_mts_state()
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
             {
@@ -284,31 +268,21 @@ class Mts200Climate(MtsClimate):
                     {mc.KEY_CHANNEL: self.channel, key: int(t * mc.MTS_TEMP_SCALE)}
                 ]
             },
-            _ack_callback,
-        )
+        ):
+            self._attr_target_temperature = t
+            self.update_mts_state()
 
     async def async_request_onoff(self, onoff: int):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self._mts_onoff = onoff
-                self.update_mts_state()
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
             {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}]},
-            _ack_callback,
-        )
+        ):
+            self._mts_onoff = onoff
+            self.update_mts_state()
 
     async def async_request_summermode(self, summermode: int):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                # it looks that (at least when sending '0') even
-                # if acknowledged the mts doesnt really update it
-                self._mts_summermode = summermode
-                self.update_mts_state()
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
             mc.METHOD_SET,
             {
@@ -316,8 +290,11 @@ class Mts200Climate(MtsClimate):
                     {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: summermode}
                 ]
             },
-            _ack_callback,
-        )
+        ):
+            # it looks that (at least when sending '0') even
+            # if acknowledged the mts doesnt really update it
+            self._mts_summermode = summermode
+            self.update_mts_state()
 
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
@@ -586,17 +563,12 @@ class MLScreenBrightnessNumber(MLConfigNumber):
             mc.KEY_STANDBY: self.manager._number_brightness_standby.native_value,
         }
         brightness[self.key_value] = value
-
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_native_value(value)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
             mc.METHOD_SET,
             {mc.KEY_BRIGHTNESS: [brightness]},
-            _ack_callback,
-        )
+        ):
+            self.update_native_value(value)
 
 
 class ScreenBrightnessMixin(

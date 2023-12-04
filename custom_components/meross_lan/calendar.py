@@ -322,20 +322,18 @@ class MtsSchedule(MLCalendar):
 
             payload[self.key_channel] = self.channel
 
-            def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-                if not acknowledge:
-                    self.manager.request(
+            if not await self.manager.async_request_ack(
+                self.namespace,
+                mc.METHOD_SET,
+                {mc.KEY_SCHEDULE: [payload]},
+            ):
+                # there was an error so we request the actual device state again
+                if self.manager.online:
+                    await self.manager.async_request(
                         self.namespace,
                         mc.METHOD_GET,
                         {mc.KEY_SCHEDULE: [{self.key_channel: self.channel}]},
                     )
-
-            await self.manager.async_request(
-                self.namespace,
-                mc.METHOD_SET,
-                {mc.KEY_SCHEDULE: [payload]},
-                _ack_callback,
-            )
 
     def _get_event_entry(self, event_time: datetime) -> MtsScheduleEntry | None:
         """Search for and return an entry description (MtsScheduleEntry) matching the internal

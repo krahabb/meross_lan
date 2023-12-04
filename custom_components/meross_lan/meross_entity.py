@@ -275,11 +275,7 @@ class MerossToggle(MerossEntity):
         # this is the meross executor code
         # override for switches not implemented
         # by a toggle like api
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_onoff(onoff)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             self.namespace,
             mc.METHOD_SET,
             {
@@ -288,8 +284,8 @@ class MerossToggle(MerossEntity):
                     self.key_onoff: onoff,
                 }
             },
-            _ack_callback,
-        )
+        ):
+            self.update_onoff(onoff)
 
     def _parse_toggle(self, payload: dict):
         self.update_onoff(payload.get(self.key_onoff))

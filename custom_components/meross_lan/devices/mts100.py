@@ -76,19 +76,13 @@ class Mts100Climate(MtsClimate):
     async def async_set_preset_mode(self, preset_mode: str):
         mode = reverse_lookup(Mts100Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
         if mode is not None:
-
-            def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-                if acknowledge:
-                    self._mts_mode = mode
-                    self.update_mts_state()
-
-            await self.manager.async_request(
+            if await self.manager.async_request_ack(
                 mc.NS_APPLIANCE_HUB_MTS100_MODE,
                 mc.METHOD_SET,
                 {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
-                _ack_callback,
-            )
-
+            ):
+                self._mts_mode = mode
+                self.update_mts_state()
             if not self._mts_onoff:
                 await self.async_request_onoff(1)
 
@@ -99,36 +93,25 @@ class Mts100Climate(MtsClimate):
         key = Mts100Climate.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or Mts100Climate.PRESET_CUSTOM
         ]
-
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self._parse_temperature(payload[mc.KEY_TEMPERATURE][0])
-                # self._attr_target_temperature = device_temperature / mc.MTS_TEMP_SCALE
-                # self.update_mts_state()
-
         # when sending a temp this way the device will automatically
         # exit auto mode if needed
-        await self.manager.async_request(
+        if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
             {
                 mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.id, key: device_temperature}]
             },  # the device rounds down ?!
-            _ack_callback,
-        )
+        ):
+            self._parse_temperature(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
 
     async def async_request_onoff(self, onoff: int):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self._mts_onoff = onoff
-                self.update_mts_state()
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_HUB_TOGGLEX,
             mc.METHOD_SET,
             {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: onoff}]},
-            _ack_callback,
-        )
+        ):
+            self._mts_onoff = onoff
+            self.update_mts_state()
 
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO

@@ -111,21 +111,17 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
         await self.async_request_mp3(mc.KEY_SONG, song)
 
     async def async_request_mp3(self, key: str, value: int):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self._mp3[key] = value
-                self._attr_state = (
-                    STATE_IDLE if self._mp3.get(mc.KEY_MUTE) else STATE_PLAYING
-                )
-                if self._hass_connected:
-                    self._async_write_ha_state()
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_MP3,
             mc.METHOD_SET,
             {mc.KEY_MP3: {mc.KEY_CHANNEL: self.channel, key: value}},
-            _ack_callback,
-        )
+        ):
+            self._mp3[key] = value
+            self._attr_state = (
+                STATE_IDLE if self._mp3.get(mc.KEY_MUTE) else STATE_PLAYING
+            )
+            if self._hass_connected:
+                self._async_write_ha_state()
 
     def _parse_mp3(self, payload: dict):
         """
