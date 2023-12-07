@@ -43,13 +43,13 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PRESET_AUTO: Final = "auto"
 
     manager: MerossDeviceBase
-    binary_sensor_window: MLBinarySensor
-    number_adjust_temperature: MLConfigNumber
-    number_away_temperature: MtsSetPointNumber
-    number_comfort_temperature: MtsSetPointNumber
-    number_sleep_temperature: MtsSetPointNumber
-    schedule: MtsSchedule
-    select_tracked_sensor: MtsTrackedSensor
+    binary_sensor_window: Final[MLBinarySensor]
+    number_adjust_temperature: Final[MLConfigNumber]
+    number_away_temperature: Final[MtsSetPointNumber]
+    number_comfort_temperature: Final[MtsSetPointNumber]
+    number_sleep_temperature: Final[MtsSetPointNumber]
+    schedule: Final[MtsSchedule]
+    select_tracked_sensor: Final[MtsTrackedSensor]
 
     _attr_preset_modes: Final = [
         PRESET_CUSTOM,
@@ -82,6 +82,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
+        "_mts_adjust_offset",
         "binary_sensor_window",
         "number_adjust_temperature",
         "number_comfort_temperature",
@@ -111,6 +112,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_active = None
         self._mts_mode: int | None = None
         self._mts_onoff: int | None = None
+        self._mts_adjust_offset = 0
         super().__init__(manager, channel, None, None)
         self.binary_sensor_window = binary_sensor_window
         self.number_adjust_temperature = number_adjust_temperature
@@ -258,5 +260,9 @@ class MtsSetPointNumber(MLConfigNumber):
         return MtsClimate.TEMP_CELSIUS
 
     @property
-    def ml_multiplier(self):
+    def device_offset(self):
+        return self.climate._mts_adjust_offset
+
+    @property
+    def device_scale(self):
         return mc.MTS_TEMP_SCALE

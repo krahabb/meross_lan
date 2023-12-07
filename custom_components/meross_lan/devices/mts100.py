@@ -12,6 +12,85 @@ if typing.TYPE_CHECKING:
     from ..meross_device_hub import MTS100SubDevice
 
 
+class Mts100AdjustNumber(MLHubAdjustNumber):
+    __slots__ = ("climate",)
+
+    def __init__(self, manager: MTS100SubDevice, climate: Mts100Climate):
+        self.climate = climate  # climate not initialized yet
+        super().__init__(
+            manager,
+            mc.KEY_TEMPERATURE,
+            mc.NS_APPLIANCE_HUB_MTS100_ADJUST,
+            MLHubAdjustNumber.DeviceClass.TEMPERATURE,
+            -5,
+            5,
+            0.1,
+        )
+
+    def update_native_value(self, device_value):
+        super().update_native_value(device_value)
+        # hub adjust has a scale of 100 while the other climate temperature
+        # numbers have a scale of 10 (MTS_SCALE)
+        adjust_offset = round(device_value / 10) % 5
+        # since adjust have a resolution of 0.1 °C while temp setpoints have a 0.5 °C
+        # stepping, when the adjust is not a multiple of 0.5 the MTS looses the
+        # correct setpoints and starts to round down their values.
+        # it looks like it is not able to represent correctly the offsets when
+        # these are not in multiple of 0.5. We therefore try to 'patch'
+        # these readings before sending them to HA
+        self.climate._mts_adjust_offset = adjust_offset if adjust_offset < 3 else adjust_offset - 5
+        # _mts_adjust_offset will then be used to offset the T setpoints and will be 0 when
+        # the adjust value is a 0.5 multiple or the corresponding remainder when it is not.
+        # the offset is set so it 'down-rounds' when it is 0.1 or 0.2. Instead it will 'up-rounds'
+        # when it is 0.3 or 0.4
+
+    async def async_set_native_value(self, value: float):
+        # when sending the 'adjust' to the valve, the device also modifies
+        # it's temperature setpoints (target temp, away, cool, heat and so)
+        # This is due to internal exotic rounding when the adjust offset is not
+        # a multiple of 0.5 °C
+        # It's unclear how and why this happens so we'll try to circumvent
+        # the issue by saving the actual values before the adjust command
+        # and then resending the (previous) setpoints
+        climate = self.climate
+        target_temperature = climate.target_temperature
+        comfort_temperature = climate.number_comfort_temperature.native_value
+        away_temperature = climate.number_away_temperature.native_value
+        sleep_temperature = climate.number_sleep_temperature.native_value
+
+        await super().async_set_native_value(value)
+
+        p_temperature = {mc.KEY_ID: climate.id}
+        if target_temperature:
+            p_temperature[mc.KEY_CUSTOM] = (
+                round(target_temperature * mc.MTS_TEMP_SCALE)
+                + climate._mts_adjust_offset
+            )
+        if comfort_temperature:
+            p_temperature[mc.KEY_COMFORT] = (
+                round(comfort_temperature * mc.MTS_TEMP_SCALE)
+                + climate._mts_adjust_offset
+            )
+        if away_temperature:
+            p_temperature[mc.KEY_AWAY] = (
+                round(away_temperature * mc.MTS_TEMP_SCALE) + climate._mts_adjust_offset
+            )
+        if sleep_temperature:
+            p_temperature[mc.KEY_ECONOMY] = (
+                round(sleep_temperature * mc.MTS_TEMP_SCALE)
+                + climate._mts_adjust_offset
+            )
+
+        if response := await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
+            mc.METHOD_SET,
+            {mc.KEY_TEMPERATURE: [p_temperature]},
+        ):
+            self.climate._parse_temperature(
+                response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0]
+            )
+
+
 class Mts100Climate(MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
 
@@ -43,15 +122,7 @@ class Mts100Climate(MtsClimate):
             manager,
             manager.id,
             manager.build_binary_sensor_window(),
-            MLHubAdjustNumber(
-                manager,
-                mc.KEY_TEMPERATURE,
-                mc.NS_APPLIANCE_HUB_MTS100_ADJUST,
-                MLHubAdjustNumber.DeviceClass.TEMPERATURE,
-                -5,
-                5,
-                0.1,
-            ),
+            Mts100AdjustNumber(manager, self),
             Mts100SetPointNumber,
             Mts100Schedule,
         )
@@ -87,8 +158,9 @@ class Mts100Climate(MtsClimate):
                 await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        device_temperature = round(
-            kwargs[Mts100Climate.ATTR_TEMPERATURE] * mc.MTS_TEMP_SCALE
+        device_temperature = (
+            round(kwargs[Mts100Climate.ATTR_TEMPERATURE] * mc.MTS_TEMP_SCALE)
+            + self._mts_adjust_offset
         )
         key = Mts100Climate.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or Mts100Climate.PRESET_CUSTOM
@@ -98,9 +170,7 @@ class Mts100Climate(MtsClimate):
         if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
-            {
-                mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.id, key: device_temperature}]
-            },  # the device rounds down ?!
+            {mc.KEY_TEMPERATURE: [{mc.KEY_ID: self.id, key: device_temperature}]},
         ):
             self._parse_temperature(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
 
@@ -141,8 +211,8 @@ class Mts100Climate(MtsClimate):
             self.manager.sensor_temperature.update_state(self._attr_current_temperature)
         if mc.KEY_CURRENTSET in p_temperature:
             self._attr_target_temperature = (
-                p_temperature[mc.KEY_CURRENTSET] / mc.MTS_TEMP_SCALE
-            )
+                p_temperature[mc.KEY_CURRENTSET] - self._mts_adjust_offset
+            ) / mc.MTS_TEMP_SCALE
         if mc.KEY_MIN in p_temperature:
             self._attr_min_temp = p_temperature[mc.KEY_MIN] / mc.MTS_TEMP_SCALE
         if mc.KEY_MAX in p_temperature:

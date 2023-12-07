@@ -54,7 +54,7 @@ class Mts200CalibrationNumber(MLConfigNumber):
         return MtsClimate.TEMP_CELSIUS
 
     @property
-    def ml_multiplier(self):
+    def device_scale(self):
         return mc.MTS_TEMP_SCALE
 
 
@@ -88,7 +88,7 @@ class Mts200OverheatThresholdNumber(MLConfigNumber):
         return MtsClimate.TEMP_CELSIUS
 
     @property
-    def ml_multiplier(self):
+    def device_scale(self):
         return mc.MTS_TEMP_SCALE
 
 

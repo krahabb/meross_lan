@@ -202,7 +202,7 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
         return TIME_SECONDS
 
     @property
-    def ml_multiplier(self):
+    def device_scale(self):
         return 1000
 
 
@@ -213,17 +213,17 @@ class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
     """
 
     def __init__(self, manager: GarageMixin, key: str, init_payload: dict):
-        self._attr_state = init_payload[key] / self.ml_multiplier
+        self._attr_state = init_payload[key] / self.device_scale
         super().__init__(manager, None, key)
 
     async def async_set_native_value(self, value: float):
-        native_value = round(value * self.ml_multiplier)
+        device_value = round(value * self.device_scale)
         if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
             mc.METHOD_SET,
-            {mc.KEY_CONFIG: {self.key_value: native_value}},
+            {mc.KEY_CONFIG: {self.key_value: device_value}},
         ):
-            self.update_native_value(native_value)
+            self.update_native_value(device_value)
 
 
 class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
@@ -1059,7 +1059,7 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
             self._cover._parse_config(config)
 
     @property
-    def ml_multiplier(self):
+    def device_scale(self):
         return 1000
 
 

@@ -73,6 +73,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         "_attr_native_min_value",
         "_attr_native_step",
         "_attr_native_unit_of_measurement",
+        "_device_value",
     )
 
     @property
@@ -100,26 +101,37 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     def native_value(self):
         return self._attr_state
 
-    def update_native_value(self, value):
-        self.update_state(value / self.ml_multiplier)
+    def update_native_value(self, device_value):
+        self._device_value = device_value
+        self.update_state((device_value - self.device_offset) / self.device_scale)
 
     async def async_set_native_value(self, value: float):
-        value = round(value * self.ml_multiplier)
-
+        device_value = round(value * self.device_scale) + self.device_offset
         if await self.manager.async_request_ack(
             self.namespace,
             mc.METHOD_SET,
             {
                 self.key_namespace: [
-                    {self.key_channel: self.channel, self.key_value: value}
+                    {self.key_channel: self.channel, self.key_value: device_value}
                 ]
             },
         ):
-            self.update_native_value(value)
+            self.update_native_value(device_value)
 
     @property
-    def ml_multiplier(self):
+    def device_offset(self):
+        """used to offset the device value when converting to/from native value"""
+        return 0
+
+    @property
+    def device_scale(self):
+        """used to scale the device value when converting to/from native value"""
         return 1
+
+    @property
+    def device_value(self):
+        """the 'native' device value carried in protocol messages"""
+        return self._device_value
 
 
 class MLHubAdjustNumber(MLConfigNumber):
@@ -153,5 +165,5 @@ class MLHubAdjustNumber(MLConfigNumber):
         )
 
     @property
-    def ml_multiplier(self):
+    def device_scale(self):
         return 100
