@@ -6,14 +6,13 @@ from homeassistant.components import number
 from homeassistant.const import PERCENTAGE, TEMP_CELSIUS
 
 from . import meross_entity as me
-from .merossclient import const as mc, get_namespacekey  # mEROSS cONST
+from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .meross_device import MerossDevice
-    from .meross_device_hub import MerossSubDevice
 
 
 try:
@@ -42,15 +41,13 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
 
-DEVICECLASS_TO_UNIT_MAP = {
-    NumberDeviceClass.HUMIDITY: PERCENTAGE,
-    NumberDeviceClass.TEMPERATURE: TEMP_CELSIUS,
-}
-
-
 class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     PLATFORM = number.DOMAIN
     DeviceClass = NumberDeviceClass
+    DEVICECLASS_TO_UNIT_MAP = {
+        NumberDeviceClass.HUMIDITY: PERCENTAGE,
+        NumberDeviceClass.TEMPERATURE: TEMP_CELSIUS,
+    }
 
     manager: MerossDevice
 
@@ -76,6 +73,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         "_device_value",
     )
 
+    # interface: number.NumberEntity
     @property
     def mode(self) -> number.NumberMode:
         """Return the mode of the entity."""
@@ -101,10 +99,6 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     def native_value(self):
         return self._attr_state
 
-    def update_native_value(self, device_value):
-        self._device_value = device_value
-        self.update_state((device_value - self.device_offset) / self.device_scale)
-
     async def async_set_native_value(self, value: float):
         device_value = round(value * self.device_scale) + self.device_offset
         if await self.manager.async_request_ack(
@@ -118,6 +112,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         ):
             self.update_native_value(device_value)
 
+    # interface: self
     @property
     def device_offset(self):
         """used to offset the device value when converting to/from native value"""
@@ -133,37 +128,6 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         """the 'native' device value carried in protocol messages"""
         return self._device_value
 
-
-class MLHubAdjustNumber(MLConfigNumber):
-    key_channel = mc.KEY_ID
-
-    def __init__(
-        self,
-        manager: "MerossSubDevice",
-        key: str,
-        namespace: str,
-        device_class: NumberDeviceClass,
-        min_value: float,
-        max_value: float,
-        step: float,
-    ):
-        self.namespace = namespace
-        self.key_namespace = get_namespacekey(namespace)
-        self.key_value = key
-        self._attr_native_min_value = min_value
-        self._attr_native_max_value = max_value
-        self._attr_native_step = step
-        self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(
-            device_class
-        )
-        self._attr_name = f"Adjust {device_class}"
-        super().__init__(
-            manager,
-            manager.id,
-            f"config_{self.key_namespace}_{key}",
-            device_class,
-        )
-
-    @property
-    def device_scale(self):
-        return 100
+    def update_native_value(self, device_value):
+        self._device_value = device_value
+        self.update_state((device_value - self.device_offset) / self.device_scale)

@@ -6,43 +6,45 @@ from ..calendar import MtsSchedule
 from ..climate import MtsClimate, MtsSetPointNumber
 from ..helpers import reverse_lookup
 from ..merossclient import const as mc
-from ..number import MLHubAdjustNumber
+from ..number import MLConfigNumber
 
 if typing.TYPE_CHECKING:
     from ..meross_device_hub import MTS100SubDevice
 
 
-class Mts100AdjustNumber(MLHubAdjustNumber):
+class Mts100AdjustNumber(MLConfigNumber):
+    namespace = mc.NS_APPLIANCE_HUB_MTS100_ADJUST
+    key_namespace = mc.KEY_ADJUST
+    key_channel = mc.KEY_ID
+    key_value = mc.KEY_TEMPERATURE
+
     __slots__ = ("climate",)
 
     def __init__(self, manager: MTS100SubDevice, climate: Mts100Climate):
         self.climate = climate  # climate not initialized yet
+        self._attr_name = "Adjust temperature"
         super().__init__(
             manager,
-            mc.KEY_TEMPERATURE,
-            mc.NS_APPLIANCE_HUB_MTS100_ADJUST,
-            MLHubAdjustNumber.DeviceClass.TEMPERATURE,
-            -5,
-            5,
-            0.1,
+            manager.id,
+            f"config_{self.key_namespace}_{self.key_value}",
+            MLConfigNumber.DeviceClass.TEMPERATURE,
         )
 
-    def update_native_value(self, device_value):
-        super().update_native_value(device_value)
-        # hub adjust has a scale of 100 while the other climate temperature
-        # numbers have a scale of 10 (MTS_SCALE)
-        adjust_offset = round(device_value / 10) % 5
-        # since adjust have a resolution of 0.1 °C while temp setpoints have a 0.5 °C
-        # stepping, when the adjust is not a multiple of 0.5 the MTS looses the
-        # correct setpoints and starts to round down their values.
-        # it looks like it is not able to represent correctly the offsets when
-        # these are not in multiple of 0.5. We therefore try to 'patch'
-        # these readings before sending them to HA
-        self.climate._mts_adjust_offset = adjust_offset if adjust_offset < 3 else adjust_offset - 5
-        # _mts_adjust_offset will then be used to offset the T setpoints and will be 0 when
-        # the adjust value is a 0.5 multiple or the corresponding remainder when it is not.
-        # the offset is set so it 'down-rounds' when it is 0.1 or 0.2. Instead it will 'up-rounds'
-        # when it is 0.3 or 0.4
+    @property
+    def native_max_value(self):
+        return 5
+
+    @property
+    def native_min_value(self):
+        return -5
+
+    @property
+    def native_step(self):
+        return 0.1
+
+    @property
+    def native_unit_of_measurement(self):
+        return MtsClimate.TEMP_CELSIUS
 
     async def async_set_native_value(self, value: float):
         # when sending the 'adjust' to the valve, the device also modifies
@@ -89,6 +91,29 @@ class Mts100AdjustNumber(MLHubAdjustNumber):
             self.climate._parse_temperature(
                 response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0]
             )
+
+    @property
+    def device_scale(self):
+        return 100
+
+    def update_native_value(self, device_value):
+        super().update_native_value(device_value)
+        # hub adjust has a scale of 100 while the other climate temperature
+        # numbers have a scale of 10 (MTS_SCALE)
+        adjust_offset = round(device_value / 10) % 5
+        # since adjust have a resolution of 0.1 °C while temp setpoints have a 0.5 °C
+        # stepping, when the adjust is not a multiple of 0.5 the MTS looses the
+        # correct setpoints and starts to round down their values.
+        # it looks like it is not able to represent correctly the offsets when
+        # these are not in multiple of 0.5. We therefore try to 'patch'
+        # these readings before sending them to HA
+        self.climate._mts_adjust_offset = (
+            adjust_offset if adjust_offset < 3 else adjust_offset - 5
+        )
+        # _mts_adjust_offset will then be used to offset the T setpoints and will be 0 when
+        # the adjust value is a 0.5 multiple or the corresponding remainder when it is not.
+        # the offset is set so it 'down-rounds' when it is 0.1 or 0.2. Instead it will 'up-rounds'
+        # when it is 0.3 or 0.4
 
 
 class Mts100Climate(MtsClimate):

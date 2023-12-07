@@ -18,7 +18,7 @@ from .merossclient import (  # mEROSS cONST
     get_productnameuuid,
     is_device_online,
 )
-from .number import MLHubAdjustNumber
+from .number import MLConfigNumber
 from .select import MtsTrackedSensor
 from .sensor import MLSensor
 from .switch import MLSwitch
@@ -41,6 +41,60 @@ MTS100_ALL_TYPESET = {mc.TYPE_MTS100, mc.TYPE_MTS100V3, mc.TYPE_MTS150}
 
 # REMOVE
 TRICK = False
+
+
+class MLHubSensorAdjustNumber(MLConfigNumber):
+    namespace = mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
+    key_namespace = mc.KEY_ADJUST
+    key_channel = mc.KEY_ID
+
+    def __init__(
+        self,
+        manager: MerossSubDevice,
+        key: str,
+        device_class: MLConfigNumber.DeviceClass,
+        min_value: float,
+        max_value: float,
+        step: float,
+    ):
+        self.key_value = key
+        self._attr_native_min_value = min_value
+        self._attr_native_max_value = max_value
+        self._attr_native_step = step
+        self._attr_native_unit_of_measurement = (
+            MLConfigNumber.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+        )
+        self._attr_name = f"Adjust {device_class}"
+        super().__init__(
+            manager,
+            manager.id,
+            f"config_{self.key_namespace}_{self.key_value}",
+            device_class,
+        )
+
+    async def async_set_native_value(self, value: float):
+        # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
+        # the issued value as a 'delta' to the current configured value i.e.
+        # 'new adjust value' = 'current adjust value' + 'issued adjust value'
+        # Since the native HA interface async_set_native_value wants to set
+        # the 'new adjust value' we have to issue the difference against the
+        # currently configured one
+        device_value = round(value * self.device_scale) + self.device_offset
+        if adjust_value := device_value - self.device_value:
+            if await self.manager.async_request_ack(
+                self.namespace,
+                mc.METHOD_SET,
+                {
+                    self.key_namespace: [
+                        {self.key_channel: self.channel, self.key_value: adjust_value}
+                    ]
+                },
+            ):
+                self.update_native_value(device_value)
+
+    @property
+    def device_scale(self):
+        return 10
 
 
 class SubDevicePollingStrategy(PollingStrategy):
@@ -117,7 +171,7 @@ class MerossDeviceHub(MerossDevice):
         self.platforms[MLBinarySensor.PLATFORM] = None
         self.platforms[MtsClimate.PLATFORM] = None
         self.platforms[MtsTrackedSensor.PLATFORM] = None
-        self.platforms[MLHubAdjustNumber.PLATFORM] = None
+        self.platforms[MLHubSensorAdjustNumber.PLATFORM] = None
         self.platforms[MLSwitch.PLATFORM] = None
         self.platforms[MLCalendar.PLATFORM] = None
 
@@ -612,7 +666,7 @@ class MerossSubDevice(MerossDeviceBase):
         for p_key, p_value in p_adjust.items():
             if p_key == mc.KEY_ID:
                 continue
-            number: MLHubAdjustNumber
+            number: MLHubSensorAdjustNumber
             if number := getattr(self, f"number_adjust_{p_key}", None):  # type: ignore
                 number.update_native_value(p_value)
 
@@ -655,20 +709,18 @@ class MS100SubDevice(MerossSubDevice):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
         self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
         self.sensor_humidity = self.build_sensor_c(MLSensor.DeviceClass.HUMIDITY)
-        self.number_adjust_temperature = MLHubAdjustNumber(
+        self.number_adjust_temperature = MLHubSensorAdjustNumber(
             self,
             mc.KEY_TEMPERATURE,
-            mc.NS_APPLIANCE_HUB_SENSOR_ADJUST,
-            MLHubAdjustNumber.DeviceClass.TEMPERATURE,
+            MLHubSensorAdjustNumber.DeviceClass.TEMPERATURE,
             -5,
             5,
             0.1,
         )
-        self.number_adjust_humidity = MLHubAdjustNumber(
+        self.number_adjust_humidity = MLHubSensorAdjustNumber(
             self,
             mc.KEY_HUMIDITY,
-            mc.NS_APPLIANCE_HUB_SENSOR_ADJUST,
-            MLHubAdjustNumber.DeviceClass.HUMIDITY,
+            MLHubSensorAdjustNumber.DeviceClass.HUMIDITY,
             -20,
             20,
             1,
@@ -678,8 +730,8 @@ class MS100SubDevice(MerossSubDevice):
         await super().async_shutdown()
         self.sensor_temperature: MLSensor = None  # type: ignore
         self.sensor_humidity: MLSensor = None  # type: ignore
-        self.number_adjust_temperature: MLHubAdjustNumber = None  # type: ignore
-        self.number_adjust_humidity: MLHubAdjustNumber = None  # type: ignore
+        self.number_adjust_temperature: MLHubSensorAdjustNumber = None  # type: ignore
+        self.number_adjust_humidity: MLHubSensorAdjustNumber = None  # type: ignore
 
     def _parse_humidity(self, p_humidity: dict):
         if isinstance(p_latest := p_humidity.get(mc.KEY_LATEST), int):
