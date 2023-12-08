@@ -1,11 +1,14 @@
 """Test for meross cloud profiles"""
 from unittest.mock import call
 
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pytest_homeassistant_custom_component.common import flush_store
 
 from custom_components.meross_lan import MerossApi, const as mlc
-from custom_components.meross_lan.meross_profile import MerossCloudProfile
+from custom_components.meross_lan.meross_profile import (
+    MerossCloudProfile,
+)
 from custom_components.meross_lan.merossclient import cloudapi, const as mc
 
 from . import const as tc, helpers
@@ -37,11 +40,12 @@ async def test_cloudapi(hass, cloudapi_mock: helpers.CloudApiMocker):
 
 
 async def test_meross_profile(
-    hass,
+    hass: HomeAssistant,
     hass_storage,
     aioclient_mock,
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
+    time_mock: helpers.TimeMocker,
 ):
     """
     Tests basic MerossCloudProfile (alone) behavior:
@@ -54,6 +58,14 @@ async def test_meross_profile(
     async with helpers.ProfileEntryMocker(hass) as profile_entry_mock:
         assert (profile := MerossApi.profiles.get(tc.MOCK_PROFILE_ID))
         # check we have refreshed our device list
+        # the device discovery starts when we setup the entry and it might take
+        # same while since we're queueing multiple requests (2)
+        # so we'll
+
+        await time_mock.async_tick(5)
+        await time_mock.async_tick(5)
+        await hass.async_block_till_done()
+
         assert len(cloudapi_mock.api_calls) >= 1
         assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_DEVLIST_PATH] == 1
         # check the cloud profile connected the mqtt server(s)
@@ -99,11 +111,12 @@ async def test_meross_profile(
 
 
 async def test_meross_profile_cloudapi_offline(
-    hass,
+    hass: HomeAssistant,
     hass_storage,
     aioclient_mock,
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
+    time_mock: helpers.TimeMocker,
 ):
     """
     Tests basic MerossCloudProfile (alone) behavior:
@@ -115,6 +128,10 @@ async def test_meross_profile_cloudapi_offline(
     hass_storage.update(tc.MOCK_PROFILE_STORAGE)
     async with helpers.ProfileEntryMocker(hass) as profile_entry_mock:
         assert (profile := MerossApi.profiles.get(tc.MOCK_PROFILE_ID))
+        time_mock.tick(5)
+        time_mock.tick(5)
+        await hass.async_block_till_done()
+
         # check we have tried to refresh our device list
         assert len(cloudapi_mock.api_calls) == 1
         assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_DEVLIST_PATH] == 1
@@ -122,9 +139,13 @@ async def test_meross_profile_cloudapi_offline(
         # for discovery of devices. Since the device list was not refreshed
         # we check against our stored list of devices
         expected_connections = set()
+        """
+        # update 2023-12-08: on entry setup we're not automatically querying
+        # the stored device list
         for device_info in tc.MOCK_PROFILE_STORE_DEVICEINFO_DICT.values():
             expected_connections.add(device_info[mc.KEY_DOMAIN])
             expected_connections.add(device_info[mc.KEY_RESERVEDDOMAIN])
+        """
         # check our profile built the expected number of connections
         mqttconnections = list(profile.mqttconnections.values())
         assert len(mqttconnections) == len(expected_connections)

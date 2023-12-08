@@ -79,3 +79,9 @@ async def hamqtt_mock(mqtt_mock):
 def merossmqtt_mock():
     with helpers.MerossMQTTMocker() as _merossmqtt_mock:
         yield _merossmqtt_mock
+
+
+@pytest.fixture()
+def time_mock(hass):
+    with helpers.TimeMocker(hass) as _time_mock:
+        yield _time_mock

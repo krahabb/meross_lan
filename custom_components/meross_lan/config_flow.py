@@ -283,47 +283,31 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     async def _async_mqtt_discovery(
         self, device_id: str, key: str | None, profile_id: str | None
     ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
-        # passing key=None would allow key-hack and we don't want it aymore
-        if key is None:
-            key = ""
-
         mqttconnections = []
         # TODO: we should better detect if the profile is a Meross one
         # and eventually raise a better exception stating if it's available
         # or not (disabled maybe)
-        if profile_id and (profile := MerossApi.profiles.get(profile_id)):
+        if profile_id and (profile_id in MerossApi.profiles):
+            profile = MerossApi.profiles[profile_id]
+            if not profile:
+                raise Exception(
+                    "Unable to identify device over MQTT since Meross cloud profile is disabled"
+                )
+            if not profile.allow_mqtt_publish:
+                raise Exception(
+                    "Unable to identify device over MQTT since Meross cloud profile doesn't allow MQTT publishing"
+                )
             mqttconnections = profile.get_or_create_mqttconnections(device_id)
         else:
             mqttconnections = [MerossApi.get(self.hass).mqtt_connection]
 
-        payload = None
         for mqttconnection in mqttconnections:
-            response = await mqttconnection.async_mqtt_publish(
-                device_id,
-                *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
-                key,
-            )
-            if not isinstance(response, dict):
-                continue  # try next connection if any
-            payload = response[mc.KEY_PAYLOAD]
-            response = await mqttconnection.async_mqtt_publish(
-                device_id,
-                *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
-                key,
-            )
-            if not isinstance(response, dict):
-                payload = None
-                continue  # try next connection if any
-            payload.update(response[mc.KEY_PAYLOAD])
-            descriptor = MerossDeviceDescriptor(payload)
-            return (
-                {
-                    mlc.CONF_PAYLOAD: payload,
-                    mlc.CONF_KEY: key,
-                    mlc.CONF_DEVICE_ID: descriptor.uuid,
-                },
-                descriptor,
-            )
+            if device_config := await mqttconnection.async_identify_device(
+                device_id, key or ""
+            ):
+                return device_config, MerossDeviceDescriptor(
+                    device_config[mlc.CONF_PAYLOAD]
+                )
 
         raise Exception(
             "No MQTT response: either no available broker or invalid device id"
@@ -769,9 +753,8 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                             "error (%s) while trying to repair device registry for %s (uuid:%s)",
                             str(error),
                             descriptor_update.productmodel,
-                            self._device_id
+                            self._device_id,
                         )
-                        pass
 
                     await self.hass.config_entries.async_reload(
                         self._config_entry.entry_id

@@ -33,7 +33,7 @@ from .const import (
     PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT,
-    PARAM_UNAVAILABILITY_TIMEOUT,
+    DeviceConfigType,
 )
 from .helpers import (
     LOGGER,
@@ -51,7 +51,6 @@ from .merossclient import (
     build_message,
     const as mc,
     get_default_arguments,
-    get_namespacekey,
     get_replykey,
 )
 from .merossclient.cloudapi import (
@@ -233,7 +232,7 @@ class MQTTConnection(Loggable):
         "sensor_connection",
         "_mqtt_transactions",
         "_mqtt_is_connected",
-        "_unsub_discovery_callback",
+        # REMOVE"_unsub_discovery_callback",
     )
 
     def __init__(
@@ -245,19 +244,30 @@ class MQTTConnection(Loggable):
         self.profile = profile
         self.broker = broker
         self.mqttdevices: dict[str, MerossDevice] = {}
-        self.mqttdiscovering: dict[str, dict] = {}
+        self.mqttdiscovering: set[str] = set()
         self.sensor_connection = None
         self._mqtt_transactions: dict[str, _MQTTTransaction] = {}
         self._mqtt_is_connected = False
-        self._unsub_discovery_callback: asyncio.TimerHandle | None = None
+        # REMOVEself._unsub_discovery_callback: asyncio.TimerHandle | None = None
         super().__init__(connection_id)
         if profile.create_diagnostic_entities:
             self.create_diagnostic_entities()
 
     async def async_shutdown(self):
+        """REMOVE
         if self._unsub_discovery_callback:
             self._unsub_discovery_callback.cancel()
             self._unsub_discovery_callback = None
+        """
+        for mqtt_transaction in self._mqtt_transactions.values():
+            self.log(
+                DEBUG,
+                "cancelling pending mqtt transaction on %s %s",
+                mqtt_transaction.method,
+                mqtt_transaction.namespace,
+            )
+            mqtt_transaction.response_future.cancel()
+        self._mqtt_transactions.clear()
         self.mqttdiscovering.clear()
         for device in self.mqttdevices.values():
             device.mqtt_detached()
@@ -373,6 +383,20 @@ class MQTTConnection(Loggable):
                 )
                 return
 
+            # the device is not configured: proceed to discovery in case
+            if device_id in self.mqttdiscovering:
+                return
+
+            key = self.profile.key
+            if get_replykey(header, key) is not key:
+                self.warning(
+                    "discovery key error for device_id: %s",
+                    device_id,
+                    timeout=300,
+                )
+                if key is not None:
+                    return
+
             # lookout for any disabled/ignored entry
             config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
             if (
@@ -413,16 +437,18 @@ class MQTTConnection(Loggable):
                 )
                 return
 
-            key = self.profile.key
-            if get_replykey(header, key) is not key:
-                self.warning(
-                    "discovery key error for device_id: %s",
-                    device_id,
-                    timeout=300,
-                )
-                if key is not None:
-                    return
+            self.mqttdiscovering.add(device_id)
+            try:
+                if device_config := await self.async_identify_device(device_id, key):
+                    await ApiProfile.hass.config_entries.flow.async_init(
+                        DOMAIN,
+                        context={"source": SOURCE_INTEGRATION_DISCOVERY},
+                        data=device_config,
+                    )
+            finally:
+                self.mqttdiscovering.remove(device_id)
 
+            """REMOVE
             discovered = self.get_or_set_discovering(device_id)
             if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
                 namespace = header[mc.KEY_NAMESPACE]
@@ -448,7 +474,9 @@ class MQTTConnection(Loggable):
                     CONF_KEY: key,
                 },
             )
+            """
 
+    """REMOVE
     def get_or_set_discovering(self, device_id: str):
         if device_id not in self.mqttdiscovering:
             self.log(DEBUG, "starting discovery for device_id: %s", device_id)
@@ -465,7 +493,76 @@ class MQTTConnection(Loggable):
                     self._async_discovery_callback,
                 )
         return self.mqttdiscovering[device_id]
+    """
 
+    async def async_identify_device(
+        self, device_id: str, key: str
+    ) -> DeviceConfigType | None:
+        from_ = mc.TOPIC_RESPONSE.format(device_id)
+        response = await self.async_mqtt_publish(
+            device_id,
+            mc.NS_APPLIANCE_CONTROL_MULTIPLE,
+            mc.METHOD_SET,
+            {
+                mc.KEY_MULTIPLE: [
+                    build_message(
+                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
+                        key,
+                        from_,
+                    ),
+                    build_message(
+                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                        key,
+                        from_,
+                    ),
+                ]
+            },
+            key,
+        )
+        if not isinstance(response, dict):
+            return None
+        multiple_response: list[MerossMessageType] = response[mc.KEY_PAYLOAD][
+            mc.KEY_MULTIPLE
+        ]
+        payload = multiple_response[0][mc.KEY_PAYLOAD]
+        payload.update(multiple_response[1][mc.KEY_PAYLOAD])
+        return {
+            CONF_DEVICE_ID: device_id,
+            CONF_PAYLOAD: payload,
+            CONF_KEY: key,
+        }
+
+        """REMOVE
+        response = await self.async_mqtt_publish(
+            device_id,
+            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
+            key,
+        )
+        if not isinstance(response, dict):
+            return None
+        payload = response[mc.KEY_PAYLOAD]
+        if (
+            device_id
+            != payload[mc.KEY_ALL][mc.KEY_SYSTEM][mc.KEY_HARDWARE][mc.KEY_UUID]
+        ):
+            # device mismatch ?!
+            return None
+        response = await self.async_mqtt_publish(
+            device_id,
+            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+            key,
+        )
+        if not isinstance(response, dict):
+            return None
+        payload.update(response[mc.KEY_PAYLOAD])
+        return {
+            CONF_DEVICE_ID: device_id,
+            CONF_PAYLOAD: payload,
+            CONF_KEY: key,
+        }
+        """
+
+    """REMOVE
     async def _async_progress_discovery(self, discovered: dict, device_id: str):
         for namespace in (mc.NS_APPLIANCE_SYSTEM_ALL, mc.NS_APPLIANCE_SYSTEM_ABILITY):
             if get_namespacekey(namespace) not in discovered:
@@ -479,14 +576,9 @@ class MQTTConnection(Loggable):
                 return True
 
         return False
-
+    """
+    """REMOVE
     async def _async_discovery_callback(self):
-        """
-        async task to keep alive the discovery process:
-        activated when any device is initially detected
-        this task is not renewed when the list of devices
-        under 'discovery' is empty or these became stale
-        """
         self._unsub_discovery_callback = None
         if len(discovering := self.mqttdiscovering) == 0:
             return
@@ -510,6 +602,7 @@ class MQTTConnection(Loggable):
                 PARAM_UNAVAILABILITY_TIMEOUT + 2,
                 self._async_discovery_callback,
             )
+    """
 
     def _mqtt_transaction_init(
         self,
@@ -546,13 +639,10 @@ class MQTTConnection(Loggable):
     def _mqtt_transactions_clean(self):
         if self._mqtt_transactions:
             # check and cleanup stale transactions
-            _mqtt_transaction_stale_list = []
             epoch = time()
-            for _mqtt_transaction in self._mqtt_transactions.values():
+            for _mqtt_transaction in list(self._mqtt_transactions.values()):
                 if (epoch - _mqtt_transaction.request_time) > 15:
-                    _mqtt_transaction_stale_list.append(_mqtt_transaction.messageid)
-            for messageid in _mqtt_transaction_stale_list:
-                self._mqtt_transactions.pop(messageid)
+                    self._mqtt_transaction_cancel(_mqtt_transaction)
 
     @callback
     def _mqtt_connected(self):
@@ -909,14 +999,10 @@ class MerossCloudProfile(ApiProfile):
             self._device_info_time + PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
         )
         next_query_delay = next_query_epoch - time()
-        if next_query_delay < 60:
-            # schedule immediately when it's about to come
-            # or if the timer elapsed in the past
-            if await self.async_query_device_info() is not None:
-                # the 'unknown' devices discovery already kicked in
-                # when the "async_query_devices" processed data
-                return
-            next_query_delay = 60
+        if next_query_delay < 5:
+            # we'll give some breath to the init process
+            next_query_delay = 5
+        """REMOVE
         # the device_info refresh did not kick in or failed
         # for whatever reason. We just scan the device_info
         # we have and setup the polling
@@ -929,7 +1015,7 @@ class MerossCloudProfile(ApiProfile):
         ]
         if len(device_info_unknown):
             await self._process_device_info_unknown(device_info_unknown)
-
+        """
         """REMOVE
         with self._cloud_token_exception_manager("async_cloudapi_deviceinfo") as token:
             if token is not None:
@@ -1377,7 +1463,15 @@ class MerossCloudProfile(ApiProfile):
                     continue
                 # cloud conf has a new device
                 for mqttconnection in self.get_or_create_mqttconnections(device_id):
-                    mqttconnection.get_or_set_discovering(device_id)
+                    if device_config := await mqttconnection.async_identify_device(
+                        device_id, self.key
+                    ):
+                        await ApiProfile.hass.config_entries.flow.async_init(
+                            DOMAIN,
+                            context={"source": SOURCE_INTEGRATION_DISCOVERY},
+                            data=device_config,
+                        )
+                        break
 
     def _schedule_save_store(self):
         def _data_func():

@@ -33,13 +33,103 @@ from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 from . import const as tc
 
 
+class TimeMocker(contextlib.AbstractContextManager):
+    """
+    time mocker helper using freeztime and providing some helpers
+    to integrate time changes with HA core mechanics.
+    At the time, don't use it together with DeviceContext which
+    mocks its own time
+    """
+
+    hass: HomeAssistant
+    time: FrozenDateTimeFactory | StepTickTimeFactory
+    _warp_task: Future | None = None
+    _warp_run: bool
+
+    def __init__(self, hass: HomeAssistant, time_to_freeze=None):
+        super().__init__()
+        self.hass = hass
+        self._freeze_time = freeze_time(time_to_freeze)
+
+    def __enter__(self):
+        self.time = self._freeze_time.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._freeze_time.stop()
+
+    def tick(self, tick: timedelta | float | int):
+        self.time.tick(tick if isinstance(tick, timedelta) else timedelta(seconds=tick))
+        async_fire_time_changed_exact(self.hass)
+
+    async def async_tick(self, tick: timedelta | float | int):
+        self.time.tick(tick if isinstance(tick, timedelta) else timedelta(seconds=tick))
+        async_fire_time_changed_exact(self.hass)
+        # await self.hass.async_block_till_done()
+
+    async def async_move_to(self, target_datetime: datetime):
+        self.time.move_to(target_datetime)
+        async_fire_time_changed_exact(self.hass)
+        # await self.hass.async_block_till_done()
+
+    async def async_warp(
+        self,
+        timeout: float | int | timedelta | datetime,
+        tick: float | int | timedelta = 1,
+    ):
+        if not isinstance(timeout, datetime):
+            if isinstance(timeout, timedelta):
+                timeout = self.time() + timeout
+            else:
+                timeout = self.time() + timedelta(seconds=timeout)
+        if not isinstance(tick, timedelta):
+            tick = timedelta(seconds=tick)
+
+        while self.time() < timeout:
+            await self.async_tick(tick)
+
+    def warp(self, tick: float | int | timedelta = 0.5):
+        """
+        starts an asynchronous task in an executor which manipulates our
+        freze_time so the time passes and get advanced to
+        time.time() + timeout.
+        While passing it tries to perform HA events rollout
+        every tick seconds
+        """
+        assert self._warp_task is None
+
+        if not isinstance(tick, timedelta):
+            tick = timedelta(seconds=tick)
+
+        def _warp():
+            print("TimeMocker.warp: entering executor")
+            count = 0
+            while self._warp_run:
+                _time = self.time()
+                run_coroutine_threadsafe(self.async_tick(tick), self.hass.loop)
+                while _time == self.time():
+                    time.sleep(0.01)
+                count += 1
+            print(f"TimeMocker.warp: exiting executor (_warp count={count})")
+
+        self._warp_run = True
+        self._warp_task = self.hass.async_add_executor_job(_warp)
+
+    async def async_stopwarp(self):
+        print("TimeMocker.warp: stopping executor")
+        assert self._warp_task
+        self._warp_run = False
+        await self._warp_task
+        self._warp_task = None
+
+
 class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
     def __init__(
         self,
         hass: HomeAssistant,
         unique_id: str,
         *,
-        data: dict | None = None,
+        data: Any | None = None,
         auto_add: bool = True,
         auto_setup: bool = True,
     ) -> None:
@@ -361,9 +451,7 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         if not self._config_entry_loaded:
             await self.async_load_config_entry()
         assert self.device
-        self.time.tick(timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY))
-        async_fire_time_changed_exact(self.hass)
-        await self.hass.async_block_till_done()
+        await self.async_tick(timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY))
         assert self.device.online
 
     async def async_load_config_entry(self):
@@ -625,6 +713,7 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
 class MerossMQTTMocker(contextlib.AbstractContextManager):
     safe_connect_mock: Mock
     safe_disconnect_mock: Mock
+    async_mqtt_publish_mock: Mock
 
     def __init__(self):
         def _safe_connect(_self: MerossMQTTConnection, host, port):
@@ -651,16 +740,31 @@ class MerossMQTTMocker(contextlib.AbstractContextManager):
         )
         self.safe_disconnect_mock = None  # type: ignore
 
+        async def _async_mqtt_publish(_self: MerossMQTTConnection, *args):
+            return None
+
+        self.async_mqtt_publish_patcher = patch.object(
+            MerossMQTTConnection,
+            "async_mqtt_publish",
+            autospec=True,
+            side_effect=_async_mqtt_publish,
+        )
+        self.async_mqtt_publish_mock = None  # type: ignore
+
     def __enter__(self):
         self.safe_connect_mock = self.safe_connect_patcher.start()
         self.safe_disconnect_mock = self.safe_disconnect_patcher.start()
+        self.async_mqtt_publish_mock = self.async_mqtt_publish_patcher.start()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.safe_connect_mock is not None:
+        if self.safe_connect_mock:
             self.safe_connect_patcher.stop()
             self.safe_connect_mock = None  # type: ignore
-        if self.safe_disconnect_mock is not None:
+        if self.safe_disconnect_mock:
             self.safe_disconnect_patcher.stop()
             self.safe_disconnect_mock = None  # type: ignore
+        if self.async_mqtt_publish_mock:
+            self.async_mqtt_publish_patcher.stop()
+            self.async_mqtt_publish_mock = None  # type: ignore
         return super().__exit__(exc_type, exc_value, traceback)
