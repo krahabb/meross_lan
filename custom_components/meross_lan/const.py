@@ -151,3 +151,57 @@ PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT = 604800  # 1 week
 """timeout for querying cloud api latestVersion endpoint"""
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30
 """used to delay updated profile data to storage"""
+PARAM_HEADER_SIZE = 300
+"""(rough) estimate of the header part of any response"""
+PARAM_RESPONSE_SIZE_MAX = 3000
+"""(rough) estimate of the allowed response size limit before overflow occurs (see #244)"""
+
+"""
+Default timeouts and config parameters for polled namespaces managed
+through PollingStrategy helper classes. For every namespace we
+set the defaults used to initialize these helpers.
+The configuration is set in the tuple as:
+(polling_timeout, polling_timeout_cloud, response_size, additional_size)
+see the PollingStrategy for the meaning of these values
+The 'response_size' is a conservative (in excess) estimate of the
+expected response size for the whole message (header itself weights around 300 bytes).
+Some payloads would depend on the number of channels/subdevices available
+and the configured number would just be a base size (minimum) while
+the 'additional_size' value must be multiplied for the number of channels/subdevices
+and will be used to adjust the actual 'response_size' at runtime in the relative PollingStrategy.
+This parameter in turn will be used to split expected huge payload requests/responses
+in Appliance.Control.Multiple since it appears the HTTP interface has an outbound
+message size limit around 3000 chars/bytes (on a legacy mss310) and this would lead to a malformed (truncated)
+response. This issue also appeared on hubs when querying for a big number of subdevices
+as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
+responses though
+"""
+POLLING_STRATEGY_CONF: dict[str, tuple[int, int, int, int]] = {
+    mc.NS_APPLIANCE_SYSTEM_ALL: (0, 0, 1000, 0),
+    mc.NS_APPLIANCE_SYSTEM_DEBUG: (0, 0, 1400, 0),
+    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 320, 0),
+    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (PARAM_SIGNAL_UPDATE_PERIOD, PARAM_CLOUDMQTT_UPDATE_PERIOD, 330, 0),
+    mc.NS_APPLIANCE_CONFIG_OVERTEMP: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 340, 0),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (PARAM_ENERGY_UPDATE_PERIOD, PARAM_CLOUDMQTT_UPDATE_PERIOD, 1100, 0),
+    mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: (0, 0, PARAM_HEADER_SIZE, 100),
+    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 430, 0),
+    mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 1850, 0),
+    mc.NS_APPLIANCE_CONTROL_MP3: (0, 0, 380, 0),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 80),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: (0, 0, PARAM_HEADER_SIZE, 140),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: (0, 0, PARAM_HEADER_SIZE, 550),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: (0, 0, PARAM_HEADER_SIZE, 40),
+    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 70),
+    mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 410, 0),
+    mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 140),
+    mc.NS_APPLIANCE_HUB_BATTERY: (PARAM_HUBBATTERY_UPDATE_PERIOD, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 40),
+    mc.NS_APPLIANCE_HUB_MTS100_ADJUST: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 40),
+    mc.NS_APPLIANCE_HUB_MTS100_ALL: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 350),
+    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 500),
+    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 60),
+    mc.NS_APPLIANCE_HUB_SENSOR_ALL: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 250),
+    mc.NS_APPLIANCE_HUB_TOGGLEX: (0, 0, PARAM_HEADER_SIZE, 35),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 70),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION: (0, 0, PARAM_HEADER_SIZE, 50),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (0, 0, PARAM_HEADER_SIZE, 40),
+}

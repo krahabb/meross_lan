@@ -125,9 +125,7 @@ class DiffuserMixin(
             self._sensor_humidity = MLSensor.build_for_device(
                 self, MLSensor.DeviceClass.HUMIDITY
             )
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR
-            ] = PollingStrategy(mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR)
+            PollingStrategy(self, mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR, item_count=1)
 
     # interface: MerossDevice
     async def async_shutdown(self):

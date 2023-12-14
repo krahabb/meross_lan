@@ -424,15 +424,13 @@ class LightMixin(
         super().__init__(descriptor, entry)
 
         if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in descriptor.ability:
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT
-            ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT)
+            SmartPollingStrategy(self, mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT)
 
     def _init_light(self, payload: dict):
         MLLight(self, payload)
 
     def _handle_Appliance_Control_Light(self, header: dict, payload: dict):
-        self._parse_light(payload[mc.KEY_LIGHT])
+        self._parse__generic(mc.KEY_LIGHT, payload[mc.KEY_LIGHT])
 
     def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
         light_effect_map = {}

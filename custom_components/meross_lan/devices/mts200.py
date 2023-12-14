@@ -435,31 +435,41 @@ class ThermostatMixin(
             for m in mode:
                 Mts200Climate(self, m[mc.KEY_CHANNEL])
                 self._polling_payload.append({mc.KEY_CHANNEL: m[mc.KEY_CHANNEL]})
-        if self._polling_payload:
+        if channel_count := len(self._polling_payload):
             ability = self.descriptor.ability
             """
             "Mode","SummerMode","WindowOpened" are carried in digest so we don't poll them
             "Schedule" is pushed over mqtt
             The rest are actually guesses
             """
-            for ns in {
-                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
-                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE,
-                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
-            }:
-                if ns in ability:
-                    self.polling_dictionary[ns] = PollingStrategy(
-                        ns,
-                        {get_namespacekey(ns): self._polling_payload},
-                    )
-            for ns in {
-                mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION,
-            }:
-                if ns in ability:
-                    self.polling_dictionary[ns] = SmartPollingStrategy(
-                        ns,
-                        {get_namespacekey(ns): self._polling_payload},
-                    )
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION in ability:
+                SmartPollingStrategy(
+                    self,
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION,
+                    payload={mc.KEY_CALIBRATION: self._polling_payload},
+                    item_count=channel_count,
+                )
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT in ability:
+                PollingStrategy(
+                    self,
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
+                    payload={mc.KEY_OVERHEAT: self._polling_payload},
+                    item_count=channel_count,
+                )
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE in ability:
+                PollingStrategy(
+                    self,
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE,
+                    payload={mc.KEY_SCHEDULE: self._polling_payload},
+                    item_count=channel_count,
+                )
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR in ability:
+                PollingStrategy(
+                    self,
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
+                    payload={mc.KEY_SENSOR: self._polling_payload},
+                    item_count=channel_count,
+                )
 
     def _handle_Appliance_Control_Thermostat_Calibration(self, header, payload):
         self._parse__array(mc.KEY_CALIBRATION, payload[mc.KEY_CALIBRATION])
@@ -592,9 +602,11 @@ class ScreenBrightnessMixin(
             self._number_brightness_standby = MLScreenBrightnessNumber(
                 self, 0, mc.KEY_STANDBY
             )
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
-            ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS)
+            SmartPollingStrategy(
+                self,
+                mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
+                item_count=1,
+            )
 
     # interface: MerossDevice
     async def async_shutdown(self):

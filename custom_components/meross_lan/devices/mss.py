@@ -9,7 +9,6 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
-from ..const import PARAM_ENERGY_UPDATE_PERIOD
 from ..helpers import (
     ApiProfile,
     EntityPollingStrategy,
@@ -123,9 +122,7 @@ class ElectricityMixin(
             self, MLSensor.DeviceClass.VOLTAGE
         )
         self._sensor_energy_estimate = EnergyEstimateSensor(self)
-        self.polling_dictionary[
-            mc.NS_APPLIANCE_CONTROL_ELECTRICITY
-        ] = SmartPollingStrategy(mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
+        SmartPollingStrategy(self, mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
 
     def start(self):
         self._schedule_next_reset(dt_util.now())
@@ -285,12 +282,10 @@ class ConsumptionXMixin(
     def __init__(self, descriptor, entry):
         super().__init__(descriptor, entry)
         self._sensor_consumption: ConsumptionXSensor = ConsumptionXSensor(self)
-        self.polling_dictionary[
-            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
-        ] = EntityPollingStrategy(
+        EntityPollingStrategy(
+            self,
             mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX,
             self._sensor_consumption,
-            PARAM_ENERGY_UPDATE_PERIOD,
         )
 
     async def async_shutdown(self):
@@ -466,9 +461,8 @@ class OverTempMixin(
         self._sensor_overtemp_type: MLSensor = MLSensor(
             self, None, "config_overtemp_type", MLSensor.DeviceClass.ENUM
         )
-        self.polling_dictionary[
-            mc.NS_APPLIANCE_CONFIG_OVERTEMP
-        ] = EntityPollingStrategy(
+        EntityPollingStrategy(
+            self,
             mc.NS_APPLIANCE_CONFIG_OVERTEMP,
             self._switch_overtemp_enable,
         )

@@ -52,7 +52,9 @@ from aiohttp import web
 # homeassistant.helpers.storage
 from custom_components.meross_lan.merossclient import (
     MerossDeviceDescriptor,
+    MerossHeaderType,
     MerossMessageType,
+    MerossPayloadType,
     build_message,
     const as mc,
     get_namespacekey,
@@ -170,51 +172,22 @@ class MerossEmulator:
         return self._tzinfo
 
     # async def post_config(self, request: web_Request):
-    def handle(self, request: str) -> MerossMessageType:
-        jsonrequest: MerossMessageType = json.loads(request)
-        header = jsonrequest[mc.KEY_HEADER]
-        payload = jsonrequest[mc.KEY_PAYLOAD]
-        namespace = header[mc.KEY_NAMESPACE]
-        method = header[mc.KEY_METHOD]
-
+    def handle(self, s_request: str) -> MerossMessageType:
+        request: MerossMessageType = json.loads(s_request)
+        request_header = request[mc.KEY_HEADER]
+        request_payload = request[mc.KEY_PAYLOAD]
+        self.update_epoch()
         print(
             f"Emulator({self.descriptor.uuid}) "
-            f"RX: namespace={namespace} method={method} payload={json.dumps(payload)}"
+            f"RX: namespace={request_header[mc.KEY_NAMESPACE]} method={request_header[mc.KEY_METHOD]} payload={json.dumps(request_payload)}"
         )
-        try:
-            self.update_epoch()
-
-            if namespace not in self.descriptor.ability:
-                raise Exception(f"{namespace} not supported in ability")
-
-            elif get_replykey(header, self.key) is not self.key:
-                method = mc.METHOD_ERROR
-                payload = {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}}
-
-            elif handler := getattr(
-                self, f"_{method}_{namespace.replace('.', '_')}", None
-            ):
-                method, payload = handler(header, payload)
-
-            else:
-                method, payload = self._handler_default(method, namespace, payload)
-
-        except Exception as e:
-            method = mc.METHOD_ERROR
-            payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
-
-        data = build_message(
-            namespace,
-            method,
-            payload,
-            self.key,
-            mc.MANUFACTURER,
-            header[mc.KEY_MESSAGEID],
-        )
+        response = self._handle_message(request_header, request_payload)
+        response_header = response[mc.KEY_HEADER]
         print(
-            f"Emulator({self.descriptor.uuid}) TX: namespace={namespace} method={method} payload={json.dumps(payload)}"
+            f"Emulator({self.descriptor.uuid}) "
+            f"TX: namespace={response_header[mc.KEY_NAMESPACE]} method={response_header[mc.KEY_METHOD]} payload={json.dumps(response[mc.KEY_PAYLOAD])}"
         )
-        return data
+        return response
 
     def update_epoch(self):
         """
@@ -254,6 +227,38 @@ class MerossEmulator:
                 raise Exception(f"{key} not present in digest")
 
         return key, p_digest[key]
+
+    def _handle_message(self, header: MerossHeaderType, payload: MerossPayloadType):
+        namespace = header[mc.KEY_NAMESPACE]
+        method = header[mc.KEY_METHOD]
+        try:
+            if namespace not in self.descriptor.ability:
+                raise Exception(f"{namespace} not supported in ability")
+
+            elif get_replykey(header, self.key) is not self.key:
+                response_method = mc.METHOD_ERROR
+                response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}}
+
+            elif handler := getattr(
+                self, f"_{method}_{namespace.replace('.', '_')}", None
+            ):
+                response_method, response_payload = handler(header, payload)
+
+            else:
+                response_method, response_payload = self._handler_default(method, namespace, payload)
+
+        except Exception as e:
+            response_method = mc.METHOD_ERROR
+            response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
+
+        return build_message(
+            namespace,
+            response_method,
+            response_payload,
+            self.key,
+            mc.MANUFACTURER,
+            header[mc.KEY_MESSAGEID],
+        )
 
     def _handler_default(self, method: str, namespace: str, payload: dict):
         """
@@ -302,6 +307,14 @@ class MerossEmulator:
                 )
 
         return mc.METHOD_SETACK, {}
+
+    def _SET_Appliance_Control_Multiple(self, header, payload):
+        multiple = []
+        for message in payload[mc.KEY_MULTIPLE]:
+            multiple.append(
+                self._handle_message(message[mc.KEY_HEADER], message[mc.KEY_PAYLOAD])
+            )
+        return mc.METHOD_SETACK, {mc.KEY_MULTIPLE: multiple}
 
     def _GET_Appliance_System_DNDMode(self, header, payload):
         return mc.METHOD_GETACK, self.p_dndmode

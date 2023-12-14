@@ -144,9 +144,7 @@ class Mp3Mixin(
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here
             MLMp3Player(self, 0)
-            self.polling_dictionary[mc.NS_APPLIANCE_CONTROL_MP3] = PollingStrategy(
-                mc.NS_APPLIANCE_CONTROL_MP3
-            )
+            PollingStrategy(self, mc.NS_APPLIANCE_CONTROL_MP3)
             # cherub light entity should be there...
             light: MLLight = self.entities.get(0)  # type: ignore
             if light:

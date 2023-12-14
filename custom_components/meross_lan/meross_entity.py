@@ -245,10 +245,10 @@ class MerossToggle(MerossEntity):
     manager: MerossDeviceBase
     # customize the request payload for different
     # devices api. see 'request_onoff' to see how
-    namespace: str | None
-    key_namespace: str | None
-    key_channel: str | None = mc.KEY_CHANNEL
-    key_onoff: str | None = mc.KEY_ONOFF
+    namespace: str
+    key_namespace: str
+    key_channel: str = mc.KEY_CHANNEL
+    key_onoff: str = mc.KEY_ONOFF
 
     def __init__(
         self,

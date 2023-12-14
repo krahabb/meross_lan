@@ -8,7 +8,7 @@ from . import meross_entity as me
 from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
-from .const import DOMAIN, PARAM_HUBBATTERY_UPDATE_PERIOD
+from .const import DOMAIN
 from .helpers import ApiProfile, PollingStrategy, SmartPollingStrategy
 from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (  # mEROSS cONST
@@ -38,9 +38,6 @@ WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
 )
 # subdevices types listed in NS_APPLIANCE_HUB_MTS100_ALL
 MTS100_ALL_TYPESET = {mc.TYPE_MTS100, mc.TYPE_MTS100V3, mc.TYPE_MTS150}
-
-# REMOVE
-TRICK = False
 
 
 class MLHubSensorAdjustNumber(MLConfigNumber):
@@ -104,6 +101,8 @@ class SubDevicePollingStrategy(PollingStrategy):
     poll when the device is MQTT pushing its state
     """
 
+    device: typing.Final[MerossDeviceHub]  # type: ignore
+
     __slots__ = (
         "_types",
         "_included",
@@ -111,14 +110,20 @@ class SubDevicePollingStrategy(PollingStrategy):
     )
 
     def __init__(
-        self, namespace: str, types: typing.Collection, included: bool, count: int
+        self,
+        device: MerossDeviceHub,
+        namespace: str,
+        types: typing.Collection,
+        included: bool,
+        count: int,
     ):
-        super().__init__(namespace)
+        super().__init__(device, namespace)
         self._types = types
         self._included = included
         self._count = count
 
-    async def poll(self, device: MerossDeviceHub, epoch: float, namespace: str | None):
+    async def async_poll(self, epoch: float, namespace: str | None):
+        device = self.device
         if namespace or (not device._mqtt_active) or (self.lastrequest == 0):
             max_queuable = 1
             # for hubs, this payload request might be splitted
@@ -138,20 +143,18 @@ class SubDevicePollingStrategy(PollingStrategy):
                 # if we're good to go on the first iteration,
                 # we don't want to break this cycle else it
                 # would restart (stateless) at the next polling cycle
+                self.request = (
+                    self.namespace,
+                    mc.METHOD_GET,
+                    {get_namespacekey(self.namespace): p},
+                )
+                self.adjust_size(len(p))
                 if await device.async_request_smartpoll(
+                    self,
                     epoch,
-                    self.lastrequest,
-                    (
-                        self.namespace,
-                        mc.METHOD_GET,
-                        {get_namespacekey(self.namespace): p},
-                    ),
                     cloud_queue_max=max_queuable,
                 ):
-                    max_queuable = max_queuable + 1
-
-            if max_queuable > 1:
-                self.lastrequest = epoch
+                    max_queuable += 1
 
 
 class MerossDeviceHub(MerossDevice):
@@ -174,30 +177,6 @@ class MerossDeviceHub(MerossDevice):
         self.platforms[MLHubSensorAdjustNumber.PLATFORM] = None
         self.platforms[MLSwitch.PLATFORM] = None
         self.platforms[MLCalendar.PLATFORM] = None
-
-        self.polling_dictionary[mc.NS_APPLIANCE_HUB_BATTERY] = SmartPollingStrategy(
-            mc.NS_APPLIANCE_HUB_BATTERY, None, PARAM_HUBBATTERY_UPDATE_PERIOD
-        )
-
-        # REMOVE
-        global TRICK
-        if TRICK:
-            TRICK = False
-            MS100SubDevice(
-                self,
-                {
-                    "id": "120027D281CF",
-                    "status": 1,
-                    "onoff": 0,
-                    "lastActiveTime": 1638019438,
-                    "ms100": {
-                        "latestTime": 1638019438,
-                        "latestTemperature": 224,
-                        "latestHumidity": 460,
-                        "voltage": 2766,
-                    },
-                },
-            )
 
     # interface: EntityManager
     def managed_entities(self, platform):
@@ -338,54 +317,58 @@ class MerossDeviceHub(MerossDevice):
             except Exception:
                 return None
 
+        polling_dictionary = self.polling_dictionary
         abilities = self.descriptor.ability
         if _type in MTS100_ALL_TYPESET:
-            if (mc.NS_APPLIANCE_HUB_MTS100_ALL in abilities) and not (
-                mc.NS_APPLIANCE_HUB_MTS100_ALL in self.polling_dictionary
+            if (mc.NS_APPLIANCE_HUB_MTS100_ALL not in polling_dictionary) and (
+                mc.NS_APPLIANCE_HUB_MTS100_ALL in abilities
             ):
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_HUB_MTS100_ALL
-                ] = SubDevicePollingStrategy(
-                    mc.NS_APPLIANCE_HUB_MTS100_ALL, MTS100_ALL_TYPESET, True, 8
+                SubDevicePollingStrategy(
+                    self, mc.NS_APPLIANCE_HUB_MTS100_ALL, MTS100_ALL_TYPESET, True, 8
                 )
-            if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in abilities) and not (
-                mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in self.polling_dictionary
+            if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB not in polling_dictionary) and (
+                mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in abilities
             ):
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB
-                ] = SubDevicePollingStrategy(
-                    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, MTS100_ALL_TYPESET, True, 4
+                SubDevicePollingStrategy(
+                    self,
+                    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
+                    MTS100_ALL_TYPESET,
+                    True,
+                    4,
                 )
-            if (mc.NS_APPLIANCE_HUB_MTS100_ADJUST in abilities) and not (
-                mc.NS_APPLIANCE_HUB_MTS100_ADJUST in self.polling_dictionary
-            ):
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_HUB_MTS100_ADJUST
-                ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
+            if mc.NS_APPLIANCE_HUB_MTS100_ADJUST in polling_dictionary:
+                polling_dictionary[mc.NS_APPLIANCE_HUB_MTS100_ADJUST].increment_size()
+            elif mc.NS_APPLIANCE_HUB_MTS100_ADJUST in abilities:
+                SmartPollingStrategy(
+                    self, mc.NS_APPLIANCE_HUB_MTS100_ADJUST, item_count=1
+                )
         else:
-            if (mc.NS_APPLIANCE_HUB_SENSOR_ALL in abilities) and not (
-                mc.NS_APPLIANCE_HUB_SENSOR_ALL in self.polling_dictionary
+            if (mc.NS_APPLIANCE_HUB_SENSOR_ALL not in polling_dictionary) and (
+                mc.NS_APPLIANCE_HUB_SENSOR_ALL in abilities
             ):
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_HUB_SENSOR_ALL
-                ] = SubDevicePollingStrategy(
-                    mc.NS_APPLIANCE_HUB_SENSOR_ALL, MTS100_ALL_TYPESET, False, 8
+                SubDevicePollingStrategy(
+                    self, mc.NS_APPLIANCE_HUB_SENSOR_ALL, MTS100_ALL_TYPESET, False, 8
                 )
-            if (mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in abilities) and not (
-                mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in self.polling_dictionary
-            ):
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
-                ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
-            if (mc.NS_APPLIANCE_HUB_TOGGLEX in abilities) and not (
-                mc.NS_APPLIANCE_HUB_TOGGLEX in self.polling_dictionary
+            if mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in polling_dictionary:
+                polling_dictionary[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST].increment_size()
+            elif mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in abilities:
+                SmartPollingStrategy(
+                    self, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST, item_count=1
+                )
+            if (mc.NS_APPLIANCE_HUB_TOGGLEX not in polling_dictionary) and (
+                mc.NS_APPLIANCE_HUB_TOGGLEX in abilities
             ):
                 # this is a status message irrelevant for mts100(s) and
                 # other types. If not use an MQTT-PUSH friendly startegy
                 if _type not in (mc.TYPE_MS100,):
-                    self.polling_dictionary[
-                        mc.NS_APPLIANCE_HUB_TOGGLEX
-                    ] = PollingStrategy(mc.NS_APPLIANCE_HUB_TOGGLEX)
+                    PollingStrategy(self, mc.NS_APPLIANCE_HUB_TOGGLEX)
+
+        if mc.NS_APPLIANCE_HUB_TOGGLEX in polling_dictionary:
+            polling_dictionary[mc.NS_APPLIANCE_HUB_TOGGLEX].increment_size()
+        if mc.NS_APPLIANCE_HUB_BATTERY in polling_dictionary:
+            polling_dictionary[mc.NS_APPLIANCE_HUB_BATTERY].increment_size()
+        elif mc.NS_APPLIANCE_HUB_BATTERY in abilities:
+            SmartPollingStrategy(self, mc.NS_APPLIANCE_HUB_BATTERY, item_count=1)
 
         if deviceclass := WELL_KNOWN_TYPE_MAP.get(_type):  # type: ignore
             return deviceclass(self, p_subdevice)
@@ -416,18 +399,15 @@ class MerossDeviceHub(MerossDevice):
         on expected payload size but we might have no clue especially for
         bigger payloads like NS_APPLIANCE_HUB_MTS100_SCHEDULEB
         """
-        if len(subdevices := self.subdevices) > count:
-            payload = []
-            for subdevice in subdevices.values():
-                if (subdevice.type in subdevice_types) == included:
-                    payload.append({mc.KEY_ID: subdevice.id})
-                    if len(payload) == count:
-                        yield payload
-                        payload = []
-            if payload:
-                yield payload
-        else:
-            yield []
+        payload = []
+        for subdevice in self.subdevices.values():
+            if (subdevice.type in subdevice_types) == included:
+                payload.append({mc.KEY_ID: subdevice.id})
+                if len(payload) == count:
+                    yield payload
+                    payload = []
+        if payload:
+            yield payload
 
 
 class MerossSubDevice(MerossDeviceBase):

@@ -578,15 +578,13 @@ class GarageMixin(
         self.platforms.setdefault(MLConfigNumber.PLATFORM, None)
         self.platforms.setdefault(MLSwitch.PLATFORM, None)
         if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in descriptor.ability:
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
-            ] = SmartPollingStrategy(mc.NS_APPLIANCE_GARAGEDOOR_CONFIG)
+            SmartPollingStrategy(self, mc.NS_APPLIANCE_GARAGEDOOR_CONFIG)
         if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in descriptor.ability:
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
-            ] = SmartPollingStrategy(
+            SmartPollingStrategy(
+                self,
                 mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
-                {mc.KEY_CONFIG: self._polling_payload},
+                payload={mc.KEY_CONFIG: self._polling_payload},
+                item_count=len(self._polling_payload),
             )
 
     async def async_shutdown(self):
@@ -699,7 +697,7 @@ class GarageMixin(
             ]
         }
         """
-        self._parse__generic(mc.KEY_CONFIG, payload.get(mc.KEY_CONFIG))
+        self._parse__array(mc.KEY_CONFIG, payload[mc.KEY_CONFIG])
 
     def _parse_garageDoor(self, payload):
         self._parse__generic(mc.KEY_STATE, payload)
@@ -1072,15 +1070,11 @@ class RollerShutterMixin(
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here
             MLRollerShutter(self, 0)
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_ROLLERSHUTTER_STATE
-            ] = PollingStrategy(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION
-            ] = PollingStrategy(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
-            self.polling_dictionary[
-                mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG
-            ] = SmartPollingStrategy(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG)
+            PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, item_count=1)
+            PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, item_count=1)
+            SmartPollingStrategy(
+                self, mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, item_count=1
+            )
 
     def _handle_Appliance_RollerShutter_Position(self, header: dict, payload: dict):
         self._parse__array(mc.KEY_POSITION, payload.get(mc.KEY_POSITION))

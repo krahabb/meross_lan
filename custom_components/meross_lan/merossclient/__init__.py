@@ -28,6 +28,7 @@ MerossPayloadType = dict[str, typing.Any]
 MerossMessageType = typing.TypedDict(
     "MerossMessageType", {"header": MerossHeaderType, "payload": MerossPayloadType}
 )
+MerossRequestType = tuple[str, str, MerossPayloadType]
 KeyType = typing.Union[MerossHeaderType, str, None]
 ResponseCallbackType = typing.Callable[[bool, dict, dict], None]
 
@@ -197,7 +198,7 @@ def get_namespacekey(namespace: str) -> str:
     return key[0].lower() + key[1:]
 
 
-def get_default_payload(namespace: str) -> dict:
+def get_default_payload(namespace: str) -> MerossPayloadType:
     """
     when we query a device 'namespace' with a GET method the request payload
     is usually 'well structured' (more or less). We have a dictionary of
