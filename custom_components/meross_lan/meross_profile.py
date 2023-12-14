@@ -338,30 +338,56 @@ class MQTTConnection(Loggable):
             message = json_loads(msg.payload)
             header = message[mc.KEY_HEADER]
             device_id = header[mc.KEY_FROM].split("/")[2]
+            namespace = header[mc.KEY_NAMESPACE]
+            method = header[mc.KEY_METHOD]
+            messageid = header[mc.KEY_MESSAGEID]
+            payload = message[mc.KEY_PAYLOAD]
             if LOGGER.isEnabledFor(DEBUG):
                 self.log(
                     DEBUG,
                     "MQTT RECV device_id:(%s) method:(%s) namespace:(%s)",
                     device_id,
-                    header[mc.KEY_METHOD],
-                    header[mc.KEY_NAMESPACE],
+                    method,
+                    namespace,
                 )
-            messageid = header[mc.KEY_MESSAGEID]
+
             if messageid in self._mqtt_transactions:
                 mqtt_transaction = self._mqtt_transactions[messageid]
-                if mqtt_transaction.namespace == header[mc.KEY_NAMESPACE]:
+                if mqtt_transaction.namespace == namespace:
                     self._mqtt_transactions.pop(messageid, None)
                     mqtt_transaction.response_future.set_result(message)
                     if mqtt_transaction.response_callback:
                         mqtt_transaction.response_callback(
-                            header[mc.KEY_METHOD] != mc.METHOD_ERROR,
+                            method != mc.METHOD_ERROR,
                             header,
-                            message[mc.KEY_PAYLOAD],
+                            payload,
                         )
+            else:
+                if (
+                    (namespace == mc.NS_APPLIANCE_CONTROL_BIND)
+                    and (method == mc.METHOD_SET)
+                    and self.allow_mqtt_publish
+                ):
+                    # this transaction appears when a device (firstly)
+                    # connects to an MQTT broker and tries to 'register'
+                    # itself. Our guess right now is to just SETACK
+                    # trying fix #346. We should maybe be careful
+                    # if this connection is a cloud one but I guess
+                    # the Meross cloud brokers are already managing
+                    # and filtering out this message
+                    await self.async_mqtt_publish(
+                        device_id,
+                        namespace,
+                        mc.METHOD_SETACK,
+                        {},
+                        self.profile.key,
+                        None,
+                        messageid,
+                    )
 
             if device := ApiProfile.devices.get(device_id):
                 if device._mqtt_connection == self:
-                    device.mqtt_receive(header, message[mc.KEY_PAYLOAD])
+                    device.mqtt_receive(header, payload)
                     return
                 # we have the device registered but somehow it is not 'mqtt binded'
                 # either it's configuration is ONLY_HTTP or it is paired to
@@ -424,13 +450,14 @@ class MQTTConnection(Loggable):
                     return
 
             discovered = self.get_or_set_discovering(device_id)
-            if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
-                namespace = header[mc.KEY_NAMESPACE]
-                if namespace in (
+            if (method == mc.METHOD_GETACK) and (
+                namespace
+                in (
                     mc.NS_APPLIANCE_SYSTEM_ALL,
                     mc.NS_APPLIANCE_SYSTEM_ABILITY,
-                ):
-                    discovered.update(message[mc.KEY_PAYLOAD])
+                )
+            ):
+                discovered.update(payload)
 
             if await self._async_progress_discovery(discovered, device_id):
                 return

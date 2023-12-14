@@ -1046,22 +1046,6 @@ class MerossDevice(MerossDeviceBase):
         if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
             self.descriptor.update_time(payload[mc.KEY_TIME])
 
-    def _handle_Appliance_Control_Bind(self, header: dict, payload: dict):
-        """
-        this transaction was observed on a trace from a msh300hk
-        the device keeps sending 'SET'-'Bind' so I'm trying to
-        kindly answer a 'SETACK'
-        assumption is we're working on mqtt
-        """
-        if self.mqtt_locallyactive and (header[mc.KEY_METHOD] == mc.METHOD_SET):
-            self.mqtt_request(
-                mc.NS_APPLIANCE_CONTROL_BIND,
-                mc.METHOD_SETACK,
-                {},
-                None,
-                header[mc.KEY_MESSAGEID],
-            )
-
     def mqtt_receive(self, header: MerossHeaderType, payload: MerossPayloadType):
         assert self._mqtt_connected and (self.conf_protocol is not CONF_PROTOCOL_HTTP)
         if not self._mqtt_active:
