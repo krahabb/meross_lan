@@ -87,6 +87,7 @@ if typing.TYPE_CHECKING:
         MerossHeaderType,
         MerossMessageType,
         MerossPayloadType,
+        MerossRequestType,
         ResponseCallbackType,
     )
     from .merossclient.cloudapi import (
@@ -298,16 +299,16 @@ class SystemDebugPollingStrategy(PollingStrategy):
     Polling strategy for NS_APPLIANCE_SYSTEM_DEBUG. This
     query, beside carrying some device info, is only useful for us
     in order to see if the device reports it is mqtt-connected
-    and allows us to update the MQTT connection state. The 'poll'
-    will then ask the namespace only if we're not (yet) mqtt connected
-    but we should (device.conf_protocol is CONF_PROTOCOL_AUTO)
+    and allows us to update the MQTT connection state. The whole
+    polling strategy is only added at runtime when the device has
+    a corresponding cloud profile and conf_protocol is CONF_PROTOCOL_AUTO
+    it will then kick in only if we're not (yet) mqtt connected
+    but we should
     """
 
     async def async_poll(self, epoch: float, namespace: str | None):
         device = self.device
-        if device.conf_protocol is CONF_PROTOCOL_AUTO and (not device._mqtt_active):
-            # this is a special feature to use only on AUTO in order to see
-            # if the device is 'mqtt connected' and where to
+        if not device._mqtt_active:
             await device.async_request_poll(self)
 
 
@@ -371,7 +372,7 @@ class MerossDevice(MerossDeviceBase):
         "_queued_smartpoll_requests",
         "_multiple_len",
         "_multiple_len_max",
-        "_multiple_payload",
+        "_multiple_requests",
         "_multiple_response_size",
         "_tzinfo",
         "_timezone_next_check",
@@ -422,10 +423,9 @@ class MerossDevice(MerossDeviceBase):
         # since it carries also timing informations and whatever
         self.polling_dictionary: dict[str, PollingStrategy] = {}
         # TODO: try to cache the system.all payload size in order to avoid the json_dumps
-        PollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_ALL).response_size = len(
-            json_dumps(descriptor.all)
+        PollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_ALL).response_size = (
+            len(json_dumps(descriptor.all)) + PARAM_HEADER_SIZE
         )
-        SystemDebugPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DEBUG)
         self._unsub_polling_callback = None
         self._queued_smartpoll_requests = 0
         ability: typing.Final = descriptor.ability
@@ -433,7 +433,7 @@ class MerossDevice(MerossDeviceBase):
             "maxCmdNum", 0
         )
         self._multiple_len_max: typing.Final = self._multiple_len
-        self._multiple_payload = []
+        self._multiple_requests: list[MerossRequestType] = []
         self._multiple_response_size = PARAM_HEADER_SIZE
         # Message handling is actually very hybrid:
         # when a message (device reply or originated) is received it gets routed to the
@@ -547,15 +547,11 @@ class MerossDevice(MerossDeviceBase):
                 if host := self.host:
                     http.host = host
 
-        # We'll activate debug tracing only when the user turns it on in OptionsFlowHandler so we usually
-        # don't care about it on startup ('_set_config_entry'). When updating ConfigEntry
-        # we always reset the timeout and so the trace will (eventually) restart
+        # When updating ConfigEntry we always reset the timeout
+        # so the trace will (eventually) restart
         if self._trace_file:
             self._trace_close()
-        endtime = config_entry.data.get(CONF_TRACE, 0)
-        epoch = time()
-        if endtime > epoch:
-            self._trace_open(epoch, endtime)
+        self._trace_open_check()
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
         if not self._online:
@@ -563,6 +559,8 @@ class MerossDevice(MerossDeviceBase):
 
     # interface: MerossDeviceBase
     async def async_shutdown(self):
+        if self._trace_file:
+            self._trace_close()
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
         if self._cloud_profile:
@@ -573,8 +571,6 @@ class MerossDevice(MerossDeviceBase):
         self._unsub_polling_callback.cancel()
         self._unsub_polling_callback = None
         self.polling_dictionary.clear()
-        if self._trace_file:
-            self._trace_close()
         await super().async_shutdown()
         ApiProfile.devices[self.id] = None
         self.entity_dnd = None  # type: ignore
@@ -731,16 +727,12 @@ class MerossDevice(MerossDeviceBase):
         # called by async_setup_entry after the entities have been registered
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
-        # since mqtt could be readily available (it takes very few
-        # tenths of sec to connect, setup and respond to our GET
-        # NS_ALL) we'll give it a short 'advantage' before starting
-        # the polling loop
         self._check_mqtt_connection_attach()
-
+        # (eventually) open the trace before setting the _unsub_polling_callback
+        # so the trace doesn't start dumping namespaces before the initial poll
+        self._trace_open_check()
         self._unsub_polling_callback = schedule_async_callback(
-            ApiProfile.hass,
-            PARAM_COLDSTARTPOLL_DELAY if self._mqtt_connection else 0,
-            self._async_polling_callback,
+            ApiProfile.hass, 0, self._async_polling_callback
         )
 
     def get_device_datetime(self, epoch):
@@ -762,13 +754,7 @@ class MerossDevice(MerossDeviceBase):
             if multiple_response_size > self.device_response_size_max:
                 await self.async_request_flush()
                 multiple_response_size = PARAM_HEADER_SIZE + strategy.response_size
-            self._multiple_payload.append(
-                build_message(
-                    *strategy.request,
-                    self.key,
-                    mc.MANUFACTURER,
-                ),
-            )
+            self._multiple_requests.append(strategy.request)
             self._multiple_response_size = multiple_response_size
             self._multiple_len -= 1
             if self._multiple_len:
@@ -795,32 +781,77 @@ class MerossDevice(MerossDeviceBase):
         return True
 
     async def async_request_flush(self):
-        multiple_payload = self._multiple_payload
+        multiple_requests = self._multiple_requests
         multiple_response_size = self._multiple_response_size
         self._multiple_len = self._multiple_len_max
-        self._multiple_payload = []
+        self._multiple_requests = []
         self._multiple_response_size = PARAM_HEADER_SIZE
-        if response := await self.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_MULTIPLE,
-            mc.METHOD_SET,
-            {mc.KEY_MULTIPLE: multiple_payload},
-        ):
+
+        requests_len = len(multiple_requests)
+        while self.online and requests_len:
+            if requests_len == 1:
+                await self.async_request_ack(*(multiple_requests[0]))
+                return
+
+            multiple = [
+                build_message(
+                    *request,
+                    self.key,
+                    mc.MANUFACTURER,
+                )
+                for request in multiple_requests
+            ]
+            if not (
+                response := await self.async_request_ack(
+                    mc.NS_APPLIANCE_CONTROL_MULTIPLE,
+                    mc.METHOD_SET,
+                    {mc.KEY_MULTIPLE: multiple},
+                )
+            ):
+                return  # likely offline
+
+            multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
+            responses_len = len(multiple_responses)
             if MEROSSDEBUG:
                 self.log(
                     DEBUG,
-                    "Appliance.Control.Multiple response size: expected=%d actual=%d",
+                    "Appliance.Control.Multiple requests=%d (responses=%d) expected size=%d (actual=%d)",
+                    requests_len,
+                    responses_len,
                     multiple_response_size,
                     len(json_dumps(response)),
                 )
             message: MerossMessageType
-            for message in response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]:
+            if responses_len == requests_len:
+                # faster shortcut
+                for message in multiple_responses:
+                    m_header = message[mc.KEY_HEADER]
+                    self._handle(
+                        m_header[mc.KEY_NAMESPACE],
+                        m_header[mc.KEY_METHOD],
+                        m_header,
+                        message[mc.KEY_PAYLOAD],
+                    )
+                return
+            # the requests payload was too big and the response was
+            # truncated. the http client tried to 'recover' by discarding
+            # the incomplete payloads so we'll check what's missing
+            for message in multiple_responses:
                 m_header = message[mc.KEY_HEADER]
+                namespace = m_header[mc.KEY_NAMESPACE]
                 self._handle(
-                    m_header[mc.KEY_NAMESPACE],
+                    namespace,
                     m_header[mc.KEY_METHOD],
                     m_header,
                     message[mc.KEY_PAYLOAD],
                 )
+                for request in multiple_requests:
+                    if request[0] == namespace:
+                        multiple_requests.remove(request)
+                        break
+            # and re-issue the missing ones
+            requests_len = len(multiple_requests)
+            multiple_response_size = -1  # logging purpose
 
     async def async_request_updates(self, epoch: float, namespace: str | None):
         """
@@ -845,7 +876,7 @@ class MerossDevice(MerossDeviceBase):
             if namespace != _strategy.namespace:
                 await _strategy.async_poll(epoch, namespace)
 
-        if self._multiple_payload:
+        if self._multiple_requests:
             await self.async_request_flush()
 
     def receive(
@@ -1088,17 +1119,15 @@ class MerossDevice(MerossDeviceBase):
                 if update_firmware._hass_connected:
                     update_firmware._async_write_ha_state()
 
-        if self._mqtt_active:
-            if not is_device_online(descr.system):
-                self._mqtt_active = None
-                self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
-        elif self._mqtt_connected and is_device_online(descr.system):
-            try:
+        if self.conf_protocol is CONF_PROTOCOL_AUTO:
+            if self._mqtt_active:
+                if not is_device_online(descr.system):
+                    self._mqtt_active = None
+                    self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
+            elif self._mqtt_connected and is_device_online(descr.system):
                 if self._mqtt_connected.broker == self.mqtt_broker:
                     self._mqtt_active = self._mqtt_connected
                     self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
-            except Exception:
-                pass
 
         for _key, _value in descr.digest.items():
             if _parse := getattr(self, f"_parse_{_key}", None):
@@ -1297,14 +1326,15 @@ class MerossDevice(MerossDeviceBase):
                         attempt,
                     )
                     response_text = jsonerror.doc
+                    response_text_len_safe = int(len(response_text) * 0.9)
                     error_pos = jsonerror.pos
-                    if len(response_text) == error_pos:
+                    if error_pos > response_text_len_safe:
                         # the error happened because of truncated json payload
-                        self.device_response_size_max = error_pos
+                        self.device_response_size_max = response_text_len_safe
                         if namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
                             # try to recover by discarding the incomplete
                             # message at the end
-                            trunc_pos = response_text.rfind(',{"header"}')
+                            trunc_pos = response_text.rfind(',{"header":')
                             if trunc_pos != -1:
                                 response_text = response_text[0:trunc_pos] + "]}}"
                                 response: MerossMessageType = json_loads(response_text)
@@ -1787,8 +1817,18 @@ class MerossDevice(MerossDeviceBase):
             # strictly HTTP so detach MQTT in case
             if self._mqtt_connection:
                 self._mqtt_connection.detach(self)
+            self.polling_dictionary.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
         else:
             profile_id = self.profile_id
+            if (
+                profile_id
+                and (self.conf_protocol is CONF_PROTOCOL_AUTO)
+                and (mc.NS_APPLIANCE_SYSTEM_DEBUG not in self.polling_dictionary)
+            ):
+                SystemDebugPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DEBUG)
+            else:
+                self.polling_dictionary.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
+
             if self._mqtt_connection:
                 if self._mqtt_connection.profile.id == profile_id:
                     return
@@ -1843,6 +1883,7 @@ class MerossDevice(MerossDeviceBase):
 
     def _trace_open(self, epoch: float, endtime):
         try:
+            assert not self._trace_file
             self.log(DEBUG, "start tracing")
             tracedir = ApiProfile.hass.config.path(
                 "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
@@ -1869,6 +1910,13 @@ class MerossDevice(MerossDeviceBase):
                 self._trace_close()
             self.log_exception_warning(exception, "creating trace file")
 
+    def _trace_open_check(self):
+        # assert not self._trace_file
+        endtime = self.config.get(CONF_TRACE) or 0
+        epoch = time()
+        if endtime > epoch:
+            self._trace_open(epoch, endtime)
+
     def _trace_close(self):
         try:
             self._trace_file.close()  # type: ignore
@@ -1887,11 +1935,13 @@ class MerossDevice(MerossDeviceBase):
         if self._trace_ability_iter is None:
             return
         try:
-            while True:
-                ability: str = next(self._trace_ability_iter)
-                if ability not in TRACE_ABILITY_EXCLUDE:
-                    self.request(*get_default_arguments(ability))
-                    break
+            if self._unsub_polling_callback:
+                # avoid interleave tracing ability with polling loop
+                while True:
+                    ability: str = next(self._trace_ability_iter)
+                    if ability not in TRACE_ABILITY_EXCLUDE:
+                        self.request(*get_default_arguments(ability))
+                        break
             schedule_callback(
                 ApiProfile.hass, PARAM_TRACING_ABILITY_POLL_TIMEOUT, self._trace_ability
             )
