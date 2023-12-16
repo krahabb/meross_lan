@@ -933,6 +933,10 @@ class MerossDevice(MerossDeviceBase):
         key = get_namespacekey(header[mc.KEY_NAMESPACE])
         self._parse__array(key, payload[key])
 
+    def _handle_Appliance_Control_Bind(self, header: dict, payload: dict):
+        # processed at the MQTTConnection message handling
+        pass
+
     def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
         # This is only requested when we want to update a config_entry due
         # to a detected fw change or whatever...
@@ -1030,17 +1034,8 @@ class MerossDevice(MerossDeviceBase):
         self.entity_dnd.update_onoff(payload[mc.KEY_DNDMODE][mc.KEY_MODE])
 
     def _handle_Appliance_System_Clock(self, header: dict, payload: dict):
-        # this is part of initial flow over MQTT
-        # we'll try to set the correct time in order to avoid
-        # having NTP opened to setup the device
-        # Note: I actually see this NS only on mss310 plugs
-        # (msl120j bulb doesnt have it)
-        if self.mqtt_locallyactive and (header[mc.KEY_METHOD] == mc.METHOD_PUSH):
-            self.mqtt_request(
-                mc.NS_APPLIANCE_SYSTEM_CLOCK,
-                mc.METHOD_PUSH,
-                {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
-            )
+        # processed at the MQTTConnection message handling
+        pass
 
     def _handle_Appliance_System_Time(self, header: dict, payload: dict):
         if header[mc.KEY_METHOD] == mc.METHOD_PUSH:

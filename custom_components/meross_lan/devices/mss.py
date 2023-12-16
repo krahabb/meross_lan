@@ -297,6 +297,10 @@ class ConsumptionXMixin(
         await super().async_shutdown()
         self._sensor_consumption = None  # type: ignore
 
+    def _handle_Appliance_Control_ConsumptionConfig(self, header: dict, payload: dict):
+        # processed at the MQTTConnection message handling
+        pass
+
     def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
         _sensor_consumption = self._sensor_consumption
         # we'll look through the device array values to see

@@ -362,28 +362,58 @@ class MQTTConnection(Loggable):
                             header,
                             payload,
                         )
-            else:
-                if (
-                    (namespace == mc.NS_APPLIANCE_CONTROL_BIND)
-                    and (method == mc.METHOD_SET)
-                    and self.allow_mqtt_publish
-                ):
-                    # this transaction appears when a device (firstly)
-                    # connects to an MQTT broker and tries to 'register'
-                    # itself. Our guess right now is to just SETACK
-                    # trying fix #346. We should maybe be careful
-                    # if this connection is a cloud one but I guess
-                    # the Meross cloud brokers are already managing
-                    # and filtering out this message
-                    await self.async_mqtt_publish(
-                        device_id,
-                        namespace,
-                        mc.METHOD_SETACK,
-                        {},
-                        self.profile.key,
-                        None,
-                        messageid,
-                    )
+            elif self.id is CONF_PROFILE_ID_LOCAL:
+                # special processing for local broker
+                # this code is experimental and is needed to give
+                # our broker some transaction management for devices
+                # trying to bind to non-Meross MQTT brokers
+                if method == mc.METHOD_PUSH:
+                    if namespace == mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG:
+                        # this message too is published by mss switches
+                        # and it appears newer mss315 could abort their connection
+                        # if not replied (see #346)
+                        await self.async_mqtt_publish(
+                            device_id,
+                            namespace,
+                            method,
+                            payload,
+                            self.profile.key,
+                            None,
+                            messageid,
+                        )
+                    elif namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
+                        # this is part of initial flow over MQTT
+                        # we'll try to set the correct time in order to avoid
+                        # having NTP opened to setup the device
+                        # Note: I actually see this NS only on mss310 plugs
+                        # (msl120j bulb doesnt have it)
+                        await self.async_mqtt_publish(
+                            device_id,
+                            namespace,
+                            method,
+                            {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
+                            self.profile.key,
+                            None,
+                            messageid,
+                        )
+                elif method == mc.METHOD_SET:
+                    if namespace == mc.NS_APPLIANCE_CONTROL_BIND:
+                        # this transaction appears when a device (firstly)
+                        # connects to an MQTT broker and tries to 'register'
+                        # itself. Our guess right now is to just SETACK
+                        # trying fix #346. We should maybe be careful
+                        # if this connection is a cloud one but I guess
+                        # the Meross cloud brokers are already managing
+                        # and filtering out this message
+                        await self.async_mqtt_publish(
+                            device_id,
+                            namespace,
+                            mc.METHOD_SETACK,
+                            {},
+                            self.profile.key,
+                            None,
+                            messageid,
+                        )
 
             if device := ApiProfile.devices.get(device_id):
                 if device._mqtt_connection == self:
