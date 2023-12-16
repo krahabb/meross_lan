@@ -1016,20 +1016,21 @@ class MerossDevice(MerossDeviceBase):
         self._parse__array(key, payload[key])
 
     def _handle_Appliance_Control_Bind(self, header: dict, payload: dict):
-        """
-        this transaction was observed on a trace from a msh300hk
-        the device keeps sending 'SET'-'Bind' so I'm trying to
-        kindly answer a 'SETACK'
-        assumption is we're working on mqtt
-        """
-        if self.mqtt_locallyactive and (header[mc.KEY_METHOD] == mc.METHOD_SET):
-            self.mqtt_request(
-                mc.NS_APPLIANCE_CONTROL_BIND,
-                mc.METHOD_SETACK,
-                {},
-                None,
-                header[mc.KEY_MESSAGEID],
-            )
+        # processed at the MQTTConnection message handling
+        pass
+
+    def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
+        # This is only requested when we want to update a config_entry due
+        # to a detected fw change or whatever...
+        # before saving, we're checking the abilities did (or didn't) change too
+        self.needsave = False
+        with self.exception_warning("ConfigEntry update"):
+            entries = ApiProfile.hass.config_entries
+            if entry := entries.async_get_entry(self.config_entry_id):
+                data = dict(entry.data)
+                descr = self.descriptor
+                data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+                data[CONF_PAYLOAD][mc.KEY_ALL] = descr.all
 
     def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
         # This should only be requested when we want to update a config_entry
@@ -1124,17 +1125,8 @@ class MerossDevice(MerossDeviceBase):
             self.request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY))
 
     def _handle_Appliance_System_Clock(self, header: dict, payload: dict):
-        # this is part of initial flow over MQTT
-        # we'll try to set the correct time in order to avoid
-        # having NTP opened to setup the device
-        # Note: I actually see this NS only on mss310 plugs
-        # (msl120j bulb doesnt have it)
-        if self.mqtt_locallyactive and (header[mc.KEY_METHOD] == mc.METHOD_PUSH):
-            self.mqtt_request(
-                mc.NS_APPLIANCE_SYSTEM_CLOCK,
-                mc.METHOD_PUSH,
-                {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
-            )
+        # processed at the MQTTConnection message handling
+        pass
 
     def _handle_Appliance_System_Debug(self, header: dict, payload: dict):
         self.device_debug = p_debug = payload[mc.KEY_DEBUG]
