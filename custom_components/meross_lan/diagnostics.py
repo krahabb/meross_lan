@@ -62,9 +62,9 @@ async def async_get_config_entry_diagnostics(
                 "http_active": bool(device._http_active),
             },
             "polling_period": device.polling_period,
-            "polling_dictionary": {
-                namespace: strategy.lastrequest
-                for namespace, strategy in device.polling_dictionary.items()
+            "polling_strategies": {
+                strategy.namespace: strategy.lastrequest
+                for strategy in device.polling_strategies.values()
             },
         }
         data[CONF_TRACE] = await device.get_diagnostics_trace(

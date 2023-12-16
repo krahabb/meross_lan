@@ -427,7 +427,45 @@ async def get_entity_last_state_available(
     return None
 
 
-class PollingStrategy:
+class NamespaceHandler:
+    """
+    This is the root class for somewhat dynamic namespace handlers.
+    Every device keeps its own list of method handlers indexed through
+    the message namespace in order to speed up parsing/routing when receiving
+    a message from the device see MerossDevice.namespace_handlers and
+    MerossDevice._handle to get the basic behavior.
+    Actually, every namespace handler is defined as a MerossDevice method with
+    a well defined signature but this requires a bit of string manipulation on
+    every incoming message. Also, the PollingStrategy class is itself related to
+    a specific namespace polling/handling system and inherits from this basic class
+    At runtime, the list of handlers is 'lazily' built when we receive the namespace
+    for the first time
+    """
+
+    __slots__ = (
+        "device",
+        "namespace",
+        "lastrequest",
+        "handler",
+    )
+
+    def __init__(
+        self,
+        device: MerossDevice,
+        namespace: str,
+        *,
+        handler: Callable[[dict, dict], None] | None = None,
+    ):
+        self.device: typing.Final = device
+        self.namespace: typing.Final = namespace
+        self.handler: typing.Final = handler or getattr(
+            device, f"_handle_{namespace.replace('.', '_')}", device._handle_undefined
+        )
+        self.lastrequest = 0
+        device.namespace_handlers[namespace] = self
+
+
+class PollingStrategy(NamespaceHandler):
     """
     These helper class(es) is used to implement 'smart' polling
     based on current state of device, especially regarding MQTT availability.
@@ -439,12 +477,8 @@ class PollingStrategy:
     """
 
     __slots__ = (
-        "device",
-        "namespace",
-        "lastrequest",
         "polling_period",
         "polling_period_cloud",
-        "handler",
         "response_size",
         "request",
     )
@@ -458,16 +492,9 @@ class PollingStrategy:
         handler: Callable[[dict, dict], None] | None = None,
         item_count: int = 0,
     ):
-        assert namespace not in device.polling_dictionary
-        self.device: typing.Final = device
-        self.namespace: typing.Final = namespace
-        self.handler: typing.Final = (
-            handler
-            or getattr(device, f"_handle_{namespace.replace('.', '_')}")
-            or device._handle_undefined
-        )
-        self.lastrequest = 0
-        _conf = POLLING_STRATEGY_CONF[self.namespace]
+        super().__init__(device, namespace, handler=handler)
+        assert namespace not in device.polling_strategies
+        _conf = POLLING_STRATEGY_CONF[namespace]
         self.polling_period = _conf[0]
         self.polling_period_cloud = _conf[1]
         self.response_size = _conf[2] + item_count * _conf[3]
@@ -480,7 +507,7 @@ class PollingStrategy:
                 payload,
             )
         )
-        device.polling_dictionary[namespace] = self
+        device.polling_strategies[namespace] = self
 
     def adjust_size(self, item_count: int):
         _conf = POLLING_STRATEGY_CONF[self.namespace]

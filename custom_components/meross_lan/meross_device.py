@@ -55,6 +55,7 @@ from .helpers import (
     ApiProfile,
     EntityManager,
     EntityPollingStrategy,
+    NamespaceHandler,
     PollingStrategy,
     datetime_from_epoch,
     obfuscated_dict_copy,
@@ -367,7 +368,8 @@ class MerossDevice(MerossDeviceBase):
         "_trace_data",
         "_trace_endtime",
         "_trace_ability_iter",
-        "polling_dictionary",
+        "namespace_handlers",
+        "polling_strategies",
         "_unsub_polling_callback",
         "_queued_smartpoll_requests",
         "_multiple_len",
@@ -414,14 +416,8 @@ class MerossDevice(MerossDeviceBase):
         self._trace_data: list | None = None
         self._trace_endtime = 0
         self._trace_ability_iter = None
-        # This is mainly for HTTP based devices: we build a dictionary of what we think could be
-        # useful to asynchronously poll so the actual polling cycle doesnt waste time in checks
-        # TL:DR we'll try to solve everything with just NS_SYS_ALL since it usually carries the full state
-        # in a single transaction. Also (see #33) the multiplug mss425 doesnt publish the full switch list state
-        # through NS_CNTRL_TOGGLEX (not sure if it's the firmware or the dialect)
-        # Even if some devices don't carry significant state in NS_ALL we'll poll it anyway even if bulky
-        # since it carries also timing informations and whatever
-        self.polling_dictionary: dict[str, PollingStrategy] = {}
+        self.namespace_handlers: dict[str, NamespaceHandler] = {}
+        self.polling_strategies: dict[str, PollingStrategy] = {}
         # TODO: try to cache the system.all payload size in order to avoid the json_dumps
         PollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_ALL).response_size = (
             len(json_dumps(descriptor.all)) + PARAM_HEADER_SIZE
@@ -570,7 +566,8 @@ class MerossDevice(MerossDeviceBase):
             await asyncio.sleep(1)
         self._unsub_polling_callback.cancel()
         self._unsub_polling_callback = None
-        self.polling_dictionary.clear()
+        self.polling_strategies.clear()
+        self.namespace_handlers.clear()
         await super().async_shutdown()
         ApiProfile.devices[self.id] = None
         self.entity_dnd = None  # type: ignore
@@ -653,7 +650,7 @@ class MerossDevice(MerossDeviceBase):
         super()._set_offline()
         self._polling_delay = self.polling_period
         self._mqtt_active = self._http_active = None
-        for strategy in self.polling_dictionary.values():
+        for strategy in self.polling_strategies.values():
             strategy.lastrequest = 0
 
     # interface: self
@@ -870,18 +867,15 @@ class MerossDevice(MerossDeviceBase):
         subsequent polls
         """
         self._queued_smartpoll_requests = 0
-        for _strategy in self.polling_dictionary.values():
+        for _strategy in self.polling_strategies.values():
             if not self._online:
                 break
             if namespace != _strategy.namespace:
                 await _strategy.async_poll(epoch, namespace)
 
-        if self._multiple_requests:
-            await self.async_request_flush()
+        await self.async_request_flush()
 
-    def receive(
-        self, header: MerossHeaderType, payload: MerossPayloadType, protocol
-    ) -> bool:
+    def receive(self, header: MerossHeaderType, payload: MerossPayloadType, protocol):
         """
         default (received) message handling entry point
         """
@@ -949,33 +943,18 @@ class MerossDevice(MerossDeviceBase):
                 json_dumps(payload),
                 timeout=14400,
             )
-            return True
-
-        if polling_strategy := self.polling_dictionary.get(namespace):
-            # this might turn a 'SmartPollingStrategy' in something
-            # even smarter if we receive a PUSH on this namespace
-            # or if the namespace is queried out of polling loop
-            polling_strategy.lastrequest = self.lastresponse
-            polling_strategy.handler(header, payload)  # type: ignore
-            return True
-
-        if method == mc.METHOD_SETACK:
-            # SETACK generally don't carry any state/info so it is
+            return
+        elif method == mc.METHOD_SETACK:
+            # SETACK generally doesn't carry any state/info so it is
             # no use parsing..moreover, our callbacks system is full
             # in place so we have no need to further process
-            return True
-        # disable this code: it is no use so far....
-        # handler = self.handlers.get(namespace)
-        # if handler is not None:
-        #     handler(header, payload)
-        #     return True
-        with self.exception_warning("handle %s %s", method, namespace, timeout=14400):
-            getattr(
-                self, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
-            )(header, payload)
-            return True
+            return
 
-        return False
+        if not (handler := self.namespace_handlers.get(namespace)):
+            handler = NamespaceHandler(self, namespace)
+
+        handler.lastrequest = self.lastresponse  # type: ignore
+        handler.handler(header, payload)  # type: ignore
 
     def _handle_undefined(self, header: MerossHeaderType, payload: MerossPayloadType):
         self.log(
@@ -1013,15 +992,15 @@ class MerossDevice(MerossDeviceBase):
 
     def _parse__array(self, key: str, payload):
         # optimized version for well-known payloads which carry channel structs
-        # play it safe for empty (None) payloads
-        for p_channel in payload or []:
+        # this will direct the parsing to the entity keyed by channel alone
+        for p_channel in payload:
             entity = self.entities[p_channel[mc.KEY_CHANNEL]]
             getattr(entity, f"_parse_{key}", entity._parse_undefined)(p_channel)
 
     def _parse__array_key(self, key: str, payload, entitykey: str):
         # optimized version for well-known payloads which carry channel structs
-        # play it safe for empty (None) payloads
-        for p_channel in payload or []:
+        # this will direct the parsing to the entity keyed by channel and entitykey
+        for p_channel in payload:
             entity = self.entities[f"{p_channel[mc.KEY_CHANNEL]}_{entitykey}"]
             getattr(entity, f"_parse_{key}", entity._parse_undefined)(p_channel)
 
@@ -1203,6 +1182,13 @@ class MerossDevice(MerossDeviceBase):
         self._mqtt_connected = _mqtt_connection
         if _mqtt_connection.allow_mqtt_publish:
             self._mqtt_publish = _mqtt_connection
+            if not self._online and self._unsub_polling_callback:
+                # reschedule immediately
+                self._unsub_polling_callback.cancel()
+                self._unsub_polling_callback = schedule_async_callback(
+                    ApiProfile.hass, 0, self._async_polling_callback
+                )
+
         elif self.conf_protocol is CONF_PROTOCOL_MQTT:
             self.warning(
                 "MQTT connection doesn't allow publishing - device will not be able send commands",
@@ -1817,17 +1803,21 @@ class MerossDevice(MerossDeviceBase):
             # strictly HTTP so detach MQTT in case
             if self._mqtt_connection:
                 self._mqtt_connection.detach(self)
-            self.polling_dictionary.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
+            self.polling_strategies.pop(
+                mc.NS_APPLIANCE_SYSTEM_DEBUG, None
+            )
         else:
             profile_id = self.profile_id
             if (
                 profile_id
                 and (self.conf_protocol is CONF_PROTOCOL_AUTO)
-                and (mc.NS_APPLIANCE_SYSTEM_DEBUG not in self.polling_dictionary)
             ):
-                SystemDebugPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DEBUG)
+                if mc.NS_APPLIANCE_SYSTEM_DEBUG not in self.polling_strategies:
+                    SystemDebugPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DEBUG)
             else:
-                self.polling_dictionary.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
+                self.polling_strategies.pop(
+                    mc.NS_APPLIANCE_SYSTEM_DEBUG, None
+                )
 
             if self._mqtt_connection:
                 if self._mqtt_connection.profile.id == profile_id:

@@ -317,16 +317,16 @@ class MerossDeviceHub(MerossDevice):
             except Exception:
                 return None
 
-        polling_dictionary = self.polling_dictionary
+        polling_strategies = self.polling_strategies
         abilities = self.descriptor.ability
         if _type in MTS100_ALL_TYPESET:
-            if (mc.NS_APPLIANCE_HUB_MTS100_ALL not in polling_dictionary) and (
+            if (mc.NS_APPLIANCE_HUB_MTS100_ALL not in polling_strategies) and (
                 mc.NS_APPLIANCE_HUB_MTS100_ALL in abilities
             ):
                 SubDevicePollingStrategy(
                     self, mc.NS_APPLIANCE_HUB_MTS100_ALL, MTS100_ALL_TYPESET, True, 8
                 )
-            if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB not in polling_dictionary) and (
+            if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB not in polling_strategies) and (
                 mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in abilities
             ):
                 SubDevicePollingStrategy(
@@ -336,26 +336,26 @@ class MerossDeviceHub(MerossDevice):
                     True,
                     4,
                 )
-            if mc.NS_APPLIANCE_HUB_MTS100_ADJUST in polling_dictionary:
-                polling_dictionary[mc.NS_APPLIANCE_HUB_MTS100_ADJUST].increment_size()
+            if mc.NS_APPLIANCE_HUB_MTS100_ADJUST in polling_strategies:
+                polling_strategies[mc.NS_APPLIANCE_HUB_MTS100_ADJUST].increment_size()
             elif mc.NS_APPLIANCE_HUB_MTS100_ADJUST in abilities:
                 SmartPollingStrategy(
                     self, mc.NS_APPLIANCE_HUB_MTS100_ADJUST, item_count=1
                 )
         else:
-            if (mc.NS_APPLIANCE_HUB_SENSOR_ALL not in polling_dictionary) and (
+            if (mc.NS_APPLIANCE_HUB_SENSOR_ALL not in polling_strategies) and (
                 mc.NS_APPLIANCE_HUB_SENSOR_ALL in abilities
             ):
                 SubDevicePollingStrategy(
                     self, mc.NS_APPLIANCE_HUB_SENSOR_ALL, MTS100_ALL_TYPESET, False, 8
                 )
-            if mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in polling_dictionary:
-                polling_dictionary[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST].increment_size()
+            if mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in polling_strategies:
+                polling_strategies[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST].increment_size()
             elif mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in abilities:
                 SmartPollingStrategy(
                     self, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST, item_count=1
                 )
-            if (mc.NS_APPLIANCE_HUB_TOGGLEX not in polling_dictionary) and (
+            if (mc.NS_APPLIANCE_HUB_TOGGLEX not in polling_strategies) and (
                 mc.NS_APPLIANCE_HUB_TOGGLEX in abilities
             ):
                 # this is a status message irrelevant for mts100(s) and
@@ -363,10 +363,10 @@ class MerossDeviceHub(MerossDevice):
                 if _type not in (mc.TYPE_MS100,):
                     PollingStrategy(self, mc.NS_APPLIANCE_HUB_TOGGLEX)
 
-        if mc.NS_APPLIANCE_HUB_TOGGLEX in polling_dictionary:
-            polling_dictionary[mc.NS_APPLIANCE_HUB_TOGGLEX].increment_size()
-        if mc.NS_APPLIANCE_HUB_BATTERY in polling_dictionary:
-            polling_dictionary[mc.NS_APPLIANCE_HUB_BATTERY].increment_size()
+        if mc.NS_APPLIANCE_HUB_TOGGLEX in polling_strategies:
+            polling_strategies[mc.NS_APPLIANCE_HUB_TOGGLEX].increment_size()
+        if mc.NS_APPLIANCE_HUB_BATTERY in polling_strategies:
+            polling_strategies[mc.NS_APPLIANCE_HUB_BATTERY].increment_size()
         elif mc.NS_APPLIANCE_HUB_BATTERY in abilities:
             SmartPollingStrategy(self, mc.NS_APPLIANCE_HUB_BATTERY, item_count=1)
 
@@ -502,12 +502,11 @@ class MerossSubDevice(MerossDeviceBase):
     def _set_online(self):
         super()._set_online()
         # force a re-poll even on MQTT
-        _strategy = self.hub.polling_dictionary.get(
+        if _strategy := self.hub.polling_strategies.get(
             mc.NS_APPLIANCE_HUB_MTS100_ALL
             if self.type in MTS100_ALL_TYPESET
             else mc.NS_APPLIANCE_HUB_SENSOR_ALL
-        )
-        if _strategy:
+        ):
             _strategy.lastrequest = 0
 
     # interface: self
