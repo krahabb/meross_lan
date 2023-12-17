@@ -1020,19 +1020,6 @@ class MerossDevice(MerossDeviceBase):
         pass
 
     def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
-        # This is only requested when we want to update a config_entry due
-        # to a detected fw change or whatever...
-        # before saving, we're checking the abilities did (or didn't) change too
-        self.needsave = False
-        with self.exception_warning("ConfigEntry update"):
-            entries = ApiProfile.hass.config_entries
-            if entry := entries.async_get_entry(self.config_entry_id):
-                data = dict(entry.data)
-                descr = self.descriptor
-                data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
-                data[CONF_PAYLOAD][mc.KEY_ALL] = descr.all
-
-    def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
         # This should only be requested when we want to update a config_entry
         # (needsave == True) due to a detected fw change or whatever in NS_ALL
         # Before saving, we're checking the abilities did (or didn't) change too
