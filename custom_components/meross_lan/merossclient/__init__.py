@@ -165,7 +165,7 @@ def build_message(
         key[mc.KEY_METHOD] = method
         key[mc.KEY_PAYLOADVERSION] = 1
         key[mc.KEY_FROM] = from_
-        return {mc.KEY_HEADER: key, mc.KEY_PAYLOAD: payload}
+        return {mc.KEY_HEADER: key, mc.KEY_PAYLOAD: payload}  # type: ignore
     else:
         messageid = messageid or uuid4().hex
         timestamp = int(time())
@@ -221,7 +221,7 @@ def get_message_signature(messageid: str, key: str, timestamp):
     ).hexdigest()
 
 
-def get_replykey(header: MerossHeaderType, key: KeyType = None) -> KeyType:
+def get_replykey(header: MerossHeaderType, key: KeyType) -> KeyType:
     """
     checks header signature against key:
     if ok return sign itsef else return the full header { "messageId", "timestamp", "sign", ...}
@@ -289,6 +289,47 @@ def is_device_online(payload: dict) -> bool:
         return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
     except Exception:
         return False
+
+
+class MerossRequest(dict):
+    __slots__ = (
+        "namespace",
+        "method",
+        "messageid",
+        "payload",
+    )
+
+    def __init__(
+        self,
+        key: str,
+        namespace: str,
+        method: str = mc.METHOD_GET,
+        payload: MerossPayloadType | None = None,
+        topic_response: str = mc.MANUFACTURER,
+        *,
+        messageid: str | None = None,
+    ):
+        self.namespace = namespace
+        self.method = method
+        self.messageid = messageid or uuid4().hex
+        self.payload = payload or get_default_payload(namespace)
+        timestamp = int(time())
+        super().__init__({
+            mc.KEY_HEADER: {
+                mc.KEY_MESSAGEID: self.messageid,
+                mc.KEY_NAMESPACE: namespace,
+                mc.KEY_METHOD: method,
+                mc.KEY_PAYLOADVERSION: 1,
+                mc.KEY_FROM: topic_response,
+                mc.KEY_TIMESTAMP: timestamp,
+                mc.KEY_TIMESTAMPMS: 0,
+                mc.KEY_SIGN: get_message_signature(self.messageid, key, timestamp),
+            },
+            mc.KEY_PAYLOAD: self.payload,
+        })
+
+    def to_string(self):
+        return json.dumps(self)
 
 
 class MerossDeviceDescriptor:

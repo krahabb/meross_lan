@@ -48,7 +48,7 @@ from .helpers import (
 from .meross_device_hub import MerossDeviceHub
 from .merossclient import (
     MEROSSDEBUG,
-    build_message,
+    MerossRequest,
     const as mc,
     get_default_arguments,
     get_replykey,
@@ -76,7 +76,7 @@ if typing.TYPE_CHECKING:
     from . import MerossApi
     from .const import ProfileConfigType
     from .meross_device import MerossDevice, MerossDeviceDescriptor
-    from .merossclient import KeyType, MerossMessageType, ResponseCallbackType
+    from .merossclient import MerossMessageType
     from .merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
@@ -184,26 +184,46 @@ class _MQTTTransaction:
     """
 
     __slots__ = (
+        "mqtt_connection",
         "namespace",
         "messageid",
         "method",
         "request_time",
-        "response_callback",
         "response_future",
     )
 
     def __init__(
         self,
-        namespace: str,
-        method: str,
-        response_callback: ResponseCallbackType | None,
+        mqtt_connection: MQTTConnection,
+        request: MerossRequest,
     ):
-        self.namespace = namespace
-        self.messageid = uuid4().hex
-        self.method = method
+        self.mqtt_connection = mqtt_connection
+        self.namespace = request.namespace
+        self.messageid = request.messageid
+        self.method = request.method
         self.request_time = time()
-        self.response_callback = response_callback
         self.response_future = asyncio.get_running_loop().create_future()
+        mqtt_connection._mqtt_transactions[self.messageid] = self
+
+    async def async_wait(self, timeout) -> MerossMessageType | None:
+        try:
+            return await asyncio.wait_for(self.response_future, timeout)
+        except Exception as e:
+            self.mqtt_connection.log_exception(
+                DEBUG,
+                e,
+                "waiting for MQTT reply on message %s %s (messageId: %s)",
+                self.method,
+                self.namespace,
+                self.messageid,
+            )
+            return None
+        finally:
+            self.mqtt_connection._mqtt_transactions.pop(self.messageid, None)
+
+    def cancel(self):
+        self.response_future.cancel()
+        self.mqtt_connection._mqtt_transactions.pop(self.messageid, None)
 
 
 class MQTTConnection(Loggable):
@@ -227,6 +247,7 @@ class MQTTConnection(Loggable):
     __slots__ = (
         "profile",
         "broker",
+        "topic_response",
         "mqttdevices",
         "mqttdiscovering",
         "sensor_connection",
@@ -240,13 +261,15 @@ class MQTTConnection(Loggable):
         profile: MerossCloudProfile | MerossApi,
         connection_id: str,
         broker: tuple[str, int],
+        topic_response: str,
     ):
-        self.profile = profile
+        self.profile: Final = profile
         self.broker = broker
-        self.mqttdevices: dict[str, MerossDevice] = {}
-        self.mqttdiscovering: set[str] = set()
+        self.topic_response: Final = topic_response
+        self.mqttdevices: Final[dict[str, MerossDevice]] = {}
+        self.mqttdiscovering: Final[set[str]] = set()
         self.sensor_connection = None
-        self._mqtt_transactions: dict[str, _MQTTTransaction] = {}
+        self._mqtt_transactions: Final[dict[str, _MQTTTransaction]] = {}
         self._mqtt_is_connected = False
         # REMOVEself._unsub_discovery_callback: asyncio.TimerHandle | None = None
         super().__init__(connection_id)
@@ -312,13 +335,8 @@ class MQTTConnection(Loggable):
     def mqtt_publish(
         self,
         device_id: str,
-        namespace: str,
-        method: str,
-        payload: dict,
-        key: KeyType = None,
-        response_callback: ResponseCallbackType | None = None,
-        messageid: str | None = None,
-    ) -> asyncio.Future:
+        request: MerossRequest,
+    ) -> asyncio.Future[MerossMessageType | None]:
         """
         throw and forget..usually schedules to a background task since
         the actual mqtt send could be sync/blocking
@@ -329,12 +347,7 @@ class MQTTConnection(Loggable):
     async def async_mqtt_publish(
         self,
         device_id: str,
-        namespace: str,
-        method: str,
-        payload: dict,
-        key: KeyType = None,
-        response_callback: ResponseCallbackType | None = None,
-        messageid: str | None = None,
+        request: MerossRequest,
     ) -> MerossMessageType | None:
         """
         awaits message publish in asyncio style
@@ -366,12 +379,6 @@ class MQTTConnection(Loggable):
                 if mqtt_transaction.namespace == namespace:
                     self._mqtt_transactions.pop(messageid, None)
                     mqtt_transaction.response_future.set_result(message)
-                    if mqtt_transaction.response_callback:
-                        mqtt_transaction.response_callback(
-                            method != mc.METHOD_ERROR,
-                            header,
-                            payload,
-                        )
             elif self.id is CONF_PROFILE_ID_LOCAL:
                 # special processing for local broker
                 # this code is experimental and is needed to give
@@ -384,12 +391,14 @@ class MQTTConnection(Loggable):
                         # if not replied (see #346)
                         await self.async_mqtt_publish(
                             device_id,
-                            namespace,
-                            method,
-                            payload,
-                            self.profile.key,
-                            None,
-                            messageid,
+                            MerossRequest(
+                                self.profile.key,
+                                namespace,
+                                method,
+                                payload,
+                                self.topic_response,
+                                messageid=messageid,
+                            ),
                         )
                     elif namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
                         # this is part of initial flow over MQTT
@@ -399,12 +408,14 @@ class MQTTConnection(Loggable):
                         # (msl120j bulb doesnt have it)
                         await self.async_mqtt_publish(
                             device_id,
-                            namespace,
-                            method,
-                            {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
-                            self.profile.key,
-                            None,
-                            messageid,
+                            MerossRequest(
+                                self.profile.key,
+                                namespace,
+                                method,
+                                {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
+                                self.topic_response,
+                                messageid=messageid,
+                            ),
                         )
                 elif method == mc.METHOD_SET:
                     if namespace == mc.NS_APPLIANCE_CONTROL_BIND:
@@ -417,12 +428,14 @@ class MQTTConnection(Loggable):
                         # and filtering out this message
                         await self.async_mqtt_publish(
                             device_id,
-                            namespace,
-                            mc.METHOD_SETACK,
-                            {},
-                            self.profile.key,
-                            None,
-                            messageid,
+                            MerossRequest(
+                                self.profile.key,
+                                namespace,
+                                mc.METHOD_SETACK,
+                                {},
+                                self.topic_response,
+                                messageid=messageid,
+                            ),
                         )
 
             if device := ApiProfile.devices.get(device_id):
@@ -555,26 +568,29 @@ class MQTTConnection(Loggable):
     async def async_identify_device(
         self, device_id: str, key: str
     ) -> DeviceConfigType | None:
-        from_ = mc.TOPIC_RESPONSE.format(device_id)
+        topic_response = self.topic_response
         response = await self.async_mqtt_publish(
             device_id,
-            mc.NS_APPLIANCE_CONTROL_MULTIPLE,
-            mc.METHOD_SET,
-            {
-                mc.KEY_MULTIPLE: [
-                    build_message(
-                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
-                        key,
-                        from_,
-                    ),
-                    build_message(
-                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
-                        key,
-                        from_,
-                    ),
-                ]
-            },
-            key,
+            MerossRequest(
+                key,
+                mc.NS_APPLIANCE_CONTROL_MULTIPLE,
+                mc.METHOD_SET,
+                {
+                    mc.KEY_MULTIPLE: [
+                        MerossRequest(
+                            key,
+                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
+                            topic_response,
+                        ),
+                        MerossRequest(
+                            key,
+                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                            topic_response,
+                        ),
+                    ]
+                },
+                topic_response,
+            ),
         )
         if not isinstance(response, dict):
             return None
@@ -661,45 +677,13 @@ class MQTTConnection(Loggable):
             )
     """
 
-    def _mqtt_transaction_init(
-        self,
-        namespace: str,
-        method: str,
-        response_callback: ResponseCallbackType | None,
-    ):
-        transaction = _MQTTTransaction(namespace, method, response_callback)
-        self._mqtt_transactions[transaction.messageid] = transaction
-        return transaction
-
-    async def _async_mqtt_transaction_wait(
-        self, transaction: _MQTTTransaction, timeout=DEFAULT_RESPONSE_TIMEOUT
-    ) -> MerossMessageType | None:
-        try:
-            return await asyncio.wait_for(transaction.response_future, timeout)
-        except Exception as e:
-            self.log_exception(
-                DEBUG,
-                e,
-                "waiting for MQTT reply on message %s %s (messageId: %s)",
-                transaction.method,
-                transaction.namespace,
-                transaction.messageid,
-            )
-            return None
-        finally:
-            self._mqtt_transactions.pop(transaction.messageid, None)
-
-    def _mqtt_transaction_cancel(self, transaction: _MQTTTransaction):
-        transaction.response_future.cancel()
-        self._mqtt_transactions.pop(transaction.messageid, None)
-
     def _mqtt_transactions_clean(self):
         if self._mqtt_transactions:
             # check and cleanup stale transactions
             epoch = time()
-            for _mqtt_transaction in list(self._mqtt_transactions.values()):
-                if (epoch - _mqtt_transaction.request_time) > 15:
-                    self._mqtt_transaction_cancel(_mqtt_transaction)
+            for transaction in list(self._mqtt_transactions.values()):
+                if (epoch - transaction.request_time) > 15:
+                    transaction.cancel()
 
     @callback
     def _mqtt_connected(self):
@@ -727,8 +711,6 @@ class MQTTConnection(Loggable):
 
 
 class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
-    profile: MerossCloudProfile  # Type: ignore
-
     _MSG_PRIORITY_MAP = {
         mc.METHOD_SET: True,
         mc.METHOD_PUSH: False,
@@ -740,7 +722,9 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         self, profile: MerossCloudProfile, connection_id: str, broker: tuple[str, int]
     ):
         MerossMQTTClient.__init__(self, profile.config, profile.app_id)
-        MQTTConnection.__init__(self, profile, connection_id, broker)
+        MQTTConnection.__init__(
+            self, profile, connection_id, broker, self.topic_command
+        )
         self.user_data_set(ApiProfile.hass)  # speedup hass lookup in callbacks
         self.on_connect = self._mqttc_connect
         self.on_disconnect = self._mqttc_disconnect
@@ -787,18 +771,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
     def mqtt_publish(
         self,
         device_id: str,
-        namespace: str,
-        method: str,
-        payload: dict,
-        key: KeyType = None,
-        response_callback: ResponseCallbackType | None = None,
-        messageid: str | None = None,
+        request: MerossRequest,
     ) -> asyncio.Future[_MQTTTransaction | mqtt.MQTTMessageInfo | bool]:
+        namespace = request.namespace
+        method = request.method
         if method in mc.METHOD_ACK_MAP.keys():
-            transaction = self._mqtt_transaction_init(
-                namespace, method, response_callback
-            )
-            messageid = transaction.messageid
+            transaction = _MQTTTransaction(self, request)
         else:
             transaction = None
 
@@ -814,23 +792,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                     timeout=14400,
                 )
                 if transaction:
-                    ApiProfile.hass.loop.call_soon_threadsafe(
-                        self._mqtt_transaction_cancel, transaction
-                    )
+                    ApiProfile.hass.loop.call_soon_threadsafe(transaction.cancel)
                 return False
 
             ret = self.rl_publish(
                 mc.TOPIC_REQUEST.format(device_id),
-                json_dumps(
-                    build_message(
-                        namespace,
-                        method,
-                        payload,
-                        key,
-                        self.topic_command,
-                        messageid,
-                    )
-                ),
+                request.to_string(),
                 MerossMQTTConnection._MSG_PRIORITY_MAP[method],
             )
             if ret is False:
@@ -848,9 +815,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                     timeout=14000,
                 )
                 if transaction:
-                    ApiProfile.hass.loop.call_soon_threadsafe(
-                        self._mqtt_transaction_cancel, transaction
-                    )
+                    ApiProfile.hass.loop.call_soon_threadsafe(transaction.cancel)
                 return False
             if ret is True:
                 if sensor_connection := self.sensor_connection:
@@ -880,19 +845,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
     async def async_mqtt_publish(
         self,
         device_id: str,
-        namespace: str,
-        method: str,
-        payload: dict,
-        key: KeyType = None,
-        response_callback: ResponseCallbackType | None = None,
-        messageid: str | None = None,
+        request: MerossRequest,
     ):
-        result = await self.mqtt_publish(
-            device_id, namespace, method, payload, key, response_callback, messageid
-        )
+        result = await self.mqtt_publish(device_id, request)
         if isinstance(result, _MQTTTransaction):
-            return await self._async_mqtt_transaction_wait(
-                result, self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT
+            return await result.async_wait(
+                self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT
             )
         return result
 

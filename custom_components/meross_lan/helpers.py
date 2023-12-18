@@ -26,7 +26,7 @@ from .const import (
     DOMAIN,
     POLLING_STRATEGY_CONF,
 )
-from .merossclient import const as mc, get_default_arguments
+from .merossclient import const as mc, get_default_arguments, get_namespacekey
 
 try:
     # since we're likely on python3.11 this should quickly
@@ -57,10 +57,10 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant, State
 
     from . import MerossApi
-    from .merossclient import MerossHeaderType, MerossPayloadType
     from .meross_device import MerossDevice
     from .meross_entity import MerossEntity
     from .meross_profile import MerossCloudProfile
+    from .merossclient import MerossHeaderType, MerossPayloadType
 
 
 def clamp(_value, _min, _max):
@@ -445,6 +445,7 @@ class NamespaceHandler:
     __slots__ = (
         "device",
         "namespace",
+        "key_namespace",
         "lastrequest",
         "handler",
     )
@@ -458,6 +459,7 @@ class NamespaceHandler:
     ):
         self.device: typing.Final = device
         self.namespace: typing.Final = namespace
+        self.key_namespace = get_namespacekey(namespace)
         self.handler: typing.Final = handler or getattr(
             device, f"_handle_{namespace.replace('.', '_')}", device._handle_undefined
         )

@@ -11,10 +11,9 @@ from .climate import MtsClimate
 from .const import DOMAIN
 from .helpers import ApiProfile, PollingStrategy, SmartPollingStrategy
 from .meross_device import MerossDevice, MerossDeviceBase
-from .merossclient import (  # mEROSS cONST
+from .merossclient import (
     const as mc,
     get_default_arguments,
-    get_namespacekey,
     get_productnameuuid,
     is_device_online,
 )
@@ -25,8 +24,8 @@ from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
     from .devices.mts100 import Mts100Climate
-    from .meross_device import MerossPayloadType, ResponseCallbackType
     from .meross_entity import MerossEntity
+    from .merossclient import MerossPayloadType, MerossRequest
 
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
@@ -83,7 +82,10 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
                 mc.METHOD_SET,
                 {
                     self.key_namespace: [
-                        {self.key_channel: self.channel, self.key_value: adjust_value}
+                        {
+                            self.key_channel: self.channel,
+                            self.key_value: adjust_value,
+                        }
                     ]
                 },
             ):
@@ -146,7 +148,7 @@ class SubDevicePollingStrategy(PollingStrategy):
                 self.request = (
                     self.namespace,
                     mc.METHOD_GET,
-                    {get_namespacekey(self.namespace): p},
+                    {self.key_namespace: p},
                 )
                 self.adjust_size(len(p))
                 if await device.async_request_smartpoll(
@@ -385,7 +387,7 @@ class MerossDeviceHub(MerossDevice):
                 # would be a waste since we wouldnt have enough info
                 # to correctly build that
                 if is_device_online(p_subdevice):
-                    self.request(*get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
+                    self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
 
     def _build_subdevices_payload(
         self, subdevice_types: typing.Collection, included: bool, count: int
@@ -478,16 +480,21 @@ class MerossSubDevice(MerossDeviceBase):
         self.sensor_battery: MLSensor = None  # type: ignore
         self.switch_togglex = None
 
-    async def async_request(
+    def build_request(
         self,
         namespace: str,
         method: str,
-        payload: dict,
-        response_callback: ResponseCallbackType | None = None,
-    ):
-        return await self.hub.async_request(
-            namespace, method, payload, response_callback
+        payload: MerossPayloadType,
+    ) -> MerossRequest:
+        return MerossRequest(
+            self.key, namespace, method, payload, self.hub._topic_response
         )
+
+    async def async_request_raw(
+        self,
+        request: MerossRequest,
+    ):
+        return await self.hub.async_request_raw(request)
 
     @property
     def tz(self):

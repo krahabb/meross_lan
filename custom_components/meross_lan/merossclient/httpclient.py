@@ -76,7 +76,9 @@ class MerossHttpClient:
         self._logger = _logger
         self._logid = None
 
-    async def async_request_raw(self, request: MerossMessageType) -> MerossMessageType:
+    async def async_request_raw(
+        self, request: MerossMessageType | dict
+    ) -> MerossMessageType:
         timeout = 1
         try:
             self._logid = None
