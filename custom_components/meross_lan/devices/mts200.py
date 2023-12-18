@@ -408,7 +408,7 @@ class Mts200Climate(MtsClimate):
             if self._mts_summermode != summermode:
                 self._mts_summermode = summermode
                 self.update_mts_state()
-
+        
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
         self.binary_sensor_window.update_onoff(payload[mc.KEY_STATUS])
