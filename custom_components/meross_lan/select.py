@@ -6,7 +6,7 @@ import typing
 
 from homeassistant import const as hac
 from homeassistant.components import select
-from homeassistant.core import callback
+from homeassistant.core import callback, CoreState
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
@@ -17,7 +17,7 @@ from .merossclient import const as mc  # mEROSS cONST
 if typing.TYPE_CHECKING:
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant, State
+    from homeassistant.core import Event, HomeAssistant, State
     from homeassistant.helpers.entity_component import EntityComponent
     from homeassistant.helpers.event import EventStateChangedData
     from homeassistant.helpers.typing import EventType
@@ -168,7 +168,6 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         self,
         climate: MtsClimate,
     ):
-        # BEWARE! the climate entity is not initialized so don't use it here
         self.climate = climate
         self._attr_options = []
         self._delayed_tracking_timestamp = 0
@@ -179,6 +178,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
 
     # interface: MerossEntity
     async def async_shutdown(self):
+        self._tracking_stop()
         self.climate = None  # type: ignore
         await super().async_shutdown()
 
@@ -191,45 +191,55 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         return False
 
     def set_unavailable(self):
-        # reset the timeout 8and the eventual callback) when the device
+        # reset the timeout and the eventual callback when the device
         # offlines so we promptly re-track when the device onlines again
-        self._reset_delayed_tracking(0)
+        self._delayed_tracking_reset(0)
 
     async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-
-        self._attr_options = [hac.STATE_OFF]
-        component: EntityComponent[SensorEntity] = self.hass.data["sensor"]
-        entities = list(component.entities)
-        for entity in entities:
-            um = entity.native_unit_of_measurement
-            if um in (hac.TEMP_CELSIUS, hac.TEMP_FAHRENHEIT):
-                self._attr_options.append(entity.entity_id)
+        hass = self.hass
 
         if self._attr_state is None:
             self._attr_state = hac.STATE_OFF
             with self.exception_warning("restoring previous state"):
                 if last_state := await get_entity_last_state_available(
-                    self.hass, self.entity_id
+                    hass, self.entity_id
                 ):
                     self._attr_state = last_state.state
 
-        self._start_tracking()
+        if hass.state == CoreState.running:
+            self._setup_tracking_entities()
+        else:
+            # setup a temp list in order to not loose restored state
+            # since HA validates 'current_option' against 'options'
+            # when persisting the state and we could loose the
+            # current restored state if we don't setup the tracking
+            # list soon enough
+            self._attr_options = [self._attr_state]
+            hass.bus.async_listen_once(
+                hac.EVENT_HOMEASSISTANT_STARTED,
+                self._setup_tracking_entities,
+            )
+
+        # call super after (eventually) calling _setup_tracking_entities
+        # since it could flush the new state (should when called by the hass bus)
+        await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
-        self._stop_tracking()
+        self._tracking_stop()
         await super().async_will_remove_from_hass()
 
     # interface: SelectEntity
     @property
+    def options(self) -> list[str]:
+        return self._attr_options
+
+    @property
     def current_option(self):
-        """Return the selected entity option to represent the entity state."""
         return self._attr_state
 
     async def async_select_option(self, option: str):
-        self._stop_tracking()
         self.update_state(option)
-        self._start_tracking()
+        self._tracking_start()
 
     # interface: self
     def check_tracking(self):
@@ -237,17 +247,27 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         called when either the climate or the tracked_entity has a new
         temperature reading in order to see if the climate needs to be adjusted
         """
+        if not self.manager.online or not self._unsub_track_state:
+            return
         tracked_state = self._tracked_state
-        if not tracked_state or tracked_state.state in (
+        if not tracked_state:
+            # we've setup tracking but the entity doesn't exist in the
+            # state machine...was it removed from HA ?
+            self.warning(
+                "tracked entity state is missing: was it removed from HomeAssistant ?",
+                timeout=14400,
+            )
+            return
+        if tracked_state.state in (
             hac.STATE_UNAVAILABLE,
             hac.STATE_UNKNOWN,
         ):
-            return
-        if not self.manager.online:
+            # might be transient so we don't take any action or log
             return
         epoch = time()
         delay = self._delayed_tracking_timestamp - epoch
         if delay > 0:
+            # last tracking was too recent so we delay this a bit
             if not self._unsub_tracking_delayed:
                 self._unsub_tracking_delayed = schedule_callback(
                     self.hass, delay, self._delayed_tracking_callback
@@ -295,7 +315,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
                 ):
                     return
                 adjust_temperature = number_adjust_temperature.native_min_value
-            self._reset_delayed_tracking(epoch + self.TRACKING_DEADTIME)
+            self._delayed_tracking_reset(epoch + self.TRACKING_DEADTIME)
             self.hass.async_create_task(
                 number_adjust_temperature.async_set_native_value(adjust_temperature)
             )
@@ -307,8 +327,29 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
                 climate.entity_id,
             )
 
-    def _start_tracking(self):
-        self._stop_tracking()
+    @callback
+    def _setup_tracking_entities(self, *_):
+        self._attr_options = [hac.STATE_OFF]
+        component: EntityComponent[SensorEntity] = self.hass.data["sensor"]
+        for entity in component.entities:
+            um = entity.native_unit_of_measurement
+            if um in (hac.TEMP_CELSIUS, hac.TEMP_FAHRENHEIT):
+                self._attr_options.append(entity.entity_id)
+
+        if self._attr_state not in self._attr_options:
+            # this might happen when restoring a not anymore valid entity
+            self._attr_state = hac.STATE_OFF
+
+        if self._hass_connected:
+            # this means the _setup_tracking_entities is being called
+            # on EVENT_HOMEASSISTANT_STARTED so we update the HA state here
+            # with full consistent data
+            self._async_write_ha_state()
+
+        self._tracking_start()
+
+    def _tracking_start(self):
+        self._tracking_stop()
         entity_id = self._attr_state
         if entity_id and entity_id not in (
             hac.STATE_OFF,
@@ -319,21 +360,21 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             @callback
             def _track_state_callback(event: EventType[EventStateChangedData]):
                 with self.exception_warning("processing state update event"):
-                    self._update_tracked_state(event.data.get("new_state"))
+                    self._tracking_update_state(event.data.get("new_state"))
 
             self._unsub_track_state = async_track_state_change_event(
                 self.hass, entity_id, _track_state_callback
             )
-            self._update_tracked_state(self.hass.states.get(entity_id))
+            self._tracking_update_state(self.hass.states.get(entity_id))
 
-    def _stop_tracking(self):
+    def _tracking_stop(self):
         if self._unsub_track_state:
             self._unsub_track_state()
             self._unsub_track_state = None
             self._tracked_state = None
-            self._reset_delayed_tracking(0)
+            self._delayed_tracking_reset(0)
 
-    def _update_tracked_state(self, tracked_state: State | None):
+    def _tracking_update_state(self, tracked_state: State | None):
         self._tracked_state = tracked_state
         self.check_tracking()
 
@@ -342,7 +383,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         self._unsub_tracking_delayed = None
         self.check_tracking()
 
-    def _reset_delayed_tracking(self, delayed_tracking_timestamp):
+    def _delayed_tracking_reset(self, delayed_tracking_timestamp):
         """
         cancels the delayed callback (if pending). This is called when either
         the tracking is fired (and a new deadtime is set) or when tracking
