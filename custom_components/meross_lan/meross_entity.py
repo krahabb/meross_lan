@@ -114,7 +114,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             if channel is None
             else f"{channel}_{entitykey}"
         )
-        Loggable.__init__(self, _id)
+        Loggable.__init__(self, _id, None, manager)
         assert (
             manager.entities.get(_id) is None
         ), f"(channel:{channel}, entitykey:{entitykey}) is not unique inside manager.entities"
@@ -140,15 +140,12 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             async_add_devices([self])
 
     # interface: Loggable
+    """ REMOVE
     def log(self, level: int, msg: str, *args, **kwargs):
         self.manager.log(
             level, f"{self.__class__.__name__}({self.entity_id}) {msg}", *args, **kwargs
         )
-
-    def warning(self, msg: str, *args, **kwargs):
-        self.manager.warning(
-            f"{self.__class__.__name__}({self.entity_id}) {msg}", *args, **kwargs
-        )
+    """
 
     # interface: Entity
     @property
@@ -206,6 +203,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         return self._attr_unique_id
 
     async def async_added_to_hass(self):
+        self.logtag = f"{self.__class__.__name__}({self.entity_id})"
         self._hass_connected = True
 
     async def async_will_remove_from_hass(self):

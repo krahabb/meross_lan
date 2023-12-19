@@ -474,11 +474,6 @@ class MerossSubDevice(MerossDeviceBase):
             level, f"{self.__class__.__name__}({self.name}) {msg}", *args, **kwargs
         )
 
-    def warning(self, msg: str, *args, **kwargs):
-        self.hub.warning(
-            f"{self.__class__.__name__}({self.name}) {msg}", *args, **kwargs
-        )
-
     # interface: EntityManager
     def generate_unique_id(self, entity: MerossEntity):
         """
