@@ -18,7 +18,9 @@ MerossHeaderType = typing.TypedDict(
         "namespace": str,
         "method": str,
         "payloadVersion": int,
+        "triggerSrc": typing.NotRequired[str],
         "from": str,
+        "uuid": typing.NotRequired[str],
         "timestamp": int,
         "timestampMs": int,
         "sign": str,
@@ -183,6 +185,19 @@ def build_message(
             },
             mc.KEY_PAYLOAD: payload,
         }
+
+
+def build_message_reply(
+    header: MerossHeaderType,
+    payload: MerossPayloadType,
+) -> MerossMessageType:
+    header = header.copy()
+    header.pop(mc.KEY_UUID, None)
+    header[mc.KEY_TRIGGERSRC] = "CloudControl"
+    return {
+        mc.KEY_HEADER: header,
+        mc.KEY_PAYLOAD: payload,
+    }
 
 
 def get_namespacekey(namespace: str) -> str:
