@@ -49,6 +49,8 @@ from .meross_device_hub import MerossDeviceHub
 from .merossclient import (
     MEROSSDEBUG,
     MerossRequest,
+    build_message,
+    build_message_reply,
     const as mc,
     get_default_arguments,
     get_replykey,
@@ -354,6 +356,16 @@ class MQTTConnection(Loggable):
         """
         raise NotImplementedError()
 
+    async def async_mqtt_publish_reply(
+        self,
+        device_id: str,
+        message: MerossMessageType,
+    ):
+        """
+        special raw publish for broker-session management
+        """
+        pass
+
     async def async_mqtt_message(self, msg):
         with self.exception_warning("async_mqtt_message"):
             if sensor_connection := self.sensor_connection:
@@ -389,16 +401,9 @@ class MQTTConnection(Loggable):
                         # this message too is published by mss switches
                         # and it appears newer mss315 could abort their connection
                         # if not replied (see #346)
-                        await self.async_mqtt_publish(
+                        await self.async_mqtt_publish_reply(
                             device_id,
-                            MerossRequest(
-                                self.profile.key,
-                                namespace,
-                                method,
-                                payload,
-                                self.topic_response,
-                                messageid=messageid,
-                            ),
+                            build_message_reply(header, payload),
                         )
                     elif namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
                         # this is part of initial flow over MQTT
@@ -406,15 +411,11 @@ class MQTTConnection(Loggable):
                         # having NTP opened to setup the device
                         # Note: I actually see this NS only on mss310 plugs
                         # (msl120j bulb doesnt have it)
-                        await self.async_mqtt_publish(
+                        await self.async_mqtt_publish_reply(
                             device_id,
-                            MerossRequest(
-                                self.profile.key,
-                                namespace,
-                                method,
+                            build_message_reply(
+                                header,
                                 {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
-                                self.topic_response,
-                                messageid=messageid,
                             ),
                         )
                 elif method == mc.METHOD_SET:
@@ -422,21 +423,23 @@ class MQTTConnection(Loggable):
                         # this transaction appears when a device (firstly)
                         # connects to an MQTT broker and tries to 'register'
                         # itself. Our guess right now is to just SETACK
-                        # trying fix #346. We should maybe be careful
-                        # if this connection is a cloud one but I guess
-                        # the Meross cloud brokers are already managing
-                        # and filtering out this message
-                        await self.async_mqtt_publish(
-                            device_id,
-                            MerossRequest(
-                                self.profile.key,
-                                namespace,
-                                mc.METHOD_SETACK,
-                                {},
-                                self.topic_response,
-                                messageid=messageid,
-                            ),
+                        # trying fix #346. When building the reply, the
+                        # meross broker sets the from field as
+                        # "from": "cloud/sub/kIGFRwvtAQP4sbXv/58c35d719350a689"
+                        # and the fields look like hashes or something since
+                        # they change between attempts (hashed broker id ?)
+                        # At any rate I don't have a clue on how to properly
+                        # replicate this and the "from" field is set as ususal
+                        reply = build_message(
+                            namespace,
+                            mc.METHOD_SETACK,
+                            {},
+                            self.profile.key,
+                            mc.TOPIC_RESPONSE.format(device_id),
+                            messageid,
                         )
+                        reply[mc.KEY_HEADER][mc.KEY_TRIGGERSRC] = "CloudControl"
+                        await self.async_mqtt_publish_reply(device_id, reply)
 
             if device := ApiProfile.devices.get(device_id):
                 if device._mqtt_connection == self:

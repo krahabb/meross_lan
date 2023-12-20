@@ -41,7 +41,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import ServiceCall, ServiceResponse
 
-    from .merossclient import KeyType
+    from .merossclient import KeyType, MerossMessageType, ResponseCallbackType
 
 
 else:
@@ -132,6 +132,25 @@ class HAMQTTConnection(MQTTConnection):
         )
         if transaction:
             return await transaction.async_wait(self.DEFAULT_RESPONSE_TIMEOUT)
+
+    async def async_mqtt_publish_reply(
+        self,
+        device_id: str,
+        message: MerossMessageType
+    ):
+        self.log(
+            DEBUG,
+            "MQTT PUBLISH REPLY device_id:(%s) method:(%s) namespace:(%s)",
+            device_id,
+            message[mc.KEY_HEADER][mc.KEY_METHOD],
+            message[mc.KEY_HEADER][mc.KEY_NAMESPACE],
+        )
+        await mqtt_async_publish(
+            ApiProfile.hass,
+            mc.TOPIC_REQUEST.format(device_id),
+            json_dumps(message)
+        )
+
 
     # interface: self
     @property

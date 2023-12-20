@@ -523,14 +523,9 @@ class MerossDevice(MerossDeviceBase):
 
     # interface: Loggable
     def log(self, level: int, msg: str, *args, **kwargs):
-        LOGGER.log(level, f"MerossDevice({self.name}): {msg}", *args, **kwargs)
+        self.logger.log(level, f"MerossDevice({self.name}): {msg}", *args, **kwargs)
         if self._trace_file:
             self._trace(time(), msg % args, logging_getLevelName(level), "LOG")
-
-    def warning(self, msg: str, *args, **kwargs):
-        LOGGER.warning(f"MerossDevice({self.name}): {msg}", *args, **kwargs)
-        if self._trace_file:
-            self._trace(time(), msg % args, "WARNING", "LOG")
 
     # interface: EntityManager
     @callback
