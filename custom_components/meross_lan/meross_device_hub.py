@@ -773,6 +773,7 @@ class MTS100SubDevice(MerossSubDevice):
 
         self.climate = Mts100Climate(self)
         self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
+        self.sensor_temperature._attr_entity_registry_enabled_default = False
 
     async def async_shutdown(self):
         await super().async_shutdown()
