@@ -72,34 +72,18 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
             device_class,
         )
 
-    async def async_set_native_value(self, value: float):
+    @property
+    def device_scale(self):
+        return 10
+
+    async def async_request(self, device_value):
         # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
         # the issued value as a 'delta' to the current configured value i.e.
         # 'new adjust value' = 'current adjust value' + 'issued adjust value'
         # Since the native HA interface async_set_native_value wants to set
         # the 'new adjust value' we have to issue the difference against the
         # currently configured one
-        device_value = round(value * self.device_scale)
-        if adjust_value := device_value - self.device_value:
-            # optimistic update since the command needs the actual
-            # value to compute delta and could de-sync if issued before the previous
-            # async_request_ack is still awaiting confirmation. At any rate,
-            # the actual value from the device will soon be refreshed on polling
-            self.update_native_value(device_value)
-            if await self.manager.async_request_ack(
-                self.namespace,
-                mc.METHOD_SET,
-                {
-                    self.key_namespace: [
-                        {self.key_channel: self.channel, self.key_value: adjust_value}
-                    ]
-                },
-            ):
-                pass
-
-    @property
-    def device_scale(self):
-        return 10
+        return await super().async_request(device_value - self.device_value)
 
 
 class SubDevicePollingStrategy(PollingStrategy):

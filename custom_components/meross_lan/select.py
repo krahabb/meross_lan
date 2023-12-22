@@ -148,7 +148,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
 
     PLATFORM = select.DOMAIN
 
-    TRACKING_DEADTIME = 300
+    TRACKING_DEADTIME = 60
     """minimum delay (dead-time) between trying to adjust the climate entity"""
 
     climate: MtsClimate
@@ -275,6 +275,15 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             return
         climate = self.climate
         with self.exception_warning("check_tracking", timeout=900):
+            current_temperature = climate.current_temperature
+            if not current_temperature:
+                # should be transitory - just a safety check
+                return
+            number_adjust_temperature = climate.number_adjust_temperature
+            current_adjust_temperature = number_adjust_temperature.native_value
+            if current_adjust_temperature is None:
+                # adjust entity not available (yet?) should be transitory - just a safety check
+                return
             tracked_temperature = float(tracked_state.state)
             # ensure tracked_temperature is °C
             tracked_temperature_unit = tracked_state.attributes.get(
@@ -288,15 +297,10 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
                     tracked_temperature_unit,
                     climate.TEMP_CELSIUS,
                 )
-            error_temperature: float = tracked_temperature - climate.current_temperature  # type: ignore
+            error_temperature: float = tracked_temperature - current_temperature
             native_error_temperature = round(error_temperature * mc.MTS_TEMP_SCALE)
             if not native_error_temperature:
                 # tracking error within device resolution limits..we're ok
-                return
-            number_adjust_temperature = climate.number_adjust_temperature
-            current_adjust_temperature = number_adjust_temperature.native_value
-            if current_adjust_temperature is None:
-                # adjust entity not available (yet?) should be transitory - just a safety check
                 return
             adjust_temperature = current_adjust_temperature + error_temperature
             # check if our correction is within the native adjust limits
@@ -319,8 +323,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             self.hass.async_create_task(
                 number_adjust_temperature.async_set_native_value(adjust_temperature)
             )
-            self.log(
-                DEBUG,
+            self.debug(
                 "applying correction of %s %s to %s",
                 adjust_temperature,
                 climate.TEMP_CELSIUS,

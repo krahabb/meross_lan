@@ -216,14 +216,12 @@ class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
         self._attr_state = init_payload[key] / self.device_scale
         super().__init__(manager, None, key)
 
-    async def async_set_native_value(self, value: float):
-        device_value = round(value * self.device_scale)
-        if await self.manager.async_request_ack(
+    async def async_request(self, device_value):
+        return await self.manager.async_request_ack(
             mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
             mc.METHOD_SET,
             {mc.KEY_CONFIG: {self.key_value: device_value}},
-        ):
-            self.update_native_value(device_value)
+        )
 
 
 class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
@@ -1044,23 +1042,25 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     def native_unit_of_measurement(self):
         return TIME_SECONDS
 
-    async def async_set_native_value(self, value: float):
+    @property
+    def device_scale(self):
+        return 1000
+
+    async def async_request(self, device_value):
         config = {
             mc.KEY_CHANNEL: self.channel,
             mc.KEY_SIGNALOPEN: self._cover._signalOpen,
             mc.KEY_SIGNALCLOSE: self._cover._signalClose,
         }
-        config[self.key_value] = int(value * 1000)
-        if await self.manager.async_request_ack(
+        config[self.key_value] = device_value
+        if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG,
             mc.METHOD_SET,
             {mc.KEY_CONFIG: [config]},
         ):
             self._cover._parse_config(config)
 
-    @property
-    def device_scale(self):
-        return 1000
+        return response
 
 
 class RollerShutterMixin(

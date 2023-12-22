@@ -268,35 +268,25 @@ class MtsSetPointNumber(MLConfigNumber):
     def native_unit_of_measurement(self):
         return MtsClimate.TEMP_CELSIUS
 
-    async def async_set_native_value(self, value: float):
+    @property
+    def device_scale(self):
+        return mc.MTS_TEMP_SCALE
+
+    async def async_request(self, device_value):
         # +4 here is to try accomodate mts setpoint roundings
         # see climat._parse_temperature (or _parse_mode for mts200)
-        device_value = round(value * mc.MTS_TEMP_SCALE)
-        key_namespace = self.key_namespace
-        if response := await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                key_namespace: [
-                    {self.key_channel: self.channel, self.key_value: device_value + 4}
-                ]
-            },
-        ):
+        if response := await super().async_request(device_value + 4):
             # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
             # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
             # make sure the climate state is consistent and all the correct roundings
             # are processed when changing any of the presets
             # not sure about mts200 replies..but we're optimist
+            key_namespace = self.key_namespace
             payload = response[mc.KEY_PAYLOAD]
             if key_namespace in payload:
                 # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)
                 getattr(self.climate, f"_parse_{key_namespace}")(
                     payload[key_namespace][0]
                 )
-            else:
-                # fallback (maybe for mts200..we'll see)
-                self.update_native_value(device_value)
 
-    @property
-    def device_scale(self):
-        return mc.MTS_TEMP_SCALE
+        return response
