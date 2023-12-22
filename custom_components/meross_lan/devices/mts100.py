@@ -126,9 +126,6 @@ class Mts100Climate(MtsClimate):
         key = Mts100Climate.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or Mts100Climate.PRESET_CUSTOM
         ]
-        device_temperature = (
-            round(kwargs[Mts100Climate.ATTR_TEMPERATURE] * mc.MTS_TEMP_SCALE) + 4
-        )
         # when sending a temp this way the device will automatically
         # exit auto mode if needed. Also it will round-down the value
         # to the nearest multiple of 5
@@ -139,7 +136,9 @@ class Mts100Climate(MtsClimate):
                 mc.KEY_TEMPERATURE: [
                     {
                         mc.KEY_ID: self.id,
-                        key: device_temperature,
+                        key: round(
+                            kwargs[Mts100Climate.ATTR_TEMPERATURE] * mc.MTS_TEMP_SCALE
+                        ),
                     }
                 ]
             },

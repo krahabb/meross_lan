@@ -273,9 +273,7 @@ class MtsSetPointNumber(MLConfigNumber):
         return mc.MTS_TEMP_SCALE
 
     async def async_request(self, device_value):
-        # +4 here is to try accomodate mts setpoint roundings
-        # see climat._parse_temperature (or _parse_mode for mts200)
-        if response := await super().async_request(device_value + 4):
+        if response := await super().async_request(device_value):
             # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
             # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
             # make sure the climate state is consistent and all the correct roundings
