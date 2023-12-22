@@ -139,14 +139,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         if async_add_devices:
             async_add_devices([self])
 
-    # interface: Loggable
-    """ REMOVE
-    def log(self, level: int, msg: str, *args, **kwargs):
-        self.manager.log(
-            level, f"{self.__class__.__name__}({self.entity_id}) {msg}", *args, **kwargs
-        )
-    """
-
     # interface: Entity
     @property
     def assumed_state(self):

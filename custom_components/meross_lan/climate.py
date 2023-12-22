@@ -83,6 +83,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_mode",
         "_mts_onoff",
         "_mts_adjust_offset",
+        "_mts_adjusted_temperature",
         "binary_sensor_window",
         "number_adjust_temperature",
         "number_comfort_temperature",
@@ -113,6 +114,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_mode: int | None = None
         self._mts_onoff: int | None = None
         self._mts_adjust_offset = 0
+        self._mts_adjusted_temperature = {}
         super().__init__(manager, channel, None, None)
         self.binary_sensor_window = binary_sensor_window
         self.number_adjust_temperature = number_adjust_temperature
@@ -136,6 +138,13 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.number_adjust_temperature = None  # type: ignore
         self.binary_sensor_window = None  # type: ignore
         await super().async_shutdown()
+
+    def set_unavailable(self):
+        self._mts_active = None
+        self._mts_mode = None
+        self._mts_onoff = None
+        self._mts_adjusted_temperature = {}
+        super().set_unavailable()
 
     # interface: ClimateEntity
     @property
@@ -260,9 +269,22 @@ class MtsSetPointNumber(MLConfigNumber):
         return MtsClimate.TEMP_CELSIUS
 
     @property
-    def device_offset(self):
-        return self.climate._mts_adjust_offset
-
-    @property
     def device_scale(self):
         return mc.MTS_TEMP_SCALE
+
+    async def async_request(self, device_value):
+        if response := await super().async_request(device_value):
+            # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
+            # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
+            # make sure the climate state is consistent and all the correct roundings
+            # are processed when changing any of the presets
+            # not sure about mts200 replies..but we're optimist
+            key_namespace = self.key_namespace
+            payload = response[mc.KEY_PAYLOAD]
+            if key_namespace in payload:
+                # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)
+                getattr(self.climate, f"_parse_{key_namespace}")(
+                    payload[key_namespace][0]
+                )
+
+        return response

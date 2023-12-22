@@ -6,12 +6,14 @@ from homeassistant.components import number
 from homeassistant.const import PERCENTAGE, TEMP_CELSIUS
 
 from . import meross_entity as me
+from .helpers import schedule_async_callback
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .helpers import EntityManager
     from .meross_device import MerossDevice
 
 
@@ -49,6 +51,8 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         NumberDeviceClass.TEMPERATURE: TEMP_CELSIUS,
     }
 
+    DEBOUNCE_DELAY = 1
+
     manager: MerossDevice
 
     _attr_entity_category = me.EntityCategory.CONFIG
@@ -71,7 +75,26 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         "_attr_native_step",
         "_attr_native_unit_of_measurement",
         "_device_value",
+        "_unsub_request",
     )
+
+    def __init__(
+        self,
+        manager: EntityManager,
+        channel: object | None,
+        entitykey: str | None = None,
+        device_class: NumberDeviceClass | None = None,
+    ):
+        super().__init__(manager, channel, entitykey, device_class)
+        self._unsub_request = None
+
+    async def async_shutdown(self):
+        self._cancel_request()
+        await super().async_shutdown()
+
+    def set_unavailable(self):
+        self._cancel_request()
+        super().set_unavailable()
 
     # interface: number.NumberEntity
     @property
@@ -100,24 +123,20 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         return self._attr_state
 
     async def async_set_native_value(self, value: float):
-        device_value = round(value * self.device_scale) + self.device_offset
-        if await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: [
-                    {self.key_channel: self.channel, self.key_value: device_value}
-                ]
-            },
-        ):
-            self.update_native_value(device_value)
+        device_value = round(value * self.device_scale)
+        device_step = round(self.native_step * self.device_scale)
+        device_value = round(device_value / device_step) * device_step
+        # since the async_set_native_value might be triggered back-to-back
+        # especially when using the BOXED UI we're debouncing the device
+        # request and provide 'temporaneous' optimistic updates
+        self.update_state(device_value / self.device_scale)
+        if self._unsub_request:
+            self._unsub_request.cancel()
+        self._unsub_request = schedule_async_callback(
+            self.hass, self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
+        )
 
     # interface: self
-    @property
-    def device_offset(self):
-        """used to offset the device value when converting to/from native value"""
-        return 0
-
     @property
     def device_scale(self):
         """used to scale the device value when converting to/from native value"""
@@ -130,4 +149,30 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
 
     def update_native_value(self, device_value):
         self._device_value = device_value
-        self.update_state((device_value - self.device_offset) / self.device_scale)
+        self.update_state(device_value / self.device_scale)
+
+    async def async_request(self, device_value):
+        """sends the actual request to the device. this is likely to be overloaded"""
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: [
+                    {self.key_channel: self.channel, self.key_value: device_value}
+                ]
+            },
+        )
+
+    async def _async_request_debounce(self, device_value):
+        self._unsub_request = None
+        if await self.async_request(device_value):
+            self.update_native_value(device_value)
+        else:
+            # restore the last good known device value
+            if self.manager.online:
+                self.update_state(self._device_value / self.device_scale)
+
+    def _cancel_request(self):
+        if self._unsub_request:
+            self._unsub_request.cancel()
+            self._unsub_request = None
