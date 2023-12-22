@@ -79,8 +79,13 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
         # Since the native HA interface async_set_native_value wants to set
         # the 'new adjust value' we have to issue the difference against the
         # currently configured one
-        device_value = round(value * self.device_scale) + self.device_offset
+        device_value = round(value * self.device_scale)
         if adjust_value := device_value - self.device_value:
+            # optimistic update since the command needs the actual
+            # value to compute delta and could de-sync if issued before the previous
+            # async_request_ack is still awaiting confirmation. At any rate,
+            # the actual value from the device will soon be refreshed on polling
+            self.update_native_value(device_value)
             if await self.manager.async_request_ack(
                 self.namespace,
                 mc.METHOD_SET,
@@ -90,7 +95,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
                     ]
                 },
             ):
-                self.update_native_value(device_value)
+                pass
 
     @property
     def device_scale(self):
@@ -339,53 +344,54 @@ class MerossDeviceHub(MerossDevice):
                 return None
 
         abilities = self.descriptor.ability
+        polling_dictionary = self.polling_dictionary
         if _type in MTS100_ALL_TYPESET:
-            if (mc.NS_APPLIANCE_HUB_MTS100_ALL in abilities) and not (
-                mc.NS_APPLIANCE_HUB_MTS100_ALL in self.polling_dictionary
+            if (mc.NS_APPLIANCE_HUB_MTS100_ADJUST in abilities) and not (
+                mc.NS_APPLIANCE_HUB_MTS100_ADJUST in polling_dictionary
             ):
-                self.polling_dictionary[
+                polling_dictionary[
+                    mc.NS_APPLIANCE_HUB_MTS100_ADJUST
+                ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
+            if (mc.NS_APPLIANCE_HUB_MTS100_ALL in abilities) and not (
+                mc.NS_APPLIANCE_HUB_MTS100_ALL in polling_dictionary
+            ):
+                polling_dictionary[
                     mc.NS_APPLIANCE_HUB_MTS100_ALL
                 ] = SubDevicePollingStrategy(
                     mc.NS_APPLIANCE_HUB_MTS100_ALL, MTS100_ALL_TYPESET, True, 8
                 )
             if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in abilities) and not (
-                mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in self.polling_dictionary
+                mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in polling_dictionary
             ):
-                self.polling_dictionary[
+                polling_dictionary[
                     mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB
                 ] = SubDevicePollingStrategy(
                     mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, MTS100_ALL_TYPESET, True, 4
                 )
-            if (mc.NS_APPLIANCE_HUB_MTS100_ADJUST in abilities) and not (
-                mc.NS_APPLIANCE_HUB_MTS100_ADJUST in self.polling_dictionary
-            ):
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_HUB_MTS100_ADJUST
-                ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
         else:
-            if (mc.NS_APPLIANCE_HUB_SENSOR_ALL in abilities) and not (
-                mc.NS_APPLIANCE_HUB_SENSOR_ALL in self.polling_dictionary
+            if (mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in abilities) and not (
+                mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in polling_dictionary
             ):
-                self.polling_dictionary[
+                polling_dictionary[
+                    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
+                ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
+            if (mc.NS_APPLIANCE_HUB_SENSOR_ALL in abilities) and not (
+                mc.NS_APPLIANCE_HUB_SENSOR_ALL in polling_dictionary
+            ):
+                polling_dictionary[
                     mc.NS_APPLIANCE_HUB_SENSOR_ALL
                 ] = SubDevicePollingStrategy(
                     mc.NS_APPLIANCE_HUB_SENSOR_ALL, MTS100_ALL_TYPESET, False, 8
                 )
-            if (mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in abilities) and not (
-                mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in self.polling_dictionary
-            ):
-                self.polling_dictionary[
-                    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
-                ] = SmartPollingStrategy(mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
             if (mc.NS_APPLIANCE_HUB_TOGGLEX in abilities) and not (
-                mc.NS_APPLIANCE_HUB_TOGGLEX in self.polling_dictionary
+                mc.NS_APPLIANCE_HUB_TOGGLEX in polling_dictionary
             ):
                 # this is a status message irrelevant for mts100(s) and
                 # other types. If not use an MQTT-PUSH friendly startegy
                 if _type not in (mc.TYPE_MS100,):
-                    self.polling_dictionary[
+                    polling_dictionary[mc.NS_APPLIANCE_HUB_TOGGLEX] = PollingStrategy(
                         mc.NS_APPLIANCE_HUB_TOGGLEX
-                    ] = PollingStrategy(mc.NS_APPLIANCE_HUB_TOGGLEX)
+                    )
 
         if deviceclass := WELL_KNOWN_TYPE_MAP.get(_type):  # type: ignore
             return deviceclass(self, p_subdevice)

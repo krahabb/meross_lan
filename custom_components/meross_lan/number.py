@@ -100,7 +100,9 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         return self._attr_state
 
     async def async_set_native_value(self, value: float):
-        device_value = round(value * self.device_scale) + self.device_offset
+        device_value = round(value * self.device_scale)
+        device_step = round(self.native_step * self.device_scale)
+        device_value = round(device_value / device_step) * device_step
         if await self.manager.async_request_ack(
             self.namespace,
             mc.METHOD_SET,
@@ -114,11 +116,6 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
 
     # interface: self
     @property
-    def device_offset(self):
-        """used to offset the device value when converting to/from native value"""
-        return 0
-
-    @property
     def device_scale(self):
         """used to scale the device value when converting to/from native value"""
         return 1
@@ -130,4 +127,4 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
 
     def update_native_value(self, device_value):
         self._device_value = device_value
-        self.update_state((device_value - self.device_offset) / self.device_scale)
+        self.update_state(device_value / self.device_scale)
