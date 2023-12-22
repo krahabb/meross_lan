@@ -77,11 +77,11 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
     _attr_entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, cover: MLGarage):
-        self._attr_extra_state_attributes = {}
-        self._attr_state = self.STATE_OFF
         super().__init__(
             cover.manager, cover.channel, "problem", self.DeviceClass.PROBLEM
         )
+        self._attr_extra_state_attributes = {}
+        self._attr_state = self.STATE_OFF
 
     @property
     def available(self):
@@ -164,8 +164,8 @@ class MLGarageConfigSwitch(MLGarageMultipleConfigSwitch):
     """
 
     def __init__(self, manager: GarageMixin, key: str, init_payload: dict):
-        self._attr_state = self.STATE_ON if init_payload[key] else self.STATE_OFF
         super().__init__(manager, None, key)
+        self._attr_state = self.STATE_ON if init_payload[key] else self.STATE_OFF
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(
@@ -213,8 +213,8 @@ class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
     """
 
     def __init__(self, manager: GarageMixin, key: str, init_payload: dict):
-        self._attr_state = init_payload[key] / self.device_scale
         super().__init__(manager, None, key)
+        self._attr_state = init_payload[key] / self.device_scale
 
     async def async_request(self, device_value):
         return await self.manager.async_request_ack(
@@ -435,7 +435,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                 # for delays in communication
                 self._transition_end_unsub = schedule_callback(
                     self.hass,
-                    timeout + 1,  # type: ignore
+                    (timeout or self._transition_duration) + 1,  # type: ignore
                     self._transition_end_callback,
                 )
             else:
