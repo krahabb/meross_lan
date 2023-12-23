@@ -1,9 +1,13 @@
 import collections
+import re
 
 # MQTT topics
 TOPIC_DISCOVERY = "/appliance/+/publish"
 TOPIC_REQUEST = "/appliance/{}/subscribe"
 TOPIC_RESPONSE = "/appliance/{}/publish"
+
+RE_PATTERN_TOPIC_UUID = re.compile(r"/.+/(.*)/.+")
+"""re pattern to search/extract the uuid from an MQTT topic or the "from" field in message header"""
 
 METHOD_PUSH = "PUSH"
 METHOD_GET = "GET"

@@ -148,6 +148,7 @@ class MerossEmulator:
         for request routed from the web.Application or from the mqtt.Client.
         It could also be used alone if we want to 'query' the emulator in any other
         scenario like for testing (where the web/mqtt environments are likely mocked)
+        This method is thread-safe
         """
         request: MerossMessageType = json.loads(s_request)
         request_header = request[mc.KEY_HEADER]
@@ -157,6 +158,7 @@ class MerossEmulator:
             f"RX: namespace={request_header[mc.KEY_NAMESPACE]} method={request_header[mc.KEY_METHOD]} payload={json.dumps(request_payload)}"
         )
         with self.lock:
+            # guarantee thread safety by locking the whole message handling
             self.update_epoch()
             response = self._handle_message(request_header, request_payload)
         response_header = response[mc.KEY_HEADER]
@@ -165,15 +167,6 @@ class MerossEmulator:
             f"TX: namespace={response_header[mc.KEY_NAMESPACE]} method={response_header[mc.KEY_METHOD]} payload={json.dumps(response[mc.KEY_PAYLOAD])}"
         )
         return response
-
-    def mqtt_handle(self, msg: str, mqtt_client):
-        """
-        this is the entry point called from paho.mqtt.Client.on_message
-        since it works in its own thread we're protecting concurrent access to the
-        whole message parsing directly in the 'handle' method
-        """
-        response = self.handle(msg)
-        mqtt_client.publish(self.topic_response, json.dumps(response))
 
     def _get_key_state(self, namespace: str) -> tuple[str, dict]:
         """

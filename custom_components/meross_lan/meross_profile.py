@@ -50,6 +50,7 @@ from .merossclient import (
     MerossRequest,
     const as mc,
     get_default_arguments,
+    get_message_uuid,
     get_replykey,
 )
 from .merossclient.cloudapi import (
@@ -367,7 +368,7 @@ class MQTTConnection(Loggable):
                 sensor_connection.inc_counter(ConnectionSensor.ATTR_RECEIVED)
             message: MerossMessageType = json_loads(msg.payload)
             header = message[mc.KEY_HEADER]
-            device_id = header.get(mc.KEY_UUID) or header[mc.KEY_FROM].split("/")[2]
+            device_id = get_message_uuid(header)
             namespace = header[mc.KEY_NAMESPACE]
             method = header[mc.KEY_METHOD]
             messageid = header[mc.KEY_MESSAGEID]

@@ -242,6 +242,10 @@ def get_message_signature(messageid: str, key: str, timestamp):
     ).hexdigest()
 
 
+def get_message_uuid(header: MerossHeaderType):
+    return header.get(mc.KEY_UUID) or mc.RE_PATTERN_TOPIC_UUID.match(header[mc.KEY_FROM]).group(1)  # type: ignore
+
+
 def get_replykey(header: MerossHeaderType, key: KeyType) -> KeyType:
     """
     checks header signature against key:
@@ -335,19 +339,21 @@ class MerossRequest(dict):
         self.messageid = messageid or uuid4().hex
         self.payload = payload or get_default_payload(namespace)
         timestamp = int(time())
-        super().__init__({
-            mc.KEY_HEADER: {
-                mc.KEY_MESSAGEID: self.messageid,
-                mc.KEY_NAMESPACE: namespace,
-                mc.KEY_METHOD: method,
-                mc.KEY_PAYLOADVERSION: 1,
-                mc.KEY_FROM: topic_response,
-                mc.KEY_TIMESTAMP: timestamp,
-                mc.KEY_TIMESTAMPMS: 0,
-                mc.KEY_SIGN: get_message_signature(self.messageid, key, timestamp),
-            },
-            mc.KEY_PAYLOAD: self.payload,
-        })
+        super().__init__(
+            {
+                mc.KEY_HEADER: {
+                    mc.KEY_MESSAGEID: self.messageid,
+                    mc.KEY_NAMESPACE: namespace,
+                    mc.KEY_METHOD: method,
+                    mc.KEY_PAYLOADVERSION: 1,
+                    mc.KEY_FROM: topic_response,
+                    mc.KEY_TIMESTAMP: timestamp,
+                    mc.KEY_TIMESTAMPMS: 0,
+                    mc.KEY_SIGN: get_message_signature(self.messageid, key, timestamp),
+                },
+                mc.KEY_PAYLOAD: self.payload,
+            }
+        )
 
     def to_string(self):
         return json.dumps(self)

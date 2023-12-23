@@ -14,6 +14,7 @@
     set of emulators from all the traces stored in a path.
 """
 from __future__ import annotations
+import json
 
 import os
 
@@ -188,9 +189,10 @@ def run(argv):
                 print("Failed to subscribe to mqtt topic")
 
         def _mqttc_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
-            msg_uuid = msg.topic.split("/")[2]
-            if msg_uuid in emulators:
-                emulators[msg_uuid].mqtt_handle(msg.payload.decode("utf-8"), client)
+            if msg_uuid := mc.RE_PATTERN_TOPIC_UUID.match(msg.topic):
+                if emulator := emulators.get(msg_uuid.group(1)):
+                    response = emulator.handle(msg.payload.decode("utf-8"))
+                    client.publish(emulator.topic_response, json.dumps(response))
 
         mqtt_client = mqtt.Client("MerossEmulator", protocol=mqtt.MQTTv311)
         mqtt_client.username_pw_set("emulator")

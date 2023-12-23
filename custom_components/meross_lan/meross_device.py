@@ -8,7 +8,6 @@ from io import TextIOWrapper
 from json import JSONDecodeError, dumps as json_dumps, loads as json_loads
 from logging import DEBUG, ERROR, WARNING, getLevelName as logging_getLevelName
 import os
-import re
 from time import localtime, strftime, time
 import typing
 import weakref
@@ -63,12 +62,13 @@ from .helpers import (
     schedule_callback,
 )
 from .meross_entity import MerossFakeEntity
-from .merossclient import (  # mEROSS cONST
+from .merossclient import (
     MEROSSDEBUG,
     MerossRequest,
     const as mc,
     get_default_arguments,
     get_message_signature,
+    get_message_uuid,
     get_namespacekey,
     is_device_online,
 )
@@ -342,8 +342,6 @@ class MerossDevice(MerossDeviceBase):
     sensor_protocol: ProtocolSensor
     sensor_signal_strength: MLSensor
     update_firmware: MLUpdate | None
-
-    RE_PATTERN_MATCH_UUID = re.compile(r"/.+/(.*)/.+")
 
     __slots__ = (
         "polling_period",
@@ -900,8 +898,7 @@ class MerossDevice(MerossDeviceBase):
             # and this might (unluckily) be another Meross with the same key
             # so it could rightly respond here. This shouldnt happen over MQTT
             # since the device.id is being taken care of by the routing mechanism
-            match_uuid = self.RE_PATTERN_MATCH_UUID.search(r_header[mc.KEY_FROM])
-            if match_uuid and self._check_uuid_mismatch(match_uuid.group(1)):
+            if self._check_uuid_mismatch(get_message_uuid(r_header)):
                 return None
 
             if not self._http_active:
