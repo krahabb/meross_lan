@@ -192,9 +192,15 @@ def build_message_reply(
     header: MerossHeaderType,
     payload: MerossPayloadType,
 ) -> MerossMessageType:
+    """
+    builds a message by replying the full header. This is used
+    in replies to some PUSH sent by devices where it appears
+    (from meross broker protocol inspection - see #346)
+    the broker doesn't calculate a new signature but just replies
+    the incoming header data
+    """
     header = header.copy()
     header.pop(mc.KEY_UUID, None)
-    header[mc.KEY_TRIGGERSRC] = "CloudControl"
     return {
         mc.KEY_HEADER: header,
         mc.KEY_PAYLOAD: payload,

@@ -495,8 +495,8 @@ class PollingStrategy(NamespaceHandler):
         handler: Callable[[dict, dict], None] | None = None,
         item_count: int = 0,
     ):
-        super().__init__(device, namespace, handler=handler)
         assert namespace not in device.polling_strategies
+        super().__init__(device, namespace, handler=handler)
         _conf = POLLING_STRATEGY_CONF[namespace]
         self.polling_period = _conf[0]
         self.polling_period_cloud = _conf[1]

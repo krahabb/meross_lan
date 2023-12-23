@@ -1,7 +1,7 @@
 """Test meross_lan config flow"""
 import json
-from uuid import uuid4
 import typing
+from uuid import uuid4
 
 from homeassistant import config_entries
 from homeassistant.components.dhcp import DhcpServiceInfo

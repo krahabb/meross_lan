@@ -29,7 +29,7 @@ async def test_request_on_mqtt(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTM
         )
         # this call, with no devices registered in configuration
         # will just try to publish on mqtt so we'll check the mock
-        hamqtt_mock.mqtt_async_publish.assert_called_once_with(
+        hamqtt_mock.async_publish_mock.assert_called_once_with(
             hass, mc.TOPIC_REQUEST.format(tc.MOCK_DEVICE_UUID), ANY
         )
 
@@ -73,7 +73,7 @@ async def test_request_on_device(
 
         # this call, should not be routed to mqtt since our device is
         # emulated in http
-        hamqtt_mock.mqtt_async_publish.assert_not_called()
+        hamqtt_mock.async_publish_mock.assert_not_called()
 
 
 async def test_request_notification(
@@ -106,4 +106,4 @@ async def test_request_notification(
 
         # this call, should not be routed to mqtt since our device is
         # emulated in http
-        hamqtt_mock.mqtt_async_publish.assert_not_called()
+        hamqtt_mock.async_publish_mock.assert_not_called()

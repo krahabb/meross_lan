@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from json import dumps as json_dumps, loads as json_loads
 from logging import DEBUG
+from time import time
 import typing
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
@@ -29,6 +30,8 @@ from .merossclient import (
     MEROSSDEBUG,
     MerossDeviceDescriptor,
     MerossRequest,
+    build_message,
+    build_message_reply,
     const as mc,
     get_default_payload,
 )
@@ -41,7 +44,12 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import ServiceCall, ServiceResponse
 
-    from .merossclient import KeyType, MerossMessageType, ResponseCallbackType
+    from .merossclient import (
+        KeyType,
+        MerossHeaderType,
+        MerossMessageType,
+        MerossPayloadType,
+    )
 
 
 else:
@@ -70,6 +78,14 @@ class HAMQTTConnection(MQTTConnection):
         self._unsub_mqtt_disconnected: Callable | None = None
         self._unsub_mqtt_connected: Callable | None = None
         self._mqtt_subscribing = False  # guard for asynchronous mqtt sub registration
+        self.namespace_handlers = {
+            namespace: getattr(self, f"_handle_{namespace.replace('.', '_')}")
+            for namespace in (
+                mc.NS_APPLIANCE_CONTROL_BIND,
+                mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
+                mc.NS_APPLIANCE_SYSTEM_CLOCK,
+            )
+        }
         if MEROSSDEBUG:
 
             async def _async_random_disconnect():
@@ -119,38 +135,35 @@ class HAMQTTConnection(MQTTConnection):
             transaction = _MQTTTransaction(self, request)
         else:
             transaction = None
-
-        self.log(
-            DEBUG,
-            "MQTT PUBLISH device_id:(%s) method:(%s) namespace:(%s)",
-            device_id,
-            request.method,
-            request.namespace,
-        )
+        if self.isEnabledFor(DEBUG):
+            self.log(
+                DEBUG,
+                "MQTT PUBLISH device_id:(%s) method:(%s) namespace:(%s)",
+                device_id,
+                request.method,
+                request.namespace,
+            )
         await mqtt_async_publish(
             ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.to_string()
         )
         if transaction:
             return await transaction.async_wait(self.DEFAULT_RESPONSE_TIMEOUT)
 
-    async def async_mqtt_publish_reply(
-        self,
-        device_id: str,
-        message: MerossMessageType
+    async def async_mqtt_publish_cloudcontrol(
+        self, device_id: str, message: MerossMessageType
     ):
-        self.log(
-            DEBUG,
-            "MQTT PUBLISH REPLY device_id:(%s) method:(%s) namespace:(%s)",
-            device_id,
-            message[mc.KEY_HEADER][mc.KEY_METHOD],
-            message[mc.KEY_HEADER][mc.KEY_NAMESPACE],
-        )
+        if self.isEnabledFor(DEBUG):
+            self.log(
+                DEBUG,
+                "MQTT PUBLISH device_id:(%s) method:(%s) namespace:(%s)",
+                device_id,
+                message[mc.KEY_HEADER][mc.KEY_METHOD],
+                message[mc.KEY_HEADER][mc.KEY_NAMESPACE],
+            )
+        message[mc.KEY_HEADER][mc.KEY_TRIGGERSRC] = "CloudControl"
         await mqtt_async_publish(
-            ApiProfile.hass,
-            mc.TOPIC_REQUEST.format(device_id),
-            json_dumps(message)
+            ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), json_dumps(message)
         )
-
 
     # interface: self
     @property
@@ -183,7 +196,11 @@ class HAMQTTConnection(MQTTConnection):
                     mqtt_data = mqtt.get_mqtt_data(hass)
                     if mqtt_data and mqtt_data.client:
                         conf = mqtt_data.client.conf
-                        self.broker = (conf[mqtt.CONF_BROKER], conf[mqtt.CONF_PORT])
+                        self.broker = (
+                            conf[mqtt.CONF_BROKER],
+                            conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT),
+                        )
+
                 if mqtt.is_connected(hass):
                     self._mqtt_connected()
             self._mqtt_subscribing = False
@@ -202,6 +219,68 @@ class HAMQTTConnection(MQTTConnection):
             self._unsub_mqtt_subscribe = None
         if self._mqtt_is_connected:
             self._mqtt_disconnected()
+
+    # these handlers are used to manage session establishment on MQTT.
+    # They are typically sent by the device when they connect to the broker
+    # and they are used to mimic the official Meross brokers session managment
+    # They're implemented at the MQTTConnection level since the device might not be
+    # configured yet in meross_lan. When the device is configured, we still manage
+    # these 'session messages' here but we'll forward them to the device too in order
+    # to trigger all of the device connection management.
+    async def _handle_Appliance_Control_Bind(
+        self, device_id: str, header: MerossHeaderType, payload: MerossPayloadType
+    ):
+        # this transaction appears when a device (firstly)
+        # connects to an MQTT broker and tries to 'register'
+        # itself. Our guess right now is to just SETACK
+        # trying fix #346. When building the reply, the
+        # meross broker sets the from field as
+        # "from": "cloud/sub/kIGFRwvtAQP4sbXv/58c35d719350a689"
+        # and the fields look like hashes or something since
+        # they change between attempts (hashed broker id ?)
+        # At any rate I don't have a clue on how to properly
+        # replicate this and the "from" field is set as ususal
+        if header[mc.KEY_METHOD] == mc.METHOD_SET:
+            await self.async_mqtt_publish_cloudcontrol(
+                device_id,
+                build_message(
+                    mc.NS_APPLIANCE_CONTROL_BIND,
+                    mc.METHOD_SETACK,
+                    {},
+                    self.profile.key,
+                    mc.TOPIC_RESPONSE.format(device_id),
+                    header[mc.KEY_MESSAGEID],
+                ),
+            )
+
+    async def _handle_Appliance_Control_ConsumptionConfig(
+        self, device_id: str, header: MerossHeaderType, payload: MerossPayloadType
+    ):
+        # this message is published by mss switches
+        # and it appears newer mss315 could abort their connection
+        # if not replied (see #346)
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
+            await self.async_mqtt_publish_cloudcontrol(
+                device_id,
+                build_message_reply(header, payload),
+            )
+
+    async def _handle_Appliance_System_Clock(
+        self, device_id: str, header: MerossHeaderType, payload: MerossPayloadType
+    ):
+        # this is part of initial flow over MQTT
+        # we'll try to set the correct time in order to avoid
+        # having NTP opened to setup the device
+        # Note: I actually see this NS only on mss310 plugs
+        # (msl120j bulb doesnt have it)
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
+            await self.async_mqtt_publish_cloudcontrol(
+                device_id,
+                build_message_reply(
+                    header,
+                    {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
+                ),
+            )
 
 
 class MerossApi(ApiProfile):

@@ -14,8 +14,8 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 )
 
 from custom_components.meross_lan.const import PARAM_ENERGY_UPDATE_PERIOD
-from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.devices.mss import ConsumptionXMixin, ElectricityMixin
+from custom_components.meross_lan.merossclient import const as mc
 from emulator.mixins.electricity import (
     ConsumptionXMixin as EmulatorConsumptionMixin,
     ElectricityMixin as EmulatorElectricityMixin,

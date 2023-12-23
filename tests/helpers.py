@@ -9,7 +9,7 @@ import json
 import re
 import time
 from typing import Any, Callable, Coroutine
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
 import aiohttp
 from freezegun.api import FrozenDateTimeFactory, StepTickTimeFactory, freeze_time
@@ -31,6 +31,43 @@ from custom_components.meross_lan.merossclient import cloudapi, const as mc
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
 from . import const as tc
+
+
+class DictMatcher(dict):
+    """
+    customize dictionary matching by checking if
+    only the keys defined in this object are matched in the
+    compared one. It works following the same assumptions as for the ANY
+    symbol in the mock library
+    """
+
+    def __eq__(self, other):
+        for key, value in self.items():
+            if value != other.get(key):
+                return False
+        return True
+
+
+class MessageMatcher:
+    """
+    Helper useful when checking the meross messages.
+    This is expecially helpful when asserting mock calls where the argument(s)
+    is a Meross message dict. Most of the times we cannot execute a perfect match
+    nor it is desirable but we just want to be sure some dict key:value pairs are
+    set correctly
+    """
+
+    def __init__(self, *, header=ANY, payload=ANY):
+        self.header = header
+        self.payload = payload
+
+    def __eq__(self, reply):
+        reply = json.loads(reply)
+        # here self.header and self.payload are likely DictMatcher objects
+        # in order to chek against some required and stable keys in the message
+        return (self.header == reply[mc.KEY_HEADER]) and (
+            self.payload == reply[mc.KEY_PAYLOAD]
+        )
 
 
 class TimeMocker(contextlib.AbstractContextManager):
@@ -680,25 +717,24 @@ MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
 
 class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
-    mqtt_async_publish: Mock
-
     def __init__(self):
-        self.mqtt_async_publish_patcher = patch(
+        self.async_publish_patcher = patch(
             "homeassistant.components.mqtt.async_publish"
         )
 
     async def __aenter__(self):
         """Return `self` upon entering the runtime context."""
-        self.mqtt_async_publish = self.mqtt_async_publish_patcher.start()
-        self.mqtt_async_publish.side_effect = self._async_publish
+        self.async_publish_mock = self.async_publish_patcher.start()
+        self.async_publish_mock.side_effect = self._async_publish
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        self.mqtt_async_publish.side_effect = None
-        self.mqtt_async_publish_patcher.stop()
+        self.async_publish_patcher.stop()
         return await super().__aexit__(exc_type, exc_value, traceback)
 
-    def _async_publish(self, hass, topic: str, payload: str, *args, **kwargs):
+    async def _async_publish(
+        self, hass: HomeAssistant, topic: str, payload: str, *args, **kwargs
+    ):
         pass
 
 
