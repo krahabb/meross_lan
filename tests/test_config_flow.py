@@ -32,7 +32,6 @@ async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
     """
     with helpers.EmulatorContext(mc.TYPE_MTS200, aioclient_mock) as emulator_context:
         emulator = emulator_context.emulator
-        device_id = emulator.descriptor.uuid
         host = emulator_context.host
 
         result = await hass.config_entries.flow.async_init(
@@ -64,11 +63,20 @@ async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
         assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
 
         data = result["data"]  # type: ignore
-        assert data[mlc.CONF_DEVICE_ID] == device_id
+        descriptor = emulator.descriptor
+        assert data[mlc.CONF_DEVICE_ID] == descriptor.uuid
         assert data[mlc.CONF_HOST] == host
         assert data[mlc.CONF_KEY] == emulator.key
-        assert data[mlc.CONF_PAYLOAD][mc.KEY_ALL] == emulator.descriptor.all
-        assert data[mlc.CONF_PAYLOAD][mc.KEY_ABILITY] == emulator.descriptor.ability
+        # since the emulator updates it's own state (namely the timestamp)
+        # on every request we have to be careful in comparing configuration
+        payload = data[mlc.CONF_PAYLOAD]
+        payload_all = payload[mc.KEY_ALL]
+        payload_time = payload_all[mc.KEY_SYSTEM][mc.KEY_TIME]
+        if payload_time[mc.KEY_TIMESTAMP] == descriptor.time[mc.KEY_TIMESTAMP] - 1:
+            # we just have to patch when the emulator timestamp ticked around a second
+            payload_time[mc.KEY_TIMESTAMP] = descriptor.time[mc.KEY_TIMESTAMP]
+        assert payload_all == descriptor.all
+        assert payload[mc.KEY_ABILITY] == descriptor.ability
 
         # now cleanup the entry
         await _cleanup_config_entry(hass, result)
@@ -274,7 +282,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             assert device.host == DHCP_GOOD_HOST, "device host was wrongly updated"
 
 
-async def test_options_flow(hass, aioclient_mock, hamqtt_mock, merossmqtt_mock):
+async def test_options_flow(hass: HomeAssistant, aioclient_mock, hamqtt_mock, merossmqtt_mock):
     """
     Tests the device config entry option flow. This code could potentially use
     either HTTP or MQTT so we accordingly mock both. TODO: perform the test check

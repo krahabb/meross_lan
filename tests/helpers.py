@@ -416,14 +416,6 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
                 # Right now we're strict enough to actually
                 # identify every 'suppressed' exception in real code
                 raise exception
-                if self.device is None:
-                    # at context 'cold start' we still don't have the device instance
-                    raise exception
-                self.device.warning(
-                    f"{exception.__class__.__name__}({str(exception)}) in {msg}",
-                    *args,
-                    **kwargs,
-                )
 
         self._patch_exception_warning = patch.object(
             MerossDevice,
