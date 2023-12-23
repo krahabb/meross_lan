@@ -620,7 +620,7 @@ class Loggable(abc.ABC):
         self.id = id
         self.logtag = logtag or f"{self.__class__.__name__}({id})"
         self.logger = logger
-        logger.debug("%s: init", self.logtag)
+        LOGGER.log(DEBUG, "%s: init", self.logtag)
 
     def isEnabledFor(self, level: int):
         return self.logger.isEnabledFor(level)
@@ -628,31 +628,11 @@ class Loggable(abc.ABC):
     def log(self, level: int, msg: str, *args, **kwargs):
         self.logger.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
 
-    def warning_enabled(self):
-        return self.logger.isEnabledFor(WARNING)
-
-    def warning(self, msg: str, *args, **kwargs):
-        self.log(WARNING, msg, *args, **kwargs)
-
-    def debug_enabled(self):
-        return self.logger.isEnabledFor(DEBUG)
-
-    def debug(self, msg: str, *args, **kwargs):
-        self.log(DEBUG, msg, *args, **kwargs)
-
     def log_exception(
         self, level: int, exception: Exception, msg: str, *args, **kwargs
     ):
         self.log(
             level,
-            f"{exception.__class__.__name__}({str(exception)}) in {msg}",
-            *args,
-            **kwargs,
-        )
-
-    def log_exception_warning(self, exception: Exception, msg: str, *args, **kwargs):
-        self.log(
-            WARNING,
             f"{exception.__class__.__name__}({str(exception)}) in {msg}",
             *args,
             **kwargs,
@@ -671,7 +651,10 @@ class Loggable(abc.ABC):
             )
 
     def __del__(self):
-        self.logger.debug("%s: destroy", self.logtag)
+        # self.logger being another loggable might be
+        # already 'shutted down' and so inconsistent
+        # during garbage collection
+        LOGGER.log(DEBUG, "%s: destroy", self.logtag)
         return
 
 

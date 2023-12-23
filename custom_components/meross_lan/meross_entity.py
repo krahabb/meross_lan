@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+from logging import WARNING
 import typing
 
 from homeassistant import const as hac
@@ -217,7 +218,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     def _parse_undefined(self, payload):
         # this is a default handler for any message (in protocol routing)
         # for which we haven't defined a specific handler (see MerossDevice._parse__generic)
-        self.warning("handler undefined for payload:(%s)", str(payload), timeout=14400)
+        self.log(WARNING, "handler undefined for payload:(%s)", str(payload), timeout=14400)
 
     # even though these are toggle/binary_sensor properties
     # we provide a base-implement-all

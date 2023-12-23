@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from logging import WARNING
 import typing
 
 from homeassistant.helpers import device_registry
@@ -276,7 +277,8 @@ class MerossDeviceHub(MerossDevice):
             self.needsave = True
             for p_id in subdevices_actual:
                 subdevice = self.subdevices[p_id]
-                self.warning(
+                self.log(
+                    WARNING,
                     "removing subdevice %s(%s) - configuration will be reloaded in few sec",
                     subdevice.name,
                     p_id,
@@ -716,6 +718,11 @@ class MS100SubDevice(MerossSubDevice):
             self.sensor_temperature.update_state(value / 10)
         if isinstance(value := p_temphum.get(mc.KEY_LATESTHUMIDITY), int):
             self.sensor_humidity.update_state(value / 10)
+
+    def _parse_togglex(self, p_togglex: dict):
+        # avoid the base class creating a toggle entity
+        # since we're pretty sure ms100 doesn't have one
+        pass
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice

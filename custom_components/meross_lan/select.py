@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from logging import DEBUG
+from logging import DEBUG, WARNING
 from time import time
 import typing
 
@@ -253,7 +253,8 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         if not tracked_state:
             # we've setup tracking but the entity doesn't exist in the
             # state machine...was it removed from HA ?
-            self.warning(
+            self.log(
+                WARNING,
                 "tracked entity state is missing: was it removed from HomeAssistant ?",
                 timeout=14400,
             )
@@ -323,7 +324,8 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             self.hass.async_create_task(
                 number_adjust_temperature.async_set_native_value(adjust_temperature)
             )
-            self.debug(
+            self.log(
+                DEBUG,
                 "applying correction of %s %s to %s",
                 adjust_temperature,
                 climate.TEMP_CELSIUS,

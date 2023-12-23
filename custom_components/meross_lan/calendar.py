@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import datetime, timedelta
+from logging import WARNING
 import re
 import typing
 
@@ -173,7 +174,8 @@ class MtsSchedule(MLCalendar):
             events.append(event)
             # we'll set a guard to prevent crazy loops
             if len(events) > 1000:
-                self.warning(
+                self.log(
+                    WARNING,
                     "returning too many calendar events: breaking the loop now",
                     timeout=14400,
                 )
@@ -249,7 +251,8 @@ class MtsSchedule(MLCalendar):
                         if self._schedule_entry_count != schedule_entry_count:
                             # this should fire only on first weekday scan
                             if self._schedule_entry_count:
-                                self.warning(
+                                self.log(
+                                    WARNING,
                                     "unexpected device schedule entries count",
                                     timeout=14400,
                                 )

@@ -6,7 +6,7 @@ import bisect
 from datetime import datetime, timezone, tzinfo
 from io import TextIOWrapper
 from json import JSONDecodeError, dumps as json_dumps, loads as json_loads
-from logging import DEBUG, ERROR, getLevelName as logging_getLevelName
+from logging import DEBUG, ERROR, WARNING, getLevelName as logging_getLevelName
 import os
 import re
 from time import localtime, strftime, time
@@ -682,7 +682,8 @@ class MerossDevice(MerossDeviceBase):
             self._tzinfo = ZoneInfo(tz_name)
             return self._tzinfo
         except Exception:
-            self.warning(
+            self.log(
+                WARNING,
                 "unable to load timezone info for %s - check your python environment",
                 tz_name,
                 timeout=14400,
@@ -1101,7 +1102,8 @@ class MerossDevice(MerossDeviceBase):
                 header[mc.KEY_MESSAGEID], self.key, header[mc.KEY_TIMESTAMP]
             )
             if sign != header[mc.KEY_SIGN]:
-                self.warning(
+                self.log(
+                    WARNING,
                     "received signature error: computed=%s, header=%s",
                     sign,
                     json_dumps(header),
@@ -1123,7 +1125,8 @@ class MerossDevice(MerossDeviceBase):
         payload: MerossPayloadType,
     ):
         if method == mc.METHOD_ERROR:
-            self.warning(
+            self.log(
+                WARNING,
                 "protocol error: namespace = '%s' payload = '%s'",
                 namespace,
                 json_dumps(payload),
@@ -1222,7 +1225,8 @@ class MerossDevice(MerossDeviceBase):
             self.needsave = True
             oldabilities = oldability.keys()
             newabilities = newability.keys()
-            self.warning(
+            self.log(
+                WARNING,
                 "Trying schedule device configuration reload since the abilities changed (added: %s - removed: %s)",
                 str(newabilities - oldabilities),
                 str(oldabilities - newabilities),
@@ -1356,7 +1360,8 @@ class MerossDevice(MerossDeviceBase):
                 )
 
         elif self.conf_protocol is CONF_PROTOCOL_MQTT:
-            self.warning(
+            self.log(
+                WARNING,
                 "MQTT connection doesn't allow publishing - device will not be able send commands",
                 timeout=14400,
             )
@@ -1547,7 +1552,8 @@ class MerossDevice(MerossDeviceBase):
                 return
         if (epoch - self.device_timedelta_log_epoch) > 604800:  # 1 week lockout
             self.device_timedelta_log_epoch = epoch
-            self.warning(
+            self.log(
+                WARNING,
                 "incorrect timestamp: %d seconds behind HA",
                 int(self.device_timedelta),
             )
@@ -1676,7 +1682,8 @@ class MerossDevice(MerossDeviceBase):
                         timerules = [[0, tz_local.utcoffset(None), 0]]
 
                 except Exception as e:
-                    self.warning(
+                    self.log(
+                        WARNING,
                         "error(%s) while using pytz to build timezone(%s) ",
                         str(e),
                         tzname,
@@ -1690,7 +1697,8 @@ class MerossDevice(MerossDeviceBase):
                     timerules = [[timestamp, utcoffset, 1 if isdst else 0]]
 
             except Exception as e:
-                self.warning(
+                self.log(
+                    WARNING,
                     "error(%s) while building timezone(%s) info for %s",
                     str(e),
                     tzname,
@@ -1886,7 +1894,7 @@ class MerossDevice(MerossDeviceBase):
         except Exception as exception:
             if self._trace_file:
                 self._trace_close()
-            self.log_exception_warning(exception, "creating trace file")
+            self.log_exception(WARNING, exception, "creating trace file")
 
     def _trace_open_check(self):
         # assert not self._trace_file
@@ -1901,7 +1909,7 @@ class MerossDevice(MerossDeviceBase):
             self._trace_file = None
         except Exception as exception:
             self._trace_file = None
-            self.log_exception_warning(exception, "closing trace file")
+            self.log_exception(WARNING, exception, "closing trace file")
         self._trace_ability_iter = None
         if self._trace_future:
             self._trace_future.set_result(self._trace_data)
@@ -1960,4 +1968,4 @@ class MerossDevice(MerossDeviceBase):
                 self._trace_data.append(columns)
         except Exception as exception:
             self._trace_close()
-            self.log_exception_warning(exception, "writing to trace file")
+            self.log_exception(WARNING, exception, "writing to trace file")

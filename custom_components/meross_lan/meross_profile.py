@@ -7,7 +7,7 @@ import abc
 import asyncio
 from contextlib import asynccontextmanager
 from json import dumps as json_dumps, loads as json_loads
-from logging import DEBUG, INFO
+from logging import DEBUG, INFO, WARNING
 from time import time
 import typing
 from uuid import uuid4
@@ -448,7 +448,8 @@ class MQTTConnection(Loggable):
                 # we have the device registered but somehow it is not 'mqtt binded'
                 # either it's configuration is ONLY_HTTP or it is paired to
                 # another profile. In this case we shouldn't receive 'local' MQTT
-                self.warning(
+                self.log(
+                    WARNING,
                     "device(%s) not registered for MQTT handling on this profile",
                     device.name,
                     timeout=14400,
@@ -461,7 +462,8 @@ class MQTTConnection(Loggable):
 
             key = self.profile.key
             if get_replykey(header, key) is not key:
-                self.warning(
+                self.log(
+                    WARNING,
                     "discovery key error for device_id: %s",
                     device_id,
                     timeout=300,
@@ -789,7 +791,8 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
             Beware when calling HA api's (like when we want to update sensors)
             """
             if not self.allow_mqtt_publish:
-                self.warning(
+                self.log(
+                    WARNING,
                     "MQTT publishing is not allowed for this profile (device_id=%s)",
                     device_id,
                     timeout=14400,
@@ -810,7 +813,8 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                         ConnectionSensor.ATTR_DROPPED,
                         ConnectionSensor.STATE_DROPPING,
                     )
-                self.warning(
+                self.log(
+                    WARNING,
                     "MQTT DROP device_id:(%s) method:(%s) namespace:(%s)",
                     device_id,
                     method,
@@ -1097,7 +1101,8 @@ class MerossCloudProfile(ApiProfile):
     # interface: ApiProfile
     def attach_mqtt(self, device: MerossDevice):
         if device.id not in self._data[MerossCloudProfile.KEY_DEVICE_INFO]:
-            self.warning(
+            self.log(
+                WARNING,
                 "cannot connect MQTT for MerossDevice(%s): it does not belong to the current profile",
                 device.name,
             )
@@ -1120,7 +1125,8 @@ class MerossCloudProfile(ApiProfile):
         if device_id not in self.linkeddevices:
             device_info = self._data[MerossCloudProfile.KEY_DEVICE_INFO].get(device_id)
             if not device_info:
-                self.warning(
+                self.log(
+                    WARNING,
                     "cannot link MerossDevice(%s): does not belong to the current profile",
                     device.name,
                 )
@@ -1199,7 +1205,7 @@ class MerossCloudProfile(ApiProfile):
                 datetime_from_epoch(self._device_info_time).isoformat(),
             )
             if not token:
-                self.warning("querying device list cancelled: missing api token")
+                self.log(WARNING, "querying device list cancelled: missing api token")
                 return None
             self._device_info_time = time()
             device_info_new = await async_cloudapi_device_devlist(
@@ -1348,9 +1354,9 @@ class MerossCloudProfile(ApiProfile):
             if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
                 if data.pop(mc.KEY_TOKEN, None):  # type: ignore
                     await self._async_token_missing(True)
-            self.log_exception_warning(clouderror, msg)
+            self.log_exception(WARNING, clouderror, msg)
         except Exception as exception:
-            self.log_exception_warning(exception, msg)
+            self.log_exception(WARNING, exception, msg)
 
     async def _async_polling_query_device_info(self):
         try:
@@ -1369,7 +1375,9 @@ class MerossCloudProfile(ApiProfile):
     async def _async_query_subdevices(self, device_id: str):
         async with self._async_token_manager("_async_query_subdevices") as token:
             if not token:
-                self.warning("querying subdevice list cancelled: missing api token")
+                self.log(
+                    WARNING, "querying subdevice list cancelled: missing api token"
+                )
                 return None
             self.log(DEBUG, "querying subdevice list")
             return await async_cloudapi_hub_getsubdevices(
@@ -1467,7 +1475,8 @@ class MerossCloudProfile(ApiProfile):
         self, device_info_unknown: list[DeviceInfoType]
     ):
         if not self.allow_mqtt_publish:
-            self.warning(
+            self.log(
+                WARNING,
                 "Meross cloud api reported new devices but MQTT publishing is disabled: skipping automatic discovery",
                 timeout=604800,  # 1 week
             )
