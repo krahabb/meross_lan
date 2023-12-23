@@ -8,7 +8,8 @@ from custom_components.meross_lan.merossclient import (
     get_element_by_key_safe,
 )
 
-from .. import MerossEmulator, MerossEmulatorDescriptor
+if typing.TYPE_CHECKING:
+    from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
 class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):

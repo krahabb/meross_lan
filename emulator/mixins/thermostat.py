@@ -6,7 +6,8 @@ import typing
 
 from custom_components.meross_lan.merossclient import const as mc, get_element_by_key
 
-from .. import MerossEmulator, MerossEmulatorDescriptor
+if typing.TYPE_CHECKING:
+    from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
 class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
@@ -33,7 +34,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                         mc.KEY_MIN: 200,
                         mc.KEY_MAX: 700,
                         mc.KEY_CURRENTTEMP: 355,
-                        mc.KEY_LMTIME: 0
+                        mc.KEY_LMTIME: 0,
                     }
                 )
 

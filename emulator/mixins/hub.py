@@ -6,7 +6,8 @@ import typing
 
 from custom_components.meross_lan.merossclient import const as mc
 
-from .. import MerossEmulator, MerossEmulatorDescriptor
+if typing.TYPE_CHECKING:
+    from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
 class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
