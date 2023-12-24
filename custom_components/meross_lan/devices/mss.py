@@ -286,6 +286,7 @@ class ConsumptionXMixin(
             self,
             mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX,
             self._sensor_consumption,
+            item_count=30,  # the number of days in the payload: typically sits at 1 month
         )
 
     async def async_shutdown(self):
@@ -332,6 +333,13 @@ class ConsumptionXMixin(
                 str(self._tomorrow_midnight_epoch),
             )
 
+        # we're optimizing the payload response_size calculation
+        # so our multiple requests are more reliable. If anything
+        # goes wrong, the MerossDevice multiple payload managment
+        # is smart enough to adapt to wrong estimates
+        self.polling_strategies[mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX].adjust_size(
+            len(payload[mc.KEY_CONSUMPTIONX])
+        )
         # the days array contains a month worth of data
         # but we're only interested in the last few days (today
         # and maybe yesterday) so we discard a bunch of
