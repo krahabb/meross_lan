@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import asyncio
-from json import dumps as json_dumps, loads as json_loads
 from logging import DEBUG
 import typing
 
@@ -23,6 +22,8 @@ from . import (
     build_message,
     const as mc,
     get_replykey,
+    json_dumps,
+    json_loads,
 )
 
 if typing.TYPE_CHECKING:

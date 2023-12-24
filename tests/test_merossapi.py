@@ -1,5 +1,4 @@
 """Test the core MerossApi class"""
-import json
 from time import time
 from unittest.mock import ANY
 
@@ -12,6 +11,7 @@ from custom_components.meross_lan.merossclient import (
     MerossMessageType,
     build_message,
     const as mc,
+    json_dumps,
 )
 
 from . import const as tc, helpers
@@ -40,7 +40,7 @@ async def test_hamqtt_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMo
     # since nothing is (yet) built at the moment, we expect this message
     # will go through all of the initialization process of MerossApi
     # and then manage the message
-    async_fire_mqtt_message(hass, topic_publish, json.dumps(message_bind_set))
+    async_fire_mqtt_message(hass, topic_publish, json_dumps(message_bind_set))
     await hass.async_block_till_done()
 
     hamqtt_mock.async_publish_mock.assert_any_call(
@@ -68,7 +68,7 @@ async def test_hamqtt_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMo
         emulator.key,
         topic_publish,
     )
-    async_fire_mqtt_message(hass, topic_publish, json.dumps(message_clock_push))
+    async_fire_mqtt_message(hass, topic_publish, json_dumps(message_clock_push))
     await hass.async_block_till_done()
     # check the PUSH was replied
     header_clock_reply = helpers.DictMatcher(message_clock_push[mc.KEY_HEADER])
@@ -96,7 +96,7 @@ async def test_hamqtt_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMo
         emulator.key,
         topic_publish,
     )
-    async_fire_mqtt_message(hass, topic_publish, json.dumps(message_consumption_push))
+    async_fire_mqtt_message(hass, topic_publish, json_dumps(message_consumption_push))
     await hass.async_block_till_done()
     # check the PUSH was replied
     header_consumption_reply = helpers.DictMatcher(message_consumption_push[mc.KEY_HEADER])

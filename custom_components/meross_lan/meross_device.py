@@ -5,7 +5,7 @@ import asyncio
 import bisect
 from datetime import datetime, timezone, tzinfo
 from io import TextIOWrapper
-from json import JSONDecodeError, dumps as json_dumps, loads as json_loads
+from json import JSONDecodeError
 from logging import DEBUG, ERROR, WARNING, getLevelName as logging_getLevelName
 import os
 from time import localtime, strftime, time
@@ -71,6 +71,8 @@ from .merossclient import (
     get_message_uuid,
     get_namespacekey,
     is_device_online,
+    json_dumps,
+    json_loads,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .sensor import PERCENTAGE, MLSensor, ProtocolSensor
@@ -994,14 +996,15 @@ class MerossDevice(MerossDeviceBase):
 
             multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
             responses_len = len(multiple_responses)
-            self.log(
-                DEBUG,
-                "Appliance.Control.Multiple requests=%d (responses=%d) expected size=%d (actual=%d)",
-                requests_len,
-                responses_len,
-                multiple_response_size,
-                len(json_dumps(response)),
-            )
+            if self.isEnabledFor(DEBUG):
+                self.log(
+                    DEBUG,
+                    "Appliance.Control.Multiple requests=%d (responses=%d) expected size=%d (actual=%d)",
+                    requests_len,
+                    responses_len,
+                    multiple_response_size,
+                    len(json_dumps(response)),
+                )
             message: MerossMessageType
             if responses_len == requests_len:
                 # faster shortcut

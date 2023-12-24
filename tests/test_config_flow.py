@@ -1,5 +1,4 @@
 """Test meross_lan config flow"""
-import json
 import typing
 from uuid import uuid4
 
@@ -15,6 +14,7 @@ from custom_components.meross_lan.merossclient import (
     build_message,
     cloudapi,
     const as mc,
+    json_dumps,
 )
 
 from tests import const as tc, helpers
@@ -164,7 +164,7 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
         mc.TOPIC_REQUEST.format(device_id),
     )
 
-    async_fire_mqtt_message(hass, topic, json.dumps(payload))
+    async_fire_mqtt_message(hass, topic, json_dumps(payload))
     await hass.async_block_till_done()
 
     # we should have 2 flows now: one for the MQTT hub and the other for the

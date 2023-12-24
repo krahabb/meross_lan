@@ -1,8 +1,6 @@
 """The Meross IoT local LAN integration."""
 from __future__ import annotations
 
-import asyncio
-from json import dumps as json_dumps, loads as json_loads
 from logging import DEBUG
 from time import time
 import typing
@@ -34,6 +32,8 @@ from .merossclient import (
     build_message_reply,
     const as mc,
     get_default_payload,
+    json_dumps,
+    json_loads,
 )
 from .merossclient.httpclient import MerossHttpClient
 

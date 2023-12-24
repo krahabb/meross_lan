@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import threading
 from time import time
@@ -15,6 +14,8 @@ from custom_components.meross_lan.merossclient import (
     const as mc,
     get_namespacekey,
     get_replykey,
+    json_dumps,
+    json_loads,
 )
 
 
@@ -50,7 +51,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         parse a 'diagnostics' HA trace
         """
         try:
-            _json = json.loads(f.read())
+            _json = json_loads(f.read())
             data = _json["data"]
             columns = None
             for row in data["trace"]:
@@ -78,11 +79,11 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                 self.namespaces[namespace] = {
                     get_namespacekey(namespace): data
                     if isinstance(data, dict)
-                    else json.loads(data)
+                    else json_loads(data)
                 }
             else:
                 self.namespaces[namespace] = (
-                    data if isinstance(data, dict) else json.loads(data)
+                    data if isinstance(data, dict) else json_loads(data)
                 )
 
 
@@ -150,12 +151,12 @@ class MerossEmulator:
         scenario like for testing (where the web/mqtt environments are likely mocked)
         This method is thread-safe
         """
-        request: MerossMessageType = json.loads(s_request)
+        request: MerossMessageType = json_loads(s_request)
         request_header = request[mc.KEY_HEADER]
         request_payload = request[mc.KEY_PAYLOAD]
         print(
             f"Emulator({self.uuid}) "
-            f"RX: namespace={request_header[mc.KEY_NAMESPACE]} method={request_header[mc.KEY_METHOD]} payload={json.dumps(request_payload)}"
+            f"RX: namespace={request_header[mc.KEY_NAMESPACE]} method={request_header[mc.KEY_METHOD]} payload={json_dumps(request_payload)}"
         )
         with self.lock:
             # guarantee thread safety by locking the whole message handling
@@ -164,7 +165,7 @@ class MerossEmulator:
         response_header = response[mc.KEY_HEADER]
         print(
             f"Emulator({self.uuid}) "
-            f"TX: namespace={response_header[mc.KEY_NAMESPACE]} method={response_header[mc.KEY_METHOD]} payload={json.dumps(response[mc.KEY_PAYLOAD])}"
+            f"TX: namespace={response_header[mc.KEY_NAMESPACE]} method={response_header[mc.KEY_METHOD]} payload={json_dumps(response[mc.KEY_PAYLOAD])}"
         )
         return response
 

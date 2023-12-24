@@ -6,11 +6,9 @@ from __future__ import annotations
 import abc
 import asyncio
 from contextlib import asynccontextmanager
-from json import dumps as json_dumps, loads as json_loads
 from logging import DEBUG, INFO, WARNING
 from time import time
 import typing
-from uuid import uuid4
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
@@ -52,6 +50,7 @@ from .merossclient import (
     get_default_arguments,
     get_message_uuid,
     get_replykey,
+    json_loads,
 )
 from .merossclient.cloudapi import (
     APISTATUS_TOKEN_ERRORS,

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 from hashlib import md5
+import json
 from time import time
 import typing
 from uuid import uuid4
@@ -36,7 +37,6 @@ ResponseCallbackType = typing.Callable[[bool, dict, dict], None]
 
 
 try:
-    import json
     from random import randint
 
     class MEROSSDEBUG:
@@ -316,6 +316,20 @@ def is_device_online(payload: dict) -> bool:
         return False
 
 
+_json_encoder = json.JSONEncoder(
+    ensure_ascii=False, check_circular=False, separators=(",", ":")
+)
+_json_decoder = json.JSONDecoder()
+
+
+def json_dumps(obj):
+    return _json_encoder.encode(obj)
+
+
+def json_loads(s: str):
+    return _json_decoder.raw_decode(s)[0]
+
+
 class MerossRequest(dict):
     __slots__ = (
         "namespace",
@@ -356,7 +370,7 @@ class MerossRequest(dict):
         )
 
     def to_string(self):
-        return json.dumps(self)
+        return _json_encoder.encode(self)
 
 
 class MerossDeviceDescriptor:

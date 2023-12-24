@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 
 import typing
 
@@ -239,9 +238,11 @@ class Mts100Climate(MtsClimate):
             # for this but it's going to be removed in the next major release
             # The mts state will anyway be eventually pushed or we'll poll it very soon
             self.manager.request(
-                mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
-                mc.METHOD_SET,
-                {mc.KEY_TEMPERATURE: [p_temperature_patch]},
+                (
+                    mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
+                    mc.METHOD_SET,
+                    {mc.KEY_TEMPERATURE: [p_temperature_patch]},
+                )
             )
 
         if mc.KEY_MIN in p_temperature:

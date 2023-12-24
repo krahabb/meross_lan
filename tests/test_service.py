@@ -1,11 +1,10 @@
 """Test for meross_lan.request service calls"""
-import json
 from unittest.mock import ANY
 
 from homeassistant.core import HomeAssistant
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, json_dumps
 
 from tests import const as tc, helpers
 
@@ -55,7 +54,7 @@ async def test_request_on_device(
                 mlc.CONF_DEVICE_ID: context.device_id,
                 mc.KEY_NAMESPACE: mc.NS_APPLIANCE_CONTROL_TOGGLEX,
                 mc.KEY_METHOD: mc.METHOD_SET,
-                mc.KEY_PAYLOAD: json.dumps(
+                mc.KEY_PAYLOAD: json_dumps(
                     {
                         mc.KEY_TOGGLEX: {
                             mc.KEY_CHANNEL: 0,

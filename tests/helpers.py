@@ -5,7 +5,6 @@ import contextlib
 from copy import deepcopy
 from datetime import datetime, timedelta
 import hashlib
-import json
 import re
 import time
 from typing import Any, Callable, Coroutine
@@ -27,7 +26,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
 from custom_components.meross_lan.meross_profile import MerossMQTTConnection
-from custom_components.meross_lan.merossclient import cloudapi, const as mc
+from custom_components.meross_lan.merossclient import cloudapi, const as mc, json_loads
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
 from . import const as tc
@@ -62,7 +61,7 @@ class MessageMatcher:
         self.payload = payload
 
     def __eq__(self, reply):
-        reply = json.loads(reply)
+        reply = json_loads(reply)
         # here self.header and self.payload are likely DictMatcher objects
         # in order to chek against some required and stable keys in the message
         return (self.header == reply[mc.KEY_HEADER]) and (
@@ -624,7 +623,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
     @staticmethod
     def _validate_request_payload(data) -> dict:
         if not isinstance(data, dict):
-            data = json.loads(data)
+            data = json_loads(data)
         assert mc.KEY_TIMESTAMP in data
         timestamp: int = data[mc.KEY_TIMESTAMP]
         assert mc.KEY_NONCE in data
@@ -640,7 +639,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
             ).hexdigest()
         )
         params = base64.b64decode(params.encode("utf-8")).decode("utf-8")
-        return json.loads(params)
+        return json_loads(params)
 
     async def _async_handle(self, method, url, data):
         path: str = url.path

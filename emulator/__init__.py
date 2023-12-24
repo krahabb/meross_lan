@@ -14,7 +14,6 @@
     set of emulators from all the traces stored in a path.
 """
 from __future__ import annotations
-import json
 
 import os
 
@@ -51,7 +50,7 @@ from aiohttp import web
 # so I've changed a bit the import sequence in meross_lan
 # to have the homeassistant.core imported (initialized) before
 # homeassistant.helpers.storage
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, json_dumps
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
 
@@ -192,7 +191,7 @@ def run(argv):
             if msg_uuid := mc.RE_PATTERN_TOPIC_UUID.match(msg.topic):
                 if emulator := emulators.get(msg_uuid.group(1)):
                     response = emulator.handle(msg.payload.decode("utf-8"))
-                    client.publish(emulator.topic_response, json.dumps(response))
+                    client.publish(emulator.topic_response, json_dumps(response))
 
         mqtt_client = mqtt.Client("MerossEmulator", protocol=mqtt.MQTTv311)
         mqtt_client.username_pw_set("emulator")

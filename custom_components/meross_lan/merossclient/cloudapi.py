@@ -3,7 +3,7 @@ from __future__ import annotations
 from base64 import b64encode
 from collections import deque
 from hashlib import md5
-from json import dumps as json_dumps
+import json
 import logging
 import ssl
 import threading
@@ -165,7 +165,7 @@ class CloudApiError(MerossProtocolError):
             reason
             or APISTATUS_MAP.get(self.apistatus)  # type: ignore
             or response.get(mc.KEY_INFO)
-            or json_dumps(response),
+            or json.dumps(response),
         )
 
 
@@ -177,7 +177,7 @@ async def async_cloudapi_post_raw(
 ) -> dict:
     timestamp = int(time() * 1000)
     nonce = uuid4().hex
-    params = json_dumps(data, ensure_ascii=False)
+    params = json.dumps(data, ensure_ascii=False)
     params = b64encode(params.encode("utf-8")).decode("utf-8")
     sign = md5((SECRET + str(timestamp) + nonce + params).encode("utf-8"))
     async with async_timeout.timeout(10):
