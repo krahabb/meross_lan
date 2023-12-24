@@ -344,6 +344,7 @@ class MerossApi(ApiProfile):
             )
             namespace = service_call.data[mc.KEY_NAMESPACE]
             method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
+            key = service_call.data.get(mlc.CONF_KEY)
             if mc.KEY_PAYLOAD in service_call.data:
                 try:
                     payload = json_loads(service_call.data[mc.KEY_PAYLOAD])
@@ -354,58 +355,68 @@ class MerossApi(ApiProfile):
             else:
                 payload = {}  # likely failing the request...
 
-            key = service_call.data.get(mlc.CONF_KEY)
-
             async def _async_device_request(device: MerossDevice):
-                request = MerossRequest(
+                service_response["request"] = request = MerossRequest(
                     key or device.key,
                     namespace,
                     method,
                     payload,
                     device._topic_response,
                 )
-                if protocol is mlc.CONF_PROTOCOL_MQTT:
-                    return await device.async_mqtt_request_raw(request)
-                elif protocol is mlc.CONF_PROTOCOL_HTTP:
-                    return await device.async_http_request_raw(request)
-                else:
-                    return await device.async_request_raw(request)
+                service_response["response"] = (
+                    await device.async_mqtt_request_raw(request)
+                    if protocol is mlc.CONF_PROTOCOL_MQTT
+                    else await device.async_http_request_raw(request)
+                    if protocol is mlc.CONF_PROTOCOL_HTTP
+                    else await device.async_request_raw(request)
+                )
+                return service_response
 
             if device_id:
                 if device := self.devices.get(device_id):
-                    service_response["response"] = await _async_device_request(device)
-                    return service_response
+                    return await _async_device_request(device)
                 if (
                     protocol is not mlc.CONF_PROTOCOL_HTTP
                     and (mqtt_connection := self._mqtt_connection)
                     and mqtt_connection.mqtt_is_connected
                 ):
+                    service_response["request"] = request = MerossRequest(
+                        key or self.key,
+                        namespace,
+                        method,
+                        payload,
+                        mqtt_connection.topic_response,
+                    )
                     service_response[
                         "response"
-                    ] = await mqtt_connection.async_mqtt_publish(
-                        device_id,
-                        MerossRequest(
-                            key or self.key,
-                            namespace,
-                            method,
-                            payload,
-                            mqtt_connection.topic_response,
-                        ),
-                    )
+                    ] = await mqtt_connection.async_mqtt_publish(device_id, request)
                     return service_response
 
             if host:
                 for device in self.active_devices():
                     if device.host == host:
-                        service_response["response"] = await _async_device_request(
-                            device
-                        )
-                        return service_response
+                        return await _async_device_request(device)
 
                 if protocol is not mlc.CONF_PROTOCOL_MQTT:
-                    service_response["response"] = await self.async_http_request(
-                        host, namespace, method, payload, key or self.key
+                    service_response["request"] = request = MerossRequest(
+                        key or self.key,
+                        namespace,
+                        method,
+                        payload,
+                        mc.MANUFACTURER,
                     )
+                    try:
+                        service_response["response"] = await MerossHttpClient(
+                            host,
+                            key or self.key,
+                            async_get_clientsession(self.hass),
+                            LOGGER,
+                        ).async_request_raw(request)
+                    except Exception as exception:
+                        service_response[
+                            "exception"
+                        ] = f"{exception.__class__.__name__}({str(exception)})"
+
                     return service_response
 
             raise HomeAssistantError(
@@ -564,26 +575,6 @@ class MerossApi(ApiProfile):
         if not (mqtt_connection := self._mqtt_connection):
             self._mqtt_connection = mqtt_connection = HAMQTTConnection(self)
         return mqtt_connection
-
-    async def async_http_request(
-        self,
-        host: str,
-        namespace: str,
-        method: str,
-        payload: dict,
-        key: KeyType = None,
-    ):
-        with self.exception_warning("async_http_request"):
-            _httpclient: MerossHttpClient = getattr(self, "_httpclient", None)  # type: ignore
-            if _httpclient:
-                _httpclient.host = host
-                _httpclient.key = key
-            else:
-                self._httpclient = _httpclient = MerossHttpClient(
-                    host, key, async_get_clientsession(self.hass), LOGGER
-                )
-            return await _httpclient.async_request(namespace, method, payload)
-        return None
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
