@@ -1,5 +1,6 @@
 """Config flow for Meross LAN integration."""
 from __future__ import annotations
+import json
 
 from logging import DEBUG
 from time import time
@@ -10,6 +11,7 @@ from homeassistant.const import CONF_ERROR
 from homeassistant.data_entry_flow import AbortFlow, FlowHandler, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import UNDEFINED
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
@@ -50,8 +52,17 @@ class ConfigError(Exception):
 class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     """Mixin providing commons for Config and Option flows"""
 
-    # this is set for an OptionsFlow
     _profile_entry: config_entries.ConfigEntry | None = None
+    """
+    This is set when processing a 'profile' OptionsFlow. It is needed
+    to discriminate the context in the general purpose 'async_step_profile' since
+    that step might come in these scenarios:
+    - user initiated (and auto-discovery) profile ConfigFlow
+    - user initiated profile OptionsFlow (this is the step that 'fixes' the _profile_entry)
+    - intermediate flow step when configuring a device (either ConfigFlow or OptionsFlow)
+    in the latter case, the 'async_step_profile' will smartly create/edit the configuration
+    entry for the profile which is not the actual entry (a device one) under configuration/edit
+    """
 
     # These values are just buffers for UI state persistance
     hub_config: mlc.HubConfigType
@@ -59,11 +70,13 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     profile_config: mlc.ProfileConfigType
     device_descriptor: MerossDeviceDescriptor
 
-    _placeholders = {
+    device_placeholders = {
         CONF_DEVICE_TYPE: "",
         mlc.CONF_DEVICE_ID: "",
         mlc.CONF_HOST: "",
     }
+
+    profile_placeholders = {}
 
     _is_keyerror: bool = False
     _httpclient: MerossHttpClient | None = None
@@ -178,6 +191,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         if _err:
             config_schema[vol.Optional(CONF_ERROR, description={DESCR: _err})] = str
         if self._profile_entry:
+            # this is a profile OptionsFlow
             profile = ApiProfile.profiles.get(profile_config[mc.KEY_USERID_])
             require_login = not (profile and profile.token)
         else:
@@ -231,6 +245,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             step_id="profile",
             data_schema=vol.Schema(config_schema),
             errors=errors,
+            description_placeholders=self.profile_placeholders,
         )
 
     async def async_step_device(self, user_input=None):
@@ -389,7 +404,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                 }
             ),
             errors=errors,
-            description_placeholders=self._placeholders,
+            description_placeholders=self.device_placeholders,
         )
 
     async def async_step_integration_discovery(
@@ -566,7 +581,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
             devname = device_id
         self._title = f"{descriptor.type} - {devname}"
         self.context["title_placeholders"] = {"name": self._title}
-        self._placeholders = {
+        self.device_placeholders = {
             CONF_DEVICE_TYPE: descriptor.productnametype,
             mlc.CONF_DEVICE_ID: device_id,
         }
@@ -576,7 +591,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         return self.async_show_form(
             step_id="finalize",
             data_schema=vol.Schema({}),
-            description_placeholders=self._placeholders,
+            description_placeholders=self.device_placeholders,
         )
 
 
@@ -598,6 +613,16 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         if unique_id[0] == "profile":
             self._profile_entry = self._config_entry
             self.profile_config = dict(self._config_entry.data)  # type: ignore
+            self.profile_placeholders = {
+                mlc.CONF_EMAIL: self.profile_config.get(mlc.CONF_EMAIL),
+                "placeholder": json.dumps(
+                    {
+                        key: self.profile_config.get(key)
+                        for key in (mc.KEY_USERID_, mlc.CONF_KEY)
+                    },
+                    indent=2,
+                ),
+            }
             return await self.async_step_profile()
 
         self.device_config = dict(self._config_entry.data)  # type: ignore
@@ -610,7 +635,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             if device
             else MerossDeviceDescriptor(self.device_config.get(mlc.CONF_PAYLOAD))
         )
-        self._placeholders = {
+        self.device_placeholders = {
             mlc.CONF_DEVICE_ID: self._device_id,
             CONF_DEVICE_TYPE: self.device_descriptor.productnametype,
         }
@@ -760,7 +785,8 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                         self._config_entry.entry_id
                     )
                 # return None in data so the async_update_entry is not called for the
-                # options to be updated
+                # options to be updated. This will offend the type-checker tho and
+                # it appears as a very dirty trick to HA: beware!
                 return self.async_create_entry(data=None)  # type: ignore
 
             except MerossKeyError:
@@ -773,7 +799,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         config_schema = {}
         _host = device_config.get(mlc.CONF_HOST)
         config_schema[vol.Optional(mlc.CONF_HOST, description={DESCR: _host})] = str
-        self._placeholders[mlc.CONF_HOST] = _host or "MQTT"
+        self.device_placeholders[mlc.CONF_HOST] = _host or "MQTT"
         config_schema[
             vol.Optional(
                 mlc.CONF_KEY, description={DESCR: device_config.get(mlc.CONF_KEY)}
@@ -819,6 +845,6 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="device",
             data_schema=vol.Schema(config_schema),
-            description_placeholders=self._placeholders,
             errors=errors,
+            description_placeholders=self.device_placeholders,
         )

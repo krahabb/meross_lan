@@ -144,7 +144,7 @@
             },
             "profile": {
                 "title": "Geräteschlüssel übertragen",
-                "description": "Bitte einloggen um den Geräteschlüssel aus Ihrem Meross Account zu übertragen",
+                "description": "Meross-Konto {email} konfigurieren\n{placeholder}",
                 "data": {
                     "email": "Meross Benutzername",
                     "password": "Meross Passwort",

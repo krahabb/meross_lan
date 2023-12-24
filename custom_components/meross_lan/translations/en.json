@@ -144,7 +144,7 @@
             },
             "profile": {
                 "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
+                "description": "Configure Meross {email} account\n{placeholder}",
                 "data": {
                     "email": "Meross login",
                     "password": "Meross password",

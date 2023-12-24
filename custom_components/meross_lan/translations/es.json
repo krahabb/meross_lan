@@ -84,8 +84,8 @@
                 }
             },
             "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
+                "title": "Perfil de nube de Meross",
+                "description": "Regístrese y conéctese a una cuenta Meross",
                 "data": {
                     "email": "Nombre de usuario de Meross",
                     "password": "Contraseña de Meross",
@@ -143,8 +143,8 @@
                 }
             },
             "profile": {
-                "title": "Recuperar clave de dispositivo",
-                "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
+                "title": "Perfil de nube de Meross",
+                "description": "Cónfiguración de Meross {email} cuenta\n{placeholder}",
                 "data": {
                     "email": "Nombre de usuario de Meross",
                     "password": "Contraseña de Meross",
