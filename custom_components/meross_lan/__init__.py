@@ -369,7 +369,7 @@ class MerossApi(ApiProfile):
                     else await device.async_http_request_raw(request)
                     if protocol is mlc.CONF_PROTOCOL_HTTP
                     else await device.async_request_raw(request)
-                )
+                ) or {}
                 return service_response
 
             if device_id:
@@ -389,7 +389,7 @@ class MerossApi(ApiProfile):
                     )
                     service_response[
                         "response"
-                    ] = await mqtt_connection.async_mqtt_publish(device_id, request)
+                    ] = await mqtt_connection.async_mqtt_publish(device_id, request) or {}
                     return service_response
 
             if host:
@@ -411,7 +411,7 @@ class MerossApi(ApiProfile):
                             key or self.key,
                             async_get_clientsession(self.hass),
                             LOGGER,
-                        ).async_request_raw(request)
+                        ).async_request_raw(request) or {}
                     except Exception as exception:
                         service_response[
                             "exception"

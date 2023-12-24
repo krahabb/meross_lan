@@ -343,10 +343,13 @@ class MQTTConnection(Loggable):
         self,
         device_id: str,
         request: MerossRequest,
-    ) -> asyncio.Future[MerossMessageType | None]:
+    ) -> asyncio.Future:
         """
         throw and forget..usually schedules to a background task since
-        the actual mqtt send could be sync/blocking
+        the actual mqtt send could be sync/blocking.
+        The Future(likely a Task) returned might be polimorphyc so we
+        don't set an expected type here at the base declaration giving
+        type-checkers a small boost in identifying misuses
         """
         raise NotImplementedError()
 
@@ -527,7 +530,7 @@ class MQTTConnection(Loggable):
         self, device_id: str, key: str
     ) -> DeviceConfigType | None:
         topic_response = self.topic_response
-        response = await self.async_mqtt_publish(
+        if response := await self.async_mqtt_publish(
             device_id,
             MerossRequest(
                 key,
@@ -549,19 +552,18 @@ class MQTTConnection(Loggable):
                 },
                 topic_response,
             ),
-        )
-        if not isinstance(response, dict):
-            return None
-        multiple_response: list[MerossMessageType] = response[mc.KEY_PAYLOAD][
-            mc.KEY_MULTIPLE
-        ]
-        payload = multiple_response[0][mc.KEY_PAYLOAD]
-        payload.update(multiple_response[1][mc.KEY_PAYLOAD])
-        return {
-            CONF_DEVICE_ID: device_id,
-            CONF_PAYLOAD: payload,
-            CONF_KEY: key,
-        }
+        ):
+            multiple_response: list[MerossMessageType] = response[mc.KEY_PAYLOAD][
+                mc.KEY_MULTIPLE
+            ]
+            payload = multiple_response[0][mc.KEY_PAYLOAD]
+            payload.update(multiple_response[1][mc.KEY_PAYLOAD])
+            return {
+                CONF_DEVICE_ID: device_id,
+                CONF_PAYLOAD: payload,
+                CONF_KEY: key,
+            }
+        return None
 
         """REMOVE
         response = await self.async_mqtt_publish(
@@ -806,13 +808,16 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         self,
         device_id: str,
         request: MerossRequest,
-    ):
+    ) -> MerossMessageType | None:
         result = await self.mqtt_publish(device_id, request)
+        # self.mqtt_publish has a rather multi-dimensional return type
+        # in our framework we're actually only interested in the response
+        # message if this was related to a transaction (SETACK-GETACK)
         if isinstance(result, _MQTTTransaction):
             return await result.async_wait(
                 self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT
             )
-        return result
+        return None  # discard any exotic return info
 
     @callback
     def _mqtt_published(self, mid):
