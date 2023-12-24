@@ -198,19 +198,37 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     async def async_added_to_hass(self):
         self.logtag = f"{self.__class__.__name__}({self.entity_id})"
         self._hass_connected = True
+        return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
         self._hass_connected = False
+        return await super().async_will_remove_from_hass()
 
     # interface: self
     async def async_shutdown(self):
         pass
 
     def update_state(self, state: StateType):
+        """
+        update the entity state and flush it if changed
+        HA already has a system to catch non-changing state updates
+        but we'd prefer avoid all of the overhead if we're already
+        sure it didn't change
+        """
         if self._attr_state != state:
             self._attr_state = state
-            if self._hass_connected:
-                self._async_write_ha_state()
+            self.flush_state()
+
+    def flush_state(self):
+        """
+        actually commits a state change to HA. This is more
+        hard-core than update_state since some entities (say climates)
+        have multi-dimensional state with HA core attributes that
+        need to be updated. For these use-cases update_state is too simple
+        to catch so we just let HA process it
+        """
+        if self._hass_connected:
+            self.async_write_ha_state()
 
     def set_unavailable(self):
         self.update_state(None)
@@ -218,7 +236,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     def _parse_undefined(self, payload):
         # this is a default handler for any message (in protocol routing)
         # for which we haven't defined a specific handler (see MerossDevice._parse__generic)
-        self.log(WARNING, "handler undefined for payload:(%s)", str(payload), timeout=14400)
+        self.log(
+            WARNING, "handler undefined for payload:(%s)", str(payload), timeout=14400
+        )
 
     # even though these are toggle/binary_sensor properties
     # we provide a base-implement-all

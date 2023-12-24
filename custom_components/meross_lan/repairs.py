@@ -6,7 +6,6 @@ from . import const as mlc
 from .config_flow import OptionsFlow
 from .helpers import ConfigEntriesHelper
 
-
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 

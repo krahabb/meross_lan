@@ -180,6 +180,7 @@ def run(argv):
 
     if broker:
         import ssl
+
         import paho.mqtt.client as mqtt
 
         def _mqttc_connect(client: mqtt.Client, userdata, flags, rc):

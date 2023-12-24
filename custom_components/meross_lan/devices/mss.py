@@ -80,14 +80,12 @@ class EnergyEstimateSensor(MLSensor):
         state = int(self._attr_state_float)
         if self._attr_state != state:
             self._attr_state = state
-            if self._hass_connected:
-                self.async_write_ha_state()
+            self.flush_state()
 
     def reset_estimate(self):
         self._attr_state_float -= self._attr_state  # preserve fraction
         self._attr_state = 0
-        if self._hass_connected:
-            self.async_write_ha_state()
+        self.flush_state()
 
 
 class ElectricityMixin(
@@ -258,8 +256,7 @@ class ConsumptionXSensor(MLSensor):
             self._attr_extra_state_attributes = {}
             self.offset = 0
             self.reset_ts = 0
-            if self._hass_connected:
-                self.async_write_ha_state()
+            self.flush_state()
             self.log(DEBUG, "no readings available for new day - resetting")
 
 
@@ -428,16 +425,14 @@ class ConsumptionXMixin(
                 _sensor_consumption._attr_state = (
                     day_last_value - _sensor_consumption.offset
                 )
-                if _sensor_consumption._hass_connected:
-                    _sensor_consumption.async_write_ha_state()
+                _sensor_consumption.flush_state()
             return
 
         self._consumption_last_time = day_last_time
         self._consumption_last_value = day_last_value
         self._consumption_estimate = 0.0  # reset ElecticityMixin estimate cycle
         _sensor_consumption._attr_state = day_last_value - _sensor_consumption.offset
-        if _sensor_consumption._hass_connected:
-            _sensor_consumption.async_write_ha_state()
+        _sensor_consumption.flush_state()
         self.log(DEBUG, "updating consumption=%d", day_last_value)
 
     def _set_offline(self):

@@ -6,7 +6,7 @@ import typing
 
 from homeassistant import const as hac
 from homeassistant.components import select
-from homeassistant.core import callback, CoreState
+from homeassistant.core import CoreState, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
@@ -220,8 +220,8 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
                 self._setup_tracking_entities,
             )
 
-        # call super after (eventually) calling _setup_tracking_entities
-        # since it could flush the new state (should when called by the hass bus)
+        # call super after (eventually) calling _setup_tracking_entities since it
+        # could flush the new state (it should only when called by the hass bus)
         await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
@@ -345,12 +345,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             # this might happen when restoring a not anymore valid entity
             self._attr_state = hac.STATE_OFF
 
-        if self._hass_connected:
-            # this means the _setup_tracking_entities is being called
-            # on EVENT_HOMEASSISTANT_STARTED so we update the HA state here
-            # with full consistent data
-            self._async_write_ha_state()
-
+        self.flush_state()
         self._tracking_start()
 
     def _tracking_start(self):

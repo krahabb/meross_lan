@@ -885,8 +885,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         if self._position_native_isgood:
             if position != self._attr_current_cover_position:
                 self._attr_current_cover_position = position
-                if self._hass_connected:
-                    self._async_write_ha_state()
+                self.flush_state()
             return
 
         if position == self._position_native:
@@ -902,8 +901,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         else:
             self._position_native = position
             self._attr_extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
-        if self._hass_connected:
-            self._async_write_ha_state()
+
+        self.flush_state()
 
     def _parse_state(self, payload: dict):
         epoch = self.manager.lastresponse
@@ -924,14 +923,14 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 self._attr_current_cover_position = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)  # type: ignore
                 if self._attr_current_cover_position > POSITION_FULLY_OPENED:
                     self._attr_current_cover_position = POSITION_FULLY_OPENED
-                if self._hass_connected and (state == mc.ROLLERSHUTTER_STATE_OPENING):
-                    self._async_write_ha_state()
+                if state == mc.ROLLERSHUTTER_STATE_OPENING:
+                    self.flush_state()
             elif self._attr_state == STATE_CLOSING:
                 self._attr_current_cover_position = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)  # type: ignore
                 if self._attr_current_cover_position < POSITION_FULLY_CLOSED:
                     self._attr_current_cover_position = POSITION_FULLY_CLOSED
-                if self._hass_connected and (state == mc.ROLLERSHUTTER_STATE_CLOSING):
-                    self._async_write_ha_state()
+                if state == mc.ROLLERSHUTTER_STATE_CLOSING:
+                    self.flush_state()
 
             if state == mc.ROLLERSHUTTER_STATE_OPENING:
                 if self._attr_state != STATE_OPENING:

@@ -146,6 +146,11 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_adjusted_temperature = {}
         super().set_unavailable()
 
+    def flush_state(self):
+        self._attr_state = self._attr_hvac_mode if self.manager.online else None
+        super().flush_state()
+        self.schedule.flush_state()
+
     # interface: ClimateEntity
     @property
     def supported_features(self):
@@ -217,12 +222,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     def is_mts_scheduled(self):
         raise NotImplementedError()
-
-    def update_mts_state(self):
-        self._attr_state = self._attr_hvac_mode if self.manager.online else None
-        if self._hass_connected:
-            self._async_write_ha_state()
-        self.schedule.update_mts_state()
 
 
 class MtsSetPointNumber(MLConfigNumber):

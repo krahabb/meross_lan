@@ -104,8 +104,7 @@ class MerossLanSpray(me.MerossEntity, humidifier.HumidifierEntity):
             if (self._attr_state != self.STATE_ON) or (self._spray_mode != spray_mode):
                 self._attr_state = self.STATE_ON
                 self._spray_mode = spray_mode
-                if self._hass_connected:
-                    self._async_write_ha_state()
+                self.flush_state()
 
     def _parse_spray(self, payload: dict):
         self.update_mode(payload.get(mc.KEY_MODE))

@@ -120,8 +120,7 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
             self._attr_state = (
                 STATE_IDLE if self._mp3.get(mc.KEY_MUTE) else STATE_PLAYING
             )
-            if self._hass_connected:
-                self._async_write_ha_state()
+            self.flush_state()
 
     def _parse_mp3(self, payload: dict):
         """
@@ -131,8 +130,7 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
             self._mp3 = payload
             if mc.KEY_MUTE in payload:
                 self._attr_state = STATE_IDLE if payload[mc.KEY_MUTE] else STATE_PLAYING
-            if self._hass_connected:
-                self._async_write_ha_state()
+            self.flush_state()
 
 
 class Mp3Mixin(

@@ -223,6 +223,26 @@ class Mts200Climate(MtsClimate):
         self.sensor_externalsensor_temperature = None  # type: ignore
         await super().async_shutdown()
 
+    def flush_state(self):
+        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
+        if self._mts_onoff:
+            self._attr_hvac_mode = self.SUMMERMODE_TO_HVACMODE.get(
+                self._mts_summermode, MtsClimate.HVACMode.HEAT
+            )
+            if self._mts_active:
+                self._attr_hvac_action = (
+                    MtsClimate.HVACAction.HEATING
+                    if self._attr_hvac_mode is MtsClimate.HVACMode.HEAT
+                    else MtsClimate.HVACAction.COOLING
+                )
+            else:
+                self._attr_hvac_action = MtsClimate.HVACAction.IDLE
+        else:
+            self._attr_hvac_mode = MtsClimate.HVACMode.OFF
+            self._attr_hvac_action = MtsClimate.HVACAction.OFF
+
+        super().flush_state()
+
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
         if hvac_mode == MtsClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
@@ -253,7 +273,7 @@ class Mts200Climate(MtsClimate):
         ):
             self._mts_mode = mode
             self._mts_onoff = 1
-            self.update_mts_state()
+            self.flush_state()
 
     async def async_set_temperature(self, **kwargs):
         t = kwargs[Mts200Climate.ATTR_TEMPERATURE]
@@ -270,7 +290,7 @@ class Mts200Climate(MtsClimate):
             },
         ):
             self._attr_target_temperature = t
-            self.update_mts_state()
+            self.flush_state()
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(
@@ -279,7 +299,7 @@ class Mts200Climate(MtsClimate):
             {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}]},
         ):
             self._mts_onoff = onoff
-            self.update_mts_state()
+            self.flush_state()
 
     async def async_request_summermode(self, summermode: int):
         if await self.manager.async_request_ack(
@@ -294,30 +314,10 @@ class Mts200Climate(MtsClimate):
             # it looks that (at least when sending '0') even
             # if acknowledged the mts doesnt really update it
             self._mts_summermode = summermode
-            self.update_mts_state()
+            self.flush_state()
 
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
-
-    def update_mts_state(self):
-        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
-        if self._mts_onoff:
-            self._attr_hvac_mode = self.SUMMERMODE_TO_HVACMODE.get(
-                self._mts_summermode, MtsClimate.HVACMode.HEAT
-            )
-            if self._mts_active:
-                self._attr_hvac_action = (
-                    MtsClimate.HVACAction.HEATING
-                    if self._attr_hvac_mode is MtsClimate.HVACMode.HEAT
-                    else MtsClimate.HVACAction.COOLING
-                )
-            else:
-                self._attr_hvac_action = MtsClimate.HVACAction.IDLE
-        else:
-            self._attr_hvac_mode = MtsClimate.HVACMode.OFF
-            self._attr_hvac_action = MtsClimate.HVACAction.OFF
-
-        super().update_mts_state()
 
     # message handlers
     def _parse_calibration(self, payload: dict):
@@ -370,7 +370,7 @@ class Mts200Climate(MtsClimate):
             self.number_sleep_temperature.update_native_value(_t)
         if isinstance(_t := payload.get(mc.KEY_ECOTEMP), int):
             self.number_away_temperature.update_native_value(_t)
-        self.update_mts_state()
+        self.flush_state()
 
     def _parse_overheat(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
@@ -407,8 +407,8 @@ class Mts200Climate(MtsClimate):
             summermode = payload[mc.KEY_MODE]
             if self._mts_summermode != summermode:
                 self._mts_summermode = summermode
-                self.update_mts_state()
-        
+                self.flush_state()
+
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "lmTime": 1642425303 }"""
         self.binary_sensor_window.update_onoff(payload[mc.KEY_STATUS])

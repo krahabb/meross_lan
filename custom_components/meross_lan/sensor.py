@@ -166,8 +166,7 @@ class ProtocolSensor(MLSensor):
             }
         else:
             self._attr_extra_state_attributes = {}
-        if self._hass_connected:
-            self._async_write_ha_state()
+        self.flush_state()
 
     def update_connected(self):
         manager = self.manager
@@ -184,8 +183,7 @@ class ProtocolSensor(MLSensor):
             self._attr_extra_state_attributes[
                 self.ATTR_MQTT_BROKER
             ] = self._get_attr_state(manager._mqtt_connected)
-        if self._hass_connected:
-            self._async_write_ha_state()
+        self.flush_state()
 
     # these smart updates are meant to only flush attrs
     # when they are already present..i.e. meaning the device
@@ -199,20 +197,17 @@ class ProtocolSensor(MLSensor):
             self._attr_extra_state_attributes[attrname] = self._get_attr_state(
                 attr_state
             )
-            if self._hass_connected:
-                self._async_write_ha_state()
+            self.flush_state()
 
     def update_attr_active(self, attrname: str):
         if attrname in self._attr_extra_state_attributes:
             self._attr_extra_state_attributes[attrname] = self.STATE_ACTIVE
-            if self._hass_connected:
-                self._async_write_ha_state()
+            self.flush_state()
 
     def update_attr_inactive(self, attrname: str):
         if attrname in self._attr_extra_state_attributes:
             self._attr_extra_state_attributes[attrname] = self.STATE_INACTIVE
-            if self._hass_connected:
-                self._async_write_ha_state()
+            self.flush_state()
 
     def update_attrs_inactive(self, *attrnames):
         flush = False
@@ -220,5 +215,5 @@ class ProtocolSensor(MLSensor):
             if self._attr_extra_state_attributes.get(attrname) is self.STATE_ACTIVE:
                 self._attr_extra_state_attributes[attrname] = self.STATE_INACTIVE
                 flush = True
-        if flush and self._hass_connected:
-            self._async_write_ha_state()
+        if flush:
+            self.flush_state()

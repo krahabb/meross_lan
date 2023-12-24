@@ -146,26 +146,22 @@ class ConnectionSensor(MLSensor):
         self._attr_extra_state_attributes[ConnectionSensor.ATTR_DEVICES][
             device.id
         ] = device.name
-        if self._hass_connected:
-            self._async_write_ha_state()
+        self.flush_state()
 
     def remove_device(self, device: MerossDevice):
         self._attr_extra_state_attributes[ConnectionSensor.ATTR_DEVICES].pop(
             device.id, None
         )
-        if self._hass_connected:
-            self._async_write_ha_state()
+        self.flush_state()
 
     def inc_counter(self, attr_name: str):
         self._attr_extra_state_attributes[attr_name] += 1
-        if self._hass_connected:
-            self._async_write_ha_state()
+        self.flush_state()
 
     def inc_counter_with_state(self, attr_name: str, state: str):
         self._attr_extra_state_attributes[attr_name] += 1
         self._attr_state = state
-        if self._hass_connected:
-            self._async_write_ha_state()
+        self.flush_state()
 
     def inc_queued(self, queue_length: int):
         self._attr_extra_state_attributes[ConnectionSensor.ATTR_QUEUED] += 1
@@ -173,8 +169,7 @@ class ConnectionSensor(MLSensor):
             ConnectionSensor.ATTR_QUEUE_LENGTH
         ] = queue_length
         self._attr_state = ConnectionSensor.STATE_QUEUING
-        if self._hass_connected:
-            self._async_write_ha_state()
+        self.flush_state()
 
 
 class _MQTTTransaction:
@@ -841,8 +836,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
             if self.mqtt_is_connected and not queue_length:
                 # enforce the state eventually cancelling queued, dropped...
                 sensor_connection._attr_state = ConnectionSensor.STATE_CONNECTED
-            if sensor_connection._hass_connected:
-                sensor_connection._async_write_ha_state()
+            sensor_connection.flush_state()
 
     # interface: self
     def schedule_connect(self):

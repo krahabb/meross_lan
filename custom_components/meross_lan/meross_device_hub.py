@@ -769,7 +769,7 @@ class MTS100SubDevice(MerossSubDevice):
         if isinstance(p_temperature := p_all.get(mc.KEY_TEMPERATURE), dict):
             climate._parse_temperature(p_temperature)
         else:
-            climate.update_mts_state()
+            climate.flush_state()
 
     def _parse_adjust(self, p_adjust: dict):
         self.climate.number_adjust_temperature.update_native_value(
@@ -779,7 +779,7 @@ class MTS100SubDevice(MerossSubDevice):
     def _parse_mode(self, p_mode: dict):
         climate = self.climate
         climate._mts_mode = p_mode.get(mc.KEY_STATE)
-        climate.update_mts_state()
+        climate.flush_state()
 
     def _parse_mts100(self, p_mts100: dict):
         pass
@@ -793,7 +793,7 @@ class MTS100SubDevice(MerossSubDevice):
     def _parse_togglex(self, p_togglex: dict):
         climate = self.climate
         climate._mts_onoff = p_togglex.get(mc.KEY_ONOFF)
-        climate.update_mts_state()
+        climate.flush_state()
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100] = MTS100SubDevice

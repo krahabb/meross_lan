@@ -1272,8 +1272,7 @@ class MerossDevice(MerossDeviceBase):
                 # self.update_firmware is dynamically created only when the cloud api
                 # reports a newer fw
                 update_firmware._attr_installed_version = descr.firmwareVersion
-                if update_firmware._hass_connected:
-                    update_firmware._async_write_ha_state()
+                update_firmware.flush_state()
 
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             if self._mqtt_active:
@@ -1842,8 +1841,7 @@ class MerossDevice(MerossDeviceBase):
         update_firmware._attr_installed_version = self.descriptor.firmwareVersion
         update_firmware._attr_latest_version = latest_version.get(mc.KEY_VERSION)
         update_firmware._attr_release_summary = latest_version.get(mc.KEY_DESCRIPTION)
-        if update_firmware._hass_connected:
-            update_firmware._async_write_ha_state()
+        update_firmware.flush_state()
 
     def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
         """

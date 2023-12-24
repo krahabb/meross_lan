@@ -140,13 +140,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
                 self._attr_rgb_color = None
 
             self._inherited_parse_light(payload)
-
-            if self._hass_connected:
-                # since the light payload could be processed before the relative 'togglex'
-                # here we'll flush only when the lamp is 'on' to avoid intra-updates to HA states.
-                # when the togglex will arrive, the _light (attributes) will be already set
-                # and HA will save a consistent state (hopefully..we'll see)
-                self._async_write_ha_state()
+            self.flush_state()
 
 
 class MLLight(MLLightBase):
@@ -328,8 +322,7 @@ class MLLight(MLLightBase):
         else:
             self._attr_supported_features &= ~LightEntityFeature.EFFECT
             self._attr_effect_list = None
-        if self._hass_connected:
-            self._async_write_ha_state()
+        self.flush_state()
 
     def _inherited_parse_light(self, payload: dict):
         if mc.KEY_CAPACITY in payload:

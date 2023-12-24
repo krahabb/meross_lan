@@ -1,7 +1,7 @@
 """Config flow for Meross LAN integration."""
 from __future__ import annotations
-import json
 
+import json
 from logging import DEBUG
 from time import time
 import typing
@@ -28,7 +28,6 @@ from .merossclient.cloudapi import (
     async_cloudapi_logout_safe,
 )
 from .merossclient.httpclient import MerossHttpClient
-
 
 # helper conf keys not persisted to config
 CONF_DEVICE_TYPE = "device_type"

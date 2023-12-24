@@ -98,6 +98,22 @@ class Mts100Climate(MtsClimate):
         else:
             self._attr_extra_state_attributes.pop(mc.KEY_SCHEDULEBMODE)
 
+    # interface: MtsClimate
+    def flush_state(self):
+        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
+        if self._mts_onoff:
+            self._attr_hvac_mode = MtsClimate.HVACMode.HEAT
+            self._attr_hvac_action = (
+                MtsClimate.HVACAction.HEATING
+                if self._mts_active
+                else MtsClimate.HVACAction.IDLE
+            )
+        else:
+            self._attr_hvac_mode = MtsClimate.HVACMode.OFF
+            self._attr_hvac_action = MtsClimate.HVACAction.OFF
+
+        super().flush_state()
+
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
         if hvac_mode == MtsClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
@@ -113,7 +129,7 @@ class Mts100Climate(MtsClimate):
                 {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
             ):
                 self._mts_mode = mode
-                self.update_mts_state()
+                self.flush_state()
             if not self._mts_onoff:
                 await self.async_request_onoff(1)
 
@@ -151,25 +167,10 @@ class Mts100Climate(MtsClimate):
             {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: onoff}]},
         ):
             self._mts_onoff = onoff
-            self.update_mts_state()
+            self.flush_state()
 
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
-
-    def update_mts_state(self):
-        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
-        if self._mts_onoff:
-            self._attr_hvac_mode = MtsClimate.HVACMode.HEAT
-            self._attr_hvac_action = (
-                MtsClimate.HVACAction.HEATING
-                if self._mts_active
-                else MtsClimate.HVACAction.IDLE
-            )
-        else:
-            self._attr_hvac_mode = MtsClimate.HVACMode.OFF
-            self._attr_hvac_action = MtsClimate.HVACAction.OFF
-
-        super().update_mts_state()
 
     # message handlers
     def _parse_temperature(self, p_temperature: dict):
@@ -254,7 +255,7 @@ class Mts100Climate(MtsClimate):
         if mc.KEY_OPENWINDOW in p_temperature:
             self.binary_sensor_window.update_onoff(p_temperature[mc.KEY_OPENWINDOW])
 
-        self.update_mts_state()
+        self.flush_state()
 
 
 class Mts100SetPointNumber(MtsSetPointNumber):
