@@ -143,11 +143,22 @@ class HAMQTTConnection(MQTTConnection):
                 request.method,
                 request.namespace,
             )
-        await mqtt_async_publish(
-            ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.to_string()
-        )
-        if transaction:
-            return await transaction.async_wait(self.DEFAULT_RESPONSE_TIMEOUT)
+        try:
+            # mqtt_async_publish raises exception if unable to send..we'll shut it down
+            await mqtt_async_publish(
+                ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.to_string()
+            )
+            if transaction:
+                return await transaction.async_wait(self.DEFAULT_RESPONSE_TIMEOUT)
+            return None
+        except Exception as exception:
+            self.log(
+                DEBUG,
+                f"{exception.__class__.__name__}({str(exception)}) in async_mqtt_publish",
+            )
+            if transaction:
+                transaction.cancel()
+            return None
 
     async def async_mqtt_publish_cloudcontrol(
         self, device_id: str, message: MerossMessageType
@@ -387,9 +398,10 @@ class MerossApi(ApiProfile):
                         payload,
                         mqtt_connection.topic_response,
                     )
-                    service_response[
-                        "response"
-                    ] = await mqtt_connection.async_mqtt_publish(device_id, request) or {}
+                    service_response["response"] = (
+                        await mqtt_connection.async_mqtt_publish(device_id, request)
+                        or {}
+                    )
                     return service_response
 
             if host:
@@ -406,12 +418,15 @@ class MerossApi(ApiProfile):
                         mc.MANUFACTURER,
                     )
                     try:
-                        service_response["response"] = await MerossHttpClient(
-                            host,
-                            key or self.key,
-                            async_get_clientsession(self.hass),
-                            LOGGER,
-                        ).async_request_raw(request) or {}
+                        service_response["response"] = (
+                            await MerossHttpClient(
+                                host,
+                                key or self.key,
+                                async_get_clientsession(self.hass),
+                                LOGGER,
+                            ).async_request_raw(request)
+                            or {}
+                        )
                     except Exception as exception:
                         service_response[
                             "exception"
