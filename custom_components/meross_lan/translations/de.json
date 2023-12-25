@@ -55,7 +55,6 @@
         "step": {
             "user": {
                 "title": "Option wählen",
-                "description": "",
                 "menu_options": {
                     "profile": "Registrieren Sie ein Meross-Cloud-Profil",
                     "device": "Konfigurieren Sie ein Gerät manuell"
@@ -97,8 +96,7 @@
             },
             "finalize": {
                 "title": "Gerätekonfiguration",
-                "description": "Typ: {device_type}\nUUID: {device_id}",
-                "data": {}
+                "description": "Typ: {device_type}\nUUID: {device_id}"
             }
         }
     },
@@ -127,7 +125,6 @@
                     "host": "IP-Adresse des Geräts",
                     "key": "Geräteschlüssel",
                     "protocol": "Verbindungsart",
-                    "profile_id": "Cloud-Profil",
                     "polling_period": "Abfragerate",
                     "timezone": "Gerätezeitzone",
                     "trace": "Debugmodus aktivieren",
@@ -187,7 +184,6 @@
                             "host": "IP-Adresse des Geräts",
                             "key": "Geräteschlüssel",
                             "protocol": "Verbindungsart",
-                            "profile_id": "Cloud-Profil",
                             "polling_period": "Abfragerate",
                             "timezone": "Gerätezeitzone",
                             "trace": "Debugmodus aktivieren",

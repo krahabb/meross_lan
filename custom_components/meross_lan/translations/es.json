@@ -55,7 +55,6 @@
         "step": {
             "user": {
                 "title": "Elegir opción",
-                "description": "",
                 "menu_options": {
                     "profile": "Registrar un perfil en la nube de Meross",
                     "device": "Configurar manualmente un dispositivo"
@@ -97,8 +96,7 @@
             },
             "finalize": {
                 "title": "Cónfiguración de dispositivo",
-                "description": "Tipo: {device_type}\nUUID: {device_id}",
-                "data": {}
+                "description": "Tipo: {device_type}\nUUID: {device_id}"
             }
         }
     },
@@ -127,7 +125,6 @@
                     "host": "Dirección IP del dispositivo",
                     "key": "Clave de dispositivo",
                     "protocol": "Protocolo de conexión",
-                    "profile_id": "Perfil de nube",
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
                     "trace": "Activar el modo debug",
@@ -187,7 +184,6 @@
                             "host": "Dirección IP del dispositivo",
                             "key": "Clave de dispositivo",
                             "protocol": "Protocolo de conexión",
-                            "profile_id": "Perfil de nube",
                             "polling_period": "Intervalo de consulta",
                             "timezone": "Zona horaria del dispositivo",
                             "trace": "Activar el modo debug",

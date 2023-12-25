@@ -55,7 +55,6 @@
         "step": {
             "user": {
                 "title": "オプションを選択してください",
-                "description": "",
                 "menu_options": {
                     "profile": "Meross クラウド プロファイルを登録する",
                     "device": "デバイスを手動で構成する"
@@ -97,8 +96,7 @@
             },
             "finalize": {
                 "title": "デバイス設定",
-                "description": "タイップ: {device_type}\nUUID: {device_id}",
-                "data": {}
+                "description": "タイップ: {device_type}\nUUID: {device_id}"
             }
         }
     },
@@ -127,7 +125,6 @@
                     "host": "デバイスのホストアドレス",
                     "key": "デバイスキー",
                     "protocol": "接続プロトコル",
-                    "profile_id": "クラウド プロファイル",
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
                     "trace": "デバイスのデバグトレースを開始する",
@@ -187,7 +184,6 @@
                             "host": "デバイスのホストアドレス",
                             "key": "デバイスキー",
                             "protocol": "接続プロトコル",
-                            "profile_id": "クラウド プロファイル",
                             "polling_period": "ポーリング間隔(秒)",
                             "timezone": "デバイスのタイムゾーン",
                             "trace": "デバイスのデバグトレースを開始する",

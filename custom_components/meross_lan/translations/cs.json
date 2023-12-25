@@ -55,7 +55,6 @@
         "step": {
             "user": {
                 "title": "Vyberte možnost",
-                "description": "",
                 "menu_options": {
                     "profile": "Zaregistrujte si cloudový profil Meross",
                     "device": "Ručně nakonfigurujte zařízení"
@@ -72,8 +71,7 @@
                 "description": "Nastavení zařízení Meross\nTyp: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Adresa hostitele zařízení",
-                    "key": "Klíč zařízení",
-                    "Required": "Povinné pole"
+                    "key": "Klíč zařízení"
                 }
             },
             "keyerror": {
@@ -98,8 +96,7 @@
             },
             "finalize": {
                 "title": "Konfigurace zařízení",
-                "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}",
-                "data": {}
+                "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}"
             }
         }
     },
@@ -128,7 +125,6 @@
                     "host": "Adresa hostitele zařízení",
                     "key": "Klíč zařízení",
                     "protocol": "Protokol připojení",
-                    "profile_id": "Cloudový profil",
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
                     "trace": "Zapnout ladění zařízení",
@@ -188,7 +184,6 @@
                             "host": "Adresa hostitele zařízení",
                             "key": "Klíč zařízení",
                             "protocol": "Protokol připojení",
-                            "profile_id": "Cloudový profil",
                             "polling_period": "Interval dotazování",
                             "timezone": "Časové pásmo zařízení",
                             "trace": "Zapnout ladění zařízení",

@@ -55,7 +55,6 @@
         "step": {
             "user": {
                 "title": "Scegli un'opzione",
-                "description": "",
                 "menu_options": {
                     "profile": "Connetti un account Meross",
                     "device": "Configura un dispositivo manualmente"
@@ -97,8 +96,7 @@
             },
             "finalize": {
                 "title": "Configurazione dispositivo",
-                "description": "Tipo: {device_type}\nUUID: {device_id}",
-                "data": {}
+                "description": "Tipo: {device_type}\nUUID: {device_id}"
             }
         }
     },
@@ -130,9 +128,7 @@
                     "polling_period": "Intervallo di aggiornamento",
                     "timezone": "Zona oraria",
                     "trace": "Attiva il debug tracing",
-                    "trace_timeout": "Durata debug tracing (sec)",
-                    "all": "Appliance.System.All",
-                    "ability": "Appliance.System.Ability"
+                    "trace_timeout": "Durata debug tracing (sec)"
                 }
             },
             "keyerror": {

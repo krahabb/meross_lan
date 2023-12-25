@@ -55,7 +55,6 @@
         "step": {
             "user": {
                 "title": "Choose option",
-                "description": "",
                 "menu_options": {
                     "profile": "Register a Meross cloud profile",
                     "device": "Manually configure a device"
@@ -97,8 +96,7 @@
             },
             "finalize": {
                 "title": "Device configuration",
-                "description": "Type: {device_type}\nUUID: {device_id}",
-                "data": {}
+                "description": "Type: {device_type}\nUUID: {device_id}"
             }
         }
     },
@@ -127,7 +125,6 @@
                     "host": "Device host address",
                     "key": "Device key",
                     "protocol": "Connection protocol",
-                    "profile_id": "Cloud profile",
                     "polling_period": "Polling period",
                     "timezone": "Device time zone",
                     "trace": "Activate device debug tracing",
@@ -187,7 +184,6 @@
                             "host": "Device host address",
                             "key": "Device key",
                             "protocol": "Connection protocol",
-                            "profile_id": "Cloud profile",
                             "polling_period": "Polling period",
                             "timezone": "Device time zone",
                             "trace": "Activate device debug tracing",

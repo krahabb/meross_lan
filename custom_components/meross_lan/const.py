@@ -70,7 +70,6 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
 
     key: str | None
     cloud_key: str | None
-    profile_id: str | None
     host: str
     protocol: str
     polling_period: int | None

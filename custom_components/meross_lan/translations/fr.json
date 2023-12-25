@@ -55,7 +55,6 @@
         "step": {
             "user": {
                 "title": "Choisissez l'option",
-                "description": "",
                 "menu_options": {
                     "profile": "Enregistrer un profil cloud Meross",
                     "device": "Configurer manuellement un appareil"
@@ -97,8 +96,7 @@
             },
             "finalize": {
                 "title": "Configuration de l'appareil",
-                "description": "Type: {device_type}\nUUID: {device_id}",
-                "data": {}
+                "description": "Type: {device_type}\nUUID: {device_id}"
             }
         }
     },
@@ -127,7 +125,6 @@
                     "host": "Adresse",
                     "key": "Clé",
                     "protocol": "Protocole de connexion",
-                    "profile_id": "Profil Cloud",
                     "polling_period": "Période de requête",
                     "timezone": "Fuseau horaire de l'appareil",
                     "trace": "Activer le traçage de l'appareil",
@@ -187,7 +184,6 @@
                             "host": "Adresse",
                             "key": "Clé",
                             "protocol": "Protocole de connexion",
-                            "profile_id": "Profil Cloud",
                             "polling_period": "Période de requête",
                             "timezone": "Fuseau horaire de l'appareil",
                             "trace": "Activer le traçage de l'appareil",
