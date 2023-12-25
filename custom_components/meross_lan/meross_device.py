@@ -236,7 +236,6 @@ class MerossDeviceBase(EntityManager):
                     _device_registry_entry.id, name=name
                 )
 
-    @abc.abstractmethod
     def build_request(
         self,
         namespace: str,
@@ -245,7 +244,6 @@ class MerossDeviceBase(EntityManager):
     ) -> MerossRequest:
         raise NotImplementedError
 
-    @abc.abstractmethod
     async def async_request_raw(
         self,
         request: MerossRequest,
@@ -258,9 +256,7 @@ class MerossDeviceBase(EntityManager):
         method: str,
         payload: MerossPayloadType,
     ) -> MerossMessageType | None:
-        return await self.async_request_raw(
-            self.build_request(namespace, method, payload)
-        )
+        raise NotImplementedError
 
     async def async_request_ack(
         self,
@@ -268,9 +264,7 @@ class MerossDeviceBase(EntityManager):
         method: str,
         payload: MerossPayloadType,
     ) -> MerossMessageType | None:
-        response = await self.async_request_raw(
-            self.build_request(namespace, method, payload)
-        )
+        response = await self.async_request(namespace, method, payload)
         return (
             response
             if response and response[mc.KEY_HEADER][mc.KEY_METHOD] != mc.METHOD_ERROR
@@ -278,9 +272,7 @@ class MerossDeviceBase(EntityManager):
         )
 
     def request(self, request_tuple: MerossRequestType):
-        return ApiProfile.hass.async_create_task(
-            self.async_request_raw(self.build_request(*request_tuple))
-        )
+        return ApiProfile.hass.async_create_task(self.async_request(*request_tuple))
 
     @property
     @abc.abstractmethod
@@ -627,6 +619,16 @@ class MerossDevice(MerossDeviceBase):
             return await self.async_mqtt_request_raw(request)
 
         return None
+
+    async def async_request(
+        self,
+        namespace: str,
+        method: str,
+        payload: MerossPayloadType,
+    ) -> MerossMessageType | None:
+        return await self.async_request_raw(
+            MerossRequest(self.key, namespace, method, payload, self._topic_response)
+        )
 
     def _get_device_info_name_key(self) -> str:
         return mc.KEY_DEVNAME

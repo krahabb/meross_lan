@@ -411,6 +411,9 @@ class MerossSubDevice(MerossDeviceBase):
     """
 
     __slots__ = (
+        "build_request",
+        "async_request_raw",
+        "async_request",
         "hub",
         "type",
         "p_digest",
@@ -419,11 +422,17 @@ class MerossSubDevice(MerossDeviceBase):
     )
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
-        id_ = p_digest[mc.KEY_ID]
+        # this is a very dirty trick/optimization to override some MerossDeviceBase
+        # properties/methods that just needs to be forwarded to the hub
+        # this way we're short-circuiting that indirection
+        self.build_request = hub.build_request
+        self.async_request_raw = hub.async_request_raw
+        self.async_request = hub.async_request
+        # these properties are needed to be in place before base class init
         self.hub = hub
         self.type = _type
         self.p_digest = p_digest
-        # base init after setting some key properties needed for logging
+        id_ = p_digest[mc.KEY_ID]
         super().__init__(
             id_,
             hub.config_entry_id,
@@ -459,25 +468,12 @@ class MerossSubDevice(MerossDeviceBase):
     async def async_shutdown(self):
         self.platforms = {}  # avoid super() clearing the MerossDeviceHub.platforms
         await super().async_shutdown()
+        self.async_request = None  # type: ignore
+        self.async_request_raw = None  # type: ignore
+        self.build_request = None  # type: ignore
         self.hub: MerossDeviceHub = None  # type: ignore
         self.sensor_battery: MLSensor = None  # type: ignore
         self.switch_togglex = None
-
-    def build_request(
-        self,
-        namespace: str,
-        method: str,
-        payload: MerossPayloadType,
-    ) -> MerossRequest:
-        return MerossRequest(
-            self.key, namespace, method, payload, self.hub._topic_response
-        )
-
-    async def async_request_raw(
-        self,
-        request: MerossRequest,
-    ):
-        return await self.hub.async_request_raw(request)
 
     @property
     def tz(self):
