@@ -4,11 +4,9 @@ import abc
 import asyncio
 import bisect
 from datetime import datetime, timezone, tzinfo
-from io import TextIOWrapper
 from json import JSONDecodeError
 from logging import DEBUG, ERROR, WARNING, getLevelName as logging_getLevelName
-import os
-from time import localtime, strftime, time
+from time import time
 import typing
 import weakref
 from zoneinfo import ZoneInfo
@@ -32,14 +30,8 @@ from .const import (
     CONF_PROTOCOL_MQTT,
     CONF_PROTOCOL_OPTIONS,
     CONF_TIMESTAMP,
-    CONF_TRACE,
-    CONF_TRACE_DIRECTORY,
-    CONF_TRACE_FILENAME,
-    CONF_TRACE_MAXSIZE,
-    CONF_TRACE_TIMEOUT_DEFAULT,
     DOMAIN,
     ISSUE_DEVICE_ID_MISMATCH,
-    PARAM_COLDSTARTPOLL_DELAY,
     PARAM_HEADER_SIZE,
     PARAM_HEARTBEAT_PERIOD,
     PARAM_INFINITE_EPOCH,
@@ -133,9 +125,6 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_MCU_FIRMWARE,  # disconnects
     mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK,  # disconnects
 )
-
-TRACE_DIRECTION_RX = "RX"
-TRACE_DIRECTION_TX = "TX"
 
 TIMEZONES_SET = None
 
@@ -365,11 +354,6 @@ class MerossDevice(MerossDeviceBase):
         "_http_active",  # HTTP is 'online' i.e. reachable
         "_http_lastrequest",
         "_http_lastresponse",
-        "_trace_file",
-        "_trace_future",
-        "_trace_data",
-        "_trace_endtime",
-        "_trace_ability_iter",
         "namespace_handlers",
         "polling_strategies",
         "_unsub_polling_callback",
@@ -414,11 +398,6 @@ class MerossDevice(MerossDeviceBase):
         self._http_active: MerossHttpClient | None = None
         self._http_lastrequest = 0
         self._http_lastresponse = 0
-        self._trace_file: TextIOWrapper | None = None
-        self._trace_future: asyncio.Future | None = None
-        self._trace_data: list | None = None
-        self._trace_endtime = 0
-        self._trace_ability_iter = None
         self.namespace_handlers: dict[str, NamespaceHandler] = {}
         self.polling_strategies: dict[str, PollingStrategy] = {}
         # TODO: try to cache the system.all payload size in order to avoid the json_dumps
@@ -451,7 +430,7 @@ class MerossDevice(MerossDeviceBase):
         self._timezone_next_check = (
             0 if mc.NS_APPLIANCE_SYSTEM_TIME in ability else PARAM_INFINITE_EPOCH
         )
-        """Indicates the (next) time we shoulc to perform a check (only when localmqtt)
+        """Indicates the (next) time we should perform a check (only when localmqtt)
         in order to see if the device has correct timezone/dst configuration"""
 
         # base init after setting some key properties needed for logging
@@ -515,8 +494,8 @@ class MerossDevice(MerossDeviceBase):
     # interface: Loggable
     def log(self, level: int, msg: str, *args, **kwargs):
         self.logger.log(level, f"MerossDevice({self.name}): {msg}", *args, **kwargs)
-        if self._trace_file:
-            self._trace(time(), msg % args, logging_getLevelName(level), "LOG")
+        if self.trace_file:
+            self.trace(time(), msg % args, logging_getLevelName(level), "LOG")
 
     # interface: EntityManager
     @callback
@@ -541,20 +520,21 @@ class MerossDevice(MerossDeviceBase):
                 if host := self.host:
                     http.host = host
 
-        # When updating ConfigEntry we always reset the timeout
-        # so the trace will (eventually) restart
-        if self._trace_file:
-            self._trace_close()
-        self._trace_open_check()
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
         if not self._online:
             self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
 
+    def _trace_opened(self, epoch: float):
+        descr = self.descriptor
+        self.trace(epoch, descr.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
+        self.trace(
+            epoch, descr.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK
+        )
+        self._trace_ability(iter(descr.ability))
+
     # interface: MerossDeviceBase
     async def async_shutdown(self):
-        if self._trace_file:
-            self._trace_close()
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
         if self._cloud_profile:
@@ -733,9 +713,6 @@ class MerossDevice(MerossDeviceBase):
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
         self._check_mqtt_connection_attach()
-        # (eventually) open the trace before setting the _unsub_polling_callback
-        # so the trace doesn't start dumping namespaces before the initial poll
-        self._trace_open_check()
         self._unsub_polling_callback = schedule_async_callback(
             ApiProfile.hass, 0, self._async_polling_callback
         )
@@ -760,14 +737,14 @@ class MerossDevice(MerossDeviceBase):
             )
             return None
         self._mqtt_lastrequest = time()
-        if self._trace_file:
-            self._trace(
+        if self.trace_file:
+            self.trace(
                 self._mqtt_lastrequest,
                 request.payload,
                 request.namespace,
                 request.method,
                 CONF_PROTOCOL_MQTT,
-                TRACE_DIRECTION_TX,
+                self.TRACE_TX,
             )
         self._queued_smartpoll_requests += 1
         return await self._mqtt_publish.async_mqtt_publish(self.id, request)
@@ -824,14 +801,14 @@ class MerossDevice(MerossDeviceBase):
                 # since we get 'random' connection errors, this is a retry attempts loop
                 # until we get it done. We'd want to break out early on specific events tho (Timeouts)
                 self._http_lastrequest = time()
-                if self._trace_file:
-                    self._trace(
+                if self.trace_file:
+                    self.trace(
                         self._http_lastrequest,
                         request.payload,
                         request.namespace,
                         request.method,
                         CONF_PROTOCOL_HTTP,
-                        TRACE_DIRECTION_TX,
+                        self.TRACE_TX,
                     )
                 try:
                     response = await http.async_request_raw(request)
@@ -1071,8 +1048,8 @@ class MerossDevice(MerossDeviceBase):
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
 
-        if self._trace_file:
-            self._trace(epoch, payload, namespace, method, protocol, TRACE_DIRECTION_RX)
+        if self.trace_file:
+            self.trace(epoch, payload, namespace, method, protocol, self.TRACE_RX)
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
         # and we want to 'translate' this timings in our (local) time.
@@ -1845,126 +1822,23 @@ class MerossDevice(MerossDeviceBase):
         update_firmware._attr_release_summary = latest_version.get(mc.KEY_DESCRIPTION)
         update_firmware.flush_state()
 
-    def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
-        """
-        invoked by the diagnostics callback:
-        here we set the device to start tracing the classical way (in file)
-        but we also fill in a dict which will set back as the result of the
-        Future we're returning to dignostics
-        """
-        if self._trace_future:
-            # avoid re-entry..keep going the running trace
-            return self._trace_future
-        if self._trace_file:
-            self._trace_close()
-        self._trace_future = asyncio.get_running_loop().create_future()
-        self._trace_data = []
-        self._trace_data.append(
-            ["time", "rxtx", "protocol", "method", "namespace", "data"]
-        )
-        epoch = time()
-        self._trace_open(epoch, epoch + (trace_timeout or CONF_TRACE_TIMEOUT_DEFAULT))
-        return self._trace_future
-
-    def _trace_open(self, epoch: float, endtime):
-        try:
-            assert not self._trace_file
-            self.log(DEBUG, "start tracing")
-            tracedir = ApiProfile.hass.config.path(
-                "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
-            )
-            os.makedirs(tracedir, exist_ok=True)
-            descr = self.descriptor
-            self._trace_file = open(
-                os.path.join(
-                    tracedir,
-                    CONF_TRACE_FILENAME.format(descr.type, int(endtime)),
-                ),
-                mode="w",
-                encoding="utf8",
-            )
-            self._trace_endtime = endtime
-            self._trace(epoch, descr.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
-            self._trace(
-                epoch, descr.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK
-            )
-            self._trace_ability_iter = iter(descr.ability)
-            self._trace_ability()
-        except Exception as exception:
-            if self._trace_file:
-                self._trace_close()
-            self.log_exception(WARNING, exception, "creating trace file")
-
-    def _trace_open_check(self):
-        # assert not self._trace_file
-        endtime = self.config.get(CONF_TRACE) or 0
-        epoch = time()
-        if endtime > epoch:
-            self._trace_open(epoch, endtime)
-
-    def _trace_close(self):
-        try:
-            self._trace_file.close()  # type: ignore
-            self._trace_file = None
-        except Exception as exception:
-            self._trace_file = None
-            self.log_exception(WARNING, exception, "closing trace file")
-        self._trace_ability_iter = None
-        if self._trace_future:
-            self._trace_future.set_result(self._trace_data)
-            self._trace_future = None
-        self._trace_data = None
-
     @callback
-    def _trace_ability(self):
-        if self._trace_ability_iter is None:
-            return
-        try:
-            if self._unsub_polling_callback:
-                # avoid interleave tracing ability with polling loop
-                while True:
-                    ability: str = next(self._trace_ability_iter)
-                    if ability not in TRACE_ABILITY_EXCLUDE:
-                        self.request(get_default_arguments(ability))
-                        break
-            schedule_callback(
-                ApiProfile.hass, PARAM_TRACING_ABILITY_POLL_TIMEOUT, self._trace_ability
-            )
-        except Exception:  # finished ?!
-            self._trace_ability_iter = None
-
-    def _trace(
-        self,
-        epoch: float,
-        data: str | dict,
-        namespace: str,
-        method: str,
-        protocol=CONF_PROTOCOL_AUTO,
-        rxtx="",
-    ):
-        # assert self._trace_file is not None:
-        try:
-            if (epoch > self._trace_endtime) or (
-                self._trace_file.tell() > CONF_TRACE_MAXSIZE  # type: ignore
-            ):  # type: ignore
-                self._trace_close()
-                return
-
-            if isinstance(data, dict):
-                # we'll eventually make a deepcopy since data
-                # might be retained by the _trace_data list
-                # and carry over the deobfuscation (which we'll skip now)
-                data = obfuscated_dict_copy(data)
-                textdata = json_dumps(data)
-            else:
-                textdata = data
-            texttime = strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch))
-            columns = [texttime, rxtx, protocol, method, namespace, textdata]
-            self._trace_file.write("\t".join(columns) + "\r\n")  # type: ignore
-            if self._trace_data is not None:
-                # better have json for dignostic trace
-                columns[5] = data  # type: ignore
-                self._trace_data.append(columns)
-        except Exception as exception:
-            self._trace_close()
-            self.log_exception(WARNING, exception, "writing to trace file")
+    def _trace_ability(self, abilities_iterator: typing.Iterator[str]):
+        if self.trace_file:
+            try:
+                if self._unsub_polling_callback:
+                    # avoid interleave tracing ability with polling loop
+                    while True:
+                        ability = next(abilities_iterator)
+                        if ability not in TRACE_ABILITY_EXCLUDE:
+                            self.request(get_default_arguments(ability))
+                            break
+                # TODO: cancel this job when shutting down (it only lasts 2 secs tho)
+                schedule_callback(
+                    ApiProfile.hass,
+                    PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+                    self._trace_ability,
+                    abilities_iterator,
+                )
+            except Exception:  # finished ?!
+                pass

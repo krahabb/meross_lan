@@ -42,8 +42,7 @@ CONF_TRACE_TIMEOUT_DEFAULT: Final = 600
 CONF_TRACE_MAXSIZE: Final = 65536  # or when MAXSIZE exceeded
 # folder where to store traces
 CONF_TRACE_DIRECTORY: Final = "traces"
-# filename format: device_type-device_id.csv
-CONF_TRACE_FILENAME: Final = "{}-{}.csv"
+CONF_TRACE_FILENAME: Final = "{}_{}.csv"
 # this is a 'fake' conf used to force-flush
 CONF_TIMESTAMP: Final = mc.KEY_TIMESTAMP
 

@@ -68,7 +68,7 @@ async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
         )
         await hass.async_block_till_done()
 
-        assert device._trace_file
+        assert device.trace_file
         # the endtime of the trace is not checked 'absolutely' due to float rounding
         # so we just check it is close to expected
         assert (
@@ -84,4 +84,4 @@ async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
             tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
         )
 
-        assert device._trace_file is None
+        assert device.trace_file is None

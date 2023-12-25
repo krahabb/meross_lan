@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from functools import partial
 import logging
 from logging import DEBUG, WARNING
-from time import gmtime, time
+import os
+from time import gmtime, localtime, strftime, time
 import typing
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -24,10 +25,21 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_KEY,
+    CONF_PROTOCOL_AUTO,
+    CONF_TRACE,
+    CONF_TRACE_DIRECTORY,
+    CONF_TRACE_FILENAME,
+    CONF_TRACE_MAXSIZE,
+    CONF_TRACE_TIMEOUT_DEFAULT,
     DOMAIN,
     POLLING_STRATEGY_CONF,
 )
-from .merossclient import const as mc, get_default_arguments, get_namespacekey
+from .merossclient import (
+    const as mc,
+    get_default_arguments,
+    get_namespacekey,
+    json_dumps,
+)
 
 try:
     # since we're likely on python3.11 this should quickly
@@ -52,6 +64,7 @@ except Exception:
 
 if typing.TYPE_CHECKING:
     from datetime import tzinfo
+    from io import TextIOWrapper
     from typing import Callable, ClassVar, Coroutine, Final
 
     from homeassistant.config_entries import ConfigEntry
@@ -616,7 +629,9 @@ class Loggable(abc.ABC):
         "logger",
     )
 
-    def __init__(self, id, logtag: str | None = None, logger: Loggable | logging.Logger = LOGGER):
+    def __init__(
+        self, id, logtag: str | None = None, logger: Loggable | logging.Logger = LOGGER
+    ):
         self.id = id
         self.logtag = logtag or f"{self.__class__.__name__}({id})"
         self.logger = logger
@@ -664,8 +679,11 @@ class EntityManager(Loggable):
     for MerossEntity(s). This container is very 'hybrid', end its main purpose
     is to provide interfaces to their owned MerossEntities.
     It could represent a MerossDevice, a MerossSubDevice or an ApiProfile
-    and groups entities associated with a ConfigEntry
+    and groups entities associated with a ConfigEntry.
     """
+
+    TRACE_RX = "RX"
+    TRACE_TX = "TX"
 
     config_entry_id: Final[str]
     deviceentry_id: dict[str, set] | None
@@ -678,6 +696,10 @@ class EntityManager(Loggable):
         "platforms",
         "key",
         "config",
+        "trace_file",
+        "_trace_endtime",
+        "_trace_future",
+        "_trace_data",
         "_unsub_entry_update_listener",
         "_unsub_entry_reload_scheduler",
     )
@@ -710,6 +732,10 @@ class EntityManager(Loggable):
             self.config_entry_id = config_entry_or_id.entry_id
             self.config = config_entry_or_id.data
             self.key = config_entry_or_id.data.get(CONF_KEY) or ""
+        self.trace_file: typing.Final[TextIOWrapper | None] = None
+        self._trace_future: asyncio.Future | None = None
+        self._trace_data: list | None = None
+        self._trace_endtime = 0
         self._unsub_entry_update_listener = None
         self._unsub_entry_reload_scheduler: asyncio.TimerHandle | None = None
 
@@ -735,6 +761,8 @@ class EntityManager(Loggable):
         for entity in self.entities.values():
             await entity.async_shutdown()
         self.entities.clear()
+        if self.trace_file:
+            self.trace_close()
 
     async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
         assert not self._unsub_entry_update_listener
@@ -748,6 +776,7 @@ class EntityManager(Loggable):
         self._unsub_entry_update_listener = config_entry.add_update_listener(
             self.entry_update_listener
         )
+        self._trace_open_check()
 
     async def async_unload_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
         if not await hass.config_entries.async_unload_platforms(
@@ -802,6 +831,120 @@ class EntityManager(Loggable):
     ):
         self.config = config_entry.data
         self.key = config_entry.data.get(CONF_KEY) or ""
+        # When updating ConfigEntry we always reset the timeout
+        # so the trace will (eventually) restart
+        if self.trace_file:
+            self.trace_close()
+        self._trace_open_check()
+
+    # tracing capabilities
+    def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
+        """
+        invoked by the diagnostics callback:
+        here we set the device to start tracing the classical way (in file)
+        but we also fill in a dict which will set back as the result of the
+        Future we're returning to dignostics
+        """
+        if self._trace_future:
+            # avoid re-entry..keep going the running trace
+            return self._trace_future
+        if self.trace_file:
+            self.trace_close()
+        self._trace_future = asyncio.get_running_loop().create_future()
+        self._trace_data = []
+        self._trace_data.append(
+            ["time", "rxtx", "protocol", "method", "namespace", "data"]
+        )
+        epoch = time()
+        self._trace_open(epoch, epoch + (trace_timeout or CONF_TRACE_TIMEOUT_DEFAULT))
+        return self._trace_future
+
+    def _trace_open(self, epoch: float, endtime):
+        try:
+            # assert not self.trace_file
+            tracedir = ApiProfile.hass.config.path(
+                "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
+            )
+            os.makedirs(tracedir, exist_ok=True)
+            self.trace_file = open(  # type: ignore
+                os.path.join(
+                    tracedir,
+                    CONF_TRACE_FILENAME.format(
+                        strftime("%Y-%m-%d_%H-%M-%S", localtime(epoch)),
+                        self.config_entry_id,
+                    ),
+                ),
+                mode="w",
+                encoding="utf8",
+            )
+            self._trace_endtime = endtime
+            self._trace_opened(epoch)
+        except Exception as exception:
+            if self.trace_file:
+                self.trace_close()
+            self.log_exception(WARNING, exception, "creating trace file")
+
+    def _trace_open_check(self):
+        # assert not self._trace_file
+        endtime = self.config.get(CONF_TRACE) or 0
+        epoch = time()
+        if endtime > epoch:
+            self._trace_open(epoch, endtime)
+
+    def _trace_opened(self, epoch: float):
+        """
+        Virtual placeholder called when a new trace is opened.
+        Allows derived EntityManagers to log some preamble in the trace.
+        """
+        pass
+
+    def trace_close(self):
+        try:
+            self.trace_file.close()  # type: ignore
+            self.trace_file = None  # type: ignore
+        except Exception as exception:
+            self.trace_file = None  # type: ignore
+            self.log_exception(WARNING, exception, "closing trace file")
+        if self._trace_future:
+            self._trace_future.set_result(self._trace_data)
+            self._trace_future = None
+            self._trace_data = None
+
+    def trace(
+        self,
+        epoch: float,
+        data: str | dict,
+        namespace: str,
+        method: str,
+        protocol=CONF_PROTOCOL_AUTO,
+        rxtx="",
+    ):
+        try:
+            assert self.trace_file
+            if (epoch > self._trace_endtime) or (
+                self.trace_file.tell() > CONF_TRACE_MAXSIZE
+            ):
+                self.trace_close()
+                return
+
+            if isinstance(data, dict):
+                # we'll eventually make a deepcopy since data
+                # might be retained by the _trace_data list
+                # and carry over the deobfuscation (which we'll skip now)
+                data = obfuscated_dict_copy(data)
+                textdata = json_dumps(data)
+            else:
+                textdata = data
+            texttime = strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch))
+            columns = [texttime, rxtx, protocol, method, namespace, textdata]
+            self.trace_file.write("\t".join(columns) + "\r\n")
+            if self._trace_data is not None:
+                # better have json for dignostic trace
+                columns[5] = data  # type: ignore
+                self._trace_data.append(columns)
+        except Exception as exception:
+            self.trace_close()
+            self.log_exception(WARNING, exception, "writing to trace file")
 
 
 class ApiProfile(EntityManager):
