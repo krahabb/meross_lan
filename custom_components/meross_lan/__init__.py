@@ -132,7 +132,7 @@ class HAMQTTConnection(MQTTConnection):
         request: MerossRequest,
     ):
         if request.method in mc.METHOD_ACK_MAP.keys():
-            transaction = _MQTTTransaction(self, request)
+            transaction = _MQTTTransaction(self, device_id, request)
         else:
             transaction = None
         if self.isEnabledFor(DEBUG):
