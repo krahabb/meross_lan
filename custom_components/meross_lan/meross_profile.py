@@ -14,7 +14,6 @@ from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
 from homeassistant.helpers import issue_registry, storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import paho.mqtt.client as mqtt
 
 from .const import (
     CONF_ALLOW_MQTT_PUBLISH,
@@ -69,8 +68,11 @@ from .sensor import MLSensor
 if typing.TYPE_CHECKING:
     from typing import Final
 
+    from homeassistant.components import mqtt as ha_mqtt
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
+    import paho.mqtt.client as paho_mqtt
 
     from . import MerossApi
     from .const import ProfileConfigType
@@ -359,11 +361,18 @@ class MQTTConnection(Loggable):
         """
         raise NotImplementedError()
 
-    async def async_mqtt_message(self, msg):
+    async def async_mqtt_message(
+        self, mqtt_msg: ha_mqtt.ReceiveMessage | paho_mqtt.MQTTMessage | MqttServiceInfo
+    ):
         with self.exception_warning("async_mqtt_message"):
             if sensor_connection := self.sensor_connection:
                 sensor_connection.inc_counter(ConnectionSensor.ATTR_RECEIVED)
-            message: MerossMessageType = json_loads(msg.payload)
+            mqtt_payload = mqtt_msg.payload
+            message: MerossMessageType = json_loads(
+                mqtt_payload
+                if type(mqtt_payload) is str
+                else mqtt_payload.decode("utf-8")  # type: ignore
+            )
             header = message[mc.KEY_HEADER]
             device_id = get_message_uuid(header)
             namespace = header[mc.KEY_NAMESPACE]
@@ -727,7 +736,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         self,
         device_id: str,
         request: MerossRequest,
-    ) -> asyncio.Future[_MQTTTransaction | mqtt.MQTTMessageInfo | bool]:
+    ) -> asyncio.Future[_MQTTTransaction | paho_mqtt.MQTTMessageInfo | bool]:
         namespace = request.namespace
         method = request.method
         if method in mc.METHOD_ACK_MAP.keys():
@@ -735,7 +744,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         else:
             transaction = None
 
-        def _publish() -> _MQTTTransaction | mqtt.MQTTMessageInfo | bool:
+        def _publish() -> _MQTTTransaction | paho_mqtt.MQTTMessageInfo | bool:
             """
             this function runs in an executor since the mqtt.Client is synchronous code.
             Beware when calling HA api's (like when we want to update sensors)
@@ -858,7 +867,9 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         MerossMQTTClient._mqttc_disconnect(self, client, userdata, rc)
         userdata.add_job(self._mqtt_disconnected)
 
-    def _mqttc_message(self, client, userdata: HomeAssistant, msg: mqtt.MQTTMessage):
+    def _mqttc_message(
+        self, client, userdata: HomeAssistant, msg: paho_mqtt.MQTTMessage
+    ):
         userdata.create_task(self.async_mqtt_message(msg))
 
     def _mqttc_publish(self, client, userdata: HomeAssistant, mid):

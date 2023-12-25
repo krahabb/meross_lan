@@ -11,7 +11,6 @@ from homeassistant.const import CONF_ERROR
 from homeassistant.data_entry_flow import AbortFlow, FlowHandler, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.typing import UNDEFINED
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
@@ -28,6 +27,11 @@ from .merossclient.cloudapi import (
     async_cloudapi_logout_safe,
 )
 from .merossclient.httpclient import MerossHttpClient
+
+if typing.TYPE_CHECKING:
+    from homeassistant.components.dhcp import DhcpServiceInfo
+    from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
+
 
 # helper conf keys not persisted to config
 CONF_DEVICE_TYPE = "device_type"
@@ -421,7 +425,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
             discovery_info, MerossDeviceDescriptor(discovery_info[mlc.CONF_PAYLOAD])
         )
 
-    async def async_step_dhcp(self, discovery_info):
+    async def async_step_dhcp(self, discovery_info: DhcpServiceInfo):
         """Handle a flow initialized by DHCP discovery."""
         if LOGGER.isEnabledFor(DEBUG):
             LOGGER.debug("received dhcp discovery: %s", str(discovery_info))
@@ -534,7 +538,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         }
         return await self.async_step_device()
 
-    async def async_step_mqtt(self, discovery_info):
+    async def async_step_mqtt(self, discovery_info: MqttServiceInfo):
         """manage the MQTT discovery flow"""
         # this entry should only ever called once after startup
         # when HA thinks we're interested in discovery.
