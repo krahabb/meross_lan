@@ -117,52 +117,20 @@ class HAMQTTConnection(MQTTConnection):
         await self.async_mqtt_unsubscribe()
         await super().async_shutdown()
 
-    def mqtt_publish(
+    async def _async_mqtt_publish(
         self,
         device_id: str,
         request: MerossRequest,
-    ):
-        return ApiProfile.hass.async_create_task(
-            self.async_mqtt_publish(device_id, request)
+    ) -> int:
+        await mqtt_async_publish(
+            ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.to_string()
         )
-
-    async def async_mqtt_publish(
-        self,
-        device_id: str,
-        request: MerossRequest,
-    ):
-        if request.method in mc.METHOD_ACK_MAP.keys():
-            transaction = _MQTTTransaction(self, device_id, request)
-        else:
-            transaction = None
-        if self.isEnabledFor(DEBUG):
-            self.log(
-                DEBUG,
-                "MQTT PUBLISH device_id:(%s) method:(%s) namespace:(%s)",
-                device_id,
-                request.method,
-                request.namespace,
-            )
-        try:
-            # mqtt_async_publish raises exception if unable to send..we'll shut it down
-            await mqtt_async_publish(
-                ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.to_string()
-            )
-            if transaction:
-                return await transaction.async_wait(self.DEFAULT_RESPONSE_TIMEOUT)
-            return None
-        except Exception as exception:
-            self.log(
-                DEBUG,
-                f"{exception.__class__.__name__}({str(exception)}) in async_mqtt_publish",
-            )
-            if transaction:
-                transaction.cancel()
-            return None
+        return self.DEFAULT_RESPONSE_TIMEOUT
 
     async def async_mqtt_publish_cloudcontrol(
         self, device_id: str, message: MerossMessageType
     ):
+        # TODO: move to async_mqtt_publish: it's now the 'mandatory' single point of publishing
         if self.isEnabledFor(DEBUG):
             self.log(
                 DEBUG,

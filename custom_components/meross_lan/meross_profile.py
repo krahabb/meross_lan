@@ -25,6 +25,7 @@ from .const import (
     CONF_PASSWORD,
     CONF_PAYLOAD,
     CONF_PROFILE_ID_LOCAL,
+    CONF_PROTOCOL_MQTT,
     DOMAIN,
     ISSUE_CLOUD_TOKEN_EXPIRED,
     PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT,
@@ -345,31 +346,72 @@ class MQTTConnection(Loggable):
         self.sensor_connection = None
 
     @abc.abstractmethod
+    async def _async_mqtt_publish(
+        self,
+        device_id: str,
+        request: MerossRequest,
+    ) -> int:
+        """
+        Actually sends the message to the transport. On return gives
+        the expected time-to-send depending on the (eventual) queuing
+        system in place (MerossMQTTConnection/paho client).
+        Should raise an exception when the message could not be sent
+        """
+        raise NotImplementedError()
+
+    @typing.final
     def mqtt_publish(
         self,
         device_id: str,
         request: MerossRequest,
-    ) -> asyncio.Future:
-        """
-        throw and forget..usually schedules to a background task since
-        the actual mqtt send could be sync/blocking.
-        The Future(likely a Task) returned might be polimorphyc so we
-        don't set an expected type here at the base declaration giving
-        type-checkers a small boost in identifying misuses
-        """
-        raise NotImplementedError()
+    ):
+        return ApiProfile.hass.async_create_task(
+            self.async_mqtt_publish(device_id, request)
+        )
 
-    @abc.abstractmethod
+    @typing.final
     async def async_mqtt_publish(
         self,
         device_id: str,
         request: MerossRequest,
     ) -> MerossMessageType | None:
-        """
-        awaits message publish in asyncio style
-        """
-        raise NotImplementedError()
+        if request.method in mc.METHOD_ACK_MAP.keys():
+            transaction = _MQTTTransaction(self, device_id, request)
+        else:
+            transaction = None
+        if self.isEnabledFor(DEBUG):
+            self.log(
+                DEBUG,
+                "MQTT PUBLISH device_id:(%s) method:(%s) namespace:(%s)",
+                device_id,
+                request.method,
+                request.namespace,
+            )
+        profile = self.profile
+        if profile.trace_file:
+            profile.trace(
+                time(),
+                request.payload,
+                request.namespace,
+                request.method,
+                CONF_PROTOCOL_MQTT,
+                profile.TRACE_TX,
+            )
 
+        try:
+            timeout = await self._async_mqtt_publish(device_id, request)
+            if transaction:
+                return await transaction.async_wait(timeout)
+        except Exception as exception:
+            self.log(
+                DEBUG,
+                f"{exception.__class__.__name__}({str(exception)}) in _async_mqtt_publish",
+            )
+            if transaction:
+                transaction.cancel()
+        return None
+
+    @typing.final
     async def async_mqtt_message(
         self, mqtt_msg: ha_mqtt.ReceiveMessage | paho_mqtt.MQTTMessage | MqttServiceInfo
     ):
@@ -388,6 +430,9 @@ class MQTTConnection(Loggable):
             method = header[mc.KEY_METHOD]
             messageid = header[mc.KEY_MESSAGEID]
             payload = message[mc.KEY_PAYLOAD]
+
+            profile = self.profile
+
             if self.isEnabledFor(DEBUG):
                 self.log(
                     DEBUG,
@@ -395,6 +440,15 @@ class MQTTConnection(Loggable):
                     device_id,
                     method,
                     namespace,
+                )
+            if profile.trace_file:
+                profile.trace(
+                    time(),
+                    payload,
+                    namespace,
+                    method,
+                    CONF_PROTOCOL_MQTT,
+                    profile.TRACE_RX,
                 )
 
             if messageid in self._mqtt_transactions:
@@ -429,7 +483,7 @@ class MQTTConnection(Loggable):
             if device_id in self.mqttdiscovering:
                 return
 
-            key = self.profile.key
+            key = profile.key
             if get_replykey(header, key) is not key:
                 self.log(
                     WARNING,
@@ -735,39 +789,16 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         await super().async_shutdown()
         await self.schedule_disconnect()
 
-    def mqtt_publish(
+    async def _async_mqtt_publish(
         self,
         device_id: str,
         request: MerossRequest,
-    ) -> asyncio.Future[_MQTTTransaction | paho_mqtt.MQTTMessageInfo | bool]:
-        if request.method in mc.METHOD_ACK_MAP.keys():
-            transaction = _MQTTTransaction(self, device_id, request)
-        else:
-            transaction = None
-        return ApiProfile.hass.async_add_executor_job(
-            self._publish, device_id, request, transaction
-        )
-
-    async def async_mqtt_publish(
-        self,
-        device_id: str,
-        request: MerossRequest,
-    ) -> MerossMessageType | None:
-        if request.method in mc.METHOD_ACK_MAP.keys():
-            transaction = _MQTTTransaction(self, device_id, request)
-        else:
-            transaction = None
-        result = await ApiProfile.hass.async_add_executor_job(
-            self._publish, device_id, request, transaction
-        )
-        # self._publish has a rather multi-dimensional return type
-        # in our framework we're actually only interested in the response
-        # message if this was related to a transaction (SETACK-GETACK)
-        if type(result) is _MQTTTransaction:
-            return await result.async_wait(
-                self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT
-            )
-        return None  # discard any exotic return info
+    ) -> int:
+        if await ApiProfile.hass.async_add_executor_job(
+            self._publish, device_id, request
+        ):
+            return self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT
+        raise Exception("Unable to queue data to the Meross broker")
 
     @callback
     def _mqtt_published(self, mid):
@@ -806,8 +837,8 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         return ApiProfile.hass.async_add_executor_job(self.safe_disconnect)
 
     def _publish(
-        self, device_id: str, request: MerossRequest, transaction: _MQTTTransaction
-    ) -> _MQTTTransaction | paho_mqtt.MQTTMessageInfo | bool:
+        self, device_id: str, request: MerossRequest
+    ) -> paho_mqtt.MQTTMessageInfo | bool:
         """
         this function runs in an executor
         Beware when calling HA api's (like when we want to update sensors)
@@ -819,8 +850,6 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                 device_id,
                 timeout=14400,
             )
-            if transaction:
-                ApiProfile.hass.loop.call_soon_threadsafe(transaction.cancel)
             return False
 
         ret = self.rl_publish(
@@ -843,8 +872,6 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                 request.namespace,
                 timeout=14000,
             )
-            if transaction:
-                ApiProfile.hass.loop.call_soon_threadsafe(transaction.cancel)
             return False
         if ret is True:
             if sensor_connection := self.sensor_connection:
@@ -867,7 +894,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                 request.method,
                 request.namespace,
             )
-        return transaction or ret
+        return ret
 
     # paho mqtt calbacks
     def _mqttc_connect(self, client, userdata: HomeAssistant, rc, other):
