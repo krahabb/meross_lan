@@ -467,7 +467,7 @@ class MerossMQTTClient(mqtt.Client):
                 # priority == False are still prioritized but less than priority == True
                 # so they'll be queued in front of priority == None
                 # actual meross_lan uses this priority for PUSH messages (not a real reason to do so)
-                # also, we're not actually sending PUSH messages over cloud MQTT....
+                # also, we're not typically sending PUSH messages over cloud MQTT....
                 _queue_pos = 0
                 for topic_payload_priority in self._rl_qeque:
                     if topic_payload_priority[2] is None:

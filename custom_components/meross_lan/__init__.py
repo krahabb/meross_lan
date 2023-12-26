@@ -121,11 +121,11 @@ class HAMQTTConnection(MQTTConnection):
         self,
         device_id: str,
         request: MerossRequest,
-    ) -> int:
+    ) -> tuple[str, int]:
         await mqtt_async_publish(
             ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.to_string()
         )
-        return self.DEFAULT_RESPONSE_TIMEOUT
+        return self._MQTT_PUBLISH, self.DEFAULT_RESPONSE_TIMEOUT
 
     async def async_mqtt_publish_cloudcontrol(
         self, device_id: str, message: MerossMessageType
