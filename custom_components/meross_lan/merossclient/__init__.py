@@ -330,7 +330,18 @@ def json_loads(s: str):
     return _json_decoder.raw_decode(s)[0]
 
 
-class MerossRequest(dict):
+class MerossMessage(dict):
+    """
+    Base abstract class for different source of messages that
+    need to be sent to the device.
+    The actual implementation will setup the slots
+    """
+
+    namespace: str
+    method: str
+    messageid: str
+    payload: MerossPayloadType
+
     __slots__ = (
         "namespace",
         "method",
@@ -338,20 +349,23 @@ class MerossRequest(dict):
         "payload",
     )
 
+    def to_string(self):
+        return _json_encoder.encode(self)
+
+
+class MerossRequest(MerossMessage):
     def __init__(
         self,
         key: str,
         namespace: str,
         method: str = mc.METHOD_GET,
         payload: MerossPayloadType | None = None,
-        topic_response: str = mc.MANUFACTURER,
-        *,
-        messageid: str | None = None,
+        from_: str = mc.MANUFACTURER,
     ):
         self.namespace = namespace
         self.method = method
-        self.messageid = messageid or uuid4().hex
-        self.payload = payload or get_default_payload(namespace)
+        self.messageid = uuid4().hex
+        self.payload = get_default_payload(namespace) if payload is None else payload
         timestamp = int(time())
         super().__init__(
             {
@@ -360,7 +374,7 @@ class MerossRequest(dict):
                     mc.KEY_NAMESPACE: namespace,
                     mc.KEY_METHOD: method,
                     mc.KEY_PAYLOADVERSION: 1,
-                    mc.KEY_FROM: topic_response,
+                    mc.KEY_FROM: from_,
                     mc.KEY_TIMESTAMP: timestamp,
                     mc.KEY_TIMESTAMPMS: 0,
                     mc.KEY_SIGN: get_message_signature(self.messageid, key, timestamp),
@@ -369,8 +383,61 @@ class MerossRequest(dict):
             }
         )
 
-    def to_string(self):
-        return _json_encoder.encode(self)
+
+class MerossPushReply(MerossMessage):
+    """
+    Builds a message by replying the full header. This is used
+    in replies to some PUSH sent by devices where it appears
+    (from meross broker protocol inspection - see #346)
+    the broker doesn't calculate a new signature but just replies
+    the incoming header data.
+    """
+
+    def __init__(self, header: MerossHeaderType, payload: MerossPayloadType):
+        self.namespace = header[mc.KEY_NAMESPACE]
+        self.method = header[mc.KEY_METHOD]
+        self.messageid = header[mc.KEY_MESSAGEID]
+        self.payload = payload
+        header = header.copy()
+        header.pop(mc.KEY_UUID, None)
+        header[mc.KEY_TRIGGERSRC] = "CloudControl"
+        super().__init__(
+            {
+                mc.KEY_HEADER: header,
+                mc.KEY_PAYLOAD: payload,
+            }
+        )
+
+
+class MerossAckReply(MerossMessage):
+    """
+    Builds a response ascknowledge message by signing an incoming messageId.
+    """
+
+    def __init__(
+        self, key: str, header: MerossHeaderType, payload: MerossPayloadType, from_: str
+    ):
+        self.namespace = header[mc.KEY_NAMESPACE]
+        self.method = mc.METHOD_ACK_MAP[header[mc.KEY_METHOD]]
+        self.messageid = header[mc.KEY_MESSAGEID]
+        self.payload = payload
+        timestamp = int(time())
+        super().__init__(
+            {
+                mc.KEY_HEADER: {
+                    mc.KEY_MESSAGEID: self.messageid,
+                    mc.KEY_NAMESPACE: self.namespace,
+                    mc.KEY_METHOD: self.method,
+                    mc.KEY_PAYLOADVERSION: 1,
+                    mc.KEY_FROM: from_,
+                    mc.KEY_TRIGGERSRC: "CloudControl",
+                    mc.KEY_TIMESTAMP: timestamp,
+                    mc.KEY_TIMESTAMPMS: 0,
+                    mc.KEY_SIGN: get_message_signature(self.messageid, key, timestamp),
+                },
+                mc.KEY_PAYLOAD: payload,
+            }
+        )
 
 
 class MerossDeviceDescriptor:

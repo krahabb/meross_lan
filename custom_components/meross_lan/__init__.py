@@ -22,17 +22,15 @@ from .meross_profile import (
     MerossCloudProfile,
     MerossCloudProfileStore,
     MQTTConnection,
-    _MQTTTransaction,
 )
 from .merossclient import (
     MEROSSDEBUG,
+    MerossAckReply,
     MerossDeviceDescriptor,
+    MerossPushReply,
     MerossRequest,
-    build_message,
-    build_message_reply,
     const as mc,
     get_default_payload,
-    json_dumps,
     json_loads,
 )
 from .merossclient.httpclient import MerossHttpClient
@@ -45,8 +43,8 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import ServiceCall, ServiceResponse
 
     from .merossclient import (
-        KeyType,
         MerossHeaderType,
+        MerossMessage,
         MerossMessageType,
         MerossPayloadType,
     )
@@ -120,29 +118,12 @@ class HAMQTTConnection(MQTTConnection):
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: MerossRequest,
+        request: MerossMessage,
     ) -> tuple[str, int]:
         await mqtt_async_publish(
             ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.to_string()
         )
         return self._MQTT_PUBLISH, self.DEFAULT_RESPONSE_TIMEOUT
-
-    async def async_mqtt_publish_cloudcontrol(
-        self, device_id: str, message: MerossMessageType
-    ):
-        # TODO: move to async_mqtt_publish: it's now the 'mandatory' single point of publishing
-        if self.isEnabledFor(DEBUG):
-            self.log(
-                DEBUG,
-                "MQTT PUBLISH device_id:(%s) method:(%s) namespace:(%s)",
-                device_id,
-                message[mc.KEY_HEADER][mc.KEY_METHOD],
-                message[mc.KEY_HEADER][mc.KEY_NAMESPACE],
-            )
-        message[mc.KEY_HEADER][mc.KEY_TRIGGERSRC] = "CloudControl"
-        await mqtt_async_publish(
-            ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), json_dumps(message)
-        )
 
     # interface: self
     @property
@@ -220,15 +201,13 @@ class HAMQTTConnection(MQTTConnection):
         # At any rate I don't have a clue on how to properly
         # replicate this and the "from" field is set as ususal
         if header[mc.KEY_METHOD] == mc.METHOD_SET:
-            await self.async_mqtt_publish_cloudcontrol(
+            await self.async_mqtt_publish(
                 device_id,
-                build_message(
-                    mc.NS_APPLIANCE_CONTROL_BIND,
-                    mc.METHOD_SETACK,
-                    {},
+                MerossAckReply(
                     self.profile.key,
+                    header,
+                    {},
                     mc.TOPIC_RESPONSE.format(device_id),
-                    header[mc.KEY_MESSAGEID],
                 ),
             )
 
@@ -239,9 +218,9 @@ class HAMQTTConnection(MQTTConnection):
         # and it appears newer mss315 could abort their connection
         # if not replied (see #346)
         if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
-            await self.async_mqtt_publish_cloudcontrol(
+            await self.async_mqtt_publish(
                 device_id,
-                build_message_reply(header, payload),
+                MerossPushReply(header, payload),
             )
 
     async def _handle_Appliance_System_Clock(
@@ -253,9 +232,9 @@ class HAMQTTConnection(MQTTConnection):
         # Note: I actually see this NS only on mss310 plugs
         # (msl120j bulb doesnt have it)
         if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
-            await self.async_mqtt_publish_cloudcontrol(
+            await self.async_mqtt_publish(
                 device_id,
-                build_message_reply(
+                MerossPushReply(
                     header,
                     {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
                 ),

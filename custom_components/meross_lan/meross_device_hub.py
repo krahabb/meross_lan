@@ -26,7 +26,7 @@ from .switch import MLSwitch
 if typing.TYPE_CHECKING:
     from .devices.mts100 import Mts100Climate
     from .meross_entity import MerossEntity
-    from .merossclient import MerossPayloadType, MerossRequest
+    from .merossclient import MerossPayloadType
 
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(

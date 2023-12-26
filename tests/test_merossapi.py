@@ -8,7 +8,6 @@ from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.merossclient import (
-    MerossMessageType,
     build_message,
     const as mc,
     json_dumps,

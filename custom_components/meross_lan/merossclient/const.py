@@ -20,11 +20,6 @@ METHOD_ACK_MAP = {
     METHOD_GET: METHOD_GETACK,
     METHOD_SET: METHOD_SETACK,
 }
-# list methods usually carrying parsable state
-METHOD_PARSE_SET = (
-    METHOD_GETACK,
-    METHOD_PUSH,
-)
 
 NS_APPLIANCE_SYSTEM_ALL = "Appliance.System.All"
 NS_APPLIANCE_SYSTEM_ABILITY = "Appliance.System.Ability"

@@ -78,7 +78,12 @@ if typing.TYPE_CHECKING:
     from . import MerossApi
     from .const import ProfileConfigType
     from .meross_device import MerossDevice, MerossDeviceDescriptor
-    from .merossclient import MerossHeaderType, MerossMessageType, MerossPayloadType
+    from .merossclient import (
+        MerossHeaderType,
+        MerossMessage,
+        MerossMessageType,
+        MerossPayloadType,
+    )
     from .merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
@@ -194,7 +199,7 @@ class _MQTTTransaction:
         self,
         mqtt_connection: MQTTConnection,
         device_id: str,
-        request: MerossRequest,
+        request: MerossMessage,
     ):
         self.mqtt_connection = mqtt_connection
         self.device_id = device_id
@@ -339,7 +344,7 @@ class MQTTConnection(Loggable):
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: MerossRequest,
+        request: MerossMessage,
     ) -> tuple[str, int]:
         """
         Actually sends the message to the transport. On return gives
@@ -353,7 +358,7 @@ class MQTTConnection(Loggable):
     def mqtt_publish(
         self,
         device_id: str,
-        request: MerossRequest,
+        request: MerossMessage,
     ):
         return ApiProfile.hass.async_create_task(
             self.async_mqtt_publish(device_id, request)
@@ -363,7 +368,7 @@ class MQTTConnection(Loggable):
     async def async_mqtt_publish(
         self,
         device_id: str,
-        request: MerossRequest,
+        request: MerossMessage,
     ) -> MerossMessageType | None:
         if request.method in mc.METHOD_ACK_MAP.keys():
             transaction = _MQTTTransaction(self, device_id, request)
@@ -777,7 +782,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: MerossRequest,
+        request: MerossMessage,
     ) -> tuple[str, int]:
         return await ApiProfile.hass.async_add_executor_job(
             self._publish, device_id, request
@@ -819,9 +824,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         # contending but...
         return ApiProfile.hass.async_add_executor_job(self.safe_disconnect)
 
-    def _publish(
-        self, device_id: str, request: MerossRequest
-    ) -> tuple[str, int]:
+    def _publish(self, device_id: str, request: MerossMessage) -> tuple[str, int]:
         """
         this function runs in an executor
         Beware when calling HA api's (like when we want to update sensors)
@@ -848,7 +851,10 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
                     sensor_connection.inc_queued,
                     self.rl_queue_length,
                 )
-            return (self._MQTT_QUEUE, self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT)
+            return (
+                self._MQTT_QUEUE,
+                self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT,
+            )
         return (self._MQTT_PUBLISH, self.DEFAULT_RESPONSE_TIMEOUT)
 
     # paho mqtt calbacks
