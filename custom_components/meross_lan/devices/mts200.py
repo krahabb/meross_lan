@@ -4,7 +4,7 @@ import typing
 
 from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
-from ..climate import MtsClimate, MtsSetPointNumber
+from ..climate import MtsClimate, MtsSetPointNumber, MtsTemperatureNumber
 from ..helpers import PollingStrategy, SmartPollingStrategy, reverse_lookup
 from ..merossclient import const as mc, get_namespacekey
 from ..number import PERCENTAGE, MLConfigNumber
@@ -24,44 +24,25 @@ class Mts200SetPointNumber(MtsSetPointNumber):
     key_namespace = mc.KEY_MODE
 
 
-class Mts200CalibrationNumber(MLConfigNumber):
-    """
-    customize MLConfigNumber to interact with thermostat calibration
-    """
-
+class Mts200CalibrationNumber(MtsTemperatureNumber):
     _attr_name = "Calibration"
 
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
     key_namespace = mc.KEY_CALIBRATION
     key_value = mc.KEY_VALUE
 
-    def __init__(self, manager: ThermostatMixin, channel: object | None):
+    def __init__(self, climate: Mts200Climate):
         self._attr_native_max_value = 8
         self._attr_native_min_value = -8
-        super().__init__(
-            manager,
-            channel,
-            mc.KEY_CALIBRATION,
-            MLConfigNumber.DeviceClass.TEMPERATURE,
-        )
+        super().__init__(climate, mc.KEY_CALIBRATION)
 
     @property
     def native_step(self):
         return 0.1
 
-    @property
-    def native_unit_of_measurement(self):
-        return MtsClimate.TEMP_CELSIUS
 
-    @property
-    def device_scale(self):
-        return mc.MTS_TEMP_SCALE
-
-
-class Mts200OverheatThresholdNumber(MLConfigNumber):
-    """
-    customize MLConfigNumber to interact with overheat protection value
-    """
+class Mts200OverheatThresholdNumber(MtsTemperatureNumber):
+    """Configure overheat protection value"""
 
     _attr_name = "Overheat threshold"
 
@@ -69,27 +50,31 @@ class Mts200OverheatThresholdNumber(MLConfigNumber):
     key_namespace = mc.KEY_OVERHEAT
     key_value = mc.KEY_VALUE
 
-    def __init__(self, manager: ThermostatMixin, channel: object | None):
+    def __init__(self, climate: Mts200Climate):
         self._attr_native_max_value = 70
         self._attr_native_min_value = 20
-        super().__init__(
-            manager,
-            channel,
-            "overheat threshold",
-            MLConfigNumber.DeviceClass.TEMPERATURE,
-        )
+        super().__init__(climate, "overheat threshold")
 
     @property
     def native_step(self):
         return 0.5
 
-    @property
-    def native_unit_of_measurement(self):
-        return MtsClimate.TEMP_CELSIUS
+
+class Mts200DeadZoneNumber(MtsTemperatureNumber):
+    _attr_name = "Dead Zone"
+
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE
+    key_namespace = mc.KEY_DEADZONE
+    key_value = mc.KEY_VALUE
+
+    def __init__(self, climate: Mts200Climate):
+        self._attr_native_max_value = 3.5
+        self._attr_native_min_value = 0.5
+        super().__init__(climate, mc.KEY_DEADZONE)
 
     @property
-    def device_scale(self):
-        return mc.MTS_TEMP_SCALE
+    def native_step(self):
+        return 0.1
 
 
 class Mts200ConfigSwitch(MLSwitch):
@@ -160,6 +145,7 @@ class Mts200Climate(MtsClimate):
     switch_overheat_onoff: Mts200ConfigSwitch
     sensor_overheat_warning: MLSensor
     number_overheat_value: Mts200OverheatThresholdNumber
+    number_deadzone_value: Mts200DeadZoneNumber
     switch_sensor_mode: Mts200ConfigSwitch
     sensor_externalsensor_temperature: MLSensor
 
@@ -168,6 +154,7 @@ class Mts200Climate(MtsClimate):
         "switch_overheat_onoff",
         "sensor_overheat_warning",
         "number_overheat_value",
+        "number_deadzone_value",
         "switch_sensor_mode",
         "sensor_externalsensor_temperature",
     )
@@ -179,10 +166,7 @@ class Mts200Climate(MtsClimate):
             MLBinarySensor(
                 manager, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
             ),
-            Mts200CalibrationNumber(
-                manager,
-                channel,
-            ),
+            Mts200CalibrationNumber,
             Mts200SetPointNumber,
             Mts200Schedule,
         )
@@ -195,10 +179,8 @@ class Mts200Climate(MtsClimate):
             manager, channel, "overheat warning", MLSensor.DeviceClass.ENUM
         )
         self.sensor_overheat_warning._attr_translation_key = "mts200_overheat_warning"
-        self.number_overheat_value = Mts200OverheatThresholdNumber(
-            manager,
-            channel,
-        )
+        self.number_overheat_value = Mts200OverheatThresholdNumber(self)
+        self.number_deadzone_value = Mts200DeadZoneNumber(self)
         # sensor mode: use internal(0) vs external(1) sensor as temperature loopback
         self.switch_sensor_mode = Mts200ConfigSwitch(
             self, "external sensor mode", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
@@ -219,6 +201,7 @@ class Mts200Climate(MtsClimate):
         self.switch_overheat_onoff = None  # type: ignore
         self.sensor_overheat_warning = None  # type: ignore
         self.number_overheat_value = None  # type: ignore
+        self.number_deadzone_value = None  # type: ignore
         self.switch_sensor_mode = None  # type: ignore
         self.sensor_externalsensor_temperature = None  # type: ignore
         await super().async_shutdown()
@@ -322,15 +305,11 @@ class Mts200Climate(MtsClimate):
     # message handlers
     def _parse_calibration(self, payload: dict):
         """{"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}"""
-        if mc.KEY_MIN in payload:
-            self.number_adjust_temperature._attr_native_min_value = (
-                payload[mc.KEY_MIN] / mc.MTS_TEMP_SCALE
-            )
-        if mc.KEY_MAX in payload:
-            self.number_adjust_temperature._attr_native_max_value = (
-                payload[mc.KEY_MAX] / mc.MTS_TEMP_SCALE
-            )
-        self.number_adjust_temperature.update_native_value(payload[mc.KEY_VALUE])
+        self.number_adjust_temperature._parse_value(payload)
+
+    def _parse_deadZone(self, payload: dict):
+        """{"channel": 0, "value": 0, "min": 5, "max": 35, "lmTime": 1697010767}"""
+        self.number_deadzone_value._parse_value(payload)
 
     def _parse_mode(self, payload: dict):
         """{
@@ -375,6 +354,7 @@ class Mts200Climate(MtsClimate):
     def _parse_overheat(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}"""
+        self.number_overheat_value._parse_value(payload)
         if mc.KEY_ONOFF in payload:
             self.switch_overheat_onoff.update_onoff(payload[mc.KEY_ONOFF])
         if mc.KEY_WARNING in payload:
@@ -382,16 +362,6 @@ class Mts200Climate(MtsClimate):
             self.sensor_overheat_warning.update_state(
                 mc.MTS200_OVERHEAT_WARNING_MAP.get(_warning, _warning)
             )
-        if mc.KEY_MIN in payload:
-            self.number_overheat_value._attr_native_min_value = (
-                payload[mc.KEY_MIN] / mc.MTS_TEMP_SCALE
-            )
-        if mc.KEY_MAX in payload:
-            self.number_overheat_value._attr_native_max_value = (
-                payload[mc.KEY_MAX] / mc.MTS_TEMP_SCALE
-            )
-        if mc.KEY_VALUE in payload:
-            self.number_overheat_value.update_native_value(payload[mc.KEY_VALUE])
         if mc.KEY_CURRENTTEMP in payload:
             self.sensor_externalsensor_temperature.update_state(
                 payload[mc.KEY_CURRENTTEMP] / mc.MTS_TEMP_SCALE
@@ -447,6 +417,13 @@ class ThermostatMixin(
                     self,
                     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION,
                     payload={mc.KEY_CALIBRATION: self._polling_payload},
+                    item_count=channel_count,
+                )
+            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE in ability:
+                SmartPollingStrategy(
+                    self,
+                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE,
+                    payload={mc.KEY_DEADZONE: self._polling_payload},
                     item_count=channel_count,
                 )
             if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT in ability:

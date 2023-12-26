@@ -44,7 +44,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     manager: MerossDeviceBase
     binary_sensor_window: Final[MLBinarySensor]
-    number_adjust_temperature: Final[MLConfigNumber]
+    number_adjust_temperature: Final[MtsTemperatureNumber]
     number_away_temperature: Final[MtsSetPointNumber]
     number_comfort_temperature: Final[MtsSetPointNumber]
     number_sleep_temperature: Final[MtsSetPointNumber]
@@ -98,7 +98,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         manager: MerossDeviceBase,
         channel: object,
         binary_sensor_window: MLBinarySensor,
-        number_adjust_temperature: MLConfigNumber,
+        adjust_number_class: typing.Type[MtsTemperatureNumber],
         preset_number_class: typing.Type[MtsSetPointNumber],
         calendar_class: typing.Type[MtsSchedule],
     ):
@@ -117,7 +117,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_adjusted_temperature = {}
         super().__init__(manager, channel, None, None)
         self.binary_sensor_window = binary_sensor_window
-        self.number_adjust_temperature = number_adjust_temperature
+        self.number_adjust_temperature = adjust_number_class(self)  # type: ignore
         self.number_away_temperature = preset_number_class(self, MtsClimate.PRESET_AWAY)
         self.number_comfort_temperature = preset_number_class(
             self, MtsClimate.PRESET_COMFORT
@@ -224,7 +224,46 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         raise NotImplementedError()
 
 
-class MtsSetPointNumber(MLConfigNumber):
+class MtsTemperatureNumber(MLConfigNumber):
+    """
+    Common number entity for representing MTS temperatures configuration
+    """
+
+    __slots__ = ("climate",)
+
+    def __init__(self, climate: MtsClimate, entitykey: str):
+        self.climate = climate
+        super().__init__(
+            climate.manager,
+            climate.channel,
+            entitykey,
+            MLConfigNumber.DeviceClass.TEMPERATURE,
+        )
+
+    @property
+    def native_unit_of_measurement(self):
+        return MtsClimate.TEMP_CELSIUS
+
+    @property
+    def device_scale(self):
+        return mc.MTS_TEMP_SCALE
+
+    def _parse_value(self, payload: dict):
+        """
+        Derived entities receive payloads in this form (mts200 mostly):
+        {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
+        Even though the min/max are not expected to change, we're diligent enough to actually
+        use'em to update our native min/max together with the entity native value.
+        This helper will then save a lot of duplicate code in previous implementations.
+        """
+        if mc.KEY_MIN in payload:
+            self._attr_native_min_value = payload[mc.KEY_MIN] / mc.MTS_TEMP_SCALE
+        if mc.KEY_MAX in payload:
+            self._attr_native_max_value = payload[mc.KEY_MAX] / mc.MTS_TEMP_SCALE
+        self.update_native_value(payload[self.key_value])
+
+
+class MtsSetPointNumber(MtsTemperatureNumber):
     """
     Helper entity to configure MTS (thermostats) setpoints
     AKA: Heat(comfort) - Cool(sleep) - Eco(away)
@@ -236,19 +275,14 @@ class MtsSetPointNumber(MLConfigNumber):
         MtsClimate.PRESET_AWAY: "mdi:bag-checked",
     }
 
-    __slots__ = ("climate",)
-
     def __init__(self, climate: MtsClimate, preset_mode: str):
-        self.climate = climate
         self._preset_mode = preset_mode
         self.key_value = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
         self._attr_icon = MtsSetPointNumber.PRESET_TO_ICON_MAP[preset_mode]
         self._attr_name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
         super().__init__(
-            climate.manager,
-            climate.channel,
+            climate,
             f"config_{mc.KEY_TEMPERATURE}_{self.key_value}",
-            MLConfigNumber.DeviceClass.TEMPERATURE,
         )
 
     @property
@@ -262,14 +296,6 @@ class MtsSetPointNumber(MLConfigNumber):
     @property
     def native_step(self):
         return self.climate.target_temperature_step
-
-    @property
-    def native_unit_of_measurement(self):
-        return MtsClimate.TEMP_CELSIUS
-
-    @property
-    def device_scale(self):
-        return mc.MTS_TEMP_SCALE
 
     async def async_request(self, device_value):
         if response := await super().async_request(device_value):

@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from ..calendar import MtsSchedule
-from ..climate import MtsClimate, MtsSetPointNumber
+from ..climate import MtsClimate, MtsSetPointNumber, MtsTemperatureNumber
 from ..helpers import reverse_lookup
 from ..merossclient import const as mc
 from ..number import MLConfigNumber
@@ -12,22 +12,18 @@ if typing.TYPE_CHECKING:
     from ..meross_device_hub import MTS100SubDevice
 
 
-class Mts100AdjustNumber(MLConfigNumber):
+class Mts100AdjustNumber(MtsTemperatureNumber):
+    _attr_name = "Adjust temperature"
+
     namespace = mc.NS_APPLIANCE_HUB_MTS100_ADJUST
     key_namespace = mc.KEY_ADJUST
     key_channel = mc.KEY_ID
     key_value = mc.KEY_TEMPERATURE
 
-    __slots__ = ("climate",)
-
-    def __init__(self, manager: MTS100SubDevice, climate: Mts100Climate):
-        self.climate = climate  # climate not initialized yet
-        self._attr_name = "Adjust temperature"
+    def __init__(self, climate: Mts100Climate):
         super().__init__(
-            manager,
-            manager.id,
+            climate,
             f"config_{self.key_namespace}_{self.key_value}",
-            MLConfigNumber.DeviceClass.TEMPERATURE,
         )
 
     @property
@@ -41,10 +37,6 @@ class Mts100AdjustNumber(MLConfigNumber):
     @property
     def native_step(self):
         return 0.5
-
-    @property
-    def native_unit_of_measurement(self):
-        return MtsClimate.TEMP_CELSIUS
 
     @property
     def device_scale(self):
@@ -82,7 +74,7 @@ class Mts100Climate(MtsClimate):
             manager,
             manager.id,
             manager.build_binary_sensor_window(),
-            Mts100AdjustNumber(manager, self),
+            Mts100AdjustNumber,
             Mts100SetPointNumber,
             Mts100Schedule,
         )
