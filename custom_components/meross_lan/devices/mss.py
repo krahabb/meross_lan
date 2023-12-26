@@ -227,15 +227,6 @@ class ConsumptionXSensor(MLSensor):
             )
             if state.last_updated < devicetime_today_midnight:
                 return
-            # fix beta/preview attr names (sometime REMOVE)
-            if "energy_offset" in state.attributes:
-                _attr_value = state.attributes["energy_offset"]
-                self._attr_extra_state_attributes[self.ATTR_OFFSET] = _attr_value
-                setattr(self, self.ATTR_OFFSET, _attr_value)
-            if "energy_reset_ts" in state.attributes:
-                _attr_value = state.attributes["energy_reset_ts"]
-                self._attr_extra_state_attributes[self.ATTR_RESET_TS] = _attr_value
-                setattr(self, self.ATTR_RESET_TS, _attr_value)
             for _attr_name in (self.ATTR_OFFSET, self.ATTR_RESET_TS):
                 if _attr_name in state.attributes:
                     _attr_value = state.attributes[_attr_name]
