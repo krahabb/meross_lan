@@ -29,6 +29,8 @@ from .merossclient.cloudapi import (
 from .merossclient.httpclient import MerossHttpClient
 
 if typing.TYPE_CHECKING:
+    from typing import Final
+
     from homeassistant.components.dhcp import DhcpServiceInfo
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
 
@@ -128,10 +130,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 
                 if self._profile_entry:
                     # we were managing a profile OptionsFlow: fast save
-                    self.hass.config_entries.async_update_entry(
-                        self._profile_entry, data=profile_config
-                    )
-                    return self.async_create_entry(data=None)  # type: ignore
+                    return self.finish_options_flow(profile_config)
 
                 # abort any eventual duplicate progress flow
                 # also, even if the user was creating a new profile,
@@ -243,6 +242,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 },
             )
         ] = bool
+        if self._profile_entry:
+            self._setup_entitymanager_schema(config_schema, profile_config)
 
         return self.async_show_form(
             step_id="profile",
@@ -260,6 +261,12 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         return self.async_show_menu(
             step_id="keyerror", menu_options=["profile", "device"]
         )
+
+    def finish_options_flow(
+        self, config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType
+    ):
+        """Used in OptionsFlow to terminate and exit (with save)."""
+        raise NotImplementedError()
 
     async def _async_http_discovery(
         self, host: str, key: str | None
@@ -331,16 +338,29 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             "No MQTT response: either no available broker or invalid device id"
         )
 
+    def _setup_entitymanager_schema(
+        self,
+        config_schema: dict,
+        config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType,
+    ):
+        """
+        Fills (the bottom of) the schema presented to the UI with common settings
+        available for all (or almost) the config flows (properties typically configuring
+        the EntityManager base class).
+        """
+        config_schema[
+            vol.Optional(
+                mlc.CONF_TRACE_TIMEOUT,
+                default=mlc.CONF_TRACE_TIMEOUT_DEFAULT,  # type: ignore
+                description={DESCR: config.get(mlc.CONF_TRACE_TIMEOUT)},
+            )
+        ] = cv.positive_int
+
 
 class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
 
     VERSION = 1
-
-    _MENU_USER = {
-        "step_id": "user",
-        "menu_options": ["profile", "device"],
-    }
 
     @staticmethod
     def async_get_options_flow(config_entry):
@@ -349,7 +369,10 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
     async def async_step_user(self, user_input=None):
         self.device_config = {}  # type: ignore[assignment]
         self.profile_config = {}  # type: ignore[assignment]
-        return self.async_show_menu(**self._MENU_USER)
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["profile", "device"],
+        )
 
     async def async_step_hub(self, user_input=None):
         """configure the MQTT discovery device key"""
@@ -603,19 +626,27 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
     Manage device options configuration
     """
 
+    __slots__ = (
+        "config_entry",
+        "config_entry_id",
+        "config_step_id",
+    )
+
     def __init__(self, config_entry: config_entries.ConfigEntry):
-        self._config_entry = config_entry
+        self.config_entry: Final = config_entry
+        self.config_entry_id: Final = config_entry.entry_id
 
     async def async_step_init(self, user_input=None):
-        unique_id = self._config_entry.unique_id
+        unique_id = self.config_entry.unique_id
         if unique_id == mlc.DOMAIN:
-            self.hub_config = dict(self._config_entry.data)  # type: ignore
-            return await self.async_step_hub()
+            self.hub_config = dict(self.config_entry.data)  # type: ignore
+            self.config_step_id = "hub"
+            return await self.async_step_menu()
 
         unique_id = unique_id.split(".")  # type: ignore
         if unique_id[0] == "profile":
-            self._profile_entry = self._config_entry
-            self.profile_config = dict(self._config_entry.data)  # type: ignore
+            self._profile_entry = self.config_entry
+            self.profile_config = dict(self.config_entry.data)  # type: ignore
             self.profile_placeholders = {
                 mlc.CONF_EMAIL: self.profile_config.get(mlc.CONF_EMAIL),
                 "placeholder": json.dumps(
@@ -626,9 +657,11 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     indent=2,
                 ),
             }
-            return await self.async_step_profile()
+            self.config_step_id = "profile"
+            return await self.async_step_menu()
 
-        self.device_config = dict(self._config_entry.data)  # type: ignore
+        self.device_config = dict(self.config_entry.data)  # type: ignore
+        self.device_config.pop(mlc.CONF_TRACE, None)  # totally removed in v5.0
         self._device_id = unique_id[0]
         assert self._device_id == self.device_config.get(mlc.CONF_DEVICE_ID)
         device = ApiProfile.devices[self._device_id]
@@ -642,22 +675,40 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             mlc.CONF_DEVICE_ID: self._device_id,
             CONF_DEVICE_TYPE: self.device_descriptor.productnametype,
         }
-        return await self.async_step_device()
+        self.config_step_id = "device"
+        return await self.async_step_menu()
+
+    async def async_step_menu(self, user_input=None):
+        return self.async_show_menu(
+            step_id="menu",
+            menu_options=[self.config_step_id, "diagnostics"],
+        )
+
+    async def async_step_diagnostics(self, user_input=None):
+        # when choosing to start a diagnostic from the OptionsFlow UI we'll
+        # reload the entry so we trace also the full initialization process
+        # for a more complete insight on the EntityManager context.
+        # The info to trigger the trace_open on entry setup is carried through
+        # the global ApiProfile.managers_transient_state
+        state = ApiProfile.managers_transient_state.setdefault(self.config_entry_id, {})
+        state[mlc.CONF_TRACE] = True
+        await self.hass.config_entries.async_reload(self.config_entry_id)
+        return self.async_create_entry(data=None)  # type: ignore
 
     async def async_step_hub(self, user_input=None):
         hub_config = self.hub_config
         if user_input is not None:
-            hub_config[mlc.CONF_KEY] = user_input.get(mlc.CONF_KEY)
-            self.hass.config_entries.async_update_entry(
-                self._config_entry, data=hub_config
-            )
-            return self.async_create_entry(data=None)  # type: ignore
+            hub_config.update(user_input)
+            return self.finish_options_flow(hub_config)
 
         config_schema = {
             vol.Optional(
-                mlc.CONF_KEY, description={DESCR: hub_config.get(mlc.CONF_KEY)}
+                mlc.CONF_KEY,
+                default="",  # type: ignore
+                description={DESCR: hub_config.get(mlc.CONF_KEY)},
             ): str
         }
+        self._setup_entitymanager_schema(config_schema, hub_config)
         return self.async_show_form(
             step_id="hub", data_schema=vol.Schema(config_schema)
         )
@@ -710,13 +761,6 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 else:
                     device_config.pop(mlc.CONF_HOST, None)
                 device_config[mlc.CONF_PAYLOAD] = device_config_update[mlc.CONF_PAYLOAD]
-                if device_config.get(mlc.CONF_TRACE):
-                    device_config[mlc.CONF_TRACE] = time() + (
-                        device_config.get(mlc.CONF_TRACE_TIMEOUT)
-                        or mlc.CONF_TRACE_TIMEOUT_DEFAULT
-                    )
-                else:
-                    device_config.pop(mlc.CONF_TRACE, None)
                 if mlc.CONF_CLOUD_KEY in device_config:
                     # cloud_key functionality has been superseeded by
                     # meross cloud profiles and we could just remove it.
@@ -734,10 +778,10 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 # we're not following HA 'etiquette' and we're just updating the
                 # config_entry data with this dirty trick
                 self.hass.config_entries.async_update_entry(
-                    self._config_entry, data=device_config
+                    self.config_entry, data=device_config
                 )
                 if (
-                    self._config_entry.state
+                    self.config_entry.state
                     == config_entries.ConfigEntryState.SETUP_ERROR
                 ):
                     try:  # to fix the device registry in case it was corrupted by #341
@@ -754,7 +798,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                             _name_by_user = device_entry.name_by_user
                             device_registry.async_remove_device(device_entry.id)
                             device_registry.async_get_or_create(
-                                config_entry_id=self._config_entry.entry_id,
+                                config_entry_id=self.config_entry.entry_id,
                                 suggested_area=_area_id,
                                 name=descriptor_update.productname,
                                 model=descriptor_update.productmodel,
@@ -785,7 +829,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                         )
 
                     await self.hass.config_entries.async_reload(
-                        self._config_entry.entry_id
+                        self.config_entry.entry_id
                     )
                 # return None in data so the async_update_entry is not called for the
                 # options to be updated. This will offend the type-checker tho and
@@ -828,26 +872,17 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             except Exception:
                 pass  # forgive any error
 
-        config_schema[
-            vol.Optional(
-                mlc.CONF_TRACE,
-                default=False,  # type: ignore
-                # this is the UI value (yes or no) mlc.CONF_TRACE carries
-                # trace endtime if racing is active
-                description={DESCR: (device_config.get(mlc.CONF_TRACE) or 0) > time()},
-            )
-        ] = bool
-        config_schema[
-            vol.Optional(
-                mlc.CONF_TRACE_TIMEOUT,
-                default=mlc.CONF_TRACE_TIMEOUT_DEFAULT,  # type: ignore
-                description={DESCR: device_config.get(mlc.CONF_TRACE_TIMEOUT)},
-            )
-        ] = cv.positive_int
-
+        self._setup_entitymanager_schema(config_schema, device_config)
         return self.async_show_form(
             step_id="device",
             data_schema=vol.Schema(config_schema),
             errors=errors,
             description_placeholders=self.device_placeholders,
         )
+
+    def finish_options_flow(
+        self, config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType
+    ):
+        """Used in OptionsFlow to terminate and exit (with save)."""
+        self.hass.config_entries.async_update_entry(self.config_entry, data=config)
+        return self.async_create_entry(data=None)  # type: ignore

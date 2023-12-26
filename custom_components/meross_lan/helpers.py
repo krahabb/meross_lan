@@ -30,6 +30,7 @@ from .const import (
     CONF_TRACE_DIRECTORY,
     CONF_TRACE_FILENAME,
     CONF_TRACE_MAXSIZE,
+    CONF_TRACE_TIMEOUT,
     CONF_TRACE_TIMEOUT_DEFAULT,
     DOMAIN,
     POLLING_STRATEGY_CONF,
@@ -679,7 +680,7 @@ class EntityManager(Loggable):
     for MerossEntity(s). This container is very 'hybrid', end its main purpose
     is to provide interfaces to their owned MerossEntities.
     It could represent a MerossDevice, a MerossSubDevice or an ApiProfile
-    and groups entities associated with a ConfigEntry.
+    and manages the relation(s) with the ConfigEntry (config, life-cycle)
     """
 
     TRACE_RX = "RX"
@@ -732,6 +733,7 @@ class EntityManager(Loggable):
             self.config_entry_id = config_entry_or_id.entry_id
             self.config = config_entry_or_id.data
             self.key = config_entry_or_id.data.get(CONF_KEY) or ""
+
         self.trace_file: typing.Final[TextIOWrapper | None] = None
         self._trace_future: asyncio.Future | None = None
         self._trace_data: list | None = None
@@ -770,13 +772,19 @@ class EntityManager(Loggable):
         self.config_entry_id = config_entry.entry_id  # type: ignore
         self.config = config_entry.data
         ApiProfile.managers[self.config_entry_id] = self
+
+        # open the trace before adding the entities
+        # so we could catch logs in this phase too
+        state = ApiProfile.managers_transient_state.setdefault(self.config_entry_id, {})
+        if state.pop(CONF_TRACE, None):
+            self._trace_open()
+
         await hass.config_entries.async_forward_entry_setups(
             config_entry, self.platforms.keys()
         )
         self._unsub_entry_update_listener = config_entry.add_update_listener(
             self.entry_update_listener
         )
-        self._trace_open_check()
 
     async def async_unload_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
         if not await hass.config_entries.async_unload_platforms(
@@ -831,14 +839,9 @@ class EntityManager(Loggable):
     ):
         self.config = config_entry.data
         self.key = config_entry.data.get(CONF_KEY) or ""
-        # When updating ConfigEntry we always reset the timeout
-        # so the trace will (eventually) restart
-        if self.trace_file:
-            self.trace_close()
-        self._trace_open_check()
 
     # tracing capabilities
-    def get_diagnostics_trace(self, trace_timeout) -> asyncio.Future:
+    def get_diagnostics_trace(self) -> asyncio.Future:
         """
         invoked by the diagnostics callback:
         here we set the device to start tracing the classical way (in file)
@@ -855,12 +858,12 @@ class EntityManager(Loggable):
         self._trace_data.append(
             ["time", "rxtx", "protocol", "method", "namespace", "data"]
         )
-        epoch = time()
-        self._trace_open(epoch, epoch + (trace_timeout or CONF_TRACE_TIMEOUT_DEFAULT))
+        self._trace_open()
         return self._trace_future
 
-    def _trace_open(self, epoch: float, endtime):
+    def _trace_open(self):
         try:
+            epoch = time()
             # assert not self.trace_file
             tracedir = ApiProfile.hass.config.path(
                 "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
@@ -877,19 +880,14 @@ class EntityManager(Loggable):
                 mode="w",
                 encoding="utf8",
             )
-            self._trace_endtime = endtime
+            self._trace_endtime = epoch + (
+                self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT
+            )
             self._trace_opened(epoch)
         except Exception as exception:
             if self.trace_file:
                 self.trace_close()
             self.log_exception(WARNING, exception, "creating trace file")
-
-    def _trace_open_check(self):
-        # assert not self._trace_file
-        endtime = self.config.get(CONF_TRACE) or 0
-        epoch = time()
-        if endtime > epoch:
-            self._trace_open(epoch, endtime)
 
     def _trace_opened(self, epoch: float):
         """
@@ -899,16 +897,25 @@ class EntityManager(Loggable):
         pass
 
     def trace_close(self):
+        # assert self.trace_file
         try:
             self.trace_file.close()  # type: ignore
             self.trace_file = None  # type: ignore
         except Exception as exception:
             self.trace_file = None  # type: ignore
             self.log_exception(WARNING, exception, "closing trace file")
+        self._trace_closed()
         if self._trace_future:
             self._trace_future.set_result(self._trace_data)
             self._trace_future = None
             self._trace_data = None
+
+    def _trace_closed(self):
+        """
+        Virtual placeholder called when a new trace is closed.
+        Allows derived EntityManagers to cleanup.
+        """
+        pass
 
     def trace(
         self,
@@ -949,23 +956,38 @@ class EntityManager(Loggable):
 
 class ApiProfile(EntityManager):
     """
-    base class for both MerossCloudProfile and MerossApi
-    allowing lightweight sharing of globals and defining
-    a common interface
+    Base class for both MerossCloudProfile and MerossApi allowing lightweight
+    sharing of globals and defining some common interfaces.
     """
 
     # hass, api: set when initializing MerossApi
     hass: ClassVar[HomeAssistant] = None  # type: ignore
+    """Cached HomeAssistant instance (Boom!)"""
     api: ClassVar[MerossApi] = None  # type: ignore
-    # devices: list of known devices. Every device config_entry
-    # in the system is mapped here and set to the MerossDevice instance
-    # if the device is actually active (config_entry loaded) or None
-    # if the device entry is not loaded
+    """Cached MerossApi instance (Boom!)"""
     devices: ClassVar[dict[str, MerossDevice | None]] = {}
-    # profiles: list of known cloud profiles (same as devices)
+    """
+    dict of configured devices. Every device config_entry in the system is mapped here and
+    set to the MerossDevice instance if the device is actually active (config_entry loaded)
+    or set to None if the config_entry is not loaded (no device instance)
+    """
     profiles: ClassVar[dict[str, MerossCloudProfile | None]] = {}
-    # managers: represents the container of entities belonging to a ConfigEntry
+    """
+    dict of configured cloud profiles (behaves as the 'devices' dict).
+    """
     managers: ClassVar[dict[str, EntityManager]] = {}
+    """
+    dict of loaded EntityManagers (ApiProfile(s) or devices) and
+    matches exactly the loaded config entries.
+    """
+    managers_transient_state: ClassVar[dict[str, dict]] = {}
+    """
+    This is actually a temporary memory storage used to mantain some info related to
+    an ConfigEntry/EntityManager that we don't want to persist to hass storage (useless overhead)
+    since they're just runtime context but we need an independent storage than
+    EntityManager since these info are needed during EntityManager async_setup_entry.
+    See the tracing feature activated through the OptionsFlow for insights.
+    """
 
     @staticmethod
     def active_devices():

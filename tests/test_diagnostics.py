@@ -5,6 +5,7 @@ import math
 import time
 
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.diagnostics import (
@@ -50,38 +51,28 @@ async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
     async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
         await context.perform_coldstart()
 
-        assert (device := context.device)
-
-        result = await hass.config_entries.options.async_init(device.config_entry_id)
-
-        trace_timeout = tc.MOCK_TRACE_TIMEOUT
-
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            user_input={
-                mlc.CONF_HOST: device.host,
-                mlc.CONF_KEY: device.key,
-                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
-                mlc.CONF_TRACE: True,
-                mlc.CONF_TRACE_TIMEOUT: trace_timeout,
-            },
+        options_flow = hass.config_entries.options
+        result = await options_flow.async_init(context.config_entry_id)
+        await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "menu", "diagnostics", FlowResultType.CREATE_ENTRY
         )
-        await hass.async_block_till_done()
-
+        # after having choosen 'diagnostics' the config entry will reload and the device
+        # should set to be tracing.
+        device = context.device
         assert device.trace_file
         # the endtime of the trace is not checked 'absolutely' due to float rounding
         # so we just check it is close to expected
         assert (
             math.fabs(
                 device._trace_endtime
-                - (time.time() + trace_timeout - tc.MOCK_HTTP_RESPONSE_DELAY)
+                - (time.time() + tc.MOCK_TRACE_TIMEOUT - tc.MOCK_HTTP_RESPONSE_DELAY)
             )
             < tc.MOCK_HTTP_RESPONSE_DELAY
         )
-
+        # We now need to 'coldstart' again the device
+        device = await context.perform_coldstart()
         await context.async_warp(
-            trace_timeout + device.polling_period,
+            tc.MOCK_TRACE_TIMEOUT + device.polling_period,
             tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
         )
-
-        assert device.trace_file is None
+        assert not device.trace_file

@@ -364,6 +364,7 @@ class MerossDevice(MerossDeviceBase):
         "_multiple_response_size",
         "_tzinfo",
         "_timezone_next_check",
+        "_unsub_trace_ability_callback",
         "entity_dnd",
         "sensor_protocol",
         "sensor_signal_strength",
@@ -432,6 +433,7 @@ class MerossDevice(MerossDeviceBase):
         )
         """Indicates the (next) time we should perform a check (only when localmqtt)
         in order to see if the device has correct timezone/dst configuration"""
+        self._unsub_trace_ability_callback = None
 
         # base init after setting some key properties needed for logging
         super().__init__(
@@ -527,11 +529,21 @@ class MerossDevice(MerossDeviceBase):
 
     def _trace_opened(self, epoch: float):
         descr = self.descriptor
+        # at this stage, _trace_ability will just (re)schedule itself so
+        # the first data in trace will anyway be the ns_all and ns_ability
+        # calling it first is needed so that any failure writing leading to
+        # a trace_closed will rightly cancel the callback
+        self._trace_ability(iter(descr.ability))
         self.trace(epoch, descr.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
         self.trace(
             epoch, descr.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK
         )
-        self._trace_ability(iter(descr.ability))
+
+    def _trace_closed(self):
+        if self._unsub_trace_ability_callback:
+            self._unsub_trace_ability_callback.cancel()
+            self._unsub_trace_ability_callback = None
+
 
     # interface: MerossDeviceBase
     async def async_shutdown(self):
@@ -1824,21 +1836,23 @@ class MerossDevice(MerossDeviceBase):
 
     @callback
     def _trace_ability(self, abilities_iterator: typing.Iterator[str]):
-        if self.trace_file:
-            try:
-                if self._unsub_polling_callback:
-                    # avoid interleave tracing ability with polling loop
-                    while True:
-                        ability = next(abilities_iterator)
-                        if ability not in TRACE_ABILITY_EXCLUDE:
-                            self.request(get_default_arguments(ability))
-                            break
-                # TODO: cancel this job when shutting down (it only lasts 2 secs tho)
-                schedule_callback(
-                    ApiProfile.hass,
-                    PARAM_TRACING_ABILITY_POLL_TIMEOUT,
-                    self._trace_ability,
-                    abilities_iterator,
-                )
-            except Exception:  # finished ?!
-                pass
+        try:
+            # avoid interleave tracing ability with polling loop
+            # also, since we could trigger this at early stages
+            # in device init, this check will prevent iterating
+            # at least until the device fully initialize through
+            # self.start()
+            if self._unsub_polling_callback:
+                while self.online:
+                    ability = next(abilities_iterator)
+                    if ability not in TRACE_ABILITY_EXCLUDE:
+                        self.request(get_default_arguments(ability))
+                        break
+            self._unsub_trace_ability_callback = schedule_callback(
+                ApiProfile.hass,
+                PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+                self._trace_ability,
+                abilities_iterator,
+            )
+        except Exception:  # finished ?!
+            self._unsub_trace_ability_callback = None

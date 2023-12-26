@@ -1,7 +1,7 @@
 import typing
 
 from . import MerossApi
-from .const import CONF_TRACE, CONF_TRACE_TIMEOUT, DOMAIN
+from .const import CONF_TRACE, DOMAIN
 from .helpers import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict_copy
 from .meross_profile import MerossCloudProfile
 
@@ -67,7 +67,5 @@ async def async_get_config_entry_diagnostics(
                 for strategy in device.polling_strategies.values()
             },
         }
-        data[CONF_TRACE] = await device.get_diagnostics_trace(
-            data.get(CONF_TRACE_TIMEOUT)
-        )
+        data[CONF_TRACE] = await device.get_diagnostics_trace()
     return data

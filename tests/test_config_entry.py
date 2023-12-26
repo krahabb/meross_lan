@@ -56,7 +56,7 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
         async with helpers.DeviceContext(hass, emulator, aioclient_mock) as context:
             await context.async_load_config_entry()
 
-            assert (device := context.device)
+            device = context.device
             device_ability = emulator.descriptor.ability
 
             entity_dnd = None

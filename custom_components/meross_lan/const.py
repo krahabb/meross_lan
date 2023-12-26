@@ -1,5 +1,5 @@
 """Constants for the Meross IoT local LAN integration."""
-from typing import Final, TypedDict
+from typing import Final, NotRequired, TypedDict
 
 from homeassistant import const as hac
 
@@ -51,6 +51,7 @@ class HubConfigType(TypedDict):
     """MQTT Hub config_entry keys"""
 
     key: str
+    trace_timeout: NotRequired[int | None]
 
 
 class DeviceConfigTypeMinimal(TypedDict):
@@ -72,8 +73,7 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     host: str
     protocol: str
     polling_period: int | None
-    trace: int | float | None
-    trace_timeout: int | None
+    trace_timeout: NotRequired[int | None]
     timezone: str | None
     timestamp: float | None
 
@@ -96,6 +96,7 @@ class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
     allow_mqtt_publish: bool | None
     check_firmware_updates: bool | None
     create_diagnostic_entities: bool | None
+    trace_timeout: NotRequired[int | None]
 
 
 SERVICE_REQUEST = "request"
