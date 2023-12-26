@@ -23,7 +23,7 @@ from ..select import (
 from ..sensor import MLSensor
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import MerossDevice, ResponseCallbackType
+    from ..meross_device import MerossDevice
 
 
 class MLDiffuserLight(MLLightBase):
@@ -63,20 +63,14 @@ class MLDiffuserLight(MLLightBase):
             if mc.KEY_MODE not in light:
                 light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
 
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self._parse_light(light)
-
-        await self.manager.async_request_light(light, _ack_callback)
+        if await self.manager.async_request_light_ack(light):
+            self._parse_light(light)
 
     async def async_turn_off(self, **kwargs):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_onoff(0)
-
-        await self.manager.async_request_light(
-            {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}, _ack_callback
-        )
+        if await self.manager.async_request_light_ack(
+            {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}
+        ):
+            self.update_onoff(0)
 
     def _inherited_parse_light(self, payload: dict):
         if mc.KEY_MODE in payload:
@@ -168,10 +162,10 @@ class DiffuserMixin(
             self._sensor_temperature.update_state(temperature.get(mc.KEY_VALUE) / 10)  # type: ignore
 
     def _parse_diffuser_light(self, payload):
-        self._parse__generic_array(mc.KEY_LIGHT, payload)
+        self._parse__array(mc.KEY_LIGHT, payload)
 
     def _parse_diffuser_spray(self, payload):
-        self._parse__generic_array(mc.KEY_SPRAY, payload, mc.KEY_SPRAY)
+        self._parse__array_key(mc.KEY_SPRAY, payload, mc.KEY_SPRAY)
 
     def _parse_diffuser(self, payload: dict):
         """
@@ -186,18 +180,16 @@ class DiffuserMixin(
             if _parse := getattr(self, f"_parse_diffuser_{key}", None):
                 _parse(value)
 
-    async def async_request_light(self, payload, callback: ResponseCallbackType):
-        await self.async_request(
+    async def async_request_light_ack(self, payload):
+        return await self.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
             mc.METHOD_SET,
             {mc.KEY_TYPE: self._type, mc.KEY_LIGHT: [payload]},
-            callback,
         )
 
-    async def async_request_spray(self, payload, callback: ResponseCallbackType):
-        await self.async_request(
+    async def async_request_spray_ack(self, payload):
+        return await self.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY,
             mc.METHOD_SET,
             {mc.KEY_TYPE: self._type, mc.KEY_SPRAY: [payload]},
-            callback,
         )

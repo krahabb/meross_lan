@@ -5,6 +5,6 @@
 2021/11/23 - 07:47:34	http	GET	Appliance.GarageDoor.State	{"state": {}}
 2021/11/23 - 07:47:37	http	GETACK	Appliance.GarageDoor.State	{"state": {"channel": 1, "open": 1, "lmTime": 0}}
 2021/11/23 - 07:47:39	http	GET	Appliance.GarageDoor.Config	{"config": {}}
-2021/11/23 - 07:47:45	http	GETACK	Appliance.GarageDoor.Config	{"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
+2021/11/23 - 07:47:45	http	GETACK	Appliance.GarageDoor.Config	{"config": {"signalDuration": 1000, "buzzerEnable": 0}}
 2021/11/23 - 07:47:39	http	GET	Appliance.GarageDoor.MultipleConfig	{"config": []}
 2021/11/23 - 07:47:45	http	GETACK	Appliance.GarageDoor.MultipleConfig	{"config":[{"channel":1,"doorEnable":1,"timestamp":0,"timestampMs":0,"signalClose":10000,"signalOpen":10000,"buzzerEnable":1},{"channel":2,"doorEnable":0,"timestamp":1699130744,"timestampMs":87,"signalClose":10000,"signalOpen":10000,"buzzerEnable":1},{"channel":3,"doorEnable":0,"timestamp":1699130748,"timestampMs":663,"signalClose":10000,"signalOpen":10000,"buzzerEnable":1}]}

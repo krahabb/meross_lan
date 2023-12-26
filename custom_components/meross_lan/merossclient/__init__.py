@@ -18,7 +18,9 @@ MerossHeaderType = typing.TypedDict(
         "namespace": str,
         "method": str,
         "payloadVersion": int,
+        "triggerSrc": typing.NotRequired[str],
         "from": str,
+        "uuid": typing.NotRequired[str],
         "timestamp": int,
         "timestampMs": int,
         "sign": str,
@@ -94,7 +96,7 @@ try:
             return randint(0, 99) < MEROSSDEBUG.mqtt_disconnect_probability
 
         # MerossHTTPClient debug patching
-        http_client_log_enable = False
+        http_client_log_enable = True
         http_disc_end = 0
         http_disc_duration = 25
         http_disc_probability = 0
@@ -183,6 +185,19 @@ def build_message(
             },
             mc.KEY_PAYLOAD: payload,
         }
+
+
+def build_message_reply(
+    header: MerossHeaderType,
+    payload: MerossPayloadType,
+) -> MerossMessageType:
+    header = header.copy()
+    header.pop(mc.KEY_UUID, None)
+    header[mc.KEY_TRIGGERSRC] = "CloudControl"
+    return {
+        mc.KEY_HEADER: header,
+        mc.KEY_PAYLOAD: payload,
+    }
 
 
 def get_namespacekey(namespace: str) -> str:
@@ -304,6 +319,7 @@ class MerossDeviceDescriptor:
     firmware: dict
     type: str
     subType: str
+    hardwareVersion: str
     uuid: str
     macAddress: str
     innerIp: str | None
@@ -328,6 +344,7 @@ class MerossDeviceDescriptor:
         mc.KEY_FIRMWARE: lambda _self: _self.system.get(mc.KEY_FIRMWARE, {}),
         mc.KEY_TYPE: lambda _self: _self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER),
         mc.KEY_SUBTYPE: lambda _self: _self.hardware.get(mc.KEY_SUBTYPE, ""),
+        "hardwareVersion": lambda _self: _self.hardware.get(mc.KEY_VERSION, ""),
         mc.KEY_UUID: lambda _self: _self.hardware.get(mc.KEY_UUID),
         mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(
             mc.KEY_MACADDRESS, mc.MEROSS_MACADDRESS

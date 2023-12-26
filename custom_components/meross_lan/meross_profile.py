@@ -29,6 +29,7 @@ from .const import (
     CONF_PAYLOAD,
     CONF_PROFILE_ID_LOCAL,
     DOMAIN,
+    ISSUE_CLOUD_TOKEN_EXPIRED,
     PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT,
@@ -48,6 +49,7 @@ from .meross_device_hub import MerossDeviceHub
 from .merossclient import (
     MEROSSDEBUG,
     build_message,
+    build_message_reply,
     const as mc,
     get_default_arguments,
     get_namespacekey,
@@ -86,8 +88,6 @@ if typing.TYPE_CHECKING:
 
     UuidType = str
     DeviceInfoDictType = dict[UuidType, DeviceInfoType]
-
-ISSUE_CLOUD_TOKEN_EXPIRED = "cloud_token_expired"
 
 
 class ConnectionSensor(MLSensor):
@@ -198,7 +198,7 @@ class _MQTTTransaction:
         self,
         namespace: str,
         method: str,
-        response_callback: ResponseCallbackType,
+        response_callback: ResponseCallbackType | None,
     ):
         self.namespace = namespace
         self.messageid = uuid4().hex
@@ -332,6 +332,16 @@ class MQTTConnection(Loggable):
         """
         raise NotImplementedError()
 
+    async def async_mqtt_publish_reply(
+        self,
+        device_id: str,
+        message: MerossMessageType,
+    ):
+        """
+        special raw publish for broker-session management
+        """
+        pass
+
     async def async_mqtt_message(self, msg):
         with self.exception_warning("async_mqtt_message"):
             if sensor_connection := self.sensor_connection:
@@ -339,29 +349,83 @@ class MQTTConnection(Loggable):
             message = json_loads(msg.payload)
             header = message[mc.KEY_HEADER]
             device_id = header[mc.KEY_FROM].split("/")[2]
+            namespace = header[mc.KEY_NAMESPACE]
+            method = header[mc.KEY_METHOD]
+            messageid = header[mc.KEY_MESSAGEID]
+            payload = message[mc.KEY_PAYLOAD]
             if LOGGER.isEnabledFor(DEBUG):
                 self.log(
                     DEBUG,
                     "MQTT RECV device_id:(%s) method:(%s) namespace:(%s)",
                     device_id,
-                    header[mc.KEY_METHOD],
-                    header[mc.KEY_NAMESPACE],
+                    method,
+                    namespace,
                 )
-            messageid = header[mc.KEY_MESSAGEID]
+
             if messageid in self._mqtt_transactions:
                 mqtt_transaction = self._mqtt_transactions[messageid]
-                if mqtt_transaction.namespace == header[mc.KEY_NAMESPACE]:
+                if mqtt_transaction.namespace == namespace:
                     self._mqtt_transactions.pop(messageid, None)
                     mqtt_transaction.response_future.set_result(message)
-                    mqtt_transaction.response_callback(
-                        header[mc.KEY_METHOD] != mc.METHOD_ERROR,
-                        header,
-                        message[mc.KEY_PAYLOAD],
-                    )
+                    if mqtt_transaction.response_callback:
+                        mqtt_transaction.response_callback(
+                            method != mc.METHOD_ERROR,
+                            header,
+                            payload,
+                        )
+            elif self.id is CONF_PROFILE_ID_LOCAL:
+                # special processing for local broker
+                # this code is experimental and is needed to give
+                # our broker some transaction management for devices
+                # trying to bind to non-Meross MQTT brokers
+                if method == mc.METHOD_PUSH:
+                    if namespace == mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG:
+                        # this message too is published by mss switches
+                        # and it appears newer mss315 could abort their connection
+                        # if not replied (see #346)
+                        await self.async_mqtt_publish_reply(
+                            device_id,
+                            build_message_reply(header, payload),
+                        )
+                    elif namespace == mc.NS_APPLIANCE_SYSTEM_CLOCK:
+                        # this is part of initial flow over MQTT
+                        # we'll try to set the correct time in order to avoid
+                        # having NTP opened to setup the device
+                        # Note: I actually see this NS only on mss310 plugs
+                        # (msl120j bulb doesnt have it)
+                        await self.async_mqtt_publish_reply(
+                            device_id,
+                            build_message_reply(
+                                header,
+                                {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
+                            ),
+                        )
+                elif method == mc.METHOD_SET:
+                    if namespace == mc.NS_APPLIANCE_CONTROL_BIND:
+                        # this transaction appears when a device (firstly)
+                        # connects to an MQTT broker and tries to 'register'
+                        # itself. Our guess right now is to just SETACK
+                        # trying fix #346. When building the reply, the
+                        # meross broker sets the from field as
+                        # "from": "cloud/sub/kIGFRwvtAQP4sbXv/58c35d719350a689"
+                        # and the fields look like hashes or something since
+                        # they change between attempts (hashed broker id ?)
+                        # At any rate I don't have a clue on how to properly
+                        # replicate this and the "from" field is set as ususal
+                        reply = build_message(
+                            namespace,
+                            mc.METHOD_SETACK,
+                            {},
+                            self.profile.key,
+                            mc.TOPIC_RESPONSE.format(device_id),
+                            messageid,
+                        )
+                        reply[mc.KEY_HEADER][mc.KEY_TRIGGERSRC] = "CloudControl"
+                        await self.async_mqtt_publish_reply(device_id, reply)
 
             if device := ApiProfile.devices.get(device_id):
                 if device._mqtt_connection == self:
-                    device.mqtt_receive(header, message[mc.KEY_PAYLOAD])
+                    device.mqtt_receive(header, payload)
                     return
                 # we have the device registered but somehow it is not 'mqtt binded'
                 # either it's configuration is ONLY_HTTP or it is paired to
@@ -424,13 +488,14 @@ class MQTTConnection(Loggable):
                     return
 
             discovered = self.get_or_set_discovering(device_id)
-            if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
-                namespace = header[mc.KEY_NAMESPACE]
-                if namespace in (
+            if (method == mc.METHOD_GETACK) and (
+                namespace
+                in (
                     mc.NS_APPLIANCE_SYSTEM_ALL,
                     mc.NS_APPLIANCE_SYSTEM_ABILITY,
-                ):
-                    discovered.update(message[mc.KEY_PAYLOAD])
+                )
+            ):
+                discovered.update(payload)
 
             if await self._async_progress_discovery(discovered, device_id):
                 return
@@ -512,7 +577,10 @@ class MQTTConnection(Loggable):
             )
 
     def _mqtt_transaction_init(
-        self, namespace: str, method: str, response_callback: ResponseCallbackType
+        self,
+        namespace: str,
+        method: str,
+        response_callback: ResponseCallbackType | None,
     ):
         transaction = _MQTTTransaction(namespace, method, response_callback)
         self._mqtt_transactions[transaction.messageid] = transaction
@@ -618,6 +686,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
             )
         else:
             self._unsub_random_disconnect = None
+        self.schedule_connect()
 
     # interface: MQTTConnection
     async def async_shutdown(self):
@@ -629,13 +698,9 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
 
     def attach(self, device: MerossDevice):
         super().attach(device)
-        if self.state_inactive:
-            self.schedule_connect()
 
     def detach(self, device: MerossDevice):
         super().detach(device)
-        if not self.mqttdevices:
-            self.schedule_disconnect()
 
     def mqtt_publish(
         self,
@@ -647,7 +712,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ) -> asyncio.Future[_MQTTTransaction | mqtt.MQTTMessageInfo | bool]:
-        if response_callback:
+        if method in mc.METHOD_ACK_MAP.keys():
             transaction = self._mqtt_transaction_init(
                 namespace, method, response_callback
             )
@@ -743,11 +808,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
         result = await self.mqtt_publish(
             device_id, namespace, method, payload, key, response_callback, messageid
         )
-
         if isinstance(result, _MQTTTransaction):
             return await self._async_mqtt_transaction_wait(
                 result, self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT
             )
+        return result
 
     @callback
     def _mqtt_published(self, mid):
@@ -1151,6 +1216,21 @@ class MerossCloudProfile(ApiProfile):
                     if latest_version := self.get_latest_version(device.descriptor):
                         device.update_latest_version(latest_version)
 
+    def get_or_create_mqttconnections(self, device_id: str):
+        mqttconnections: list[MerossMQTTConnection] = []
+        device_info = self.get_device_info(device_id)
+        if device_info:
+            if domain := device_info.get(mc.KEY_DOMAIN):
+                mqttconnections.append(
+                    self._get_or_create_mqttconnection(parse_domain(domain))
+                )
+            if reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN):
+                if reserveddomain != domain:
+                    mqttconnections.append(
+                        self._get_or_create_mqttconnection(parse_domain(reserveddomain))
+                    )
+        return mqttconnections
+
     def _get_or_create_mqttconnection(self, broker: tuple[str, int]):
         connection_id = f"{self.id}:{broker[0]}:{broker[1]}"
         if connection_id not in self.mqttconnections:
@@ -1361,19 +1441,8 @@ class MerossCloudProfile(ApiProfile):
                 if config_entries_helper.get_config_flow(device_id):
                     continue
                 # cloud conf has a new device
-                for hostkey in (mc.KEY_DOMAIN, mc.KEY_RESERVEDDOMAIN):
-                    with self.exception_warning(
-                        f"_process_device_info_unknown: unknown device_id={device_id}"
-                    ):
-                        broker = parse_domain(domain := device_info[hostkey])
-                        mqttconnection = self._get_or_create_mqttconnection(broker)
-                        if mqttconnection.state_inactive:
-                            await mqttconnection.schedule_connect()
-                        mqttconnection.get_or_set_discovering(device_id)
-                        if domain == device_info[mc.KEY_RESERVEDDOMAIN]:
-                            # dirty trick to avoid looping when the 2 hosts
-                            # are the same
-                            break
+                for mqttconnection in self.get_or_create_mqttconnections(device_id):
+                    mqttconnection.get_or_set_discovering(device_id)
 
     def _schedule_save_store(self):
         def _data_func():

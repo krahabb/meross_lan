@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from functools import partial
 import logging
+from logging import DEBUG, WARNING
 from time import gmtime, time
 import typing
 
@@ -152,9 +153,9 @@ class _Logger(logging.Logger if typing.TYPE_CHECKING else object):
             trap_key = (msg, args)
             if trap_key in _Logger._LOGGER_TIMEOUTS:
                 if (epoch - _Logger._LOGGER_TIMEOUTS[trap_key]) < timeout:
-                    if self.isEnabledFor(logging.DEBUG):
+                    if self.isEnabledFor(DEBUG):
                         super()._log(
-                            logging.DEBUG,
+                            DEBUG,
                             f"dropped log message for {msg}",
                             args,
                             **kwargs,
@@ -540,33 +541,43 @@ class Loggable(abc.ABC):
     """
     Helper base class for logging instance name/id related info.
     Derived classes can customize this in different flavours:
-    Basic is to override 'logtag' to provide a custom name when
-    logging. By overriding 'log' (together with 'warning' since
-    the basic implementation doesnt call 'log' in order to optimize/skip
-    a call and forwards itself the log message to the underlying LOGGER)
-    like in 'MerossDevice' we can intercept log messages
-    Here, since most of our logs are WARNINGS, the 'warning' interface
-    is just a small optimization in order to reduce parameters pushing
+    - basic way is to override 'logtag' to provide a custom name when
+    logging.
+    - custom way by overriding 'log' like in 'MerossDevice' we can
+    intercept log messages.
     """
 
     id: Final
-    logtag: Final[str]
 
     __slots__ = (
         "id",
         "logtag",
+        "logger",
     )
 
-    def __init__(self, id, logtag: str | None = None):
+    def __init__(self, id, logtag: str | None = None, logger: Loggable | logging.Logger = LOGGER):
         self.id = id
         self.logtag = logtag or f"{self.__class__.__name__}({id})"
-        LOGGER.debug("%s: init", self.logtag)
+        self.logger = logger
+        logger.debug("%s: init", self.logtag)
+
+    def isEnabledFor(self, level: int):
+        return self.logger.isEnabledFor(level)
 
     def log(self, level: int, msg: str, *args, **kwargs):
-        LOGGER.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
+        self.logger.log(level, f"{self.logtag}: {msg}", *args, **kwargs)
+
+    def warning_enabled(self):
+        return self.logger.isEnabledFor(WARNING)
 
     def warning(self, msg: str, *args, **kwargs):
-        LOGGER.warning(f"{self.logtag}: {msg}", *args, **kwargs)
+        self.log(WARNING, msg, *args, **kwargs)
+
+    def debug_enabled(self):
+        return self.logger.isEnabledFor(DEBUG)
+
+    def debug(self, msg: str, *args, **kwargs):
+        self.log(DEBUG, msg, *args, **kwargs)
 
     def log_exception(
         self, level: int, exception: Exception, msg: str, *args, **kwargs
@@ -579,7 +590,8 @@ class Loggable(abc.ABC):
         )
 
     def log_exception_warning(self, exception: Exception, msg: str, *args, **kwargs):
-        self.warning(
+        self.log(
+            WARNING,
             f"{exception.__class__.__name__}({str(exception)}) in {msg}",
             *args,
             **kwargs,
@@ -590,14 +602,15 @@ class Loggable(abc.ABC):
         try:
             yield
         except Exception as exception:
-            self.warning(
+            self.log(
+                WARNING,
                 f"{exception.__class__.__name__}({str(exception)}) in {msg}",
                 *args,
                 **kwargs,
             )
 
     def __del__(self):
-        LOGGER.debug("%s: destroy", self.logtag)
+        self.logger.debug("%s: destroy", self.logtag)
         return
 
 
@@ -675,11 +688,9 @@ class EntityManager(Loggable):
         """
         self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
         self.unschedule_entry_reload()
-        ApiProfile.managers.pop(self.config_entry_id, None)
         for entity in self.entities.values():
             await entity.async_shutdown()
         self.entities.clear()
-        self.platforms.clear()
 
     async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
         assert not self._unsub_entry_update_listener

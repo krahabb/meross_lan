@@ -131,9 +131,7 @@
                     "polling_period": "Polling period",
                     "timezone": "Device time zone",
                     "trace": "Activate device debug tracing",
-                    "trace_timeout": "Debug tracing duration (sec)",
-                    "all": "Appliance.System.All",
-                    "ability": "Appliance.System.Ability"
+                    "trace_timeout": "Debug tracing duration (sec)"
                 }
             },
             "keyerror": {
@@ -173,6 +171,27 @@
                             "allow_mqtt_publish": "Allow cloud MQTT publish",
                             "check_firmware_updates": "Check firmware updates",
                             "create_diagnostic_entities": "Create diagnostic entities"
+                        }
+                    }
+                }
+            }
+        },
+        "device_identity_mismatch": {
+            "title": "Received mismatched identity for device '{device_name}'",
+            "fix_flow": {
+                "step": {
+                    "device": {
+                        "title": "Device configuration",
+                        "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}",
+                        "data": {
+                            "host": "Device host address",
+                            "key": "Device key",
+                            "protocol": "Connection protocol",
+                            "profile_id": "Cloud profile",
+                            "polling_period": "Polling period",
+                            "timezone": "Device time zone",
+                            "trace": "Activate device debug tracing",
+                            "trace_timeout": "Debug tracing duration (sec)"
                         }
                     }
                 }

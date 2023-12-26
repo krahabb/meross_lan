@@ -17,9 +17,10 @@ except Exception:
     from .helpers import StrEnum
 
     class BinarySensorDeviceClass(StrEnum):
-        PROBLEM = "problem"
-        WINDOW = "window"
         CONNECTIVITY = "connectivity"
+        PROBLEM = "problem"
+        SAFETY = "safety"
+        WINDOW = "window"
 
 
 async def async_setup_entry(

@@ -297,6 +297,10 @@ class ConsumptionXMixin(
         await super().async_shutdown()
         self._sensor_consumption = None  # type: ignore
 
+    def _handle_Appliance_Control_ConsumptionConfig(self, header: dict, payload: dict):
+        # processed at the MQTTConnection message handling
+        pass
+
     def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
         _sensor_consumption = self._sensor_consumption
         # we'll look through the device array values to see
@@ -449,16 +453,12 @@ class OverTempEnableSwitch(MLSwitch):
         )
 
     async def async_request_onoff(self, onoff: int):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_onoff(onoff)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONFIG_OVERTEMP,
             mc.METHOD_SET,
             {mc.KEY_OVERTEMP: {mc.KEY_ENABLE: onoff}},
-            _ack_callback,
-        )
+        ):
+            self.update_onoff(onoff)
 
 
 class OverTempMixin(

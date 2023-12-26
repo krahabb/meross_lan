@@ -141,6 +141,7 @@ KEY_NAMESPACE = "namespace"
 KEY_METHOD = "method"
 KEY_PAYLOADVERSION = "payloadVersion"
 KEY_FROM = "from"
+KEY_TRIGGERSRC = "triggerSrc"
 KEY_TIMESTAMP = "timestamp"
 KEY_TIMESTAMPMS = "timestampMs"
 KEY_SIGN = "sign"
@@ -218,6 +219,8 @@ KEY_LATESTHUMIDITY = "latestHumidity"
 KEY_SMOKEALARM = "smokeAlarm"
 KEY_INTERCONN = "interConn"
 KEY_DOORWINDOW = "doorWindow"
+KEY_WATERLEAK = "waterLeak"
+KEY_LATESTWATERLEAK = "latestWaterLeak"
 KEY_SCHEDULE = "schedule"
 KEY_SCHEDULEBMODE = "scheduleBMode"
 KEY_SCHEDULEUNITTIME = "scheduleUnitTime"
@@ -386,6 +389,8 @@ ROLLERSHUTTER_STATE_IDLE = 0
 ROLLERSHUTTER_STATE_OPENING = 1
 ROLLERSHUTTER_STATE_CLOSING = 2
 
+MTS_TEMP_SCALE = 10  # native mts temperatures expressed in tenth of °C
+
 # mts100 (and the likes..) valves mode
 MTS100_MODE_CUSTOM = 0
 MTS100_MODE_HEAT = 1
@@ -399,6 +404,9 @@ MTS200_MODE_COOL = 1
 MTS200_MODE_ECO = 2
 MTS200_MODE_AUTO = 3
 MTS200_MODE_CUSTOM = 4
+# looks like with 'summerMode' disabled (i.e. in winter) the MTS reports '1'
+MTS200_SUMMERMODE_HEAT = 1
+MTS200_SUMMERMODE_COOL = 0
 
 # MTS200 external sensor status (overheat protection)
 MTS200_OVERHEAT_WARNING_OK = 0
@@ -512,6 +520,9 @@ TYPE_NAME_MAP[TYPE_GS559] = "Smart Smoke Alarm"
 
 TYPE_MS200 = "ms200"
 TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"
+
+TYPE_MS400 = "ms400"
+TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
 
 """
     GP constants

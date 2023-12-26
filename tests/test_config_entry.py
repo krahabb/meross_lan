@@ -84,7 +84,9 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
 
 
 async def test_profile_entry(
-    hass: HomeAssistant, cloudapi_mock: helpers.CloudApiMocker
+    hass: HomeAssistant,
+    cloudapi_mock: helpers.CloudApiMocker,
+    merossmqtt_mock: helpers.MerossMQTTMocker,
 ):
     """
     Test a Meross cloud profile entry

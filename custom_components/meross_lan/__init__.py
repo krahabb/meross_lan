@@ -36,7 +36,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
 
-    from .merossclient import KeyType, ResponseCallbackType
+    from .merossclient import KeyType, MerossMessageType, ResponseCallbackType
 
 
 else:
@@ -117,11 +117,13 @@ class HAMQTTConnection(MQTTConnection):
         response_callback: ResponseCallbackType | None = None,
         messageid: str | None = None,
     ):
-        if response_callback:
+        if method in mc.METHOD_ACK_MAP.keys():
             transaction = self._mqtt_transaction_init(
                 namespace, method, response_callback
             )
             messageid = transaction.messageid
+        else:
+            transaction = None
 
         self.log(
             DEBUG,
@@ -144,8 +146,27 @@ class HAMQTTConnection(MQTTConnection):
                 )
             ),
         )
-        if response_callback:
+        if transaction:
             return await self._async_mqtt_transaction_wait(transaction)  # type: ignore
+
+    async def async_mqtt_publish_reply(
+        self,
+        device_id: str,
+        message: MerossMessageType
+    ):
+        self.log(
+            DEBUG,
+            "MQTT PUBLISH REPLY device_id:(%s) method:(%s) namespace:(%s)",
+            device_id,
+            message[mc.KEY_HEADER][mc.KEY_METHOD],
+            message[mc.KEY_HEADER][mc.KEY_NAMESPACE],
+        )
+        await mqtt_async_publish(
+            ApiProfile.hass,
+            mc.TOPIC_REQUEST.format(device_id),
+            json_dumps(message)
+        )
+
 
     # interface: self
     @property
@@ -356,13 +377,29 @@ class MerossApi(ApiProfile):
         self.mqtt_connection.attach(device)
 
     # interface: self
-    def build_device(self, config_entry: ConfigEntry) -> MerossDevice:
+    def build_device(self, device_id: str, config_entry: ConfigEntry) -> MerossDevice:
         """
         scans device descriptor to build a 'slightly' specialized MerossDevice
         The base MerossDevice class is a bulk 'do it all' implementation
         but some devices (i.e. Hub) need a (radically?) different behaviour
         """
+        if device_id != config_entry.data.get(mlc.CONF_DEVICE_ID):
+            # shouldnt really happen: it means we have a 'critical' bug in our config entry/flow management
+            # or that the config_entry was tampered
+            raise ConfigEntryError("Unrecoverable device id mismatch. 'ConfigEntry.unique_id' "
+                                   "does not match the configured 'device_id'. "
+                                   "Please delete the entry and reconfigure it")
         descriptor = MerossDeviceDescriptor(config_entry.data.get(mlc.CONF_PAYLOAD))
+        if device_id != descriptor.uuid:
+            # this could happen (#341 raised the suspect) if a working device
+            # 'suddenly' starts talking with another one and doesn't recognize
+            # the mismatch (the issue appears as the device usually keeps updating
+            # the config_entry data from live communication). This behavior is being
+            # fixed in 4.5.0 so that devices don't update wrong configurations 'in the wild'
+            raise ConfigEntryError("Configuration data mismatch. Please refresh "
+                                   "the configuration by hitting 'Configure' "
+                                   "in the integration configuration page")
+
         ability = descriptor.ability
         digest = descriptor.digest
 
@@ -531,7 +568,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
         # this could happen when we add profile entries
         # after boot
         api.devices[device_id] = None
-    device = api.build_device(config_entry)
+    device = api.build_device(device_id, config_entry)
     try:
         await device.async_setup_entry(hass, config_entry)
         device.start()

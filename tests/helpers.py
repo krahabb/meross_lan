@@ -214,6 +214,7 @@ def build_emulator_config_entry(
         },
         mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
         mlc.CONF_POLLING_PERIOD: tc.MOCK_POLLING_PERIOD,
+        mlc.CONF_TRACE_TIMEOUT: tc.MOCK_TRACE_TIMEOUT,
     }
 
     if config_data:
@@ -232,12 +233,14 @@ class EmulatorContext(contextlib.AbstractContextManager):
         self,
         emulator: MerossEmulator | str,
         aioclient_mock: AiohttpClientMocker,
+        *,
         frozen_time: FrozenDateTimeFactory | StepTickTimeFactory | None = None,
+        host: str | None = None,
     ) -> None:
         if isinstance(emulator, str):
             emulator = build_emulator(emulator)
         self.emulator = emulator
-        self.host = str(id(emulator))
+        self.host = host or str(id(emulator))
         self.aioclient_mock = aioclient_mock
         if frozen_time:
             self.frozen_time = frozen_time
@@ -308,7 +311,7 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
     async def __aenter__(self):
         self.time = self._freeze_time.start()
         self.emulator_context = EmulatorContext(
-            self.emulator, self.aioclient_mock, self.time
+            self.emulator, self.aioclient_mock, frozen_time=self.time
         )
         self.emulator_context.__enter__()
 

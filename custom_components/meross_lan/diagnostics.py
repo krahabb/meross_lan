@@ -44,7 +44,29 @@ async def async_get_config_entry_diagnostics(
 
     data = obfuscated_dict_copy(entry.data)
     if device := MerossApi.devices.get(unique_id[0]):
-        data["deviceclass"] = type(device).__name__
+        data["device"] = {
+            "class": type(device).__name__,
+            "conf_protocol": device.conf_protocol,
+            "pref_protocol": device.pref_protocol,
+            "curr_protocol": device.curr_protocol,
+            "MQTT": {
+                "cloud_profile": bool(device._cloud_profile),
+                "locally_active": bool(device.mqtt_locallyactive),
+                "mqtt_connection": bool(device._mqtt_connection),
+                "mqtt_connected": bool(device._mqtt_connected),
+                "mqtt_publish": bool(device._mqtt_publish),
+                "mqtt_active": bool(device._mqtt_active),
+            },
+            "HTTP": {
+                "http": bool(device._http),
+                "http_active": bool(device._http_active),
+            },
+            "polling_period": device.polling_period,
+            "polling_dictionary": {
+                namespace: strategy.lastrequest
+                for namespace, strategy in device.polling_dictionary.items()
+            },
+        }
         data[CONF_TRACE] = await device.get_diagnostics_trace(
             data.get(CONF_TRACE_TIMEOUT)
         )

@@ -24,8 +24,6 @@ except Exception:
         MODE_NORMAL,
     )
 
-from homeassistant.const import STATE_OFF, STATE_ON
-
 from . import meross_entity as me
 from .merossclient import const as mc  # mEROSS cONST
 
@@ -92,23 +90,19 @@ class MerossLanSpray(me.MerossEntity, humidifier.HumidifierEntity):
         )
 
     async def async_request_spray(self, spray_mode: int):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_mode(spray_mode)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_SPRAY,
             mc.METHOD_SET,
             {mc.KEY_SPRAY: {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: spray_mode}},
-            _ack_callback,
-        )
+        ):
+            self.update_mode(spray_mode)
 
     def update_mode(self, spray_mode: int | None):
         if spray_mode == mc.SPRAY_MODE_OFF:
-            self.update_state(STATE_OFF)
+            self.update_state(self.STATE_OFF)
         else:
-            if (self._attr_state != STATE_ON) or (self._spray_mode != spray_mode):
-                self._attr_state = STATE_ON
+            if (self._attr_state != self.STATE_ON) or (self._spray_mode != spray_mode):
+                self._attr_state = self.STATE_ON
                 self._spray_mode = spray_mode
                 if self._hass_connected:
                     self._async_write_ha_state()

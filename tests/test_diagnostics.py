@@ -54,12 +54,16 @@ async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
 
         result = await hass.config_entries.options.async_init(device.config_entry_id)
 
+        trace_timeout = tc.MOCK_TRACE_TIMEOUT
+
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
             user_input={
                 mlc.CONF_HOST: device.host,
                 mlc.CONF_KEY: device.key,
+                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
                 mlc.CONF_TRACE: True,
+                mlc.CONF_TRACE_TIMEOUT: trace_timeout,
             },
         )
         await hass.async_block_till_done()
@@ -70,17 +74,13 @@ async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
         assert (
             math.fabs(
                 device._trace_endtime
-                - (
-                    time.time()
-                    + mlc.CONF_TRACE_TIMEOUT_DEFAULT
-                    - tc.MOCK_HTTP_RESPONSE_DELAY
-                )
+                - (time.time() + trace_timeout - tc.MOCK_HTTP_RESPONSE_DELAY)
             )
             < tc.MOCK_HTTP_RESPONSE_DELAY
         )
 
         await context.async_warp(
-            mlc.CONF_TRACE_TIMEOUT_DEFAULT + device.polling_period,
+            trace_timeout + device.polling_period,
             tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
         )
 

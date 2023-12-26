@@ -14,14 +14,14 @@ from homeassistant.components.light import (
 
 from . import meross_entity as me
 from .const import DND_ID
-from .helpers import ApiProfile, SmartPollingStrategy, reverse_lookup
+from .helpers import SmartPollingStrategy, reverse_lookup
 from .merossclient import const as mc, get_element_by_key_safe
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import MerossDevice, ResponseCallbackType
+    from .meross_device import MerossDevice
     from .merossclient import MerossDeviceDescriptor
 
 ATTR_TOGGLEX_MODE = "togglex_mode"
@@ -98,7 +98,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     def update_onoff(self, onoff):
         if mc.KEY_ONOFF in self._light:
             self._light[mc.KEY_ONOFF] = onoff
-        self.update_state(me.STATE_ON if onoff else me.STATE_OFF)
+        self.update_state(self.STATE_ON if onoff else self.STATE_OFF)
 
     def _inherited_parse_light(self, payload: dict):
         """
@@ -114,7 +114,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
 
             if mc.KEY_ONOFF in payload:
                 self._attr_state = (
-                    me.STATE_ON if payload[mc.KEY_ONOFF] else me.STATE_OFF
+                    self.STATE_ON if payload[mc.KEY_ONOFF] else self.STATE_OFF
                 )
 
             self._attr_color_mode = ColorMode.UNKNOWN
@@ -276,67 +276,45 @@ class MLLight(MLLightBase):
         if not self._togglex_switch:
             light[mc.KEY_ONOFF] = 1
 
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self._light = {}  # invalidate so _parse_light will force-flush
-                self._parse_light(light)
-                if not self.is_on:
-                    # In general, the LIGHT payload with LUMINANCE set should rightly
-                    # turn on the light, but this is not true for every model/fw.
-                    # Since devices exposing TOGGLEX have different behaviors we'll
-                    # try to learn this at runtime.
-                    if self._togglex_mode:
-                        # previous test showed that we need TOGGLEX
-                        ApiProfile.hass.async_create_task(self.async_request_onoff(1))
-                    elif self._togglex_mode is None:
-                        # we need to learn the device behavior...
-                        def _togglex_getack_callback(
-                            acknowledge: bool, header: dict, payload: dict
-                        ):
-                            if acknowledge:
-                                self._parse_togglex(payload[mc.KEY_TOGGLEX][0])
-                                if self.is_on:
-                                    # the device won't need TOGGLEX to turn on
-                                    self._togglex_mode = False
-                                else:
-                                    # the device will need TOGGLEX to turn on
-                                    self._togglex_mode = True
-                                    ApiProfile.hass.async_create_task(
-                                        self.async_request_onoff(1)
-                                    )
-                                self._attr_extra_state_attributes = {
-                                    ATTR_TOGGLEX_MODE: self._togglex_mode
-                                }
-
-                        self.manager.request(
-                            mc.NS_APPLIANCE_CONTROL_TOGGLEX,
-                            mc.METHOD_GET,
-                            {mc.KEY_TOGGLEX: [{mc.KEY_CHANNEL: self.channel}]},
-                            _togglex_getack_callback,
+        if await self.manager.async_request_light_ack(light):
+            self._light = {}  # invalidate so _parse_light will force-flush
+            self._parse_light(light)
+            if not self.is_on:
+                # In general, the LIGHT payload with LUMINANCE set should rightly
+                # turn on the light, but this is not true for every model/fw.
+                # Since devices exposing TOGGLEX have different behaviors we'll
+                # try to learn this at runtime.
+                if self._togglex_mode is None:
+                    # we need to learn the device behavior...
+                    if togglex_response := await self.manager.async_request_ack(
+                        mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+                        mc.METHOD_GET,
+                        {mc.KEY_TOGGLEX: [{mc.KEY_CHANNEL: self.channel}]},
+                    ):
+                        self._parse_togglex(
+                            togglex_response[mc.KEY_PAYLOAD][mc.KEY_TOGGLEX][0]
                         )
+                        self._togglex_mode = not self.is_on
+                        self._attr_extra_state_attributes = {
+                            ATTR_TOGGLEX_MODE: self._togglex_mode
+                        }
+                if self._togglex_mode:
+                    # previous test showed that we need TOGGLEX
+                    await self.async_request_onoff(1)
 
-        await self.manager.async_request_light(light, _ack_callback)
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
             if self.manager.descriptor.firmwareVersion == "2.1.2":
-                await self.manager.async_request_light(light, None)
+                await self.manager.async_request_light_ack(light)
 
     async def async_request_onoff(self, onoff: int):
         if self._togglex_switch:
             await super().async_request_onoff(onoff)
         else:
-
-            def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-                if acknowledge:
-                    self.update_onoff(onoff)
-
-            await self.manager.async_request_light(
-                {
-                    mc.KEY_CHANNEL: self.channel,
-                    mc.KEY_ONOFF: onoff,
-                },
-                _ack_callback,
-            )
+            if await self.manager.async_request_light_ack(
+                {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}
+            ):
+                self.update_onoff(onoff)
 
     def update_effect_map(self, light_effect_map: dict):
         """
@@ -412,31 +390,23 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
         return ColorMode.ONOFF
 
     async def async_turn_on(self, **kwargs):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_state(me.STATE_ON)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},
-            _ack_callback,
-        )
+        ):
+            self.update_state(self.STATE_ON)
 
     async def async_turn_off(self, **kwargs):
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_state(me.STATE_OFF)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},
-            _ack_callback,
-        )
+        ):
+            self.update_state(self.STATE_OFF)
 
     def update_onoff(self, onoff):
-        self.update_state(me.STATE_OFF if onoff else me.STATE_ON)
+        self.update_state(self.STATE_OFF if onoff else self.STATE_ON)
 
 
 class LightMixin(
@@ -477,10 +447,9 @@ class LightMixin(
     def _parse_light(self, payload):
         self._parse__generic(mc.KEY_LIGHT, payload)
 
-    async def async_request_light(self, payload, callback: ResponseCallbackType | None):
-        await self.async_request(
+    async def async_request_light_ack(self, payload):
+        return await self.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_LIGHT,
             mc.METHOD_SET,
             {mc.KEY_LIGHT: payload},
-            callback,
         )

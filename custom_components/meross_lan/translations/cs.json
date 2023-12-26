@@ -132,9 +132,7 @@
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
                     "trace": "Zapnout ladění zařízení",
-                    "trace_timeout": "Debug tracing duration (sec)",
-                    "all": "Appliance.System.All",
-                    "ability": "Appliance.System.Ability"
+                    "trace_timeout": "Doba trvání trasování ladění (sec)"
                 }
             },
             "keyerror": {
@@ -174,6 +172,27 @@
                             "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                             "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                             "create_diagnostic_entities": "Vytvářejte diagnostické entity"
+                        }
+                    }
+                }
+            }
+        },
+        "device_identity_mismatch": {
+            "title": "Přijata neodpovídající identita zařízení '{device_name}'",
+            "fix_flow": {
+                "step": {
+                    "device": {
+                        "title": "Konfigurace zařízení",
+                        "description": "Typ: {device_type}\nIdentifikátor UUID: {device_id}\nHostitel: {host}",
+                        "data": {
+                            "host": "Adresa hostitele zařízení",
+                            "key": "Klíč zařízení",
+                            "protocol": "Protokol připojení",
+                            "profile_id": "Cloudový profil",
+                            "polling_period": "Interval dotazování",
+                            "timezone": "Časové pásmo zařízení",
+                            "trace": "Zapnout ladění zařízení",
+                            "trace_timeout": "Doba trvání trasování ladění (sec)"
                         }
                     }
                 }

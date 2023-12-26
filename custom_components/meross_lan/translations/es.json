@@ -131,9 +131,7 @@
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
                     "trace": "Activar el modo debug",
-                    "trace_timeout": "Debug tracing duration (sec)",
-                    "all": "Appliance.System.All",
-                    "ability": "Appliance.System.Ability"
+                    "trace_timeout": "Duración del seguimiento de debug (sec)"
                 }
             },
             "keyerror": {
@@ -173,6 +171,27 @@
                             "allow_mqtt_publish": "Permitir la publicación de MQTT en la nube",
                             "check_firmware_updates": "Comprobar actualizaciones de firmware",
                             "create_diagnostic_entities": "Crear entidades de diagnóstico"
+                        }
+                    }
+                }
+            }
+        },
+        "device_identity_mismatch": {
+            "title": "Se recibió una identidad no coincidente para el dispositivo {device_name}",
+            "fix_flow": {
+                "step": {
+                    "device": {
+                        "title": "Cónfiguración de dispositivo",
+                        "description": "Tipo: {device_type}\nUUID: {device_id}\nDirección IP: {host}",
+                        "data": {
+                            "host": "Dirección IP del dispositivo",
+                            "key": "Clave de dispositivo",
+                            "protocol": "Protocolo de conexión",
+                            "profile_id": "Perfil de nube",
+                            "polling_period": "Intervalo de consulta",
+                            "timezone": "Zona horaria del dispositivo",
+                            "trace": "Activar el modo debug",
+                            "trace_timeout": "Duración del seguimiento de debug (sec)"
                         }
                     }
                 }

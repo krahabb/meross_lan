@@ -176,6 +176,26 @@
                     }
                 }
             }
+        },
+        "device_identity_mismatch": {
+            "title": "Ricevuta identità del dispositivo non corretta per {device_name}",
+            "fix_flow": {
+                "step": {
+                    "device": {
+                        "title": "Configurazione dispositivo",
+                        "description": "Tipo: {device_type}\nUUID: {device_id}\nHost: {host}",
+                        "data": {
+                            "host": "Indirizzo dispositivo",
+                            "key": "Chiave dispositivo",
+                            "protocol": "Protocollo",
+                            "polling_period": "Intervallo di aggiornamento",
+                            "timezone": "Zona oraria",
+                            "trace": "Attiva il debug tracing",
+                            "trace_timeout": "Durata debug tracing (sec)"
+                        }
+                    }
+                }
+            }
         }
     }
 }

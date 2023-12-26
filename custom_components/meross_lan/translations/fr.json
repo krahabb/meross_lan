@@ -131,9 +131,7 @@
                     "polling_period": "Période de requête",
                     "timezone": "Fuseau horaire de l'appareil",
                     "trace": "Activer le traçage de l'appareil",
-                    "trace_timeout": "Debug tracing duration (sec)",
-                    "all": "Appliance.System.All",
-                    "ability": "Appliance.System.Ability"
+                    "trace_timeout": "Durée du suivi du débogage (sec)"
                 }
             },
             "keyerror": {
@@ -173,6 +171,27 @@
                             "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                             "check_firmware_updates": "Vérifier les mises à jour du firmware",
                             "create_diagnostic_entities": "Créer des entités de diagnostic"
+                        }
+                    }
+                }
+            }
+        },
+        "device_identity_mismatch": {
+            "title": "Identité incompatible reçue pour l'appareil {device_name}",
+            "fix_flow": {
+                "step": {
+                    "device": {
+                        "title": "Configuration de l'appareil",
+                        "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}",
+                        "data": {
+                            "host": "Adresse",
+                            "key": "Clé",
+                            "protocol": "Protocole de connexion",
+                            "profile_id": "Profil Cloud",
+                            "polling_period": "Période de requête",
+                            "timezone": "Fuseau horaire de l'appareil",
+                            "trace": "Activer le traçage de l'appareil",
+                            "trace_timeout": "Durée du suivi du débogage (sec)"
                         }
                     }
                 }

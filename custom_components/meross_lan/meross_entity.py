@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import typing
 
-from homeassistant.const import STATE_OFF, STATE_ON
+from homeassistant import const as hac
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import StateType
 
@@ -114,7 +114,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             if channel is None
             else f"{channel}_{entitykey}"
         )
-        Loggable.__init__(self, _id)
+        Loggable.__init__(self, _id, None, manager)
         assert (
             manager.entities.get(_id) is None
         ), f"(channel:{channel}, entitykey:{entitykey}) is not unique inside manager.entities"
@@ -138,17 +138,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         async_add_devices = manager.platforms.setdefault(self.PLATFORM)
         if async_add_devices:
             async_add_devices([self])
-
-    # interface: Loggable
-    def log(self, level: int, msg: str, *args, **kwargs):
-        self.manager.log(
-            level, f"{self.__class__.__name__}({self.entity_id}) {msg}", *args, **kwargs
-        )
-
-    def warning(self, msg: str, *args, **kwargs):
-        self.manager.warning(
-            f"{self.__class__.__name__}({self.entity_id}) {msg}", *args, **kwargs
-        )
 
     # interface: Entity
     @property
@@ -206,6 +195,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         return self._attr_unique_id
 
     async def async_added_to_hass(self):
+        self.logtag = f"{self.__class__.__name__}({self.entity_id})"
         self._hass_connected = True
 
     async def async_will_remove_from_hass(self):
@@ -231,12 +221,15 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     # even though these are toggle/binary_sensor properties
     # we provide a base-implement-all
+    STATE_ON: typing.Final = hac.STATE_ON
+    STATE_OFF: typing.Final = hac.STATE_OFF
+
     @property
     def is_on(self):
-        return self._attr_state == STATE_ON
+        return self._attr_state == self.STATE_ON
 
     def update_onoff(self, onoff):
-        self.update_state(STATE_ON if onoff else STATE_OFF)
+        self.update_state(self.STATE_ON if onoff else self.STATE_OFF)
 
 
 class MerossToggle(MerossEntity):
@@ -278,11 +271,7 @@ class MerossToggle(MerossEntity):
         # this is the meross executor code
         # override for switches not implemented
         # by a toggle like api
-        def _ack_callback(acknowledge: bool, header: dict, payload: dict):
-            if acknowledge:
-                self.update_onoff(onoff)
-
-        await self.manager.async_request(
+        if await self.manager.async_request_ack(
             self.namespace,
             mc.METHOD_SET,
             {
@@ -291,8 +280,8 @@ class MerossToggle(MerossEntity):
                     self.key_onoff: onoff,
                 }
             },
-            _ack_callback,
-        )
+        ):
+            self.update_onoff(onoff)
 
     def _parse_toggle(self, payload: dict):
         self.update_onoff(payload.get(self.key_onoff))

@@ -1,10 +1,6 @@
 name: Push actions
 
-on:
-  push:
-    branches:
-      - master
-      - dev
+on: push
 
 env:
   DEFAULT_PYTHON: "3.11"

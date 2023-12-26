@@ -1,5 +1,7 @@
 """Test meross_lan config flow"""
 import json
+from uuid import uuid4
+import typing
 
 from homeassistant import config_entries
 from homeassistant.components.dhcp import DhcpServiceInfo
@@ -201,27 +203,84 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
     When an entry is already configured, check what happens when dhcp sends
     us a new ip
     """
-    async with helpers.DeviceContext(hass, mc.TYPE_MTS200, aioclient_mock) as context:
-        await context.perform_coldstart()
+    device_type: typing.Final = mc.TYPE_MTS200
+    async with helpers.DeviceContext(
+        hass, device_type, aioclient_mock
+    ) as device_context:
+        await device_context.perform_coldstart()
 
-        assert (device := context.device)
+        assert (device := device_context.device)
+        assert (emulator := device_context.emulator)
 
         # better be sure our context is consistent with expectations!
-        assert device.host == str(id(context.emulator))
+        assert device.host == str(id(emulator))
+        assert device.id == device.descriptor.uuid
 
-        result = await hass.config_entries.flow.async_init(
-            mlc.DOMAIN,
-            context={"source": config_entries.SOURCE_DHCP},
-            data=DhcpServiceInfo(tc.MOCK_DEVICE_IP, "", device.descriptor.macAddress),
+        # since we check the DHCP renewal comes form a legit device we need to setup
+        # a mock responding at the solicited ip with the same device info (descriptor)
+        # since dhcp config flow will check by mac address
+
+        # here we build a 'clone' of the configured device
+        emulator_dhcp = helpers.build_emulator(
+            device_type, device_id=device.id, key=device.key
         )
+        assert (
+            emulator_dhcp.descriptor.macAddress == device.descriptor.macAddress
+        ), "wrong emulator clone"
+        assert (
+            emulator_dhcp.descriptor.uuid == device.descriptor.uuid
+        ), "wrong emulator clone"
+        # now we mock the device emulator at new address
+        DHCP_GOOD_HOST: typing.Final = "88.88.88.88"
+        with helpers.EmulatorContext(
+            emulator_dhcp, aioclient_mock, host=DHCP_GOOD_HOST
+        ):
+            result = await hass.config_entries.flow.async_init(
+                mlc.DOMAIN,
+                context={"source": config_entries.SOURCE_DHCP},
+                data=DhcpServiceInfo(DHCP_GOOD_HOST, "", device.descriptor.macAddress),
+            )
 
-        assert result["type"] == FlowResultType.ABORT  # type: ignore
-        assert result["reason"] == "already_configured"  # type: ignore
-        # also check the device host got updated with MOCK_DEVICE_IP
-        assert device.host == tc.MOCK_DEVICE_IP
+            assert result["type"] == FlowResultType.ABORT  # type: ignore
+            assert result["reason"] == "already_configured"  # type: ignore
+            # also check the device host got updated with new address
+            assert device.host == DHCP_GOOD_HOST, "device host was not updated"
+
+        # here we build a different (device uuid) device instance
+        BOGUS_DEVICE_ID: typing.Final = uuid4().hex
+        emulator_dhcp = helpers.build_emulator(
+            device_type, device_id=BOGUS_DEVICE_ID, key=device.key
+        )
+        assert (
+            emulator_dhcp.descriptor.macAddress != device.descriptor.macAddress
+        ), "wrong emulator clone"
+        assert (
+            emulator_dhcp.descriptor.uuid != device.descriptor.uuid
+        ), "wrong emulator clone"
+        # now we mock the device emulator at new address
+        DHCP_BOGUS_HOST: typing.Final = "99.99.99.99"
+        with helpers.EmulatorContext(
+            emulator_dhcp, aioclient_mock, host=DHCP_BOGUS_HOST
+        ):
+            result = await hass.config_entries.flow.async_init(
+                mlc.DOMAIN,
+                context={"source": config_entries.SOURCE_DHCP},
+                data=DhcpServiceInfo(DHCP_BOGUS_HOST, "", device.descriptor.macAddress),
+            )
+
+            assert result["type"] == FlowResultType.ABORT  # type: ignore
+            assert result["reason"] == "already_configured"  # type: ignore
+            # also check the device host got updated with MOCK_DEVICE_IP
+            assert device.host == DHCP_GOOD_HOST, "device host was wrongly updated"
 
 
-async def test_options_flow(hass, aioclient_mock):
+async def test_options_flow(hass, aioclient_mock, hamqtt_mock, merossmqtt_mock):
+    """
+    Tests the device config entry option flow. This code could potentially use
+    either HTTP or MQTT so we accordingly mock both. TODO: perform the test check
+    against different config options (namely: the protocol) in order to see if
+    they behave as expected
+    """
     async with helpers.DeviceContext(hass, mc.TYPE_MTS200, aioclient_mock) as context:
         await context.perform_coldstart()
 
@@ -234,7 +293,11 @@ async def test_options_flow(hass, aioclient_mock):
 
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={mlc.CONF_HOST: device.host, mlc.CONF_KEY: "wrongkey"},
+            user_input={
+                mlc.CONF_HOST: device.host,
+                mlc.CONF_KEY: "wrongkey",
+                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
+            },
         )
 
         assert result["type"] == FlowResultType.MENU
@@ -242,7 +305,9 @@ async def test_options_flow(hass, aioclient_mock):
 
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={"next_step_id": "device"},
+            user_input={
+                "next_step_id": "device",
+            },
         )
 
         assert result["type"] == FlowResultType.FORM
@@ -250,7 +315,11 @@ async def test_options_flow(hass, aioclient_mock):
 
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={mlc.CONF_HOST: device.host, mlc.CONF_KEY: device.key},
+            user_input={
+                mlc.CONF_HOST: device.host,
+                mlc.CONF_KEY: device.key,
+                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
+            },
         )
 
         assert result["type"] == FlowResultType.CREATE_ENTRY

@@ -1,8 +1,6 @@
 """Test for meross cloud profiles"""
-import datetime as dt
 from unittest.mock import call
 
-from homeassistant.helpers import device_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pytest_homeassistant_custom_component.common import flush_store
 

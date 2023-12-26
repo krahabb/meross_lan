@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from time import time
 from zoneinfo import ZoneInfo
 
@@ -51,6 +52,7 @@ from aiohttp import web
 # homeassistant.helpers.storage
 from custom_components.meross_lan.merossclient import (
     MerossDeviceDescriptor,
+    MerossMessageType,
     build_message,
     const as mc,
     get_namespacekey,
@@ -75,7 +77,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         # patch system payload with fake ids
         hardware = self.hardware
         hardware[mc.KEY_UUID] = uuid
-        hardware[mc.KEY_MACADDRESS] = uuid[-12:]
+        hardware[mc.KEY_MACADDRESS] = ":".join(re.findall("..", uuid[-12:]))
 
     def _import_tsv(self, f):
         """
@@ -168,12 +170,12 @@ class MerossEmulator:
         return self._tzinfo
 
     # async def post_config(self, request: web_Request):
-    def handle(self, request: str) -> dict:
-        jsonrequest = json.loads(request)
-        header: dict = jsonrequest[mc.KEY_HEADER]
-        payload: dict = jsonrequest[mc.KEY_PAYLOAD]
-        namespace: str = header[mc.KEY_NAMESPACE]
-        method: str = header[mc.KEY_METHOD]
+    def handle(self, request: str) -> MerossMessageType:
+        jsonrequest: MerossMessageType = json.loads(request)
+        header = jsonrequest[mc.KEY_HEADER]
+        payload = jsonrequest[mc.KEY_PAYLOAD]
+        namespace = header[mc.KEY_NAMESPACE]
+        method = header[mc.KEY_METHOD]
 
         print(
             f"Emulator({self.descriptor.uuid}) "
@@ -343,6 +345,8 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
     """
     Given a supported 'tracefile' (either a legacy trace .csv or a diagnostic .json)
     parse it and build the appropriate emulator instance with the give 'uuid' and 'key'
+    this will also set the correct inferred mac address in the descriptor based on the uuid
+    as this appears to be consistent with real devices config
     """
     descriptor = MerossEmulatorDescriptor(tracefile, uuid)
 

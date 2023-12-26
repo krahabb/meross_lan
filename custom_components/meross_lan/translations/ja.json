@@ -131,9 +131,7 @@
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
                     "trace": "デバイスのデバグトレースを開始する",
-                    "trace_timeout": "Debug tracing duration (sec)",
-                    "all": "Appliance.System.All",
-                    "ability": "Appliance.System.Ability"
+                    "trace_timeout": "デバグトレース時間 [秒]"
                 }
             },
             "keyerror": {
@@ -173,6 +171,27 @@
                             "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                             "check_firmware_updates": "ファームウェアのアップデートを確認する",
                             "create_diagnostic_entities": "診断エンティティの作成"
+                        }
+                    }
+                }
+            }
+        },
+        "device_identity_mismatch": {
+            "title": "デバイス[{device_name}]の間違った ID を受信しました",
+            "fix_flow": {
+                "step": {
+                    "device": {
+                        "title": "デバイス設定",
+                        "description": "タイップ: {device_type}\nUUID: {device_id}\nホストアドレス: {host}",
+                        "data": {
+                            "host": "デバイスのホストアドレス",
+                            "key": "デバイスキー",
+                            "protocol": "接続プロトコル",
+                            "profile_id": "クラウド プロファイル",
+                            "polling_period": "ポーリング間隔(秒)",
+                            "timezone": "デバイスのタイムゾーン",
+                            "trace": "デバイスのデバグトレースを開始する",
+                            "trace_timeout": "デバグトレース時間 [秒]"
                         }
                     }
                 }
