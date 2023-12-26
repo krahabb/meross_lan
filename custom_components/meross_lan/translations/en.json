@@ -127,7 +127,6 @@
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
                     "timezone": "Device time zone",
-                    "trace": "Activate device debug tracing",
                     "trace_timeout": "Debug tracing duration (sec)"
                 }
             },
@@ -149,6 +148,15 @@
                     "allow_mqtt_publish": "Allow cloud MQTT publish",
                     "check_firmware_updates": "Check firmware updates",
                     "create_diagnostic_entities": "Create diagnostic entities"
+                }
+            },
+            "menu": {
+                "title": "Choose option",
+                "menu_options": {
+                    "hub": "Configure",
+                    "device": "Configure",
+                    "profile": "Configure",
+                    "diagnostics": "Start diagnostics trace"
                 }
             }
         }
@@ -186,7 +194,6 @@
                             "protocol": "Connection protocol",
                             "polling_period": "Polling period",
                             "timezone": "Device time zone",
-                            "trace": "Activate device debug tracing",
                             "trace_timeout": "Debug tracing duration (sec)"
                         }
                     }

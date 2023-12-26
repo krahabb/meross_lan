@@ -127,7 +127,6 @@
                     "protocol": "Verbindungsart",
                     "polling_period": "Abfragerate",
                     "timezone": "Gerätezeitzone",
-                    "trace": "Debugmodus aktivieren",
                     "trace_timeout": "Dauer der Debug-Ablaufverfolgung (sec)"
                 }
             },
@@ -149,6 +148,15 @@
                     "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
                     "check_firmware_updates": "Überprüfen Sie Firmware-Updates",
                     "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten"
+                }
+            },
+            "menu": {
+                "title": "Option wählen",
+                "menu_options": {
+                    "hub": "Konfigurieren",
+                    "device": "Konfigurieren",
+                    "profile": "Konfigurieren",
+                    "diagnostics": "Diagnosetrace starten"
                 }
             }
         }
@@ -186,7 +194,6 @@
                             "protocol": "Verbindungsart",
                             "polling_period": "Abfragerate",
                             "timezone": "Gerätezeitzone",
-                            "trace": "Debugmodus aktivieren",
                             "trace_timeout": "Dauer der Debug-Ablaufverfolgung (sec)"
                         }
                     }

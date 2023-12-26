@@ -127,7 +127,6 @@
                     "protocol": "Protocole de connexion",
                     "polling_period": "Période de requête",
                     "timezone": "Fuseau horaire de l'appareil",
-                    "trace": "Activer le traçage de l'appareil",
                     "trace_timeout": "Durée du suivi du débogage (sec)"
                 }
             },
@@ -149,6 +148,15 @@
                     "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                     "check_firmware_updates": "Vérifier les mises à jour du firmware",
                     "create_diagnostic_entities": "Créer des entités de diagnostic"
+                }
+            },
+            "menu": {
+                "title": "Choisissez l'option",
+                "menu_options": {
+                    "hub": "Configurer",
+                    "device": "Configurer",
+                    "profile": "Configurer",
+                    "diagnostics": "Démarrer la trace de diagnostic"
                 }
             }
         }
@@ -186,7 +194,6 @@
                             "protocol": "Protocole de connexion",
                             "polling_period": "Période de requête",
                             "timezone": "Fuseau horaire de l'appareil",
-                            "trace": "Activer le traçage de l'appareil",
                             "trace_timeout": "Durée du suivi du débogage (sec)"
                         }
                     }

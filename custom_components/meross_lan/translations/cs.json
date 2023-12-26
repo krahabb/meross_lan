@@ -127,7 +127,6 @@
                     "protocol": "Protokol připojení",
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
-                    "trace": "Zapnout ladění zařízení",
                     "trace_timeout": "Doba trvání trasování ladění (sec)"
                 }
             },
@@ -149,6 +148,15 @@
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                     "create_diagnostic_entities": "Vytvářejte diagnostické entity"
+                }
+            },
+            "menu": {
+                "title": "Vyberte možnost",
+                "menu_options": {
+                    "hub": "Konfigurovat",
+                    "device": "Konfigurovat",
+                    "profile": "Konfigurovat",
+                    "diagnostics": "Spusťte trasování diagnostiky"
                 }
             }
         }
@@ -186,7 +194,6 @@
                             "protocol": "Protokol připojení",
                             "polling_period": "Interval dotazování",
                             "timezone": "Časové pásmo zařízení",
-                            "trace": "Zapnout ladění zařízení",
                             "trace_timeout": "Doba trvání trasování ladění (sec)"
                         }
                     }

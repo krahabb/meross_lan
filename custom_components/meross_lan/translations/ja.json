@@ -127,7 +127,6 @@
                     "protocol": "接続プロトコル",
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
-                    "trace": "デバイスのデバグトレースを開始する",
                     "trace_timeout": "デバグトレース時間 [秒]"
                 }
             },
@@ -149,6 +148,15 @@
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "create_diagnostic_entities": "診断エンティティの作成"
+                }
+            },
+            "menu": {
+                "title": "オプションを選択",
+                "menu_options": {
+                    "hub": "設定",
+                    "device": "設定",
+                    "profile": "設定",
+                    "diagnostics": "診断トレースの開始"
                 }
             }
         }
@@ -186,7 +194,6 @@
                             "protocol": "接続プロトコル",
                             "polling_period": "ポーリング間隔(秒)",
                             "timezone": "デバイスのタイムゾーン",
-                            "trace": "デバイスのデバグトレースを開始する",
                             "trace_timeout": "デバグトレース時間 [秒]"
                         }
                     }

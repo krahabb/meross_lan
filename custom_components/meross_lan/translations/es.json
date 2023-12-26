@@ -127,7 +127,6 @@
                     "protocol": "Protocolo de conexión",
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
-                    "trace": "Activar el modo debug",
                     "trace_timeout": "Duración del seguimiento de debug (sec)"
                 }
             },
@@ -149,6 +148,15 @@
                     "allow_mqtt_publish": "Permitir la publicación de MQTT en la nube",
                     "check_firmware_updates": "Comprobar actualizaciones de firmware",
                     "create_diagnostic_entities": "Crear entidades de diagnóstico"
+                }
+            },
+            "menu": {
+                "title": "Elegir opción",
+                "menu_options": {
+                    "hub": "Configurar",
+                    "device": "Configurar",
+                    "profile": "Configurar",
+                    "diagnostics": "Iniciar traza de diagnóstico"
                 }
             }
         }
@@ -186,7 +194,6 @@
                             "protocol": "Protocolo de conexión",
                             "polling_period": "Intervalo de consulta",
                             "timezone": "Zona horaria del dispositivo",
-                            "trace": "Activar el modo debug",
                             "trace_timeout": "Duración del seguimiento de debug (sec)"
                         }
                     }
