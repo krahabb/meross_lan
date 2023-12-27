@@ -55,15 +55,14 @@ from .merossclient import (
 from .merossclient.cloudapi import (
     APISTATUS_TOKEN_ERRORS,
     CloudApiError,
-    MerossMQTTClient,
     async_cloudapi_device_devlist,
     async_cloudapi_device_latestversion,
     async_cloudapi_hub_getsubdevices,
     async_cloudapi_login,
     async_cloudapi_logout,
-    generate_app_id,
     parse_domain,
 )
+from .merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
 from .sensor import MLSensor
 
 if typing.TYPE_CHECKING:
@@ -727,7 +726,7 @@ class MQTTConnection(Loggable):
             sensor_connection.inc_counter(ConnectionSensor.ATTR_PUBLISHED)
 
 
-class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
+class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     _MSG_PRIORITY_MAP = {
         mc.METHOD_SET: True,
         mc.METHOD_PUSH: False,
@@ -738,7 +737,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
     def __init__(
         self, profile: MerossCloudProfile, connection_id: str, broker: tuple[str, int]
     ):
-        MerossMQTTClient.__init__(self, profile.config, profile.app_id)
+        MerossMQTTAppClient.__init__(self, profile.config, profile.app_id)
         MQTTConnection.__init__(
             self, profile, connection_id, broker, self.topic_command
         )
@@ -859,11 +858,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTClient):
 
     # paho mqtt calbacks
     def _mqttc_connect(self, client, userdata: HomeAssistant, rc, other):
-        MerossMQTTClient._mqttc_connect(self, client, userdata, rc, other)
+        MerossMQTTAppClient._mqttc_connect(self, client, userdata, rc, other)
         userdata.add_job(self._mqtt_connected)
 
     def _mqttc_disconnect(self, client, userdata: HomeAssistant, rc):
-        MerossMQTTClient._mqttc_disconnect(self, client, userdata, rc)
+        MerossMQTTAppClient._mqttc_disconnect(self, client, userdata, rc)
         userdata.add_job(self._mqtt_disconnected)
 
     def _mqttc_message(
