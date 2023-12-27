@@ -400,11 +400,9 @@ class ThermostatMixin(
     # interface: self
     def _init_thermostat(self, payload: dict):
         self._polling_payload = []
-        mode = payload.get(mc.KEY_MODE)
-        if isinstance(mode, list):
-            for m in mode:
-                Mts200Climate(self, m[mc.KEY_CHANNEL])
-                self._polling_payload.append({mc.KEY_CHANNEL: m[mc.KEY_CHANNEL]})
+        for m in payload[mc.KEY_MODE]:
+            Mts200Climate(self, m[mc.KEY_CHANNEL])
+            self._polling_payload.append({mc.KEY_CHANNEL: m[mc.KEY_CHANNEL]})
         if channel_count := len(self._polling_payload):
             ability = self.descriptor.ability
             """
