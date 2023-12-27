@@ -11,6 +11,7 @@ import typing
 import weakref
 from zoneinfo import ZoneInfo
 
+from aiohttp import ServerDisconnectedError
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry, issue_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -66,6 +67,7 @@ from .merossclient import (
     json_dumps,
     json_loads,
 )
+from .merossclient.cloudapi import parse_domain
 from .merossclient.httpclient import MerossHttpClient
 from .sensor import PERCENTAGE, MLSensor, ProtocolSensor
 from .update import MLUpdate
@@ -544,7 +546,6 @@ class MerossDevice(MerossDeviceBase):
             self._unsub_trace_ability_callback.cancel()
             self._unsub_trace_ability_callback = None
 
-
     # interface: MerossDeviceBase
     async def async_shutdown(self):
         if self._mqtt_connection:
@@ -729,6 +730,45 @@ class MerossDevice(MerossDeviceBase):
             ApiProfile.hass, 0, self._async_polling_callback
         )
 
+    async def async_bind(
+        self, broker: str, key: str | None = None, userId: int | None = None
+    ):
+        broker, port = parse_domain(broker)
+        bind = (
+            mc.NS_APPLIANCE_CONFIG_KEY,
+            mc.METHOD_SET,
+            {
+                mc.KEY_KEY: {
+                    mc.KEY_GATEWAY: {
+                        mc.KEY_HOST: broker,
+                        mc.KEY_PORT: port,
+                        mc.KEY_SECONDHOST: broker,
+                        mc.KEY_SECONDPORT: port,
+                    },
+                    mc.KEY_KEY: key or self.key,
+                    mc.KEY_USERID:  str(userId) if userId else CONF_PROFILE_ID_LOCAL,
+                }
+            },
+        )
+        # we don't have a clue if it works or not..just go over http
+        return await self.async_http_request(*bind)
+
+    def unbind(self):
+        """
+        WARNING!!!
+        Hardware reset to factory default: the device will unpair itself from
+        the (cloud) broker and then reboot, ready to be initialized/paired
+        """
+        unbind = (mc.NS_APPLIANCE_CONTROL_UNBIND, mc.METHOD_PUSH, {})
+        # in case we're connected to a cloud broker we'll use that since
+        # it appears the broker session level will take care of also removing
+        # the device from its list, thus totally cancelling it from the Meross account
+        if self._mqtt_publish and self._cloud_profile:
+            self.mqtt_request(*unbind)
+            return
+        # else go with whatever transport: the device will reset it's configuration
+        self.request(unbind)
+
     def get_device_datetime(self, epoch):
         """
         given the epoch (utc timestamp) returns the datetime
@@ -792,10 +832,12 @@ class MerossDevice(MerossDeviceBase):
         request: MerossRequest,
         attempts: int = 1,
     ) -> MerossMessageType | None:
+        method = request.method
+        namespace = request.namespace
         with self.exception_warning(
             "async_http_request %s %s",
-            request.method,
-            request.namespace,
+            method,
+            namespace,
             timeout=14400,
         ):
             if not (http := self._http):
@@ -817,8 +859,8 @@ class MerossDevice(MerossDeviceBase):
                     self.trace(
                         self._http_lastrequest,
                         request.payload,
-                        request.namespace,
-                        request.method,
+                        namespace,
+                        method,
                         CONF_PROTOCOL_HTTP,
                         self.TRACE_TX,
                     )
@@ -833,8 +875,8 @@ class MerossDevice(MerossDeviceBase):
                         DEBUG,
                         jsonerror,
                         "async_http_request %s %s attempt(%d)",
-                        request.method,
-                        request.namespace,
+                        method,
+                        namespace,
                         attempt,
                     )
                     response_text = jsonerror.doc
@@ -843,7 +885,7 @@ class MerossDevice(MerossDeviceBase):
                     if error_pos > response_text_len_safe:
                         # the error happened because of truncated json payload
                         self.device_response_size_max = response_text_len_safe
-                        if request.namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
+                        if namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
                             # try to recover by discarding the incomplete
                             # message at the end
                             trunc_pos = response_text.rfind(',{"header":')
@@ -858,20 +900,26 @@ class MerossDevice(MerossDeviceBase):
                         DEBUG,
                         exception,
                         "async_http_request %s %s attempt(%d)",
-                        request.method,
-                        request.namespace,
+                        method,
+                        namespace,
                         attempt,
                     )
                     if not self._online:
                         return None
-                    if (
-                        self._http_active
-                        and request.namespace is mc.NS_APPLIANCE_SYSTEM_ALL
-                    ):
-                        self._http_active = None
-                        self.sensor_protocol.update_attr_inactive(
-                            ProtocolSensor.ATTR_HTTP
-                        )
+
+                    if namespace is mc.NS_APPLIANCE_SYSTEM_ALL:
+                        if self._http_active:
+                            self._http_active = None
+                            self.sensor_protocol.update_attr_inactive(
+                                ProtocolSensor.ATTR_HTTP
+                            )
+                    elif namespace is mc.NS_APPLIANCE_CONTROL_UNBIND:
+                        if isinstance(exception, ServerDisconnectedError):
+                            # this is expected when issuing the UNBIND
+                            # so this is an indication we're dead
+                            self._set_offline()
+                            return None
+
                     if isinstance(exception, asyncio.TimeoutError):
                         return None
                     await asyncio.sleep(0.1)  # wait a bit before re-issuing request
@@ -1046,10 +1094,10 @@ class MerossDevice(MerossDeviceBase):
         self._queued_smartpoll_requests = 0
         for _strategy in self.polling_strategies.values():
             if not self._online:
-                break
+                break  # do not return: do the flush first!
             if namespace != _strategy.namespace:
                 await _strategy.async_poll(epoch, namespace)
-
+        # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_request_flush()
 
     def receive(self, header: MerossHeaderType, payload: MerossPayloadType, protocol):

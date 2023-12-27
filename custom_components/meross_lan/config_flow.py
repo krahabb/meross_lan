@@ -11,6 +11,7 @@ from homeassistant.const import CONF_ERROR
 from homeassistant.data_entry_flow import AbortFlow, FlowHandler, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
@@ -36,7 +37,6 @@ if typing.TYPE_CHECKING:
 
 
 # helper conf keys not persisted to config
-CONF_DEVICE_TYPE = "device_type"
 DESCR = "suggested_value"
 ERR_BASE = "base"
 ERR_CANNOT_CONNECT = "cannot_connect"
@@ -49,9 +49,9 @@ ERR_CLOUD_PROFILE_MISMATCH = "cloud_profile_mismatch"
 
 
 class ConfigError(Exception):
-    def __init__(self, reason):
-        super().__init__(reason)
-        self.reason = reason
+    def __init__(self, err_key: str):
+        super().__init__(err_key)
+        self.err_key = err_key
 
 
 class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
@@ -70,15 +70,14 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     """
 
     # These values are just buffers for UI state persistance
-    hub_config: mlc.HubConfigType
     device_config: mlc.DeviceConfigType
     profile_config: mlc.ProfileConfigType
     device_descriptor: MerossDeviceDescriptor
 
     device_placeholders = {
-        CONF_DEVICE_TYPE: "",
-        mlc.CONF_DEVICE_ID: "",
-        mlc.CONF_HOST: "",
+        "device_type": "",
+        "device_id": "",
+        "host": "",
     }
 
     profile_placeholders = {}
@@ -92,7 +91,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 
     async def async_step_profile(self, user_input=None):
         """configure a Meross cloud profile"""
-        errors = {}
+        errors = None
         _err = profile = None
         profile_config = self.profile_config
 
@@ -180,13 +179,12 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 return await self.async_step_device()
 
             except CloudApiError as error:
-                errors[CONF_ERROR] = ERR_INVALID_AUTH
+                errors = {CONF_ERROR: ERR_INVALID_AUTH}
                 _err = str(error)
             except ConfigError as error:
-                errors[CONF_ERROR] = ERR_INVALID_AUTH
-                _err = error.reason
+                errors = {ERR_BASE: error.err_key}
             except Exception as error:
-                errors[CONF_ERROR] = ERR_CANNOT_CONNECT
+                errors = {CONF_ERROR: ERR_CANNOT_CONNECT}
                 _err = str(error) or type(error).__name__
 
         config_schema = {}
@@ -348,13 +346,6 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         available for all (or almost) the config flows (properties typically configuring
         the EntityManager base class).
         """
-        config_schema[
-            vol.Optional(
-                mlc.CONF_TRACE_TIMEOUT,
-                default=mlc.CONF_TRACE_TIMEOUT_DEFAULT,  # type: ignore
-                description={DESCR: config.get(mlc.CONF_TRACE_TIMEOUT)},
-            )
-        ] = cv.positive_int
 
 
 class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.DOMAIN):
@@ -387,7 +378,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
 
     async def async_step_device(self, user_input=None):
         """common device configuration"""
-        errors = {}
+        errors = None
         device_config = self.device_config
 
         if user_input is None:
@@ -401,19 +392,17 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                         user_input[mlc.CONF_HOST], user_input.get(mlc.CONF_KEY)
                     )
                 )
-            except ConfigError as error:
-                errors[ERR_BASE] = error.reason
             except MerossKeyError:
                 return await self.async_step_keyerror()
             except AbortFlow:
-                errors[ERR_BASE] = ERR_ALREADY_CONFIGURED_DEVICE
+                errors = {ERR_BASE: ERR_ALREADY_CONFIGURED_DEVICE}
             except Exception as error:
                 LOGGER.warning(
                     "Error (%s) configuring meross device (host:%s)",
                     str(error),
                     user_input[mlc.CONF_HOST],
                 )
-                errors[ERR_BASE] = ERR_CANNOT_CONNECT
+                errors = {ERR_BASE: ERR_CANNOT_CONNECT}
 
         return self.async_show_form(
             step_id="device",
@@ -608,8 +597,8 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         self._title = f"{descriptor.type} - {devname}"
         self.context["title_placeholders"] = {"name": self._title}
         self.device_placeholders = {
-            CONF_DEVICE_TYPE: descriptor.productnametype,
-            mlc.CONF_DEVICE_ID: device_id,
+            "device_type": descriptor.productnametype,
+            "device_id": device_id,
         }
         if await self.async_set_unique_id(device_id):
             raise AbortFlow("already_configured")
@@ -626,29 +615,30 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
     Manage device options configuration
     """
 
+    config: mlc.HubConfigType | mlc.DeviceConfigType | mlc.ProfileConfigType
+
     __slots__ = (
         "config_entry",
         "config_entry_id",
-        "config_step_id",
+        "config",
     )
 
     def __init__(self, config_entry: config_entries.ConfigEntry):
         self.config_entry: Final = config_entry
         self.config_entry_id: Final = config_entry.entry_id
+        self.config = dict(self.config_entry.data)  # type: ignore
 
     async def async_step_init(self, user_input=None):
         unique_id = self.config_entry.unique_id
         if unique_id == mlc.DOMAIN:
-            self.hub_config = dict(self.config_entry.data)  # type: ignore
-            self.config_step_id = "hub"
-            return await self.async_step_menu()
+            return await self.async_step_menu(["hub", "diagnostics"])
 
         unique_id = unique_id.split(".")  # type: ignore
         if unique_id[0] == "profile":
             self._profile_entry = self.config_entry
-            self.profile_config = dict(self.config_entry.data)  # type: ignore
+            self.profile_config = self.config  # type: ignore
             self.profile_placeholders = {
-                mlc.CONF_EMAIL: self.profile_config.get(mlc.CONF_EMAIL),
+                "email": self.profile_config.get(mlc.CONF_EMAIL),
                 "placeholder": json.dumps(
                     {
                         key: self.profile_config.get(key)
@@ -657,11 +647,11 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     indent=2,
                 ),
             }
-            self.config_step_id = "profile"
-            return await self.async_step_menu()
+            return await self.async_step_menu(["profile", "diagnostics"])
 
-        self.device_config = dict(self.config_entry.data)  # type: ignore
-        self.device_config.pop(mlc.CONF_TRACE, None)  # totally removed in v5.0
+        self.device_config = typing.cast(mlc.DeviceConfigType, self.config)
+        if mlc.CONF_TRACE in self.device_config:
+            self.device_config.pop(mlc.CONF_TRACE)  # totally removed in v5.0
         self._device_id = unique_id[0]
         assert self._device_id == self.device_config.get(mlc.CONF_DEVICE_ID)
         device = ApiProfile.devices[self._device_id]
@@ -672,33 +662,21 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             else MerossDeviceDescriptor(self.device_config.get(mlc.CONF_PAYLOAD))
         )
         self.device_placeholders = {
-            mlc.CONF_DEVICE_ID: self._device_id,
-            CONF_DEVICE_TYPE: self.device_descriptor.productnametype,
+            "device_type": self.device_descriptor.productnametype,
+            "device_id": self._device_id,
         }
-        self.config_step_id = "device"
-        return await self.async_step_menu()
+        return await self.async_step_menu(["device", "diagnostics", "bind", "unbind"])
 
-    async def async_step_menu(self, user_input=None):
+    async def async_step_menu(self, user_input=[]):
         return self.async_show_menu(
             step_id="menu",
-            menu_options=[self.config_step_id, "diagnostics"],
+            menu_options=user_input,
         )
 
-    async def async_step_diagnostics(self, user_input=None):
-        # when choosing to start a diagnostic from the OptionsFlow UI we'll
-        # reload the entry so we trace also the full initialization process
-        # for a more complete insight on the EntityManager context.
-        # The info to trigger the trace_open on entry setup is carried through
-        # the global ApiProfile.managers_transient_state
-        state = ApiProfile.managers_transient_state.setdefault(self.config_entry_id, {})
-        state[mlc.CONF_TRACE] = True
-        await self.hass.config_entries.async_reload(self.config_entry_id)
-        return self.async_create_entry(data=None)  # type: ignore
-
     async def async_step_hub(self, user_input=None):
-        hub_config = self.hub_config
+        hub_config = self.config
         if user_input is not None:
-            hub_config.update(user_input)
+            hub_config[mlc.CONF_KEY] = user_input.get(mlc.CONF_KEY)
             return self.finish_options_flow(hub_config)
 
         config_schema = {
@@ -718,7 +696,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         general (common) device configuration allowing key set and
         general parameters to be entered/modified
         """
-        errors = {}
+        errors = None
         device = ApiProfile.devices[self._device_id]
         device_config = self.device_config
         if user_input is not None:
@@ -839,14 +817,14 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             except MerossKeyError:
                 return await self.async_step_keyerror()
             except ConfigError as error:
-                errors[ERR_BASE] = error.reason
+                errors = {ERR_BASE: error.err_key}
             except Exception:
-                errors[ERR_BASE] = ERR_CANNOT_CONNECT
+                errors = {ERR_BASE: ERR_CANNOT_CONNECT}
 
         config_schema = {}
         _host = device_config.get(mlc.CONF_HOST)
         config_schema[vol.Optional(mlc.CONF_HOST, description={DESCR: _host})] = str
-        self.device_placeholders[mlc.CONF_HOST] = _host or "MQTT"
+        self.device_placeholders["host"] = _host or "MQTT"
         config_schema[
             vol.Optional(
                 mlc.CONF_KEY, description={DESCR: device_config.get(mlc.CONF_KEY)}
@@ -878,6 +856,123 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             data_schema=vol.Schema(config_schema),
             errors=errors,
             description_placeholders=self.device_placeholders,
+        )
+
+    async def async_step_diagnostics(self, user_input=None):
+        # when choosing to start a diagnostic from the OptionsFlow UI we'll
+        # reload the entry so we trace also the full initialization process
+        # for a more complete insight on the EntityManager context.
+        # The info to trigger the trace_open on entry setup is carried through
+        # the global ApiProfile.managers_transient_state
+        config = self.config
+        if user_input:
+            config[mlc.CONF_TRACE_TIMEOUT] = user_input.get(mlc.CONF_TRACE_TIMEOUT)
+
+            state = ApiProfile.managers_transient_state.setdefault(
+                self.config_entry_id, {}
+            )
+            state[mlc.CONF_TRACE] = True
+            # taskerize the reload so the entry get updated first
+            self.hass.async_create_task(
+                self.hass.config_entries.async_reload(self.config_entry_id)
+            )
+
+            return self.finish_options_flow(config)
+
+        config_schema = {
+            vol.Optional(
+                mlc.CONF_TRACE_TIMEOUT,
+                default=mlc.CONF_TRACE_TIMEOUT_DEFAULT,  # type: ignore
+                description={DESCR: config.get(mlc.CONF_TRACE_TIMEOUT)},
+            ): cv.positive_int,
+        }
+        return self.async_show_form(
+            step_id="diagnostics", data_schema=vol.Schema(config_schema)
+        )
+
+    async def async_step_bind(self, user_input=None):
+        KEY_BROKER = "broker"
+        KEY_KEY = "key"
+        KEY_USERID = "userid"
+        if user_input:
+            broker = user_input.get(KEY_BROKER)
+            key = user_input.get(KEY_KEY)
+            userid = user_input.get(KEY_USERID)
+            if not broker:
+                mqtt_connection = MerossApi.get(self.hass).mqtt_connection
+                if mqtt_connection.mqtt_is_connected:
+                    broker, port = mqtt_connection.broker
+
+            device = ApiProfile.devices[self._device_id]
+            if device and device.online:
+                await device.async_bind(broker, key, userid)
+                return self.async_create_entry(data=None)  # type: ignore
+            else:
+                errors = {ERR_BASE: ERR_CANNOT_CONNECT}
+        else:
+            errors = None
+            broker = None
+            key = self.config.get(KEY_KEY)
+            userid = ""
+
+        config_schema = {
+            vol.Optional(
+                KEY_BROKER,
+                description={DESCR: broker}
+            ): str,
+            vol.Optional(
+                KEY_KEY,
+                description={DESCR: key}
+            ): str,
+            vol.Optional(
+                KEY_USERID,
+                description={DESCR: userid}
+            ): str
+        }
+        return self.async_show_form(
+            step_id="bind", data_schema=vol.Schema(config_schema), errors=errors
+        )
+
+    async def async_step_unbind(self, user_input=None):
+        KEY_ACTION = "post_action"
+        KEY_ACTION_DISABLE = "disable"
+        KEY_ACTION_DELETE = "delete"
+        if user_input:
+            device = ApiProfile.devices[self._device_id]
+            if device and device.online:
+                device.unbind()
+                action = user_input[KEY_ACTION]
+                if action == KEY_ACTION_DISABLE:
+                    self.hass.async_create_task(
+                        self.hass.config_entries.async_set_disabled_by(
+                            self.config_entry_id, config_entries.ConfigEntryDisabler.USER
+                        )
+                    )
+                elif action == KEY_ACTION_DELETE:
+                    self.hass.async_create_task(
+                        self.hass.config_entries.async_remove(self.config_entry_id)
+                    )
+                return self.async_create_entry(data=None)  # type: ignore
+            else:
+                errors = {ERR_BASE: ERR_CANNOT_CONNECT}
+        else:
+            errors = None
+
+        config_schema = {
+            vol.Required(
+                KEY_ACTION,
+                default=KEY_ACTION_DISABLE,  # type: ignore
+            ): selector(
+                {
+                    "select": {
+                        "options": [KEY_ACTION_DISABLE, KEY_ACTION_DELETE],
+                        "translation_key": "unbind_post_action",
+                    }
+                }
+            )
+        }
+        return self.async_show_form(
+            step_id="unbind", data_schema=vol.Schema(config_schema), errors=errors
         )
 
     def finish_options_flow(

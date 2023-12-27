@@ -53,11 +53,17 @@ async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
 
         options_flow = hass.config_entries.options
         result = await options_flow.async_init(context.config_entry_id)
-        await helpers.async_assert_flow_menu_to_step(
-            options_flow, result, "menu", "diagnostics", FlowResultType.CREATE_ENTRY
+        result = await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "menu", "diagnostics"
         )
+        result = await options_flow.async_configure(
+            result["flow_id"],
+            user_input={mlc.CONF_TRACE_TIMEOUT: tc.MOCK_TRACE_TIMEOUT},
+        )
+        assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
         # after having choosen 'diagnostics' the config entry will reload and the device
         # should set to be tracing.
+        await hass.async_block_till_done() # reload was 'taskerized'
         device = context.device
         assert device.trace_file
         # the endtime of the trace is not checked 'absolutely' due to float rounding

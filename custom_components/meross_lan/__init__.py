@@ -7,7 +7,7 @@ import typing
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HomeAssistant, SupportsResponse
+from homeassistant.core import HomeAssistant, SupportsResponse, callback
 from homeassistant.exceptions import (
     ConfigEntryError,
     ConfigEntryNotReady,
@@ -18,11 +18,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from . import const as mlc
 from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, schedule_async_callback
 from .meross_device import MerossDevice
-from .meross_profile import (
-    MerossCloudProfile,
-    MerossCloudProfileStore,
-    MQTTConnection,
-)
+from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (
     MEROSSDEBUG,
     MerossAckReply,
@@ -48,7 +44,6 @@ if typing.TYPE_CHECKING:
         MerossMessageType,
         MerossPayloadType,
     )
-
 
 else:
     # In order to avoid a static dependency we resolve these
@@ -149,18 +144,6 @@ class HAMQTTConnection(MQTTConnection):
                 self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
                     hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
                 )
-                # try to also get the HA broker conf
-                with self.exception_warning(
-                    "async_mqtt_subscribe: recovering broker conf"
-                ):
-                    mqtt_data = mqtt.get_mqtt_data(hass)
-                    if mqtt_data and mqtt_data.client:
-                        conf = mqtt_data.client.conf
-                        self.broker = (
-                            conf[mqtt.CONF_BROKER],
-                            conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT),
-                        )
-
                 if mqtt.is_connected(hass):
                     self._mqtt_connected()
             self._mqtt_subscribing = False
@@ -239,6 +222,24 @@ class HAMQTTConnection(MQTTConnection):
                     {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
                 ),
             )
+
+    @callback
+    def _mqtt_connected(self):
+        """called when the underlying mqtt.Client connects to the broker"""
+        # try to get the HA broker host address
+        with self.exception_warning(
+            "async_mqtt_subscribe: recovering broker conf"
+        ):
+            from homeassistant.components import mqtt
+            mqtt_data = mqtt.get_mqtt_data(ApiProfile.hass)
+            if mqtt_data and mqtt_data.client:
+                conf = mqtt_data.client.conf
+                self.broker = (
+                    conf[mqtt.CONF_BROKER],
+                    conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT),
+                )
+
+        super()._mqtt_connected()
 
 
 class MerossApi(ApiProfile):
