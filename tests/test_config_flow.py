@@ -92,6 +92,10 @@ async def test_profile_config_flow(
         user_input={
             mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: "",
+            mlc.CONF_SAVE_PASSWORD: False,
+            mlc.CONF_ALLOW_MQTT_PUBLISH: False,
+            mlc.CONF_CHECK_FIRMWARE_UPDATES: False,
+            mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES: False,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_LOGIN_PATH] == 1
@@ -104,6 +108,10 @@ async def test_profile_config_flow(
         user_input={
             mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
+            mlc.CONF_SAVE_PASSWORD: False,
+            mlc.CONF_ALLOW_MQTT_PUBLISH: False,
+            mlc.CONF_CHECK_FIRMWARE_UPDATES: False,
+            mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES: False,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_LOGIN_PATH] == 2
@@ -116,6 +124,10 @@ async def test_profile_config_flow(
         user_input={
             mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
+            mlc.CONF_SAVE_PASSWORD: False,
+            mlc.CONF_ALLOW_MQTT_PUBLISH: False,
+            mlc.CONF_CHECK_FIRMWARE_UPDATES: False,
+            mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES: False,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_LOGIN_PATH] == 3

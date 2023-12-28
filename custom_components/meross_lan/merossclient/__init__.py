@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 from hashlib import md5
 import json
+import re
 from time import time
 import typing
 from uuid import uuid4
@@ -152,6 +153,19 @@ class MerossSignatureError(MerossProtocolError):
 
     def __init__(self, response: MerossMessageType):
         super().__init__(response, "Signature error")
+
+
+def parse_host_port(domain: str, default_port = mc.MQTT_DEFAULT_PORT):
+    """Splits the eventual :port suffix from domain and return (host, port)"""
+    if (colon_index := domain.find(":")) != -1:
+        return domain[0:colon_index], int(domain[colon_index + 1 :])
+    else:
+        return domain, default_port
+
+
+def get_macaddress_from_uuid(uuid: str):
+    """Infers the device mac address from the UUID"""
+    return ":".join(re.findall("..", uuid[-12:]))
 
 
 def build_message(
@@ -314,6 +328,27 @@ def is_device_online(payload: dict) -> bool:
         return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
     except Exception:
         return False
+
+
+def check_message_strict(message: MerossMessageType):
+    """
+    Does a formal check of the message structure also raising a
+    typed exception if formally correct but carrying a protocol error
+    """
+    try:
+        header = message[mc.KEY_HEADER]
+        header[mc.KEY_NAMESPACE]
+        method = header[mc.KEY_METHOD]
+        payload = message[mc.KEY_PAYLOAD]
+        if method == mc.METHOD_ERROR:
+            p_error = payload[mc.KEY_ERROR]
+            if p_error.get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
+                raise MerossKeyError(message)
+            else:
+                raise MerossProtocolError(message, p_error)
+        return message
+    except KeyError as error:
+        raise MerossProtocolError(message, str(error)) from error
 
 
 _json_encoder = json.JSONEncoder(

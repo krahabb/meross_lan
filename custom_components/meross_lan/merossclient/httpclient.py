@@ -18,8 +18,8 @@ from . import (
     MerossKeyError,
     MerossMessageType,
     MerossPayloadType,
-    MerossProtocolError,
     build_message,
+    check_message_strict,
     const as mc,
     get_replykey,
     json_dumps,
@@ -176,20 +176,6 @@ class MerossHttpClient:
         check the protocol layer is correct and no protocol ERROR
         is being reported
         """
-        response = await self.async_request(namespace, method, payload)
-        try:
-            r_header = response[mc.KEY_HEADER]
-            r_header[mc.KEY_NAMESPACE]
-            r_method = r_header[mc.KEY_METHOD]
-            r_payload = response[mc.KEY_PAYLOAD]
-        except Exception as e:
-            raise MerossProtocolError(response, str(e)) from e
-
-        if r_method == mc.METHOD_ERROR:
-            p_error = r_payload.get(mc.KEY_ERROR, {})
-            if p_error.get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
-                raise MerossKeyError(response)
-            else:
-                raise MerossProtocolError(response, p_error)
-
-        return response
+        return check_message_strict(
+            await self.async_request(namespace, method, payload)
+        )

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import threading
 from time import time
 from zoneinfo import ZoneInfo
@@ -12,6 +11,7 @@ from custom_components.meross_lan.merossclient import (
     MerossPayloadType,
     build_message,
     const as mc,
+    get_macaddress_from_uuid,
     get_namespacekey,
     get_replykey,
     json_dumps,
@@ -36,7 +36,8 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         # patch system payload with fake ids
         hardware = self.hardware
         hardware[mc.KEY_UUID] = uuid
-        hardware[mc.KEY_MACADDRESS] = ":".join(re.findall("..", uuid[-12:]))
+        hardware[mc.KEY_MACADDRESS] = get_macaddress_from_uuid(uuid)
+
 
     def _import_tsv(self, f):
         """

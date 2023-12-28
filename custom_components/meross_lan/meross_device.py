@@ -67,7 +67,6 @@ from .merossclient import (
     json_dumps,
     json_loads,
 )
-from .merossclient.cloudapi import parse_domain
 from .merossclient.httpclient import MerossHttpClient
 from .sensor import PERCENTAGE, MLSensor, ProtocolSensor
 from .update import MLUpdate
@@ -731,22 +730,33 @@ class MerossDevice(MerossDeviceBase):
         )
 
     async def async_bind(
-        self, broker: str, key: str | None = None, userId: int | None = None
+        self, host: str, port: int, *, key: str | None = None, userid: str | None = None
     ):
-        broker, port = parse_domain(broker)
+        if MEROSSDEBUG:
+            return {
+                mc.KEY_HEADER: {
+                    mc.KEY_METHOD: mc.METHOD_SETACK
+                },
+                mc.KEY_PAYLOAD:{}
+            }
+        
+        if key is None:
+            key = self.key
+        if userid is None:
+            userid = self.descriptor.userId or CONF_PROFILE_ID_LOCAL
         bind = (
             mc.NS_APPLIANCE_CONFIG_KEY,
             mc.METHOD_SET,
             {
                 mc.KEY_KEY: {
                     mc.KEY_GATEWAY: {
-                        mc.KEY_HOST: broker,
+                        mc.KEY_HOST: host,
                         mc.KEY_PORT: port,
-                        mc.KEY_SECONDHOST: broker,
+                        mc.KEY_SECONDHOST: host,
                         mc.KEY_SECONDPORT: port,
                     },
-                    mc.KEY_KEY: key or self.key,
-                    mc.KEY_USERID:  str(userId) if userId else CONF_PROFILE_ID_LOCAL,
+                    mc.KEY_KEY: key,
+                    mc.KEY_USERID: userid,
                 }
             },
         )

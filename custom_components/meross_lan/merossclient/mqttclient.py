@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections import deque
 from hashlib import md5
 import logging
@@ -13,7 +14,7 @@ from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from . import MEROSSDEBUG, const as mc
+from . import MEROSSDEBUG, const as mc, get_macaddress_from_uuid
 
 if typing.TYPE_CHECKING:
     from .cloudapi import MerossCloudCredentials
@@ -31,42 +32,46 @@ class _MerossMQTTClient(mqtt.Client):
     Implements a rather abstract MQTT client used by both the MerossMQTTAppClient
     and MerossMQTTDeviceClient
     """
+
+    MQTT_ERR_SUCCESS = mqtt.MQTT_ERR_SUCCESS
+
     STATE_CONNECTING = "connecting"
     STATE_CONNECTED = "connected"
     STATE_RECONNECTING = "reconnecting"
     STATE_DISCONNECTING = "disconnecting"
     STATE_DISCONNECTED = "disconnected"
 
-    """
-    Meross cloud traffic need to be rate-limited in order
-    to prevent banning.
-    Here the policy is pretty simple:
-    the trasmission rate is limited by RATELIMITER_MINDELAY
-    which poses a minimum interval between successive publish
-    when a message is published with priority == True it is queued in front of
-    any other 'non priority' mesage
-    RATELIMITER_MAXQUEUE_PRIORITY sets a maximum number of priority messages
-    to be queued: when overflow occurs, older priority messages are discarded
-    """
+    # Meross cloud traffic need to be rate-limited in order to prevent banning.
+    # Here the policy is pretty simple:
+    # the trasmission rate is limited by RATELIMITER_MINDELAY which poses a minimum
+    # interval between successive publish. When a message is published with
+    # priority == True it is queued in front of any other 'non priority' mesage.
+    # RATELIMITER_MAXQUEUE_PRIORITY sets a maximum number of priority messages
+    # to be queued: when overflow occurs, older priority messages are discarded
     RATELIMITER_MINDELAY = 12
     RATELIMITER_MAXQUEUE = 5
     RATELIMITER_MAXQUEUE_PRIORITY = 0
     RATELIMITER_AVGPERIOD_DERATE = 0.1
 
     def __init__(self, client_id: str):
+        self._future_connected = None
+        self._lock = threading.Lock()
+        self._rl_lastpublish = monotonic() - self.RATELIMITER_MINDELAY
+        self._rl_qeque: deque[tuple[str, str, bool | None]] = deque()
+        self._rl_queue_length = 0
+        self._rl_dropped = 0
+        self._rl_avgperiod = 0.0
         self._stateext = self.STATE_DISCONNECTED
-        self.lock = threading.Lock()
         super().__init__(client_id, protocol=mqtt.MQTTv311)
         self.on_connect = self._mqttc_connect
         self.on_disconnect = self._mqttc_disconnect
         self.suppress_exceptions = True
-        self._rl_lastpublish = monotonic() - self.RATELIMITER_MINDELAY
-        self._rl_qeque: deque[tuple[str, str, bool | None]] = deque()
-        self._rl_queue_length = 0
-        self.rl_dropped = 0
-        self.rl_avgperiod = 0.0
         if MEROSSDEBUG and MEROSSDEBUG.mqtt_client_log_enable:
             self.enable_logger(LOGGER)
+
+    @property
+    def rl_dropped(self):
+        return self._rl_dropped
 
     @property
     def rl_queue_length(self):
@@ -88,18 +93,34 @@ class _MerossMQTTClient(mqtt.Client):
     def state_inactive(self):
         return self._stateext in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
 
+    async def async_safe_connect(self, host: str, port: int):
+        """
+        async friendly management of connection start. Keep in mind using the main thread or even
+        an executor usually fails in the socket connection and we get SSLEOFError with no reason
+        except the fact that maybe the asyncio is colliding with the mqtt.Client sockets
+        My (previous) code always managed the connection from the mqtt.Client dedicated thread
+        so we're keeping using that flavor. Looking online doesn't help and maybe just hints
+        to this error being linked to some python/ssl/paho versions (who knows...)
+        """
+        future = asyncio.get_running_loop().create_future()
+        with self._lock:
+            self.loop_stop()  # in case we're connected or connecting or disconnecting
+            self._future_connected = future
+            self.connect_async(host, port)
+            self._stateext = self.STATE_CONNECTING
+            self.loop_start()
+
+        await asyncio.wait_for(future, 5)
+
     def safe_connect(self, host: str, port: int):
         """
         Safe to be called from any thread (except the mqtt one). Could be a bit
         'blocking' if the thread needs to be stopped (in case it was still running).
         The effective connection is asynchronous and will be managed by the thread
         """
-        with self.lock:
-            # paho mqtt client has a very crazy interface so we cannot know
-            # for sure the internal state (being it 'connecting' or 'new'
-            # or whatever) so we just try to be as 'safe' as possible given
-            # its behavior
+        with self._lock:
             self.loop_stop()  # in case we're connected or connecting or disconnecting
+            self._future_connected = None
             self.connect_async(host, port)
             self._stateext = self.STATE_CONNECTING
             self.loop_start()
@@ -118,22 +139,22 @@ class _MerossMQTTClient(mqtt.Client):
     def rl_publish(
         self, topic: str, payload: str, priority: bool | None = None
     ) -> mqtt.MQTTMessageInfo | bool:
-        with self.lock:
+        with self._lock:
             queuelen = len(self._rl_qeque)
             if queuelen == 0:
                 now = monotonic()
                 period = now - self._rl_lastpublish
                 if period > self.RATELIMITER_MINDELAY:
                     self._rl_lastpublish = now
-                    self.rl_avgperiod += self.RATELIMITER_AVGPERIOD_DERATE * (
-                        period - self.rl_avgperiod
+                    self._rl_avgperiod += self.RATELIMITER_AVGPERIOD_DERATE * (
+                        period - self._rl_avgperiod
                     )
                     return super().publish(topic, payload)
 
             if priority is None:
                 if queuelen >= self.RATELIMITER_MAXQUEUE:
                     # TODO: log dropped message
-                    self.rl_dropped += 1
+                    self._rl_dropped += 1
                     return False
                 _queue_pos = queuelen
 
@@ -150,7 +171,7 @@ class _MerossMQTTClient(mqtt.Client):
                     if _queue_pos == self.RATELIMITER_MAXQUEUE_PRIORITY:
                         # discard older 'priority' msg
                         self._rl_qeque.popleft()
-                        self.rl_dropped += 1
+                        self._rl_dropped += 1
                         queuelen -= 1
                         break
                     _queue_pos += 1
@@ -167,7 +188,7 @@ class _MerossMQTTClient(mqtt.Client):
                     if _queue_pos == self.RATELIMITER_MAXQUEUE_PRIORITY:
                         # discard older 'priority' msg
                         self._rl_qeque.popleft()
-                        self.rl_dropped += 1
+                        self._rl_dropped += 1
                         queuelen -= 1
                         break
                     _queue_pos += 1
@@ -179,7 +200,7 @@ class _MerossMQTTClient(mqtt.Client):
     def loop_misc(self):
         ret = super().loop_misc()
         if (ret == mqtt.MQTT_ERR_SUCCESS) and self._rl_queue_length:
-            if self.lock.acquire(False):
+            if self._lock.acquire(False):
                 topic_payload_priority = None
                 try:
                     queuelen = len(self._rl_qeque)
@@ -189,14 +210,14 @@ class _MerossMQTTClient(mqtt.Client):
                         if period > self.RATELIMITER_MINDELAY:
                             topic_payload_priority = self._rl_qeque.popleft()
                             self._rl_lastpublish = now
-                            self.rl_avgperiod += self.RATELIMITER_AVGPERIOD_DERATE * (
-                                period - self.rl_avgperiod
+                            self._rl_avgperiod += self.RATELIMITER_AVGPERIOD_DERATE * (
+                                period - self._rl_avgperiod
                             )
                             self._rl_queue_length = queuelen - 1
                     else:
                         self._rl_queue_length = 0
                 finally:
-                    self.lock.release()
+                    self._lock.release()
                     if topic_payload_priority:
                         super().publish(
                             topic_payload_priority[0], topic_payload_priority[1]
@@ -204,10 +225,13 @@ class _MerossMQTTClient(mqtt.Client):
         return ret
 
     def _mqttc_connect(self, client: mqtt.Client, userdata, rc, other):
-        with self.lock:
+        with self._lock:
             self._rl_qeque.clear()
             self._rl_queue_length = 0
         self._stateext = self.STATE_CONNECTED
+        if self._future_connected:
+            self._future_connected.set_result(True)
+            self._future_connected = None
 
     def _mqttc_disconnect(self, client: mqtt.Client, userdata, rc):
         self._stateext = (
@@ -226,6 +250,7 @@ class MerossMQTTAppClient(_MerossMQTTClient):
     different from the client impersonated by a device even though both (device client
     and app client) connect to the same broker and talk the same protocol
     """
+
     def __init__(self, credentials: MerossCloudCredentials, app_id: str | None = None):
         if not app_id:
             app_id = generate_app_id()
@@ -254,7 +279,8 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
     This is different from the client impersonated by an App even though both (device client
     and app client) connect to the same broker and talk the same protocol
     """
-    def __init__(self, uuid: str, *, key: str, userid: str, macaddress: str):
+
+    def __init__(self, uuid: str, *, key: str = "", userid: str = ""):
         """
         uuid: 16 bytes hex string (lowercase)
         key: see device key
@@ -264,12 +290,11 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         self.topic_command = f"/appliance/{uuid}/publish"
         self.topic_subscribe = f"/appliance/{uuid}/subscribe"
         characters = string.ascii_letters + string.digits
-        random_string = ''.join(random.choices(characters, k=16))
-        super().__init__(f"fmware:{uuid}_{random_string}")
+        super().__init__(f"fmware:{uuid}_{''.join(random.choices(characters, k=16))}")
+        macaddress = get_macaddress_from_uuid(uuid)
         pwd = md5(f"{macaddress}{key}".encode("utf8")).hexdigest()
         self.username_pw_set(macaddress, f"{userid}_{pwd}")
-        self.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLSv1_2)
-        self.tls_insecure_set(True)
+        self.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
 
     def _mqttc_connect(self, client: mqtt.Client, userdata, rc, other):
         super()._mqttc_connect(client, userdata, rc, other)

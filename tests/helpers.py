@@ -26,7 +26,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
 from custom_components.meross_lan.meross_profile import MerossMQTTConnection
-from custom_components.meross_lan.merossclient import cloudapi, const as mc, json_loads
+from custom_components.meross_lan.merossclient import cloudapi, const as mc, json_loads, parse_host_port
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
 from . import const as tc
@@ -327,7 +327,7 @@ def build_emulator_for_profile(
     fw[mc.KEY_USERID] = int(profile_id)
 
     if domain:
-        host, port = cloudapi.parse_domain(domain)
+        host, port = parse_host_port(domain)
         fw[mc.KEY_SERVER] = host
         fw[mc.KEY_PORT] = port
 
@@ -336,7 +336,7 @@ def build_emulator_for_profile(
             fw.pop(mc.KEY_SECONDSERVER, None)
             fw.pop(mc.KEY_SECONDPORT, None)
         else:
-            host, port = cloudapi.parse_domain(reservedDomain)
+            host, port = parse_host_port(reservedDomain)
             fw[mc.KEY_SECONDSERVER] = host
             fw[mc.KEY_SECONDPORT] = port
 
@@ -423,6 +423,7 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
     up as a configured device in HA
     It also provides timefreezing
     """
+
     time: FrozenDateTimeFactory | StepTickTimeFactory
 
     __slots__ = (
@@ -529,9 +530,7 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         assert not MerossApi.devices.get(self.device_id)
         assert not self.config_entry_loaded
         hass = self.hass
-        assert await hass.config_entries.async_setup(
-            self.config_entry_id
-        )
+        assert await hass.config_entries.async_setup(self.config_entry_id)
         await hass.async_block_till_done()
         assert (device := self.device) and not device.online
 

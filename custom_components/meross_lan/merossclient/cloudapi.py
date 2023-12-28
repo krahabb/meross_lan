@@ -123,13 +123,6 @@ class LatestVersionType(typing.TypedDict, total=False):
     description: str
 
 
-def parse_domain(domain: str):
-    if (colon_index := domain.find(":")) != -1:
-        return domain[0:colon_index], int(domain[colon_index + 1 :])
-    else:
-        return domain, mc.MQTT_DEFAULT_PORT
-
-
 class SubDeviceInfoType(typing.TypedDict, total=False):
     """
     (Hub) SubDevice info as recovered from meross cloud api "/Hub/getSubDevices"

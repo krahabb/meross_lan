@@ -46,11 +46,13 @@ from .meross_device_hub import MerossDeviceHub
 from .merossclient import (
     MEROSSDEBUG,
     MerossRequest,
+    check_message_strict,
     const as mc,
     get_default_arguments,
     get_message_uuid,
     get_replykey,
     json_loads,
+    parse_host_port,
 )
 from .merossclient.cloudapi import (
     APISTATUS_TOKEN_ERRORS,
@@ -60,7 +62,6 @@ from .merossclient.cloudapi import (
     async_cloudapi_hub_getsubdevices,
     async_cloudapi_login,
     async_cloudapi_logout,
-    parse_domain,
 )
 from .merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
 from .sensor import MLSensor
@@ -553,16 +554,7 @@ class MQTTConnection(Loggable):
                 )
                 return
 
-            self.mqttdiscovering.add(device_id)
-            try:
-                if device_config := await self.async_identify_device(device_id, key):
-                    await ApiProfile.hass.config_entries.flow.async_init(
-                        DOMAIN,
-                        context={"source": SOURCE_INTEGRATION_DISCOVERY},
-                        data=device_config,
-                    )
-            finally:
-                self.mqttdiscovering.remove(device_id)
+            await self.async_try_discovery(device_id)
 
             """REMOVE
             discovered = self.get_or_set_discovering(device_id)
@@ -612,11 +604,13 @@ class MQTTConnection(Loggable):
         return self.mqttdiscovering[device_id]
     """
 
-    async def async_identify_device(
-        self, device_id: str, key: str
-    ) -> DeviceConfigType | None:
+    async def async_identify_device(self, device_id: str, key: str) -> DeviceConfigType:
+        """
+        Sends an ns_all and ns_ability GET requests encapsulated in an ns_multiple
+        to speed up things. Raises exception in case of error
+        """
         topic_response = self.topic_response
-        if response := await self.async_mqtt_publish(
+        response = await self.async_mqtt_publish(
             device_id,
             MerossRequest(
                 key,
@@ -638,18 +632,48 @@ class MQTTConnection(Loggable):
                 },
                 topic_response,
             ),
-        ):
+        )
+
+        if not response:
+            raise Exception("No response")
+
+        try:
+            # optimistically start considering valid response.
+            # only investigate the response if this doesn't work
             multiple_response: list[MerossMessageType] = response[mc.KEY_PAYLOAD][
                 mc.KEY_MULTIPLE
             ]
-            payload = multiple_response[0][mc.KEY_PAYLOAD]
-            payload.update(multiple_response[1][mc.KEY_PAYLOAD])
+            # this syntax ensures both the responses are the expected ones
             return {
                 CONF_DEVICE_ID: device_id,
-                CONF_PAYLOAD: payload,
+                CONF_PAYLOAD: {
+                    mc.KEY_ALL: multiple_response[0][mc.KEY_PAYLOAD][mc.KEY_ALL],
+                    mc.KEY_ABILITY: multiple_response[1][mc.KEY_PAYLOAD][
+                        mc.KEY_ABILITY
+                    ],
+                },
                 CONF_KEY: key,
             }
-        return None
+        except KeyError as error:
+            # formally checks the message and raises a typed except
+            check_message_strict(response)
+            # else go with the wind
+            raise error
+
+    async def async_try_discovery(self, device_id: str):
+        """Tries device identification and starts a flow if succeded"""
+        result = None
+        self.mqttdiscovering.add(device_id)
+        with self.exception_warning(
+            "trying discover for device id:%s", device_id, timeout=14400
+        ):
+            result = await ApiProfile.hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": SOURCE_INTEGRATION_DISCOVERY},
+                data=await self.async_identify_device(device_id, self.profile.key),
+            )
+        self.mqttdiscovering.remove(device_id)
+        return result
 
     """REMOVE
     async def _async_progress_discovery(self, discovered: dict, device_id: str):
@@ -732,7 +756,22 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         mc.METHOD_PUSH: False,
         mc.METHOD_GET: None,
     }
-    __slots__ = ("_unsub_random_disconnect",)
+
+    # here we're acrobatically slottizing MerossMQTTAppClient
+    # since it cannot be slotted itself leading to multiple inheritance
+    # "forbidden" slots
+
+    __slots__ = (
+        "_future_connected",
+        "_lock",
+        "_rl_lastpublish",
+        "_rl_qeque",
+        "_rl_queue_length",
+        "_rl_dropped",
+        "_rl_avgperiod",
+        "_stateext",
+        "_unsub_random_disconnect",
+    )
 
     def __init__(
         self, profile: MerossCloudProfile, connection_id: str, broker: tuple[str, int]
@@ -1228,12 +1267,14 @@ class MerossCloudProfile(ApiProfile):
         if device_info:
             if domain := device_info.get(mc.KEY_DOMAIN):
                 mqttconnections.append(
-                    self._get_or_create_mqttconnection(parse_domain(domain))
+                    self._get_or_create_mqttconnection(parse_host_port(domain))
                 )
             if reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN):
                 if reserveddomain != domain:
                     mqttconnections.append(
-                        self._get_or_create_mqttconnection(parse_domain(reserveddomain))
+                        self._get_or_create_mqttconnection(
+                            parse_host_port(reserveddomain)
+                        )
                     )
         return mqttconnections
 
@@ -1451,14 +1492,7 @@ class MerossCloudProfile(ApiProfile):
                     continue
                 # cloud conf has a new device
                 for mqttconnection in self.get_or_create_mqttconnections(device_id):
-                    if device_config := await mqttconnection.async_identify_device(
-                        device_id, self.key
-                    ):
-                        await ApiProfile.hass.config_entries.flow.async_init(
-                            DOMAIN,
-                            context={"source": SOURCE_INTEGRATION_DISCOVERY},
-                            data=device_config,
-                        )
+                    if await mqttconnection.async_try_discovery(device_id):
                         break
 
     def _schedule_save_store(self):
