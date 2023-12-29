@@ -37,6 +37,14 @@
             }
         }
     },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Disable the configuration entry",
+                "delete": "Permanently delete the configuration entry"
+            }
+        }
+    },
     "config": {
         "flow_title": "{name}",
         "abort": {
@@ -106,11 +114,23 @@
             "cannot_connect": "[%key:config::error::cannot_connect%]",
             "cloud_profile_mismatch": "[%key:config::error::cloud_profile_mismatch%]",
             "device_id_mismatch": "Device UUID mismatch: the device is not the same",
+            "habroker_not_connected": "The HomeAssistant MQTT broker is not connected",
             "invalid_auth": "[%key:config::error::invalid_auth%]",
             "invalid_key": "[%key:config::error::invalid_key%]",
             "invalid_nullkey": "[%key:config::error::invalid_nullkey%]"
         },
         "step": {
+            "menu": {
+                "title": "Choose option",
+                "menu_options": {
+                    "hub": "Configure",
+                    "device": "[%key:options::step::menu::menu_options::hub%]",
+                    "profile": "[%key:options::step::menu::menu_options::hub%]",
+                    "diagnostics": "Start diagnostics trace",
+                    "bind": "Reconfigure MQTT (local binding)",
+                    "unbind": "Hardware reset"
+                }
+            },
             "hub": {
                 "title": "[%key:config::step::hub::title%]",
                 "description": "[%key:config::step::hub::description%]",
@@ -126,8 +146,7 @@
                     "key": "[%key:config::step::device::data::key%]",
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
-                    "timezone": "Device time zone",
-                    "trace_timeout": "Debug tracing duration (sec)"
+                    "timezone": "Device time zone"
                 }
             },
             "keyerror": {
@@ -150,13 +169,31 @@
                     "create_diagnostic_entities": "[%key:config::step::profile::data::create_diagnostic_entities%]"
                 }
             },
-            "menu": {
-                "title": "Choose option",
-                "menu_options": {
-                    "hub": "Configure",
-                    "device": "[%key:options::step::menu::menu_options::hub%]",
-                    "profile": "[%key:options::step::menu::menu_options::hub%]",
-                    "diagnostics": "Start diagnostics trace"
+            "diagnostics": {
+                "title": "[%key:options::step::menu::menu_options::diagnostics%]",
+                "description": "The configuration will be reloaded and debug tracing will start for the configured period",
+                "data": {
+                    "trace_timeout": "Debug tracing duration (sec)"
+                }
+            },
+            "bind": {
+                "title": "[%key:options::step::menu::menu_options::bind%]",
+                "description": "Connect (Bind) the device to a different MQTT broker",
+                "data": {
+                    "broker": "Address of the new MQTT broker",
+                    "check": "Check broker compatibility before reconfiguring",
+                    "key": "[%key:config::step::hub::data::key%]",
+                    "userid": "User Id"
+                },
+                "data_description": {
+                    "broker": "Enter the address in the form 'host(:port)' or leave empty to use the HA one"
+                }
+            },
+            "unbind": {
+                "title": "[%key:options::step::menu::menu_options::unbind%]",
+                "description": "WARNING! this will issue a special command to unbind the device from the current MQTT broker (either Meross cloud or local one) and reset it to factory defaults.\n After that, the device will need to be re-configured again in order to use it",
+                "data": {
+                    "post_action": "After unbinding:"
                 }
             }
         }
@@ -193,8 +230,7 @@
                             "key": "[%key:options::step::device::data::key%]",
                             "protocol": "[%key:options::step::device::data::protocol%]",
                             "polling_period": "[%key:options::step::device::data::polling_period%]",
-                            "timezone": "[%key:options::step::device::data::timezone%]",
-                            "trace_timeout": "[%key:options::step::device::data::trace_timeout%]"
+                            "timezone": "[%key:options::step::device::data::timezone%]"
                         }
                     }
                 }

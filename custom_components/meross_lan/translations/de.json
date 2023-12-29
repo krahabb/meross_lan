@@ -108,7 +108,8 @@
             "device_id_mismatch": "Nicht übereinstimmende Geräte-UUID: Das Gerät ist nicht dasselbe",
             "invalid_auth": "Fehlerhafte Zugangsdaten",
             "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
-            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen"
+            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
+            "habroker_not_connected": "Der HomeAssistant MQTT-Broker ist nicht verbunden"
         },
         "step": {
             "hub": {
@@ -156,7 +157,36 @@
                     "hub": "Konfigurieren",
                     "device": "Konfigurieren",
                     "profile": "Konfigurieren",
-                    "diagnostics": "Diagnosetrace starten"
+                    "diagnostics": "Diagnosetrace starten",
+                    "bind": "MQTT neu konfigurieren (lokale Bindung)",
+                    "unbind": "Hardware-Reset"
+                }
+            },
+            "diagnostics": {
+                "title": "Diagnosetrace starten",
+                "description": "Die Konfiguration wird neu geladen und die Debug-Verfolgung wird für den konfigurierten Zeitraum gestartet",
+                "data": {
+                    "trace_timeout": "Dauer der Debug-Ablaufverfolgung (sec)"
+                }
+            },
+            "bind": {
+                "title": "MQTT neu konfigurieren (lokale Bindung)",
+                "description": "Verbinden (Binden) des Geräts mit einem anderen MQTT-Broker",
+                "data": {
+                    "broker": "Adresse des neuen MQTT-Brokers",
+                    "check": "Prüfen Sie vor der Neukonfiguration die Kompatibilität mit MQTT-Brokern",
+                    "key": "Geräteschlüssel",
+                    "userid": "Benutzer-ID"
+                },
+                "data_description": {
+                    "broker": "Geben Sie die Adresse in der Form 'host(:port)' ein oder lassen Sie sie leer, um die Adresse von HomeAssistant zu verwenden"
+                }
+            },
+            "unbind": {
+                "title": "Hardware-Reset",
+                "description": "ACHTUNG! Dadurch wird ein spezieller Befehl ausgegeben, der das Gerät vom aktuellen MQTT-Broker (entweder Meross Cloud oder lokaler Broker) abkoppelt und auf die Werkseinstellungen zurücksetzt.\n Danach muss das Gerät wieder neu konfiguriert werden, um es zu verwenden",
+                "data": {
+                    "post_action": "Nach dem Entbinden:"
                 }
             }
         }
@@ -198,6 +228,14 @@
                         }
                     }
                 }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Deaktivieren Sie den Konfigurationseintrag",
+                "delete": "Dauerhaftes Löschen des Konfigurationseintrags"
             }
         }
     }

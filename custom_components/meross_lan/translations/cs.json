@@ -108,7 +108,8 @@
             "device_id_mismatch": "Neshoda UUID zařízení: zařízení není stejné",
             "invalid_auth": "Ověření selhalo",
             "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key"
+            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
+            "habroker_not_connected": "Zprostředkovatel HomeAssistant MQTT není připojen"
         },
         "step": {
             "hub": {
@@ -156,7 +157,36 @@
                     "hub": "Konfigurovat",
                     "device": "Konfigurovat",
                     "profile": "Konfigurovat",
-                    "diagnostics": "Spusťte trasování diagnostiky"
+                    "diagnostics": "Spusťte trasování diagnostiky",
+                    "bind": "Překonfigurovat MQTT (místní vazba)",
+                    "unbind": "Hardwarový reset"
+                }
+            },
+            "diagnostics": {
+                "title": "Spusťte trasování diagnostiky",
+                "description": "Konfigurace se znovu načte a začne se sledovat ladění po nastavenou dobu.",
+                "data": {
+                    "trace_timeout": "Doba trvání trasování ladění (sec)"
+                }
+            },
+            "bind": {
+                "title": "Překonfigurovat MQTT (místní vazba)",
+                "description": "Připojení (Bind) zařízení k jinému zprostředkovateli MQTT",
+                "data": {
+                    "broker": "Adresa nového zprostředkovatele MQTT",
+                    "check": "Zkontrolujte kompatibilitu zprostředkovatele MQTT před rekonfigurací",
+                    "key": "Klíč zařízení",
+                    "userid": "Id uživatele"
+                },
+                "data_description": {
+                    "broker": "Zadejte adresu ve tvaru 'host(:port)' nebo nechte prázdnou, chcete-li použít adresu HomeAssistant."
+                }
+            },
+            "unbind": {
+                "title": "Hardwarový reset",
+                "description": "UPOZORNĚNÍ! vydá speciální příkaz k odpojení zařízení od aktuálního zprostředkovatele MQTT (buď Meross cloud, nebo lokálního) a obnoví jeho tovární nastavení.\n Poté bude nutné zařízení znovu nakonfigurovat, aby bylo možné jej používat",
+                "data": {
+                    "post_action": "Po rozvázání:"
                 }
             }
         }
@@ -198,6 +228,14 @@
                         }
                     }
                 }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Konfigurace zařízení",
+                "delete": "Trvalé odstranění položky konfigurace"
             }
         }
     }

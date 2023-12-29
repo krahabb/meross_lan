@@ -108,7 +108,8 @@
             "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません",
             "invalid_auth": "認証エラー",
             "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key"
+            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
+            "habroker_not_connected": "HomeAssistant MQTTブローカーが接続されていない"
         },
         "step": {
             "hub": {
@@ -156,7 +157,36 @@
                     "hub": "設定",
                     "device": "設定",
                     "profile": "設定",
-                    "diagnostics": "診断トレースの開始"
+                    "diagnostics": "診断トレースの開始",
+                    "bind": "MQTTの再設定（ローカルバインディング）",
+                    "unbind": "ハードウェア・リセット"
+                }
+            },
+            "diagnostics": {
+                "title": "診断トレースの開始",
+                "description": "コンフィギュレーションがリロードされ、設定された期間、デバッグトレースが開始されます。",
+                "data": {
+                    "trace_timeout": "デバグトレース時間 [秒]"
+                }
+            },
+            "bind": {
+                "title": "MQTTの再設定（ローカルバインディング）",
+                "description": "デバイスを別のMQTTブローカーに接続（バインド）する",
+                "data": {
+                    "broker": "新しいMQTTブローカーのアドレス",
+                    "check": "再設定前にMQTTブローカーとの互換性を確認する",
+                    "key": "デバイスキー",
+                    "userid": "ユーザーID"
+                },
+                "data_description": {
+                    "broker": "host(:port)'形式でアドレスを入力するか、HomeAssistantのものを使用する場合は空のままにします。"
+                }
+            },
+            "unbind": {
+                "title": "ハードウェア・リセット",
+                "description": "警告！これは、現在のMQTTブローカー（Merossクラウドまたはローカルのいずれか）からデバイスをアンバインドし、工場出荷時のデフォルトにリセットする特別なコマンドを発行します。\n その後、デバイスを使用するには再度設定する必要があります。",
+                "data": {
+                    "post_action": "バインドを解いた後"
                 }
             }
         }
@@ -198,6 +228,14 @@
                         }
                     }
                 }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "設定エントリーを無効にする",
+                "delete": "コンフィギュレーション・エントリーを永久に削除する"
             }
         }
     }

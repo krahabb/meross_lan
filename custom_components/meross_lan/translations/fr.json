@@ -108,7 +108,8 @@
             "device_id_mismatch": "Non-concordance de l'UUID: l'appareil n'est pas le même",
             "invalid_auth": "Authentication",
             "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
-            "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide"
+            "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
+            "habroker_not_connected": "Le courtier HomeAssistant MQTT n'est pas connecté"
         },
         "step": {
             "hub": {
@@ -156,7 +157,36 @@
                     "hub": "Configurer",
                     "device": "Configurer",
                     "profile": "Configurer",
-                    "diagnostics": "Démarrer la trace de diagnostic"
+                    "diagnostics": "Démarrer la trace de diagnostic",
+                    "bind": "Reconfigurer MQTT (liaison locale)",
+                    "unbind": "Réinitialisation du matériel"
+                }
+            },
+            "diagnostics": {
+                "title": "Démarrer la trace de diagnostic",
+                "description": "La configuration sera rechargée et le traçage de débogage commencera pour la période configurée.",
+                "data": {
+                    "trace_timeout": "Durée du suivi du débogage (sec)"
+                }
+            },
+            "bind": {
+                "title": "Reconfigurer MQTT (liaison locale)",
+                "description": "Connecter (Bind) l'appareil à un autre courtier MQTT",
+                "data": {
+                    "broker": "Adresse du nouveau courtier MQTT",
+                    "check": "Vérifier la compatibilité du courtier MQTT avant de reconfigurer",
+                    "key": "Clé",
+                    "userid": "ID de l'utilisateur"
+                },
+                "data_description": {
+                    "broker": "Entrez l'adresse sous la forme 'host(:port)' ou laissez vide pour utiliser celle de HomeAssistant."
+                }
+            },
+            "unbind": {
+                "title": "Réinitialisation du matériel",
+                "description": "ATTENTION ! Ceci va émettre une commande spéciale pour délier l'appareil du courtier MQTT actuel (soit le nuage Meross ou un courtier local) et le réinitialiser aux valeurs d'usine par défaut.\n Après cela, l'appareil devra être reconfiguré pour pouvoir être utilisé.",
+                "data": {
+                    "post_action": "Après la déliaison:"
                 }
             }
         }
@@ -198,6 +228,14 @@
                         }
                     }
                 }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Désactiver l'entrée de configuration",
+                "delete": "Supprimer définitivement l'entrée de configuration"
             }
         }
     }

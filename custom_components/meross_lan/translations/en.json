@@ -108,7 +108,8 @@
             "device_id_mismatch": "Device UUID mismatch: the device is not the same",
             "invalid_auth": "Authentication error",
             "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
-            "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key"
+            "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
+            "habroker_not_connected": "The HomeAssistant MQTT broker is not connected"
         },
         "step": {
             "hub": {
@@ -156,7 +157,36 @@
                     "hub": "Configure",
                     "device": "Configure",
                     "profile": "Configure",
-                    "diagnostics": "Start diagnostics trace"
+                    "diagnostics": "Start diagnostics trace",
+                    "bind": "Reconfigure MQTT (local binding)",
+                    "unbind": "Hardware reset"
+                }
+            },
+            "diagnostics": {
+                "title": "Start diagnostics trace",
+                "description": "The configuration will be reloaded and debug tracing will start for the configured period",
+                "data": {
+                    "trace_timeout": "Debug tracing duration (sec)"
+                }
+            },
+            "bind": {
+                "title": "Reconfigure MQTT (local binding)",
+                "description": "Connect (Bind) the device to a different MQTT broker",
+                "data": {
+                    "broker": "Address of the new MQTT broker",
+                    "check": "Check MQTT broker compatibility before reconfiguring",
+                    "key": "Device key",
+                    "userid": "User Id"
+                },
+                "data_description": {
+                    "broker": "Enter the address in the form 'host(:port)' or leave empty to use the HomeAssistant one"
+                }
+            },
+            "unbind": {
+                "title": "Hardware reset",
+                "description": "WARNING! this will issue a special command to unbind the device from the current MQTT broker (either Meross cloud or local one) and reset it to factory defaults.\n After that, the device will need to be re-configured again in order to use it",
+                "data": {
+                    "post_action": "After unbinding:"
                 }
             }
         }
@@ -198,6 +228,14 @@
                         }
                     }
                 }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Disable the configuration entry",
+                "delete": "Permanently delete the configuration entry"
             }
         }
     }

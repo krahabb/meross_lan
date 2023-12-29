@@ -108,7 +108,8 @@
             "device_id_mismatch": "UUID non corrispondente: il dispositivo non è lo stesso",
             "invalid_auth": "Errore di autenticazione",
             "invalid_key": "Chiave errata: usa 'Cloud retrieve' per recuperare dall'account Meross",
-            "invalid_nullkey": "Chiave errata: usa 'Hack mode' per consentire un valore vuoto"
+            "invalid_nullkey": "Chiave errata: usa 'Hack mode' per consentire un valore vuoto",
+            "habroker_not_connected": "Il broker MQTT di HomeAssistant non è collegato"
         },
         "step": {
             "hub": {
@@ -156,7 +157,36 @@
                     "hub": "Configura",
                     "device": "Configura",
                     "profile": "Configura",
-                    "diagnostics": "Attiva il debug tracing"
+                    "diagnostics": "Attiva il debug tracing",
+                    "bind": "Riconfigura MQTT (binding locale)",
+                    "unbind": "Reset hardware"
+                }
+            },
+            "diagnostics": {
+                "title": "Attiva il debug tracing",
+                "description": "La configurazione verrà ricaricata e il debug tracing verrà avviato per il periodo configurato.",
+                "data": {
+                    "trace_timeout": "Durata debug tracing (sec)"
+                }
+            },
+            "bind": {
+                "title": "Riconfigura MQTT (binding locale)",
+                "description": "Collega (Bind) il dispositivo a un altro broker MQTT",
+                "data": {
+                    "broker": "Indirizzo del nuovo broker MQTT",
+                    "check": "Verifica la compatibilità del broker MQTT prima di riconfigurarlo",
+                    "key": "Chiave dispositivo",
+                    "userid": "Id utente"
+                },
+                "data_description": {
+                    "broker": "Inserire l'indirizzo nella forma \"host(:port)\" o lasciare vuoto per utilizzare quello di HomeAssistant."
+                }
+            },
+            "unbind": {
+                "title": "Reset hardware",
+                "description": "ATTENZIONE: questo comando speciale disaccoppia il dispositivo dal broker MQTT corrente (cloud Meross o locale) e lo riporta alle impostazioni di fabbrica.\n Dopodiché, il dispositivo dovrà essere riconfigurato di nuovo per poterlo utilizzare.",
+                "data": {
+                    "post_action": "Dopo il reset:"
                 }
             }
         }
@@ -198,6 +228,14 @@
                         }
                     }
                 }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Disattiva la voce di configurazione",
+                "delete": "Elimina definitivamente la voce di configurazione"
             }
         }
     }
