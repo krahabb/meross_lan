@@ -450,7 +450,6 @@ class MerossDevice(MerossDeviceBase):
         )
 
         self._update_config()
-        self.curr_protocol = self.pref_protocol
 
         if mc.NS_APPLIANCE_SYSTEM_DNDMODE in ability:
             from .light import MLDNDLightEntity
@@ -507,7 +506,6 @@ class MerossDevice(MerossDeviceBase):
     ):
         await super().entry_update_listener(hass, config_entry)
         self._update_config()
-
         self._check_mqtt_connection_attach()
 
         if self.conf_protocol is not CONF_PROTOCOL_AUTO:
@@ -725,6 +723,7 @@ class MerossDevice(MerossDeviceBase):
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
         self._check_mqtt_connection_attach()
+        self.curr_protocol = self.pref_protocol
         self._unsub_polling_callback = schedule_async_callback(
             ApiProfile.hass, 0, self._async_polling_callback
         )
@@ -732,14 +731,13 @@ class MerossDevice(MerossDeviceBase):
     async def async_bind(
         self, host: str, port: int, *, key: str | None = None, userid: str | None = None
     ):
+        # TODO: test in the field and remove DEBUG code
         if MEROSSDEBUG:
             return {
-                mc.KEY_HEADER: {
-                    mc.KEY_METHOD: mc.METHOD_SETACK
-                },
-                mc.KEY_PAYLOAD:{}
+                mc.KEY_HEADER: {mc.KEY_METHOD: mc.METHOD_SETACK},
+                mc.KEY_PAYLOAD: {},
             }
-        
+
         if key is None:
             key = self.key
         if userid is None:
@@ -1788,18 +1786,6 @@ class MerossDevice(MerossDeviceBase):
         self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(
             config.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO
         )
-        if self.conf_protocol is CONF_PROTOCOL_AUTO:
-            # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
-            # and eventually fallback (curr_protocol) until some good news allow us
-            # to retry pref_protocol. When binded to a cloud_profile always prefer
-            # 'local' http since it should be faster and less prone to cloud 'issues'
-            if config.get(CONF_HOST) or self.profile_id:
-                self.pref_protocol = CONF_PROTOCOL_HTTP
-            else:
-                self.pref_protocol = CONF_PROTOCOL_MQTT
-        else:
-            self.pref_protocol = self.conf_protocol
-
         self.polling_period = (
             config.get(CONF_POLLING_PERIOD) or CONF_POLLING_PERIOD_DEFAULT
         )
@@ -1849,27 +1835,40 @@ class MerossDevice(MerossDeviceBase):
         self._cloud_profile = None
 
     def _check_mqtt_connection_attach(self):
+        _cloud_profile = self._cloud_profile
+        _mqtt_connection = self._mqtt_connection
+
+        if self.conf_protocol is CONF_PROTOCOL_AUTO:
+            # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
+            # and eventually fallback (curr_protocol) until some good news allow us
+            # to retry pref_protocol. When binded to a cloud_profile always prefer
+            # 'local' http since it should be faster and less prone to cloud 'issues'
+            if self.config.get(CONF_HOST) or _cloud_profile:
+                self.pref_protocol = CONF_PROTOCOL_HTTP
+            else:
+                self.pref_protocol = CONF_PROTOCOL_MQTT
+        else:
+            self.pref_protocol = self.conf_protocol
+
         if self.conf_protocol is CONF_PROTOCOL_HTTP:
             # strictly HTTP so detach MQTT in case
-            if self._mqtt_connection:
-                self._mqtt_connection.detach(self)
+            if _mqtt_connection:
+                _mqtt_connection.detach(self)
             self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
         else:
-            profile_id = self.profile_id
-            if profile_id and (self.conf_protocol is CONF_PROTOCOL_AUTO):
+
+            if _cloud_profile and (self.conf_protocol is CONF_PROTOCOL_AUTO):
                 if mc.NS_APPLIANCE_SYSTEM_DEBUG not in self.polling_strategies:
                     SystemDebugPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DEBUG)
             else:
                 self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
 
-            if self._mqtt_connection:
-                if self._mqtt_connection.profile.id == profile_id:
-                    return
-                self._mqtt_connection.detach(self)
-
-            if profile_id:
-                if self._cloud_profile:
-                    self._cloud_profile.attach_mqtt(self)
+            if _cloud_profile:
+                if _mqtt_connection:
+                    if _mqtt_connection.profile == _cloud_profile:
+                        return
+                    _mqtt_connection.detach(self)
+                _cloud_profile.attach_mqtt(self)
             else:
                 # this is the case for when we just want local handling
                 # in this scenario we bind anyway to our local mqtt api
@@ -1882,6 +1881,10 @@ class MerossDevice(MerossDeviceBase):
                 # fill our local mqtt structures with unuseful data..
                 # Right now add anyway since it's no harm
                 # (no mqtt messages will come though)
+                if _mqtt_connection:
+                    if _mqtt_connection.profile == ApiProfile.api:
+                        return
+                    _mqtt_connection.detach(self)
                 ApiProfile.api.attach_mqtt(self)
 
     def update_latest_version(self, latest_version: LatestVersionType):

@@ -576,8 +576,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
             api.profiles[profile_id] = profile
             # 'link' the devices already initialized
             for device in api.active_devices():
-                if device.descriptor.userId == profile_id:
-                    profile.link(device)
+                profile.try_link(device)
             return True
         except Exception as error:
             await profile.async_shutdown()
@@ -594,32 +593,13 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     device = api.build_device(device_id, config_entry)
     try:
         await device.async_setup_entry(hass, config_entry)
-        device.start()
         api.devices[device_id] = device
         # this code needs to run after registering api.devices[device_id]
         # because of race conditions with profile entry loading
-        profile_id = device.descriptor.userId
-        if profile_id in api.profiles:
-            # the profile is somehow configured, either disabled or not
-            if profile := api.profiles[profile_id]:
-                profile.link(device)
-        else:
-            # trigger a cloud profile discovery if we guess it reasonable
-            if profile_id and (config_entry.data.get(mlc.CONF_CLOUD_KEY) == device.key):
-                helper = ConfigEntriesHelper(hass)
-                flow_unique_id = f"profile.{profile_id}"
-                if not helper.get_config_flow(flow_unique_id):
-                    await hass.config_entries.flow.async_init(
-                        mlc.DOMAIN,
-                        context={
-                            "source": SOURCE_INTEGRATION_DISCOVERY,
-                            "unique_id": flow_unique_id,
-                            "title_placeholders": {"name": "unknown cloud profile"},
-                        },
-                        data={
-                            mc.KEY_USERID_: profile_id,
-                        },
-                    )
+        for profile in api.active_profiles():
+            if profile.try_link(device):
+                break
+        device.start()
         return True
     except Exception as error:
         await device.async_shutdown()

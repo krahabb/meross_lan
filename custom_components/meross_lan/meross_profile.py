@@ -1125,17 +1125,22 @@ class MerossCloudProfile(ApiProfile):
     def token(self):
         return self._data.get(mc.KEY_TOKEN)
 
-    def link(self, device: MerossDevice):
+    def device_registered(self, device_id):
+        return device_id in self._data[MerossCloudProfile.KEY_DEVICE_INFO]
+
+    def try_link(self, device: MerossDevice):
         device_id = device.id
+        device_info = self._data[MerossCloudProfile.KEY_DEVICE_INFO].get(device_id)
+        if not device_info:
+            # does not belong here.
+            # we previously used the device.descriptor.userId to 'index'
+            # into the cloud profiles but that info has always been too
+            # flaky to be reliable (since when we rebind the devices people
+            # could use any value for the device conf and so use a 'valid'
+            # userid from a cloud account even if the device is not binded
+            # anymore)
+            return False
         if device_id not in self.linkeddevices:
-            device_info = self._data[MerossCloudProfile.KEY_DEVICE_INFO].get(device_id)
-            if not device_info:
-                self.log(
-                    WARNING,
-                    "cannot link MerossDevice(%s): does not belong to the current profile",
-                    device.name,
-                )
-                return
             device.profile_linked(self)
             self.linkeddevices[device_id] = device
             device.update_device_info(device_info)
