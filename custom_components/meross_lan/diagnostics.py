@@ -50,7 +50,7 @@ async def async_get_config_entry_diagnostics(
             "pref_protocol": device.pref_protocol,
             "curr_protocol": device.curr_protocol,
             "MQTT": {
-                "cloud_profile": bool(device._cloud_profile),
+                "cloud_profile": bool(device._profile and device._profile.id),
                 "locally_active": bool(device.mqtt_locallyactive),
                 "mqtt_connection": bool(device._mqtt_connection),
                 "mqtt_connected": bool(device._mqtt_connected),

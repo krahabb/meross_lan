@@ -204,7 +204,7 @@ async def test_meross_profile_with_device(
         assert (device := devicecontext.device)
         assert (profile := api.profiles.get(tc.MOCK_PROFILE_ID))
 
-        assert device._cloud_profile is profile
+        assert device._profile is profile
         assert device._mqtt_connection in profile.mqttconnections.values()
         assert device._mqtt_connected is device._mqtt_connection
 
@@ -240,6 +240,6 @@ async def test_meross_profile_with_device(
         # remove the cloud profile
         assert await profile_entry_mock.async_unload()
         assert api.profiles[tc.MOCK_PROFILE_ID] is None
-        assert device._cloud_profile is None
+        assert device._profile is None
         assert device._mqtt_connection is None
         assert device._mqtt_connected is None

@@ -110,6 +110,10 @@ class HAMQTTConnection(MQTTConnection):
         await self.async_mqtt_unsubscribe()
         await super().async_shutdown()
 
+    @property
+    def is_cloud_connection(self):
+        return False
+
     async def _async_mqtt_publish(
         self,
         device_id: str,
@@ -227,10 +231,9 @@ class HAMQTTConnection(MQTTConnection):
     def _mqtt_connected(self):
         """called when the underlying mqtt.Client connects to the broker"""
         # try to get the HA broker host address
-        with self.exception_warning(
-            "async_mqtt_subscribe: recovering broker conf"
-        ):
+        with self.exception_warning("async_mqtt_subscribe: recovering broker conf"):
             from homeassistant.components import mqtt
+
             mqtt_data = mqtt.get_mqtt_data(ApiProfile.hass)
             if mqtt_data and mqtt_data.client:
                 conf = mqtt_data.client.conf
@@ -396,13 +399,11 @@ class MerossApi(ApiProfile):
 
     # interface: EntityManager
     async def async_shutdown(self):
-        if self._mqtt_connection:
-            await self._mqtt_connection.async_shutdown()
-            self._mqtt_connection = None
         for device in self.active_devices():
             await device.async_shutdown()
         for profile in self.active_profiles():
             await profile.async_shutdown()
+        self._mqtt_connection = None
         await super().async_shutdown()
         ApiProfile.hass = None  # type: ignore
         ApiProfile.api = None  # type: ignore
@@ -537,6 +538,7 @@ class MerossApi(ApiProfile):
     def mqtt_connection(self):
         if not (mqtt_connection := self._mqtt_connection):
             self._mqtt_connection = mqtt_connection = HAMQTTConnection(self)
+            self.mqttconnections[mqtt_connection.id] = mqtt_connection
         return mqtt_connection
 
 
@@ -599,6 +601,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
         for profile in api.active_profiles():
             if profile.try_link(device):
                 break
+        else:
+            api.try_link(device)
         device.start()
         return True
     except Exception as error:

@@ -344,7 +344,7 @@ class MerossDevice(MerossDeviceBase):
         "lastresponse",
         "_topic_response",  # sets the "from" field in request messages
         "_has_issue_id",
-        "_cloud_profile",
+        "_profile",
         "_mqtt_connection",  # we're binded to an MQTT profile/broker
         "_mqtt_connected",  # the broker is online/connected
         "_mqtt_publish",  # the broker accepts 'publish' (cloud broker conf might disable publishing)
@@ -389,7 +389,7 @@ class MerossDevice(MerossDeviceBase):
         self.lastresponse = 0.0
         self._topic_response = mc.MANUFACTURER
         self._has_issue_id = None
-        self._cloud_profile: MerossCloudProfile | None = None
+        self._profile: ApiProfile | None = None
         self._mqtt_connection: MQTTConnection | None = None
         self._mqtt_connected: MQTTConnection | None = None
         self._mqtt_publish: MQTTConnection | None = None
@@ -547,8 +547,8 @@ class MerossDevice(MerossDeviceBase):
     async def async_shutdown(self):
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
-        if self._cloud_profile:
-            self._cloud_profile.unlink(self)
+        if self._profile:
+            self._profile.unlink(self)
         while self._unsub_polling_callback is None:
             # wait for the polling loop to finish in case
             await asyncio.sleep(1)
@@ -691,7 +691,7 @@ class MerossDevice(MerossDeviceBase):
         we should also check if the _mqtt_connection is 'publishable' but
         at the moment the MerossApi MQTTConnection doesn't allow disabling it
         """
-        return self._mqtt_active and self._mqtt_active.profile is ApiProfile.api
+        return self._mqtt_active and not self._mqtt_active.is_cloud_connection
 
     @property
     def mqtt_broker(self) -> tuple[str, int]:
@@ -771,7 +771,7 @@ class MerossDevice(MerossDeviceBase):
         # in case we're connected to a cloud broker we'll use that since
         # it appears the broker session level will take care of also removing
         # the device from its list, thus totally cancelling it from the Meross account
-        if self._mqtt_publish and self._cloud_profile:
+        if self._mqtt_publish and self._mqtt_publish.is_cloud_connection:
             self.mqtt_request(*unbind)
             return
         # else go with whatever transport: the device will reset it's configuration
@@ -1819,23 +1819,23 @@ class MerossDevice(MerossDeviceBase):
             return True
         return False
 
-    def profile_linked(self, profile: MerossCloudProfile):
-        if self._cloud_profile is not profile:
+    def profile_linked(self, profile: ApiProfile):
+        if self._profile is not profile:
             if self._mqtt_connection:
                 self._mqtt_connection.detach(self)
-            if self._cloud_profile:
-                self._cloud_profile.unlink(self)
-            self._cloud_profile = profile
+            if self._profile:
+                self._profile.unlink(self)
+            self._profile = profile
             self._check_mqtt_connection_attach()
 
     def profile_unlinked(self):
-        # assert self._cloud_profile
+        # assert self._profile
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
-        self._cloud_profile = None
+        self._profile = None
 
     def _check_mqtt_connection_attach(self):
-        _cloud_profile = self._cloud_profile
+        _profile = self._profile
         _mqtt_connection = self._mqtt_connection
 
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
@@ -1843,7 +1843,7 @@ class MerossDevice(MerossDeviceBase):
             # and eventually fallback (curr_protocol) until some good news allow us
             # to retry pref_protocol. When binded to a cloud_profile always prefer
             # 'local' http since it should be faster and less prone to cloud 'issues'
-            if self.config.get(CONF_HOST) or _cloud_profile:
+            if self.config.get(CONF_HOST) or (_profile and _profile.id):
                 self.pref_protocol = CONF_PROTOCOL_HTTP
             else:
                 self.pref_protocol = CONF_PROTOCOL_MQTT
@@ -1856,36 +1856,30 @@ class MerossDevice(MerossDeviceBase):
                 _mqtt_connection.detach(self)
             self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
         else:
-
-            if _cloud_profile and (self.conf_protocol is CONF_PROTOCOL_AUTO):
+            if _profile and (self.conf_protocol is CONF_PROTOCOL_AUTO):
                 if mc.NS_APPLIANCE_SYSTEM_DEBUG not in self.polling_strategies:
                     SystemDebugPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DEBUG)
             else:
                 self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
 
-            if _cloud_profile:
-                if _mqtt_connection:
-                    if _mqtt_connection.profile == _cloud_profile:
-                        return
-                    _mqtt_connection.detach(self)
-                _cloud_profile.attach_mqtt(self)
+            if _mqtt_connection:
+                if _mqtt_connection.profile == _profile:
+                    return
+                _mqtt_connection.detach(self)
+
+            if _profile:
+                _profile.attach_mqtt(self)
             else:
-                # this is the case for when we just want local handling
-                # in this scenario we bind anyway to our local mqtt api
-                # even tho the device might be unavailable since it's
-                # still meross cloud bound. Also, we might not have
-                # local mqtt at all but should this come later we don't
-                # want to have to broadcast a connection event 'in the wild'
-                # We should further inspect how to discriminate which
-                # devices to add (or not) as a small optimization so to not
-                # fill our local mqtt structures with unuseful data..
-                # Right now add anyway since it's no harm
-                # (no mqtt messages will come though)
-                if _mqtt_connection:
-                    if _mqtt_connection.profile == ApiProfile.api:
-                        return
-                    _mqtt_connection.detach(self)
-                ApiProfile.api.attach_mqtt(self)
+                # this will cause 1 level recursion by
+                # calling profile_linked. In general, devices
+                # are attached right when loaded (by default they're attached to MerossApi
+                # if no CloudProfile matches). Whenever a Cloud profile appears, it can
+                # steal the device from another ApiProfile (and this should be safe).
+                # but when a cloud profile is unloaded, it unlinks its devices which will
+                # rest without an ApiProfile. This is still to be fixed but at least,
+                # whenever we refresh the device config, this kind of 'failover' will
+                # definitely bind the device to the local broker in case it got orphaned
+                ApiProfile.api.try_link(self)
 
     def update_latest_version(self, latest_version: LatestVersionType):
         if not (update_firmware := self.update_firmware):

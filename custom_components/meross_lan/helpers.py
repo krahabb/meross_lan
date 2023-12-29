@@ -74,7 +74,7 @@ if typing.TYPE_CHECKING:
     from . import MerossApi
     from .meross_device import MerossDevice
     from .meross_entity import MerossEntity
-    from .meross_profile import MerossCloudProfile
+    from .meross_profile import MerossCloudProfile, MQTTConnection
     from .merossclient import MerossHeaderType, MerossPayloadType
 
 
@@ -1006,6 +1006,52 @@ class ApiProfile(EntityManager):
                 return device
         return None
 
+    __slots__ = (
+        "linkeddevices",
+        "mqttconnections",
+    )
+
+    def __init__(self, id: str, config_entry_or_id: ConfigEntry | str = ""):
+        super().__init__(id, config_entry_or_id)
+        self.linkeddevices: dict[str, MerossDevice] = {}
+        self.mqttconnections: dict[str, MQTTConnection] = {}
+
+    async def async_shutdown(self):
+        for mqttconnection in self.mqttconnections.values():
+            await mqttconnection.async_shutdown()
+        self.mqttconnections.clear()
+        for device in self.linkeddevices.values():
+            device.profile_unlinked()
+        self.linkeddevices.clear()
+        await super().async_shutdown()
+
+    # interface: EntityManager
+    async def entry_update_listener(self, hass, config_entry: ConfigEntry):
+        config = config_entry.data
+        # the ApiProfile always enable (independent of config) mqtt publish so far
+        allow_mqtt_publish = config.get(CONF_ALLOW_MQTT_PUBLISH) or (
+            self is ApiProfile.api
+        )
+        if allow_mqtt_publish != self.allow_mqtt_publish:
+            # device._mqtt_publish is rather 'passive' so
+            # we do some fast 'smart' updates:
+            if allow_mqtt_publish:
+                for device in self.linkeddevices.values():
+                    device._mqtt_publish = device._mqtt_connected
+            else:
+                for device in self.linkeddevices.values():
+                    device._mqtt_publish = None
+        create_diagnostic_entities = config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
+        if create_diagnostic_entities != self.create_diagnostic_entities:
+            if create_diagnostic_entities:
+                for mqttconnection in self.mqttconnections.values():
+                    mqttconnection.create_diagnostic_entities()
+            else:
+                for mqttconnection in self.mqttconnections.values():
+                    mqttconnection.destroy_diagnostic_entities()
+        await super().entry_update_listener(hass, config_entry)
+
+    # interface: self
     @property
     def allow_mqtt_publish(self):
         return self.config.get(CONF_ALLOW_MQTT_PUBLISH)
@@ -1013,6 +1059,20 @@ class ApiProfile(EntityManager):
     @property
     def create_diagnostic_entities(self):
         return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
+
+    def try_link(self, device: MerossDevice):
+        device_id = device.id
+        if device_id not in self.linkeddevices:
+            device.profile_linked(self)
+            self.linkeddevices[device_id] = device
+            return True
+        return False
+
+    def unlink(self, device: MerossDevice):
+        device_id = device.id
+        if device_id in self.linkeddevices:
+            device.profile_unlinked()
+            self.linkeddevices.pop(device_id)
 
     @abc.abstractmethod
     def attach_mqtt(self, device: MerossDevice):
