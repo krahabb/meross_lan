@@ -26,7 +26,12 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
 from custom_components.meross_lan.meross_profile import MerossMQTTConnection
-from custom_components.meross_lan.merossclient import cloudapi, const as mc, json_loads, parse_host_port
+from custom_components.meross_lan.merossclient import (
+    cloudapi,
+    const as mc,
+    json_loads,
+    parse_host_port,
+)
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
 from . import const as tc
@@ -767,34 +772,30 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
 
 
 class MerossMQTTMocker(contextlib.AbstractContextManager):
-    safe_connect_mock: Mock
-    safe_disconnect_mock: Mock
-    async_mqtt_publish_mock: Mock
-
     def __init__(self):
-        def _safe_connect(_self: MerossMQTTConnection, host, port):
+        def _safe_start(_self: MerossMQTTConnection, host, port, event):
+            """this runs in an executor"""
             _self._stateext = _self.STATE_CONNECTED
-            _self._mqtt_connected()
+            MerossApi.hass.add_job(_self._mqtt_connected)
 
-        self.safe_connect_patcher = patch.object(
+        self.safe_start_patcher = patch.object(
             MerossMQTTConnection,
-            "safe_connect",
+            "safe_start",
             autospec=True,
-            side_effect=_safe_connect,
+            side_effect=_safe_start,
         )
-        self.safe_connect_mock = None  # type: ignore
 
-        def _safe_disconnect(_self: MerossMQTTConnection):
+        def _safe_stop(_self: MerossMQTTConnection):
+            """this runs in an executor"""
             _self._stateext = _self.STATE_DISCONNECTED
-            _self._mqtt_disconnected()
+            MerossApi.hass.add_job(_self._mqtt_disconnected)
 
-        self.safe_disconnect_patcher = patch.object(
+        self.safe_stop_patcher = patch.object(
             MerossMQTTConnection,
-            "safe_disconnect",
+            "safe_stop",
             autospec=True,
-            side_effect=_safe_disconnect,
+            side_effect=_safe_stop,
         )
-        self.safe_disconnect_mock = None  # type: ignore
 
         async def _async_mqtt_publish(_self: MerossMQTTConnection, *args):
             return None
@@ -805,22 +806,18 @@ class MerossMQTTMocker(contextlib.AbstractContextManager):
             autospec=True,
             side_effect=_async_mqtt_publish,
         )
-        self.async_mqtt_publish_mock = None  # type: ignore
 
     def __enter__(self):
-        self.safe_connect_mock = self.safe_connect_patcher.start()
-        self.safe_disconnect_mock = self.safe_disconnect_patcher.start()
+        self.safe_start_mock = self.safe_start_patcher.start()
+        self.safe_stop_mock = self.safe_stop_patcher.start()
         self.async_mqtt_publish_mock = self.async_mqtt_publish_patcher.start()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.safe_connect_mock:
-            self.safe_connect_patcher.stop()
-            self.safe_connect_mock = None  # type: ignore
-        if self.safe_disconnect_mock:
-            self.safe_disconnect_patcher.stop()
-            self.safe_disconnect_mock = None  # type: ignore
+        if self.safe_start_mock:
+            self.safe_start_patcher.stop()
+        if self.safe_stop_mock:
+            self.safe_stop_patcher.stop()
         if self.async_mqtt_publish_mock:
             self.async_mqtt_publish_patcher.stop()
-            self.async_mqtt_publish_mock = None  # type: ignore
         return super().__exit__(exc_type, exc_value, traceback)

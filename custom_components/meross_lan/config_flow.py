@@ -393,7 +393,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 raise Exception(
                     "Unable to identify device over MQTT since Meross cloud profile doesn't allow MQTT publishing"
                 )
-            mqttconnections = profile.get_or_create_mqttconnections(device_id)
+            mqttconnections = await profile.get_or_create_mqttconnections(device_id)
         else:
             mqttconnections = [MerossApi.get(self.hass).mqtt_connection]
 
@@ -982,7 +982,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                         mqttclient.connect, host, port
                     )
                 finally:
-                    mqttclient.safe_disconnect()
+                    mqttclient.disconnect()
 
                 response = await device.async_bind(host, port, key=key, userid=userid)
                 if (

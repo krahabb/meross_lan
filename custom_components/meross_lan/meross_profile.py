@@ -763,7 +763,8 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
 
     __slots__ = (
         "_future_connected",
-        "_lock",
+        "_lock_state",
+        "_lock_queue",
         "_rl_lastpublish",
         "_rl_qeque",
         "_rl_queue_length",
@@ -793,11 +794,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                 if self.state_inactive:
                     if MEROSSDEBUG.mqtt_random_connect():
                         self.log(DEBUG, "random connect")
-                        self.safe_connect_start(*self.broker)
+                        self.safe_start(*self.broker)
                 else:
                     if MEROSSDEBUG.mqtt_random_disconnect():
                         self.log(DEBUG, "random disconnect")
-                        self.safe_disconnect()
+                        self.safe_stop()
                 self._unsub_random_disconnect = schedule_callback(
                     ApiProfile.hass, 60, _random_disconnect
                 )
@@ -807,7 +808,6 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             )
         else:
             self._unsub_random_disconnect = None
-        self.schedule_connect()
 
     # interface: MQTTConnection
     async def async_shutdown(self):
@@ -815,7 +815,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             self._unsub_random_disconnect.cancel()
             self._unsub_random_disconnect = None
         await super().async_shutdown()
-        await self.schedule_disconnect()
+        await self.schedule_disconnect_async()
 
     async def _async_mqtt_publish(
         self,
@@ -851,18 +851,18 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             sensor_connection.flush_state()
 
     # interface: self
-    def schedule_connect(self):
+    def schedule_connect_async(self, future: asyncio.Future | None = None):
         # even if safe_connect should be as fast as possible and thread-safe
         # we still might incur some contention with thread stop/restart
         # so we delegate its call to an executor
         return ApiProfile.hass.async_add_executor_job(
-            self.safe_connect_start, *self.broker
+            self.safe_start, *self.broker, future
         )
 
-    def schedule_disconnect(self):
+    def schedule_disconnect_async(self):
         # same as connect. safe_disconnect should be even faster and less
         # contending but...
-        return ApiProfile.hass.async_add_executor_job(self.safe_disconnect)
+        return ApiProfile.hass.async_add_executor_job(self.safe_stop)
 
     def _publish(self, device_id: str, request: MerossMessage) -> tuple[str, int]:
         """
@@ -1111,7 +1111,10 @@ class MerossCloudProfile(ApiProfile):
             return
 
         with self.exception_warning("attach_mqtt"):
-            self._get_or_create_mqttconnection(device.mqtt_broker).attach(device)
+            mqttconnection = self._get_mqttconnection(device.mqtt_broker)
+            mqttconnection.attach(device)
+            if mqttconnection.state_inactive:
+                mqttconnection.schedule_connect_async()
 
     # interface: self
     @property
@@ -1263,30 +1266,59 @@ class MerossCloudProfile(ApiProfile):
                     if latest_version := self.get_latest_version(device.descriptor):
                         device.update_latest_version(latest_version)
 
-    def get_or_create_mqttconnections(self, device_id: str):
+    async def get_or_create_mqttconnections(self, device_id: str):
         mqttconnections: list[MerossMQTTConnection] = []
         device_info = self.get_device_info(device_id)
         if device_info:
             if domain := device_info.get(mc.KEY_DOMAIN):
-                mqttconnections.append(
-                    self._get_or_create_mqttconnection(parse_host_port(domain))
+                mqttconnection = await self._async_get_mqttconnection(
+                    parse_host_port(domain)
                 )
+                if mqttconnection:
+                    mqttconnections.append(mqttconnection)
             if reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN):
                 if reserveddomain != domain:
-                    mqttconnections.append(
-                        self._get_or_create_mqttconnection(
-                            parse_host_port(reserveddomain)
-                        )
+                    mqttconnection = await self._async_get_mqttconnection(
+                        parse_host_port(reserveddomain)
                     )
+                    if mqttconnection:
+                        mqttconnections.append(mqttconnection)
         return mqttconnections
 
-    def _get_or_create_mqttconnection(self, broker: tuple[str, int]):
+    def _get_mqttconnection(self, broker: tuple[str, int]):
+        """
+        Returns an existing connection from the managed pool or create one and add
+        to the mqttconnections pool. The connection state is not ensured.
+        """
         connection_id = f"{self.id}:{broker[0]}:{broker[1]}"
-        if connection_id not in self.mqttconnections:
-            self.mqttconnections[connection_id] = MerossMQTTConnection(
-                self, connection_id, broker
-            )
-        return self.mqttconnections[connection_id]
+        if connection_id in self.mqttconnections:
+            return self.mqttconnections[connection_id]
+        self.mqttconnections[connection_id] = mqttconnection = MerossMQTTConnection(
+            self, connection_id, broker
+        )
+        return mqttconnection
+
+    async def _async_get_mqttconnection(self, broker: tuple[str, int]):
+        """
+        Retrieve a connection for the broker from the managed pool (or creates it)
+        and tries ensuring it is connected returning None if not (this is especially
+        needed when we want to setup a broker connection for device identification
+        and we so need it soon).
+        """
+        mqttconnection = self._get_mqttconnection(broker)
+        if mqttconnection.state_active:
+            if mqttconnection.stateext is mqttconnection.STATE_CONNECTED:
+                return mqttconnection
+            else:
+                return None
+        with self.exception_warning("_async_get_mqttconnection_active"):
+            future = self.hass.loop.create_future()
+            future = await mqttconnection.schedule_connect_async(future)
+            if future:
+                await asyncio.wait_for(future, 5)
+                return mqttconnection
+            return None
+        return None
 
     async def _async_token_missing(self, should_raise_issue: bool):
         """
@@ -1493,7 +1525,9 @@ class MerossCloudProfile(ApiProfile):
                 if config_entries_helper.get_config_flow(device_id):
                     continue
                 # cloud conf has a new device
-                for mqttconnection in self.get_or_create_mqttconnections(device_id):
+                for mqttconnection in await self.get_or_create_mqttconnections(
+                    device_id
+                ):
                     if await mqttconnection.async_try_discovery(device_id):
                         break
 

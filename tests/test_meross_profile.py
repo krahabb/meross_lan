@@ -1,5 +1,5 @@
 """Test for meross cloud profiles"""
-from unittest.mock import call
+from unittest import mock
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -7,7 +7,11 @@ from pytest_homeassistant_custom_component.common import flush_store
 
 from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.meross_profile import MerossCloudProfile
-from custom_components.meross_lan.merossclient import cloudapi, const as mc, parse_host_port
+from custom_components.meross_lan.merossclient import (
+    cloudapi,
+    const as mc,
+    parse_host_port,
+)
 
 from . import const as tc, helpers
 
@@ -57,7 +61,7 @@ async def test_meross_profile(
         assert (profile := MerossApi.profiles.get(tc.MOCK_PROFILE_ID))
         # check we have refreshed our device list
         # the device discovery starts when we setup the entry and it might take
-        # same while since we're queueing multiple requests (2)
+        # some while since we're queueing multiple requests (2)
         # so we'll
 
         await time_mock.async_tick(5)
@@ -77,16 +81,16 @@ async def test_meross_profile(
         mqttconnections = list(profile.mqttconnections.values())
         assert len(mqttconnections) == len(expected_connections)
         # and activated them (not less/no more)
-        safe_connect_calls = []
+        safe_start_calls = []
         for expected_connection in expected_connections:
             host, port = parse_host_port(expected_connection)
             connection_id = f"{tc.MOCK_PROFILE_ID}:{host}:{port}"
             mqttconnection = profile.mqttconnections[connection_id]
             mqttconnections.remove(mqttconnection)
-            safe_connect_calls.append(call(mqttconnection, host, port))
+            safe_start_calls.append(mock.call(mqttconnection, host, port, mock.ANY))
         assert len(mqttconnections) == 0
-        merossmqtt_mock.safe_connect_mock.assert_has_calls(
-            safe_connect_calls,
+        merossmqtt_mock.safe_start_mock.assert_has_calls(
+            safe_start_calls,
             any_order=True,
         )
         # check the store has been persisted with cloudapi fresh device list
@@ -103,9 +107,7 @@ async def test_meross_profile(
         # check cleanup
         assert await profile_entry_mock.async_unload()
         assert MerossApi.profiles[tc.MOCK_PROFILE_ID] is None
-        assert merossmqtt_mock.safe_disconnect_mock.call_count == len(
-            safe_connect_calls
-        )
+        assert merossmqtt_mock.safe_stop_mock.call_count == len(safe_start_calls)
 
 
 async def test_meross_profile_cloudapi_offline(
@@ -148,24 +150,22 @@ async def test_meross_profile_cloudapi_offline(
         mqttconnections = list(profile.mqttconnections.values())
         assert len(mqttconnections) == len(expected_connections)
         # and activated them (not less/no more)
-        safe_connect_calls = []
+        safe_start_calls = []
         for expected_connection in expected_connections:
             host, port = parse_host_port(expected_connection)
             connection_id = f"{tc.MOCK_PROFILE_ID}:{host}:{port}"
             mqttconnection = profile.mqttconnections[connection_id]
             mqttconnections.remove(mqttconnection)
-            safe_connect_calls.append(call(mqttconnection, host, port))
+            safe_start_calls.append(mock.call(mqttconnection, host, port, mock.ANY))
         assert len(mqttconnections) == 0
-        merossmqtt_mock.safe_connect_mock.assert_has_calls(
-            safe_connect_calls,
+        merossmqtt_mock.safe_start_mock.assert_has_calls(
+            safe_start_calls,
             any_order=True,
         )
         # check cleanup
         assert await profile_entry_mock.async_unload()
         assert MerossApi.profiles[tc.MOCK_PROFILE_ID] is None
-        assert merossmqtt_mock.safe_disconnect_mock.call_count == len(
-            safe_connect_calls
-        )
+        assert merossmqtt_mock.safe_stop_mock.call_count == len(safe_start_calls)
 
 
 async def test_meross_profile_with_device(

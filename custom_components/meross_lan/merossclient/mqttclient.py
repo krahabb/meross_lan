@@ -55,7 +55,10 @@ class _MerossMQTTClient(mqtt.Client):
 
     def __init__(self, client_id: str):
         self._future_connected = None
-        self._lock = threading.Lock()
+        self._lock_state = threading.Lock()
+        """synchronize connect/disconnect (not contended by the mqtt thread)"""
+        self._lock_queue = threading.Lock()
+        """synchronize access to the transmit queue. Might be contended by the mqtt thread"""
         self._rl_lastpublish = monotonic() - self.RATELIMITER_MINDELAY
         self._rl_qeque: deque[tuple[str, str, bool | None]] = deque()
         self._rl_queue_length = 0
@@ -94,16 +97,6 @@ class _MerossMQTTClient(mqtt.Client):
     def state_inactive(self):
         return self._stateext in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
 
-    async def async_safe_connect(self, host: str, port: int):
-        future = asyncio.get_running_loop().create_future()
-        with self._lock:
-            self.loop_stop()  # in case we're connected or connecting or disconnecting
-            self._future_connected = future
-            self.connect_async(host, port)
-            self._stateext = self.STATE_CONNECTING
-            self.loop_start()
-        await asyncio.wait_for(future, 5)
-
     def connect(self, host: str, port: int):
         """
         Executor 'friendly' connect. Raises the usual connection Exceptions
@@ -114,15 +107,14 @@ class _MerossMQTTClient(mqtt.Client):
         """
         if self._stateext != self.STATE_DISCONNECTED:
             self.disconnect()
-        super().connect(host, port)
+        mqtt.Client.connect(self, host, port)
         while mqtt.MQTT_ERR_SUCCESS == self.loop(1):
             if self._stateext == self.STATE_CONNECTED:
                 if self._subscribe_error:
                     raise Exception(self._subscribe_error)
                 break
 
-
-    def safe_connect_start(self, host: str, port: int, future: asyncio.Future | None = None):
+    def safe_start(self, host: str, port: int, future: asyncio.Future | None = None):
         """
         Initiates an async connection and starts the managing thread.
         Safe to be called from any thread (except the mqtt one). Could be a bit
@@ -131,30 +123,33 @@ class _MerossMQTTClient(mqtt.Client):
         The future (optional) allows for synchronization and will be set after
         succesfully subscribing (see _mqttc_connect and overrides)
         """
-        with self._lock:
-            self.loop_stop()  # in case we're connected or connecting or disconnecting
-            self._future_connected = future
-            self.connect_async(host, port)
-            self._stateext = self.STATE_CONNECTING
-            self.loop_start()
-        return future
+        with self._lock_state:
+            if self._stateext is self.STATE_DISCONNECTED:
+                self._future_connected = future
+                self.connect_async(host, port)
+                self._stateext = self.STATE_CONNECTING
+                self.loop_start()
+                return future
+        return None
 
-    def safe_disconnect(self):
+    def safe_stop(self):
         """
         Safe to be called from any thread (except the mqtt one)
         This is non-blocking and the thread will just die
         by itself.
         """
-        with self._lock:
-            if self._stateext != self.STATE_DISCONNECTED:
+        with self._lock_state:
+            if self.state_active:
                 self._stateext = self.STATE_DISCONNECTING
-                if mqtt.MQTT_ERR_NO_CONN == self.disconnect():
-                    self._stateext = self.STATE_DISCONNECTED
+                self.disconnect()
+                self.loop_stop()
+                self._stateext = self.STATE_DISCONNECTED
+                self._future_connected = None
 
     def rl_publish(
         self, topic: str, payload: str, priority: bool | None = None
     ) -> mqtt.MQTTMessageInfo | bool:
-        with self._lock:
+        with self._lock_queue:
             queuelen = len(self._rl_qeque)
             if queuelen == 0:
                 now = monotonic()
@@ -164,7 +159,7 @@ class _MerossMQTTClient(mqtt.Client):
                     self._rl_avgperiod += self.RATELIMITER_AVGPERIOD_DERATE * (
                         period - self._rl_avgperiod
                     )
-                    return super().publish(topic, payload)
+                    return mqtt.Client.publish(self, topic, payload)
 
             if priority is None:
                 if queuelen >= self.RATELIMITER_MAXQUEUE:
@@ -215,7 +210,7 @@ class _MerossMQTTClient(mqtt.Client):
     def loop_misc(self):
         ret = super().loop_misc()
         if (ret == mqtt.MQTT_ERR_SUCCESS) and self._rl_queue_length:
-            if self._lock.acquire(False):
+            if self._lock_queue.acquire(False):
                 topic_payload_priority = None
                 try:
                     queuelen = len(self._rl_qeque)
@@ -232,7 +227,7 @@ class _MerossMQTTClient(mqtt.Client):
                     else:
                         self._rl_queue_length = 0
                 finally:
-                    self._lock.release()
+                    self._lock_queue.release()
                     if topic_payload_priority:
                         super().publish(
                             topic_payload_priority[0], topic_payload_priority[1]
@@ -240,19 +235,18 @@ class _MerossMQTTClient(mqtt.Client):
         return ret
 
     def _mqttc_connect(self, client: mqtt.Client, userdata, rc, other):
-        with self._lock:
+        with self._lock_queue:
             self._rl_qeque.clear()
             self._rl_queue_length = 0
-            self._stateext = self.STATE_CONNECTED
-            if self._future_connected:
-                self._future_connected.set_result(True)
-                self._future_connected = None
+
+        self._stateext = self.STATE_CONNECTED
+        if self._future_connected:
+            self._future_connected.set_result(True)
+            self._future_connected = None
 
     def _mqttc_disconnect(self, client: mqtt.Client, userdata, rc):
         self._stateext = (
-            self.STATE_DISCONNECTED
-            if self._stateext in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
-            else self.STATE_RECONNECTING
+            self.STATE_DISCONNECTED if self.state_inactive else self.STATE_RECONNECTING
         )
 
 
@@ -284,14 +278,13 @@ class MerossMQTTAppClient(_MerossMQTTClient):
         if result == mqtt.MQTT_ERR_SUCCESS:
             self._subscribe_error = None
         else:
-            self._subscribe_error = msg = (
-                f"Failed to subscribe to topics: {self.topic_push} {self.topic_command}"
-            )
+            self._subscribe_error = (
+                msg
+            ) = f"Failed to subscribe to topics: {self.topic_push} {self.topic_command}"
             LOGGER.error(msg)
-            with self._lock:
-                if self._future_connected:
-                    self._future_connected.set_exception(Exception(msg))
-                    self._future_connected = None
+            if self._future_connected:
+                self._future_connected.set_exception(Exception(msg))
+                self._future_connected = None
         super()._mqttc_connect(client, userdata, rc, other)
 
 
@@ -325,12 +318,11 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         if result == mqtt.MQTT_ERR_SUCCESS:
             self._subscribe_error = None
         else:
-            self._subscribe_error = msg = (
-                f"Failed to subscribe to topic: {self.topic_subscribe}"
-            )
+            self._subscribe_error = (
+                msg
+            ) = f"Failed to subscribe to topic: {self.topic_subscribe}"
             LOGGER.error(msg)
-            with self._lock:
-                if self._future_connected:
-                    self._future_connected.set_exception(Exception(msg))
-                    self._future_connected = None
+            if self._future_connected:
+                self._future_connected.set_exception(Exception(msg))
+                self._future_connected = None
         super()._mqttc_connect(client, userdata, rc, other)
