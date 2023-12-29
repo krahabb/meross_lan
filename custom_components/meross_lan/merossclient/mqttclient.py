@@ -62,6 +62,7 @@ class _MerossMQTTClient(mqtt.Client):
         self._rl_dropped = 0
         self._rl_avgperiod = 0.0
         self._stateext = self.STATE_DISCONNECTED
+        self._subscribe_error = None
         super().__init__(client_id, protocol=mqtt.MQTTv311)
         self.on_connect = self._mqttc_connect
         self.on_disconnect = self._mqttc_disconnect
@@ -94,14 +95,6 @@ class _MerossMQTTClient(mqtt.Client):
         return self._stateext in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
 
     async def async_safe_connect(self, host: str, port: int):
-        """
-        async friendly management of connection start. Keep in mind using the main thread or even
-        an executor usually fails in the socket connection and we get SSLEOFError with no reason
-        except the fact that maybe the asyncio is colliding with the mqtt.Client sockets
-        My (previous) code always managed the connection from the mqtt.Client dedicated thread
-        so we're keeping using that flavor. Looking online doesn't help and maybe just hints
-        to this error being linked to some python/ssl/paho versions (who knows...)
-        """
         future = asyncio.get_running_loop().create_future()
         with self._lock:
             self.loop_stop()  # in case we're connected or connecting or disconnecting
@@ -109,21 +102,42 @@ class _MerossMQTTClient(mqtt.Client):
             self.connect_async(host, port)
             self._stateext = self.STATE_CONNECTING
             self.loop_start()
-
         await asyncio.wait_for(future, 5)
 
-    def safe_connect(self, host: str, port: int):
+    def connect(self, host: str, port: int):
         """
+        Executor 'friendly' connect. Raises the usual connection Exceptions
+        or, if the connection succeeds but we can't succesfully subscribe.
+        The thread-safety here is very optimistic: can be called from
+        any thread (main, executor, whatever) but do not overlap multiple
+        calls or overlap with calls to disconnect
+        """
+        if self._stateext != self.STATE_DISCONNECTED:
+            self.disconnect()
+        super().connect(host, port)
+        while mqtt.MQTT_ERR_SUCCESS == self.loop(1):
+            if self._stateext == self.STATE_CONNECTED:
+                if self._subscribe_error:
+                    raise Exception(self._subscribe_error)
+                break
+
+
+    def safe_connect_start(self, host: str, port: int, future: asyncio.Future | None = None):
+        """
+        Initiates an async connection and starts the managing thread.
         Safe to be called from any thread (except the mqtt one). Could be a bit
         'blocking' if the thread needs to be stopped (in case it was still running).
-        The effective connection is asynchronous and will be managed by the thread
+        The effective connection is asynchronous and will be managed by the thread.
+        The future (optional) allows for synchronization and will be set after
+        succesfully subscribing (see _mqttc_connect and overrides)
         """
         with self._lock:
             self.loop_stop()  # in case we're connected or connecting or disconnecting
-            self._future_connected = None
+            self._future_connected = future
             self.connect_async(host, port)
             self._stateext = self.STATE_CONNECTING
             self.loop_start()
+        return future
 
     def safe_disconnect(self):
         """
@@ -131,10 +145,11 @@ class _MerossMQTTClient(mqtt.Client):
         This is non-blocking and the thread will just die
         by itself.
         """
-        if self._stateext != self.STATE_DISCONNECTED:
-            self._stateext = self.STATE_DISCONNECTING
-            if mqtt.MQTT_ERR_NO_CONN == self.disconnect():
-                self._stateext = self.STATE_DISCONNECTED
+        with self._lock:
+            if self._stateext != self.STATE_DISCONNECTED:
+                self._stateext = self.STATE_DISCONNECTING
+                if mqtt.MQTT_ERR_NO_CONN == self.disconnect():
+                    self._stateext = self.STATE_DISCONNECTED
 
     def rl_publish(
         self, topic: str, payload: str, priority: bool | None = None
@@ -228,10 +243,10 @@ class _MerossMQTTClient(mqtt.Client):
         with self._lock:
             self._rl_qeque.clear()
             self._rl_queue_length = 0
-        self._stateext = self.STATE_CONNECTED
-        if self._future_connected:
-            self._future_connected.set_result(True)
-            self._future_connected = None
+            self._stateext = self.STATE_CONNECTED
+            if self._future_connected:
+                self._future_connected.set_result(True)
+                self._future_connected = None
 
     def _mqttc_disconnect(self, client: mqtt.Client, userdata, rc):
         self._stateext = (
@@ -265,10 +280,19 @@ class MerossMQTTAppClient(_MerossMQTTClient):
         self.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT)
 
     def _mqttc_connect(self, client: mqtt.Client, userdata, rc, other):
-        super()._mqttc_connect(client, userdata, rc, other)
         result, mid = client.subscribe([(self.topic_push, 1), (self.topic_command, 1)])
-        if result != mqtt.MQTT_ERR_SUCCESS:
-            LOGGER.error("Failed to subscribe to topics")
+        if result == mqtt.MQTT_ERR_SUCCESS:
+            self._subscribe_error = None
+        else:
+            self._subscribe_error = msg = (
+                f"Failed to subscribe to topics: {self.topic_push} {self.topic_command}"
+            )
+            LOGGER.error(msg)
+            with self._lock:
+                if self._future_connected:
+                    self._future_connected.set_exception(Exception(msg))
+                    self._future_connected = None
+        super()._mqttc_connect(client, userdata, rc, other)
 
 
 class MerossMQTTDeviceClient(_MerossMQTTClient):
@@ -297,7 +321,16 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         self.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
 
     def _mqttc_connect(self, client: mqtt.Client, userdata, rc, other):
-        super()._mqttc_connect(client, userdata, rc, other)
         result, mid = client.subscribe([(self.topic_subscribe, 1)])
-        if result != mqtt.MQTT_ERR_SUCCESS:
-            LOGGER.error("Failed to subscribe to topics")
+        if result == mqtt.MQTT_ERR_SUCCESS:
+            self._subscribe_error = None
+        else:
+            self._subscribe_error = msg = (
+                f"Failed to subscribe to topic: {self.topic_subscribe}"
+            )
+            LOGGER.error(msg)
+            with self._lock:
+                if self._future_connected:
+                    self._future_connected.set_exception(Exception(msg))
+                    self._future_connected = None
+        super()._mqttc_connect(client, userdata, rc, other)

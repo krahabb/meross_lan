@@ -793,7 +793,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                 if self.state_inactive:
                     if MEROSSDEBUG.mqtt_random_connect():
                         self.log(DEBUG, "random connect")
-                        self.safe_connect(*self.broker)
+                        self.safe_connect_start(*self.broker)
                 else:
                     if MEROSSDEBUG.mqtt_random_disconnect():
                         self.log(DEBUG, "random disconnect")
@@ -855,7 +855,9 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         # even if safe_connect should be as fast as possible and thread-safe
         # we still might incur some contention with thread stop/restart
         # so we delegate its call to an executor
-        return ApiProfile.hass.async_add_executor_job(self.safe_connect, *self.broker)
+        return ApiProfile.hass.async_add_executor_job(
+            self.safe_connect_start, *self.broker
+        )
 
     def schedule_disconnect(self):
         # same as connect. safe_disconnect should be even faster and less

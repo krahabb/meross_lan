@@ -978,7 +978,9 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     userid="" if userid is None else str(userid),
                 )
                 try:
-                    await mqttclient.async_safe_connect(host, port)
+                    await self.hass.async_add_executor_job(
+                        mqttclient.connect, host, port
+                    )
                 finally:
                     mqttclient.safe_disconnect()
 
