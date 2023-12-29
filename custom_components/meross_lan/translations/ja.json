@@ -64,14 +64,16 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Meross LAN のグローバル設定",
                 "data": {
-                    "key": "デバイスキー"
+                    "key": "デバイスキー",
+                    "error": "エラーメッセージ"
                 }
             },
             "device": {
                 "description": "Meross デバイスのセットアップ\nタイップ: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "デバイスのホストアドレス",
-                    "key": "デバイスキー"
+                    "key": "デバイスキー",
+                    "error": "エラーメッセージ"
                 }
             },
             "keyerror": {
@@ -91,7 +93,8 @@
                     "save_password": "パスワードを保存する",
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
-                    "create_diagnostic_entities": "診断エンティティの作成"
+                    "create_diagnostic_entities": "診断エンティティの作成",
+                    "error": "エラーメッセージ"
                 }
             },
             "finalize": {
@@ -116,7 +119,8 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Meross LAN のグローバル設定",
                 "data": {
-                    "key": "デバイスキー"
+                    "key": "デバイスキー",
+                    "error": "エラーメッセージ"
                 }
             },
             "device": {
@@ -128,7 +132,8 @@
                     "protocol": "接続プロトコル",
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
-                    "trace_timeout": "デバグトレース時間 [秒]"
+                    "trace_timeout": "デバグトレース時間 [秒]",
+                    "error": "エラーメッセージ"
                 }
             },
             "keyerror": {
@@ -148,7 +153,8 @@
                     "save_password": "パスワードを保存する",
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
-                    "create_diagnostic_entities": "診断エンティティの作成"
+                    "create_diagnostic_entities": "診断エンティティの作成",
+                    "error": "エラーメッセージ"
                 }
             },
             "menu": {
@@ -166,7 +172,8 @@
                 "title": "診断トレースの開始",
                 "description": "コンフィギュレーションがリロードされ、設定された期間、デバッグトレースが開始されます。",
                 "data": {
-                    "trace_timeout": "デバグトレース時間 [秒]"
+                    "trace_timeout": "デバグトレース時間 [秒]",
+                    "error": "エラーメッセージ"
                 }
             },
             "bind": {
@@ -176,7 +183,8 @@
                     "broker": "新しいMQTTブローカーのアドレス",
                     "check": "再設定前にMQTTブローカーとの互換性を確認する",
                     "key": "デバイスキー",
-                    "userid": "ユーザーID"
+                    "userid": "ユーザーID",
+                    "error": "エラーメッセージ"
                 },
                 "data_description": {
                     "broker": "host(:port)'形式でアドレスを入力するか、HomeAssistantのものを使用する場合は空のままにします。"
@@ -186,7 +194,8 @@
                 "title": "ハードウェア・リセット",
                 "description": "警告！これは、現在のMQTTブローカー（Merossクラウドまたはローカルのいずれか）からデバイスをアンバインドし、工場出荷時のデフォルトにリセットする特別なコマンドを発行します。\n その後、デバイスを使用するには再度設定する必要があります。",
                 "data": {
-                    "post_action": "バインドを解いた後"
+                    "post_action": "バインドを解いた後",
+                    "error": "エラーメッセージ"
                 }
             }
         }
@@ -205,7 +214,8 @@
                             "save_password": "パスワードを保存する",
                             "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                             "check_firmware_updates": "ファームウェアのアップデートを確認する",
-                            "create_diagnostic_entities": "診断エンティティの作成"
+                            "create_diagnostic_entities": "診断エンティティの作成",
+                            "error": "エラーメッセージ"
                         }
                     }
                 }
@@ -224,7 +234,8 @@
                             "protocol": "接続プロトコル",
                             "polling_period": "ポーリング間隔(秒)",
                             "timezone": "デバイスのタイムゾーン",
-                            "trace_timeout": "デバグトレース時間 [秒]"
+                            "trace_timeout": "デバグトレース時間 [秒]",
+                            "error": "エラーメッセージ"
                         }
                     }
                 }

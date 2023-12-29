@@ -64,14 +64,16 @@
                 "title": "Concentrador Meross LAN MQTT",
                 "description": "Configurar las opciones globales de Meross LAN",
                 "data": {
-                    "key": "Clave de dispositivo"
+                    "key": "Clave de dispositivo",
+                    "error": "Mensaje de error"
                 }
             },
             "device": {
                 "description": "Configurar un dispositivo meross\nTipo: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Dirección IP del dispositivo",
-                    "key": "Clave de dispositivo"
+                    "key": "Clave de dispositivo",
+                    "error": "Mensaje de error"
                 }
             },
             "keyerror": {
@@ -91,7 +93,8 @@
                     "save_password": "Guardar contraseña",
                     "allow_mqtt_publish": "Permitir la publicación de MQTT en la nube",
                     "check_firmware_updates": "Comprobar actualizaciones de firmware",
-                    "create_diagnostic_entities": "Crear entidades de diagnóstico"
+                    "create_diagnostic_entities": "Crear entidades de diagnóstico",
+                    "error": "Mensaje de error"
                 }
             },
             "finalize": {
@@ -116,7 +119,8 @@
                 "title": "Concentrador Meross LAN MQTT",
                 "description": "Configurar las opciones globales de Meross LAN",
                 "data": {
-                    "key": "Clave de dispositivo"
+                    "key": "Clave de dispositivo",
+                    "error": "Mensaje de error"
                 }
             },
             "device": {
@@ -128,7 +132,8 @@
                     "protocol": "Protocolo de conexión",
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
-                    "trace_timeout": "Duración del seguimiento de debug (sec)"
+                    "trace_timeout": "Duración del seguimiento de debug (sec)",
+                    "error": "Mensaje de error"
                 }
             },
             "keyerror": {
@@ -148,7 +153,8 @@
                     "save_password": "Guardar contraseña",
                     "allow_mqtt_publish": "Permitir la publicación de MQTT en la nube",
                     "check_firmware_updates": "Comprobar actualizaciones de firmware",
-                    "create_diagnostic_entities": "Crear entidades de diagnóstico"
+                    "create_diagnostic_entities": "Crear entidades de diagnóstico",
+                    "error": "Mensaje de error"
                 }
             },
             "menu": {
@@ -166,7 +172,8 @@
                 "title": "Iniciar traza de diagnóstico",
                 "description": "Se recargará la configuración y se iniciará el rastreo de depuración durante el periodo configurado",
                 "data": {
-                    "trace_timeout": "Duración del seguimiento de debug (sec)"
+                    "trace_timeout": "Duración del seguimiento de debug (sec)",
+                    "error": "Mensaje de error"
                 }
             },
             "bind": {
@@ -176,7 +183,8 @@
                     "broker": "Dirección del nuevo broker MQTT",
                     "check": "Compruebe la compatibilidad del broker MQTT antes de reconfigurar",
                     "key": "Clave de dispositivo",
-                    "userid": "Id de usuario"
+                    "userid": "Id de usuario",
+                    "error": "Mensaje de error"
                 },
                 "data_description": {
                     "broker": "Introduzca la dirección en la forma 'host(:port)' o déjela vacía para utilizar la del Asistente de Casa"
@@ -186,7 +194,8 @@
                 "title": "Reinicio del hardware",
                 "description": "ADVERTENCIA! esto emitirá un comando especial para desvincular el dispositivo del broker MQTT actual (ya sea la nube de Meross o uno local) y restablecerlo a los valores predeterminados de fábrica.\n Después de eso, el dispositivo tendrá que ser re-configurado de nuevo con el fin de utilizarlo",
                 "data": {
-                    "post_action": "Después de desvincularse:"
+                    "post_action": "Después de desvincularse:",
+                    "error": "Mensaje de error"
                 }
             }
         }
@@ -205,7 +214,8 @@
                             "save_password": "Guardar contraseña",
                             "allow_mqtt_publish": "Permitir la publicación de MQTT en la nube",
                             "check_firmware_updates": "Comprobar actualizaciones de firmware",
-                            "create_diagnostic_entities": "Crear entidades de diagnóstico"
+                            "create_diagnostic_entities": "Crear entidades de diagnóstico",
+                            "error": "Mensaje de error"
                         }
                     }
                 }
@@ -224,7 +234,8 @@
                             "protocol": "Protocolo de conexión",
                             "polling_period": "Intervalo de consulta",
                             "timezone": "Zona horaria del dispositivo",
-                            "trace_timeout": "Duración del seguimiento de debug (sec)"
+                            "trace_timeout": "Duración del seguimiento de debug (sec)",
+                            "error": "Mensaje de error"
                         }
                     }
                 }

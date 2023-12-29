@@ -72,12 +72,14 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configure global Meross LAN settings",
                 "data": {
+                    "error": "Error message",
                     "key": "Device key"
                 }
             },
             "device": {
                 "description": "Setup meross device\nType: {device_type}\nUUID: {device_id}",
                 "data": {
+                    "error": "[%key:config::step::hub::data::error%]",
                     "host": "Device host address",
                     "key": "[%key:config::step::hub::data::key%]"
                 }
@@ -94,6 +96,7 @@
                 "title": "Meross cloud profile",
                 "description": "Register and connect to a Meross account",
                 "data": {
+                    "error": "[%key:config::step::hub::data::error%]",
                     "email": "Meross login",
                     "password": "Meross password",
                     "save_password": "Save password",
@@ -135,6 +138,7 @@
                 "title": "[%key:config::step::hub::title%]",
                 "description": "[%key:config::step::hub::description%]",
                 "data": {
+                    "error": "[%key:config::step::hub::data::error%]",
                     "key": "[%key:config::step::hub::data::key%]"
                 }
             },
@@ -142,6 +146,7 @@
                 "title": "Device configuration",
                 "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}",
                 "data": {
+                    "error": "[%key:config::step::device::data::error%]",
                     "host": "[%key:config::step::device::data::host%]",
                     "key": "[%key:config::step::device::data::key%]",
                     "protocol": "Connection protocol",
@@ -161,6 +166,7 @@
                 "title": "[%key:config::step::profile::title%]",
                 "description": "Configure Meross {email} account\n{placeholder}",
                 "data": {
+                    "error": "[%key:config::step::profile::data::error%]",
                     "email": "[%key:config::step::profile::data::email%]",
                     "password": "[%key:config::step::profile::data::password%]",
                     "save_password": "[%key:config::step::profile::data::save_password%]",
@@ -173,6 +179,7 @@
                 "title": "[%key:options::step::menu::menu_options::diagnostics%]",
                 "description": "The configuration will be reloaded and debug tracing will start for the configured period",
                 "data": {
+                    "error": "[%key:config::step::hub::data::error%]",
                     "trace_timeout": "Debug tracing duration (sec)"
                 }
             },
@@ -180,6 +187,7 @@
                 "title": "[%key:options::step::menu::menu_options::bind%]",
                 "description": "Connect (Bind) the device to a different MQTT broker",
                 "data": {
+                    "error": "[%key:options::step::device::data::error%]",
                     "broker": "Address of the new MQTT broker",
                     "check": "Check broker compatibility before reconfiguring",
                     "key": "[%key:config::step::hub::data::key%]",
@@ -193,6 +201,7 @@
                 "title": "[%key:options::step::menu::menu_options::unbind%]",
                 "description": "WARNING! this will issue a special command to unbind the device from the current MQTT broker (either Meross cloud or local one) and reset it to factory defaults.\n After that, the device will need to be re-configured again in order to use it",
                 "data": {
+                    "error": "[%key:options::step::device::data::error%]",
                     "post_action": "After unbinding:"
                 }
             }
@@ -207,6 +216,7 @@
                         "title": "[%key:options::step::profile::title%]",
                         "description": "[%key:options::step::profile::description%]",
                         "data": {
+                            "error": "[%key:options::step::profile::data::error%]",
                             "email": "[%key:options::step::profile::data::email%]",
                             "password": "[%key:options::step::profile::data::password%]",
                             "save_password": "[%key:options::step::profile::data::save_password%]",
@@ -226,6 +236,7 @@
                         "title": "[%key:options::step::device::title%]",
                         "description": "[%key:options::step::device::description%]",
                         "data": {
+                            "error": "[%key:options::step::device::data::error%]",
                             "host": "[%key:options::step::device::data::host%]",
                             "key": "[%key:options::step::device::data::key%]",
                             "protocol": "[%key:options::step::device::data::protocol%]",

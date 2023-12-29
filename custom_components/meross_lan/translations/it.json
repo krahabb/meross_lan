@@ -64,14 +64,16 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configura le impostazioni globali di Meross LAN",
                 "data": {
-                    "key": "Chiave dispositivo"
+                    "key": "Chiave dispositivo",
+                    "error": "Messaggio di errore"
                 }
             },
             "device": {
                 "description": "Configurazione dispositivo\nTipo: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Indirizzo dispositivo",
-                    "key": "Chiave dispositivo"
+                    "key": "Chiave dispositivo",
+                    "error": "Messaggio di errore"
                 }
             },
             "keyerror": {
@@ -91,7 +93,8 @@
                     "save_password": "Salva password",
                     "allow_mqtt_publish": "Consenti pubblicazione MQTT",
                     "check_firmware_updates": "Verifica aggiornamenti firmware",
-                    "create_diagnostic_entities": "Crea entità disagnostiche"
+                    "create_diagnostic_entities": "Crea entità disagnostiche",
+                    "error": "Messaggio di errore"
                 }
             },
             "finalize": {
@@ -116,7 +119,8 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configura le impostazioni globali di Meross LAN",
                 "data": {
-                    "key": "Chiave dispositivo"
+                    "key": "Chiave dispositivo",
+                    "error": "Messaggio di errore"
                 }
             },
             "device": {
@@ -128,7 +132,8 @@
                     "protocol": "Protocollo",
                     "polling_period": "Intervallo di aggiornamento",
                     "timezone": "Zona oraria",
-                    "trace_timeout": "Durata debug tracing (sec)"
+                    "trace_timeout": "Durata debug tracing (sec)",
+                    "error": "Messaggio di errore"
                 }
             },
             "keyerror": {
@@ -148,7 +153,8 @@
                     "save_password": "Salva password",
                     "allow_mqtt_publish": "Consenti pubblicazione MQTT",
                     "check_firmware_updates": "Verifica aggiornamenti firmware",
-                    "create_diagnostic_entities": "Crea entità disagnostiche"
+                    "create_diagnostic_entities": "Crea entità disagnostiche",
+                    "error": "Messaggio di errore"
                 }
             },
             "menu": {
@@ -166,7 +172,8 @@
                 "title": "Attiva il debug tracing",
                 "description": "La configurazione verrà ricaricata e il debug tracing verrà avviato per il periodo configurato.",
                 "data": {
-                    "trace_timeout": "Durata debug tracing (sec)"
+                    "trace_timeout": "Durata debug tracing (sec)",
+                    "error": "Messaggio di errore"
                 }
             },
             "bind": {
@@ -176,7 +183,8 @@
                     "broker": "Indirizzo del nuovo broker MQTT",
                     "check": "Verifica la compatibilità del broker MQTT prima di riconfigurarlo",
                     "key": "Chiave dispositivo",
-                    "userid": "Id utente"
+                    "userid": "Id utente",
+                    "error": "Messaggio di errore"
                 },
                 "data_description": {
                     "broker": "Inserire l'indirizzo nella forma \"host(:port)\" o lasciare vuoto per utilizzare quello di HomeAssistant."
@@ -184,9 +192,10 @@
             },
             "unbind": {
                 "title": "Reset hardware",
-                "description": "ATTENZIONE: questo comando speciale disaccoppia il dispositivo dal broker MQTT corrente (cloud Meross o locale) e lo riporta alle impostazioni di fabbrica.\n Dopodiché, il dispositivo dovrà essere riconfigurato di nuovo per poterlo utilizzare.",
+                "description": "ATTENZIONE: questo comando speciale disaccoppia il dispositivo dal broker MQTT corrente (cloud Meross o locale) e lo riporta alle impostazioni di fabbrica.\n Dopodiché, il dispositivo dovrà essere riconfigurato per poterlo utilizzare.",
                 "data": {
-                    "post_action": "Dopo il reset:"
+                    "post_action": "Dopo il reset:",
+                    "error": "Messaggio di errore"
                 }
             }
         }
@@ -205,7 +214,8 @@
                             "save_password": "Salva password",
                             "allow_mqtt_publish": "Consenti pubblicazione MQTT",
                             "check_firmware_updates": "Verifica aggiornamenti firmware",
-                            "create_diagnostic_entities": "Crea entità disagnostiche"
+                            "create_diagnostic_entities": "Crea entità disagnostiche",
+                            "error": "Messaggio di errore"
                         }
                     }
                 }
@@ -224,7 +234,8 @@
                             "protocol": "Protocollo",
                             "polling_period": "Intervallo di aggiornamento",
                             "timezone": "Zona oraria",
-                            "trace_timeout": "Durata debug tracing (sec)"
+                            "trace_timeout": "Durata debug tracing (sec)",
+                            "error": "Messaggio di errore"
                         }
                     }
                 }

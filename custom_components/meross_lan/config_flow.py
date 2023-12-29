@@ -122,7 +122,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             self.conf_error = None
         except Exception as exception:
             self._errors = {CONF_ERROR: FlowErrorKey.CANNOT_CONNECT.value}
-            self._conf_error = f"{exception.__class__.__name__}({str(exception)})"
+            self._conf_error = str(exception) or exception.__class__.__name__
 
     def async_show_form_with_errors(
         self,

@@ -64,14 +64,16 @@
                 "title": "Centrum Meross LAN MQTT",
                 "description": "Globální konfigurace nastavení Meross LAN",
                 "data": {
-                    "key": "Klíč zařízení"
+                    "key": "Klíč zařízení",
+                    "error": "Chybová zpráva"
                 }
             },
             "device": {
                 "description": "Nastavení zařízení Meross\nTyp: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Adresa hostitele zařízení",
-                    "key": "Klíč zařízení"
+                    "key": "Klíč zařízení",
+                    "error": "Chybová zpráva"
                 }
             },
             "keyerror": {
@@ -91,7 +93,8 @@
                     "save_password": "Uložit heslo",
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
-                    "create_diagnostic_entities": "Vytvářejte diagnostické entity"
+                    "create_diagnostic_entities": "Vytvářejte diagnostické entity",
+                    "error": "Chybová zpráva"
                 }
             },
             "finalize": {
@@ -116,7 +119,8 @@
                 "title": "Centrum Meross LAN MQTT",
                 "description": "Globální konfigurace nastavení Meross LAN",
                 "data": {
-                    "key": "Klíč zařízení"
+                    "key": "Klíč zařízení",
+                    "error": "Chybová zpráva"
                 }
             },
             "device": {
@@ -128,7 +132,8 @@
                     "protocol": "Protokol připojení",
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
-                    "trace_timeout": "Doba trvání trasování ladění (sec)"
+                    "trace_timeout": "Doba trvání trasování ladění (sec)",
+                    "error": "Chybová zpráva"
                 }
             },
             "keyerror": {
@@ -148,7 +153,8 @@
                     "save_password": "Uložit heslo",
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
-                    "create_diagnostic_entities": "Vytvářejte diagnostické entity"
+                    "create_diagnostic_entities": "Vytvářejte diagnostické entity",
+                    "error": "Chybová zpráva"
                 }
             },
             "menu": {
@@ -166,7 +172,8 @@
                 "title": "Spusťte trasování diagnostiky",
                 "description": "Konfigurace se znovu načte a začne se sledovat ladění po nastavenou dobu.",
                 "data": {
-                    "trace_timeout": "Doba trvání trasování ladění (sec)"
+                    "trace_timeout": "Doba trvání trasování ladění (sec)",
+                    "error": "Chybová zpráva"
                 }
             },
             "bind": {
@@ -176,7 +183,8 @@
                     "broker": "Adresa nového zprostředkovatele MQTT",
                     "check": "Zkontrolujte kompatibilitu zprostředkovatele MQTT před rekonfigurací",
                     "key": "Klíč zařízení",
-                    "userid": "Id uživatele"
+                    "userid": "Id uživatele",
+                    "error": "Chybová zpráva"
                 },
                 "data_description": {
                     "broker": "Zadejte adresu ve tvaru 'host(:port)' nebo nechte prázdnou, chcete-li použít adresu HomeAssistant."
@@ -186,7 +194,8 @@
                 "title": "Hardwarový reset",
                 "description": "UPOZORNĚNÍ! vydá speciální příkaz k odpojení zařízení od aktuálního zprostředkovatele MQTT (buď Meross cloud, nebo lokálního) a obnoví jeho tovární nastavení.\n Poté bude nutné zařízení znovu nakonfigurovat, aby bylo možné jej používat",
                 "data": {
-                    "post_action": "Po rozvázání:"
+                    "post_action": "Po rozvázání:",
+                    "error": "Chybová zpráva"
                 }
             }
         }
@@ -205,7 +214,8 @@
                             "save_password": "Uložit heslo",
                             "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                             "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
-                            "create_diagnostic_entities": "Vytvářejte diagnostické entity"
+                            "create_diagnostic_entities": "Vytvářejte diagnostické entity",
+                            "error": "Chybová zpráva"
                         }
                     }
                 }
@@ -224,7 +234,8 @@
                             "protocol": "Protokol připojení",
                             "polling_period": "Interval dotazování",
                             "timezone": "Časové pásmo zařízení",
-                            "trace_timeout": "Doba trvání trasování ladění (sec)"
+                            "trace_timeout": "Doba trvání trasování ladění (sec)",
+                            "error": "Chybová zpráva"
                         }
                     }
                 }

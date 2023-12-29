@@ -64,14 +64,16 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configurer les paramètres LAN globaux de Meross",
                 "data": {
-                    "key": "Clé"
+                    "key": "Clé",
+                    "error": "Message d'erreur"
                 }
             },
             "device": {
                 "description": "Découvrir l'appareil\nType: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Adresse",
-                    "key": "Clé"
+                    "key": "Clé",
+                    "error": "Message d'erreur"
                 }
             },
             "keyerror": {
@@ -91,7 +93,8 @@
                     "save_password": "Enregistrer le mot de passe",
                     "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                     "check_firmware_updates": "Vérifier les mises à jour du firmware",
-                    "create_diagnostic_entities": "Créer des entités de diagnostic"
+                    "create_diagnostic_entities": "Créer des entités de diagnostic",
+                    "error": "Message d'erreur"
                 }
             },
             "finalize": {
@@ -116,7 +119,8 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configurer les paramètres LAN globaux de Meross",
                 "data": {
-                    "key": "Clé"
+                    "key": "Clé",
+                    "error": "Message d'erreur"
                 }
             },
             "device": {
@@ -128,7 +132,8 @@
                     "protocol": "Protocole de connexion",
                     "polling_period": "Période de requête",
                     "timezone": "Fuseau horaire de l'appareil",
-                    "trace_timeout": "Durée du suivi du débogage (sec)"
+                    "trace_timeout": "Durée du suivi du débogage (sec)",
+                    "error": "Message d'erreur"
                 }
             },
             "keyerror": {
@@ -148,7 +153,8 @@
                     "save_password": "Enregistrer le mot de passe",
                     "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                     "check_firmware_updates": "Vérifier les mises à jour du firmware",
-                    "create_diagnostic_entities": "Créer des entités de diagnostic"
+                    "create_diagnostic_entities": "Créer des entités de diagnostic",
+                    "error": "Message d'erreur"
                 }
             },
             "menu": {
@@ -166,7 +172,8 @@
                 "title": "Démarrer la trace de diagnostic",
                 "description": "La configuration sera rechargée et le traçage de débogage commencera pour la période configurée.",
                 "data": {
-                    "trace_timeout": "Durée du suivi du débogage (sec)"
+                    "trace_timeout": "Durée du suivi du débogage (sec)",
+                    "error": "Message d'erreur"
                 }
             },
             "bind": {
@@ -176,7 +183,8 @@
                     "broker": "Adresse du nouveau courtier MQTT",
                     "check": "Vérifier la compatibilité du courtier MQTT avant de reconfigurer",
                     "key": "Clé",
-                    "userid": "ID de l'utilisateur"
+                    "userid": "ID de l'utilisateur",
+                    "error": "Message d'erreur"
                 },
                 "data_description": {
                     "broker": "Entrez l'adresse sous la forme 'host(:port)' ou laissez vide pour utiliser celle de HomeAssistant."
@@ -186,7 +194,8 @@
                 "title": "Réinitialisation du matériel",
                 "description": "ATTENTION ! Ceci va émettre une commande spéciale pour délier l'appareil du courtier MQTT actuel (soit le nuage Meross ou un courtier local) et le réinitialiser aux valeurs d'usine par défaut.\n Après cela, l'appareil devra être reconfiguré pour pouvoir être utilisé.",
                 "data": {
-                    "post_action": "Après la déliaison:"
+                    "post_action": "Après la déliaison:",
+                    "error": "Message d'erreur"
                 }
             }
         }
@@ -205,7 +214,8 @@
                             "save_password": "Enregistrer le mot de passe",
                             "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                             "check_firmware_updates": "Vérifier les mises à jour du firmware",
-                            "create_diagnostic_entities": "Créer des entités de diagnostic"
+                            "create_diagnostic_entities": "Créer des entités de diagnostic",
+                            "error": "Message d'erreur"
                         }
                     }
                 }
@@ -224,7 +234,8 @@
                             "protocol": "Protocole de connexion",
                             "polling_period": "Période de requête",
                             "timezone": "Fuseau horaire de l'appareil",
-                            "trace_timeout": "Durée du suivi du débogage (sec)"
+                            "trace_timeout": "Durée du suivi du débogage (sec)",
+                            "error": "Message d'erreur"
                         }
                     }
                 }
