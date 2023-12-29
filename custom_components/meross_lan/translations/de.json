@@ -120,7 +120,9 @@
                 "description": "Allgemeine Meross LAN Einstellungen",
                 "data": {
                     "key": "Geräteschlüssel",
-                    "error": "Fehlermeldung"
+                    "error": "Fehlermeldung",
+                    "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
+                    "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten"
                 }
             },
             "device": {

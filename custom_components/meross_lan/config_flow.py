@@ -736,7 +736,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
     async def async_step_hub(self, user_input=None):
         hub_config = self.config
         if user_input is not None:
-            hub_config[mlc.CONF_KEY] = user_input.get(mlc.CONF_KEY)
+            self.merge_userinput(hub_config, user_input, (mlc.CONF_KEY))
             return self.finish_options_flow(hub_config)
 
         config_schema = {
@@ -744,7 +744,21 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 mlc.CONF_KEY,
                 default="",  # type: ignore
                 description={DESCR: hub_config.get(mlc.CONF_KEY)},
-            ): str
+            ): str,
+            vol.Required(
+                mlc.CONF_ALLOW_MQTT_PUBLISH,
+                description={
+                    DESCR: hub_config.get(mlc.CONF_ALLOW_MQTT_PUBLISH, True)
+                },
+            ): bool,
+            vol.Required(
+                mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES,
+                description={
+                    DESCR: hub_config.get(
+                        mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES, False
+                    )
+                },
+            ): bool,
         }
         self._setup_entitymanager_schema(config_schema, hub_config)
         return self.async_show_form(

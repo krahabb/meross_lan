@@ -51,7 +51,9 @@ class HubConfigType(TypedDict):
     """MQTT Hub config_entry keys"""
 
     key: str
-    trace_timeout: NotRequired[int | None]
+    allow_mqtt_publish: NotRequired[bool]
+    create_diagnostic_entities: NotRequired[bool]
+    trace_timeout: NotRequired[int]
 
 
 class DeviceConfigTypeMinimal(TypedDict):

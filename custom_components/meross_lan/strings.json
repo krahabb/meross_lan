@@ -139,7 +139,9 @@
                 "description": "[%key:config::step::hub::description%]",
                 "data": {
                     "error": "[%key:config::step::hub::data::error%]",
-                    "key": "[%key:config::step::hub::data::key%]"
+                    "key": "[%key:config::step::hub::data::key%]",
+                    "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]",
+                    "create_diagnostic_entities": "[%key:config::step::profile::data::create_diagnostic_entities%]"
                 }
             },
             "device": {

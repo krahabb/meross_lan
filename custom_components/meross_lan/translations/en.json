@@ -120,7 +120,9 @@
                 "description": "Configure global Meross LAN settings",
                 "data": {
                     "key": "Device key",
-                    "error": "Error message"
+                    "error": "Error message",
+                    "allow_mqtt_publish": "Allow cloud MQTT publish",
+                    "create_diagnostic_entities": "Create diagnostic entities"
                 }
             },
             "device": {

@@ -120,7 +120,9 @@
                 "description": "Configurer les paramètres LAN globaux de Meross",
                 "data": {
                     "key": "Clé",
-                    "error": "Message d'erreur"
+                    "error": "Message d'erreur",
+                    "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
+                    "create_diagnostic_entities": "Créer des entités de diagnostic"
                 }
             },
             "device": {

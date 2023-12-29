@@ -120,7 +120,9 @@
                 "description": "Globální konfigurace nastavení Meross LAN",
                 "data": {
                     "key": "Klíč zařízení",
-                    "error": "Chybová zpráva"
+                    "error": "Chybová zpráva",
+                    "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
+                    "create_diagnostic_entities": "Vytvářejte diagnostické entity"
                 }
             },
             "device": {
