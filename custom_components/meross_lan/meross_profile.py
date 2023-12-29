@@ -137,6 +137,7 @@ class ConnectionSensor(MLSensor):
         super().__init__(
             connection.profile, connection.id, None, MLSensor.DeviceClass.ENUM
         )
+        self.update_state(self.STATE_CONNECTED if connection.mqtt_is_connected else self.STATE_DISCONNECTED)
 
     @property
     def available(self):
@@ -300,7 +301,7 @@ class MQTTConnection(Loggable):
         for device in self.mqttdevices.values():
             device.mqtt_detached()
         self.mqttdevices.clear()
-        self.destroy_diagnostic_entities()
+        await self.async_destroy_diagnostic_entities()
 
     # interface: self
     @property
@@ -342,12 +343,12 @@ class MQTTConnection(Loggable):
                 for device in self.mqttdevices.values():
                     _add_device(device)
 
-    def destroy_diagnostic_entities(self):
+    async def async_destroy_diagnostic_entities(self):
         # TODO: broadcast remove to HA !?
         if sensor_connection := self.sensor_connection:
-            # WARNING: pretty dangerous code. we should also async_shutdown the entity
-            # but its implementation is empty and it's async..too much, no need now
             sensor_connection.manager.entities.pop(sensor_connection.id)
+            if sensor_connection._hass_connected:
+                await sensor_connection.async_remove()
             self.sensor_connection = None
 
     @typing.final
@@ -371,12 +372,10 @@ class MQTTConnection(Loggable):
         else:
             transaction = None
         try:
-            _mqtt_tx_code, timeout = await self._async_mqtt_publish(device_id, request)
             if self.isEnabledFor(DEBUG):
                 self.log(
                     DEBUG,
-                    "MQTT %s %s %s (device_id: %s, messageId: %s)",
-                    _mqtt_tx_code,
+                    "MQTT PUBLISH %s %s (device_id: %s, messageId: %s)",
                     request.method,
                     request.namespace,
                     device_id,
@@ -390,8 +389,9 @@ class MQTTConnection(Loggable):
                     request.namespace,
                     request.method,
                     CONF_PROTOCOL_MQTT,
-                    _mqtt_tx_code,
+                    profile.TRACE_TX,
                 )
+            _mqtt_tx_code, timeout = await self._async_mqtt_publish(device_id, request)
             if transaction:
                 if _mqtt_tx_code is self._MQTT_DROP:
                     transaction.cancel()
@@ -464,7 +464,7 @@ class MQTTConnection(Loggable):
                     namespace,
                     method,
                     CONF_PROTOCOL_MQTT,
-                    self._MQTT_RECV,
+                    profile.TRACE_RX,
                 )
 
             if messageid in self._mqtt_transactions:
@@ -754,7 +754,7 @@ class MQTTConnection(Loggable):
             sensor_connection.update_state(ConnectionSensor.STATE_DISCONNECTED)
 
     @callback
-    def _mqtt_published(self, mid):
+    def _mqtt_published(self):
         """called when the underlying mqtt.Client successfully publishes a message"""
         if sensor_connection := self.sensor_connection:
             sensor_connection.inc_counter(ConnectionSensor.ATTR_PUBLISHED)
@@ -841,7 +841,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         )
 
     @callback
-    def _mqtt_published(self, mid):
+    def _mqtt_published(self):
         if sensor_connection := self.sensor_connection:
             queue_length = self.rl_queue_length
             # queue_length and dropped are exactly calculated
@@ -898,12 +898,30 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                     ConnectionSensor.ATTR_DROPPED,
                     ConnectionSensor.STATE_DROPPING,
                 )
+            if self.isEnabledFor(DEBUG):
+                self.log(
+                    DEBUG,
+                    "MQTT DROP %s %s (device_id: %s, messageId: %s)",
+                    request.method,
+                    request.namespace,
+                    device_id,
+                    request.messageid,
+                )
             return (self._MQTT_DROP, 0)
         if ret is True:
             if sensor_connection := self.sensor_connection:
                 ApiProfile.hass.loop.call_soon_threadsafe(
                     sensor_connection.inc_queued,
                     self.rl_queue_length,
+                )
+            if self.isEnabledFor(DEBUG):
+                self.log(
+                    DEBUG,
+                    "MQTT QUEUE %s %s (device_id: %s, messageId: %s)",
+                    request.method,
+                    request.namespace,
+                    device_id,
+                    request.messageid,
                 )
             return (
                 self._MQTT_QUEUE,
@@ -926,7 +944,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         userdata.create_task(self.async_mqtt_message(msg))
 
     def _mqttc_publish(self, client, userdata: HomeAssistant, mid):
-        userdata.add_job(self._mqtt_published, mid)
+        userdata.add_job(self._mqtt_published)
 
 
 class MerossCloudProfileStoreType(typing.TypedDict):
@@ -976,7 +994,6 @@ class MerossCloudProfile(ApiProfile):
 
     def __init__(self, config_entry: ConfigEntry):
         super().__init__(config_entry.data[mc.KEY_USERID_], config_entry)
-        self.platforms[MLSensor.PLATFORM] = None
         self._store = MerossCloudProfileStore(self.id)
         self._unsub_polling_query_device_info: asyncio.TimerHandle | None = None
 

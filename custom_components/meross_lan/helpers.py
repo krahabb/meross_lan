@@ -14,6 +14,7 @@ import os
 from time import gmtime, localtime, strftime, time
 import typing
 
+from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
 from homeassistant.util.dt import DEFAULT_TIME_ZONE, utcnow
@@ -1013,6 +1014,7 @@ class ApiProfile(EntityManager):
 
     def __init__(self, id: str, config_entry_or_id: ConfigEntry | str = ""):
         super().__init__(id, config_entry_or_id)
+        self.platforms[SENSOR_DOMAIN] = None
         self.linkeddevices: dict[str, MerossDevice] = {}
         self.mqttconnections: dict[str, MQTTConnection] = {}
 
@@ -1048,7 +1050,7 @@ class ApiProfile(EntityManager):
                     mqttconnection.create_diagnostic_entities()
             else:
                 for mqttconnection in self.mqttconnections.values():
-                    mqttconnection.destroy_diagnostic_entities()
+                    await mqttconnection.async_destroy_diagnostic_entities()
         await super().entry_update_listener(hass, config_entry)
 
     # interface: self

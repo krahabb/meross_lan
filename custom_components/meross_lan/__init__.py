@@ -122,6 +122,7 @@ class HAMQTTConnection(MQTTConnection):
         await mqtt_async_publish(
             ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.to_string()
         )
+        self._mqtt_published()
         return self._MQTT_PUBLISH, self.DEFAULT_RESPONSE_TIMEOUT
 
     # interface: self
@@ -555,7 +556,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
 
     if unique_id == mlc.DOMAIN:
         # MQTT Hub entry
-        await api.entry_update_listener(hass, config_entry)
+        api.config = config_entry.data
+        api.key = config_entry.data.get(mlc.CONF_KEY) or ""
         if not await api.mqtt_connection.async_mqtt_subscribe():
             raise ConfigEntryNotReady("MQTT unavailable")
         await api.async_setup_entry(hass, config_entry)
