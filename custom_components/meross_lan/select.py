@@ -299,7 +299,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
                     climate.TEMP_CELSIUS,
                 )
             error_temperature: float = tracked_temperature - current_temperature
-            native_error_temperature = round(error_temperature * mc.MTS_TEMP_SCALE)
+            native_error_temperature = round(error_temperature * climate.device_scale)
             if not native_error_temperature:
                 # tracking error within device resolution limits..we're ok
                 return

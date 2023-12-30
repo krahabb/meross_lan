@@ -100,8 +100,10 @@ class MtsSchedule(MLCalendar):
     manager: MerossDeviceBase
     climate: typing.Final[MtsClimate]
 
-    namespace: str  # set in descendant class def
-    key_channel: str  # set in descendant class def
+    # set in descendants class def
+    namespace: str
+    key_namespace: str
+    key_channel: str
 
     _attr_entity_category = me.EntityCategory.CONFIG
     _attr_state: MtsScheduleNativeType | None
@@ -142,7 +144,7 @@ class MtsSchedule(MLCalendar):
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
         self._attr_extra_state_attributes = {}
-        super().__init__(climate.manager, climate.channel, mc.KEY_SCHEDULE, None)
+        super().__init__(climate.manager, climate.channel, self.key_namespace, None)
 
     # interface: MerossEntity
     async def async_shutdown(self):
@@ -322,14 +324,14 @@ class MtsSchedule(MLCalendar):
             if not await self.manager.async_request_ack(
                 self.namespace,
                 mc.METHOD_SET,
-                {mc.KEY_SCHEDULE: [payload]},
+                {self.key_namespace: [payload]},
             ):
                 # there was an error so we request the actual device state again
                 if self.manager.online:
                     await self.manager.async_request(
                         self.namespace,
                         mc.METHOD_GET,
-                        {mc.KEY_SCHEDULE: [{self.key_channel: self.channel}]},
+                        {self.key_namespace: [{self.key_channel: self.channel}]},
                     )
 
     def _get_event_entry(self, event_time: datetime) -> MtsScheduleEntry | None:
@@ -647,7 +649,7 @@ class MtsSchedule(MLCalendar):
             self._attr_state.update(payload)
         else:
             self._attr_state = payload
-        self._attr_extra_state_attributes[mc.KEY_SCHEDULE] = str(self._attr_state)
+        self._attr_extra_state_attributes[self.key_namespace] = str(self._attr_state)
         # invalidate our internal representation and flush
         self._schedule = None
         self._schedule_entry_count = 0

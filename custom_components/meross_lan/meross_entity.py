@@ -81,6 +81,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     __slots__ = (
         "manager",
         "channel",
+        "entitykey",
         "_attr_device_class",
         "_attr_state",
         "_attr_unique_id",
@@ -121,13 +122,16 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         ), f"(channel:{channel}, entitykey:{entitykey}) is not unique inside manager.entities"
         self.manager = manager
         self.channel = channel
+        self.entitykey = entitykey
         self._attr_device_class = device_class
         attr_name = self._attr_name
         if attr_name is None and (entitykey or device_class):
             attr_name = f"{entitykey or device_class}"
         # when channel == 0 it might be the only one so skip it
         # when channel is already in device name it also may be skipped
-        if channel and manager.name.find(str(channel)) == -1:
+        if channel and (channel is not manager.id):
+            # (channel is manager.id) means this is the 'main' entity of an hub subdevice
+            # so we skip adding the subdevice.id to the entity name
             attr_name = f"{attr_name} {channel}" if attr_name else str(channel)
         if attr_name is not None:
             attr_name = attr_name.capitalize()

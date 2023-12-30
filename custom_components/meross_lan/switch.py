@@ -11,8 +11,10 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .climate import MtsClimate
     from .meross_device import MerossDevice
     from .merossclient import MerossDeviceDescriptor
+
 
 try:
     SwitchDeviceClass = switch.SwitchDeviceClass  # type: ignore
@@ -43,6 +45,36 @@ class MLSwitch(me.MerossToggle, switch.SwitchEntity):
         return MLSwitch(
             device, channel, None, SwitchDeviceClass.OUTLET, namespace
         )
+
+
+class MtsConfigSwitch(MLSwitch):
+    _attr_entity_category = MLSwitch.EntityCategory.CONFIG
+
+    namespace: str
+
+    def __init__(self, climate: MtsClimate, entitykey: str, namespace: str):
+        super().__init__(
+            climate.manager,
+            climate.channel,
+            entitykey,
+            MLSwitch.DeviceClass.SWITCH,
+            namespace,
+        )
+
+    async def async_request_onoff(self, onoff: int):
+        if await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: [
+                    {
+                        self.key_channel: self.channel,
+                        self.key_onoff: onoff,
+                    }
+                ]
+            },
+        ):
+            self.update_onoff(onoff)
 
 
 class ToggleXMixin(MerossDevice if typing.TYPE_CHECKING else object):

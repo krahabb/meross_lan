@@ -13,6 +13,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .climate import MtsClimate
     from .helpers import EntityManager
     from .meross_device import MerossDevice
 
@@ -176,3 +177,172 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         if self._unsub_request:
             self._unsub_request.cancel()
             self._unsub_request = None
+
+
+class MtsTemperatureNumber(MLConfigNumber):
+    """
+    Common number entity for representing MTS temperatures configuration
+    """
+
+    __slots__ = ("climate",)
+
+    def __init__(self, climate: MtsClimate, entitykey: str):
+        self.climate = climate
+        super().__init__(
+            climate.manager,
+            climate.channel,
+            entitykey,
+            MLConfigNumber.DeviceClass.TEMPERATURE,
+        )
+
+    @property
+    def native_unit_of_measurement(self):
+        return self.climate.temperature_unit
+
+    @property
+    def device_scale(self):
+        return self.climate.device_scale
+
+
+class MtsRichTemperatureNumber(MtsTemperatureNumber):
+    """
+    Slightly enriched MtsTemperatureNumber to generalize  a lot of Thermostat namespaces
+    which usually carry a temperature value together with some added enitities (typically a switch
+    to enable the feature and a 'warning sensor')
+    typical examples are :
+    "calibration": {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
+    "deadZone":
+    "frost": {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
+    "overheat": {"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
+        "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
+    """
+
+    entitykey: str
+
+    __slots__ = (
+        "sensor_warning",
+        "switch",
+    )
+
+    def __init__(self, climate: MtsClimate, entitykey: str):
+        super().__init__(climate, entitykey)
+        # preset entity platforms since these might be instantiated later
+        from .switch import MtsConfigSwitch
+        self.manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
+        from .sensor import MLSensor
+        self.manager.platforms.setdefault(MLSensor.PLATFORM)
+        self.sensor_warning = None
+        self.switch = None
+
+    async def async_shutdown(self):
+        self.switch = None
+        self.sensor_warning = None
+        await super().async_shutdown()
+
+    def _parse_value(self, payload: dict):
+        """
+        {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
+        """
+        if mc.KEY_MIN in payload:
+            self._attr_native_min_value = payload[mc.KEY_MIN] / self.device_scale
+        if mc.KEY_MAX in payload:
+            self._attr_native_max_value = payload[mc.KEY_MAX] / self.device_scale
+        self.update_native_value(payload[self.key_value])
+        if mc.KEY_ONOFF in payload:
+            # on demand instance
+            try:
+                self.switch.update_onoff(payload[mc.KEY_ONOFF])  # type: ignore
+            except Exception as exception:
+                from .switch import MtsConfigSwitch
+                self.switch = MtsConfigSwitch(
+                    self.climate, f"{self.entitykey}_switch", self.namespace
+                )
+                self.switch.update_onoff(payload[mc.KEY_ONOFF])
+        if mc.KEY_WARNING in payload:
+            # on demand instance
+            try:
+                self.sensor_warning.update_state(payload[mc.KEY_WARNING])  # type: ignore
+            except Exception as exception:
+                from .sensor import MLSensor
+
+                self.sensor_warning = sensor_warning = MLSensor(
+                    self.manager,
+                    self.channel,
+                    f"{self.entitykey}_warning",
+                    MLSensor.DeviceClass.ENUM,
+                )
+                # TODO: convert translation key (old was "mts200_overheat_warning")
+                sensor_warning._attr_translation_key = f"mts_{sensor_warning.entitykey}"
+                sensor_warning.update_state(payload[mc.KEY_WARNING])
+
+
+class MtsCalibrationNumber(MtsRichTemperatureNumber):
+    """
+    adjust temperature readings for mts200 and mts960 or
+    whatever carries the Appliance.Control.Thermostat.Calibration
+    """
+
+    _attr_name = "Calibration"
+
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
+    key_namespace = mc.KEY_CALIBRATION
+    key_value = mc.KEY_VALUE
+
+    def __init__(self, climate: MtsClimate):
+        self._attr_native_max_value = 8
+        self._attr_native_min_value = -8
+        super().__init__(climate, mc.KEY_CALIBRATION)
+
+    @property
+    def native_step(self):
+        return 0.1
+
+    def _parse_calibration(self, payload: dict):
+        """{"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}"""
+        self._parse_value(payload)
+
+
+class MtsSetPointNumber(MtsTemperatureNumber):
+    """
+    Helper entity to configure MTS100/150/200 setpoints
+    AKA: Heat(comfort) - Cool(sleep) - Eco(away)
+    """
+
+    def __init__(self, climate: MtsClimate, preset_mode: str):
+        self._preset_mode = preset_mode
+        self.key_value = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
+        self._attr_icon = climate.PRESET_TO_ICON_MAP[preset_mode]
+        self._attr_name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
+        super().__init__(
+            climate,
+            f"config_{mc.KEY_TEMPERATURE}_{self.key_value}",
+        )
+
+    @property
+    def native_max_value(self):
+        return self.climate._attr_max_temp
+
+    @property
+    def native_min_value(self):
+        return self.climate._attr_min_temp
+
+    @property
+    def native_step(self):
+        return self.climate.target_temperature_step
+
+    async def async_request(self, device_value):
+        if response := await super().async_request(device_value):
+            # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
+            # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
+            # make sure the climate state is consistent and all the correct roundings
+            # are processed when changing any of the presets
+            # not sure about mts200 replies..but we're optimist
+            key_namespace = self.key_namespace
+            payload = response[mc.KEY_PAYLOAD]
+            if key_namespace in payload:
+                # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)
+                getattr(self.climate, f"_parse_{key_namespace}")(
+                    payload[key_namespace][0]
+                )
+
+        return response

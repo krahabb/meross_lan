@@ -507,7 +507,7 @@ class MerossApi(ApiProfile):
 
             mixin_classes.append(RollerShutterMixin)
         if mc.KEY_THERMOSTAT in digest:
-            from .devices.mts200 import ThermostatMixin
+            from .devices.thermostat import ThermostatMixin
 
             mixin_classes.append(ThermostatMixin)
         if mc.KEY_DIFFUSER in digest:
@@ -515,7 +515,7 @@ class MerossApi(ApiProfile):
 
             mixin_classes.append(DiffuserMixin)
         if mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS in ability:
-            from .devices.mts200 import ScreenBrightnessMixin
+            from .devices.screenbrightness import ScreenBrightnessMixin
 
             mixin_classes.append(ScreenBrightnessMixin)
         # We must be careful when ordering the mixin and leave MerossDevice as last class.

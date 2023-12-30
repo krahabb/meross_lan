@@ -3,10 +3,10 @@ from __future__ import annotations
 import typing
 
 from ..calendar import MtsSchedule
-from ..climate import MtsClimate, MtsSetPointNumber, MtsTemperatureNumber
+from ..climate import MtsClimate
 from ..helpers import reverse_lookup
 from ..merossclient import const as mc
-from ..number import MLConfigNumber
+from ..number import MtsSetPointNumber, MtsTemperatureNumber
 
 if typing.TYPE_CHECKING:
     from ..meross_device_hub import MTS100SubDevice
@@ -144,7 +144,7 @@ class Mts100Climate(MtsClimate):
                     {
                         mc.KEY_ID: self.id,
                         key: round(
-                            kwargs[Mts100Climate.ATTR_TEMPERATURE] * mc.MTS_TEMP_SCALE
+                            kwargs[Mts100Climate.ATTR_TEMPERATURE] * self.device_scale
                         ),
                     }
                 ]
@@ -168,7 +168,7 @@ class Mts100Climate(MtsClimate):
     def _parse_temperature(self, p_temperature: dict):
         if mc.KEY_ROOM in p_temperature:
             self._attr_current_temperature = (
-                p_temperature[mc.KEY_ROOM] / mc.MTS_TEMP_SCALE
+                p_temperature[mc.KEY_ROOM] / self.device_scale
             )
             self.select_tracked_sensor.check_tracking()
             self.manager.sensor_temperature.update_state(self._attr_current_temperature)
@@ -213,7 +213,7 @@ class Mts100Climate(MtsClimate):
             _mts_adjusted_temperature[key] = _t
 
             if key is mc.KEY_CURRENTSET:
-                self._attr_target_temperature = _t / mc.MTS_TEMP_SCALE
+                self._attr_target_temperature = _t / self.device_scale
             elif key is mc.KEY_COMFORT:
                 self.number_comfort_temperature.update_native_value(_t)
             elif key is mc.KEY_ECONOMY:
@@ -239,9 +239,9 @@ class Mts100Climate(MtsClimate):
             )
 
         if mc.KEY_MIN in p_temperature:
-            self._attr_min_temp = p_temperature[mc.KEY_MIN] / mc.MTS_TEMP_SCALE
+            self._attr_min_temp = p_temperature[mc.KEY_MIN] / self.device_scale
         if mc.KEY_MAX in p_temperature:
-            self._attr_max_temp = p_temperature[mc.KEY_MAX] / mc.MTS_TEMP_SCALE
+            self._attr_max_temp = p_temperature[mc.KEY_MAX] / self.device_scale
         if mc.KEY_HEATING in p_temperature:
             self._mts_active = p_temperature[mc.KEY_HEATING]
         if mc.KEY_OPENWINDOW in p_temperature:
@@ -262,6 +262,7 @@ class Mts100SetPointNumber(MtsSetPointNumber):
 
 class Mts100Schedule(MtsSchedule):
     namespace = mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB
+    key_namespace = mc.KEY_SCHEDULE
     key_channel = mc.KEY_ID
 
     def __init__(self, climate: Mts100Climate):

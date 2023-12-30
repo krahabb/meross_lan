@@ -6,7 +6,6 @@ from homeassistant.components import climate
 
 from . import meross_entity as me
 from .merossclient import const as mc  # mEROSS cONST
-from .number import MLConfigNumber
 from .select import MtsTrackedSensor
 from .sensor import UnitOfTemperature
 
@@ -19,6 +18,7 @@ if typing.TYPE_CHECKING:
     from .binary_sensor import MLBinarySensor
     from .calendar import MtsSchedule
     from .meross_device import MerossDeviceBase
+    from .number import MtsSetPointNumber, MtsTemperatureNumber
 
 
 async def async_setup_entry(
@@ -63,12 +63,18 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         | climate.ClimateEntityFeature.TARGET_TEMPERATURE
     )
 
-    # these mappings are defined in inherited MtsXXX
-    # they'll map between mts device 'mode' and HA 'preset'
     MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int, str]]
+    """maps device 'mode' value to the HA climate.preset_mode"""
     PRESET_TO_TEMPERATUREKEY_MAP: ClassVar[dict[str, str]]
-    # in general Mts thermostats are only heating..MTS200 with 'summer mode' could override this
+    """maps the current HA preset mode to the name of temperature setpoint key"""
     MTS_HVAC_MODES: Final = [HVACMode.OFF, HVACMode.HEAT]
+    """support HVSC modes for the Mts"""
+    PRESET_TO_ICON_MAP: typing.Final = {
+        PRESET_COMFORT: "mdi:sun-thermometer",
+        PRESET_SLEEP: "mdi:power-sleep",
+        PRESET_AWAY: "mdi:bag-checked",
+    }
+    """lookups used in MtsSetpoinNumber to map a pretty icon to the setpoint entity"""
 
     __slots__ = (
         "_attr_current_temperature",
@@ -223,93 +229,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     def is_mts_scheduled(self):
         raise NotImplementedError()
 
-
-class MtsTemperatureNumber(MLConfigNumber):
-    """
-    Common number entity for representing MTS temperatures configuration
-    """
-
-    __slots__ = ("climate",)
-
-    def __init__(self, climate: MtsClimate, entitykey: str):
-        self.climate = climate
-        super().__init__(
-            climate.manager,
-            climate.channel,
-            entitykey,
-            MLConfigNumber.DeviceClass.TEMPERATURE,
-        )
-
-    @property
-    def native_unit_of_measurement(self):
-        return MtsClimate.TEMP_CELSIUS
-
     @property
     def device_scale(self):
+        """historically set at 10. Overriden in mts960 to 100"""
         return mc.MTS_TEMP_SCALE
-
-    def _parse_value(self, payload: dict):
-        """
-        Derived entities receive payloads in this form (mts200 mostly):
-        {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
-        Even though the min/max are not expected to change, we're diligent enough to actually
-        use'em to update our native min/max together with the entity native value.
-        This helper will then save a lot of duplicate code in previous implementations.
-        """
-        if mc.KEY_MIN in payload:
-            self._attr_native_min_value = payload[mc.KEY_MIN] / mc.MTS_TEMP_SCALE
-        if mc.KEY_MAX in payload:
-            self._attr_native_max_value = payload[mc.KEY_MAX] / mc.MTS_TEMP_SCALE
-        self.update_native_value(payload[self.key_value])
-
-
-class MtsSetPointNumber(MtsTemperatureNumber):
-    """
-    Helper entity to configure MTS (thermostats) setpoints
-    AKA: Heat(comfort) - Cool(sleep) - Eco(away)
-    """
-
-    PRESET_TO_ICON_MAP: Final = {
-        MtsClimate.PRESET_COMFORT: "mdi:sun-thermometer",
-        MtsClimate.PRESET_SLEEP: "mdi:power-sleep",
-        MtsClimate.PRESET_AWAY: "mdi:bag-checked",
-    }
-
-    def __init__(self, climate: MtsClimate, preset_mode: str):
-        self._preset_mode = preset_mode
-        self.key_value = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
-        self._attr_icon = MtsSetPointNumber.PRESET_TO_ICON_MAP[preset_mode]
-        self._attr_name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
-        super().__init__(
-            climate,
-            f"config_{mc.KEY_TEMPERATURE}_{self.key_value}",
-        )
-
-    @property
-    def native_max_value(self):
-        return self.climate._attr_max_temp
-
-    @property
-    def native_min_value(self):
-        return self.climate._attr_min_temp
-
-    @property
-    def native_step(self):
-        return self.climate.target_temperature_step
-
-    async def async_request(self, device_value):
-        if response := await super().async_request(device_value):
-            # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
-            # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
-            # make sure the climate state is consistent and all the correct roundings
-            # are processed when changing any of the presets
-            # not sure about mts200 replies..but we're optimist
-            key_namespace = self.key_namespace
-            payload = response[mc.KEY_PAYLOAD]
-            if key_namespace in payload:
-                # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)
-                getattr(self.climate, f"_parse_{key_namespace}")(
-                    payload[key_namespace][0]
-                )
-
-        return response
