@@ -28,20 +28,25 @@
                     "ok": "No issues"
                 }
             },
-            "mts200_overheat_warning": {
+            "_common": {
                 "state": {
                     "ok": "Ok",
-                    "overheating": "Overheating",
                     "disconnected": "Disconnected"
                 }
-            }
-        }
-    },
-    "selector": {
-        "unbind_post_action": {
-            "options": {
-                "disable": "Disable the configuration entry",
-                "delete": "Permanently delete the configuration entry"
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "1": "Overheating",
+                    "0": "[%key:entity::sensor::_common::state::ok%]",
+                    "2": "[%key:entity::sensor::_common::state::disconnected%]"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "[%key:entity::sensor::_common::state::ok%]",
+                    "1": "Freezing",
+                    "2": "[%key:entity::sensor::_common::state::disconnected%]"
+                }
             }
         }
     },
@@ -72,16 +77,16 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configure global Meross LAN settings",
                 "data": {
-                    "error": "Error message",
-                    "key": "Device key"
+                    "key": "Device key",
+                    "error": "Error message"
                 }
             },
             "device": {
                 "description": "Setup meross device\nType: {device_type}\nUUID: {device_id}",
                 "data": {
-                    "error": "[%key:config::step::hub::data::error%]",
                     "host": "Device host address",
-                    "key": "[%key:config::step::hub::data::key%]"
+                    "key": "[%key:config::step::hub::data::key%]",
+                    "error": "[%key:config::step::hub::data::error%]"
                 }
             },
             "keyerror": {
@@ -96,13 +101,13 @@
                 "title": "Meross cloud profile",
                 "description": "Register and connect to a Meross account",
                 "data": {
-                    "error": "[%key:config::step::hub::data::error%]",
                     "email": "Meross login",
                     "password": "Meross password",
                     "save_password": "Save password",
                     "allow_mqtt_publish": "Allow cloud MQTT publish",
                     "check_firmware_updates": "Check firmware updates",
-                    "create_diagnostic_entities": "Create diagnostic entities"
+                    "create_diagnostic_entities": "Create diagnostic entities",
+                    "error": "[%key:config::step::hub::data::error%]"
                 }
             },
             "finalize": {
@@ -117,29 +122,18 @@
             "cannot_connect": "[%key:config::error::cannot_connect%]",
             "cloud_profile_mismatch": "[%key:config::error::cloud_profile_mismatch%]",
             "device_id_mismatch": "Device UUID mismatch: the device is not the same",
-            "habroker_not_connected": "The HomeAssistant MQTT broker is not connected",
             "invalid_auth": "[%key:config::error::invalid_auth%]",
             "invalid_key": "[%key:config::error::invalid_key%]",
-            "invalid_nullkey": "[%key:config::error::invalid_nullkey%]"
+            "invalid_nullkey": "[%key:config::error::invalid_nullkey%]",
+            "habroker_not_connected": "The HomeAssistant MQTT broker is not connected"
         },
         "step": {
-            "menu": {
-                "title": "Choose option",
-                "menu_options": {
-                    "hub": "Configure",
-                    "device": "[%key:options::step::menu::menu_options::hub%]",
-                    "profile": "[%key:options::step::menu::menu_options::hub%]",
-                    "diagnostics": "Start diagnostics trace",
-                    "bind": "Reconfigure MQTT (local binding)",
-                    "unbind": "Hardware reset"
-                }
-            },
             "hub": {
                 "title": "[%key:config::step::hub::title%]",
                 "description": "[%key:config::step::hub::description%]",
                 "data": {
-                    "error": "[%key:config::step::hub::data::error%]",
                     "key": "[%key:config::step::hub::data::key%]",
+                    "error": "[%key:config::step::hub::data::error%]",
                     "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]",
                     "create_diagnostic_entities": "[%key:config::step::profile::data::create_diagnostic_entities%]"
                 }
@@ -148,12 +142,13 @@
                 "title": "Device configuration",
                 "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}",
                 "data": {
-                    "error": "[%key:config::step::device::data::error%]",
                     "host": "[%key:config::step::device::data::host%]",
                     "key": "[%key:config::step::device::data::key%]",
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
-                    "timezone": "Device time zone"
+                    "timezone": "Device time zone",
+                    "trace_timeout": "Debug tracing duration (sec)",
+                    "error": "[%key:config::step::device::data::error%]"
                 }
             },
             "keyerror": {
@@ -168,32 +163,43 @@
                 "title": "[%key:config::step::profile::title%]",
                 "description": "Configure Meross {email} account\n{placeholder}",
                 "data": {
-                    "error": "[%key:config::step::profile::data::error%]",
                     "email": "[%key:config::step::profile::data::email%]",
                     "password": "[%key:config::step::profile::data::password%]",
                     "save_password": "[%key:config::step::profile::data::save_password%]",
                     "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]",
                     "check_firmware_updates": "[%key:config::step::profile::data::check_firmware_updates%]",
-                    "create_diagnostic_entities": "[%key:config::step::profile::data::create_diagnostic_entities%]"
+                    "create_diagnostic_entities": "[%key:config::step::profile::data::create_diagnostic_entities%]",
+                    "error": "[%key:config::step::profile::data::error%]"
+                }
+            },
+            "menu": {
+                "title": "Choose option",
+                "menu_options": {
+                    "hub": "Configure",
+                    "device": "[%key:options::step::menu::menu_options::hub%]",
+                    "profile": "[%key:options::step::menu::menu_options::hub%]",
+                    "diagnostics": "Start diagnostics trace",
+                    "bind": "Reconfigure MQTT (local binding)",
+                    "unbind": "Hardware reset"
                 }
             },
             "diagnostics": {
                 "title": "[%key:options::step::menu::menu_options::diagnostics%]",
                 "description": "The configuration will be reloaded and debug tracing will start for the configured period",
                 "data": {
-                    "error": "[%key:config::step::hub::data::error%]",
-                    "trace_timeout": "Debug tracing duration (sec)"
+                    "trace_timeout": "Debug tracing duration (sec)",
+                    "error": "[%key:config::step::hub::data::error%]"
                 }
             },
             "bind": {
                 "title": "[%key:options::step::menu::menu_options::bind%]",
                 "description": "Connect (Bind) the device to a different MQTT broker",
                 "data": {
-                    "error": "[%key:options::step::device::data::error%]",
                     "broker": "Address of the new MQTT broker",
                     "check": "Check broker compatibility before reconfiguring",
                     "key": "[%key:config::step::hub::data::key%]",
-                    "userid": "User Id"
+                    "userid": "User Id",
+                    "error": "[%key:options::step::device::data::error%]"
                 },
                 "data_description": {
                     "broker": "Enter the address in the form 'host(:port)' or leave empty to use the HA one"
@@ -203,8 +209,8 @@
                 "title": "[%key:options::step::menu::menu_options::unbind%]",
                 "description": "WARNING! this will issue a special command to unbind the device from the current MQTT broker (either Meross cloud or local one) and reset it to factory defaults.\n After that, the device will need to be re-configured again in order to use it",
                 "data": {
-                    "error": "[%key:options::step::device::data::error%]",
-                    "post_action": "After unbinding:"
+                    "post_action": "After unbinding:",
+                    "error": "[%key:options::step::device::data::error%]"
                 }
             }
         }
@@ -218,13 +224,13 @@
                         "title": "[%key:options::step::profile::title%]",
                         "description": "[%key:options::step::profile::description%]",
                         "data": {
-                            "error": "[%key:options::step::profile::data::error%]",
                             "email": "[%key:options::step::profile::data::email%]",
                             "password": "[%key:options::step::profile::data::password%]",
                             "save_password": "[%key:options::step::profile::data::save_password%]",
                             "allow_mqtt_publish": "[%key:options::step::profile::data::allow_mqtt_publish%]",
                             "check_firmware_updates": "[%key:options::step::profile::data::check_firmware_updates%]",
-                            "create_diagnostic_entities": "[%key:options::step::profile::data::create_diagnostic_entities%]"
+                            "create_diagnostic_entities": "[%key:options::step::profile::data::create_diagnostic_entities%]",
+                            "error": "[%key:options::step::profile::data::error%]"
                         }
                     }
                 }
@@ -238,15 +244,24 @@
                         "title": "[%key:options::step::device::title%]",
                         "description": "[%key:options::step::device::description%]",
                         "data": {
-                            "error": "[%key:options::step::device::data::error%]",
                             "host": "[%key:options::step::device::data::host%]",
                             "key": "[%key:options::step::device::data::key%]",
                             "protocol": "[%key:options::step::device::data::protocol%]",
                             "polling_period": "[%key:options::step::device::data::polling_period%]",
-                            "timezone": "[%key:options::step::device::data::timezone%]"
+                            "timezone": "[%key:options::step::device::data::timezone%]",
+                            "trace_timeout": "[%key:options::step::device::data::trace_timeout%]",
+                            "error": "[%key:options::step::device::data::error%]"
                         }
                     }
                 }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Disable the configuration entry",
+                "delete": "Permanently delete the configuration entry"
             }
         }
     }

@@ -28,11 +28,24 @@
                     "ok": "問題ありません"
                 }
             },
-            "mts200_overheat_warning": {
+            "_common": {
                 "state": {
                     "ok": "良い",
-                    "overheating": "過熱",
                     "disconnected": "切断された"
+                }
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "1": "過熱",
+                    "0": "良い",
+                    "2": "切断された"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "良い",
+                    "1": "Freezing",
+                    "2": "切断された"
                 }
             }
         }

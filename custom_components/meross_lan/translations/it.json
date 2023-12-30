@@ -28,11 +28,24 @@
                     "ok": "Ok"
                 }
             },
-            "mts200_overheat_warning": {
+            "_common": {
                 "state": {
                     "ok": "Ok",
-                    "overheating": "Surriscaldamento",
                     "disconnected": "Disconnesso"
+                }
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "1": "Surriscaldamento",
+                    "0": "Ok",
+                    "2": "Disconnesso"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "Ok",
+                    "1": "Freezing",
+                    "2": "Disconnesso"
                 }
             }
         }

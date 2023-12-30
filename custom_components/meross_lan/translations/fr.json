@@ -28,11 +28,24 @@
                     "ok": "Pas d'issues"
                 }
             },
-            "mts200_overheat_warning": {
+            "_common": {
                 "state": {
                     "ok": "Ok",
-                    "overheating": "Surchauffe",
                     "disconnected": "Débranché"
+                }
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "1": "Surchauffe",
+                    "0": "Ok",
+                    "2": "Débranché"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "Ok",
+                    "1": "Freezing",
+                    "2": "Débranché"
                 }
             }
         }

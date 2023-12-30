@@ -28,11 +28,24 @@
                     "ok": "Keine Probleme"
                 }
             },
-            "mts200_overheat_warning": {
+            "_common": {
                 "state": {
                     "ok": "Ok",
-                    "overheating": "Überhitzung",
                     "disconnected": "Getrennt"
+                }
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "1": "Überhitzung",
+                    "0": "Ok",
+                    "2": "Getrennt"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "Ok",
+                    "1": "Freezing",
+                    "2": "Getrennt"
                 }
             }
         }

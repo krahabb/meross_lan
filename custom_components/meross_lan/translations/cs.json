@@ -28,11 +28,24 @@
                     "ok": "Žádné problémy"
                 }
             },
-            "mts200_overheat_warning": {
+            "_common": {
                 "state": {
                     "ok": "Ok",
-                    "overheating": "Přehřívání",
                     "disconnected": "Odpojeno"
+                }
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "1": "Přehřívání",
+                    "0": "Ok",
+                    "2": "Odpojeno"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "Ok",
+                    "1": "Freezing",
+                    "2": "Odpojeno"
                 }
             }
         }
