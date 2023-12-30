@@ -188,6 +188,14 @@ class Mts200Climate(MtsClimate):
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
+    @property
+    def namespace(self):
+        return mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
+
+    @property
+    def key_namespace(self):
+        mc.KEY_MODE
+
     # message handlers
     def _parse_mode(self, payload: dict):
         """{

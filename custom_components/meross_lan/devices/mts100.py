@@ -106,12 +106,6 @@ class Mts100Climate(MtsClimate):
 
         super().flush_state()
 
-    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
-        if hvac_mode == MtsClimate.HVACMode.OFF:
-            await self.async_request_onoff(0)
-        else:
-            await self.async_request_onoff(1)
-
     async def async_set_preset_mode(self, preset_mode: str):
         mode = reverse_lookup(Mts100Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
         if mode is not None:
@@ -163,6 +157,14 @@ class Mts100Climate(MtsClimate):
 
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
+
+    @property
+    def namespace(self):
+        return mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE
+
+    @property
+    def key_namespace(self):
+        mc.KEY_TEMPERATURE
 
     # message handlers
     def _parse_temperature(self, p_temperature: dict):

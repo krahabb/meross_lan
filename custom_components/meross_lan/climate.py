@@ -216,6 +216,12 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     async def async_turn_off(self):
         await self.async_request_onoff(0)
 
+    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
+        if hvac_mode == MtsClimate.HVACMode.OFF:
+            await self.async_request_onoff(0)
+            return
+        await self.async_request_onoff(1)
+
     async def async_set_preset_mode(self, preset_mode: str):
         raise NotImplementedError()
 
@@ -227,6 +233,14 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         raise NotImplementedError()
 
     def is_mts_scheduled(self):
+        raise NotImplementedError()
+
+    @property
+    def namespace(self):
+        raise NotImplementedError()
+
+    @property
+    def key_namespace(self):
         raise NotImplementedError()
 
     @property

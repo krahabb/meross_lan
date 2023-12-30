@@ -94,13 +94,6 @@ class Mts960Climate(MtsClimate):
 
         super().flush_state()
 
-    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
-        if hvac_mode == MtsClimate.HVACMode.OFF:
-            await self.async_request_onoff(0)
-            return
-
-        await self.async_request_onoff(1)
-
     async def async_set_preset_mode(self, preset_mode: str):
         mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
         if (mode is not None) and await self.manager.async_request_ack(
@@ -148,6 +141,14 @@ class Mts960Climate(MtsClimate):
 
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS960_MODE_AUTO
+
+    @property
+    def namespace(self):
+        return mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB
+
+    @property
+    def key_namespace(self):
+        mc.KEY_MODEB
 
     @property
     def device_scale(self):
