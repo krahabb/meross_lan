@@ -338,12 +338,12 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         component: EntityComponent[SensorEntity] = self.hass.data["sensor"]
         for entity in component.entities:
             um = entity.native_unit_of_measurement
-            if um in (hac.TEMP_CELSIUS, hac.TEMP_FAHRENHEIT):
+            if um in (hac.UnitOfTemperature.CELSIUS, hac.UnitOfTemperature.FAHRENHEIT):
                 self._attr_options.append(entity.entity_id)
 
         if self._attr_state not in self._attr_options:
             # this might happen when restoring a not anymore valid entity
-            self._attr_state = hac.STATE_OFF
+            self._attr_state = self.STATE_OFF
 
         self.flush_state()
         self._tracking_start()
