@@ -5,12 +5,12 @@ import typing
 
 from homeassistant.components import sensor
 from homeassistant.const import (
-    ELECTRIC_CURRENT_AMPERE,
-    ELECTRIC_POTENTIAL_VOLT,
-    ENERGY_WATT_HOUR,
     PERCENTAGE,
-    POWER_WATT,
-    TEMP_CELSIUS,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfTemperature,
 )
 
 from . import meross_entity as me
@@ -47,11 +47,11 @@ async def async_setup_entry(
 
 
 DEVICECLASS_TO_UNIT_MAP: dict[SensorDeviceClass | None, str] = {
-    SensorDeviceClass.POWER: POWER_WATT,
-    SensorDeviceClass.CURRENT: ELECTRIC_CURRENT_AMPERE,
-    SensorDeviceClass.VOLTAGE: ELECTRIC_POTENTIAL_VOLT,
-    SensorDeviceClass.ENERGY: ENERGY_WATT_HOUR,
-    SensorDeviceClass.TEMPERATURE: TEMP_CELSIUS,
+    SensorDeviceClass.POWER: UnitOfPower.WATT,
+    SensorDeviceClass.CURRENT: UnitOfElectricCurrent.AMPERE,
+    SensorDeviceClass.VOLTAGE: UnitOfElectricPotential.VOLT,
+    SensorDeviceClass.ENERGY: UnitOfEnergy.WATT_HOUR,
+    SensorDeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
     SensorDeviceClass.HUMIDITY: PERCENTAGE,
     SensorDeviceClass.BATTERY: PERCENTAGE,
 }

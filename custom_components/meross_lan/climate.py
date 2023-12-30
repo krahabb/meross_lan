@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import typing
 
-from homeassistant import const as hac
 from homeassistant.components import climate
 
 from . import meross_entity as me
 from .merossclient import const as mc  # mEROSS cONST
 from .number import MLConfigNumber
 from .select import MtsTrackedSensor
+from .sensor import UnitOfTemperature
 
 if typing.TYPE_CHECKING:
     from typing import ClassVar, Final
@@ -31,7 +31,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PLATFORM = climate.DOMAIN
 
     ATTR_TEMPERATURE: Final = climate.ATTR_TEMPERATURE
-    TEMP_CELSIUS: Final = hac.TEMP_CELSIUS
+    TEMP_CELSIUS: Final = UnitOfTemperature.CELSIUS
 
     HVACAction = climate.HVACAction
     HVACMode = climate.HVACMode
