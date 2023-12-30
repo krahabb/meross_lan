@@ -16,7 +16,7 @@
         "emulator:run",
         "emulator_traces",
         "-key pippo",
-        "-broker 192.168.1.7:8883",
+        "-broker localhost:8883",
         //"-uuid 01234567890123456789012345678901"
       ]
     },
