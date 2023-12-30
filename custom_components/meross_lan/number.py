@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from homeassistant.components import number
-from homeassistant.const import PERCENTAGE, TEMP_CELSIUS
+from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
 from . import meross_entity as me
 from .helpers import schedule_async_callback
@@ -48,7 +48,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     DeviceClass = NumberDeviceClass
     DEVICECLASS_TO_UNIT_MAP = {
         NumberDeviceClass.HUMIDITY: PERCENTAGE,
-        NumberDeviceClass.TEMPERATURE: TEMP_CELSIUS,
+        NumberDeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
     }
 
     DEBOUNCE_DELAY = 1

@@ -291,9 +291,11 @@ class MLLight(MLLightBase):
                         mc.METHOD_GET,
                         {mc.KEY_TOGGLEX: [{mc.KEY_CHANNEL: self.channel}]},
                     ):
-                        self._parse_togglex(
-                            togglex_response[mc.KEY_PAYLOAD][mc.KEY_TOGGLEX][0]
-                        )
+                        # various kind of lights here might respond with either an array or a
+                        # simple dict since the "togglex" namespace used to be hybrid and still is.
+                        # This led to #357 but the resolution is to just bypass parsing since
+                        # the device message pipe has already processed the response with
+                        # all its (working) euristics after returning from async_request_ack
                         self._togglex_mode = not self.is_on
                         self._attr_extra_state_attributes = {
                             ATTR_TOGGLEX_MODE: self._togglex_mode
