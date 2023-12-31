@@ -7,11 +7,7 @@ from pytest_homeassistant_custom_component.common import flush_store
 
 from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.meross_profile import MerossCloudProfile
-from custom_components.meross_lan.merossclient import (
-    HostAddress,
-    cloudapi,
-    const as mc,
-)
+from custom_components.meross_lan.merossclient import HostAddress, cloudapi, const as mc
 
 from . import const as tc, helpers
 

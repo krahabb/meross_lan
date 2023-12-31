@@ -187,18 +187,25 @@ def run(argv):
             result, mid = client.subscribe([(mc.TOPIC_REQUEST.format("+"), 1)])
             if result != mqtt.MQTT_ERR_SUCCESS:
                 print("Failed to subscribe to mqtt topic")
+            for emulator in emulators.values():
+                emulator.handle_connect(client)
+
+        def _mqttc_disconnect(client: mqtt.Client, userdata, rc):
+            for emulator in emulators.values():
+                emulator.handle_disconnect(client)
 
         def _mqttc_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
             if msg_uuid := mc.RE_PATTERN_TOPIC_UUID.match(msg.topic):
                 if emulator := emulators.get(msg_uuid.group(1)):
-                    response = emulator.handle(msg.payload.decode("utf-8"))
-                    client.publish(emulator.topic_response, json_dumps(response))
+                    if response := emulator.handle(msg.payload.decode("utf-8")):
+                        client.publish(emulator.topic_response, json_dumps(response))
 
         mqtt_client = mqtt.Client("MerossEmulator", protocol=mqtt.MQTTv311)
         mqtt_client.username_pw_set("emulator")
         mqtt_client.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
         mqtt_client.tls_insecure_set(True)
         mqtt_client.on_connect = _mqttc_connect
+        mqtt_client.on_disconnect = _mqttc_disconnect
         mqtt_client.on_message = _mqttc_message
         mqtt_client.suppress_exceptions = True
         if ":" in broker:
@@ -206,7 +213,7 @@ def run(argv):
             port = int(broker[1])
             broker = broker[0]
         else:
-            port = 1883
+            port = 8883
         mqtt_client.connect_async(broker, port)
         mqtt_client.loop_start()
 

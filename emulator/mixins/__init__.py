@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from time import time
+import typing
 from zoneinfo import ZoneInfo
 
 from custom_components.meross_lan.merossclient import (
@@ -17,6 +18,9 @@ from custom_components.meross_lan.merossclient import (
     json_dumps,
     json_loads,
 )
+
+if typing.TYPE_CHECKING:
+    import paho.mqtt.client as mqtt
 
 
 class MerossEmulatorDescriptor(MerossDeviceDescriptor):
@@ -37,7 +41,6 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         hardware = self.hardware
         hardware[mc.KEY_UUID] = uuid
         hardware[mc.KEY_MACADDRESS] = get_macaddress_from_uuid(uuid)
-
 
     def _import_tsv(self, f):
         """
@@ -110,6 +113,7 @@ class MerossEmulator:
         if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
             self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
+        self.mqtt = None
         print(f"Initialized {descriptor.productname} (model:{descriptor.productmodel})")
 
     def set_timezone(self, timezone: str):
@@ -144,7 +148,7 @@ class MerossEmulator:
         if self.p_all_system_time:
             self.p_all_system_time[mc.KEY_TIMESTAMP] = self.epoch
 
-    def handle(self, s_request: str) -> MerossMessageType:
+    def handle(self, s_request: str) -> MerossMessageType | None:
         """
         main message handler entry point: this is called either from web.Request
         for request routed from the web.Application or from the mqtt.Client.
@@ -163,12 +167,38 @@ class MerossEmulator:
             # guarantee thread safety by locking the whole message handling
             self.update_epoch()
             response = self._handle_message(request_header, request_payload)
-        response_header = response[mc.KEY_HEADER]
-        print(
-            f"Emulator({self.uuid}) "
-            f"TX: namespace={response_header[mc.KEY_NAMESPACE]} method={response_header[mc.KEY_METHOD]} payload={json_dumps(response[mc.KEY_PAYLOAD])}"
-        )
+
+        if response:
+            response_header = response[mc.KEY_HEADER]
+            print(
+                f"Emulator({self.uuid}) "
+                f"TX: namespace={response_header[mc.KEY_NAMESPACE]} method={response_header[mc.KEY_METHOD]} payload={json_dumps(response[mc.KEY_PAYLOAD])}"
+            )
         return response
+
+    def handle_connect(self, client: mqtt.Client):
+        self.mqtt = client
+        self.update_epoch()
+        # kind of Bind message..we're just interested in validating
+        # the server code in meross_lan (it doesn't really check this
+        # payload)
+        message_bind_set = build_message(
+            mc.NS_APPLIANCE_CONTROL_BIND,
+            mc.METHOD_SET,
+            {
+                "bind": {
+                    "bindTime": self.epoch,
+                    mc.KEY_HARDWARE: self.descriptor.hardware,
+                    mc.KEY_FIRMWARE: self.descriptor.firmware,
+                }
+            },
+            self.key,
+            self.topic_response,
+        )
+        client.publish(self.topic_response, json_dumps(message_bind_set))
+
+    def handle_disconnect(self, client: mqtt.Client):
+        self.mqtt = None
 
     def _get_key_state(self, namespace: str) -> tuple[str, dict]:
         """
@@ -225,14 +255,15 @@ class MerossEmulator:
             response_method = mc.METHOD_ERROR
             response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
 
-        return build_message(
-            namespace,
-            response_method,
-            response_payload,
-            self.key,
-            self.topic_response,
-            header[mc.KEY_MESSAGEID],
-        )
+        if response_method:
+            return build_message(
+                namespace,
+                response_method,
+                response_payload,
+                self.key,
+                self.topic_response,
+                header[mc.KEY_MESSAGEID],
+            )
 
     def _handler_default(self, method: str, namespace: str, payload: dict):
         """
@@ -282,12 +313,16 @@ class MerossEmulator:
 
         return mc.METHOD_SETACK, {}
 
+    def _SETACK_Appliance_Control_Bind(self, header, payload):
+        return None, None
+
     def _SET_Appliance_Control_Multiple(self, header, payload):
         multiple = []
         for message in payload[mc.KEY_MULTIPLE]:
-            multiple.append(
-                self._handle_message(message[mc.KEY_HEADER], message[mc.KEY_PAYLOAD])
-            )
+            if response := self._handle_message(
+                message[mc.KEY_HEADER], message[mc.KEY_PAYLOAD]
+            ):
+                multiple.append(response)
         return mc.METHOD_SETACK, {mc.KEY_MULTIPLE: multiple}
 
     def _GET_Appliance_System_DNDMode(self, header, payload):

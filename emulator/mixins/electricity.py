@@ -6,7 +6,11 @@ from random import randint
 from time import gmtime
 import typing
 
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import (
+    build_message,
+    const as mc,
+    json_dumps,
+)
 
 if typing.TYPE_CHECKING:
     from .. import MerossEmulator, MerossEmulatorDescriptor
@@ -103,6 +107,30 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         # "Asia/Bangkok" GMT + 7
         # "Asia/Baku" GMT + 4
         self.set_timezone("Asia/Baku")
+
+    def handle_connect(self, client):
+        super().handle_connect(client)
+        # kind of Bind message..we're just interested in validating
+        # the server code in meross_lan (it doesn't really check this
+        # payload)
+        message_consumptionconfig = build_message(
+            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
+            mc.METHOD_PUSH,
+            {
+                mc.KEY_CONFIG: {
+                    "voltageRatio": 188,
+                    "electricityRatio": 102,
+                    "maxElectricityCurrent": 11000,
+                    "powerRatio": 0,
+                }
+            },
+            self.key,
+            self.topic_response,
+        )
+        client.publish(self.topic_response, json_dumps(message_consumptionconfig))
+
+    def _PUSH_Appliance_Control_ConsumptionConfig(self, header, payload):
+        return None, None
 
     def _GET_Appliance_Control_ConsumptionX(self, header, payload):
         """

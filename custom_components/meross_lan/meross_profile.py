@@ -239,18 +239,20 @@ class MQTTConnection(Loggable):
     merosss cloud mqtt)
     """
 
-    """REMOVE
-    _KEY_STARTTIME = "__starttime"
-    _KEY_REQUESTTIME = "__requesttime"
-    _KEY_REQUESTCOUNT = "__requestcount"
-    """
-
     _MQTT_DROP = "DROP"
     _MQTT_QUEUE = "QUEUE"
     _MQTT_PUBLISH = "PUBLISH"
     _MQTT_RECV = "RECV"
 
     DEFAULT_RESPONSE_TIMEOUT = 5
+
+    SESSION_HANDLERS: typing.Mapping[
+        str,
+        typing.Callable[
+            [MQTTConnection, str, MerossHeaderType, MerossPayloadType],
+            typing.Awaitable[bool],
+        ],
+    ] = {}
 
     broker: HostAddress
 
@@ -264,7 +266,6 @@ class MQTTConnection(Loggable):
         "sensor_connection",
         "_mqtt_transactions",
         "_mqtt_is_connected",
-        # REMOVE"_unsub_discovery_callback",
     )
 
     def __init__(
@@ -279,29 +280,26 @@ class MQTTConnection(Loggable):
         self.topic_response: Final = topic_response
         self.mqttdevices: Final[dict[str, MerossDevice]] = {}
         self.mqttdiscovering: Final[set[str]] = set()
+        """REMOVE
         self.namespace_handlers: dict[
             str,
             typing.Callable[
                 [str, MerossHeaderType, MerossPayloadType], typing.Coroutine
             ],
         ] = {}
+        """
+        self.namespace_handlers = self.SESSION_HANDLERS
         self.sensor_connection = None
         self._mqtt_transactions: Final[dict[str, _MQTTTransaction]] = {}
         self._mqtt_is_connected = False
-        # REMOVEself._unsub_discovery_callback: asyncio.TimerHandle | None = None
         super().__init__(connection_id)
         if profile.create_diagnostic_entities:
             self.create_diagnostic_entities()
 
     async def async_shutdown(self):
-        """REMOVE
-        if self._unsub_discovery_callback:
-            self._unsub_discovery_callback.cancel()
-            self._unsub_discovery_callback = None
-        """
         for mqtt_transaction in list(self._mqtt_transactions.values()):
             mqtt_transaction.cancel()
-        self.namespace_handlers.clear()
+        # REMOVEself.namespace_handlers.clear()
         self.mqttdiscovering.clear()
         for device in self.mqttdevices.values():
             device.mqtt_detached()
@@ -477,13 +475,17 @@ class MQTTConnection(Loggable):
                 if mqtt_transaction.namespace == namespace:
                     self._mqtt_transactions.pop(messageid, None)
                     mqtt_transaction.response_future.set_result(message)
-            elif self.id is CONF_PROFILE_ID_LOCAL:
-                # special processing for local broker
-                # this code is experimental and is needed to give
-                # our broker some transaction management for devices
-                # trying to bind to non-Meross MQTT brokers
+            else:
+                # special session management: cloud connections would
+                # behave differently than the local MQTT. Their behavior
+                # will definitevely be set in the dynamic/custom message handlers
+                # implemented in the derived MQTTConnections
                 if namespace in self.namespace_handlers:
-                    await self.namespace_handlers[namespace](device_id, header, payload)
+                    if await self.namespace_handlers[namespace](
+                        self, device_id, header, payload
+                    ):
+                        # session management has already taken care of everything
+                        return
 
             if device := ApiProfile.devices.get(device_id):
                 if device._mqtt_connection == self:
@@ -567,54 +569,6 @@ class MQTTConnection(Loggable):
 
             await self.async_try_discovery(device_id)
 
-            """REMOVE
-            discovered = self.get_or_set_discovering(device_id)
-            if (method == mc.METHOD_GETACK) and (
-                namespace
-                in (
-                    mc.NS_APPLIANCE_SYSTEM_ALL,
-                    mc.NS_APPLIANCE_SYSTEM_ABILITY,
-                )
-            ):
-                discovered.update(payload)
-
-            if await self._async_progress_discovery(discovered, device_id):
-                return
-
-            self.mqttdiscovering.pop(device_id)
-            discovered.pop(MQTTConnection._KEY_REQUESTTIME, None)
-            discovered.pop(MQTTConnection._KEY_STARTTIME, None)
-            discovered.pop(MQTTConnection._KEY_REQUESTCOUNT, None)
-            await ApiProfile.hass.config_entries.flow.async_init(
-                DOMAIN,
-                context={"source": SOURCE_INTEGRATION_DISCOVERY},
-                data={
-                    CONF_DEVICE_ID: device_id,
-                    CONF_PAYLOAD: discovered,
-                    CONF_KEY: key,
-                },
-            )
-            """
-
-    """REMOVE
-    def get_or_set_discovering(self, device_id: str):
-        if device_id not in self.mqttdiscovering:
-            self.log(DEBUG, "starting discovery for device_id: %s", device_id)
-            # new device discovered: add to discovery state-machine
-            self.mqttdiscovering[device_id] = {
-                MQTTConnection._KEY_STARTTIME: time(),
-                MQTTConnection._KEY_REQUESTTIME: 0,
-                MQTTConnection._KEY_REQUESTCOUNT: 0,
-            }
-            if not self._unsub_discovery_callback:
-                self._unsub_discovery_callback = schedule_async_callback(
-                    ApiProfile.hass,
-                    PARAM_UNAVAILABILITY_TIMEOUT + 2,
-                    self._async_discovery_callback,
-                )
-        return self.mqttdiscovering[device_id]
-    """
-
     async def async_identify_device(self, device_id: str, key: str) -> DeviceConfigType:
         """
         Sends an ns_all and ns_ability GET requests encapsulated in an ns_multiple
@@ -689,48 +643,6 @@ class MQTTConnection(Loggable):
         self.mqttdiscovering.remove(device_id)
         return result
 
-    """REMOVE
-    async def _async_progress_discovery(self, discovered: dict, device_id: str):
-        for namespace in (mc.NS_APPLIANCE_SYSTEM_ALL, mc.NS_APPLIANCE_SYSTEM_ABILITY):
-            if get_namespacekey(namespace) not in discovered:
-                discovered[MQTTConnection._KEY_REQUESTTIME] = time()
-                discovered[MQTTConnection._KEY_REQUESTCOUNT] += 1
-                await self.async_mqtt_publish(
-                    device_id,
-                    *get_default_arguments(namespace),
-                    self.profile.key,
-                )
-                return True
-
-        return False
-    """
-    """REMOVE
-    async def _async_discovery_callback(self):
-        self._unsub_discovery_callback = None
-        if len(discovering := self.mqttdiscovering) == 0:
-            return
-
-        epoch = time()
-        for device_id, discovered in discovering.copy().items():
-            if not self._mqtt_is_connected:
-                break
-            if (discovered[MQTTConnection._KEY_REQUESTCOUNT]) > 5:
-                # stale entry...remove
-                discovering.pop(device_id)
-                continue
-            if (
-                epoch - discovered[MQTTConnection._KEY_REQUESTTIME]
-            ) > PARAM_UNAVAILABILITY_TIMEOUT:
-                await self._async_progress_discovery(discovered, device_id)
-
-        if len(discovering):
-            self._unsub_discovery_callback = schedule_async_callback(
-                ApiProfile.hass,
-                PARAM_UNAVAILABILITY_TIMEOUT + 2,
-                self._async_discovery_callback,
-            )
-    """
-
     def _mqtt_transactions_clean(self):
         if self._mqtt_transactions:
             # check and cleanup stale transactions
@@ -777,6 +689,29 @@ class MQTTConnection(Loggable):
         if sensor_connection := self.sensor_connection:
             sensor_connection.inc_counter(ConnectionSensor.ATTR_PUBLISHED)
 
+    async def _handle_Appliance_System_Online(
+        self, device_id: str, header: MerossHeaderType, payload: MerossPayloadType
+    ):
+        """
+        This is likely sent by the session management layer on the Meross brokers
+        to notify the app of the device connection state. We then intercept
+        this message which is not intended for the device though and act accordingly
+        here at our 'session management state'. At any rate, this will be set to be
+        handled in every MQTTConnection (cloud, local) so we process even messages
+        originated from the device itself
+        """
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
+            status = payload[mc.KEY_ONLINE].get(mc.KEY_STATUS)
+            if status == mc.STATUS_ONLINE:
+                # the device is now online on this connection: tell the pipe to continue processing
+                # This will in turn (eventually) link the device to the current profile/connection
+                # (if not already) and online it since it will receive a 'fresh' MQTT
+                return False
+        # any other condition will instruct the message pipe
+        # to abort processing since the device is not online or we don't
+        # understand this message
+        return True
+
 
 class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     _MSG_PRIORITY_MAP = {
@@ -814,6 +749,14 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         self.on_disconnect = self._mqttc_disconnect
         self.on_message = self._mqttc_message
         self.on_publish = self._mqttc_publish
+        """REMOVE
+        self.namespace_handlers = {
+            namespace: getattr(self, f"_handle_{namespace.replace('.', '_')}")
+            for namespace in (
+                mc.NS_APPLIANCE_SYSTEM_ONLINE,
+            )
+        }
+        """
 
         if MEROSSDEBUG:
 
@@ -963,6 +906,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
 
     def _mqttc_publish(self, client, userdata: HomeAssistant, mid):
         userdata.add_job(self._mqtt_published)
+
+
+MerossMQTTConnection.SESSION_HANDLERS = {
+    mc.NS_APPLIANCE_SYSTEM_ONLINE: MQTTConnection._handle_Appliance_System_Online,
+}
 
 
 class MerossCloudProfileStoreType(typing.TypedDict):
@@ -1520,7 +1468,11 @@ class MerossCloudProfile(ApiProfile):
                 device.update_device_info(device_info)
 
         for device_id in device_info_removed:
-            self.log(DEBUG, "The device %s has been removed from the cloud profile", device_id)
+            self.log(
+                DEBUG,
+                "The device %s has been removed from the cloud profile",
+                device_id,
+            )
             device_info_dict.pop(device_id)
             if device := self.linkeddevices.get(device_id):
                 self.unlink(device)
@@ -1576,7 +1528,9 @@ class MerossCloudProfile(ApiProfile):
         for device_info in device_info_unknown:
             with self.exception_warning("_process_device_info_unknown"):
                 device_id = device_info[mc.KEY_UUID]
-                self.log(DEBUG, "Trying/Initiating discovery for (new) device:%s", device_id)
+                self.log(
+                    DEBUG, "Trying/Initiating discovery for (new) device:%s", device_id
+                )
                 if config_entries_helper.get_config_flow(device_id):
                     continue  # device configuration already progressing
                 # cloud conf has a new device

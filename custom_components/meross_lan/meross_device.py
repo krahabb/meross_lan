@@ -708,9 +708,13 @@ class MerossDevice(MerossDeviceBase):
                 p_cloud = p_debug[mc.KEY_CLOUD]
                 active_server = p_cloud[mc.KEY_ACTIVESERVER]
                 if active_server == p_cloud[mc.KEY_MAINSERVER]:
-                    return HostAddress(str(active_server), get_port_safe(p_cloud, mc.KEY_MAINPORT))
+                    return HostAddress(
+                        str(active_server), get_port_safe(p_cloud, mc.KEY_MAINPORT)
+                    )
                 elif active_server == p_cloud[mc.KEY_SECONDSERVER]:
-                    return HostAddress(str(active_server), get_port_safe(p_cloud, mc.KEY_SECONDPORT))
+                    return HostAddress(
+                        str(active_server), get_port_safe(p_cloud, mc.KEY_SECONDPORT)
+                    )
 
         fw = self.descriptor.firmware
         return HostAddress(str(fw[mc.KEY_SERVER]), get_port_safe(fw, mc.KEY_PORT))
@@ -1247,7 +1251,7 @@ class MerossDevice(MerossDeviceBase):
         self._parse__array(key, payload[key])
 
     def _handle_Appliance_Control_Bind(self, header: dict, payload: dict):
-        # processed at the MQTTConnection message handling
+        # already processed by the MQTTConnection session manager
         pass
 
     def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
@@ -1343,7 +1347,7 @@ class MerossDevice(MerossDeviceBase):
             self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY))
 
     def _handle_Appliance_System_Clock(self, header: dict, payload: dict):
-        # processed at the MQTTConnection message handling
+        # already processed by the MQTTConnection session manager
         pass
 
     def _handle_Appliance_System_Debug(self, header: dict, payload: dict):
@@ -1352,6 +1356,10 @@ class MerossDevice(MerossDeviceBase):
 
     def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
         self.entity_dnd.update_onoff(payload[mc.KEY_DNDMODE][mc.KEY_MODE])
+
+    def _handle_Appliance_System_Online(self, header: dict, payload: dict):
+        # already processed by the MQTTConnection session manager
+        pass
 
     def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
         self.sensor_signal_strength.update_state(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])

@@ -1,7 +1,7 @@
 """Config flow for Meross LAN integration."""
 from __future__ import annotations
-import asyncio
 
+import asyncio
 from contextlib import contextmanager
 import json
 from logging import DEBUG
@@ -38,6 +38,7 @@ if typing.TYPE_CHECKING:
 
     from homeassistant.components.dhcp import DhcpServiceInfo
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
+
     from .meross_profile import MQTTConnection
 
 

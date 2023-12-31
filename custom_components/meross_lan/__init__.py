@@ -72,14 +72,17 @@ class HAMQTTConnection(MQTTConnection):
         self._unsub_mqtt_disconnected: Callable | None = None
         self._unsub_mqtt_connected: Callable | None = None
         self._mqtt_subscribing = False  # guard for asynchronous mqtt sub registration
+        """REMOVE
         self.namespace_handlers = {
             namespace: getattr(self, f"_handle_{namespace.replace('.', '_')}")
             for namespace in (
                 mc.NS_APPLIANCE_CONTROL_BIND,
                 mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
                 mc.NS_APPLIANCE_SYSTEM_CLOCK,
+                mc.NS_APPLIANCE_SYSTEM_ONLINE,
             )
         }
+        """
         if MEROSSDEBUG:
 
             async def _async_random_disconnect():
@@ -169,66 +172,6 @@ class HAMQTTConnection(MQTTConnection):
         if self._mqtt_is_connected:
             self._mqtt_disconnected()
 
-    # these handlers are used to manage session establishment on MQTT.
-    # They are typically sent by the device when they connect to the broker
-    # and they are used to mimic the official Meross brokers session managment
-    # They're implemented at the MQTTConnection level since the device might not be
-    # configured yet in meross_lan. When the device is configured, we still manage
-    # these 'session messages' here but we'll forward them to the device too in order
-    # to trigger all of the device connection management.
-    async def _handle_Appliance_Control_Bind(
-        self, device_id: str, header: MerossHeaderType, payload: MerossPayloadType
-    ):
-        # this transaction appears when a device (firstly)
-        # connects to an MQTT broker and tries to 'register'
-        # itself. Our guess right now is to just SETACK
-        # trying fix #346. When building the reply, the
-        # meross broker sets the from field as
-        # "from": "cloud/sub/kIGFRwvtAQP4sbXv/58c35d719350a689"
-        # and the fields look like hashes or something since
-        # they change between attempts (hashed broker id ?)
-        # At any rate I don't have a clue on how to properly
-        # replicate this and the "from" field is set as ususal
-        if header[mc.KEY_METHOD] == mc.METHOD_SET:
-            await self.async_mqtt_publish(
-                device_id,
-                MerossAckReply(
-                    self.profile.key,
-                    header,
-                    {},
-                    mc.TOPIC_RESPONSE.format(device_id),
-                ),
-            )
-
-    async def _handle_Appliance_Control_ConsumptionConfig(
-        self, device_id: str, header: MerossHeaderType, payload: MerossPayloadType
-    ):
-        # this message is published by mss switches
-        # and it appears newer mss315 could abort their connection
-        # if not replied (see #346)
-        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
-            await self.async_mqtt_publish(
-                device_id,
-                MerossPushReply(header, payload),
-            )
-
-    async def _handle_Appliance_System_Clock(
-        self, device_id: str, header: MerossHeaderType, payload: MerossPayloadType
-    ):
-        # this is part of initial flow over MQTT
-        # we'll try to set the correct time in order to avoid
-        # having NTP opened to setup the device
-        # Note: I actually see this NS only on mss310 plugs
-        # (msl120j bulb doesnt have it)
-        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
-            await self.async_mqtt_publish(
-                device_id,
-                MerossPushReply(
-                    header,
-                    {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
-                ),
-            )
-
     @callback
     def _mqtt_connected(self):
         """called when the underlying mqtt.Client connects to the broker"""
@@ -243,6 +186,94 @@ class HAMQTTConnection(MQTTConnection):
                 self.broker.port = conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT)
 
         super()._mqtt_connected()
+
+    # these handlers are used to manage session establishment on MQTT.
+    # They are typically sent by the device when they connect to the broker
+    # and they are used to mimic the official Meross brokers session managment
+    # They're implemented at the MQTTConnection level since the device might not be
+    # configured yet in meross_lan. When the device is configured, we still manage
+    # these 'session messages' here but we'll forward them to the device too in order
+    # to trigger all of the device connection management.
+    async def _handle_Appliance_Control_Bind(
+        self: MQTTConnection,
+        device_id: str,
+        header: MerossHeaderType,
+        payload: MerossPayloadType,
+    ):
+        # this transaction appears when a device (firstly)
+        # connects to an MQTT broker and tries to 'register'
+        # itself. Our guess right now is to just SETACK
+        # trying fix #346. When building the reply, the
+        # meross broker sets the from field as
+        # "from": "cloud/sub/kIGFRwvtAQP4sbXv/58c35d719350a689"
+        # and the fields look like hashes or something since
+        # they change between attempts (hashed broker id ?)
+        # At any rate I don't have a clue on how to properly
+        # replicate this and the "from" field is set as ususal
+
+        # TODO: retrieve the key from a known device if any
+        # since it could be different than what this profile thinks
+        # also, if we're using the new 'bind' feature in meross_lan
+        # the key might be set there and we have to use that
+        if header[mc.KEY_METHOD] == mc.METHOD_SET:
+            await self.async_mqtt_publish(
+                device_id,
+                MerossAckReply(
+                    self.profile.key,
+                    header,
+                    {},
+                    mc.TOPIC_RESPONSE.format(device_id),
+                ),
+            )
+        # keep forwarding the message
+        return False
+
+    async def _handle_Appliance_Control_ConsumptionConfig(
+        self: MQTTConnection,
+        device_id: str,
+        header: MerossHeaderType,
+        payload: MerossPayloadType,
+    ):
+        # this message is published by mss switches
+        # and it appears newer mss315 could abort their connection
+        # if not replied (see #346)
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
+            await self.async_mqtt_publish(
+                device_id,
+                MerossPushReply(header, payload),
+            )
+        # keep forwarding the message
+        return False
+
+    async def _handle_Appliance_System_Clock(
+        self: MQTTConnection,
+        device_id: str,
+        header: MerossHeaderType,
+        payload: MerossPayloadType,
+    ):
+        # this is part of initial flow over MQTT
+        # we'll try to set the correct time in order to avoid
+        # having NTP opened to setup the device
+        # Note: I actually see this NS only on mss310 plugs
+        # (msl120j bulb doesnt have it)
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
+            await self.async_mqtt_publish(
+                device_id,
+                MerossPushReply(
+                    header,
+                    {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
+                ),
+            )
+        # keep forwarding the message
+        return False
+
+
+HAMQTTConnection.SESSION_HANDLERS = {
+    mc.NS_APPLIANCE_CONTROL_BIND: HAMQTTConnection._handle_Appliance_Control_Bind,
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
+    mc.NS_APPLIANCE_SYSTEM_CLOCK: HAMQTTConnection._handle_Appliance_System_Clock,
+    mc.NS_APPLIANCE_SYSTEM_ONLINE: MQTTConnection._handle_Appliance_System_Online,
+}
 
 
 class MerossApi(ApiProfile):
