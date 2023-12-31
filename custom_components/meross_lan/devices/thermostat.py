@@ -96,17 +96,6 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
     def _parse_overheat(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}"""
-
-        """REMOVE
-        self.number_overheat_value._parse_value(payload)
-        if mc.KEY_ONOFF in payload:
-            self.switch_overheat_onoff.update_onoff(payload[mc.KEY_ONOFF])
-        if mc.KEY_WARNING in payload:
-            _warning = payload[mc.KEY_WARNING]
-            self.sensor_overheat_warning.update_state(
-                mc.MTS200_OVERHEAT_WARNING_MAP.get(_warning, _warning)
-            )
-        """
         self._parse_value(payload)
         if mc.KEY_CURRENTTEMP in payload:
             self.sensor_external_temperature.update_state(
