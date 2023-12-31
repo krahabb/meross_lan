@@ -596,6 +596,7 @@ class ConfigEntriesHelper:
         self._flows = None
 
     def get_config_entry(self, unique_id: str):
+        """Gets the configured entry if it exists."""
         if self._entries is None:
             self._entries = self.config_entries.async_entries(DOMAIN)
         for config_entry in self._entries:
@@ -604,6 +605,7 @@ class ConfigEntriesHelper:
         return None
 
     def get_config_flow(self, unique_id: str):
+        """Returns the current flow (in progres) if any."""
         if self._flows is None:
             self._flows = self.config_entries.flow.async_progress_by_handler(DOMAIN)
         for flow in self._flows:
@@ -992,10 +994,12 @@ class ApiProfile(EntityManager):
 
     @staticmethod
     def active_devices():
+        """Iterates over the currently loaded MerossDevices."""
         return (device for device in ApiProfile.devices.values() if device)
 
     @staticmethod
     def active_profiles():
+        """Iterates over the currently loaded MerossCloudProfiles."""
         return (profile for profile in ApiProfile.profiles.values() if profile)
 
     @staticmethod

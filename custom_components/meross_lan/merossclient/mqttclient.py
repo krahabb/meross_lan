@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from . import MEROSSDEBUG, const as mc, get_macaddress_from_uuid
+from . import MEROSSDEBUG, HostAddress, const as mc, get_macaddress_from_uuid
 
 if typing.TYPE_CHECKING:
     from .cloudapi import MerossCloudCredentials
@@ -114,7 +114,7 @@ class _MerossMQTTClient(mqtt.Client):
                     raise Exception(self._subscribe_error)
                 break
 
-    def safe_start(self, host: str, port: int, future: asyncio.Future | None = None):
+    def safe_start(self, broker: HostAddress, future: asyncio.Future | None = None):
         """
         Initiates an async connection and starts the managing thread.
         Safe to be called from any thread (except the mqtt one). Could be a bit
@@ -126,7 +126,7 @@ class _MerossMQTTClient(mqtt.Client):
         with self._lock_state:
             if self._stateext is self.STATE_DISCONNECTED:
                 self._future_connected = future
-                self.connect_async(host, port)
+                self.connect_async(broker.host, broker.port)
                 self._stateext = self.STATE_CONNECTING
                 self.loop_start()
                 return future

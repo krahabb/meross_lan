@@ -1,5 +1,6 @@
 """Config flow for Meross LAN integration."""
 from __future__ import annotations
+import asyncio
 
 from contextlib import contextmanager
 import json
@@ -18,11 +19,11 @@ import voluptuous as vol
 from . import MerossApi, const as mlc
 from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, StrEnum
 from .merossclient import (
+    HostAddress,
     MerossDeviceDescriptor,
     MerossKeyError,
     const as mc,
     get_default_arguments,
-    parse_host_port,
 )
 from .merossclient.cloudapi import (
     CloudApiError,
@@ -37,6 +38,7 @@ if typing.TYPE_CHECKING:
 
     from homeassistant.components.dhcp import DhcpServiceInfo
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
+    from .meross_profile import MQTTConnection
 
 
 # helper conf keys not persisted to config
@@ -377,37 +379,60 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         )
 
     async def _async_mqtt_discovery(
-        self, device_id: str, key: str | None, profile_id: str | None
+        self, device_id: str, key: str | None, descriptor: MerossDeviceDescriptor | None
     ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
-        mqttconnections = []
-        # TODO: we should better detect if the profile is a Meross one
-        # and eventually raise a better exception stating if it's available
-        # or not (disabled maybe)
-        if profile_id and (profile_id in MerossApi.profiles):
-            profile = MerossApi.profiles[profile_id]
-            if not profile:
-                raise Exception(
-                    "Unable to identify device over MQTT since Meross cloud profile is disabled"
-                )
-            if not profile.allow_mqtt_publish:
-                raise Exception(
-                    "Unable to identify device over MQTT since Meross cloud profile doesn't allow MQTT publishing"
-                )
-            mqttconnections = await profile.get_or_create_mqttconnections(device_id)
-        else:
-            mqttconnections = [MerossApi.get(self.hass).mqtt_connection]
+        mqttconnections: list[MQTTConnection] = []
+        if descriptor:
+            for profile in MerossApi.active_profiles():
+                if profile.device_is_registered(descriptor):
+                    if profile.allow_mqtt_publish:
+                        mqttconnections = await profile.get_or_create_mqttconnections(
+                            device_id
+                        )
+                        if not mqttconnections:
+                            raise Exception(
+                                f"Meross cloud profile ({profile.config[mc.KEY_EMAIL]}) brokers are unavailable at the moment"
+                            )
+                    else:
+                        raise Exception(
+                            f"Meross cloud profile ({profile.config[mc.KEY_EMAIL]}) doesn't allow MQTT publishing"
+                        )
+                    break
 
-        for mqttconnection in mqttconnections:
-            if device_config := await mqttconnection.async_identify_device(
-                device_id, key or ""
-            ):
+        if not mqttconnections:
+            # this means the device is not Meross cloud binded or the profile
+            # is not configured/loaded at least according to our euristics.
+            # We'll try HA broker if available
+            hamqttconnection = MerossApi.get(self.hass).mqtt_connection
+            if not hamqttconnection.mqtt_is_connected:
+                raise Exception(
+                    "No MQTT broker (either Meross cloud or HA local broker) available to connect"
+                )
+            mqttconnections.append(hamqttconnection)
+
+        # acrobatic asyncio:
+        # we expect only one of the mqttconnections to eventually
+        # succesfully identify the device while other will raise
+        # exceptions likely due to timeout or malformed responses
+        # we'll then wait for the first (and only) success one while
+        # eventually collect the exceptions
+        exceptions = []
+        identifies = asyncio.as_completed(
+            {
+                mqttconnection.async_identify_device(device_id, key or "")
+                for mqttconnection in mqttconnections
+            }
+        )
+        for identify_coro in identifies:
+            try:
+                device_config = await identify_coro
                 return device_config, MerossDeviceDescriptor(
                     device_config[mlc.CONF_PAYLOAD]
                 )
+            except Exception as exception:
+                exceptions.append(exception)
 
-        raise Exception(
-            "No MQTT response: either no available broker or invalid device id"
-        )
+        raise exceptions[0]
 
     def _setup_entitymanager_schema(
         self,
@@ -747,16 +772,12 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             ): str,
             vol.Required(
                 mlc.CONF_ALLOW_MQTT_PUBLISH,
-                description={
-                    DESCR: hub_config.get(mlc.CONF_ALLOW_MQTT_PUBLISH, True)
-                },
+                description={DESCR: hub_config.get(mlc.CONF_ALLOW_MQTT_PUBLISH, True)},
             ): bool,
             vol.Required(
                 mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES,
                 description={
-                    DESCR: hub_config.get(
-                        mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES, False
-                    )
+                    DESCR: hub_config.get(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES, False)
                 },
             ): bool,
         }
@@ -793,7 +814,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                                 device_config_update,
                                 descriptor_update,
                             ) = await self._async_mqtt_discovery(
-                                self._device_id, _key, self.device_descriptor.userId
+                                self._device_id, _key, self.device_descriptor
                             )
                         except Exception as e:
                             inner_exception = e
@@ -971,16 +992,16 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 userid = user_input.get(KEY_USERID)
 
                 if broker:
-                    host, port = parse_host_port(broker, 8883)
+                    broker_address = HostAddress(broker, 8883)
                 else:
                     mqtt_connection = MerossApi.get(self.hass).mqtt_connection
                     if not mqtt_connection.mqtt_is_connected:
                         raise FlowError(OptionsFlowErrorKey.HABROKER_NOT_CONNECTED)
-                    host, port = mqtt_connection.broker
-                    if port == 1883:
-                        port = 8883
+                    broker_address = mqtt_connection.broker
+                    if broker_address.port == 1883:
+                        broker_address.port = 8883
                 # set back the value so the user has an hint in case of errors connecting
-                broker = f"{host}:{port}"
+                broker = str(broker_address)
 
                 device = ApiProfile.devices[self._device_id]
                 if not (device and device.online):
@@ -993,12 +1014,14 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 )
                 try:
                     await self.hass.async_add_executor_job(
-                        mqttclient.connect, host, port
+                        mqttclient.connect, broker_address.host, broker_address.port
                     )
                 finally:
                     mqttclient.disconnect()
 
-                response = await device.async_bind(host, port, key=key, userid=userid)
+                response = await device.async_bind(
+                    broker_address, key=key, userid=userid
+                )
                 if (
                     response
                     and response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK

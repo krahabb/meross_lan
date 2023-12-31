@@ -27,10 +27,10 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
 from custom_components.meross_lan.meross_profile import MerossMQTTConnection
 from custom_components.meross_lan.merossclient import (
+    HostAddress,
     cloudapi,
     const as mc,
     json_loads,
-    parse_host_port,
 )
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
@@ -332,18 +332,18 @@ def build_emulator_for_profile(
     fw[mc.KEY_USERID] = int(profile_id)
 
     if domain:
-        host, port = parse_host_port(domain)
-        fw[mc.KEY_SERVER] = host
-        fw[mc.KEY_PORT] = port
+        broker = HostAddress.build(domain)
+        fw[mc.KEY_SERVER] = broker.host
+        fw[mc.KEY_PORT] = broker.port
 
     if reservedDomain:
         if domain == reservedDomain:
             fw.pop(mc.KEY_SECONDSERVER, None)
             fw.pop(mc.KEY_SECONDPORT, None)
         else:
-            host, port = parse_host_port(reservedDomain)
-            fw[mc.KEY_SECONDSERVER] = host
-            fw[mc.KEY_SECONDPORT] = port
+            broker = HostAddress.build(reservedDomain)
+            fw[mc.KEY_SECONDSERVER] = broker.host
+            fw[mc.KEY_SECONDPORT] = broker.port
 
     return emulator
 
@@ -773,7 +773,7 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
 
 class MerossMQTTMocker(contextlib.AbstractContextManager):
     def __init__(self):
-        def _safe_start(_self: MerossMQTTConnection, host, port, event):
+        def _safe_start(_self: MerossMQTTConnection, *args, **kwargs):
             """this runs in an executor"""
             _self._stateext = _self.STATE_CONNECTED
             MerossApi.hass.add_job(_self._mqtt_connected)
@@ -785,7 +785,7 @@ class MerossMQTTMocker(contextlib.AbstractContextManager):
             side_effect=_safe_start,
         )
 
-        def _safe_stop(_self: MerossMQTTConnection):
+        def _safe_stop(_self: MerossMQTTConnection, *args, **kwargs):
             """this runs in an executor"""
             _self._stateext = _self.STATE_DISCONNECTED
             MerossApi.hass.add_job(_self._mqtt_disconnected)
@@ -797,7 +797,7 @@ class MerossMQTTMocker(contextlib.AbstractContextManager):
             side_effect=_safe_stop,
         )
 
-        async def _async_mqtt_publish(_self: MerossMQTTConnection, *args):
+        async def _async_mqtt_publish(_self: MerossMQTTConnection, *args, **kwargs):
             return None
 
         self.async_mqtt_publish_patcher = patch.object(

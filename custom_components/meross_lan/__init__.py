@@ -21,6 +21,7 @@ from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (
     MEROSSDEBUG,
+    HostAddress,
     MerossAckReply,
     MerossDeviceDescriptor,
     MerossPushReply,
@@ -64,7 +65,7 @@ class HAMQTTConnection(MQTTConnection):
         super().__init__(
             api,
             mlc.CONF_PROFILE_ID_LOCAL,
-            ("homeassistant", 0),
+            HostAddress("homeassistant", 0),
             mc.TOPIC_RESPONSE.format(mlc.DOMAIN),
         )
         self._unsub_mqtt_subscribe: Callable | None = None
@@ -238,10 +239,8 @@ class HAMQTTConnection(MQTTConnection):
             mqtt_data = mqtt.get_mqtt_data(ApiProfile.hass)
             if mqtt_data and mqtt_data.client:
                 conf = mqtt_data.client.conf
-                self.broker = (
-                    conf[mqtt.CONF_BROKER],
-                    conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT),
-                )
+                self.broker.host = conf[mqtt.CONF_BROKER]
+                self.broker.port = conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT)
 
         super()._mqtt_connected()
 

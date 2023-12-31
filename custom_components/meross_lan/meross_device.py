@@ -57,12 +57,14 @@ from .helpers import (
 from .meross_entity import MerossFakeEntity
 from .merossclient import (
     MEROSSDEBUG,
+    HostAddress,
     MerossRequest,
     const as mc,
     get_default_arguments,
     get_message_signature,
     get_message_uuid,
     get_namespacekey,
+    get_port_safe,
     is_device_online,
     json_dumps,
     json_loads,
@@ -379,6 +381,7 @@ class MerossDevice(MerossDeviceBase):
     ):
         self.descriptor = descriptor
         self.needsave = False
+        self.curr_protocol = CONF_PROTOCOL_AUTO
         self.device_timestamp: int = 0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
@@ -694,15 +697,9 @@ class MerossDevice(MerossDeviceBase):
         return self._mqtt_active and not self._mqtt_active.is_cloud_connection
 
     @property
-    def mqtt_broker(self) -> tuple[str, int]:
+    def mqtt_broker(self) -> HostAddress:
         # deciding which broker to connect to might prove to be hard
         # since devices might fail-over the mqtt connection between 2 hosts
-        def _safe_port(p_dict: dict, key: str) -> int:
-            try:
-                return int(p_dict[key]) or mc.MQTT_DEFAULT_PORT
-            except Exception:
-                return mc.MQTT_DEFAULT_PORT
-
         if p_debug := self.device_debug:
             # we have 'current' connection info so this should be very trustable
             with self.exception_warning(
@@ -711,25 +708,24 @@ class MerossDevice(MerossDeviceBase):
                 p_cloud = p_debug[mc.KEY_CLOUD]
                 active_server = p_cloud[mc.KEY_ACTIVESERVER]
                 if active_server == p_cloud[mc.KEY_MAINSERVER]:
-                    return str(active_server), _safe_port(p_cloud, mc.KEY_MAINPORT)
+                    return HostAddress(str(active_server), get_port_safe(p_cloud, mc.KEY_MAINPORT))
                 elif active_server == p_cloud[mc.KEY_SECONDSERVER]:
-                    return str(active_server), _safe_port(p_cloud, mc.KEY_SECONDPORT)
+                    return HostAddress(str(active_server), get_port_safe(p_cloud, mc.KEY_SECONDPORT))
 
         fw = self.descriptor.firmware
-        return str(fw[mc.KEY_SERVER]), _safe_port(fw, mc.KEY_PORT)
+        return HostAddress(str(fw[mc.KEY_SERVER]), get_port_safe(fw, mc.KEY_PORT))
 
     def start(self):
         # called by async_setup_entry after the entities have been registered
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
         self._check_mqtt_connection_attach()
-        self.curr_protocol = self.pref_protocol
         self._unsub_polling_callback = schedule_async_callback(
             ApiProfile.hass, 0, self._async_polling_callback
         )
 
     async def async_bind(
-        self, host: str, port: int, *, key: str | None = None, userid: str | None = None
+        self, broker: HostAddress, *, key: str | None = None, userid: str | None = None
     ):
         # TODO: test in the field and remove DEBUG code
         if MEROSSDEBUG:
@@ -748,10 +744,10 @@ class MerossDevice(MerossDeviceBase):
             {
                 mc.KEY_KEY: {
                     mc.KEY_GATEWAY: {
-                        mc.KEY_HOST: host,
-                        mc.KEY_PORT: port,
-                        mc.KEY_SECONDHOST: host,
-                        mc.KEY_SECONDPORT: port,
+                        mc.KEY_HOST: broker.host,
+                        mc.KEY_PORT: broker.port,
+                        mc.KEY_SECONDHOST: broker.host,
+                        mc.KEY_SECONDPORT: broker.port,
                     },
                     mc.KEY_KEY: key,
                     mc.KEY_USERID: userid,
@@ -1393,7 +1389,7 @@ class MerossDevice(MerossDeviceBase):
     def mqtt_connected(self):
         _mqtt_connection = self._mqtt_connection
         assert _mqtt_connection
-        self.log(DEBUG, "mqtt_connected to %s:%d", *_mqtt_connection.broker)
+        self.log(DEBUG, "mqtt_connected to %s", _mqtt_connection.broker)
         self._mqtt_connected = _mqtt_connection
         if _mqtt_connection.allow_mqtt_publish:
             self._mqtt_publish = _mqtt_connection
@@ -1414,7 +1410,7 @@ class MerossDevice(MerossDeviceBase):
 
     def mqtt_disconnected(self):
         assert self._mqtt_connection
-        self.log(DEBUG, "mqtt_disconnected from %s:%d", *self._mqtt_connection.broker)
+        self.log(DEBUG, "mqtt_disconnected from %s", self._mqtt_connection.broker)
         self._mqtt_connected = self._mqtt_publish = self._mqtt_active = None
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             if self.conf_protocol is CONF_PROTOCOL_AUTO:
@@ -1845,10 +1841,16 @@ class MerossDevice(MerossDeviceBase):
             # 'local' http since it should be faster and less prone to cloud 'issues'
             if self.config.get(CONF_HOST) or (_profile and _profile.id):
                 self.pref_protocol = CONF_PROTOCOL_HTTP
+                if self.curr_protocol is not CONF_PROTOCOL_HTTP and self._http_active:
+                    self._switch_protocol(CONF_PROTOCOL_HTTP)
             else:
                 self.pref_protocol = CONF_PROTOCOL_MQTT
+                if self.curr_protocol is not CONF_PROTOCOL_MQTT and self._mqtt_active:
+                    self._switch_protocol(CONF_PROTOCOL_MQTT)
         else:
             self.pref_protocol = self.conf_protocol
+            if self.curr_protocol is not self.pref_protocol:
+                self._switch_protocol(self.pref_protocol)
 
         if self.conf_protocol is CONF_PROTOCOL_HTTP:
             # strictly HTTP so detach MQTT in case

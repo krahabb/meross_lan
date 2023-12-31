@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from hashlib import md5
 import json
 import re
@@ -119,6 +120,22 @@ except Exception:
     MEROSSDEBUG = None  # type: ignore
 
 
+_json_encoder = json.JSONEncoder(
+    ensure_ascii=False, check_circular=False, separators=(",", ":")
+)
+_json_decoder = json.JSONDecoder()
+
+
+def json_dumps(obj):
+    """Slightly optimized json.dumps with pre-configured encoder"""
+    return _json_encoder.encode(obj)
+
+
+def json_loads(s: str):
+    """Slightly optimized json.loads with pre-configured decoder"""
+    return _json_decoder.raw_decode(s)[0]
+
+
 class MerossProtocolError(Exception):
     """
     signal a protocol error like:
@@ -155,12 +172,25 @@ class MerossSignatureError(MerossProtocolError):
         super().__init__(response, "Signature error")
 
 
-def parse_host_port(domain: str, default_port = mc.MQTT_DEFAULT_PORT):
-    """Splits the eventual :port suffix from domain and return (host, port)"""
-    if (colon_index := domain.find(":")) != -1:
-        return domain[0:colon_index], int(domain[colon_index + 1 :])
-    else:
-        return domain, default_port
+@dataclass
+class HostAddress:
+    __slots__ = (
+        "host",
+        "port",
+    )
+    host: str
+    port: int
+
+    @staticmethod
+    def build(address: str, default_port=mc.MQTT_DEFAULT_PORT):
+        """Splits the eventual :port suffix from domain and return (host, port)"""
+        if (colon_index := address.find(":")) != -1:
+            return HostAddress(address[0:colon_index], int(address[colon_index + 1 :]))
+        else:
+            return HostAddress(address, default_port)
+
+    def __str__(self) -> str:
+        return f"{self.host}:{self.port}"
 
 
 def get_macaddress_from_uuid(uuid: str):
@@ -242,8 +272,14 @@ def get_default_payload(namespace: str) -> MerossPayloadType:
     if namespace in mc.PAYLOAD_GET:
         return mc.PAYLOAD_GET[namespace]
     split = namespace.split(".")
-    key = split[-1]
-    return {key[0].lower() + key[1:]: [] if split[1] == "Hub" else {}}
+    key_namespace = split[-1]
+    key_namespace = key_namespace[0].lower() + key_namespace[1:]
+    if split[1] == "Hub":
+        return {key_namespace: []}
+    elif split[2] == "Thermostat":
+        return {key_namespace: [{mc.KEY_CHANNEL: 0}]}
+    else:
+        return {key_namespace: {}}
 
 
 def get_default_arguments(namespace: str):
@@ -277,6 +313,18 @@ def get_replykey(header: MerossHeaderType, key: KeyType) -> KeyType:
             return key
 
     return header
+
+
+def get_port_safe(p_dict: dict, key: str) -> int:
+    """
+    Parses the "firmware" dict in device descriptor (coming from NS_ALL)
+    or the "debug" dict and returns the broker port value or what we know
+    is the default for Meross.
+    """
+    try:
+        return int(p_dict[key]) or mc.MQTT_DEFAULT_PORT
+    except Exception:
+        return mc.MQTT_DEFAULT_PORT
 
 
 def get_element_by_key(payload: list, key: str, value: object) -> dict:
@@ -349,20 +397,6 @@ def check_message_strict(message: MerossMessageType):
         return message
     except KeyError as error:
         raise MerossProtocolError(message, str(error)) from error
-
-
-_json_encoder = json.JSONEncoder(
-    ensure_ascii=False, check_circular=False, separators=(",", ":")
-)
-_json_decoder = json.JSONDecoder()
-
-
-def json_dumps(obj):
-    return _json_encoder.encode(obj)
-
-
-def json_loads(s: str):
-    return _json_decoder.raw_decode(s)[0]
 
 
 class MerossMessage(dict):
@@ -505,6 +539,7 @@ class MerossDeviceDescriptor:
         "all",
         "ability",
         "digest",
+        "_brokers",
         "__dict__",
     )
 
@@ -538,6 +573,7 @@ class MerossDeviceDescriptor:
             self.all = payload.get(mc.KEY_ALL, {})
             self.ability = payload.get(mc.KEY_ABILITY, {})
             self.digest = self.all.get(mc.KEY_DIGEST, {})
+        self._brokers = None
 
     def __getattr__(self, name):
         value = MerossDeviceDescriptor._dynamicattrs[name](self)
@@ -550,6 +586,7 @@ class MerossDeviceDescriptor:
         """
         self.all = payload.get(mc.KEY_ALL, self.all)
         self.digest = self.all.get(mc.KEY_DIGEST, {})
+        self._brokers = None
         for key in MerossDeviceDescriptor._dynamicattrs.keys():
             # don't use hasattr() or so to inspect else the whole
             # dynamic attrs logic gets f...d
@@ -562,3 +599,17 @@ class MerossDeviceDescriptor:
         self.system[mc.KEY_TIME] = p_time
         self.time = p_time
         self.timezone = p_time.get(mc.KEY_TIMEZONE)
+
+    @property
+    def brokers(self) -> list[HostAddress]:
+        """list of configured brokers in the device"""
+        _brokers: list[HostAddress] | None
+        _brokers = self._brokers
+        if _brokers is None:
+            self._brokers = _brokers = []
+            fw = self.firmware
+            if server := fw.get(mc.KEY_SERVER):
+                _brokers.append(HostAddress(server, get_port_safe(fw, mc.KEY_PORT)))
+            if second_server := fw.get(mc.KEY_SECONDSERVER):
+                _brokers.append(HostAddress(second_server, get_port_safe(fw, mc.KEY_SECONDPORT)))
+        return _brokers

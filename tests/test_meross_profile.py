@@ -8,9 +8,9 @@ from pytest_homeassistant_custom_component.common import flush_store
 from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.meross_profile import MerossCloudProfile
 from custom_components.meross_lan.merossclient import (
+    HostAddress,
     cloudapi,
     const as mc,
-    parse_host_port,
 )
 
 from . import const as tc, helpers
@@ -83,11 +83,11 @@ async def test_meross_profile(
         # and activated them (not less/no more)
         safe_start_calls = []
         for expected_connection in expected_connections:
-            host, port = parse_host_port(expected_connection)
-            connection_id = f"{tc.MOCK_PROFILE_ID}:{host}:{port}"
+            broker = HostAddress.build(expected_connection)
+            connection_id = f"{tc.MOCK_PROFILE_ID}:{broker.host}:{broker.port}"
             mqttconnection = profile.mqttconnections[connection_id]
             mqttconnections.remove(mqttconnection)
-            safe_start_calls.append(mock.call(mqttconnection, host, port, mock.ANY))
+            safe_start_calls.append(mock.call(mqttconnection, broker, mock.ANY))
         assert len(mqttconnections) == 0
         merossmqtt_mock.safe_start_mock.assert_has_calls(
             safe_start_calls,
@@ -152,11 +152,11 @@ async def test_meross_profile_cloudapi_offline(
         # and activated them (not less/no more)
         safe_start_calls = []
         for expected_connection in expected_connections:
-            host, port = parse_host_port(expected_connection)
-            connection_id = f"{tc.MOCK_PROFILE_ID}:{host}:{port}"
+            broker = HostAddress.build(expected_connection)
+            connection_id = f"{tc.MOCK_PROFILE_ID}:{broker.host}:{broker.port}"
             mqttconnection = profile.mqttconnections[connection_id]
             mqttconnections.remove(mqttconnection)
-            safe_start_calls.append(mock.call(mqttconnection, host, port, mock.ANY))
+            safe_start_calls.append(mock.call(mqttconnection, broker, mock.ANY))
         assert len(mqttconnections) == 0
         merossmqtt_mock.safe_start_mock.assert_has_calls(
             safe_start_calls,
