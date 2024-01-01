@@ -28,7 +28,7 @@
                     "ok": "No issues"
                 }
             },
-            "_common": {
+            "common": {
                 "state": {
                     "ok": "Ok",
                     "disconnected": "Disconnected"
@@ -37,15 +37,15 @@
             "mts_overheat_warning": {
                 "state": {
                     "1": "Overheating",
-                    "0": "[%key:entity::sensor::_common::state::ok%]",
-                    "2": "[%key:entity::sensor::_common::state::disconnected%]"
+                    "0": "[%key:entity::sensor::common::state::ok%]",
+                    "2": "[%key:entity::sensor::common::state::disconnected%]"
                 }
             },
             "mts_frost_warning": {
                 "state": {
-                    "0": "[%key:entity::sensor::_common::state::ok%]",
+                    "0": "[%key:entity::sensor::common::state::ok%]",
                     "1": "Freezing",
-                    "2": "[%key:entity::sensor::_common::state::disconnected%]"
+                    "2": "[%key:entity::sensor::common::state::disconnected%]"
                 }
             }
         }

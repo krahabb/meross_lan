@@ -28,7 +28,7 @@
                     "ok": "Sin problemas"
                 }
             },
-            "_common": {
+            "common": {
                 "state": {
                     "ok": "Ok",
                     "disconnected": "Desconectado"

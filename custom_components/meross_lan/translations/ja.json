@@ -28,7 +28,7 @@
                     "ok": "問題ありません"
                 }
             },
-            "_common": {
+            "common": {
                 "state": {
                     "ok": "良い",
                     "disconnected": "切断された"

@@ -28,7 +28,7 @@
                     "ok": "Žádné problémy"
                 }
             },
-            "_common": {
+            "common": {
                 "state": {
                     "ok": "Ok",
                     "disconnected": "Odpojeno"

@@ -28,7 +28,7 @@
                     "ok": "Pas d'issues"
                 }
             },
-            "_common": {
+            "common": {
                 "state": {
                     "ok": "Ok",
                     "disconnected": "Débranché"
