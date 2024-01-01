@@ -126,7 +126,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             attr_name = f"{entitykey or device_class}"
         # when channel == 0 it might be the only one so skip it
         # when channel is already in device name it also may be skipped
-        if channel and manager.name.find(str(channel)) == -1:
+        if channel and channel != manager.id:
             attr_name = f"{attr_name} {channel}" if attr_name else str(channel)
         if attr_name is not None:
             attr_name = attr_name.capitalize()
