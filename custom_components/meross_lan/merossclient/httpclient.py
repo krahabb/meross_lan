@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from logging import DEBUG
+import logging
 import typing
 
 import aiohttp
@@ -26,9 +26,6 @@ from . import (
     json_loads,
 )
 
-if typing.TYPE_CHECKING:
-    from logging import Logger
-
 
 class MerossHttpClient:
     timeout = 5  # total timeout will be 1+2+4: check relaxation algorithm
@@ -41,6 +38,7 @@ class MerossHttpClient:
         "_session",
         "_logger",
         "_logid",
+        "_log_level_dump",
     )
 
     def __init__(
@@ -48,13 +46,15 @@ class MerossHttpClient:
         host: str,
         key: KeyType = None,
         session: aiohttp.ClientSession | None = None,
-        logger: Logger | None = None,
+        logger: logging.Logger | None = None,
+        log_level_dump: int = logging.NOTSET,
     ):
         """
         host: the ip of hostname of the device
         key: pass in the (str) device key used for signing or None to attempt 'key-hack'
         session: the shared session to use or None to create a dedicated one
-        logger: a shared logger or None to log in its own Logger
+        logger: a shared logger to enable logging
+        log_level_dump: the logging level at which the full json payloads will be dumped (costly)
         """
         self._host = host
         self._requesturl = URL(f"http://{host}/config")
@@ -63,6 +63,7 @@ class MerossHttpClient:
         self._session = session or aiohttp.ClientSession()
         self._logger = logger
         self._logid = None
+        self._log_level_dump = log_level_dump
 
     @property
     def host(self):
@@ -73,22 +74,18 @@ class MerossHttpClient:
         self._host = value
         self._requesturl = URL(f"http://{value}/config")
 
-    def set_logger(self, _logger: Logger):
-        self._logger = _logger
-        self._logid = None
-
     async def async_request_raw(
         self, request: MerossMessageType | dict
     ) -> MerossMessageType:
         timeout = 1
         try:
             self._logid = None
-            if self._logger and self._logger.isEnabledFor(DEBUG):
+            if self._logger and self._logger.isEnabledFor(self._log_level_dump):
                 # we catch the 'request' id before json dumping so
                 # to reasonably set the context before any exception
                 self._logid = f"MerossHttpClient({self._host}:{id(request)})"
                 request_data = json_dumps(request)
-                self._logger.log(DEBUG, "%s: HTTP Request (%s)", self._logid, request_data)
+                self._logger.log(self._log_level_dump, "%s: HTTP Request (%s)", self._logid, request_data)
             else:
                 request_data = json_dumps(request)
             # since device HTTP service sometimes timeouts with no apparent
@@ -112,7 +109,7 @@ class MerossHttpClient:
             response.raise_for_status()
             text_body = await response.text()
             if self._logid:
-                self._logger.log(DEBUG, "%s: HTTP Response (%s)", self._logid, text_body)  # type: ignore
+                self._logger.log(self._log_level_dump, "%s: HTTP Response (%s)", self._logid, text_body)  # type: ignore
             json_body: MerossMessageType = json_loads(text_body)
             if self.key is None:
                 self.replykey = get_replykey(json_body[mc.KEY_HEADER], self.key)
@@ -120,7 +117,7 @@ class MerossHttpClient:
             self.replykey = None  # reset the key hack since it could became stale
             if self._logid:
                 self._logger.log(  # type: ignore
-                    DEBUG,
+                    logging.DEBUG,
                     "%s: HTTP %s (%s)",
                     self._logid,
                     type(e).__name__,
@@ -151,7 +148,7 @@ class MerossHttpClient:
             # sign error... hack and fool
             if self._logid:
                 self._logger.log(  # type: ignore
-                    DEBUG,
+                    logging.WARNING,
                     "%s: Key error on (%s:%s) -> retrying with key-reply hack",
                     self._logid,
                     method,

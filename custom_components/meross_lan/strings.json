@@ -178,7 +178,7 @@
                     "hub": "Configure",
                     "device": "[%key:options::step::menu::menu_options::hub%]",
                     "profile": "[%key:options::step::menu::menu_options::hub%]",
-                    "diagnostics": "Start diagnostics trace",
+                    "diagnostics": "Diagnostics",
                     "bind": "Reconfigure MQTT (local binding)",
                     "unbind": "Hardware reset"
                 }
@@ -187,6 +187,8 @@
                 "title": "[%key:options::step::menu::menu_options::diagnostics%]",
                 "description": "The configuration will be reloaded and debug tracing will start for the configured period",
                 "data": {
+                    "logging_level": "Logging level",
+                    "trace": "Start diagnostics trace",
                     "trace_timeout": "Debug tracing duration (sec)",
                     "error": "[%key:config::step::hub::data::error%]"
                 }

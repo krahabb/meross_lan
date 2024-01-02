@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from logging import WARNING
 import typing
 
 from homeassistant.helpers import device_registry
@@ -278,7 +277,7 @@ class MerossDeviceHub(MerossDevice):
             for p_id in subdevices_actual:
                 subdevice = self.subdevices[p_id]
                 self.log(
-                    WARNING,
+                    self.WARNING,
                     "removing subdevice %s(%s) - configuration will be reloaded in few sec",
                     subdevice.name,
                     p_id,

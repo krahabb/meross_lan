@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from logging import DEBUG
 from time import time
 import typing
 
@@ -171,12 +170,12 @@ class ElectricityMixin(
             self._cancel_energy_reset = async_track_point_in_time(
                 ApiProfile.hass, self._energy_reset, next_reset
             )
-            self.log(DEBUG, "_schedule_next_reset at %s", next_reset.isoformat())
+            self.log(self.DEBUG, "_schedule_next_reset at %s", next_reset.isoformat())
 
     @callback
     def _energy_reset(self, _now: datetime):
         self._cancel_energy_reset = None
-        self.log(DEBUG, "_energy_reset at %s", _now.isoformat())
+        self.log(self.DEBUG, "_energy_reset at %s", _now.isoformat())
         self._sensor_energy_estimate.reset_estimate()
         self._schedule_next_reset(_now)
 
@@ -248,7 +247,7 @@ class ConsumptionXSensor(MLSensor):
             self.offset = 0
             self.reset_ts = 0
             self.flush_state()
-            self.log(DEBUG, "no readings available for new day - resetting")
+            self.log(self.DEBUG, "no readings available for new day - resetting")
 
 
 class ConsumptionXMixin(
@@ -314,7 +313,7 @@ class ConsumptionXMixin(
                 devtime_today_midnight - daydelta
             ).timestamp()
             self.log(
-                DEBUG,
+                self.DEBUG,
                 "updated midnight epochs: yesterday=%s - today=%s - tomorrow=%s",
                 str(self._yesterday_midnight_epoch),
                 str(self._today_midnight_epoch),
@@ -405,7 +404,7 @@ class ConsumptionXMixin(
                         _sensor_consumption.ATTR_OFFSET
                     ] = _sensor_consumption.offset = (day_last_value - energy_estimate)
             self.log(
-                DEBUG,
+                self.DEBUG,
                 "first consumption reading for new day, offset=%d",
                 _sensor_consumption.offset,
             )
@@ -424,7 +423,7 @@ class ConsumptionXMixin(
         self._consumption_estimate = 0.0  # reset ElecticityMixin estimate cycle
         _sensor_consumption._attr_state = day_last_value - _sensor_consumption.offset
         _sensor_consumption.flush_state()
-        self.log(DEBUG, "updating consumption=%d", day_last_value)
+        self.log(self.DEBUG, "updating consumption=%d", day_last_value)
 
     def _set_offline(self):
         super()._set_offline()

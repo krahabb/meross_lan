@@ -58,7 +58,11 @@ async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
         )
         result = await options_flow.async_configure(
             result["flow_id"],
-            user_input={mlc.CONF_TRACE_TIMEOUT: tc.MOCK_TRACE_TIMEOUT},
+            user_input={
+                mlc.CONF_LOGGING_LEVEL: "default",
+                mlc.CONF_TRACE: True,
+                mlc.CONF_TRACE_TIMEOUT: tc.MOCK_TRACE_TIMEOUT,
+            },
         )
         assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
         # after having choosen 'diagnostics' the config entry will reload and the device

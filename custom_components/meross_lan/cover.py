@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from logging import DEBUG
 from time import time
 import typing
 
@@ -1005,7 +1004,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     @callback
     def _transition_end_callback(self):
-        self.log(DEBUG, "_transition_end_callback")
+        self.log(self.DEBUG, "_transition_end_callback")
         self._transition_end_unsub = None
         self.request_position(-1)
 

@@ -178,17 +178,19 @@
                     "hub": "Configure",
                     "device": "Configure",
                     "profile": "Configure",
-                    "diagnostics": "Start diagnostics trace",
+                    "diagnostics": "Diagnostics",
                     "bind": "Reconfigure MQTT (local binding)",
                     "unbind": "Hardware reset"
                 }
             },
             "diagnostics": {
-                "title": "Start diagnostics trace",
-                "description": "The configuration will be reloaded and debug tracing will start for the configured period",
+                "title": "Diagnostics",
+                "description": "Set the logging level for this device\/profile and optionally start a diagnostic trace for the configured period",
                 "data": {
                     "trace_timeout": "Debug tracing duration (sec)",
-                    "error": "Error message"
+                    "error": "Error message",
+                    "logging_level": "Logging level",
+                    "trace": "Start diagnostics trace"
                 }
             },
             "bind": {

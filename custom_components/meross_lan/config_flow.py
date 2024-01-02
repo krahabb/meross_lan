@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import contextmanager
 import json
-from logging import DEBUG
+import logging
 from time import time
 import typing
 
@@ -17,7 +17,7 @@ from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
-from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, StrEnum
+from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, StrEnum, reverse_lookup
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
@@ -353,7 +353,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             _httpclient.key = key
         else:
             self._httpclient = _httpclient = MerossHttpClient(
-                host, key, async_get_clientsession(self.hass), LOGGER  # type: ignore
+                host, key, async_get_clientsession(self.hass), LOGGER,  # type: ignore
+                logging.DEBUG
             )
 
         payload = (
@@ -525,8 +526,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
 
     async def async_step_dhcp(self, discovery_info: DhcpServiceInfo):
         """Handle a flow initialized by DHCP discovery."""
-        if LOGGER.isEnabledFor(DEBUG):
-            LOGGER.debug("received dhcp discovery: %s", str(discovery_info))
+        LOGGER.debug("received dhcp discovery: %s", str(discovery_info))
         host = discovery_info.ip
         macaddress = discovery_info.macaddress.replace(":", "").lower()
         # check if the device is already registered
@@ -619,13 +619,12 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                 return await self._async_set_device_config(_device_config, _descriptor)  # type: ignore
 
         except Exception as exception:
-            if LOGGER.isEnabledFor(DEBUG):
-                LOGGER.debug(
-                    "%s(%s) identifying meross device (host:%s)",
-                    exception.__class__.__name__,
-                    str(exception),
-                    host,
-                )
+            LOGGER.debug(
+                "%s(%s) identifying meross device (host:%s)",
+                exception.__class__.__name__,
+                str(exception),
+                host,
+            )
             if isinstance(exception, AbortFlow):
                 # we might have 'correctly' identified an already configured entry
                 return self.async_abort()
@@ -955,20 +954,46 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         # the global ApiProfile.managers_transient_state
         config = self.config
         if user_input:
+            config[mlc.CONF_LOGGING_LEVEL] = (
+                reverse_lookup(
+                    mlc.CONF_LOGGING_LEVEL_OPTIONS, user_input[mlc.CONF_LOGGING_LEVEL]
+                )
+                or logging.NOTSET
+            )
             config[mlc.CONF_TRACE_TIMEOUT] = user_input.get(mlc.CONF_TRACE_TIMEOUT)
-
-            state = ApiProfile.managers_transient_state.setdefault(
-                self.config_entry_id, {}
-            )
-            state[mlc.CONF_TRACE] = True
-            # taskerize the reload so the entry get updated first
-            self.hass.async_create_task(
-                self.hass.config_entries.async_reload(self.config_entry_id)
-            )
-
+            if user_input[mlc.CONF_TRACE]:
+                # only reload and start tracing if the user wish so
+                state = ApiProfile.managers_transient_state.setdefault(
+                    self.config_entry_id, {}
+                )
+                state[mlc.CONF_TRACE] = user_input[mlc.CONF_TRACE]
+                # taskerize the reload so the entry get updated first
+                self.hass.async_create_task(
+                    self.hass.config_entries.async_reload(self.config_entry_id)
+                )
             return self.finish_options_flow(config)
 
         config_schema = {
+            vol.Required(
+                mlc.CONF_LOGGING_LEVEL,
+                description={
+                    DESCR: mlc.CONF_LOGGING_LEVEL_OPTIONS.get(
+                        config.get(mlc.CONF_LOGGING_LEVEL, logging.NOTSET), "default"
+                    )
+                },
+            ): selector(
+                {
+                    "select": {
+                        "options": list(mlc.CONF_LOGGING_LEVEL_OPTIONS.values()),
+                        "translation_key": mlc.CONF_LOGGING_LEVEL,
+                        "mode": "dropdown",
+                    }
+                }
+            ),
+            vol.Required(
+                mlc.CONF_TRACE,
+                default=False,  # type: ignore
+            ): bool,
             vol.Optional(
                 mlc.CONF_TRACE_TIMEOUT,
                 default=mlc.CONF_TRACE_TIMEOUT_DEFAULT,  # type: ignore

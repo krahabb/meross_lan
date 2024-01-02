@@ -178,17 +178,19 @@
                     "hub": "Konfigurieren",
                     "device": "Konfigurieren",
                     "profile": "Konfigurieren",
-                    "diagnostics": "Diagnosetrace starten",
+                    "diagnostics": "Diagnostik",
                     "bind": "MQTT neu konfigurieren (lokale Bindung)",
                     "unbind": "Hardware-Reset"
                 }
             },
             "diagnostics": {
-                "title": "Diagnosetrace starten",
-                "description": "Die Konfiguration wird neu geladen und die Debug-Verfolgung wird für den konfigurierten Zeitraum gestartet",
+                "title": "Diagnostik",
+                "description": "Legen Sie die Protokollierungsstufe für dieses Gerät\/Profil fest und starten Sie optional einen Diagnose-Trace für den konfigurierten Zeitraum",
                 "data": {
                     "trace_timeout": "Dauer der Debug-Ablaufverfolgung (sec)",
-                    "error": "Fehlermeldung"
+                    "error": "Fehlermeldung",
+                    "logging_level": "Protokollierungsgrad",
+                    "trace": "Diagnosetrace starten"
                 }
             },
             "bind": {

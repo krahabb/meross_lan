@@ -178,17 +178,19 @@
                     "hub": "Configurer",
                     "device": "Configurer",
                     "profile": "Configurer",
-                    "diagnostics": "Démarrer la trace de diagnostic",
+                    "diagnostics": "Diagnostique",
                     "bind": "Reconfigurer MQTT (liaison locale)",
                     "unbind": "Réinitialisation du matériel"
                 }
             },
             "diagnostics": {
-                "title": "Démarrer la trace de diagnostic",
-                "description": "La configuration sera rechargée et le traçage de débogage commencera pour la période configurée.",
+                "title": "Diagnostique",
+                "description": "Définir le niveau de journalisation pour cet appareil\/profil et, éventuellement, lancer une trace de diagnostic pour la période configurée",
                 "data": {
                     "trace_timeout": "Durée du suivi du débogage (sec)",
-                    "error": "Message d'erreur"
+                    "error": "Message d'erreur",
+                    "logging_level": "Niveau d'enregistrement",
+                    "trace": "Démarrer la trace de diagnostic"
                 }
             },
             "bind": {

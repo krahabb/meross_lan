@@ -4,13 +4,11 @@
 from __future__ import annotations
 
 import abc
-from abc import ABCMeta
 import asyncio
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from functools import partial
 import logging
-from logging import DEBUG, WARNING
 import os
 from time import gmtime, localtime, strftime, time
 import typing
@@ -27,7 +25,13 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_KEY,
+    CONF_LOGGING_CRITICAL,
+    CONF_LOGGING_DEBUG,
+    CONF_LOGGING_INFO,
     CONF_LOGGING_LEVEL,
+    CONF_LOGGING_LEVEL_OPTIONS,
+    CONF_LOGGING_VERBOSE,
+    CONF_LOGGING_WARNING,
     CONF_PROTOCOL_AUTO,
     CONF_TRACE,
     CONF_TRACE_DIRECTORY,
@@ -186,9 +190,9 @@ class _Logger(logging.Logger if typing.TYPE_CHECKING else object):
             trap_key = (msg, args)
             if trap_key in _Logger._LOGGER_TIMEOUTS:
                 if (epoch - _Logger._LOGGER_TIMEOUTS[trap_key]) < timeout:
-                    if self.isEnabledFor(DEBUG):
+                    if self.isEnabledFor(CONF_LOGGING_VERBOSE):
                         super()._log(
-                            DEBUG,
+                            CONF_LOGGING_VERBOSE,
                             f"dropped log message for {msg}",
                             args,
                             **kwargs,
@@ -641,6 +645,12 @@ class Loggable(abc.ABC):
     intercept log messages.
     """
 
+    VERBOSE = CONF_LOGGING_VERBOSE
+    DEBUG = CONF_LOGGING_DEBUG
+    INFO = CONF_LOGGING_INFO
+    WARNING = CONF_LOGGING_WARNING
+    CRITICAL = CONF_LOGGING_CRITICAL
+
     __slots__ = (
         "id",
         "logtag",
@@ -651,7 +661,7 @@ class Loggable(abc.ABC):
         self.id: Final = id
         self.logtag = f"{self.__class__.__name__}({id})"
         self.logger = logger
-        self.log(DEBUG, "init")
+        self.log(self.DEBUG, "init")
 
     def isEnabledFor(self, level: int):
         return self.logger.isEnabledFor(level)
@@ -675,14 +685,14 @@ class Loggable(abc.ABC):
             yield
         except Exception as exception:
             self.log(
-                WARNING,
+                self.WARNING,
                 f"{exception.__class__.__name__}({str(exception)}) in {msg}",
                 *args,
                 **kwargs,
             )
 
     def __del__(self):
-        self.log(DEBUG, "destroy")
+        self.log(self.DEBUG, "destroy")
 
 
 class EntityManager(Loggable):
@@ -801,7 +811,15 @@ class ConfigEntryManager(EntityManager):
                 logger = getLogger(f"{LOGGER.name}.{logtag}_{id}")
             else:
                 logger = getLogger(f"{LOGGER.name}.{logtag}_{config_entry_id}")
-            logger.setLevel(self.config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
+            try:
+                # do not use self.exception_warning since we're not set yet
+                logger.setLevel(self.config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
+            except Exception as exception:
+                LOGGER.warning(
+                    "error (%s) setting log level: likely a corrupted configuration entry",
+                    str(exception),
+                )
+
         else:
             # this is the MerossApi: it will be better initialized when
             # the ConfigEntry is loaded
@@ -843,7 +861,7 @@ class ConfigEntryManager(EntityManager):
     def log(self, level: int, msg: str, *args, **kwargs):
         self.logger.log(level, msg, *args, **kwargs)
         if self.trace_file:
-            self.trace(time(), msg % args, logging.getLevelName(level), "LOG")
+            self.trace(time(), msg % args, CONF_LOGGING_LEVEL_OPTIONS.get(level) or logging.getLevelName(level), "LOG")
 
     # interface: self
     async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
@@ -904,7 +922,13 @@ class ConfigEntryManager(EntityManager):
         self.config = config_entry.data
         config = self.config
         self.key = config.get(CONF_KEY) or ""
-        self.logger.setLevel(config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
+        try:
+            self.logger.setLevel(config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
+        except Exception as exception:
+            LOGGER.warning(
+                "error (%s) setting log level: likely a corrupted configuration entry",
+                str(exception),
+            )
 
     # tracing capabilities
     def get_diagnostics_trace(self) -> asyncio.Future:
@@ -953,7 +977,7 @@ class ConfigEntryManager(EntityManager):
         except Exception as exception:
             if self.trace_file:
                 self.trace_close()
-            self.log_exception(WARNING, exception, "creating trace file")
+            self.log_exception(self.WARNING, exception, "creating trace file")
 
     def _trace_opened(self, epoch: float):
         """
@@ -969,7 +993,7 @@ class ConfigEntryManager(EntityManager):
             self.trace_file = None  # type: ignore
         except Exception as exception:
             self.trace_file = None  # type: ignore
-            self.log_exception(WARNING, exception, "closing trace file")
+            self.log_exception(self.WARNING, exception, "closing trace file")
         self._trace_closed()
         if self._trace_future:
             self._trace_future.set_result(self._trace_data)
@@ -1017,7 +1041,7 @@ class ConfigEntryManager(EntityManager):
                 self._trace_data.append(columns)
         except Exception as exception:
             self.trace_close()
-            self.log_exception(WARNING, exception, "writing to trace file")
+            self.log_exception(self.WARNING, exception, "writing to trace file")
 
 
 class ApiProfile(ConfigEntryManager):

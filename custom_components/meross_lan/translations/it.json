@@ -178,17 +178,19 @@
                     "hub": "Configura",
                     "device": "Configura",
                     "profile": "Configura",
-                    "diagnostics": "Attiva il debug tracing",
+                    "diagnostics": "Diagnostica",
                     "bind": "Riconfigura MQTT (binding locale)",
                     "unbind": "Reset hardware"
                 }
             },
             "diagnostics": {
-                "title": "Attiva il debug tracing",
-                "description": "La configurazione verrà ricaricata e il debug tracing verrà avviato per il periodo configurato.",
+                "title": "Diagnostica",
+                "description": "Imposta il livello di registrazione log per questo dispositivo\/profilo e, facoltativamente, avvia una traccia diagnostica per il periodo configurato",
                 "data": {
                     "trace_timeout": "Durata debug tracing (sec)",
-                    "error": "Messaggio di errore"
+                    "error": "Messaggio di errore",
+                    "logging_level": "Livello di registrazione",
+                    "trace": "Attiva il debug tracing"
                 }
             },
             "bind": {

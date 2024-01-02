@@ -1,4 +1,5 @@
 """Constants for the Meross IoT local LAN integration."""
+import logging
 from typing import Final, NotRequired, TypedDict
 
 from homeassistant import const as hac
@@ -36,6 +37,19 @@ CONF_POLLING_PERIOD_MIN: Final = 5
 CONF_POLLING_PERIOD_DEFAULT: Final = 30
 # sets the logging level x ConfigEntry
 CONF_LOGGING_LEVEL: Final = "logging_level"
+CONF_LOGGING_VERBOSE: Final = 1
+CONF_LOGGING_DEBUG: Final = logging.DEBUG
+CONF_LOGGING_INFO: Final = logging.INFO
+CONF_LOGGING_WARNING: Final = logging.WARNING
+CONF_LOGGING_CRITICAL: Final = logging.CRITICAL
+CONF_LOGGING_LEVEL_OPTIONS: Final = {
+    logging.NOTSET: "default",
+    CONF_LOGGING_CRITICAL: "critical",
+    CONF_LOGGING_WARNING: "warning",
+    CONF_LOGGING_INFO: "info",
+    CONF_LOGGING_DEBUG: "debug",
+    CONF_LOGGING_VERBOSE: "verbose",
+}
 # create a file with device info and communication tracing
 CONF_TRACE: Final = "trace"
 # when starting a trace stop it and close the file after .. secs
@@ -55,7 +69,8 @@ class HubConfigType(TypedDict):
     key: str
     allow_mqtt_publish: NotRequired[bool]
     create_diagnostic_entities: NotRequired[bool]
-    trace_timeout: NotRequired[int]
+    trace_timeout: NotRequired[int | None]
+    logging_level: NotRequired[int]
 
 
 class DeviceConfigTypeMinimal(TypedDict):
@@ -72,14 +87,15 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     and defined though DeviceConfigTypeMinimal
     """
 
-    key: str | None
-    cloud_key: str | None
-    host: str
-    protocol: str
-    polling_period: int | None
+    key: NotRequired[str | None]
+    cloud_key: NotRequired[str | None]
+    host: NotRequired[str]
+    protocol: NotRequired[str]
+    polling_period: NotRequired[int | None]
+    timezone: NotRequired[str]
+    timestamp: NotRequired[float]
     trace_timeout: NotRequired[int | None]
-    timezone: str | None
-    timestamp: float | None
+    logging_level: NotRequired[int]
 
 
 CONF_EMAIL: Final = mc.KEY_EMAIL
@@ -95,12 +111,13 @@ class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
     Meross cloud profile config_entry keys
     """
 
-    password: str | None
-    save_password: bool | None
-    allow_mqtt_publish: bool | None
-    check_firmware_updates: bool | None
-    create_diagnostic_entities: bool | None
+    password: NotRequired[str]
+    save_password: NotRequired[bool]
+    allow_mqtt_publish: NotRequired[bool]
+    check_firmware_updates: NotRequired[bool]
+    create_diagnostic_entities: NotRequired[bool]
     trace_timeout: NotRequired[int | None]
+    logging_level: NotRequired[int]
 
 
 SERVICE_REQUEST = "request"

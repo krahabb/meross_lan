@@ -6,7 +6,6 @@ from __future__ import annotations
 import abc
 import asyncio
 from contextlib import asynccontextmanager
-from logging import DEBUG, INFO, WARNING
 from time import time
 import typing
 
@@ -212,7 +211,7 @@ class _MQTTTransaction:
 
     def cancel(self):
         self.mqtt_connection.log(
-            DEBUG,
+            self.mqtt_connection.DEBUG,
             "cancelling mqtt transaction on %s %s (messageId: %s, device_id: %s)",
             self.method,
             self.namespace,
@@ -363,15 +362,14 @@ class MQTTConnection(Loggable):
         else:
             transaction = None
         try:
-            if self.isEnabledFor(DEBUG):
-                self.log(
-                    DEBUG,
-                    "MQTT PUBLISH %s %s (device_id: %s, messageId: %s)",
-                    request.method,
-                    request.namespace,
-                    device_id,
-                    request.messageid,
-                )
+            self.log(
+                self.DEBUG,
+                "MQTT PUBLISH %s %s (device_id: %s, messageId: %s)",
+                request.method,
+                request.namespace,
+                device_id,
+                request.messageid,
+            )
             profile = self.profile
             if profile.trace_file:
                 profile.trace(
@@ -391,7 +389,7 @@ class MQTTConnection(Loggable):
                     return await asyncio.wait_for(transaction.response_future, timeout)
                 except Exception as exception:
                     self.log_exception(
-                        DEBUG,
+                        self.DEBUG,
                         exception,
                         "waiting for MQTT reply to %s %s (device_id: %s, messageId: %s)",
                         request.method,
@@ -404,11 +402,10 @@ class MQTTConnection(Loggable):
                     self._mqtt_transactions.pop(transaction.messageid, None)
 
         except Exception as exception:
-            self.log(
-                DEBUG,
-                "%s(%s) in _async_mqtt_publish device_id:(%s) method:(%s) namespace:(%s)",
-                exception.__class__.__name__,
-                str(exception),
+            self.log_exception(
+                self.DEBUG,
+                exception,
+                "async_mqtt_publish device_id:(%s) method:(%s) namespace:(%s)",
                 device_id,
                 request.method,
                 request.namespace,
@@ -439,15 +436,14 @@ class MQTTConnection(Loggable):
 
             profile = self.profile
 
-            if self.isEnabledFor(DEBUG):
-                self.log(
-                    DEBUG,
-                    "MQTT RECV %s %s (device_id: %s, messageId: %s)",
-                    method,
-                    namespace,
-                    device_id,
-                    messageid,
-                )
+            self.log(
+                self.DEBUG,
+                "MQTT RECV %s %s (device_id: %s, messageId: %s)",
+                method,
+                namespace,
+                device_id,
+                messageid,
+            )
             if profile.trace_file:
                 profile.trace(
                     time(),
@@ -483,7 +479,7 @@ class MQTTConnection(Loggable):
                 # either it's configuration is ONLY_HTTP or it is paired to
                 # another profile. In this case we could automagically fix this (see later)
                 self.log(
-                    WARNING,
+                    self.WARNING,
                     "device(%s) not registered for MQTT handling on this profile",
                     device.name,
                     timeout=14400,
@@ -507,7 +503,7 @@ class MQTTConnection(Loggable):
             key = profile.key
             if get_replykey(header, key) is not key:
                 self.log(
-                    WARNING,
+                    self.WARNING,
                     "discovery key error for device_id: %s",
                     device_id,
                     timeout=300,
@@ -533,7 +529,7 @@ class MQTTConnection(Loggable):
             if config_entry := config_entries_helper.get_config_entry(device_id):
                 # entry already present...skip discovery
                 self.log(
-                    INFO,
+                    self.INFO,
                     "ignoring MQTT discovery for already configured device_id: %s (ConfigEntry is %s)",
                     device_id,
                     "disabled"
@@ -548,7 +544,7 @@ class MQTTConnection(Loggable):
             # also skip discovered integrations waiting in HA queue
             if config_entries_helper.get_config_flow(device_id):
                 self.log(
-                    DEBUG,
+                    self.DEBUG,
                     "ignoring discovery for device_id: %s (ConfigFlow is in progress)",
                     device_id,
                     timeout=14400,  # type: ignore
@@ -744,11 +740,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             def _random_disconnect():
                 if self.state_inactive:
                     if MEROSSDEBUG.mqtt_random_connect():
-                        self.log(DEBUG, "random connect")
+                        self.log(self.DEBUG, "random connect")
                         self.safe_start(self.broker)
                 else:
                     if MEROSSDEBUG.mqtt_random_disconnect():
-                        self.log(DEBUG, "random disconnect")
+                        self.log(self.DEBUG, "random disconnect")
                         self.safe_stop()
                 self._unsub_random_disconnect = schedule_callback(
                     ApiProfile.hass, 60, _random_disconnect
@@ -839,15 +835,14 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                     ConnectionSensor.ATTR_DROPPED,
                     ConnectionSensor.STATE_DROPPING,
                 )
-            if self.isEnabledFor(DEBUG):
-                self.log(
-                    DEBUG,
-                    "MQTT DROP %s %s (device_id: %s, messageId: %s)",
-                    request.method,
-                    request.namespace,
-                    device_id,
-                    request.messageid,
-                )
+            self.log(
+                self.DEBUG,
+                "MQTT DROP %s %s (device_id: %s, messageId: %s)",
+                request.method,
+                request.namespace,
+                device_id,
+                request.messageid,
+            )
             return (self._MQTT_DROP, 0)
         if ret is True:
             if sensor_connection := self.sensor_connection:
@@ -855,15 +850,14 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                     sensor_connection.inc_queued,
                     self.rl_queue_length,
                 )
-            if self.isEnabledFor(DEBUG):
-                self.log(
-                    DEBUG,
-                    "MQTT QUEUE %s %s (device_id: %s, messageId: %s)",
-                    request.method,
-                    request.namespace,
-                    device_id,
-                    request.messageid,
-                )
+            self.log(
+                self.DEBUG,
+                "MQTT QUEUE %s %s (device_id: %s, messageId: %s)",
+                request.method,
+                request.namespace,
+                device_id,
+                request.messageid,
+            )
             return (
                 self._MQTT_QUEUE,
                 self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT,
@@ -1047,7 +1041,7 @@ class MerossCloudProfile(ApiProfile):
     def attach_mqtt(self, device: MerossDevice):
         if device.id not in self._data[self.KEY_DEVICE_INFO]:
             self.log(
-                WARNING,
+                self.WARNING,
                 "cannot connect MQTT for MerossDevice(%s): it does not belong to the current profile",
                 device.name,
             )
@@ -1159,7 +1153,7 @@ class MerossCloudProfile(ApiProfile):
             assert self.key == credentials[mc.KEY_KEY]
             token = self._data.get(mc.KEY_TOKEN)
             if token != credentials[mc.KEY_TOKEN]:
-                self.log(DEBUG, "updating credentials with new token")
+                self.log(self.DEBUG, "updating credentials with new token")
                 if token:
                     # discard old one to play it nice but token might be expired
                     with self.exception_warning("async_cloudapi_logout"):
@@ -1182,12 +1176,12 @@ class MerossCloudProfile(ApiProfile):
     async def async_query_device_info(self):
         async with self._async_token_manager("async_query_device_info") as token:
             self.log(
-                DEBUG,
+                self.DEBUG,
                 "querying device list - last query was at: %s",
                 datetime_from_epoch(self._device_info_time).isoformat(),
             )
             if not token:
-                self.log(WARNING, "querying device list cancelled: missing api token")
+                self.log(self.WARNING, "querying device list cancelled: missing api token")
                 return None
             self._device_info_time = time()
             device_info_new = await async_cloudapi_device_devlist(
@@ -1341,7 +1335,7 @@ class MerossCloudProfile(ApiProfile):
             # and not trigger any side effects. No need to re-trigger _schedule_save_store
             # since it should still be pending...
             data[mc.KEY_TOKEN] = token
-            self.log(INFO, "Cloud token was automatically refreshed")
+            self.log(self.INFO, "Cloud token was automatically refreshed")
             helper = ConfigEntriesHelper(self.hass)
             profile_entry = helper.get_config_entry(f"profile.{profile_id}")
             if profile_entry:
@@ -1372,9 +1366,9 @@ class MerossCloudProfile(ApiProfile):
             if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
                 if data.pop(mc.KEY_TOKEN, None):  # type: ignore
                     await self._async_token_missing(True)
-            self.log_exception(WARNING, clouderror, msg)
+            self.log_exception(self.WARNING, clouderror, msg)
         except Exception as exception:
-            self.log_exception(WARNING, exception, msg)
+            self.log_exception(self.WARNING, exception, msg)
 
     async def _async_polling_query_device_info(self):
         try:
@@ -1394,10 +1388,10 @@ class MerossCloudProfile(ApiProfile):
         async with self._async_token_manager("_async_query_subdevices") as token:
             if not token:
                 self.log(
-                    WARNING, "querying subdevice list cancelled: missing api token"
+                    self.WARNING, "querying subdevice list cancelled: missing api token"
                 )
                 return None
-            self.log(DEBUG, "querying subdevice list")
+            self.log(self.DEBUG, "querying subdevice list")
             return await async_cloudapi_hub_getsubdevices(
                 token, device_id, async_get_clientsession(ApiProfile.hass)
             )
@@ -1449,7 +1443,7 @@ class MerossCloudProfile(ApiProfile):
 
         for device_id in device_info_removed:
             self.log(
-                DEBUG,
+                self.DEBUG,
                 "The device %s has been removed from the cloud profile",
                 device_id,
             )
@@ -1498,7 +1492,7 @@ class MerossCloudProfile(ApiProfile):
     ):
         if not self.allow_mqtt_publish:
             self.log(
-                WARNING,
+                self.WARNING,
                 "Meross cloud api reported new devices but MQTT publishing is disabled: skipping automatic discovery",
                 timeout=604800,  # 1 week
             )
@@ -1509,7 +1503,7 @@ class MerossCloudProfile(ApiProfile):
             with self.exception_warning("_process_device_info_unknown"):
                 device_id = device_info[mc.KEY_UUID]
                 self.log(
-                    DEBUG, "Trying/Initiating discovery for (new) device:%s", device_id
+                    self.DEBUG, "Trying/Initiating discovery for (new) device:%s", device_id
                 )
                 if config_entries_helper.get_config_flow(device_id):
                     continue  # device configuration already progressing

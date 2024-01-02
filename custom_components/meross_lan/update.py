@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from logging import WARNING
 import typing
 
 from homeassistant.components import update
@@ -35,7 +34,7 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
 
     async def async_install(self, version: str | None, backup: bool, **kwargs) -> None:
         self.log(
-            WARNING,
+            self.WARNING,
             "The firmware update feature is not (yet) available: use the Meross app to carry the process"
         )
 

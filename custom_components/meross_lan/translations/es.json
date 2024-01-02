@@ -178,17 +178,19 @@
                     "hub": "Configurar",
                     "device": "Configurar",
                     "profile": "Configurar",
-                    "diagnostics": "Iniciar traza de diagnóstico",
+                    "diagnostics": "Diagnóstico",
                     "bind": "Reconfigurar MQTT (enlace local)",
                     "unbind": "Reinicio del hardware"
                 }
             },
             "diagnostics": {
-                "title": "Iniciar traza de diagnóstico",
-                "description": "Se recargará la configuración y se iniciará el rastreo de depuración durante el periodo configurado",
+                "title": "Diagnóstico",
+                "description": "Establezca el nivel de registro para este dispositivo\/perfil y, opcionalmente, inicie un seguimiento de diagnóstico durante el periodo configurado",
                 "data": {
                     "trace_timeout": "Duración del seguimiento de debug (sec)",
-                    "error": "Mensaje de error"
+                    "error": "Mensaje de error",
+                    "logging_level": "Nivel de registro",
+                    "trace": "Iniciar traza de diagnóstico"
                 }
             },
             "bind": {

@@ -1,11 +1,9 @@
 """The Meross IoT local LAN integration."""
 from __future__ import annotations
 
-from logging import DEBUG
 from time import time
 import typing
 
-from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, SupportsResponse, callback
 from homeassistant.exceptions import (
@@ -93,11 +91,11 @@ class HAMQTTConnection(MQTTConnection):
                     return
                 elif self._unsub_mqtt_subscribe is None:
                     if MEROSSDEBUG.mqtt_random_connect():
-                        self.log(DEBUG, "random connect")
+                        self.log(self.DEBUG, "random connect")
                         await self.async_mqtt_subscribe()
                 else:
                     if MEROSSDEBUG.mqtt_random_disconnect():
-                        self.log(DEBUG, "random disconnect")
+                        self.log(self.DEBUG, "random disconnect")
                         await self.async_mqtt_unsubscribe()
 
             self._unsub_random_disconnect = schedule_async_callback(
@@ -405,7 +403,8 @@ class MerossApi(ApiProfile):
                                 host,
                                 key or self.key,
                                 async_get_clientsession(self.hass),
-                                LOGGER,
+                                self,  # type: ignore (our Loggable interface is compatible with the MerossHttpClient logger)
+                                self.VERBOSE,
                             ).async_request_raw(request)
                             or {}
                         )

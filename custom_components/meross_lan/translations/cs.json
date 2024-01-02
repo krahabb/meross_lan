@@ -178,17 +178,19 @@
                     "hub": "Konfigurovat",
                     "device": "Konfigurovat",
                     "profile": "Konfigurovat",
-                    "diagnostics": "Spusťte trasování diagnostiky",
+                    "diagnostics": "Diagnostika",
                     "bind": "Překonfigurovat MQTT (místní vazba)",
                     "unbind": "Hardwarový reset"
                 }
             },
             "diagnostics": {
-                "title": "Spusťte trasování diagnostiky",
-                "description": "Konfigurace se znovu načte a začne se sledovat ladění po nastavenou dobu.",
+                "title": "Diagnostika",
+                "description": "Nastavení úrovně protokolování pro toto zařízení\/profil a volitelné spuštění diagnostického sledování po nastavenou dobu",
                 "data": {
                     "trace_timeout": "Doba trvání trasování ladění (sec)",
-                    "error": "Chybová zpráva"
+                    "error": "Chybová zpráva",
+                    "logging_level": "Úroveň protokolování",
+                    "trace": "Spusťte trasování diagnostiky"
                 }
             },
             "bind": {
