@@ -37,7 +37,7 @@ async def test_mqtthub_entry_notready(hass: HomeAssistant):
         await mqtthub_entry_mocker.async_setup()
         # In this case we are testing the condition where async_setup_entry raises
         # ConfigEntryNotReady since we don't have mqtt component in the test environment
-        assert mqtthub_entry_mocker.state == ConfigEntryState.SETUP_RETRY
+        assert mqtthub_entry_mocker.config_entry.state == ConfigEntryState.SETUP_RETRY
 
 
 async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
@@ -54,7 +54,7 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
         tc.EMULATOR_TRACES_PATH, tc.MOCK_DEVICE_UUID, tc.MOCK_KEY
     ):
         async with helpers.DeviceContext(hass, emulator, aioclient_mock) as context:
-            await context.async_load_config_entry()
+            assert await context.async_setup()
 
             device = context.device
             device_ability = emulator.descriptor.ability

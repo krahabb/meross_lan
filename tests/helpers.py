@@ -25,6 +25,8 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 )
 
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
+from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
+from custom_components.meross_lan.helpers import ConfigEntryManager
 from custom_components.meross_lan.meross_profile import MerossMQTTConnection
 from custom_components.meross_lan.merossclient import (
     HostAddress,
@@ -105,15 +107,22 @@ class TimeMocker(contextlib.AbstractContextManager):
     mocks its own time
     """
 
-    hass: HomeAssistant
     time: FrozenDateTimeFactory | StepTickTimeFactory
-    _warp_task: Future | None = None
-    _warp_run: bool
+
+    __slots__ = (
+        "hass",
+        "time",
+        "_freeze_time",
+        "_warp_task",
+        "_warp_run",
+    )
 
     def __init__(self, hass: HomeAssistant, time_to_freeze=None):
         super().__init__()
         self.hass = hass
         self._freeze_time = freeze_time(time_to_freeze)
+        self._warp_task: Future | None = None
+        self._warp_run = False
 
     def __enter__(self):
         self.time = self._freeze_time.start()
@@ -129,12 +138,12 @@ class TimeMocker(contextlib.AbstractContextManager):
     async def async_tick(self, tick: timedelta | float | int):
         self.time.tick(tick if isinstance(tick, timedelta) else timedelta(seconds=tick))
         async_fire_time_changed_exact(self.hass)
-        # await self.hass.async_block_till_done()
+        await self.hass.async_block_till_done()
 
     async def async_move_to(self, target_datetime: datetime):
         self.time.move_to(target_datetime)
         async_fire_time_changed_exact(self.hass)
-        # await self.hass.async_block_till_done()
+        await self.hass.async_block_till_done()
 
     async def async_warp(
         self,
@@ -188,6 +197,13 @@ class TimeMocker(contextlib.AbstractContextManager):
 
 
 class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
+    __slots__ = (
+        "hass",
+        "config_entry",
+        "config_entry_id",
+        "auto_setup",
+    )
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -210,8 +226,16 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
             self.config_entry.add_to_hass(hass)
 
     @property
-    def state(self):
-        return self.config_entry.state
+    def api(self) -> MerossApi:
+        return self.hass.data[mlc.DOMAIN]
+
+    @property
+    def manager(self):
+        return self.api.managers[self.config_entry_id]
+
+    @property
+    def config_entry_loaded(self):
+        return self.config_entry.state == config_entries.ConfigEntryState.LOADED
 
     async def async_setup(self):
         result = await self.hass.config_entries.async_setup(self.config_entry_id)
@@ -219,7 +243,16 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
         return result
 
     async def async_unload(self):
-        return await self.hass.config_entries.async_unload(self.config_entry_id)
+        result = await self.hass.config_entries.async_unload(self.config_entry_id)
+        await self.hass.async_block_till_done()
+        return result
+
+    async def async_test_config_entry_diagnostics(self):
+        assert self.config_entry_loaded
+        diagnostic = await async_get_config_entry_diagnostics(
+            self.hass, self.config_entry
+        )
+        assert diagnostic
 
     async def __aenter__(self):
         if self.auto_setup:
@@ -375,12 +408,7 @@ def build_emulator_config_entry(
     if config_data:
         data.update(config_data)
 
-    return MockConfigEntry(
-        domain=mlc.DOMAIN,
-        data=data,
-        unique_id=data[mlc.CONF_DEVICE_ID],
-        version=1,
-    )
+    return data
 
 
 class EmulatorContext(contextlib.AbstractContextManager):
@@ -422,29 +450,22 @@ class EmulatorContext(contextlib.AbstractContextManager):
         return AiohttpClientMockResponse(method, url, json=response)
 
 
-class DeviceContext(contextlib.AbstractAsyncContextManager):
+class DeviceContext(ConfigEntryMocker):
     """
     This is a 'full featured' context providing an emulator and setting it
     up as a configured device in HA
     It also provides timefreezing
     """
 
-    time: FrozenDateTimeFactory | StepTickTimeFactory
-
     __slots__ = (
-        "hass",
         "emulator",
         "emulator_context",
-        "config_entry",
-        "config_entry_id",
         "device_id",
-        "time",
         "_aioclient_mock",
-        "_freeze_time",
+        "_time_mock",
+        "_time_mock_owned",
         "_exception_warning_patcher",
         "exception_warning_mock",
-        "_warp_task",
-        "_warp_run",
     )
 
     def __init__(
@@ -452,40 +473,42 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         hass: HomeAssistant,
         emulator: MerossEmulator | str,
         aioclient_mock: AiohttpClientMocker,
-        time_to_freeze=None,
+        *,
+        time: TimeMocker | datetime | None = None,
         config_data: dict | None = None,
     ):
-        self.hass = hass
         if isinstance(emulator, str):
             emulator = build_emulator(emulator)
-        self.emulator = emulator
-        self.config_entry = build_emulator_config_entry(
-            emulator, config_data=config_data
+        super().__init__(
+            hass,
+            emulator.uuid,
+            data=build_emulator_config_entry(emulator, config_data=config_data),
+            auto_add=True,
+            auto_setup=False,
         )
-        self.config_entry.add_to_hass(hass)
-        self.config_entry_id = self.config_entry.entry_id
-        self.device_id = emulator.descriptor.uuid
+        self.emulator = emulator
+        self.device_id = emulator.uuid
         self._aioclient_mock = aioclient_mock
-        self._freeze_time = freeze_time(time_to_freeze)
-        self._warp_task = None
-        self._warp_run = False
-
-    @property
-    def api(self) -> MerossApi:
-        return self.hass.data[mlc.DOMAIN]
+        if isinstance(time, TimeMocker):
+            self._time_mock = time
+            self._time_mock_owned = False
+        else:
+            self._time_mock = TimeMocker(hass, time)
+            self._time_mock_owned = True
 
     @property
     def device(self) -> MerossDevice:
         return self.api.devices[self.device_id]  # type: ignore
 
     @property
-    def config_entry_loaded(self):
-        return self.config_entry.state == config_entries.ConfigEntryState.LOADED
+    def time(self):
+        return self._time_mock.time
 
     async def __aenter__(self):
-        self.time = self._freeze_time.start()
+        if self._time_mock_owned:
+            self._time_mock.__enter__()
         self.emulator_context = EmulatorContext(
-            self.emulator, self._aioclient_mock, frozen_time=self.time
+            self.emulator, self._aioclient_mock, frozen_time=self._time_mock.time
         )
         self.emulator_context.__enter__()
 
@@ -507,15 +530,16 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
             side_effect=_patch_exception_warning,
         )
         self.exception_warning_mock = self._exception_warning_patcher.start()
-        return self
+        return await super().__aenter__()
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         try:
-            await self.async_unload_config_entry()
+            return await super().__aexit__(exc_type, exc_value, traceback)
         finally:
             self._exception_warning_patcher.stop()
             self.emulator_context.__exit__(exc_type, exc_value, traceback)
-            self._freeze_time.stop()
+            if self._time_mock_owned:
+                self._time_mock.__exit__(exc_type, exc_value, traceback)
 
     async def perform_coldstart(self):
         """
@@ -525,29 +549,27 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         namespaces done
         """
         if not self.config_entry_loaded:
-            await self.async_load_config_entry()
+            await self.async_setup()
         assert (device := self.device) and not device.online
         await self.async_tick(timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY))
         assert device.online
         return device
 
-    async def async_load_config_entry(self):
+    async def async_setup(self):
         assert not MerossApi.devices.get(self.device_id)
         assert not self.config_entry_loaded
-        hass = self.hass
-        assert await hass.config_entries.async_setup(self.config_entry_id)
-        await hass.async_block_till_done()
+        result = await super().async_setup()
         assert (device := self.device) and not device.online
+        return result
 
-    async def async_unload_config_entry(self):
+    async def async_unload(self):
         """
         Robust finalizer, asserts the config_entry will be correctly unloaded
         and the device cleanup done, whatever the config_entry.state
         """
-        hass = self.hass
-        assert await hass.config_entries.async_unload(self.config_entry_id)
-        await hass.async_block_till_done()
+        result = await super().async_unload()
         assert not MerossApi.devices.get(self.device_id)
+        return result
 
     async def async_enable_entity(self, entity_id):
         # entity enable will reload the config_entry
@@ -566,65 +588,23 @@ class DeviceContext(contextlib.AbstractAsyncContextManager):
         await self.perform_coldstart()
 
     async def async_tick(self, tick: timedelta):
-        # print(f"async_tick: time={self.time} tick={tick}")
-        self.time.tick(tick)
-        async_fire_time_changed_exact(self.hass)
-        await self.hass.async_block_till_done()
+        await self._time_mock.async_tick(tick)
 
     async def async_move_to(self, target_datetime: datetime):
-        self.time.move_to(target_datetime)
-        async_fire_time_changed_exact(self.hass)
-        await self.hass.async_block_till_done()
+        await self._time_mock.async_move_to(target_datetime)
 
     async def async_warp(
         self,
         timeout: float | int | timedelta | datetime,
         tick: float | int | timedelta = 1,
     ):
-        if not isinstance(timeout, datetime):
-            if isinstance(timeout, timedelta):
-                timeout = self.time() + timeout
-            else:
-                timeout = self.time() + timedelta(seconds=timeout)
-        if not isinstance(tick, timedelta):
-            tick = timedelta(seconds=tick)
-
-        while self.time() < timeout:
-            await self.async_tick(tick)
+        await self._time_mock.async_warp(timeout, tick)
 
     def warp(self, tick: float | int | timedelta = 0.5):
-        """
-        starts an asynchronous task which manipulates our
-        freze_time so the time passes and get advanced to
-        time.time() + timeout.
-        While passing it tries to perform HA events rollout
-        every tick seconds
-        """
-        assert self._warp_task is None
-
-        if not isinstance(tick, timedelta):
-            tick = timedelta(seconds=tick)
-
-        def _warp():
-            print("DeviceContext.warp: entering executor")
-            count = 0
-            while self._warp_run:
-                _time = self.time()
-                run_coroutine_threadsafe(self.async_tick(tick), self.hass.loop)
-                while _time == self.time():
-                    time.sleep(0.01)
-                count += 1
-            print(f"DeviceContext.warp: exiting executor (_warp count={count})")
-
-        self._warp_run = True
-        self._warp_task = self.hass.async_add_executor_job(_warp)
+        self._time_mock.warp(tick)
 
     async def async_stopwarp(self):
-        print("DeviceContext.warp: stopping executor")
-        assert self._warp_task
-        self._warp_run = False
-        await self._warp_task
-        self._warp_task = None
+        await self._time_mock.async_stopwarp()
 
 
 class CloudApiMocker(contextlib.AbstractContextManager):

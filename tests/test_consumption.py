@@ -51,9 +51,13 @@ def _configure_dates(tz):
     tomorrow = today + dt.timedelta(days=1)
     # make dates naive (representing UTC) and compatible with freezegun api
     # see freezegun.api.convert_to_timezone_naive
-    today -= today.utcoffset()  # type: ignore
+    offset = today.utcoffset()
+    assert offset is not None
+    today -= offset
     today = today.replace(tzinfo=None)
-    tomorrow -= tomorrow.utcoffset()  # type: ignore
+    offset = tomorrow.utcoffset()
+    assert offset is not None
+    tomorrow -= offset
     tomorrow = tomorrow.replace(tzinfo=None)
     todayseconds = (tomorrow - today).total_seconds()
 
@@ -67,7 +71,7 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
     emulator.set_timezone(timezone)
     emulator.set_power(TEST_POWER * 1000)
 
-    await context.async_load_config_entry()
+    assert await context.async_setup()
 
     device = context.device
     assert isinstance(device, ConsumptionXMixin)
@@ -109,7 +113,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
     async with helpers.DeviceContext(
-        hass, mc.TYPE_MSS310, aioclient_mock, today
+        hass, mc.TYPE_MSS310, aioclient_mock, time=today
     ) as context:
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, dt_util.DEFAULT_TIME_ZONE.key  # type: ignore
@@ -195,7 +199,7 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
     today, tomorrow, todayseconds = _configure_dates(ZoneInfo(DEVICE_TIMEZONE))
 
     async with helpers.DeviceContext(
-        hass, mc.TYPE_MSS310, aioclient_mock, today
+        hass, mc.TYPE_MSS310, aioclient_mock, time=today
     ) as context:
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, DEVICE_TIMEZONE
@@ -275,7 +279,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
     async with helpers.DeviceContext(
-        hass, mc.TYPE_MSS310, aioclient_mock, today
+        hass, mc.TYPE_MSS310, aioclient_mock, time=today
     ) as context:
         device, sensor_consumption, sensor_estimate = await _async_configure_context(
             context, dt_util.DEFAULT_TIME_ZONE.key  # type: ignore
@@ -315,7 +319,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
             assert estimatestate
             saved_estimated_energy_value = estimatestate.state
 
-            await context.async_unload_config_entry()
+            assert await context.async_unload()
             # device has been destroyed and entities should be unavailable
             consumptionstate = hass.states.get(sensor_consumption_entity_id)
             assert (consumptionstate is None) or (
@@ -329,7 +333,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
             # move the time before reloading to make the emulator accumulate some energy
             await context.async_tick(dt.timedelta(seconds=2 * TEST_DURATION))
 
-            await context.async_load_config_entry()
+            assert await context.async_setup()
             # sensor states should have been restored
             assert context.device._sensor_consumption.offset == offset  # type: ignore
             consumptionstate = hass.states.get(sensor_consumption_entity_id)

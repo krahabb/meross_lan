@@ -70,17 +70,6 @@ class HAMQTTConnection(MQTTConnection):
         self._unsub_mqtt_disconnected: Callable | None = None
         self._unsub_mqtt_connected: Callable | None = None
         self._mqtt_subscribing = False  # guard for asynchronous mqtt sub registration
-        """REMOVE
-        self.namespace_handlers = {
-            namespace: getattr(self, f"_handle_{namespace.replace('.', '_')}")
-            for namespace in (
-                mc.NS_APPLIANCE_CONTROL_BIND,
-                mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
-                mc.NS_APPLIANCE_SYSTEM_CLOCK,
-                mc.NS_APPLIANCE_SYSTEM_ONLINE,
-            )
-        }
-        """
         if MEROSSDEBUG:
 
             async def _async_random_disconnect():

@@ -194,7 +194,7 @@ async def test_meross_profile_with_device(
         # have side-effects because of device<->profile binding
         # beware: we cannot selectively load config_entries here
         # since component initialization load them all
-        await devicecontext.async_load_config_entry()
+        assert await devicecontext.async_setup()
 
         assert (api := devicecontext.api)
         assert (device := devicecontext.device)

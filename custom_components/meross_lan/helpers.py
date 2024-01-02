@@ -717,9 +717,9 @@ class EntityManager(Loggable):
         "key",
         "config",
         "trace_file",
-        "_trace_endtime",
         "_trace_future",
         "_trace_data",
+        "_unsub_trace_endtime",
         "_unsub_entry_update_listener",
         "_unsub_entry_reload_scheduler",
     )
@@ -837,7 +837,7 @@ class ConfigEntryManager(EntityManager):
         self.trace_file: typing.Final[TextIOWrapper | None] = None
         self._trace_future: asyncio.Future | None = None
         self._trace_data: list | None = None
-        self._trace_endtime = 0
+        self._unsub_trace_endtime: asyncio.TimerHandle | None = None
         self._unsub_entry_update_listener = None
         self._unsub_entry_reload_scheduler: asyncio.TimerHandle | None = None
         super().__init__(id, config_entry_id=config_entry_id, logger=logger, **kwargs)
@@ -970,8 +970,15 @@ class ConfigEntryManager(EntityManager):
                 mode="w",
                 encoding="utf8",
             )
-            self._trace_endtime = epoch + (
-                self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT
+            trace_timeout = self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT
+
+            @callback
+            def _trace_close_callback():
+                self._unsub_trace_endtime = None
+                self.trace_close()
+
+            self._unsub_trace_endtime = schedule_callback(
+                ApiProfile.hass, trace_timeout, _trace_close_callback
             )
             self._trace_opened(epoch)
         except Exception as exception:
@@ -994,6 +1001,9 @@ class ConfigEntryManager(EntityManager):
         except Exception as exception:
             self.trace_file = None  # type: ignore
             self.log_exception(self.WARNING, exception, "closing trace file")
+        if self._unsub_trace_endtime:
+            self._unsub_trace_endtime.cancel()
+            self._unsub_trace_endtime = None
         self._trace_closed()
         if self._trace_future:
             self._trace_future.set_result(self._trace_data)
@@ -1018,12 +1028,6 @@ class ConfigEntryManager(EntityManager):
     ):
         try:
             assert self.trace_file
-            if (epoch > self._trace_endtime) or (
-                self.trace_file.tell() > CONF_TRACE_MAXSIZE
-            ):
-                self.trace_close()
-                return
-
             if isinstance(data, dict):
                 # we'll eventually make a deepcopy since data
                 # might be retained by the _trace_data list
@@ -1039,6 +1043,10 @@ class ConfigEntryManager(EntityManager):
                 # better have json for dignostic trace
                 columns[5] = data  # type: ignore
                 self._trace_data.append(columns)
+
+            if self.trace_file.tell() > CONF_TRACE_MAXSIZE:
+                self.trace_close()
+
         except Exception as exception:
             self.trace_close()
             self.log_exception(self.WARNING, exception, "writing to trace file")
