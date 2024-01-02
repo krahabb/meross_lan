@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import abc
+from abc import ABCMeta
 import asyncio
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -26,6 +27,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_HOST,
     CONF_KEY,
+    CONF_LOGGING_LEVEL,
     CONF_PROTOCOL_AUTO,
     CONF_TRACE,
     CONF_TRACE_DIRECTORY,
@@ -37,6 +39,7 @@ from .const import (
     POLLING_STRATEGY_CONF,
 )
 from .merossclient import (
+    MEROSSDEBUG,
     const as mc,
     get_default_arguments,
     get_namespacekey,
@@ -136,14 +139,25 @@ def getLogger(name):
     replace your logging.getLogger with helpers.getLogger et voilà
     """
     logger = logging.getLogger(name)
-    logger.__class__ = type(
-        "Logger",
-        (
-            _Logger,
-            logger.__class__,
-        ),
-        {},
-    )
+    # watchout: getLogger could return an instance already
+    # subclassed if we previously asked for the same name
+    # for example when we reload a config entry
+    _class = logger.__class__
+    if _class not in _Logger._CLASS_HOOKS.values():
+        # getLogger returned a 'virgin' class
+        if _class in _Logger._CLASS_HOOKS.keys():
+            # we've alread subclassed this type, so we reuse it
+            logger.__class__ = _Logger._CLASS_HOOKS[_class]
+        else:
+            logger.__class__ = _Logger._CLASS_HOOKS[_class] = type(
+                "Logger",
+                (
+                    _Logger,
+                    logger.__class__,
+                ),
+                {},
+            )
+
     return logger
 
 
@@ -162,6 +176,8 @@ class _Logger(logging.Logger if typing.TYPE_CHECKING else object):
     default_timeout = 60 * 60 * 8
     # cache of logged messages with relative last-thrown-epoch
     _LOGGER_TIMEOUTS = {}
+    # cache of subclassing types: see getLogger
+    _CLASS_HOOKS = {}
 
     def _log(self, level, msg, args, **kwargs):
         if "timeout" in kwargs:
@@ -184,7 +200,7 @@ class _Logger(logging.Logger if typing.TYPE_CHECKING else object):
 
 
 LOGGER = getLogger(__name__[:-8])  # get base custom_component name for logging
-
+"""Root meross_lan logger"""
 
 """
     Obfuscation:
@@ -625,21 +641,17 @@ class Loggable(abc.ABC):
     intercept log messages.
     """
 
-    id: Final
-
     __slots__ = (
         "id",
         "logtag",
         "logger",
     )
 
-    def __init__(
-        self, id, logtag: str | None = None, logger: Loggable | logging.Logger = LOGGER
-    ):
-        self.id = id
-        self.logtag = logtag or f"{self.__class__.__name__}({id})"
+    def __init__(self, id, *, logger: Loggable | logging.Logger = LOGGER):
+        self.id: Final = id
+        self.logtag = f"{self.__class__.__name__}({id})"
         self.logger = logger
-        LOGGER.log(DEBUG, "%s: init", self.logtag)
+        self.log(DEBUG, "init")
 
     def isEnabledFor(self, level: int):
         return self.logger.isEnabledFor(level)
@@ -670,11 +682,7 @@ class Loggable(abc.ABC):
             )
 
     def __del__(self):
-        # self.logger being another loggable might be
-        # already 'shutted down' and so inconsistent
-        # during garbage collection
-        LOGGER.log(DEBUG, "%s: destroy", self.logtag)
-        return
+        self.log(DEBUG, "destroy")
 
 
 class EntityManager(Loggable):
@@ -683,16 +691,14 @@ class EntityManager(Loggable):
     for MerossEntity(s). This container is very 'hybrid', end its main purpose
     is to provide interfaces to their owned MerossEntities.
     It could represent a MerossDevice, a MerossSubDevice or an ApiProfile
-    and manages the relation(s) with the ConfigEntry (config, life-cycle)
+    and manages the relation(s) with the ConfigEntry (config, life-cycle).
+    This is a 'partial' base class for ConfigEntryManager which definitely establishes
+    the relationship with the ConfigEntry. This is in turn needed to better establish
+    an isolation level between MerossSubDevice and a ConfigEntry
     """
 
-    TRACE_RX = "RX"
-    TRACE_TX = "TX"
-
-    config_entry_id: Final[str]
-    deviceentry_id: dict[str, set] | None
-    key: str
-
+    # slots for ConfigEntryManager are defined here since we would have some
+    # multiple inheritance conflicts in MerossDevice
     __slots__ = (
         "config_entry_id",
         "deviceentry_id",
@@ -711,38 +717,31 @@ class EntityManager(Loggable):
     def __init__(
         self,
         id: str,
-        config_entry_or_id: ConfigEntry | str = "",
-        deviceentry_id: dict[str, set] | None = None,
+        *,
+        config_entry_id: str,
+        deviceentry_id: dict[str, set[tuple[str, str]]] | None = None,
+        logger: Loggable | logging.Logger,
     ):
-        super().__init__(id)
+        self.config_entry_id = config_entry_id
         self.deviceentry_id = deviceentry_id
         # This is a collection of all of the instanced entities
         # they're generally built here during inherited __init__ and will be registered
         # in platforms(s) async_setup_entry with their corresponding platform
-        self.entities: dict[object, "MerossEntity"] = {}
-        # when we build an entity we also add the relative platform name here
-        # so that the async_setup_entry for this integration will be able to forward
-        # the setup to the appropriate platform(s).
-        # The item value here will be set to the async_add_entities callback
-        # during the corresponding platform async_setup_entry so to be able
-        # to dynamically add more entities should they 'pop-up' (Hub only?)
-        self.platforms: dict[str, Callable | None] = {}
+        self.entities: Final[dict[object, MerossEntity]] = {}
+        super().__init__(id, logger=logger)
 
-        if isinstance(config_entry_or_id, str):
-            self.config_entry_id = config_entry_or_id
-            self.key = ""
-            self.config = {}
-        else:
-            self.config_entry_id = config_entry_or_id.entry_id
-            self.config = config_entry_or_id.data
-            self.key = config_entry_or_id.data.get(CONF_KEY) or ""
-
-        self.trace_file: typing.Final[TextIOWrapper | None] = None
-        self._trace_future: asyncio.Future | None = None
-        self._trace_data: list | None = None
-        self._trace_endtime = 0
-        self._unsub_entry_update_listener = None
-        self._unsub_entry_reload_scheduler: asyncio.TimerHandle | None = None
+    async def async_shutdown(self):
+        """
+        Cleanup code called when the config entry is unloaded.
+        Beware, when a derived class owns some direct member pointers to entities,
+        be sure to invalidate them after calling the super() implementation.
+        This is especially true for MerossDevice(s) classes which need to stop
+        their async polling before invalidating the member pointers (which are
+        usually referred to inside the polling /parsing code)
+        """
+        for entity in self.entities.values():
+            await entity.async_shutdown()
+        self.entities.clear()
 
     @property
     def name(self) -> str:
@@ -751,6 +750,79 @@ class EntityManager(Loggable):
     @property
     def online(self):
         return True
+
+    def managed_entities(self, platform):
+        """entities list for platform setup"""
+        return [
+            entity for entity in self.entities.values() if entity.PLATFORM is platform
+        ]
+
+    def generate_unique_id(self, entity: MerossEntity):
+        """
+        flexible policy in order to generate unique_ids for entities:
+        This is an helper needed to better control migrations in code
+        which could/would lead to a unique_id change.
+        We could put here code checks in order to avoid entity_registry
+        migrations
+        """
+        return f"{self.id}_{entity.id}"
+
+
+class ConfigEntryManager(EntityManager):
+    """
+    This is an abstraction of an actual (device or other) container
+    for MerossEntity(s). This container is very 'hybrid', end its main purpose
+    is to provide interfaces to their owned MerossEntities.
+    It could represent a MerossDevice, a MerossSubDevice or an ApiProfile
+    and manages the relation(s) with the ConfigEntry (config, life-cycle)
+    """
+
+    TRACE_RX = "RX"
+    TRACE_TX = "TX"
+
+    key: str
+    logger: logging.Logger
+
+    def __init__(
+        self,
+        id: str,
+        config_entry: ConfigEntry | None,
+        logtag: str,
+        **kwargs,
+    ):
+        if config_entry:
+            config_entry_id = config_entry.entry_id
+            self.config = config_entry.data
+            self.key = config_entry.data.get(CONF_KEY) or ""
+            # we're setting up a logging.Logger for every ConfigEntry
+            # to allow enabling/setting the logging level at the ConfigEntry
+            # naming uses the ConfigEntry
+            if MEROSSDEBUG:
+                logger = getLogger(f"{LOGGER.name}.{logtag}_{id}")
+            else:
+                logger = getLogger(f"{LOGGER.name}.{logtag}_{config_entry_id}")
+            logger.setLevel(self.config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
+        else:
+            # this is the MerossApi: it will be better initialized when
+            # the ConfigEntry is loaded
+            config_entry_id = ""
+            self.key = ""
+            self.config = {}
+            logger = getLogger(f"{LOGGER.name}.{logtag}")
+        # when we build an entity we also add the relative platform name here
+        # so that the async_setup_entry for this integration will be able to forward
+        # the setup to the appropriate platform(s).
+        # The item value here will be set to the async_add_entities callback
+        # during the corresponding platform async_setup_entry so to be able
+        # to dynamically add more entities should they 'pop-up' (Hub only?)
+        self.platforms: dict[str, Callable | None] = {}
+        self.trace_file: typing.Final[TextIOWrapper | None] = None
+        self._trace_future: asyncio.Future | None = None
+        self._trace_data: list | None = None
+        self._trace_endtime = 0
+        self._unsub_entry_update_listener = None
+        self._unsub_entry_reload_scheduler: asyncio.TimerHandle | None = None
+        super().__init__(id, config_entry_id=config_entry_id, logger=logger, **kwargs)
 
     async def async_shutdown(self):
         """
@@ -763,16 +835,21 @@ class EntityManager(Loggable):
         """
         self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
         self.unschedule_entry_reload()
-        for entity in self.entities.values():
-            await entity.async_shutdown()
-        self.entities.clear()
+        await super().async_shutdown()
         if self.trace_file:
             self.trace_close()
 
+    # interface: Loggable
+    def log(self, level: int, msg: str, *args, **kwargs):
+        self.logger.log(level, msg, *args, **kwargs)
+        if self.trace_file:
+            self.trace(time(), msg % args, logging.getLevelName(level), "LOG")
+
+    # interface: self
     async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
         assert not self._unsub_entry_update_listener
         assert config_entry.entry_id not in ApiProfile.managers
-        self.config_entry_id = config_entry.entry_id  # type: ignore
+        self.config_entry_id = config_entry.entry_id
         self.config = config_entry.data
         ApiProfile.managers[self.config_entry_id] = self
 
@@ -821,27 +898,13 @@ class EntityManager(Loggable):
             self._unsub_entry_reload_scheduler.cancel()
             self._unsub_entry_reload_scheduler = None
 
-    def managed_entities(self, platform):
-        """entities list for platform setup"""
-        return [
-            entity for entity in self.entities.values() if entity.PLATFORM is platform
-        ]
-
-    def generate_unique_id(self, entity: MerossEntity):
-        """
-        flexible policy in order to generate unique_ids for entities:
-        This is an helper needed to better control migrations in code
-        which could/would lead to a unique_id change.
-        We could put here code checks in order to avoid entity_registry
-        migrations
-        """
-        return f"{self.id}_{entity.id}"
-
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ):
         self.config = config_entry.data
-        self.key = config_entry.data.get(CONF_KEY) or ""
+        config = self.config
+        self.key = config.get(CONF_KEY) or ""
+        self.logger.setLevel(config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
 
     # tracing capabilities
     def get_diagnostics_trace(self) -> asyncio.Future:
@@ -957,7 +1020,7 @@ class EntityManager(Loggable):
             self.log_exception(WARNING, exception, "writing to trace file")
 
 
-class ApiProfile(EntityManager):
+class ApiProfile(ConfigEntryManager):
     """
     Base class for both MerossCloudProfile and MerossApi allowing lightweight
     sharing of globals and defining some common interfaces.
@@ -978,7 +1041,7 @@ class ApiProfile(EntityManager):
     """
     dict of configured cloud profiles (behaves as the 'devices' dict).
     """
-    managers: ClassVar[dict[str, EntityManager]] = {}
+    managers: ClassVar[dict[str, ConfigEntryManager]] = {}
     """
     dict of loaded EntityManagers (ApiProfile(s) or devices) and
     matches exactly the loaded config entries.
@@ -1016,8 +1079,8 @@ class ApiProfile(EntityManager):
         "mqttconnections",
     )
 
-    def __init__(self, id: str, config_entry_or_id: ConfigEntry | str = ""):
-        super().__init__(id, config_entry_or_id)
+    def __init__(self, id: str, config_entry: ConfigEntry | None, logtag: str):
+        super().__init__(id, config_entry, logtag)
         self.platforms[SENSOR_DOMAIN] = None
         self.linkeddevices: dict[str, MerossDevice] = {}
         self.mqttconnections: dict[str, MQTTConnection] = {}
@@ -1076,9 +1139,9 @@ class ApiProfile(EntityManager):
 
     def unlink(self, device: MerossDevice):
         device_id = device.id
-        if device_id in self.linkeddevices:
-            device.profile_unlinked()
-            self.linkeddevices.pop(device_id)
+        assert device_id in self.linkeddevices
+        device.profile_unlinked()
+        self.linkeddevices.pop(device_id)
 
     @abc.abstractmethod
     def attach_mqtt(self, device: MerossDevice):

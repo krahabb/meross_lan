@@ -16,15 +16,12 @@ from homeassistant.helpers import issue_registry, storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
-    CONF_ALLOW_MQTT_PUBLISH,
     CONF_CHECK_FIRMWARE_UPDATES,
-    CONF_CREATE_DIAGNOSTIC_ENTITIES,
     CONF_DEVICE_ID,
     CONF_EMAIL,
     CONF_KEY,
     CONF_PASSWORD,
     CONF_PAYLOAD,
-    CONF_PROFILE_ID_LOCAL,
     CONF_PROTOCOL_MQTT,
     DOMAIN,
     ISSUE_CLOUD_TOKEN_EXPIRED,
@@ -124,7 +121,6 @@ class ConnectionSensor(MLSensor):
     _attr_options = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_QUEUING, STATE_DROPPING]
 
     def __init__(self, connection: MQTTConnection):
-        self._attr_name = str(connection.broker)
         self._attr_extra_state_attributes = {
             ConnectionSensor.ATTR_DEVICES: {},
             ConnectionSensor.ATTR_RECEIVED: 0,
@@ -134,7 +130,7 @@ class ConnectionSensor(MLSensor):
             ConnectionSensor.ATTR_QUEUE_LENGTH: 0,
         }
         super().__init__(
-            connection.profile, connection.id, None, MLSensor.DeviceClass.ENUM
+            connection.profile, None, connection.id, MLSensor.DeviceClass.ENUM
         )
         self.update_state(
             self.STATE_CONNECTED
@@ -280,26 +276,17 @@ class MQTTConnection(Loggable):
         self.topic_response: Final = topic_response
         self.mqttdevices: Final[dict[str, MerossDevice]] = {}
         self.mqttdiscovering: Final[set[str]] = set()
-        """REMOVE
-        self.namespace_handlers: dict[
-            str,
-            typing.Callable[
-                [str, MerossHeaderType, MerossPayloadType], typing.Coroutine
-            ],
-        ] = {}
-        """
         self.namespace_handlers = self.SESSION_HANDLERS
         self.sensor_connection = None
         self._mqtt_transactions: Final[dict[str, _MQTTTransaction]] = {}
         self._mqtt_is_connected = False
-        super().__init__(connection_id)
+        super().__init__(connection_id, logger=profile)
         if profile.create_diagnostic_entities:
             self.create_diagnostic_entities()
 
     async def async_shutdown(self):
         for mqtt_transaction in list(self._mqtt_transactions.values()):
             mqtt_transaction.cancel()
-        # REMOVEself.namespace_handlers.clear()
         self.mqttdiscovering.clear()
         for device in self.mqttdevices.values():
             device.mqtt_detached()
@@ -347,12 +334,13 @@ class MQTTConnection(Loggable):
                     _add_device(device)
 
     async def async_destroy_diagnostic_entities(self):
-        # TODO: broadcast remove to HA !?
         if sensor_connection := self.sensor_connection:
+            self.sensor_connection = None
             sensor_connection.manager.entities.pop(sensor_connection.id)
             if sensor_connection._hass_connected:
                 await sensor_connection.async_remove()
-            self.sensor_connection = None
+            await sensor_connection.async_shutdown()
+
 
     @typing.final
     def mqtt_publish(
@@ -530,7 +518,7 @@ class MQTTConnection(Loggable):
             # lookout for any disabled/ignored entry
             config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
             if (
-                (self.id is CONF_PROFILE_ID_LOCAL)
+                (self.profile is ApiProfile.api)
                 and (not config_entries_helper.get_config_entry(DOMAIN))
                 and (not config_entries_helper.get_config_flow(DOMAIN))
             ):
@@ -749,14 +737,6 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         self.on_disconnect = self._mqttc_disconnect
         self.on_message = self._mqttc_message
         self.on_publish = self._mqttc_publish
-        """REMOVE
-        self.namespace_handlers = {
-            namespace: getattr(self, f"_handle_{namespace.replace('.', '_')}")
-            for namespace in (
-                mc.NS_APPLIANCE_SYSTEM_ONLINE,
-            )
-        }
-        """
 
         if MEROSSDEBUG:
 
@@ -785,8 +765,8 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         if self._unsub_random_disconnect:
             self._unsub_random_disconnect.cancel()
             self._unsub_random_disconnect = None
-        await super().async_shutdown()
         await self.schedule_disconnect_async()
+        await super().async_shutdown()
 
     @property
     def is_cloud_connection(self):
@@ -959,7 +939,7 @@ class MerossCloudProfile(ApiProfile):
     )
 
     def __init__(self, config_entry: ConfigEntry):
-        super().__init__(config_entry.data[mc.KEY_USERID_], config_entry)
+        super().__init__(config_entry.data[mc.KEY_USERID_], config_entry, "profile")
         self._store = MerossCloudProfileStore(self.id)
         self._unsub_polling_query_device_info: asyncio.TimerHandle | None = None
 
@@ -1292,7 +1272,7 @@ class MerossCloudProfile(ApiProfile):
         Returns an existing connection from the managed pool or create one and add
         to the mqttconnections pool. The connection state is not ensured.
         """
-        connection_id = f"{self.id}:{broker.host}:{broker.port}"
+        connection_id = f"{broker.host}:{broker.port}"
         if connection_id in self.mqttconnections:
             return self.mqttconnections[connection_id]  # type: ignore
         self.mqttconnections[connection_id] = mqttconnection = MerossMQTTConnection(

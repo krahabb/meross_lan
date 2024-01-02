@@ -34,6 +34,8 @@ CONF_PROTOCOL_OPTIONS: dict[str | None, str] = {
 CONF_POLLING_PERIOD: Final = "polling_period"
 CONF_POLLING_PERIOD_MIN: Final = 5
 CONF_POLLING_PERIOD_DEFAULT: Final = 30
+# sets the logging level x ConfigEntry
+CONF_LOGGING_LEVEL: Final = "logging_level"
 # create a file with device info and communication tracing
 CONF_TRACE: Final = "trace"
 # when starting a trace stop it and close the file after .. secs

@@ -80,7 +80,7 @@ async def test_meross_profile(
         safe_start_calls = []
         for expected_connection in expected_connections:
             broker = HostAddress.build(expected_connection)
-            connection_id = f"{tc.MOCK_PROFILE_ID}:{broker.host}:{broker.port}"
+            connection_id = f"{broker.host}:{broker.port}"
             mqttconnection = profile.mqttconnections[connection_id]
             mqttconnections.remove(mqttconnection)
             safe_start_calls.append(mock.call(mqttconnection, broker, mock.ANY))

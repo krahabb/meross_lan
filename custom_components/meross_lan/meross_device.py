@@ -5,7 +5,8 @@ import asyncio
 import bisect
 from datetime import datetime, timezone, tzinfo
 from json import JSONDecodeError
-from logging import DEBUG, ERROR, WARNING, getLevelName as logging_getLevelName
+import logging
+from logging import DEBUG, ERROR, WARNING
 from time import time
 import typing
 import weakref
@@ -24,7 +25,6 @@ from .const import (
     CONF_POLLING_PERIOD,
     CONF_POLLING_PERIOD_DEFAULT,
     CONF_POLLING_PERIOD_MIN,
-    CONF_PROFILE_ID_LOCAL,
     CONF_PROTOCOL,
     CONF_PROTOCOL_AUTO,
     CONF_PROTOCOL_HTTP,
@@ -45,11 +45,14 @@ from .const import (
 from .helpers import (
     LOGGER,
     ApiProfile,
+    ConfigEntryManager,
     EntityManager,
     EntityPollingStrategy,
+    Loggable,
     NamespaceHandler,
     PollingStrategy,
     datetime_from_epoch,
+    getLogger,
     obfuscated_dict_copy,
     schedule_async_callback,
     schedule_callback,
@@ -150,9 +153,10 @@ class MerossDeviceBase(EntityManager):
 
     def __init__(
         self,
-        id_: str,
-        config_entry_or_id: ConfigEntry | str,
+        id: str,
         *,
+        config_entry_id: str,
+        logger: Loggable | logging.Logger,
         default_name: str,
         model: str,
         hw_version: str | None = None,
@@ -160,7 +164,12 @@ class MerossDeviceBase(EntityManager):
         connections: set[tuple[str, str]] | None = None,
         via_device: tuple[str, str] | None = None,
     ):
-        super().__init__(id_, config_entry_or_id, {"identifiers": {(DOMAIN, id_)}})
+        super().__init__(
+            id,
+            config_entry_id=config_entry_id,
+            deviceentry_id={"identifiers": {(DOMAIN, id)}},
+            logger=logger,
+        )
         self.device_info = None
         self._online = False
         self._device_registry_entry = None
@@ -308,7 +317,7 @@ class SystemDebugPollingStrategy(PollingStrategy):
             await device.async_request_poll(self)
 
 
-class MerossDevice(MerossDeviceBase):
+class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     """
     Generic protocol handler class managing the physical device stack/state
     """
@@ -443,6 +452,7 @@ class MerossDevice(MerossDeviceBase):
         super().__init__(
             config_entry.data[CONF_DEVICE_ID],
             config_entry,
+            "device",
             default_name=descriptor.productname,
             model=descriptor.productmodel,
             hw_version=descriptor.hardwareVersion,
@@ -495,12 +505,6 @@ class MerossDevice(MerossDeviceBase):
                 else:
                     with self.exception_warning(_init_method_name):
                         _init(_payload)
-
-    # interface: Loggable
-    def log(self, level: int, msg: str, *args, **kwargs):
-        self.logger.log(level, f"MerossDevice({self.name}): {msg}", *args, **kwargs)
-        if self.trace_file:
-            self.trace(time(), msg % args, logging_getLevelName(level), "LOG")
 
     # interface: EntityManager
     @callback
@@ -659,13 +663,6 @@ class MerossDevice(MerossDeviceBase):
         return self.config.get(CONF_HOST) or self.descriptor.innerIp
 
     @property
-    def profile_id(self):
-        profile_id = self.descriptor.userId
-        return (
-            profile_id if profile_id in ApiProfile.profiles else CONF_PROFILE_ID_LOCAL
-        )
-
-    @property
     def tz(self) -> tzinfo:
         tz_name = self.descriptor.timezone
         if not tz_name:
@@ -741,7 +738,7 @@ class MerossDevice(MerossDeviceBase):
         if key is None:
             key = self.key
         if userid is None:
-            userid = self.descriptor.userId or CONF_PROFILE_ID_LOCAL
+            userid = self.descriptor.userId or ""
         bind = (
             mc.NS_APPLIANCE_CONFIG_KEY,
             mc.METHOD_SET,
@@ -853,9 +850,7 @@ class MerossDevice(MerossDeviceBase):
                     self.host,  # type: ignore
                     self.key,
                     async_get_clientsession(ApiProfile.hass),
-                    LOGGER
-                    if MEROSSDEBUG and MEROSSDEBUG.http_client_log_enable
-                    else None,
+                    self,  # type: ignore (our Loggable interface is compatible with the MerossHttpClient logger)
                 )
                 self._http = http
 
@@ -1381,7 +1376,7 @@ class MerossDevice(MerossDeviceBase):
         self._mqtt_lastresponse = self.lastresponse
 
     def mqtt_attached(self, mqtt_connection: MQTTConnection):
-        self.log(DEBUG, "mqtt_attached to %s", mqtt_connection.logtag)
+        self.log(DEBUG, "mqtt_attached to %s", mqtt_connection.broker)
         self._mqtt_connection = mqtt_connection
         self._topic_response = mqtt_connection.topic_response
         if mqtt_connection.mqtt_is_connected:
@@ -1389,7 +1384,7 @@ class MerossDevice(MerossDeviceBase):
 
     def mqtt_detached(self):
         assert self._mqtt_connection
-        self.log(DEBUG, "mqtt_detached from %s", self._mqtt_connection.logtag)
+        self.log(DEBUG, "mqtt_detached from %s", self._mqtt_connection.broker)
         if self._mqtt_connected:
             self.mqtt_disconnected()
         self._mqtt_connection = None

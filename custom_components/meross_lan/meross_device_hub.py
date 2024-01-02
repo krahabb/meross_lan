@@ -432,26 +432,21 @@ class MerossSubDevice(MerossDeviceBase):
         self.hub = hub
         self.type = _type
         self.p_digest = p_digest
-        id_ = p_digest[mc.KEY_ID]
+        id = p_digest[mc.KEY_ID]
         super().__init__(
-            id_,
-            hub.config_entry_id,
-            default_name=get_productnameuuid(_type, id_),
+            id,
+            config_entry_id=hub.config_entry_id,
+            logger=hub,
+            default_name=get_productnameuuid(_type, id),
             model=_type,
             via_device=next(iter(hub.deviceentry_id["identifiers"])),
         )
         self.platforms = hub.platforms
-        hub.subdevices[id_] = self
+        hub.subdevices[id] = self
         self.sensor_battery = self.build_sensor_c(MLSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
         self.switch_togglex: MLSwitch | None = None
-
-    # interface: Loggable
-    def log(self, level: int, msg: str, *args, **kwargs):
-        self.hub.log(
-            level, f"{self.__class__.__name__}({self.name}) {msg}", *args, **kwargs
-        )
 
     # interface: EntityManager
     def generate_unique_id(self, entity: MerossEntity):
@@ -466,7 +461,6 @@ class MerossSubDevice(MerossDeviceBase):
 
     # interface: MerossDeviceBase
     async def async_shutdown(self):
-        self.platforms = {}  # avoid super() clearing the MerossDeviceHub.platforms
         await super().async_shutdown()
         self.async_request = None  # type: ignore
         self.async_request_raw = None  # type: ignore

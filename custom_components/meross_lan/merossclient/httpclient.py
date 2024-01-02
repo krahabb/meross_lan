@@ -88,7 +88,7 @@ class MerossHttpClient:
                 # to reasonably set the context before any exception
                 self._logid = f"MerossHttpClient({self._host}:{id(request)})"
                 request_data = json_dumps(request)
-                self._logger.debug("%s: HTTP Request (%s)", self._logid, request_data)
+                self._logger.log(DEBUG, "%s: HTTP Request (%s)", self._logid, request_data)
             else:
                 request_data = json_dumps(request)
             # since device HTTP service sometimes timeouts with no apparent
@@ -112,14 +112,15 @@ class MerossHttpClient:
             response.raise_for_status()
             text_body = await response.text()
             if self._logid:
-                self._logger.debug("%s: HTTP Response (%s)", self._logid, text_body)  # type: ignore
+                self._logger.log(DEBUG, "%s: HTTP Response (%s)", self._logid, text_body)  # type: ignore
             json_body: MerossMessageType = json_loads(text_body)
             if self.key is None:
                 self.replykey = get_replykey(json_body[mc.KEY_HEADER], self.key)
         except Exception as e:
             self.replykey = None  # reset the key hack since it could became stale
             if self._logid:
-                self._logger.debug(  # type: ignore
+                self._logger.log(  # type: ignore
+                    DEBUG,
                     "%s: HTTP %s (%s)",
                     self._logid,
                     type(e).__name__,
@@ -149,7 +150,8 @@ class MerossHttpClient:
                 raise MerossKeyError(response)
             # sign error... hack and fool
             if self._logid:
-                self._logger.debug(  # type: ignore
+                self._logger.log(  # type: ignore
+                    DEBUG,
                     "%s: Key error on (%s:%s) -> retrying with key-reply hack",
                     self._logid,
                     method,

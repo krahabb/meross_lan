@@ -16,7 +16,7 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const as mlc
-from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, schedule_async_callback
+from .helpers import LOGGER, ApiProfile, schedule_async_callback
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (
@@ -64,7 +64,7 @@ class HAMQTTConnection(MQTTConnection):
     def __init__(self, api: MerossApi):
         super().__init__(
             api,
-            mlc.CONF_PROFILE_ID_LOCAL,
+            "homeassistant:0",
             HostAddress("homeassistant", 0),
             mc.TOPIC_RESPONSE.format(mlc.DOMAIN),
         )
@@ -310,7 +310,7 @@ class MerossApi(ApiProfile):
     def __init__(self, hass: HomeAssistant):
         ApiProfile.hass = hass
         ApiProfile.api = self
-        super().__init__(mlc.CONF_PROFILE_ID_LOCAL)
+        super().__init__(mlc.CONF_PROFILE_ID_LOCAL, None, "api")
         self._deviceclasses: dict[str, type] = {}
         self._mqtt_connection: HAMQTTConnection | None = None
 
@@ -574,14 +574,10 @@ class MerossApi(ApiProfile):
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    """Set up Meross IoT local LAN from a config entry."""
+    LOGGER.debug("async_setup_entry { entry_id: %s }", config_entry.entry_id)
+
     unique_id = config_entry.unique_id
-    assert unique_id, "unique_id must be set"
-    LOGGER.debug(
-        "async_setup_entry { unique_id: %s, entry_id: %s }",
-        unique_id,
-        config_entry.entry_id,
-    )
+    assert unique_id, f"unique_id not set in {config_entry.entry_id}"
     api = MerossApi.api or MerossApi.get(hass)
 
     if unique_id == mlc.DOMAIN:
@@ -643,11 +639,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    LOGGER.debug(
-        "async_unload_entry { unique_id: %s, entry_id: %s }",
-        config_entry.unique_id,
-        config_entry.entry_id,
-    )
+    LOGGER.debug("async_unload_entry { entry_id: %s }", config_entry.entry_id)
 
     manager = ApiProfile.managers[config_entry.entry_id]
     if not await manager.async_unload_entry(hass, config_entry):
@@ -660,12 +652,9 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
+    LOGGER.debug("async_remove_entry { entry_id: %s }", entry.entry_id)
+
     unique_id = entry.unique_id
-    LOGGER.debug(
-        "async_remove_entry { unique_id: %s, entry_id: %s }",
-        unique_id,
-        entry.entry_id,
-    )
     if unique_id == mlc.DOMAIN:
         return
 

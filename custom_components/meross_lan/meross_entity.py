@@ -9,14 +9,14 @@
 """
 from __future__ import annotations
 
-from logging import WARNING
+from logging import DEBUG, WARNING
 import typing
 
 from homeassistant import const as hac
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import StateType
 
-from .helpers import LOGGER, ApiProfile, Loggable, StrEnum
+from .helpers import ApiProfile, Loggable, StrEnum
 from .merossclient import const as mc, get_namespacekey
 
 if typing.TYPE_CHECKING:
@@ -109,16 +109,16 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             entitykey is not None
         ), "provide at least channel or entitykey (cannot be 'None' together)"
 
-        _id = (
+        id = (
             channel
             if entitykey is None
             else entitykey
             if channel is None
             else f"{channel}_{entitykey}"
         )
-        Loggable.__init__(self, _id, None, manager)
+        Loggable.__init__(self, id, logger=manager)
         assert (
-            manager.entities.get(_id) is None
+            manager.entities.get(id) is None
         ), f"(channel:{channel}, entitykey:{entitykey}) is not unique inside manager.entities"
         self.manager = manager
         self.channel = channel
@@ -126,20 +126,18 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self._attr_device_class = device_class
         attr_name = self._attr_name
         if attr_name is None and (entitykey or device_class):
-            attr_name = f"{entitykey or device_class}"
+            attr_name = f"{entitykey or device_class}".capitalize()
         # when channel == 0 it might be the only one so skip it
         # when channel is already in device name it also may be skipped
         if channel and (channel is not manager.id):
             # (channel is manager.id) means this is the 'main' entity of an hub subdevice
             # so we skip adding the subdevice.id to the entity name
             attr_name = f"{attr_name} {channel}" if attr_name else str(channel)
-        if attr_name is not None:
-            attr_name = attr_name.capitalize()
         self._attr_name = attr_name
         self._attr_state = None
-        self._attr_unique_id = manager.generate_unique_id(self)
         self._hass_connected = False
-        manager.entities[_id] = self
+        self._attr_unique_id = manager.generate_unique_id(self)
+        manager.entities[id] = self
         async_add_devices = manager.platforms.setdefault(self.PLATFORM)
         if async_add_devices:
             async_add_devices([self])
@@ -200,11 +198,12 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         return self._attr_unique_id
 
     async def async_added_to_hass(self):
-        self.logtag = f"{self.__class__.__name__}({self.entity_id})"
+        self.log(DEBUG, "added to HomeAssistant")
         self._hass_connected = True
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
+        self.log(DEBUG, "removed from HomeAssistant")
         self._hass_connected = False
         return await super().async_will_remove_from_hass()
 
@@ -321,11 +320,7 @@ class MerossToggle(MerossEntity):
 def platform_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices, platform: str
 ):
-    LOGGER.debug(
-        "platform_setup_entry { unique_id: %s, platform: %s }",
-        config_entry.unique_id,
-        platform,
-    )
     manager = ApiProfile.managers[config_entry.entry_id]
+    manager.log(DEBUG, "platform_setup_entry { platform: %s }", platform)
     manager.platforms[platform] = async_add_devices
     async_add_devices(manager.managed_entities(platform))
