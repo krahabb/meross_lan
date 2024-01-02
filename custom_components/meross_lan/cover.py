@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from logging import DEBUG
+from logging import DEBUG, WARNING
 from time import time
 import typing
 
@@ -383,7 +383,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             {mc.KEY_STATE: {mc.KEY_CHANNEL: self.channel, mc.KEY_OPEN: open_request}},
         ):
             """
-            example payload in SETACK:
+            example (historical) payload in SETACK:
             {"state": {"channel": 0, "open": 0, "lmTime": 0, "execute": 1}}
             "open" reports the current state and not the command
             "execute" represents command ack (I guess: never seen this == 0)
@@ -391,55 +391,64 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             be replied as "1" and the garage will stay closed
             Update (2023-10-29): the trace in issue #272 shows "execute" == 0 when
             the command is not executed because already opened (maybe fw is smarter now)
+            Update (2024-01-02): issue #361 points to the fact the payload is a list and
+            so it looks that even garageDoors are (fully) moving to a 'channelized' struct
+            {"state": [{"channel": 0, "open": 0, "lmTime": 0, "execute": 1}]}
             """
             self._transition_cancel()
-            p_state: dict = response[mc.KEY_PAYLOAD][mc.KEY_STATE]
-            self._open = p_state[mc.KEY_OPEN]
-            if p_state.get(mc.KEY_EXECUTE) and open_request != self._open:
-                self._open_request = open_request
-                self._transition_start = time()
-                self.update_state(STATE_OPENING if open_request else STATE_CLOSING)
-                if open_request:
-                    try:
-                        timeout = self.number_signalOpen.native_value  # type: ignore
-                    except AttributeError:
-                        # this happens (once) when we don't have MULTIPLECONFIG ns support
-                        # we'll then try use the 'x device' CONFIG or (since it could be missing)
-                        # just build an emulated config entity
-                        self.number_signalOpen = (
-                            self.manager.number_doorOpenDuration
-                            or MLGarageEmulatedConfigNumber(
-                                self.manager, self.channel, mc.KEY_DOOROPENDURATION
+            try:
+                p_state = response[mc.KEY_PAYLOAD][mc.KEY_STATE]
+                if isinstance(p_state, list):
+                    # we eventually expect a 1 item list with our channel of course
+                    p_state = p_state[0]
+                self._open = p_state[mc.KEY_OPEN]
+                if p_state.get(mc.KEY_EXECUTE) and open_request != self._open:
+                    self._open_request = open_request
+                    self._transition_start = time()
+                    self.update_state(STATE_OPENING if open_request else STATE_CLOSING)
+                    if open_request:
+                        try:
+                            timeout = self.number_signalOpen.native_value  # type: ignore
+                        except AttributeError:
+                            # this happens (once) when we don't have MULTIPLECONFIG ns support
+                            # we'll then try use the 'x device' CONFIG or (since it could be missing)
+                            # just build an emulated config entity
+                            self.number_signalOpen = (
+                                self.manager.number_doorOpenDuration
+                                or MLGarageEmulatedConfigNumber(
+                                    self.manager, self.channel, mc.KEY_DOOROPENDURATION
+                                )
                             )
-                        )
-                        timeout = self.number_signalOpen.native_value
-                else:
-                    try:
-                        timeout = self.number_signalClose.native_value  # type: ignore
-                    except AttributeError:
-                        # this happens (once) when we don't have MULTIPLECONFIG ns support
-                        # we'll then try use the 'x device' CONFIG or (since it could be missing)
-                        # just build an emulated config entity
-                        self.number_signalClose = (
-                            self.manager.number_doorCloseDuration
-                            or MLGarageEmulatedConfigNumber(
-                                self.manager, self.channel, mc.KEY_DOORCLOSEDURATION
+                            timeout = self.number_signalOpen.native_value
+                    else:
+                        try:
+                            timeout = self.number_signalClose.native_value  # type: ignore
+                        except AttributeError:
+                            # this happens (once) when we don't have MULTIPLECONFIG ns support
+                            # we'll then try use the 'x device' CONFIG or (since it could be missing)
+                            # just build an emulated config entity
+                            self.number_signalClose = (
+                                self.manager.number_doorCloseDuration
+                                or MLGarageEmulatedConfigNumber(
+                                    self.manager, self.channel, mc.KEY_DOORCLOSEDURATION
+                                )
                             )
-                        )
-                        timeout = self.number_signalClose.native_value
+                            timeout = self.number_signalClose.native_value
 
-                self._transition_unsub = schedule_async_callback(
-                    self.hass, 0.9, self._async_transition_callback
-                )
-                # check the timeout 1 sec after expected to account
-                # for delays in communication
-                self._transition_end_unsub = schedule_callback(
-                    self.hass,
-                    (timeout or self._transition_duration) + 1,  # type: ignore
-                    self._transition_end_callback,
-                )
-            else:
-                self.update_state(STATE_MAP.get(self._open))
+                    self._transition_unsub = schedule_async_callback(
+                        self.hass, 0.9, self._async_transition_callback
+                    )
+                    # check the timeout 1 sec after expected to account
+                    # for delays in communication
+                    self._transition_end_unsub = schedule_callback(
+                        self.hass,
+                        (timeout or self._transition_duration) + 1,  # type: ignore
+                        self._transition_end_callback,
+                    )
+                else:
+                    self.update_state(STATE_MAP.get(self._open))
+            except Exception as exception:
+                self.log_exception(WARNING, exception, "async_request_position (payload:%s)", str(response[mc.KEY_PAYLOAD]))
 
     def _parse_state(self, payload: dict):
         # {"channel": 0, "open": 1, "lmTime": 0}
