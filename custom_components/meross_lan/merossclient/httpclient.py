@@ -27,6 +27,9 @@ from . import (
 )
 
 
+class TerminatedException(Exception):
+    pass
+
 class MerossHttpClient:
     timeout = 5  # total timeout will be 1+2+4: check relaxation algorithm
 
@@ -39,6 +42,8 @@ class MerossHttpClient:
         "_logger",
         "_logid",
         "_log_level_dump",
+        "_terminate",
+        "_terminate_guard",
     )
 
     def __init__(
@@ -64,6 +69,8 @@ class MerossHttpClient:
         self._logger = logger
         self._logid = None
         self._log_level_dump = log_level_dump
+        self._terminate = False
+        self._terminate_guard = 0
 
     @property
     def host(self):
@@ -74,11 +81,26 @@ class MerossHttpClient:
         self._host = value
         self._requesturl = URL(f"http://{value}/config")
 
+    def _check_terminated(self):
+        if self._terminate:
+            raise TerminatedException
+
+    async def async_terminate(self):
+        """
+        Marks the client as 'terminating' so that any pending request will abort
+        and raise TerminateException
+        """
+        self._terminate = True
+        while self._terminate_guard:
+            await asyncio.sleep(0.5)
+
     async def async_request_raw(
         self, request: MerossMessageType | dict
     ) -> MerossMessageType:
-        timeout = 1
+        self._check_terminated()
         try:
+            self._terminate_guard += 1
+            timeout = 1
             self._logid = None
             if self._logger and self._logger.isEnabledFor(self._log_level_dump):
                 # we catch the 'request' id before json dumping so
@@ -101,19 +123,27 @@ class MerossHttpClient:
                         )
                     break
                 except asyncio.TimeoutError as e:
+                    self._check_terminated()
                     if timeout < self.timeout:
                         timeout = timeout * 2
                     else:
                         raise e
 
+            self._check_terminated()
             response.raise_for_status()
             text_body = await response.text()
+            self._check_terminated()
             if self._logid:
                 self._logger.log(self._log_level_dump, "%s: HTTP Response (%s)", self._logid, text_body)  # type: ignore
             json_body: MerossMessageType = json_loads(text_body)
             if self.key is None:
                 self.replykey = get_replykey(json_body[mc.KEY_HEADER], self.key)
+            self._terminate_guard -= 1
+        except TerminatedException as e:
+            self._terminate_guard -= 1
+            raise e
         except Exception as e:
+            self._terminate_guard -= 1
             self.replykey = None  # reset the key hack since it could became stale
             if self._logid:
                 self._logger.log(  # type: ignore
@@ -161,6 +191,8 @@ class MerossHttpClient:
             req_header[mc.KEY_SIGN] = resp_header[mc.KEY_SIGN]
             try:
                 response = await self.async_request_raw(request)
+            except TerminatedException as e:
+                raise e
             except Exception:
                 # any error here is likely consequence of key-reply hack
                 # so we'll rethrow that (see #83 lacking invalid key message when configuring)

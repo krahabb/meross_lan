@@ -70,7 +70,7 @@ from .merossclient import (
     json_dumps,
     json_loads,
 )
-from .merossclient.httpclient import MerossHttpClient
+from .merossclient.httpclient import MerossHttpClient, TerminatedException
 from .sensor import PERCENTAGE, MLSensor, ProtocolSensor
 from .update import MLUpdate
 
@@ -555,6 +555,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._mqtt_connection.detach(self)
         if self._profile:
             self._profile.unlink(self)
+        if self._http:
+            await self._http.async_terminate()
         while self._unsub_polling_callback is None:
             # wait for the polling loop to finish in case
             await asyncio.sleep(1)
@@ -632,23 +634,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def _get_internal_name(self) -> str:
         return self.descriptor.productname
 
-    def _set_online(self):
-        super()._set_online()
-        self._polling_delay = self.polling_period
-        self.sensor_protocol.update_connected()
-        # retrigger the polling loop since we're already
-        # scheduling an immediate async_request_updates.
-        # This is needed to avoid startup staggering and also
-        # as an optimization against asynchronous onlining events (on MQTT)
-        # which could come anytime and so the (next)
-        # polling might be too early
-        if self._unsub_polling_callback:
-            # might be None when we're already inside a polling loop
-            self._unsub_polling_callback.cancel()
-            self._unsub_polling_callback = schedule_async_callback(
-                ApiProfile.hass, self._polling_delay, self._async_polling_callback
-            )
-
     def _set_offline(self):
         super()._set_offline()
         self._polling_delay = self.polling_period
@@ -721,7 +706,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # the states have been eventually restored (some entities need this)
         self._check_mqtt_connection_attach()
         self._unsub_polling_callback = schedule_async_callback(
-            ApiProfile.hass, 0, self._async_polling_callback
+            ApiProfile.hass, 0, self._async_polling_callback, None
         )
 
     async def async_bind(
@@ -866,6 +851,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 try:
                     response = await http.async_request_raw(request)
                     break
+                except TerminatedException:
+                    return None
                 except JSONDecodeError as jsonerror:
                     # this could happen when the response carries a truncated payload
                     # and might be due to an 'hard' limit in the capacity of the
@@ -924,7 +911,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
                     if isinstance(exception, asyncio.TimeoutError):
                         return None
-                    await asyncio.sleep(0.1)  # wait a bit before re-issuing request
             else:
                 return None
 
@@ -1146,9 +1132,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         if not self._online:
             self._set_online()
-            ApiProfile.hass.async_create_task(
-                self.async_request_updates(epoch, header[mc.KEY_NAMESPACE])
-            )
+            self._polling_delay = self.polling_period
+            self.sensor_protocol.update_connected()
+            # retrigger the polling loop in case it is scheduled/pending.
+            # This could happen when we receive an MQTT message
+            if self._unsub_polling_callback:
+                self._unsub_polling_callback.cancel()
+                self._unsub_polling_callback = schedule_async_callback(
+                    ApiProfile.hass, 0, self._async_polling_callback, header[mc.KEY_NAMESPACE]
+                )
 
         return self._handle(header, payload)
 
@@ -1395,7 +1387,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # reschedule immediately
                 self._unsub_polling_callback.cancel()
                 self._unsub_polling_callback = schedule_async_callback(
-                    ApiProfile.hass, 0, self._async_polling_callback
+                    ApiProfile.hass, 0, self._async_polling_callback, None
                 )
 
         elif self.conf_protocol is CONF_PROTOCOL_MQTT:
@@ -1424,7 +1416,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         )
 
     @callback
-    async def _async_polling_callback(self):
+    async def _async_polling_callback(self, namespace: str):
         self.log(self.DEBUG, "Polling start")
         try:
             self._unsub_polling_callback = None
@@ -1499,14 +1491,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                                         epoch + PARAM_TIMEZONE_CHECK_OK_PERIOD
                                     )
 
-                await self.async_request_updates(epoch, None)
+                await self.async_request_updates(epoch, namespace)
 
             else:  # offline
-                if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
-                    self._polling_delay = self._polling_delay + self.polling_period
-                else:
-                    self._polling_delay = PARAM_HEARTBEAT_PERIOD
-
                 ns_all = get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self.host:
@@ -1519,9 +1506,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         await self.async_mqtt_request(*ns_all)
                 else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
                     await self.async_http_request(*ns_all)
+
+                if self._online:
+                    await self.async_request_updates(epoch, mc.NS_APPLIANCE_SYSTEM_ALL)
+                else:
+                    if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
+                        self._polling_delay += self.polling_period
+                    else:
+                        self._polling_delay = PARAM_HEARTBEAT_PERIOD
         finally:
             self._unsub_polling_callback = schedule_async_callback(
-                ApiProfile.hass, self._polling_delay, self._async_polling_callback
+                ApiProfile.hass, self._polling_delay, self._async_polling_callback, None
             )
             self.log(self.DEBUG, "Polling end")
 
