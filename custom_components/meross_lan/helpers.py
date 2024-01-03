@@ -33,6 +33,7 @@ from .const import (
     CONF_LOGGING_VERBOSE,
     CONF_LOGGING_WARNING,
     CONF_PROTOCOL_AUTO,
+    CONF_PROTOCOL_MQTT,
     CONF_TRACE,
     CONF_TRACE_DIRECTORY,
     CONF_TRACE_FILENAME,
@@ -83,7 +84,7 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
     from .meross_entity import MerossEntity
     from .meross_profile import MerossCloudProfile, MQTTConnection
-    from .merossclient import MerossHeaderType, MerossPayloadType
+    from .merossclient import MerossHeaderType, MerossMessage, MerossMessageType, MerossPayloadType
 
 
 def clamp(_value, _min, _max):
@@ -209,18 +210,12 @@ LOGGER = getLogger(__name__[:-8])  # get base custom_component name for logging
 """
     Obfuscation:
 
-    There are 2 different approaches both producing the same result by working
-    on a set of well-known keys to hide values from a structure. The 'OBFUSCATE_KEYS'
-    dict mandates which key values are patched:
-
-    - Obfuscate values 'in place' and then allow to deobfuscate. This approach
-    is less memory intensive since it will not duplicate data but will just
-    'patch' the passed in structure. 'deobfuscate' will then be able to restore
-    the structure to the original values in case. 'obfuscate' will modify the
-    passed in data (which must be mutable) only where obfuscation occurs
-
-    - Deepcopy the data. This is useful when source data are immutable and/or
-    there's the need to deepcopy the data anyway
+    working on a set of well-known keys to hide values from a structure
+    when logging/tracing.
+    The 'OBFUSCATE_KEYS' dict mandates which key values are patched and
+    mantains a set of obfuscated values stored in the OBFUSCATE_XXX_MAP
+    so that every time we obfuscate a key value, we return the same (stable)
+    obfuscation in order to correlate data in traces and logs
 """
 # common (shared) obfuscation mappings for related keys
 OBFUSCATE_DEVICE_ID_MAP = {}
@@ -328,40 +323,6 @@ def _obfuscated_value(obfuscated_map: dict[typing.Any, str], value: typing.Any):
             obfuscated_map[value] = "@" + str(count)
 
     return obfuscated_map[value]
-
-
-def obfuscate(payload: dict):
-    """
-    parses the input payload and 'hides' (obfuscates) some sensitive keys.
-    Obfuscation keeps a static list of obfuscated values (in OBFUSCATE_KEYS)
-    so to always obfuscate an input value to the same stable value.
-    This function is recursive
-
-    - payload(input-output): gets modified by obfuscating sensistive keys
-
-    - return: a dict of the original values which were obfuscated
-    (to be used in 'deobfuscate')
-    """
-    obfuscated = {}
-    for key, value in payload.items():
-        if isinstance(value, dict):
-            o = obfuscate(value)
-            if o:
-                obfuscated[key] = o
-        elif key in OBFUSCATE_KEYS:
-            # save for deobfuscate handling
-            obfuscated[key] = value
-            payload[key] = _obfuscated_value(OBFUSCATE_KEYS[key], value)
-
-    return obfuscated
-
-
-def deobfuscate(payload: dict, obfuscated: dict):
-    for key, value in obfuscated.items():
-        if isinstance(value, dict):
-            deobfuscate(payload[key], value)
-        else:
-            payload[key] = value
 
 
 def obfuscated_list_copy(data: list):
@@ -861,7 +822,10 @@ class ConfigEntryManager(EntityManager):
     def log(self, level: int, msg: str, *args, **kwargs):
         self.logger.log(level, msg, *args, **kwargs)
         if self.trace_file:
-            self.trace(time(), msg % args, CONF_LOGGING_LEVEL_OPTIONS.get(level) or logging.getLevelName(level), "LOG")
+            self.trace_log(
+                level,
+                msg % args,
+            )
 
     # interface: self
     async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
@@ -970,7 +934,9 @@ class ConfigEntryManager(EntityManager):
                 mode="w",
                 encoding="utf8",
             )
-            trace_timeout = self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT
+            trace_timeout = (
+                self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT
+            )
 
             @callback
             def _trace_close_callback():
@@ -1020,28 +986,53 @@ class ConfigEntryManager(EntityManager):
     def trace(
         self,
         epoch: float,
-        data: str | dict,
+        payload: MerossPayloadType,
         namespace: str,
-        method: str,
-        protocol=CONF_PROTOCOL_AUTO,
-        rxtx="",
+        method: str = mc.METHOD_GETACK,
+        protocol: str = CONF_PROTOCOL_AUTO,
+        rxtx: str = "",
     ):
         try:
             assert self.trace_file
-            if isinstance(data, dict):
-                # we'll eventually make a deepcopy since data
-                # might be retained by the _trace_data list
-                # and carry over the deobfuscation (which we'll skip now)
-                data = obfuscated_dict_copy(data)
-                textdata = json_dumps(data)
-            else:
-                textdata = data
-            texttime = strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch))
-            columns = [texttime, rxtx, protocol, method, namespace, textdata]
+            data = obfuscated_dict_copy(payload)
+            columns = [
+                strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch)),
+                rxtx,
+                protocol,
+                method,
+                namespace,
+                json_dumps(data),
+            ]
             self.trace_file.write("\t".join(columns) + "\r\n")
             if self._trace_data is not None:
                 # better have json for dignostic trace
                 columns[5] = data  # type: ignore
+                self._trace_data.append(columns)
+
+            if self.trace_file.tell() > CONF_TRACE_MAXSIZE:
+                self.trace_close()
+
+        except Exception as exception:
+            self.trace_close()
+            self.log_exception(self.WARNING, exception, "writing to trace file")
+
+    def trace_log(
+        self,
+        level: int,
+        msg: str,
+    ):
+        try:
+            assert self.trace_file
+            columns = [
+                strftime("%Y/%m/%d - %H:%M:%S", localtime(time())),
+                "",
+                CONF_PROTOCOL_AUTO,
+                "LOG",
+                CONF_LOGGING_LEVEL_OPTIONS.get(level) or logging.getLevelName(level),
+                msg,
+            ]
+            self.trace_file.write("\t".join(columns) + "\r\n")
+            if self._trace_data is not None:
                 self._trace_data.append(columns)
 
             if self.trace_file.tell() > CONF_TRACE_MAXSIZE:
@@ -1178,3 +1169,32 @@ class ApiProfile(ConfigEntryManager):
     @abc.abstractmethod
     def attach_mqtt(self, device: MerossDevice):
         pass
+
+    def trace_or_log(self,
+        connection: MQTTConnection,
+        device_id: str,
+        message: MerossMessage | MerossMessageType,
+        rxtx: str,
+    ):
+        if self.trace_file:
+            header = message[mc.KEY_HEADER]
+            self.trace(
+                time(),
+                message[mc.KEY_PAYLOAD],
+                header[mc.KEY_NAMESPACE],
+                header[mc.KEY_METHOD],
+                CONF_PROTOCOL_MQTT,
+                rxtx,
+            )
+        elif self.isEnabledFor(self.DEBUG):
+            header = message[mc.KEY_HEADER]
+            connection.log(
+                self.DEBUG,
+                "%s(%s) %s %s (device_id:%s messageId:%s)",
+                rxtx,
+                CONF_PROTOCOL_MQTT,
+                header[mc.KEY_METHOD],
+                header[mc.KEY_NAMESPACE],
+                device_id,
+                header[mc.KEY_MESSAGEID],
+            )

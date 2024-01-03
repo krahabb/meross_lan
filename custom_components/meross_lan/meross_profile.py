@@ -340,7 +340,6 @@ class MQTTConnection(Loggable):
                 await sensor_connection.async_remove()
             await sensor_connection.async_shutdown()
 
-
     @typing.final
     def mqtt_publish(
         self,
@@ -362,24 +361,7 @@ class MQTTConnection(Loggable):
         else:
             transaction = None
         try:
-            self.log(
-                self.DEBUG,
-                "MQTT PUBLISH %s %s (device_id: %s, messageId: %s)",
-                request.method,
-                request.namespace,
-                device_id,
-                request.messageid,
-            )
-            profile = self.profile
-            if profile.trace_file:
-                profile.trace(
-                    time(),
-                    request.payload,
-                    request.namespace,
-                    request.method,
-                    CONF_PROTOCOL_MQTT,
-                    profile.TRACE_TX,
-                )
+            self.profile.trace_or_log(self, device_id, request, ApiProfile.TRACE_TX)
             _mqtt_tx_code, timeout = await self._async_mqtt_publish(device_id, request)
             if transaction:
                 if _mqtt_tx_code is self._MQTT_DROP:
@@ -430,29 +412,11 @@ class MQTTConnection(Loggable):
             header = message[mc.KEY_HEADER]
             device_id = get_message_uuid(header)
             namespace = header[mc.KEY_NAMESPACE]
-            method = header[mc.KEY_METHOD]
             messageid = header[mc.KEY_MESSAGEID]
             payload = message[mc.KEY_PAYLOAD]
 
             profile = self.profile
-
-            self.log(
-                self.DEBUG,
-                "MQTT RECV %s %s (device_id: %s, messageId: %s)",
-                method,
-                namespace,
-                device_id,
-                messageid,
-            )
-            if profile.trace_file:
-                profile.trace(
-                    time(),
-                    payload,
-                    namespace,
-                    method,
-                    CONF_PROTOCOL_MQTT,
-                    profile.TRACE_RX,
-                )
+            profile.trace_or_log(self, device_id, message, ApiProfile.TRACE_RX)
 
             if messageid in self._mqtt_transactions:
                 mqtt_transaction = self._mqtt_transactions[messageid]
@@ -500,17 +464,6 @@ class MQTTConnection(Loggable):
             if device_id in self.mqttdiscovering:
                 return
 
-            key = profile.key
-            if get_replykey(header, key) is not key:
-                self.log(
-                    self.WARNING,
-                    "discovery key error for device_id: %s",
-                    device_id,
-                    timeout=300,
-                )
-                if key is not None:
-                    return
-
             # lookout for any disabled/ignored entry
             config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
             if (
@@ -551,6 +504,17 @@ class MQTTConnection(Loggable):
                 )
                 return
 
+            key = profile.key
+            if get_replykey(header, key) is not key:
+                self.log(
+                    self.WARNING,
+                    "discovery key error for device_id: %s",
+                    device_id,
+                    timeout=300,
+                )
+                if key is not None:
+                    return
+
             await self.async_try_discovery(device_id)
 
     async def async_identify_device(self, device_id: str, key: str) -> DeviceConfigType:
@@ -558,6 +522,9 @@ class MQTTConnection(Loggable):
         Sends an ns_all and ns_ability GET requests encapsulated in an ns_multiple
         to speed up things. Raises exception in case of error
         """
+        self.log(
+            self.DEBUG, "Initiating 1-step identification for device id:%s", device_id
+        )
         topic_response = self.topic_response
         response = await self.async_mqtt_publish(
             device_id,
@@ -583,13 +550,10 @@ class MQTTConnection(Loggable):
             ),
         )
 
-        if not response:
-            raise Exception("No response")
-
         try:
             # optimistically start considering valid response.
             # only investigate the response if this doesn't work
-            multiple_response: list[MerossMessageType] = response[mc.KEY_PAYLOAD][
+            multiple_response: list[MerossMessageType] = response[mc.KEY_PAYLOAD][  # type: ignore
                 mc.KEY_MULTIPLE
             ]
             # this syntax ensures both the responses are the expected ones
@@ -605,9 +569,46 @@ class MQTTConnection(Loggable):
             }
         except KeyError as error:
             # formally checks the message and raises a typed except
-            check_message_strict(response)
+            # check_message_strict(response)
             # else go with the wind
-            raise error
+            # raise error
+            self.log(
+                self.DEBUG,
+                "Identification error for device id:%s. Falling back to 2-steps procedure",
+                device_id,
+            )
+            try:
+                response = await self.async_mqtt_publish(
+                    device_id,
+                    MerossRequest(
+                        key,
+                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                        topic_response,
+                    ),
+                )
+                ability = response[mc.KEY_PAYLOAD][mc.KEY_ABILITY]  # type: ignore
+            except Exception as exception:
+                raise Exception("Unable to identify abilities") from exception
+            try:
+                response = await self.async_mqtt_publish(
+                    device_id,
+                    MerossRequest(
+                        key,
+                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
+                        topic_response,
+                    ),
+                )
+                all = response[mc.KEY_PAYLOAD][mc.KEY_ALL]  # type: ignore
+            except Exception as exception:
+                raise Exception("Unable to identify device (all)") from exception
+            return {
+                CONF_DEVICE_ID: device_id,
+                CONF_PAYLOAD: {
+                    mc.KEY_ALL: all,
+                    mc.KEY_ABILITY: ability,
+                },
+                CONF_KEY: key,
+            }
 
     async def async_try_discovery(self, device_id: str):
         """
@@ -617,7 +618,7 @@ class MQTTConnection(Loggable):
         result = None
         self.mqttdiscovering.add(device_id)
         with self.exception_warning(
-            "trying discover for device id:%s", device_id, timeout=14400
+            "async_try_discovery (device id:%s)", device_id, timeout=14400
         ):
             result = await ApiProfile.hass.config_entries.flow.async_init(
                 DOMAIN,
@@ -1181,7 +1182,9 @@ class MerossCloudProfile(ApiProfile):
                 datetime_from_epoch(self._device_info_time).isoformat(),
             )
             if not token:
-                self.log(self.WARNING, "querying device list cancelled: missing api token")
+                self.log(
+                    self.WARNING, "querying device list cancelled: missing api token"
+                )
                 return None
             self._device_info_time = time()
             device_info_new = await async_cloudapi_device_devlist(
@@ -1503,7 +1506,9 @@ class MerossCloudProfile(ApiProfile):
             with self.exception_warning("_process_device_info_unknown"):
                 device_id = device_info[mc.KEY_UUID]
                 self.log(
-                    self.DEBUG, "Trying/Initiating discovery for (new) device:%s", device_id
+                    self.DEBUG,
+                    "Trying/Initiating discovery for (new) device:%s",
+                    device_id,
                 )
                 if config_entries_helper.get_config_flow(device_id):
                     continue  # device configuration already progressing

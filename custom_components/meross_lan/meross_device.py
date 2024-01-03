@@ -539,10 +539,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # calling it first is needed so that any failure writing leading to
         # a trace_closed will rightly cancel the callback
         self._trace_ability(iter(descr.ability))
-        self.trace(epoch, descr.all, mc.NS_APPLIANCE_SYSTEM_ALL, mc.METHOD_GETACK)
-        self.trace(
-            epoch, descr.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY, mc.METHOD_GETACK
-        )
+        self.trace(epoch, descr.all, mc.NS_APPLIANCE_SYSTEM_ALL)
+        self.trace(epoch, descr.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY)
 
     def _trace_closed(self):
         if self._unsub_trace_ability_callback:
@@ -793,15 +791,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
             return None
         self._mqtt_lastrequest = time()
-        if self.trace_file:
-            self.trace(
-                self._mqtt_lastrequest,
-                request.payload,
-                request.namespace,
-                request.method,
-                CONF_PROTOCOL_MQTT,
-                self.TRACE_TX,
-            )
+        self._trace_or_log(
+            self._mqtt_lastrequest,
+            request[mc.KEY_HEADER],
+            request[mc.KEY_PAYLOAD],
+            CONF_PROTOCOL_MQTT,
+            self.TRACE_TX,
+        )
         self._queued_smartpoll_requests += 1
         return await self._mqtt_publish.async_mqtt_publish(self.id, request)
 
@@ -858,15 +854,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # since we get 'random' connection errors, this is a retry attempts loop
                 # until we get it done. We'd want to break out early on specific events tho (Timeouts)
                 self._http_lastrequest = time()
-                if self.trace_file:
-                    self.trace(
-                        self._http_lastrequest,
-                        request.payload,
-                        namespace,
-                        method,
-                        CONF_PROTOCOL_HTTP,
-                        self.TRACE_TX,
-                    )
+                self._trace_or_log(
+                    self._http_lastrequest,
+                    request[mc.KEY_HEADER],
+                    request[mc.KEY_PAYLOAD],
+                    CONF_PROTOCOL_HTTP,
+                    self.TRACE_TX,
+                )
                 try:
                     response = await http.async_request_raw(request)
                     break
@@ -874,12 +868,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     # this could happen when the response carries a truncated payload
                     # and might be due to an 'hard' limit in the capacity of the
                     # device http output buffer (when the response is too long)
-                    self.log_exception(
+                    self.log(
                         self.DEBUG,
-                        jsonerror,
-                        "async_http_request %s %s attempt(%d)",
+                        "HTTP ERROR %s %s (messageId:%s jsonerror:%s attempt:%d)",
                         method,
                         namespace,
+                        request.messageid,
+                        str(jsonerror),
                         attempt,
                     )
                     response_text = jsonerror.doc
@@ -899,12 +894,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
                     return None
                 except Exception as exception:
-                    self.log_exception(
+                    self.log(
                         self.DEBUG,
-                        exception,
-                        "async_http_request %s %s attempt(%d)",
+                        "HTTP ERROR %s %s (messageId:%s %s:%s attempt:%d)",
                         method,
                         namespace,
+                        request.messageid,
+                        exception.__class__.__name__,
+                        str(exception),
                         attempt,
                     )
                     if not self._online:
@@ -944,6 +941,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if self._check_uuid_mismatch(get_message_uuid(r_header)):
                 return None
 
+            self._http_lastresponse = epoch = time()
+            self._trace_or_log(epoch, r_header, r_payload, CONF_PROTOCOL_HTTP, self.TRACE_RX)
             if not self._http_active:
                 self._http_active = http
                 self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_HTTP)
@@ -952,8 +951,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     not self._mqtt_active
                 ):
                     self._switch_protocol(CONF_PROTOCOL_HTTP)
-            self.receive(r_header, r_payload, CONF_PROTOCOL_HTTP)
-            self._http_lastresponse = self.lastresponse
+            self.receive(epoch, r_header, r_payload)
             return response
 
         return None
@@ -1050,11 +1048,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if responses_len == requests_len:
                 # faster shortcut
                 for message in multiple_responses:
-                    m_header = message[mc.KEY_HEADER]
                     self._handle(
-                        m_header[mc.KEY_NAMESPACE],
-                        m_header[mc.KEY_METHOD],
-                        m_header,
+                        message[mc.KEY_HEADER],
                         message[mc.KEY_PAYLOAD],
                     )
                 return
@@ -1063,13 +1058,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # the incomplete payloads so we'll check what's missing
             for message in multiple_responses:
                 m_header = message[mc.KEY_HEADER]
-                namespace = m_header[mc.KEY_NAMESPACE]
                 self._handle(
-                    namespace,
-                    m_header[mc.KEY_METHOD],
                     m_header,
                     message[mc.KEY_PAYLOAD],
                 )
+                namespace = m_header[mc.KEY_NAMESPACE]
                 for request in multiple_requests:
                     if request[0] == namespace:
                         multiple_requests.remove(request)
@@ -1103,16 +1096,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_request_flush()
 
-    def receive(self, header: MerossHeaderType, payload: MerossPayloadType, protocol):
+    def receive(self, epoch: float, header: MerossHeaderType, payload: MerossPayloadType):
         """
         default (received) message handling entry point
         """
-        self.lastresponse = epoch = time()
-        namespace = header[mc.KEY_NAMESPACE]
-        method = header[mc.KEY_METHOD]
-
-        if self.trace_file:
-            self.trace(epoch, payload, namespace, method, protocol, self.TRACE_RX)
+        self.lastresponse = epoch
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
         # and we want to 'translate' this timings in our (local) time.
@@ -1153,18 +1141,18 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if not self._online:
             self._set_online()
             ApiProfile.hass.async_create_task(
-                self.async_request_updates(epoch, namespace)
+                self.async_request_updates(epoch, header[mc.KEY_NAMESPACE])
             )
 
-        return self._handle(namespace, method, header, payload)
+        return self._handle(header, payload)
 
     def _handle(
         self,
-        namespace: str,
-        method: str,
         header: MerossHeaderType,
         payload: MerossPayloadType,
     ):
+        namespace = header[mc.KEY_NAMESPACE]
+        method = header[mc.KEY_METHOD]
         if method == mc.METHOD_ERROR:
             self.log(
                 self.WARNING,
@@ -1365,6 +1353,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def mqtt_receive(self, header: MerossHeaderType, payload: MerossPayloadType):
         assert self._mqtt_connected and (self.conf_protocol is not CONF_PROTOCOL_HTTP)
+        self._mqtt_lastresponse = epoch = time()
+        self._trace_or_log(epoch, header, payload, CONF_PROTOCOL_MQTT, self.TRACE_RX)
         if not self._mqtt_active:
             self._mqtt_active = self._mqtt_connected
             if self._online:
@@ -1372,8 +1362,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if self.curr_protocol is not CONF_PROTOCOL_MQTT:
             if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (not self._http_active):
                 self._switch_protocol(CONF_PROTOCOL_MQTT)
-        self.receive(header, payload, CONF_PROTOCOL_MQTT)
-        self._mqtt_lastresponse = self.lastresponse
+        self.receive(epoch, header, payload)
 
     def mqtt_attached(self, mqtt_connection: MQTTConnection):
         self.log(self.DEBUG, "mqtt_attached to %s", mqtt_connection.broker)
@@ -1916,3 +1905,30 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
         except Exception:  # finished ?!
             self._unsub_trace_ability_callback = None
+
+    def _trace_or_log(self,
+        epoch: float,
+        header: MerossHeaderType,
+        payload: MerossPayloadType,
+        protocol: str,
+        rxtx: str,
+    ):
+        if self.trace_file:
+            self.trace(
+                epoch,
+                payload,
+                header[mc.KEY_NAMESPACE],
+                header[mc.KEY_METHOD],
+                protocol,
+                rxtx,
+            )
+        elif self.isEnabledFor(self.DEBUG):
+            self.log(
+                self.DEBUG,
+                "%s(%s) %s %s (messageId:%s)",
+                rxtx,
+                protocol,
+                header[mc.KEY_METHOD],
+                header[mc.KEY_NAMESPACE],
+                header[mc.KEY_MESSAGEID],
+            )
