@@ -84,7 +84,12 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
     from .meross_entity import MerossEntity
     from .meross_profile import MerossCloudProfile, MQTTConnection
-    from .merossclient import MerossHeaderType, MerossMessage, MerossMessageType, MerossPayloadType
+    from .merossclient import (
+        MerossHeaderType,
+        MerossMessage,
+        MerossMessageType,
+        MerossPayloadType,
+    )
 
 
 def clamp(_value, _min, _max):
@@ -217,23 +222,44 @@ LOGGER = getLogger(__name__[:-8])  # get base custom_component name for logging
     so that every time we obfuscate a key value, we return the same (stable)
     obfuscation in order to correlate data in traces and logs
 """
+
+
+class ObfuscateMap(dict):
+    def obfuscate(self, value):
+        if value not in self:
+            # first time seen: generate the obfuscation
+            count = len(self)
+            if isinstance(value, str):
+                # we'll preserve string length when obfuscating strings
+                obfuscated_value = str(count)
+                padding = len(value) - len(obfuscated_value)
+                if padding > 0:
+                    self[value] = "#" * padding + obfuscated_value
+                else:
+                    self[value] = "#" + obfuscated_value
+            else:
+                self[value] = "@" + str(count)
+
+        return self[value]
+
+
 # common (shared) obfuscation mappings for related keys
-OBFUSCATE_DEVICE_ID_MAP = {}
-OBFUSCATE_HOST_MAP = {}
-OBFUSCATE_USERID_MAP = {}
-OBFUSCATE_SERVER_MAP = {}
-OBFUSCATE_PORT_MAP = {}
-OBFUSCATE_KEY_MAP = {}
+OBFUSCATE_DEVICE_ID_MAP = ObfuscateMap({})
+OBFUSCATE_HOST_MAP = ObfuscateMap({})
+OBFUSCATE_USERID_MAP = ObfuscateMap({})
+OBFUSCATE_SERVER_MAP = ObfuscateMap({})
+OBFUSCATE_PORT_MAP = ObfuscateMap({})
+OBFUSCATE_KEY_MAP = ObfuscateMap({})
 OBFUSCATE_KEYS = {
     # MEROSS PROTOCOL PAYLOADS keys
     # devices uuid(s) is better obscured since knowing this
     # could allow malicious attempts at the public Meross mqtt to
     # correctly address the device (with some easy hacks on signing)
     mc.KEY_UUID: OBFUSCATE_DEVICE_ID_MAP,
-    mc.KEY_MACADDRESS: {},
-    mc.KEY_WIFIMAC: {},
-    mc.KEY_SSID: {},
-    mc.KEY_GATEWAYMAC: {},
+    mc.KEY_MACADDRESS: ObfuscateMap({}),
+    mc.KEY_WIFIMAC: ObfuscateMap({}),
+    mc.KEY_SSID: ObfuscateMap({}),
+    mc.KEY_GATEWAYMAC: ObfuscateMap({}),
     mc.KEY_INNERIP: OBFUSCATE_HOST_MAP,
     mc.KEY_SERVER: OBFUSCATE_SERVER_MAP,
     mc.KEY_PORT: OBFUSCATE_PORT_MAP,
@@ -243,15 +269,15 @@ OBFUSCATE_KEYS = {
     mc.KEY_MAINSERVER: OBFUSCATE_SERVER_MAP,
     mc.KEY_MAINPORT: OBFUSCATE_PORT_MAP,
     mc.KEY_USERID: OBFUSCATE_USERID_MAP,
-    mc.KEY_TOKEN: {},
+    mc.KEY_TOKEN: ObfuscateMap({}),
     mc.KEY_KEY: OBFUSCATE_KEY_MAP,
     #
     # MEROSS CLOUD HTTP API KEYS
     mc.KEY_USERID_: OBFUSCATE_USERID_MAP,
-    mc.KEY_EMAIL: {},
+    mc.KEY_EMAIL: ObfuscateMap({}),
     # mc.KEY_KEY: OBFUSCATE_KEY_MAP,
-    # mc.KEY_TOKEN: {},
-    mc.KEY_CLUSTER: {},
+    # mc.KEY_TOKEN: ObfuscateMap({}),
+    mc.KEY_CLUSTER: ObfuscateMap({}),
     mc.KEY_DOMAIN: OBFUSCATE_SERVER_MAP,
     mc.KEY_RESERVEDDOMAIN: OBFUSCATE_SERVER_MAP,
     # subdevice(s) ids are hardly sensitive since they
@@ -268,11 +294,11 @@ OBFUSCATE_KEYS = {
     CONF_CLOUD_KEY: OBFUSCATE_KEY_MAP,
     #
     # MerossCloudProfile keys
-    "appId": {},
+    "appId": ObfuscateMap({}),
 }
 
 
-def _obfuscated_value(obfuscated_map: dict[typing.Any, str], value: typing.Any):
+def _obfuscated_value(obfuscated_map: ObfuscateMap, value: typing.Any):
     """
     for every value we obfuscate, we'll keep
     a cache of 'unique' obfuscated values in order
@@ -308,21 +334,19 @@ def _obfuscated_value(obfuscated_map: dict[typing.Any, str], value: typing.Any):
         except Exception:
             pass
 
-    if value not in obfuscated_map:
-        # first time seen: generate the obfuscation
-        count = len(obfuscated_map)
-        if isinstance(value, str):
-            # we'll preserve string length when obfuscating strings
-            obfuscated_value = str(count)
-            padding = len(value) - len(obfuscated_value)
-            if padding > 0:
-                obfuscated_map[value] = "#" * padding + obfuscated_value
-            else:
-                obfuscated_map[value] = "#" + obfuscated_value
-        else:
-            obfuscated_map[value] = "@" + str(count)
+    return obfuscated_map.obfuscate(value)
 
-    return obfuscated_map[value]
+
+def obfuscated_device_id(device_id: str):
+    """Conditionally obfuscate the device_id to send to logging/tracing"""
+    # TODO: eventually configure obfuscation x ConfigEntry ?
+    return OBFUSCATE_DEVICE_ID_MAP.obfuscate(device_id)
+
+
+def obfuscated_profile_id(profile_id: str):
+    """Conditionally obfuscate the profile_id (which is the Meross account userId) to send to logging/tracing"""
+    # TODO: eventually configure obfuscation x ConfigEntry ?
+    return OBFUSCATE_USERID_MAP.obfuscate(profile_id)
 
 
 def obfuscated_list_copy(data: list):
@@ -768,10 +792,7 @@ class ConfigEntryManager(EntityManager):
             # we're setting up a logging.Logger for every ConfigEntry
             # to allow enabling/setting the logging level at the ConfigEntry
             # naming uses the ConfigEntry
-            if MEROSSDEBUG:
-                logger = getLogger(f"{LOGGER.name}.{logtag}_{id}")
-            else:
-                logger = getLogger(f"{LOGGER.name}.{logtag}_{config_entry_id}")
+            logger = getLogger(f"{LOGGER.name}.{logtag}")
             try:
                 # do not use self.exception_warning since we're not set yet
                 logger.setLevel(self.config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
@@ -1170,7 +1191,8 @@ class ApiProfile(ConfigEntryManager):
     def attach_mqtt(self, device: MerossDevice):
         pass
 
-    def trace_or_log(self,
+    def trace_or_log(
+        self,
         connection: MQTTConnection,
         device_id: str,
         message: MerossMessage | MerossMessageType,
@@ -1190,11 +1212,11 @@ class ApiProfile(ConfigEntryManager):
             header = message[mc.KEY_HEADER]
             connection.log(
                 self.DEBUG,
-                "%s(%s) %s %s (device_id:%s messageId:%s)",
+                "%s(%s) %s %s (uuid:%s messageId:%s)",
                 rxtx,
                 CONF_PROTOCOL_MQTT,
                 header[mc.KEY_METHOD],
                 header[mc.KEY_NAMESPACE],
-                device_id,
+                obfuscated_device_id(device_id),
                 header[mc.KEY_MESSAGEID],
             )

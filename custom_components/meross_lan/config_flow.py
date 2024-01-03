@@ -17,7 +17,14 @@ from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
-from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, StrEnum, reverse_lookup
+from .helpers import (
+    LOGGER,
+    ApiProfile,
+    ConfigEntriesHelper,
+    StrEnum,
+    obfuscated_device_id,
+    reverse_lookup,
+)
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
@@ -353,8 +360,11 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             _httpclient.key = key
         else:
             self._httpclient = _httpclient = MerossHttpClient(
-                host, key, async_get_clientsession(self.hass), LOGGER,  # type: ignore
-                logging.DEBUG
+                host,
+                key,
+                async_get_clientsession(self.hass),
+                LOGGER,  # type: ignore
+                logging.DEBUG,
             )
 
         payload = (
@@ -556,25 +566,25 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                             ] = time()  # force ConfigEntry update..
                             entries.async_update_entry(entry, data=data)
                             LOGGER.info(
-                                "DHCP updated {ip=%s, mac=%s} for device %s",
+                                "DHCP updated (ip:%s mac:%s) for uuid:%s",
                                 host,
                                 discovery_info.macaddress,
-                                entry_descriptor.uuid,
+                                obfuscated_device_id(entry_descriptor.uuid),
                             )
                         else:
                             LOGGER.error(
-                                "received a DHCP update {ip=%s, mac=%s} but the new device {uuid=%s} doesn't match the configured one {uuid=%s}",
+                                "received a DHCP update (ip:%s mac:%s) but the new uuid:%s doesn't match the configured one (uuid:%s)",
                                 host,
                                 discovery_info.macaddress,
-                                _descriptor.uuid,
-                                entry_descriptor.uuid,
+                                obfuscated_device_id(_descriptor.uuid),
+                                obfuscated_device_id(entry_descriptor.uuid),
                             )
 
                     except Exception as error:
                         LOGGER.warning(
-                            "DHCP update error %s trying to identify device {uuid=%s} at {ip=%s, mac=%s}",
+                            "DHCP update error %s trying to identify uuid:%s at (ip:%s mac:%s)",
                             str(error),
-                            entry_descriptor.uuid,
+                            obfuscated_device_id(entry_descriptor.uuid),
                             host,
                             discovery_info.macaddress,
                         )
@@ -890,7 +900,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                                 LOGGER.warning(
                                     "Device registry entry for %s (uuid:%s) was updated in order to fix it. The friendly name ('%s') has been lost and needs to be manually re-entered",
                                     descriptor_update.productmodel,
-                                    self._device_id,
+                                    obfuscated_device_id(self._device_id),
                                     _name_by_user,
                                 )
 
@@ -899,7 +909,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                                 "error (%s) while trying to repair device registry for %s (uuid:%s)",
                                 str(error),
                                 descriptor_update.productmodel,
-                                self._device_id,
+                                obfuscated_device_id(self._device_id),
                             )
 
                         await self.hass.config_entries.async_reload(

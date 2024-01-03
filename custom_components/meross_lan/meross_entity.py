@@ -197,12 +197,12 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         return self._attr_unique_id
 
     async def async_added_to_hass(self):
-        self.log(self.DEBUG, "added to HomeAssistant")
+        self.log(self.DEBUG, "Added to HomeAssistant")
         self._hass_connected = True
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
-        self.log(self.DEBUG, "removed from HomeAssistant")
+        self.log(self.DEBUG, "Removed from HomeAssistant")
         self._hass_connected = False
         return await super().async_will_remove_from_hass()
 
@@ -239,7 +239,10 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         # this is a default handler for any message (in protocol routing)
         # for which we haven't defined a specific handler (see MerossDevice._parse__generic)
         self.log(
-            self.WARNING, "handler undefined for payload:(%s)", str(payload), timeout=14400
+            self.WARNING,
+            "Handler undefined for payload:(%s)",
+            str(payload),
+            timeout=14400,
         )
 
     # even though these are toggle/binary_sensor properties

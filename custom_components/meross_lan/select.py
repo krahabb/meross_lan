@@ -254,7 +254,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             # state machine...was it removed from HA ?
             self.log(
                 self.WARNING,
-                "tracked entity state is missing: was it removed from HomeAssistant ?",
+                "Tracked entity state is missing: was it removed from HomeAssistant ?",
                 timeout=14400,
             )
             return
@@ -325,7 +325,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             )
             self.log(
                 self.DEBUG,
-                "applying correction of %s %s to %s",
+                "Applying correction of %s %s to %s",
                 adjust_temperature,
                 climate.TEMP_CELSIUS,
                 climate.entity_id,

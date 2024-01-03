@@ -278,7 +278,7 @@ class MerossDeviceHub(MerossDevice):
                 subdevice = self.subdevices[p_id]
                 self.log(
                     self.WARNING,
-                    "removing subdevice %s(%s) - configuration will be reloaded in few sec",
+                    "Removing subdevice %s(%s) - configuration will be reloaded in few sec",
                     subdevice.name,
                     p_id,
                 )

@@ -34,6 +34,8 @@ from .helpers import (
     ConfigEntriesHelper,
     Loggable,
     datetime_from_epoch,
+    obfuscated_device_id,
+    obfuscated_profile_id,
     schedule_async_callback,
     schedule_callback,
     versiontuple,
@@ -212,11 +214,11 @@ class _MQTTTransaction:
     def cancel(self):
         self.mqtt_connection.log(
             self.mqtt_connection.DEBUG,
-            "cancelling mqtt transaction on %s %s (messageId: %s, device_id: %s)",
+            "Cancelling mqtt transaction on %s %s (uuid:%s messageId:%s)",
             self.method,
             self.namespace,
+            obfuscated_device_id(self.device_id),
             self.messageid,
-            self.device_id,
         )
         self.response_future.cancel()
         self.mqtt_connection._mqtt_transactions.pop(self.messageid, None)
@@ -373,10 +375,10 @@ class MQTTConnection(Loggable):
                     self.log_exception(
                         self.DEBUG,
                         exception,
-                        "waiting for MQTT reply to %s %s (device_id: %s, messageId: %s)",
+                        "waiting for MQTT reply to %s %s (uuid:%s messageId:%s)",
                         request.method,
                         request.namespace,
-                        device_id,
+                        obfuscated_device_id(device_id),
                         request.messageid,
                     )
                     return None
@@ -387,10 +389,11 @@ class MQTTConnection(Loggable):
             self.log_exception(
                 self.DEBUG,
                 exception,
-                "async_mqtt_publish device_id:(%s) method:(%s) namespace:(%s)",
-                device_id,
+                "async_mqtt_publish %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
+                obfuscated_device_id(device_id),
+                request.messageid,
             )
             if transaction:
                 transaction.cancel()
@@ -444,7 +447,7 @@ class MQTTConnection(Loggable):
                 # another profile. In this case we could automagically fix this (see later)
                 self.log(
                     self.WARNING,
-                    "device(%s) not registered for MQTT handling on this profile",
+                    "Device(%s) not registered for MQTT handling on this profile",
                     device.name,
                     timeout=14400,
                 )
@@ -483,8 +486,8 @@ class MQTTConnection(Loggable):
                 # entry already present...skip discovery
                 self.log(
                     self.INFO,
-                    "ignoring MQTT discovery for already configured device_id: %s (ConfigEntry is %s)",
-                    device_id,
+                    "Ignoring MQTT discovery for already configured uuid:%s (ConfigEntry is %s)",
+                    obfuscated_device_id(device_id),
                     "disabled"
                     if config_entry.disabled_by
                     else "ignored"
@@ -498,8 +501,8 @@ class MQTTConnection(Loggable):
             if config_entries_helper.get_config_flow(device_id):
                 self.log(
                     self.DEBUG,
-                    "ignoring discovery for device_id: %s (ConfigFlow is in progress)",
-                    device_id,
+                    "Ignoring MQTT discovery for uuid:%s (ConfigFlow is in progress)",
+                    obfuscated_device_id(device_id),
                     timeout=14400,  # type: ignore
                 )
                 return
@@ -508,8 +511,8 @@ class MQTTConnection(Loggable):
             if get_replykey(header, key) is not key:
                 self.log(
                     self.WARNING,
-                    "discovery key error for device_id: %s",
-                    device_id,
+                    "Discovery key error for uuid:%s",
+                    obfuscated_device_id(device_id),
                     timeout=300,
                 )
                 if key is not None:
@@ -523,7 +526,9 @@ class MQTTConnection(Loggable):
         to speed up things. Raises exception in case of error
         """
         self.log(
-            self.DEBUG, "Initiating 1-step identification for device id:%s", device_id
+            self.DEBUG,
+            "Initiating 1-step identification for uuid:%s",
+            obfuscated_device_id(device_id),
         )
         topic_response = self.topic_response
         response = await self.async_mqtt_publish(
@@ -574,8 +579,8 @@ class MQTTConnection(Loggable):
             # raise error
             self.log(
                 self.DEBUG,
-                "Identification error for device id:%s. Falling back to 2-steps procedure",
-                device_id,
+                "Identification error for uuid:%s. Falling back to 2-steps procedure",
+                obfuscated_device_id(device_id),
             )
             try:
                 response = await self.async_mqtt_publish(
@@ -618,7 +623,9 @@ class MQTTConnection(Loggable):
         result = None
         self.mqttdiscovering.add(device_id)
         with self.exception_warning(
-            "async_try_discovery (device id:%s)", device_id, timeout=14400
+            "async_try_discovery (uuid:%s)",
+            obfuscated_device_id(device_id),
+            timeout=14400,
         ):
             result = await ApiProfile.hass.config_entries.flow.async_init(
                 DOMAIN,
@@ -741,11 +748,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             def _random_disconnect():
                 if self.state_inactive:
                     if MEROSSDEBUG.mqtt_random_connect():
-                        self.log(self.DEBUG, "random connect")
+                        self.log(self.DEBUG, "Random connect")
                         self.safe_start(self.broker)
                 else:
                     if MEROSSDEBUG.mqtt_random_disconnect():
-                        self.log(self.DEBUG, "random disconnect")
+                        self.log(self.DEBUG, "Random disconnect")
                         self.safe_stop()
                 self._unsub_random_disconnect = schedule_callback(
                     ApiProfile.hass, 60, _random_disconnect
@@ -838,10 +845,10 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                 )
             self.log(
                 self.DEBUG,
-                "MQTT DROP %s %s (device_id: %s, messageId: %s)",
+                "MQTT DROP %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
-                device_id,
+                obfuscated_device_id(device_id),
                 request.messageid,
             )
             return (self._MQTT_DROP, 0)
@@ -853,10 +860,10 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                 )
             self.log(
                 self.DEBUG,
-                "MQTT QUEUE %s %s (device_id: %s, messageId: %s)",
+                "MQTT QUEUE %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
-                device_id,
+                obfuscated_device_id(device_id),
                 request.messageid,
             )
             return (
@@ -934,7 +941,12 @@ class MerossCloudProfile(ApiProfile):
     )
 
     def __init__(self, config_entry: ConfigEntry):
-        super().__init__(config_entry.data[mc.KEY_USERID_], config_entry, "profile")
+        profile_id = str(
+            config_entry.data[mc.KEY_USERID_]
+        )  # better be safe with userid stringness
+        super().__init__(
+            profile_id, config_entry, f"profile_{obfuscated_profile_id(profile_id)}"
+        )
         self._store = MerossCloudProfileStore(self.id)
         self._unsub_polling_query_device_info: asyncio.TimerHandle | None = None
 
@@ -1043,7 +1055,7 @@ class MerossCloudProfile(ApiProfile):
         if device.id not in self._data[self.KEY_DEVICE_INFO]:
             self.log(
                 self.WARNING,
-                "cannot connect MQTT for MerossDevice(%s): it does not belong to the current profile",
+                "Cannot connect MQTT for Device(%s): it does not belong to the current profile",
                 device.name,
             )
             return
@@ -1154,7 +1166,7 @@ class MerossCloudProfile(ApiProfile):
             assert self.key == credentials[mc.KEY_KEY]
             token = self._data.get(mc.KEY_TOKEN)
             if token != credentials[mc.KEY_TOKEN]:
-                self.log(self.DEBUG, "updating credentials with new token")
+                self.log(self.DEBUG, "Updating credentials with new token")
                 if token:
                     # discard old one to play it nice but token might be expired
                     with self.exception_warning("async_cloudapi_logout"):
@@ -1178,12 +1190,12 @@ class MerossCloudProfile(ApiProfile):
         async with self._async_token_manager("async_query_device_info") as token:
             self.log(
                 self.DEBUG,
-                "querying device list - last query was at: %s",
+                "Querying device list - last query was at: %s",
                 datetime_from_epoch(self._device_info_time).isoformat(),
             )
             if not token:
                 self.log(
-                    self.WARNING, "querying device list cancelled: missing api token"
+                    self.WARNING, "Querying device list cancelled: missing api token"
                 )
                 return None
             self._device_info_time = time()
@@ -1391,10 +1403,10 @@ class MerossCloudProfile(ApiProfile):
         async with self._async_token_manager("_async_query_subdevices") as token:
             if not token:
                 self.log(
-                    self.WARNING, "querying subdevice list cancelled: missing api token"
+                    self.WARNING, "Querying subdevice list cancelled: missing api token"
                 )
                 return None
-            self.log(self.DEBUG, "querying subdevice list")
+            self.log(self.DEBUG, "Querying subdevice list")
             return await async_cloudapi_hub_getsubdevices(
                 token, device_id, async_get_clientsession(ApiProfile.hass)
             )
@@ -1447,8 +1459,8 @@ class MerossCloudProfile(ApiProfile):
         for device_id in device_info_removed:
             self.log(
                 self.DEBUG,
-                "The device %s has been removed from the cloud profile",
-                device_id,
+                "The uuid:%s has been removed from the cloud profile",
+                obfuscated_device_id(device_id),
             )
             device_info_dict.pop(device_id)
             if device := self.linkeddevices.get(device_id):
@@ -1507,8 +1519,8 @@ class MerossCloudProfile(ApiProfile):
                 device_id = device_info[mc.KEY_UUID]
                 self.log(
                     self.DEBUG,
-                    "Trying/Initiating discovery for (new) device:%s",
-                    device_id,
+                    "Trying/Initiating discovery for (new) uuid:%s",
+                    obfuscated_device_id(device_id),
                 )
                 if config_entries_helper.get_config_flow(device_id):
                     continue  # device configuration already progressing
