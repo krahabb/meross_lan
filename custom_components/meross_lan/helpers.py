@@ -852,8 +852,7 @@ class ConfigEntryManager(EntityManager):
     async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
         assert not self._unsub_entry_update_listener
         assert config_entry.entry_id not in ApiProfile.managers
-        self.config_entry_id = config_entry.entry_id
-        self.config = config_entry.data
+        assert self.config_entry_id == config_entry.entry_id
         ApiProfile.managers[self.config_entry_id] = self
 
         # open the trace before adding the entities

@@ -570,10 +570,10 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
 
     if unique_id == mlc.DOMAIN:
         # MQTT Hub entry
-        api.config = config_entry.data
-        api.key = config_entry.data.get(mlc.CONF_KEY) or ""
         if not await api.mqtt_connection.async_mqtt_subscribe():
             raise ConfigEntryNotReady("MQTT unavailable")
+        api.config_entry_id = config_entry.entry_id
+        await api.entry_update_listener(hass, config_entry)
         await api.async_setup_entry(hass, config_entry)
         return True
 
