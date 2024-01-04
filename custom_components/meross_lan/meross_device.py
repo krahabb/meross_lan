@@ -246,7 +246,7 @@ class MerossDeviceBase(EntityManager):
     async def async_request_raw(
         self,
         request: MerossRequest,
-    ) -> MerossMessageType | None:
+    ) -> MerossResponse | None:
         raise NotImplementedError
 
     async def async_request(
@@ -254,7 +254,7 @@ class MerossDeviceBase(EntityManager):
         namespace: str,
         method: str,
         payload: MerossPayloadType,
-    ) -> MerossMessageType | None:
+    ) -> MerossResponse | None:
         raise NotImplementedError
 
     async def async_request_ack(
@@ -262,7 +262,7 @@ class MerossDeviceBase(EntityManager):
         namespace: str,
         method: str,
         payload: MerossPayloadType,
-    ) -> MerossMessageType | None:
+    ) -> MerossResponse | None:
         response = await self.async_request(namespace, method, payload)
         return (
             response
@@ -348,6 +348,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "device_timedelta_log_epoch",
         "device_timedelta_config_epoch",
         "device_debug",
+        "device_response_size_min",
         "device_response_size_max",
         "lastrequest",
         "lastresponse",
@@ -394,6 +395,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.device_debug = {}
+        self.device_response_size_min = 2000
         self.device_response_size_max = 5000
         self.lastrequest = 0.0
         self.lastresponse = 0.0
@@ -521,7 +523,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self._http = self._http_active = None
                 self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
             else:
-                http.key = self.key
                 if host := self.host:
                     http.host = host
 
@@ -845,6 +846,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 )
                 try:
                     response = await http.async_request_message(request)
+                    self.device_response_size_min = max(
+                        self.device_response_size_min, len(response.json())
+                    )
                     break
                 except TerminatedException:
                     return None
@@ -854,7 +858,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     # device http output buffer (when the response is too long)
                     self.log(
                         self.DEBUG,
-                        "HTTP ERROR %s %s (messageId:%s jsonerror:%s attempt:%d)",
+                        "HTTP ERROR %s %s (messageId:%s JSONDecodeError:%s attempt:%d)",
                         method,
                         namespace,
                         request.messageid,
@@ -867,6 +871,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if error_pos > response_text_len_safe:
                         # the error happened because of truncated json payload
                         self.device_response_size_max = response_text_len_safe
+                        self.device_response_size_min = min(
+                            self.device_response_size_min, self.device_response_size_max
+                        )
+                        self.log(
+                            self.DEBUG,
+                            "Updating device_response_size_min:%d device_response_size_max:%d",
+                            self.device_response_size_min,
+                            self.device_response_size_max,
+                        )
                         if namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
                             # try to recover by discarding the incomplete
                             # message at the end
@@ -902,6 +915,25 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             # this is expected when issuing the UNBIND
                             # so this is an indication we're dead
                             self._set_offline()
+                            return None
+                    elif namespace is mc.NS_APPLIANCE_CONTROL_MULTIPLE:
+                        if isinstance(exception, ServerDisconnectedError):
+                            # this happens (instead of JSONDecodeError)
+                            # on my msl120. I guess the (older) fw behaves
+                            # differently than those responding incomplete json.
+                            # the None response will be managed in the caller
+                            # Here we reduce the device_response_size_max so that
+                            # next ns_multiple will be less demanding. device_response_size_min
+                            # is another dynamic param representing the biggest payload ever received
+                            self.device_response_size_max = (
+                                self.device_response_size_max
+                                + self.device_response_size_min
+                            ) / 2
+                            self.log(
+                                self.DEBUG,
+                                "Updating device_response_size_max:%d",
+                                self.device_response_size_max,
+                            )
                             return None
 
                     if isinstance(exception, asyncio.TimeoutError):
@@ -1012,7 +1044,27 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     },
                 )
             ):
-                return  # likely offline
+                # the ns_multiple failed but the reason could be the device
+                # did overflow somehow. I've seen 2 kind of errors so far on the
+                # HTTP client: typically the device returns an incomplete json
+                # and this is partly recovered in our http interface. One(old)
+                # bulb (msl120) instead completely disconnects (ServerDisconnectedException
+                # in http client) and so we get here with no response. The same
+                # msl bulb timeouts completely on MQTT, so the response to our mqtt requests
+                # is None again. At this point, if the device is still online we're
+                # trying a last resort issue of single requests
+                if self._online:
+                    self.log(
+                        self.WARNING,
+                        "Appliance.Control.Multiple failed with no response: requests=%d expected size=%d",
+                        requests_len,
+                        multiple_response_size,
+                    )
+                    for request in multiple_requests:
+                        await self.async_request(*request)
+                        if not self._online:
+                            break
+                return
 
             multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
             responses_len = len(multiple_responses)
@@ -1023,7 +1075,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     requests_len,
                     responses_len,
                     multiple_response_size,
-                    len(json_dumps(response)),
+                    len(response.json()),
                 )
             message: MerossMessageType
             if responses_len == requests_len:

@@ -73,6 +73,8 @@ async def async_get_config_entry_diagnostics(
                 strategy.namespace: strategy.lastrequest
                 for strategy in device.polling_strategies.values()
             },
+            "device_response_size_min": device.device_response_size_min,
+            "device_response_size_max": device.device_response_size_max,
         }
         data[mlc.CONF_TRACE] = await device.get_diagnostics_trace()
         return data
