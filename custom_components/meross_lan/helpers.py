@@ -45,7 +45,6 @@ from .const import (
     POLLING_STRATEGY_CONF,
 )
 from .merossclient import (
-    MEROSSDEBUG,
     const as mc,
     get_default_arguments,
     get_namespacekey,
@@ -86,9 +85,7 @@ if typing.TYPE_CHECKING:
     from .meross_entity import MerossEntity
     from .meross_profile import MerossCloudProfile, MQTTConnection
     from .merossclient import (
-        MerossHeaderType,
         MerossMessage,
-        MerossMessageType,
         MerossPayloadType,
     )
 
@@ -781,23 +778,6 @@ class ConfigEntryManager(EntityManager):
             self.config = config = config_entry.data
             self.key = config.get(CONF_KEY) or ""
             self.obfuscate = config.get(CONF_OBFUSCATE, True)
-            # we're setting up a logging.Logger for every ConfigEntry
-            # to allow enabling/setting the logging level at the ConfigEntry
-            # naming uses the ConfigEntry
-            if CONF_DEVICE_ID in config:
-                loggername = f"device_{self.obfuscated_device_id(id)}"
-            else:
-                loggername = f"profile_{self.obfuscated_profile_id(id)}"
-            logger = getLogger(f"{LOGGER.name}.{loggername}")
-            try:
-                # do not use self.exception_warning since we're not set yet
-                logger.setLevel(config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
-            except Exception as exception:
-                LOGGER.warning(
-                    "error (%s) setting log level: likely a corrupted configuration entry",
-                    str(exception),
-                )
-
         else:
             # this is the MerossApi: it will be better initialized when
             # the ConfigEntry is loaded
@@ -805,7 +785,6 @@ class ConfigEntryManager(EntityManager):
             self.key = ""
             self.config = {}
             self.obfuscate = True
-            logger = getLogger(f"{LOGGER.name}.api")
         # when we build an entity we also add the relative platform name here
         # so that the async_setup_entry for this integration will be able to forward
         # the setup to the appropriate platform(s).
@@ -819,6 +798,7 @@ class ConfigEntryManager(EntityManager):
         self._unsub_trace_endtime: asyncio.TimerHandle | None = None
         self._unsub_entry_update_listener = None
         self._unsub_entry_reload_scheduler: asyncio.TimerHandle | None = None
+        logger = self._get_configured_logger(id)
         super().__init__(id, config_entry_id=config_entry_id, logger=logger, **kwargs)
 
     async def async_shutdown(self):
@@ -904,13 +884,29 @@ class ConfigEntryManager(EntityManager):
         config = self.config
         self.key = config.get(CONF_KEY) or ""
         self.obfuscate = config.get(CONF_OBFUSCATE, True)
+        self.logger = self._get_configured_logger(self.id)
+
+    @abc.abstractmethod
+    def get_logger_name(self, id: str) -> str:
+        raise NotImplementedError()
+
+    def _get_configured_logger(self, id: str) -> logging.Logger:
+        """
+        Configure a Logger based off current config for every ConfigEntry.
+        We'll need this updated when CONF_OBFUSCATE changes since
+        the name might depend on it. We're then using this call during
+        __init__ for the first setup and subsequently when ConfigEntry changes
+        """
+        logger = getLogger(f"{LOGGER.name}.{self.get_logger_name(id)}")
         try:
-            self.logger.setLevel(config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
+            # do not use self.exception_warning since we're not set yet
+            logger.setLevel(self.config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
         except Exception as exception:
             LOGGER.warning(
                 "error (%s) setting log level: likely a corrupted configuration entry",
                 str(exception),
             )
+        return logger
 
     # tracing capabilities
     def get_diagnostics_trace(self) -> asyncio.Future:
@@ -1210,7 +1206,7 @@ class ApiProfile(ConfigEntryManager):
         self,
         connection: MQTTConnection,
         device_id: str,
-        message: MerossMessage | MerossMessageType,
+        message: MerossMessage,
         rxtx: str,
     ):
         if self.trace_file:
@@ -1234,7 +1230,9 @@ class ApiProfile(ConfigEntryManager):
                 header[mc.KEY_NAMESPACE],
                 self.obfuscated_device_id(device_id),
                 header[mc.KEY_MESSAGEID],
-                json_dumps(self.obfuscated_payload(message)),
+                json_dumps(obfuscated_dict_copy(message))
+                if self.obfuscate
+                else message.json(),
             )
         elif self.isEnabledFor(self.DEBUG):
             header = message[mc.KEY_HEADER]

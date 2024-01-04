@@ -43,12 +43,11 @@ from .merossclient import (
     MEROSSDEBUG,
     HostAddress,
     MerossRequest,
-    check_message_strict,
+    MerossResponse,
     const as mc,
     get_default_arguments,
     get_message_uuid,
     get_replykey,
-    json_loads,
 )
 from .merossclient.cloudapi import (
     APISTATUS_TOKEN_ERRORS,
@@ -206,7 +205,9 @@ class _MQTTTransaction:
         self.messageid = request.messageid
         self.method = request.method
         self.request_time = time()
-        self.response_future = asyncio.get_running_loop().create_future()
+        self.response_future: asyncio.Future[
+            MerossResponse
+        ] = asyncio.get_running_loop().create_future()
         mqtt_connection._mqtt_transactions[request.messageid] = self
 
     def cancel(self):
@@ -356,7 +357,7 @@ class MQTTConnection(Loggable):
         self,
         device_id: str,
         request: MerossMessage,
-    ) -> MerossMessageType | None:
+    ) -> MerossResponse | None:
         if request.method in mc.METHOD_ACK_MAP.keys():
             transaction = _MQTTTransaction(self, device_id, request)
         else:
@@ -406,7 +407,7 @@ class MQTTConnection(Loggable):
             if sensor_connection := self.sensor_connection:
                 sensor_connection.inc_counter(ConnectionSensor.ATTR_RECEIVED)
             mqtt_payload = mqtt_msg.payload
-            message: MerossMessageType = json_loads(
+            message = MerossResponse(
                 mqtt_payload
                 if type(mqtt_payload) is str
                 else mqtt_payload.decode("utf-8")  # type: ignore
@@ -439,27 +440,41 @@ class MQTTConnection(Loggable):
 
             if device := ApiProfile.devices.get(device_id):
                 if device._mqtt_connection == self:
-                    device.mqtt_receive(header, payload)
+                    device.mqtt_receive(message)
                     return
-                # we have the device registered but somehow it is not 'mqtt binded'
-                # either it's configuration is ONLY_HTTP or it is paired to
+                # we have the device loaded but somehow it is not 'mqtt binded' here.
+                # Either it's configuration is CONF_PROTOCOL_HTTP or it is paired to
                 # another profile. In this case we could automagically fix this (see later)
-                self.log(
-                    self.WARNING,
-                    "Device(%s) not registered for MQTT handling on this profile",
-                    device.name,
-                    timeout=14400,
-                )
-                # all in all (device._mqtt_connection != self) when
-                # - the device is configured for HTTP only (_mqtt_connection will be null anyway)
-                # - the device is registered on another profile
-                if device._profile != self.profile:
-                    # the device could be HTTP only but we want to at
-                    # least link the correct profile
-                    if self.profile.try_link(device):
+                if device._profile != profile:
+                    # It could happen (I guess) when devices 'switch' broker while the
+                    # integration was already loaded so not really often
+                    if profile.try_link(device):
+                        self.log(
+                            self.WARNING,
+                            "Device uuid:%s has been automatically re-linked to this profile",
+                            profile.obfuscated_device_id(device_id),
+                        )
                         # keep checking MQTT proto is allowed at the device level
                         if device._mqtt_connection == self:
-                            device.mqtt_receive(header, payload)
+                            device.mqtt_receive(message)
+                            return
+                        # else..keep going so we log the '...HTTP_ONLY..'
+                    else:
+                        # this is not really expected and deserves a warning
+                        self.log(
+                            self.WARNING,
+                            "Device uuid:%s cannot not registered for MQTT handling on this profile",
+                            profile.obfuscated_device_id(device_id),
+                            timeout=14400,
+                        )
+                        return
+
+                self.log(
+                    self.DEBUG,
+                    "Device uuid:%s not registered for MQTT handling. It is likely HTTP_ONLY",
+                    profile.obfuscated_device_id(device_id),
+                    timeout=14400,
+                )
                 return
 
             # the device is not configured: proceed to discovery in case
@@ -469,7 +484,7 @@ class MQTTConnection(Loggable):
             # lookout for any disabled/ignored entry
             config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
             if (
-                (self.profile is ApiProfile.api)
+                (profile is ApiProfile.api)
                 and (not config_entries_helper.get_config_entry(DOMAIN))
                 and (not config_entries_helper.get_config_flow(DOMAIN))
             ):
@@ -828,7 +843,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
 
         ret = self.rl_publish(
             mc.TOPIC_REQUEST.format(device_id),
-            request.to_string(),
+            request.json(),
             MerossMQTTConnection._MSG_PRIORITY_MAP[request.method],
         )
         if ret is False:
@@ -1034,11 +1049,14 @@ class MerossCloudProfile(ApiProfile):
             self._unsub_polling_query_device_info = None
         await super().async_shutdown()
 
-    # interface: EntityManager
+    # interface: ConfigEntryManager
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
         config = config_entry.data
         await self.async_update_credentials(config)  # type: ignore
         await super().entry_update_listener(hass, config_entry)
+
+    def get_logger_name(self, id: str) -> str:
+        return f"profile_{self.obfuscated_profile_id(id)}"
 
     # interface: ApiProfile
     def attach_mqtt(self, device: MerossDevice):

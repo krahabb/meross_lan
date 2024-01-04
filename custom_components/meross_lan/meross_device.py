@@ -57,6 +57,7 @@ from .merossclient import (
     MEROSSDEBUG,
     HostAddress,
     MerossRequest,
+    MerossResponse,
     const as mc,
     get_default_arguments,
     get_message_signature,
@@ -65,7 +66,6 @@ from .merossclient import (
     get_port_safe,
     is_device_online,
     json_dumps,
-    json_loads,
 )
 from .merossclient.httpclient import MerossHttpClient, TerminatedException
 from .sensor import PERCENTAGE, MLSensor, ProtocolSensor
@@ -82,6 +82,7 @@ if typing.TYPE_CHECKING:
     from .merossclient import (
         MerossDeviceDescriptor,
         MerossHeaderType,
+        MerossMessage,
         MerossMessageType,
         MerossPayloadType,
         MerossRequestType,
@@ -502,7 +503,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     with self.exception_warning(_init_method_name):
                         _init(_payload)
 
-    # interface: EntityManager
+    # interface: ConfigEntryManager
     @callback
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry
@@ -528,6 +529,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # so we'll eventually retry querying the device
         if not self._online:
             self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
+
+    def get_logger_name(self, id: str) -> str:
+        return f"device_{self.obfuscated_device_id(id)}"
 
     def _trace_opened(self, epoch: float):
         descr = self.descriptor
@@ -577,7 +581,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     async def async_request_raw(
         self,
         request: MerossRequest,
-    ) -> MerossMessageType | None:
+    ) -> MerossResponse | None:
         """
         route the request through MQTT or HTTP to the physical device.
         callback will be called on successful replies and actually implemented
@@ -618,7 +622,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         namespace: str,
         method: str,
         payload: MerossPayloadType,
-    ) -> MerossMessageType | None:
+    ) -> MerossResponse | None:
         return await self.async_request_raw(
             MerossRequest(self.key, namespace, method, payload, self._topic_response)
         )
@@ -762,8 +766,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     async def async_mqtt_request_raw(
         self,
-        request: MerossRequest,
-    ) -> MerossMessageType | None:
+        request: MerossMessage,
+    ) -> MerossResponse | None:
         if not self._mqtt_publish:
             # even if we're smart enough to not call async_mqtt_request when no mqtt
             # available, it could happen we loose that when asynchronously coming here
@@ -775,8 +779,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._mqtt_lastrequest = time()
         self._trace_or_log(
             self._mqtt_lastrequest,
-            request[mc.KEY_HEADER],
-            request[mc.KEY_PAYLOAD],
+            request,
             CONF_PROTOCOL_MQTT,
             self.TRACE_TX,
         )
@@ -813,7 +816,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         request: MerossRequest,
         attempts: int = 1,
-    ) -> MerossMessageType | None:
+    ) -> MerossResponse | None:
         method = request.method
         namespace = request.namespace
         with self.exception_warning(
@@ -827,8 +830,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     self.host,  # type: ignore
                     self.key,
                     async_get_clientsession(ApiProfile.hass),
-                    self,  # type: ignore (our Loggable interface is compatible with the MerossHttpClient logger)
-                    self.VERBOSE,
                 )
                 self._http = http
 
@@ -838,13 +839,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self._http_lastrequest = time()
                 self._trace_or_log(
                     self._http_lastrequest,
-                    request[mc.KEY_HEADER],
-                    request[mc.KEY_PAYLOAD],
+                    request,
                     CONF_PROTOCOL_HTTP,
                     self.TRACE_TX,
                 )
                 try:
-                    response = await http.async_request_raw(request)
+                    response = await http.async_request_message(request)
                     break
                 except TerminatedException:
                     return None
@@ -873,7 +873,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             trunc_pos = response_text.rfind(',{"header":')
                             if trunc_pos != -1:
                                 response_text = response_text[0:trunc_pos] + "]}}"
-                                response: MerossMessageType = json_loads(response_text)
+                                response = MerossResponse(response_text)
                                 break
 
                     return None
@@ -909,8 +909,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             else:
                 return None
 
-            r_header = response[mc.KEY_HEADER]
-            r_payload = response[mc.KEY_PAYLOAD]
             # add a sanity check here since we have some issues (#341)
             # that might be related to misconfigured devices where the
             # host address points to a different device than configured.
@@ -921,13 +919,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # and this might (unluckily) be another Meross with the same key
             # so it could rightly respond here. This shouldnt happen over MQTT
             # since the device.id is being taken care of by the routing mechanism
-            if self._check_uuid_mismatch(get_message_uuid(r_header)):
+            if self._check_uuid_mismatch(get_message_uuid(response[mc.KEY_HEADER])):
                 return None
 
             self._http_lastresponse = epoch = time()
-            self._trace_or_log(
-                epoch, r_header, r_payload, CONF_PROTOCOL_HTTP, self.TRACE_RX
-            )
+            self._trace_or_log(epoch, response, CONF_PROTOCOL_HTTP, self.TRACE_RX)
             if not self._http_active:
                 self._http_active = http
                 self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_HTTP)
@@ -936,7 +932,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     not self._mqtt_active
                 ):
                     self._switch_protocol(CONF_PROTOCOL_HTTP)
-            self.receive(epoch, r_header, r_payload)
+            self.receive(epoch, response)
             return response
 
         return None
@@ -1081,13 +1077,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_request_flush()
 
-    def receive(
-        self, epoch: float, header: MerossHeaderType, payload: MerossPayloadType
-    ):
+    def receive(self, epoch: float, message: MerossResponse):
         """
         default (received) message handling entry point
         """
         self.lastresponse = epoch
+        header = message[mc.KEY_HEADER]
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
         # and we want to 'translate' this timings in our (local) time.
@@ -1122,7 +1117,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     self.WARNING,
                     "Received signature error: computed=%s, header=%s",
                     sign,
-                    json_dumps(header),
+                    json_dumps(header),  # TODO: obfuscate header? check
                 )
 
         if not self._online:
@@ -1140,7 +1135,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     header[mc.KEY_NAMESPACE],
                 )
 
-        return self._handle(header, payload)
+        return self._handle(header, message[mc.KEY_PAYLOAD])
 
     def _handle(
         self,
@@ -1347,10 +1342,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
             self.descriptor.update_time(payload[mc.KEY_TIME])
 
-    def mqtt_receive(self, header: MerossHeaderType, payload: MerossPayloadType):
+    def mqtt_receive(self, message: MerossResponse):
         assert self._mqtt_connected and (self.conf_protocol is not CONF_PROTOCOL_HTTP)
         self._mqtt_lastresponse = epoch = time()
-        self._trace_or_log(epoch, header, payload, CONF_PROTOCOL_MQTT, self.TRACE_RX)
+        self._trace_or_log(epoch, message, CONF_PROTOCOL_MQTT, self.TRACE_RX)
         if not self._mqtt_active:
             self._mqtt_active = self._mqtt_connected
             if self._online:
@@ -1358,7 +1353,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if self.curr_protocol is not CONF_PROTOCOL_MQTT:
             if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (not self._http_active):
                 self._switch_protocol(CONF_PROTOCOL_MQTT)
-        self.receive(epoch, header, payload)
+        self.receive(epoch, message)
 
     def mqtt_attached(self, mqtt_connection: MQTTConnection):
         self.log(self.DEBUG, "mqtt_attached to %s", mqtt_connection.broker)
@@ -1909,21 +1904,34 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def _trace_or_log(
         self,
         epoch: float,
-        header: MerossHeaderType,
-        payload: MerossPayloadType,
+        message: MerossMessage,
         protocol: str,
         rxtx: str,
     ):
         if self.trace_file:
+            header = message[mc.KEY_HEADER]
             self.trace(
                 epoch,
-                payload,
+                message[mc.KEY_PAYLOAD],
                 header[mc.KEY_NAMESPACE],
                 header[mc.KEY_METHOD],
                 protocol,
                 rxtx,
             )
+        elif self.isEnabledFor(self.VERBOSE):
+            header = message[mc.KEY_HEADER]
+            self.log(
+                self.VERBOSE,
+                "%s(%s) %s %s (messageId:%s) %s",
+                rxtx,
+                protocol,
+                header[mc.KEY_METHOD],
+                header[mc.KEY_NAMESPACE],
+                header[mc.KEY_MESSAGEID],
+                json_dumps(self.obfuscated_payload(message)),
+            )
         elif self.isEnabledFor(self.DEBUG):
+            header = message[mc.KEY_HEADER]
             self.log(
                 self.DEBUG,
                 "%s(%s) %s %s (messageId:%s)",

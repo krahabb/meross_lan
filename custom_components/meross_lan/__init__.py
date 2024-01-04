@@ -37,12 +37,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import ServiceCall, ServiceResponse
 
-    from .merossclient import (
-        MerossHeaderType,
-        MerossMessage,
-        MerossMessageType,
-        MerossPayloadType,
-    )
+    from .merossclient import MerossHeaderType, MerossMessage, MerossPayloadType
 
 else:
     # In order to avoid a static dependency we resolve these
@@ -111,7 +106,7 @@ class HAMQTTConnection(MQTTConnection):
         request: MerossMessage,
     ) -> tuple[str, int]:
         await mqtt_async_publish(
-            ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.to_string()
+            ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.json()
         )
         self._mqtt_published()
         return self._MQTT_PUBLISH, self.DEFAULT_RESPONSE_TIMEOUT
@@ -395,7 +390,7 @@ class MerossApi(ApiProfile):
                                 async_get_clientsession(self.hass),
                                 self,  # type: ignore (our Loggable interface is compatible with the MerossHttpClient logger)
                                 self.VERBOSE,
-                            ).async_request_raw(request)
+                            ).async_request_message(request)
                             or {}
                         )
                     except Exception as exception:
@@ -417,7 +412,7 @@ class MerossApi(ApiProfile):
         )
         return
 
-    # interface: EntityManager
+    # interface: ConfigEntryManager
     async def async_shutdown(self):
         for device in self.active_devices():
             await device.async_shutdown()
@@ -427,6 +422,9 @@ class MerossApi(ApiProfile):
         await super().async_shutdown()
         ApiProfile.hass = None  # type: ignore
         ApiProfile.api = None  # type: ignore
+
+    def get_logger_name(self, id: str) -> str:
+        return "api"
 
     # interface: ApiProfile
     @property

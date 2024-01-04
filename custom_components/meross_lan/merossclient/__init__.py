@@ -158,7 +158,7 @@ class MerossKeyError(MerossProtocolError):
     reported by device
     """
 
-    def __init__(self, response: MerossMessageType):
+    def __init__(self, response: MerossResponse):
         super().__init__(response, "Invalid key")
 
 
@@ -168,7 +168,7 @@ class MerossSignatureError(MerossProtocolError):
     when validating the received header
     """
 
-    def __init__(self, response: MerossMessageType):
+    def __init__(self, response: MerossResponse):
         super().__init__(response, "Signature error")
 
 
@@ -378,7 +378,7 @@ def is_device_online(payload: dict) -> bool:
         return False
 
 
-def check_message_strict(message: MerossMessageType):
+def check_message_strict(message: MerossResponse):
     """
     Does a formal check of the message structure also raising a
     typed exception if formally correct but carrying a protocol error
@@ -416,10 +416,19 @@ class MerossMessage(dict):
         "method",
         "messageid",
         "payload",
+        "_json_str",
     )
 
-    def to_string(self):
-        return _json_encoder.encode(self)
+    def json(self):
+        if not self._json_str:
+            self._json_str = _json_encoder.encode(self)
+        return self._json_str
+
+
+class MerossResponse(MerossMessage):
+    def __init__(self, json_str: str):
+        self._json_str = json_str
+        super().__init__(_json_decoder.decode(json_str))
 
 
 class MerossRequest(MerossMessage):
@@ -431,6 +440,7 @@ class MerossRequest(MerossMessage):
         payload: MerossPayloadType | None = None,
         from_: str = mc.MANUFACTURER,
     ):
+        self._json_str = None
         self.namespace = namespace
         self.method = method
         self.messageid = uuid4().hex
@@ -463,6 +473,7 @@ class MerossPushReply(MerossMessage):
     """
 
     def __init__(self, header: MerossHeaderType, payload: MerossPayloadType):
+        self._json_str = None
         self.namespace = header[mc.KEY_NAMESPACE]
         self.method = header[mc.KEY_METHOD]
         self.messageid = header[mc.KEY_MESSAGEID]
@@ -486,6 +497,7 @@ class MerossAckReply(MerossMessage):
     def __init__(
         self, key: str, header: MerossHeaderType, payload: MerossPayloadType, from_: str
     ):
+        self._json_str = None
         self.namespace = header[mc.KEY_NAMESPACE]
         self.method = mc.METHOD_ACK_MAP[header[mc.KEY_METHOD]]
         self.messageid = header[mc.KEY_MESSAGEID]
@@ -611,5 +623,7 @@ class MerossDeviceDescriptor:
             if server := fw.get(mc.KEY_SERVER):
                 _brokers.append(HostAddress(server, get_port_safe(fw, mc.KEY_PORT)))
             if second_server := fw.get(mc.KEY_SECONDSERVER):
-                _brokers.append(HostAddress(second_server, get_port_safe(fw, mc.KEY_SECONDPORT)))
+                _brokers.append(
+                    HostAddress(second_server, get_port_safe(fw, mc.KEY_SECONDPORT))
+                )
         return _brokers
