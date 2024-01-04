@@ -14,7 +14,7 @@ from homeassistant.components.cover import (
     CoverDeviceClass,
     CoverEntityFeature,
 )
-from homeassistant.const import TIME_SECONDS
+from homeassistant.const import UnitOfTime
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry
 from homeassistant.util.dt import now
@@ -198,7 +198,7 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
 
     @property
     def native_unit_of_measurement(self):
-        return TIME_SECONDS
+        return UnitOfTime.SECONDS
 
     @property
     def device_scale(self):
@@ -1036,7 +1036,7 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
 
     @property
     def native_unit_of_measurement(self):
-        return TIME_SECONDS
+        return UnitOfTime.SECONDS
 
     @property
     def device_scale(self):
