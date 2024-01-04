@@ -118,9 +118,14 @@ class ConnectionSensor(MLSensor):
     _attr_state: str
     _attr_options = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_QUEUING, STATE_DROPPING]
 
+    __slots__ = ("connection",)
+
     def __init__(self, connection: MQTTConnection):
+        self.connection = connection
         self._attr_extra_state_attributes = {
-            ConnectionSensor.ATTR_DEVICES: {},
+            ConnectionSensor.ATTR_DEVICES: {
+                device.id: device.name for device in connection.mqttdevices.values()
+            },
             ConnectionSensor.ATTR_RECEIVED: 0,
             ConnectionSensor.ATTR_PUBLISHED: 0,
             ConnectionSensor.ATTR_DROPPED: 0,
@@ -136,6 +141,10 @@ class ConnectionSensor(MLSensor):
             else self.STATE_DISCONNECTED
         )
 
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.connection: MQTTConnection = None  # type: ignore
+
     @property
     def available(self):
         return True
@@ -148,16 +157,12 @@ class ConnectionSensor(MLSensor):
         raise NotImplementedError
 
     # interface: self
-    def add_device(self, device: MerossDevice):
-        self._attr_extra_state_attributes[ConnectionSensor.ATTR_DEVICES][
-            device.id
-        ] = device.name
-        self.flush_state()
-
-    def remove_device(self, device: MerossDevice):
-        self._attr_extra_state_attributes[ConnectionSensor.ATTR_DEVICES].pop(
-            device.id, None
-        )
+    def update_devices(self):
+        # rebuild the attr (sub)dict else we were keeping a reference
+        # to the underlying hass.state and updates were missing
+        self._attr_extra_state_attributes[ConnectionSensor.ATTR_DEVICES] = {
+            device.id: device.name for device in self.connection.mqttdevices.values()
+        }
         self.flush_state()
 
     def inc_counter(self, attr_name: str):
@@ -313,7 +318,7 @@ class MQTTConnection(Loggable):
         self.mqttdevices[device.id] = device
         device.mqtt_attached(self)
         if sensor_connection := self.sensor_connection:
-            sensor_connection.add_device(device)
+            sensor_connection.update_devices()
 
     def detach(self, device: MerossDevice):
         device_id = device.id
@@ -324,15 +329,11 @@ class MQTTConnection(Loggable):
         device.mqtt_detached()
         self.mqttdevices.pop(device_id)
         if sensor_connection := self.sensor_connection:
-            sensor_connection.remove_device(device)
+            sensor_connection.update_devices()
 
     def create_diagnostic_entities(self):
         if not self.sensor_connection:
             self.sensor_connection = ConnectionSensor(self)
-            if self.mqttdevices:
-                _add_device = self.sensor_connection.add_device
-                for device in self.mqttdevices.values():
-                    _add_device(device)
 
     async def async_destroy_diagnostic_entities(self):
         if sensor_connection := self.sensor_connection:
