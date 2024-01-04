@@ -193,6 +193,13 @@ class MerossDeviceHub(MerossDevice):
     def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
         self._parse_hub(payload[mc.KEY_HUB])
 
+    def _handle_Appliance_Hub_Exception(self, header: dict, payload: dict):
+        """
+        method:PUSH
+        payload:{'exception': [{'id': '01008C11', 'code': 5061}]}
+        """
+        self._subdevice_parse(mc.KEY_EXCEPTION, payload)
+
     def _handle_Appliance_Hub_Sensor_Adjust(self, header: dict, payload: dict):
         self._subdevice_parse(mc.KEY_ADJUST, payload)
 
@@ -631,6 +638,9 @@ class MerossSubDevice(MerossDeviceBase):
     def _parse_battery(self, p_battery: dict):
         if self._online:
             self.sensor_battery.update_state(p_battery.get(mc.KEY_VALUE))
+
+    def _parse_exception(self, p_exception: dict):
+        self.log(self.WARNING, "Received exception payload: %s", str(p_exception))
 
     def _parse_online(self, p_online: dict):
         if mc.KEY_STATUS in p_online:
