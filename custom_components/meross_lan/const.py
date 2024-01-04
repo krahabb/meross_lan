@@ -50,6 +50,7 @@ CONF_LOGGING_LEVEL_OPTIONS: Final = {
     CONF_LOGGING_DEBUG: "debug",
     CONF_LOGGING_VERBOSE: "verbose",
 }
+CONF_OBFUSCATE: Final = "obfuscate"
 # create a file with device info and communication tracing
 CONF_TRACE: Final = "trace"
 # when starting a trace stop it and close the file after .. secs
@@ -67,10 +68,17 @@ class HubConfigType(TypedDict):
     """MQTT Hub config_entry keys"""
 
     key: str
+    """device key used to discover devices over local MQTT"""
     allow_mqtt_publish: NotRequired[bool]
+    """allow meross_lan to publish over local MQTT: actually ignored since it is True in code"""
     create_diagnostic_entities: NotRequired[bool]
-    trace_timeout: NotRequired[int | None]
+    """create various diagnostic entities for debugging/diagnostics purposes"""
     logging_level: NotRequired[int]
+    """override the default log level set in HA configuration"""
+    obfuscate: NotRequired[bool]
+    """obfuscate sensitive data when logging/tracing"""
+    trace_timeout: NotRequired[int | None]
+    """duration of the tracing feature when activated"""
 
 
 class DeviceConfigTypeMinimal(TypedDict):
@@ -88,14 +96,25 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     """
 
     key: NotRequired[str | None]
+    """device key: needed to sign data for the device"""
     cloud_key: NotRequired[str | None]
+    """deprecated field: used to store the device key as recovered from the cloud account"""
     host: NotRequired[str]
+    """device address: when empty the device can still use the host address recovered through MQTT payloads"""
     protocol: NotRequired[str]
+    """configures the protocol: auto will automatically switch between the available transports"""
     polling_period: NotRequired[int | None]
+    """base polling period to query device state"""
     timezone: NotRequired[str]
+    """IANA timezone set in the device"""
     timestamp: NotRequired[float]
-    trace_timeout: NotRequired[int | None]
+    """special (hidden from UI) field used to force entry save"""
     logging_level: NotRequired[int]
+    """override the default log level set in HA configuration"""
+    obfuscate: NotRequired[bool]
+    """obfuscate sensitive data when logging/tracing"""
+    trace_timeout: NotRequired[int | None]
+    """duration of the tracing feature when activated"""
 
 
 CONF_EMAIL: Final = mc.KEY_EMAIL
@@ -112,12 +131,21 @@ class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
     """
 
     password: NotRequired[str]
+    """password of the Meross user account"""
     save_password: NotRequired[bool]
-    allow_mqtt_publish: NotRequired[bool]
+    """saves the account password in HA storage"""
     check_firmware_updates: NotRequired[bool]
+    """activate a periodical query to the cloud api to look for fw updates """
+    allow_mqtt_publish: NotRequired[bool]
+    """allow meross_lan to publish over local MQTT: actually ignored since it is True in code"""
     create_diagnostic_entities: NotRequired[bool]
-    trace_timeout: NotRequired[int | None]
+    """create various diagnostic entities for debugging/diagnostics purposes"""
     logging_level: NotRequired[int]
+    """override the default log level set in HA configuration"""
+    obfuscate: NotRequired[bool]
+    """obfuscate sensitive data when logging/tracing"""
+    trace_timeout: NotRequired[int | None]
+    """duration of the tracing feature when activated"""
 
 
 SERVICE_REQUEST = "request"
@@ -200,31 +228,101 @@ POLLING_STRATEGY_CONF: dict[str, tuple[int, int, int, int]] = {
     mc.NS_APPLIANCE_SYSTEM_ALL: (0, 0, 1000, 0),
     mc.NS_APPLIANCE_SYSTEM_DEBUG: (0, 0, 1900, 0),
     mc.NS_APPLIANCE_SYSTEM_DNDMODE: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 320, 0),
-    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (PARAM_SIGNAL_UPDATE_PERIOD, PARAM_CLOUDMQTT_UPDATE_PERIOD, 330, 0),
+    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (
+        PARAM_SIGNAL_UPDATE_PERIOD,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        330,
+        0,
+    ),
     mc.NS_APPLIANCE_CONFIG_OVERTEMP: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 340, 0),
-    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (PARAM_ENERGY_UPDATE_PERIOD, PARAM_CLOUDMQTT_UPDATE_PERIOD, 320, 53),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (
+        PARAM_ENERGY_UPDATE_PERIOD,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        320,
+        53,
+    ),
     mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: (0, 0, PARAM_HEADER_SIZE, 100),
     mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 430, 0),
     mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 1850, 0),
     mc.NS_APPLIANCE_CONTROL_MP3: (0, 0, 380, 0),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 80),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 80),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 80),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        80,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        80,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        80,
+    ),
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: (0, 0, PARAM_HEADER_SIZE, 140),
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: (0, 0, PARAM_HEADER_SIZE, 550),
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: (0, 0, PARAM_HEADER_SIZE, 550),
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: (0, 0, PARAM_HEADER_SIZE, 40),
-    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 70),
+    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        70,
+    ),
     mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 410, 0),
-    mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 140),
-    mc.NS_APPLIANCE_HUB_BATTERY: (PARAM_HUBBATTERY_UPDATE_PERIOD, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 40),
-    mc.NS_APPLIANCE_HUB_MTS100_ADJUST: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 40),
-    mc.NS_APPLIANCE_HUB_MTS100_ALL: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 350),
-    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 500),
-    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 60),
-    mc.NS_APPLIANCE_HUB_SENSOR_ALL: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 250),
+    mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        140,
+    ),
+    mc.NS_APPLIANCE_HUB_BATTERY: (
+        PARAM_HUBBATTERY_UPDATE_PERIOD,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        40,
+    ),
+    mc.NS_APPLIANCE_HUB_MTS100_ADJUST: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        40,
+    ),
+    mc.NS_APPLIANCE_HUB_MTS100_ALL: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        350,
+    ),
+    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        500,
+    ),
+    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        60,
+    ),
+    mc.NS_APPLIANCE_HUB_SENSOR_ALL: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        250,
+    ),
     mc.NS_APPLIANCE_HUB_TOGGLEX: (0, 0, PARAM_HEADER_SIZE, 35),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, PARAM_HEADER_SIZE, 70),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        70,
+    ),
     mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION: (0, 0, PARAM_HEADER_SIZE, 50),
     mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (0, 0, PARAM_HEADER_SIZE, 40),
 }

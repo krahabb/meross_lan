@@ -32,6 +32,7 @@ from .const import (
     CONF_LOGGING_LEVEL_OPTIONS,
     CONF_LOGGING_VERBOSE,
     CONF_LOGGING_WARNING,
+    CONF_OBFUSCATE,
     CONF_PROTOCOL_AUTO,
     CONF_PROTOCOL_MQTT,
     CONF_TRACE,
@@ -337,18 +338,6 @@ def _obfuscated_value(obfuscated_map: ObfuscateMap, value: typing.Any):
     return obfuscated_map.obfuscate(value)
 
 
-def obfuscated_device_id(device_id: str):
-    """Conditionally obfuscate the device_id to send to logging/tracing"""
-    # TODO: eventually configure obfuscation x ConfigEntry ?
-    return OBFUSCATE_DEVICE_ID_MAP.obfuscate(device_id)
-
-
-def obfuscated_profile_id(profile_id: str):
-    """Conditionally obfuscate the profile_id (which is the Meross account userId) to send to logging/tracing"""
-    # TODO: eventually configure obfuscation x ConfigEntry ?
-    return OBFUSCATE_USERID_MAP.obfuscate(profile_id)
-
-
 def obfuscated_list_copy(data: list):
     return [
         obfuscated_dict_copy(value)
@@ -360,7 +349,9 @@ def obfuscated_list_copy(data: list):
     ]
 
 
-def obfuscated_dict_copy(data: typing.Mapping[str, typing.Any]):
+def obfuscated_dict_copy(
+    data: typing.Mapping[str, typing.Any]
+) -> dict[str, typing.Any]:
     return {
         key: obfuscated_dict_copy(value)
         if isinstance(value, dict)
@@ -699,8 +690,9 @@ class EntityManager(Loggable):
         "deviceentry_id",
         "entities",
         "platforms",
-        "key",
         "config",
+        "key",
+        "obfuscate",
         "trace_file",
         "_trace_future",
         "_trace_data",
@@ -782,20 +774,24 @@ class ConfigEntryManager(EntityManager):
         self,
         id: str,
         config_entry: ConfigEntry | None,
-        logtag: str,
         **kwargs,
     ):
         if config_entry:
             config_entry_id = config_entry.entry_id
-            self.config = config_entry.data
-            self.key = config_entry.data.get(CONF_KEY) or ""
+            self.config = config = config_entry.data
+            self.key = config.get(CONF_KEY) or ""
+            self.obfuscate = config.get(CONF_OBFUSCATE, True)
             # we're setting up a logging.Logger for every ConfigEntry
             # to allow enabling/setting the logging level at the ConfigEntry
             # naming uses the ConfigEntry
-            logger = getLogger(f"{LOGGER.name}.{logtag}")
+            if CONF_DEVICE_ID in config:
+                loggername = f"device_{self.obfuscated_device_id(id)}"
+            else:
+                loggername = f"profile_{self.obfuscated_profile_id(id)}"
+            logger = getLogger(f"{LOGGER.name}.{loggername}")
             try:
                 # do not use self.exception_warning since we're not set yet
-                logger.setLevel(self.config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
+                logger.setLevel(config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
             except Exception as exception:
                 LOGGER.warning(
                     "error (%s) setting log level: likely a corrupted configuration entry",
@@ -808,7 +804,8 @@ class ConfigEntryManager(EntityManager):
             config_entry_id = ""
             self.key = ""
             self.config = {}
-            logger = getLogger(f"{LOGGER.name}.{logtag}")
+            self.obfuscate = True
+            logger = getLogger(f"{LOGGER.name}.api")
         # when we build an entity we also add the relative platform name here
         # so that the async_setup_entry for this integration will be able to forward
         # the setup to the appropriate platform(s).
@@ -906,6 +903,7 @@ class ConfigEntryManager(EntityManager):
         self.config = config_entry.data
         config = self.config
         self.key = config.get(CONF_KEY) or ""
+        self.obfuscate = config.get(CONF_OBFUSCATE, True)
         try:
             self.logger.setLevel(config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
         except Exception as exception:
@@ -934,6 +932,24 @@ class ConfigEntryManager(EntityManager):
         )
         self._trace_open()
         return self._trace_future
+
+    def obfuscated_payload(self, payload: typing.Mapping[str, typing.Any]):
+        """Conditionally obfuscate the device_id to send to logging/tracing"""
+        return obfuscated_dict_copy(payload) if self.obfuscate else payload
+
+    def obfuscated_device_id(self, device_id: str):
+        """Conditionally obfuscate the device_id to send to logging/tracing"""
+        return (
+            OBFUSCATE_DEVICE_ID_MAP.obfuscate(device_id)
+            if self.obfuscate
+            else device_id
+        )
+
+    def obfuscated_profile_id(self, profile_id: str):
+        """Conditionally obfuscate the profile_id (which is the Meross account userId) to send to logging/tracing"""
+        return (
+            OBFUSCATE_USERID_MAP.obfuscate(profile_id) if self.obfuscate else profile_id
+        )
 
     def _trace_open(self):
         try:
@@ -1014,7 +1030,7 @@ class ConfigEntryManager(EntityManager):
     ):
         try:
             assert self.trace_file
-            data = obfuscated_dict_copy(payload)
+            data = self.obfuscated_payload(payload)
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch)),
                 rxtx,
@@ -1122,8 +1138,8 @@ class ApiProfile(ConfigEntryManager):
         "mqttconnections",
     )
 
-    def __init__(self, id: str, config_entry: ConfigEntry | None, logtag: str):
-        super().__init__(id, config_entry, logtag)
+    def __init__(self, id: str, config_entry: ConfigEntry | None):
+        super().__init__(id, config_entry)
         self.platforms[SENSOR_DOMAIN] = None
         self.linkeddevices: dict[str, MerossDevice] = {}
         self.mqttconnections: dict[str, MQTTConnection] = {}
@@ -1207,6 +1223,19 @@ class ApiProfile(ConfigEntryManager):
                 CONF_PROTOCOL_MQTT,
                 rxtx,
             )
+        elif self.isEnabledFor(self.VERBOSE):
+            header = message[mc.KEY_HEADER]
+            connection.log(
+                self.VERBOSE,
+                "%s(%s) %s %s (uuid:%s messageId:%s) %s",
+                rxtx,
+                CONF_PROTOCOL_MQTT,
+                header[mc.KEY_METHOD],
+                header[mc.KEY_NAMESPACE],
+                self.obfuscated_device_id(device_id),
+                header[mc.KEY_MESSAGEID],
+                json_dumps(self.obfuscated_payload(message)),
+            )
         elif self.isEnabledFor(self.DEBUG):
             header = message[mc.KEY_HEADER]
             connection.log(
@@ -1216,6 +1245,6 @@ class ApiProfile(ConfigEntryManager):
                 CONF_PROTOCOL_MQTT,
                 header[mc.KEY_METHOD],
                 header[mc.KEY_NAMESPACE],
-                obfuscated_device_id(device_id),
+                self.obfuscated_device_id(device_id),
                 header[mc.KEY_MESSAGEID],
             )

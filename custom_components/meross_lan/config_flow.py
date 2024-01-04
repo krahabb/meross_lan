@@ -17,14 +17,7 @@ from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
-from .helpers import (
-    LOGGER,
-    ApiProfile,
-    ConfigEntriesHelper,
-    StrEnum,
-    obfuscated_device_id,
-    reverse_lookup,
-)
+from .helpers import ApiProfile, ConfigEntriesHelper, StrEnum, reverse_lookup
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
@@ -113,6 +106,10 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 
     _errors: dict[str, str] | None = None
     _conf_error: str | None = None
+
+    @property
+    def api(self):
+        return MerossApi.get(self.hass)
 
     @callback
     def async_abort(self, *, reason: str = "already_configured"):
@@ -353,6 +350,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         self, host: str, key: str | None
     ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
         # passing key=None would allow key-hack and we don't want it aymore
+        api = self.api
         if key is None:
             key = ""
         if _httpclient := self._httpclient:
@@ -363,8 +361,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 host,
                 key,
                 async_get_clientsession(self.hass),
-                LOGGER,  # type: ignore
-                logging.DEBUG,
+                api,  # type: ignore
+                api.VERBOSE,
             )
 
         payload = (
@@ -415,7 +413,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             # this means the device is not Meross cloud binded or the profile
             # is not configured/loaded at least according to our euristics.
             # We'll try HA broker if available
-            hamqttconnection = MerossApi.get(self.hass).mqtt_connection
+            hamqttconnection = self.api.mqtt_connection
             if not hamqttconnection.mqtt_is_connected:
                 raise Exception(
                     "No MQTT broker (either Meross cloud or HA local broker) available to connect"
@@ -477,14 +475,18 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
 
     async def async_step_hub(self, user_input=None):
         """configure the MQTT discovery device key"""
-        if user_input is None:
-            await self.async_set_unique_id(mlc.DOMAIN)
-            self._abort_if_unique_id_configured()
-            config_schema = {vol.Optional(mlc.CONF_KEY): str}
-            return self.async_show_form(
-                step_id="hub", data_schema=vol.Schema(config_schema)
-            )
-        return self.async_create_entry(title="MQTT Hub", data=user_input)
+        if user_input is not None:
+            return self.async_create_entry(title="MQTT Hub", data=user_input)
+        await self.async_set_unique_id(mlc.DOMAIN)
+        self._abort_if_unique_id_configured()
+        return self.async_show_form(
+            step_id="hub",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(mlc.CONF_KEY): str,
+                }
+            ),
+        )
 
     async def async_step_device(self, user_input=None):
         """manual device configuration"""
@@ -536,7 +538,8 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
 
     async def async_step_dhcp(self, discovery_info: DhcpServiceInfo):
         """Handle a flow initialized by DHCP discovery."""
-        LOGGER.debug("received dhcp discovery: %s", str(discovery_info))
+        api = self.api
+        api.log(api.DEBUG, "received dhcp discovery: %s", str(discovery_info))
         host = discovery_info.ip
         macaddress = discovery_info.macaddress.replace(":", "").lower()
         # check if the device is already registered
@@ -565,33 +568,36 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                                 mlc.CONF_TIMESTAMP
                             ] = time()  # force ConfigEntry update..
                             entries.async_update_entry(entry, data=data)
-                            LOGGER.info(
+                            api.log(
+                                api.INFO,
                                 "DHCP updated (ip:%s mac:%s) for uuid:%s",
                                 host,
                                 discovery_info.macaddress,
-                                obfuscated_device_id(entry_descriptor.uuid),
+                                api.obfuscated_device_id(entry_descriptor.uuid),
                             )
                         else:
-                            LOGGER.error(
+                            api.log(
+                                api.WARNING,
                                 "received a DHCP update (ip:%s mac:%s) but the new uuid:%s doesn't match the configured one (uuid:%s)",
                                 host,
                                 discovery_info.macaddress,
-                                obfuscated_device_id(_descriptor.uuid),
-                                obfuscated_device_id(entry_descriptor.uuid),
+                                api.obfuscated_device_id(_descriptor.uuid),
+                                api.obfuscated_device_id(entry_descriptor.uuid),
                             )
 
                     except Exception as error:
-                        LOGGER.warning(
+                        api.log(
+                            api.WARNING,
                             "DHCP update error %s trying to identify uuid:%s at (ip:%s mac:%s)",
                             str(error),
-                            obfuscated_device_id(entry_descriptor.uuid),
+                            api.obfuscated_device_id(entry_descriptor.uuid),
                             host,
                             discovery_info.macaddress,
                         )
 
                 return self.async_abort()
         except Exception as error:
-            LOGGER.warning("DHCP update internal error: %s", str(error))
+            api.log(api.WARNING, "DHCP update internal error: %s", str(error))
         # we'll update the unique_id for the flow when we'll have the device_id
         # Here this is needed in case we cannot correctly identify the device
         # via our api and the dhcp integration keeps pushing us discoveries for
@@ -629,7 +635,8 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                 return await self._async_set_device_config(_device_config, _descriptor)  # type: ignore
 
         except Exception as exception:
-            LOGGER.debug(
+            api.log(
+                api.DEBUG,
                 "%s(%s) identifying meross device (host:%s)",
                 exception.__class__.__name__,
                 str(exception),
@@ -652,7 +659,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         # If our MerossApi is already running it will manage the discovery itself
         # so this flow is only useful when MerossLan has no configuration yet
         # and we leverage the default mqtt discovery to setup our manager
-        mqtt_connection = MerossApi.get(self.hass).mqtt_connection
+        mqtt_connection = self.api.mqtt_connection
         if mqtt_connection.mqtt_is_subscribed:
             return self.async_abort()
         # try setup the mqtt subscription
@@ -861,15 +868,17 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                             pass  # forgive any error
                     # we're not following HA 'etiquette' and we're just updating the
                     # config_entry data with this dirty trick
-                    self.hass.config_entries.async_update_entry(
+                    hass = self.hass
+                    hass.config_entries.async_update_entry(
                         self.config_entry, data=device_config
                     )
                     if (
                         self.config_entry.state
                         == config_entries.ConfigEntryState.SETUP_ERROR
                     ):
+                        api = self.api
                         try:  # to fix the device registry in case it was corrupted by #341
-                            device_registry = dr.async_get(self.hass)
+                            device_registry = dr.async_get(hass)
                             device_identifiers = {(str(mlc.DOMAIN), self._device_id)}
                             device_entry = device_registry.async_get_device(
                                 identifiers=device_identifiers
@@ -897,22 +906,24 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                                     },
                                     identifiers=device_identifiers,
                                 )
-                                LOGGER.warning(
+                                api.log(
+                                    api.WARNING,
                                     "Device registry entry for %s (uuid:%s) was updated in order to fix it. The friendly name ('%s') has been lost and needs to be manually re-entered",
                                     descriptor_update.productmodel,
-                                    obfuscated_device_id(self._device_id),
+                                    api.obfuscated_device_id(self._device_id),
                                     _name_by_user,
                                 )
 
                         except Exception as error:
-                            LOGGER.warning(
+                            api.log(
+                                api.WARNING,
                                 "error (%s) while trying to repair device registry for %s (uuid:%s)",
                                 str(error),
                                 descriptor_update.productmodel,
-                                obfuscated_device_id(self._device_id),
+                                api.obfuscated_device_id(self._device_id),
                             )
 
-                        await self.hass.config_entries.async_reload(
+                        await hass.config_entries.async_reload(
                             self.config_entry.entry_id
                         )
                     # return None in data so the async_update_entry is not called for the
@@ -970,6 +981,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 )
                 or logging.NOTSET
             )
+            config[mlc.CONF_OBFUSCATE] = user_input[mlc.CONF_OBFUSCATE]
             config[mlc.CONF_TRACE_TIMEOUT] = user_input.get(mlc.CONF_TRACE_TIMEOUT)
             if user_input[mlc.CONF_TRACE]:
                 # only reload and start tracing if the user wish so
@@ -1001,6 +1013,10 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 }
             ),
             vol.Required(
+                mlc.CONF_OBFUSCATE,
+                description={DESCR: config.get(mlc.CONF_OBFUSCATE, True)},
+            ): bool,
+            vol.Required(
                 mlc.CONF_TRACE,
                 default=False,  # type: ignore
             ): bool,
@@ -1030,7 +1046,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 if broker:
                     broker_address = HostAddress(broker, 8883)
                 else:
-                    mqtt_connection = MerossApi.get(self.hass).mqtt_connection
+                    mqtt_connection = self.api.mqtt_connection
                     if not mqtt_connection.mqtt_is_connected:
                         raise FlowError(OptionsFlowErrorKey.HABROKER_NOT_CONNECTED)
                     broker_address = mqtt_connection.broker

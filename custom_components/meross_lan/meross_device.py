@@ -49,9 +49,6 @@ from .helpers import (
     NamespaceHandler,
     PollingStrategy,
     datetime_from_epoch,
-    getLogger,
-    obfuscated_device_id,
-    obfuscated_dict_copy,
     schedule_async_callback,
     schedule_callback,
 )
@@ -449,11 +446,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._unsub_trace_ability_callback = None
 
         # base init after setting some key properties needed for logging
-        device_id = config_entry.data[CONF_DEVICE_ID]
         super().__init__(
-            device_id,
+            config_entry.data[CONF_DEVICE_ID],
             config_entry,
-            f"device_{obfuscated_device_id(device_id)}",
             default_name=descriptor.productname,
             model=descriptor.productmodel,
             hw_version=descriptor.hardwareVersion,
@@ -1139,7 +1134,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if self._unsub_polling_callback:
                 self._unsub_polling_callback.cancel()
                 self._unsub_polling_callback = schedule_async_callback(
-                    ApiProfile.hass, 0, self._async_polling_callback, header[mc.KEY_NAMESPACE]
+                    ApiProfile.hass,
+                    0,
+                    self._async_polling_callback,
+                    header[mc.KEY_NAMESPACE],
                 )
 
         return self._handle(header, payload)
@@ -1156,7 +1154,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self.WARNING,
                 "Protocol error: namespace:%s payload:%s",
                 namespace,
-                str(obfuscated_dict_copy(payload)),
+                str(self.obfuscated_payload(payload)),
                 timeout=14400,
             )
             return
@@ -1178,7 +1176,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             "Handler undefined for method:%s namespace:%s payload:%s",
             header[mc.KEY_METHOD],
             header[mc.KEY_NAMESPACE],
-            str(obfuscated_dict_copy(payload)),
+            str(self.obfuscated_payload(payload)),
         )
 
     def _parse__generic(self, key: str, payload, entitykey: str | None = None):

@@ -34,8 +34,6 @@ from .helpers import (
     ConfigEntriesHelper,
     Loggable,
     datetime_from_epoch,
-    obfuscated_device_id,
-    obfuscated_profile_id,
     schedule_async_callback,
     schedule_callback,
     versiontuple,
@@ -212,16 +210,17 @@ class _MQTTTransaction:
         mqtt_connection._mqtt_transactions[request.messageid] = self
 
     def cancel(self):
-        self.mqtt_connection.log(
-            self.mqtt_connection.DEBUG,
+        mqtt_connection = self.mqtt_connection
+        mqtt_connection.log(
+            mqtt_connection.DEBUG,
             "Cancelling mqtt transaction on %s %s (uuid:%s messageId:%s)",
             self.method,
             self.namespace,
-            obfuscated_device_id(self.device_id),
+            mqtt_connection.profile.obfuscated_device_id(self.device_id),
             self.messageid,
         )
         self.response_future.cancel()
-        self.mqtt_connection._mqtt_transactions.pop(self.messageid, None)
+        mqtt_connection._mqtt_transactions.pop(self.messageid, None)
 
 
 class MQTTConnection(Loggable):
@@ -378,7 +377,7 @@ class MQTTConnection(Loggable):
                         "waiting for MQTT reply to %s %s (uuid:%s messageId:%s)",
                         request.method,
                         request.namespace,
-                        obfuscated_device_id(device_id),
+                        self.profile.obfuscated_device_id(device_id),
                         request.messageid,
                     )
                     return None
@@ -392,7 +391,7 @@ class MQTTConnection(Loggable):
                 "async_mqtt_publish %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
-                obfuscated_device_id(device_id),
+                self.profile.obfuscated_device_id(device_id),
                 request.messageid,
             )
             if transaction:
@@ -487,7 +486,7 @@ class MQTTConnection(Loggable):
                 self.log(
                     self.INFO,
                     "Ignoring MQTT discovery for already configured uuid:%s (ConfigEntry is %s)",
-                    obfuscated_device_id(device_id),
+                    profile.obfuscated_device_id(device_id),
                     "disabled"
                     if config_entry.disabled_by
                     else "ignored"
@@ -502,7 +501,7 @@ class MQTTConnection(Loggable):
                 self.log(
                     self.DEBUG,
                     "Ignoring MQTT discovery for uuid:%s (ConfigFlow is in progress)",
-                    obfuscated_device_id(device_id),
+                    profile.obfuscated_device_id(device_id),
                     timeout=14400,  # type: ignore
                 )
                 return
@@ -512,7 +511,7 @@ class MQTTConnection(Loggable):
                 self.log(
                     self.WARNING,
                     "Discovery key error for uuid:%s",
-                    obfuscated_device_id(device_id),
+                    profile.obfuscated_device_id(device_id),
                     timeout=300,
                 )
                 if key is not None:
@@ -528,7 +527,7 @@ class MQTTConnection(Loggable):
         self.log(
             self.DEBUG,
             "Initiating 1-step identification for uuid:%s",
-            obfuscated_device_id(device_id),
+            self.profile.obfuscated_device_id(device_id),
         )
         topic_response = self.topic_response
         response = await self.async_mqtt_publish(
@@ -572,15 +571,11 @@ class MQTTConnection(Loggable):
                 },
                 CONF_KEY: key,
             }
-        except KeyError as error:
-            # formally checks the message and raises a typed except
-            # check_message_strict(response)
-            # else go with the wind
-            # raise error
+        except Exception:
             self.log(
                 self.DEBUG,
                 "Identification error for uuid:%s. Falling back to 2-steps procedure",
-                obfuscated_device_id(device_id),
+                self.profile.obfuscated_device_id(device_id),
             )
             try:
                 response = await self.async_mqtt_publish(
@@ -624,7 +619,7 @@ class MQTTConnection(Loggable):
         self.mqttdiscovering.add(device_id)
         with self.exception_warning(
             "async_try_discovery (uuid:%s)",
-            obfuscated_device_id(device_id),
+            self.profile.obfuscated_device_id(device_id),
             timeout=14400,
         ):
             result = await ApiProfile.hass.config_entries.flow.async_init(
@@ -848,7 +843,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                 "MQTT DROP %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
-                obfuscated_device_id(device_id),
+                self.profile.obfuscated_device_id(device_id),
                 request.messageid,
             )
             return (self._MQTT_DROP, 0)
@@ -863,7 +858,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                 "MQTT QUEUE %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
-                obfuscated_device_id(device_id),
+                self.profile.obfuscated_device_id(device_id),
                 request.messageid,
             )
             return (
@@ -941,12 +936,7 @@ class MerossCloudProfile(ApiProfile):
     )
 
     def __init__(self, config_entry: ConfigEntry):
-        profile_id = str(
-            config_entry.data[mc.KEY_USERID_]
-        )  # better be safe with userid stringness
-        super().__init__(
-            profile_id, config_entry, f"profile_{obfuscated_profile_id(profile_id)}"
-        )
+        super().__init__(config_entry.data[mc.KEY_USERID_], config_entry)
         self._store = MerossCloudProfileStore(self.id)
         self._unsub_polling_query_device_info: asyncio.TimerHandle | None = None
 
@@ -1460,7 +1450,7 @@ class MerossCloudProfile(ApiProfile):
             self.log(
                 self.DEBUG,
                 "The uuid:%s has been removed from the cloud profile",
-                obfuscated_device_id(device_id),
+                self.obfuscated_device_id(device_id),
             )
             device_info_dict.pop(device_id)
             if device := self.linkeddevices.get(device_id):
@@ -1520,7 +1510,7 @@ class MerossCloudProfile(ApiProfile):
                 self.log(
                     self.DEBUG,
                     "Trying/Initiating discovery for (new) uuid:%s",
-                    obfuscated_device_id(device_id),
+                    self.obfuscated_device_id(device_id),
                 )
                 if config_entries_helper.get_config_flow(device_id):
                     continue  # device configuration already progressing

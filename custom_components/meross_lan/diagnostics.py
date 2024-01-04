@@ -1,12 +1,11 @@
 import typing
 
-from . import MerossApi
-from .const import CONF_TRACE, DOMAIN
+from . import MerossApi, const as mlc
 from .helpers import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict_copy
 from .meross_profile import MerossCloudProfile
 
 if typing.TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.config_entries import ConfigEntry, MappingProxyType
 
 
 async def async_get_device_diagnostics(
@@ -23,34 +22,42 @@ async def async_get_config_entry_diagnostics(
     unique_id = entry.unique_id
     assert unique_id, "unique_id must be set to a valid value"
 
-    if unique_id == DOMAIN:
+    if unique_id == mlc.DOMAIN:
         # MQTT Hub entry
-        return obfuscated_dict_copy(entry.data)
+        return _get_plain_config_data(entry.data)
 
     unique_id = unique_id.split(".")
     if unique_id[0] == "profile":
         # profile entry
         if profile := MerossApi.profiles.get(unique_id[1]):
-            data = obfuscated_dict_copy(profile._data)
-            # the profile contains uuid as keys and obfuscation
-            # is not smart enough
-            data[MerossCloudProfile.KEY_DEVICE_INFO] = {
-                OBFUSCATE_DEVICE_ID_MAP[key]: value
-                for key, value in data[MerossCloudProfile.KEY_DEVICE_INFO].items()  # type: ignore
-            }
-            return data
+            if profile.obfuscate:
+                data = obfuscated_dict_copy(profile._data)
+                # the profile contains uuid as keys and obfuscation
+                # is not smart enough (but OBFUSCATE_DEVICE_ID_MAP is already
+                # filled with uuid(s) from the profile device_info(s) and
+                # the device_info(s) were already obfuscated in data)
+                data[MerossCloudProfile.KEY_DEVICE_INFO] = {  # type: ignore
+                    OBFUSCATE_DEVICE_ID_MAP[device_id]: device_info
+                    for device_id, device_info in data[MerossCloudProfile.KEY_DEVICE_INFO].items()  # type: ignore
+                }
+                return data
+            else:
+                return profile._data
         else:
-            return obfuscated_dict_copy(entry.data)
+            return _get_plain_config_data(entry.data)
 
-    data = obfuscated_dict_copy(entry.data)
     if device := MerossApi.devices.get(unique_id[0]):
+        if device.obfuscate:
+            data = obfuscated_dict_copy(entry.data)
+        else:
+            data = dict(entry.data)
         data["device"] = {
             "class": type(device).__name__,
             "conf_protocol": device.conf_protocol,
             "pref_protocol": device.pref_protocol,
             "curr_protocol": device.curr_protocol,
             "MQTT": {
-                "cloud_profile": bool(device._profile and device._profile.id),
+                "cloud_profile": isinstance(device._profile, MerossCloudProfile),
                 "locally_active": bool(device.mqtt_locallyactive),
                 "mqtt_connection": bool(device._mqtt_connection),
                 "mqtt_connected": bool(device._mqtt_connected),
@@ -67,5 +74,11 @@ async def async_get_config_entry_diagnostics(
                 for strategy in device.polling_strategies.values()
             },
         }
-        data[CONF_TRACE] = await device.get_diagnostics_trace()
-    return data
+        data[mlc.CONF_TRACE] = await device.get_diagnostics_trace()
+        return data
+    else:
+        return _get_plain_config_data(entry.data)
+
+
+def _get_plain_config_data(data: "MappingProxyType"):
+    return obfuscated_dict_copy(data) if data.get(mlc.CONF_OBFUSCATE, True) else data

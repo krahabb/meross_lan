@@ -171,6 +171,7 @@ class HAMQTTConnection(MQTTConnection):
                 conf = mqtt_data.client.conf
                 self.broker.host = conf[mqtt.CONF_BROKER]
                 self.broker.port = conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT)
+                self.logtag = f"{self.__class__.__name__}({self.broker})"
 
         super()._mqtt_connected()
 
@@ -292,12 +293,12 @@ class MerossApi(ApiProfile):
                 EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi
             )
             return api
-        return hass.data[mlc.DOMAIN]
+        return MerossApi.api
 
     def __init__(self, hass: HomeAssistant):
         ApiProfile.hass = hass
         ApiProfile.api = self
-        super().__init__(mlc.CONF_PROFILE_ID_LOCAL, None, "api")
+        super().__init__(mlc.CONF_PROFILE_ID_LOCAL, None)
         self._deviceclasses: dict[str, type] = {}
         self._mqtt_connection: HAMQTTConnection | None = None
 
