@@ -101,8 +101,8 @@ class MerossHttpClient:
         self._check_terminated()
         logger = self._logger
         logid = None
+        self._terminate_guard += 1
         try:
-            self._terminate_guard += 1
             timeout = 1
             if logger and logger.isEnabledFor(self._log_level_dump):
                 # we catch the 'request' id before json dumping so
@@ -142,15 +142,10 @@ class MerossHttpClient:
                 logger.log(
                     self._log_level_dump, "%s: HTTP Response (%s)", logid, response_json
                 )
-            self._terminate_guard -= 1
             return MerossResponse(response_json)
-
         except TerminatedException as e:
-            self._terminate_guard -= 1
             raise e
-
         except Exception as e:
-            self._terminate_guard -= 1
             self.replykey = None  # reset the key hack since it could became stale
             if logger:
                 logger.log(  # type: ignore
@@ -161,6 +156,8 @@ class MerossHttpClient:
                     str(e),
                 )
             raise e
+        finally:
+            self._terminate_guard -= 1
 
     async def async_request_raw(
         self, request: MerossMessageType | dict
@@ -168,8 +165,8 @@ class MerossHttpClient:
         self._check_terminated()
         logger = self._logger
         logid = None
+        self._terminate_guard += 1
         try:
-            self._terminate_guard += 1
             timeout = 1
             if logger and logger.isEnabledFor(self._log_level_dump):
                 # we catch the 'request' id before json dumping so
@@ -209,13 +206,10 @@ class MerossHttpClient:
                 logger.log(
                     self._log_level_dump, "%s: HTTP Response (%s)", logid, response_json
                 )
-            self._terminate_guard -= 1
             return MerossResponse(response_json)
         except TerminatedException as e:
-            self._terminate_guard -= 1
             raise e
         except Exception as e:
-            self._terminate_guard -= 1
             self.replykey = None  # reset the key hack since it could became stale
             if logger:
                 logger.log(  # type: ignore
@@ -226,6 +220,8 @@ class MerossHttpClient:
                     str(e),
                 )
             raise e
+        finally:
+            self._terminate_guard -= 1
 
     async def async_request(
         self, namespace: str, method: str, payload: MerossPayloadType
