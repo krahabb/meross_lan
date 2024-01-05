@@ -13,11 +13,11 @@ from unittest.mock import MagicMock, Mock, patch
 
 import aiohttp
 from freezegun.api import FrozenDateTimeFactory, StepTickTimeFactory, freeze_time
-from homeassistant import config_entries
+from homeassistant import config_entries, const as hac
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry
 from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,
+    MockConfigEntry,  # type: ignore
     async_fire_time_changed_exact,
 )
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
@@ -32,6 +32,31 @@ from custom_components.meross_lan.merossclient import cloudapi, const as mc
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
 from . import const as tc
+
+
+class MockConfigEntry(MockConfigEntry):
+    """
+    compatibility layer for changing MockConfigEntry signatures between
+    HA core 2023.latest and 2024.1
+    """
+    def __init__(
+        self,
+        *,
+        domain: str,
+        data,
+        version: int,
+        minor_version: int,
+        unique_id: str,
+    ):
+        kwargs = {
+            "domain": domain,
+            "data": data,
+            "version": version,
+            "unique_id": unique_id,
+        }
+        if hac.MAJOR_VERSION >= 2024:
+            kwargs["minor_version"] = minor_version
+        super().__init__(**kwargs)
 
 
 class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
@@ -226,8 +251,9 @@ def build_emulator_config_entry(
     return MockConfigEntry(
         domain=mlc.DOMAIN,
         data=data,
+        version=ConfigFlow.VERSION,
+        minor_version=ConfigFlow.MINOR_VERSION,
         unique_id=data[mlc.CONF_DEVICE_ID],
-        version=1,
     )
 
 
