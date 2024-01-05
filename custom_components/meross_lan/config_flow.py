@@ -250,6 +250,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                         await helper.config_entries.async_add(
                             config_entries.ConfigEntry(
                                 version=self.VERSION,
+                                minor_version=self.MINOR_VERSION,
                                 domain=mlc.DOMAIN,
                                 title=profile_config[mc.KEY_EMAIL],
                                 data=profile_config,
@@ -460,6 +461,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
     """Handle a config flow for Meross IoT local LAN."""
 
     VERSION = 1
+    MINOR_VERSION = 1
 
     @staticmethod
     def async_get_options_flow(config_entry):
