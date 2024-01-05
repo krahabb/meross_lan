@@ -26,6 +26,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 )
 
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
+from custom_components.meross_lan.config_flow import ConfigFlow
 from custom_components.meross_lan.meross_profile import MerossMQTTConnection
 from custom_components.meross_lan.merossclient import cloudapi, const as mc
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
@@ -39,7 +40,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
         hass: HomeAssistant,
         unique_id: str,
         *,
-        data: dict | None = None,
+        data: Any | None = None,
         auto_add: bool = True,
         auto_setup: bool = True,
     ) -> None:
@@ -48,6 +49,8 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
         self.config_entry = MockConfigEntry(
             domain=mlc.DOMAIN,
             data=data,
+            version=ConfigFlow.VERSION,
+            minor_version=ConfigFlow.MINOR_VERSION,
             unique_id=unique_id,
         )
         self.auto_setup = auto_setup
