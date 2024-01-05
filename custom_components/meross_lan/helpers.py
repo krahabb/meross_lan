@@ -559,7 +559,7 @@ class Loggable(abc.ABC):
         self.id = id
         self.logtag = logtag or f"{self.__class__.__name__}({id})"
         self.logger = logger
-        logger.debug("%s: init", self.logtag)
+        LOGGER.debug("%s: init", self.logtag)
 
     def isEnabledFor(self, level: int):
         return self.logger.isEnabledFor(level)
@@ -610,7 +610,7 @@ class Loggable(abc.ABC):
             )
 
     def __del__(self):
-        self.logger.debug("%s: destroy", self.logtag)
+        LOGGER.debug("%s: destroy", self.logtag)
         return
 
 
