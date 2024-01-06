@@ -26,7 +26,6 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
 from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
-from custom_components.meross_lan.helpers import ConfigEntryManager
 from custom_components.meross_lan.config_flow import ConfigFlow
 from custom_components.meross_lan.meross_profile import MerossMQTTConnection
 from custom_components.meross_lan.merossclient import (
@@ -45,6 +44,7 @@ class MockConfigEntry(MockConfigEntry):
     compatibility layer for changing MockConfigEntry signatures between
     HA core 2023.latest and 2024.1
     """
+
     def __init__(
         self,
         *,

@@ -447,7 +447,12 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                 else:
                     self.update_state(STATE_MAP.get(self._open))
             except Exception as exception:
-                self.log_exception(self.WARNING, exception, "async_request_position (payload:%s)", str(response[mc.KEY_PAYLOAD]))
+                self.log_exception(
+                    self.WARNING,
+                    exception,
+                    "async_request_position (payload:%s)",
+                    str(response[mc.KEY_PAYLOAD]),
+                )
 
     def _parse_state(self, payload: dict):
         # {"channel": 0, "open": 1, "lmTime": 0}

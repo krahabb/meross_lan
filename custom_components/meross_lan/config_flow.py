@@ -264,7 +264,9 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                                 data=profile_config,
                                 source=config_entries.SOURCE_USER,
                                 unique_id=unique_id,
-                            ) if hac.MAJOR_VERSION >= 2024 else config_entries.ConfigEntry(  # type: ignore
+                            )
+                            if hac.MAJOR_VERSION >= 2024
+                            else config_entries.ConfigEntry(  # type: ignore
                                 version=self.VERSION,
                                 domain=mlc.DOMAIN,
                                 title=profile_config[mc.KEY_EMAIL],
