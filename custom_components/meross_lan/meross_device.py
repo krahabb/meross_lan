@@ -1157,7 +1157,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         else:
             self.device_timedelta = 0
 
-        if MEROSSDEBUG:
+        if self.isEnabledFor(self.DEBUG):
             # it appears sometimes the devices
             # send an incorrect signature hash
             # but at the moment this is unlikely to be critical
@@ -1166,7 +1166,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
             if sign != header[mc.KEY_SIGN]:
                 self.log(
-                    self.WARNING,
+                    self.DEBUG,
                     "Received signature error: computed=%s, header=%s",
                     sign,
                     json_dumps(header),  # TODO: obfuscate header? check
@@ -1197,13 +1197,20 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
         if method == mc.METHOD_ERROR:
-            self.log(
-                self.WARNING,
-                "Protocol error: namespace:%s payload:%s",
-                namespace,
-                str(self.obfuscated_payload(payload)),
-                timeout=14400,
-            )
+            if payload.get(mc.KEY_ERROR) == mc.ERROR_INVALIDKEY:
+                self.log(
+                    self.WARNING,
+                    "Key error: the configured device key is wrong",
+                    timeout=14400,
+                )
+            else:
+                self.log(
+                    self.WARNING,
+                    "Protocol error: namespace:%s payload:%s",
+                    namespace,
+                    str(self.obfuscated_payload(payload)),
+                    timeout=14400,
+                )
             return
         elif method == mc.METHOD_SETACK:
             # SETACK generally doesn't carry any state/info so it is
