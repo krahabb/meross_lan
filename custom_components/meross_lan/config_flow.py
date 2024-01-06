@@ -735,10 +735,21 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
 
     config: mlc.HubConfigType | mlc.DeviceConfigType | mlc.ProfileConfigType
 
+    BindConfigType = typing.TypedDict(
+        "BindConfigType",
+        {
+            "domain": str | None,
+            "key": str | None,
+            "userId": int | None,
+        },
+    )
+    bind_config: BindConfigType
+
     __slots__ = (
         "config_entry",
         "config_entry_id",
         "config",
+        "bind_config",
     )
 
     def __init__(self, config_entry: config_entries.ConfigEntry):
@@ -782,6 +793,11 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         self.device_placeholders = {
             "device_type": self.device_descriptor.productnametype,
             "device_id": self._device_id,
+        }
+        self.bind_config = {
+            mc.KEY_DOMAIN: None,
+            mc.KEY_KEY: self.api.key,
+            mc.KEY_USERID: None,
         }
         return await self.async_step_menu(["device", "diagnostics", "bind", "unbind"])
 
@@ -1047,20 +1063,15 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         )
 
     async def async_step_bind(self, user_input=None):
-        KEY_BROKER = "broker"
-        KEY_CHECK = "check"
-        KEY_KEY = mlc.CONF_KEY
-        KEY_USERID = "userid"
-
+        bind_config = self.bind_config
         with self.show_form_errorcontext():
             if user_input:
-                broker = user_input.get(KEY_BROKER)
-                check = user_input.get(KEY_CHECK)
-                key = user_input.get(KEY_KEY) or ""
-                userid = user_input.get(KEY_USERID)
+                bind_config[mc.KEY_DOMAIN] = domain = user_input.get(mc.KEY_DOMAIN)
+                bind_config[mc.KEY_KEY] = key = user_input.get(mc.KEY_KEY)
+                bind_config[mc.KEY_USERID] = userid = user_input.get(mc.KEY_USERID)
 
-                if broker:
-                    broker_address = HostAddress(broker, 8883)
+                if domain:
+                    broker_address = HostAddress(domain, 8883)
                 else:
                     mqtt_connection = self.api.mqtt_connection
                     if not mqtt_connection.mqtt_is_connected:
@@ -1069,16 +1080,46 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     if broker_address.port == 1883:
                         broker_address.port = 8883
                 # set back the value so the user has an hint in case of errors connecting
-                broker = str(broker_address)
+                bind_config[mc.KEY_DOMAIN] = str(broker_address)
+                # we have to check the broker address is a network bound IPV4 address
+                # since localhost would have no meaning (or a wrong one) in the device
+                import socket
+
+                addrinfos = socket.getaddrinfo(
+                    socket.getfqdn(broker_address.host),
+                    broker_address.port,
+                    family=socket.AF_INET,
+                    type=socket.SOCK_STREAM,
+                    proto=socket.IPPROTO_TCP,
+                )
+                # addrinfos contains the resolved ipv4 address(es) weather or not
+                # our broker_address.host is an ipv6 or ipv4 host name/addr
+                for addrinfo in addrinfos:
+                    # addrinfo: (family, type, proto, canonname, sockaddr)
+                    if addrinfo[4][0] == "127.0.0.1":
+                        # localhost could work in our mqtt.Client check but
+                        # it will not when configured in the device bind
+                        # so we're trying to resolve it to a valid network name
+                        from homeassistant.helpers.network import get_url
+                        import yarl
+
+                        hasslocalhost = yarl.URL(get_url(self.hass, allow_ip=True)).host
+                        if not hasslocalhost:
+                            raise FlowError(FlowErrorKey.CANNOT_CONNECT)
+                        broker_address.host = hasslocalhost
+                        bind_config[mc.KEY_DOMAIN] = str(broker_address)
+                        break
 
                 device = ApiProfile.devices[self._device_id]
                 if not (device and device.online):
                     raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 
+                key = key or ""
+                userid = "" if userid is None else str(userid)
                 mqttclient = MerossMQTTDeviceClient(
                     device.id,
                     key=key,
-                    userid="" if userid is None else str(userid),
+                    userid=userid,
                 )
                 try:
                     await self.hass.async_add_executor_job(
@@ -1101,17 +1142,14 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
 
                 raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 
-            else:
-                broker = None
-                check = True
-                key = self.device_config.get(mlc.CONF_KEY)
-                userid = None
-
         config_schema = {
-            vol.Optional(KEY_BROKER, description={DESCR: broker}): str,
-            vol.Required(KEY_CHECK, description={DESCR: check}): bool,
-            vol.Optional(KEY_KEY, description={DESCR: key}): str,
-            vol.Optional(KEY_USERID, description={DESCR: userid}): cv.positive_int,
+            vol.Optional(
+                mc.KEY_DOMAIN, description={DESCR: bind_config[mc.KEY_DOMAIN]}
+            ): str,
+            vol.Optional(mc.KEY_KEY, description={DESCR: bind_config[mc.KEY_KEY]}): str,
+            vol.Optional(
+                mc.KEY_USERID, description={DESCR: bind_config[mc.KEY_USERID]}
+            ): cv.positive_int,
         }
         return self.async_show_form_with_errors(
             step_id="bind", config_schema=config_schema
