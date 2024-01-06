@@ -8,7 +8,7 @@ import logging
 from time import time
 import typing
 
-from homeassistant import config_entries
+from homeassistant import config_entries, const as hac
 from homeassistant.const import CONF_ERROR
 from homeassistant.data_entry_flow import AbortFlow, FlowHandler, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
@@ -251,9 +251,21 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                         # this flow is managing a device but since the profile
                         # entry is new, we'll directly setup that
                         await helper.config_entries.async_add(
+                            # there's a bad compatibility issue between core 2024.1 and
+                            # previous versions up to latest 2023 on ConfigEntry. Namely:
+                            # previous core versions used positional args in ConfigEntry
+                            # while core 2024.X moves to full kwargs with required minor_version
+                            # this patch is the best I can think of
                             config_entries.ConfigEntry(
                                 version=self.VERSION,
-                                minor_version=self.MINOR_VERSION,  # type: ignore (HA core 2024.1 will support this)
+                                minor_version=self.MINOR_VERSION,  # type: ignore
+                                domain=mlc.DOMAIN,
+                                title=profile_config[mc.KEY_EMAIL],
+                                data=profile_config,
+                                source=config_entries.SOURCE_USER,
+                                unique_id=unique_id,
+                            ) if hac.MAJOR_VERSION >= 2024 else config_entries.ConfigEntry(  # type: ignore
+                                version=self.VERSION,
                                 domain=mlc.DOMAIN,
                                 title=profile_config[mc.KEY_EMAIL],
                                 data=profile_config,
