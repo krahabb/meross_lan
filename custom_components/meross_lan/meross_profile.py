@@ -42,8 +42,10 @@ from .meross_device_hub import MerossDeviceHub
 from .merossclient import (
     MEROSSDEBUG,
     HostAddress,
+    MerossKeyError,
     MerossRequest,
     MerossResponse,
+    check_message_strict,
     const as mc,
     get_default_arguments,
     get_message_uuid,
@@ -571,9 +573,8 @@ class MQTTConnection(Loggable):
         )
 
         try:
-            # optimistically start considering valid response.
-            # only investigate the response if this doesn't work
-            multiple_response: list[MerossMessageType] = response[mc.KEY_PAYLOAD][  # type: ignore
+            response = check_message_strict(response)
+            multiple_response: list[MerossMessageType] = response[mc.KEY_PAYLOAD][
                 mc.KEY_MULTIPLE
             ]
             # this syntax ensures both the responses are the expected ones
@@ -587,34 +588,46 @@ class MQTTConnection(Loggable):
                 },
                 CONF_KEY: key,
             }
-        except Exception:
+        except MerossKeyError as error:
+            # no point in attempting 2-steps identification
+            raise error
+        except Exception as exception:
             self.log(
                 self.DEBUG,
-                "Identification error for uuid:%s. Falling back to 2-steps procedure",
+                "Identification error('%s') for uuid:%s. Falling back to 2-steps procedure",
+                str(exception),
                 self.profile.obfuscated_device_id(device_id),
             )
             try:
-                response = await self.async_mqtt_publish(
-                    device_id,
-                    MerossRequest(
-                        key,
-                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
-                        topic_response,
-                    ),
+                response = check_message_strict(
+                    await self.async_mqtt_publish(
+                        device_id,
+                        MerossRequest(
+                            key,
+                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                            topic_response,
+                        ),
+                    )
                 )
-                ability = response[mc.KEY_PAYLOAD][mc.KEY_ABILITY]  # type: ignore
+                ability = response[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
+            except MerossKeyError as error:
+                raise error
             except Exception as exception:
                 raise Exception("Unable to identify abilities") from exception
             try:
-                response = await self.async_mqtt_publish(
-                    device_id,
-                    MerossRequest(
-                        key,
-                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
-                        topic_response,
-                    ),
+                response = check_message_strict(
+                    await self.async_mqtt_publish(
+                        device_id,
+                        MerossRequest(
+                            key,
+                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
+                            topic_response,
+                        ),
+                    )
                 )
-                all = response[mc.KEY_PAYLOAD][mc.KEY_ALL]  # type: ignore
+                all = response[mc.KEY_PAYLOAD][mc.KEY_ALL]
+            except MerossKeyError as error:
+                raise error
             except Exception as exception:
                 raise Exception("Unable to identify device (all)") from exception
             return {

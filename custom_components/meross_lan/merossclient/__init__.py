@@ -378,17 +378,18 @@ def is_device_online(payload: dict) -> bool:
         return False
 
 
-def check_message_strict(message: MerossResponse):
+def check_message_strict(message: MerossResponse | None):
     """
     Does a formal check of the message structure also raising a
     typed exception if formally correct but carrying a protocol error
     """
+    if not message:
+        raise MerossProtocolError(message, "No response")
     try:
+        payload = message[mc.KEY_PAYLOAD]
         header = message[mc.KEY_HEADER]
         header[mc.KEY_NAMESPACE]
-        method = header[mc.KEY_METHOD]
-        payload = message[mc.KEY_PAYLOAD]
-        if method == mc.METHOD_ERROR:
+        if header[mc.KEY_METHOD] == mc.METHOD_ERROR:
             p_error = payload[mc.KEY_ERROR]
             if p_error.get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
                 raise MerossKeyError(message)
