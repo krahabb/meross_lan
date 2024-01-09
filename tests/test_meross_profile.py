@@ -83,7 +83,7 @@ async def test_meross_profile(
             connection_id = f"{broker.host}:{broker.port}"
             mqttconnection = profile.mqttconnections[connection_id]
             mqttconnections.remove(mqttconnection)
-            safe_start_calls.append(mock.call(mqttconnection, broker, mock.ANY))
+            safe_start_calls.append(mock.call(mqttconnection, broker))
         assert len(mqttconnections) == 0
         merossmqtt_mock.safe_start_mock.assert_has_calls(
             safe_start_calls,
@@ -152,7 +152,7 @@ async def test_meross_profile_cloudapi_offline(
             connection_id = f"{tc.MOCK_PROFILE_ID}:{broker.host}:{broker.port}"
             mqttconnection = profile.mqttconnections[connection_id]
             mqttconnections.remove(mqttconnection)
-            safe_start_calls.append(mock.call(mqttconnection, broker, mock.ANY))
+            safe_start_calls.append(mock.call(mqttconnection, broker))
         assert len(mqttconnections) == 0
         merossmqtt_mock.safe_start_mock.assert_has_calls(
             safe_start_calls,
