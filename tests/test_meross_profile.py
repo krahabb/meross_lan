@@ -14,26 +14,22 @@ from . import const as tc, helpers
 async def test_cloudapi(hass, cloudapi_mock: helpers.CloudApiMocker):
     clientsession = async_get_clientsession(hass)
 
-    result = await cloudapi.async_cloudapi_login(
-        tc.MOCK_PROFILE_EMAIL, tc.MOCK_PROFILE_PASSWORD, clientsession
+    credentials = await cloudapi.async_cloudapi_signin(
+        tc.MOCK_PROFILE_EMAIL, tc.MOCK_PROFILE_PASSWORD, session=clientsession
     )
-    assert result[mc.KEY_USERID_] == tc.MOCK_PROFILE_ID
-    assert result[mc.KEY_EMAIL] == tc.MOCK_PROFILE_EMAIL
-    assert result[mc.KEY_KEY] == tc.MOCK_PROFILE_KEY
-    assert result[mc.KEY_TOKEN] == tc.MOCK_PROFILE_TOKEN
+    assert credentials == tc.MOCK_PROFILE_CREDENTIALS_SIGNIN
 
-    token = result[mc.KEY_TOKEN]
-    result = await cloudapi.async_cloudapi_device_devlist(token, clientsession)
+    result = await cloudapi.async_cloudapi_device_devlist(credentials, clientsession)
     assert result == tc.MOCK_PROFILE_CLOUDAPI_DEVLIST
 
     result = await cloudapi.async_cloudapi_hub_getsubdevices(
-        token, tc.MOCK_PROFILE_MSH300_UUID, clientsession
+        credentials, tc.MOCK_PROFILE_MSH300_UUID, clientsession
     )
     assert (
         result == tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT[tc.MOCK_PROFILE_MSH300_UUID]
     )
 
-    result = await cloudapi.async_cloudapi_logout(token, clientsession)
+    result = await cloudapi.async_cloudapi_logout(credentials, clientsession)
 
 
 async def test_meross_profile(
@@ -167,7 +163,9 @@ async def test_meross_profile_with_device(
 
     async with helpers.DeviceContext(
         hass,
-        helpers.build_emulator_for_profile(tc.MOCK_PROFILE_ID, model=mc.TYPE_MSS310),
+        helpers.build_emulator_for_profile(
+            tc.MOCK_PROFILE_CONFIG, model=mc.TYPE_MSS310
+        ),
         aioclient_mock,
         config_data={
             mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_AUTO,

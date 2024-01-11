@@ -75,7 +75,9 @@ async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
 
 
 async def test_profile_config_flow(
-    hass: HomeAssistant, cloudapi_mock: helpers.CloudApiMocker
+    hass: HomeAssistant,
+    cloudapi_mock: helpers.CloudApiMocker,
+    merossmqtt_mock: helpers.MerossMQTTMocker,
 ):
     """
     Test cloud profile entry config flow
@@ -101,7 +103,7 @@ async def test_profile_config_flow(
             mlc.CONF_PASSWORD: "",
         },
     )
-    assert cloudapi_mock.api_calls[cloudapi.API_AUTH_LOGIN_PATH] == 1
+    assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 1
     assert result["type"] == FlowResultType.FORM  # type: ignore
     assert result["step_id"] == "profile"  # type: ignore
 
@@ -114,7 +116,7 @@ async def test_profile_config_flow(
             mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
         },
     )
-    assert cloudapi_mock.api_calls[cloudapi.API_AUTH_LOGIN_PATH] == 2
+    assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 2
     assert result["type"] == FlowResultType.FORM  # type: ignore
     assert result["step_id"] == "profile"  # type: ignore
 
@@ -125,15 +127,13 @@ async def test_profile_config_flow(
         user_input={
             mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
+            mlc.CONF_ALLOW_MQTT_PUBLISH: True,
         },
     )
-    assert cloudapi_mock.api_calls[cloudapi.API_AUTH_LOGIN_PATH] == 3
+    assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 3
     assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
     data: mlc.ProfileConfigType = result["data"]  # type: ignore
-    assert data[mc.KEY_USERID_] == tc.MOCK_PROFILE_ID
-    assert data[mc.KEY_EMAIL] == tc.MOCK_PROFILE_EMAIL
-    assert data[mc.KEY_KEY] == tc.MOCK_PROFILE_KEY
-    assert data[mc.KEY_TOKEN] == tc.MOCK_PROFILE_TOKEN
+    assert data == tc.MOCK_PROFILE_CONFIG
 
     # now cleanup the entry
     await _cleanup_config_entry(hass, result)

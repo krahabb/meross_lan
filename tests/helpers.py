@@ -27,7 +27,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
 from custom_components.meross_lan.config_flow import ConfigFlow
-from custom_components.meross_lan.meross_profile import MerossMQTTConnection
+from custom_components.meross_lan.meross_profile import MerossCloudProfileStoreType, MerossMQTTConnection
 from custom_components.meross_lan.merossclient import cloudapi, const as mc
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
@@ -154,11 +154,10 @@ def build_emulator(
 
 
 def build_emulator_for_profile(
-    profile_id: str,
+    profile_config: mlc.ProfileConfigType,
     *,
     model: str | None = None,
     device_id=tc.MOCK_DEVICE_UUID,
-    key=tc.MOCK_KEY,
 ) -> MerossEmulator:
     """
     This call will setup the emulator patching its configuration
@@ -168,13 +167,12 @@ def build_emulator_for_profile(
     """
     domain = None
     reservedDomain = None
+    userid = profile_config[mc.KEY_USERID_]
+    key = profile_config[mc.KEY_KEY]
 
-    storekey = f"{mlc.DOMAIN}.profile.{profile_id}"
-    cloudprofiledata = tc.MOCK_PROFILE_STORAGE.get(storekey)
+    cloudprofiledata = tc.MOCK_PROFILE_STORAGE.get(f"{mlc.DOMAIN}.profile.{userid}")
     if cloudprofiledata:
         cloudprofiledata = cloudprofiledata["data"]
-        assert cloudprofiledata[mc.KEY_USERID_] == profile_id
-        assert (key := cloudprofiledata[mc.KEY_KEY])
         device_info_dict = cloudprofiledata.get("deviceInfo")
         if device_info_dict:
             for device_info in cloudprofiledata["deviceInfo"].values():
@@ -202,7 +200,7 @@ def build_emulator_for_profile(
     )
 
     fw = emulator.descriptor.firmware
-    fw[mc.KEY_USERID] = int(profile_id)
+    fw[mc.KEY_USERID] = int(userid)
 
     if domain:
         host, port = cloudapi.parse_domain(domain)
@@ -513,7 +511,6 @@ class CloudApiMocker(contextlib.AbstractContextManager):
 
     def __init__(self, aioclient_mock: AiohttpClientMocker, online: bool = True):
         self.aioclient_mock = aioclient_mock
-        self._token = None
         self._online = online
         self.api_calls: dict[str, int] = {}
         aioclient_mock.post(
@@ -584,13 +581,22 @@ class CloudApiMocker(contextlib.AbstractContextManager):
             response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_WRONG_CREDENTIALS
         else:
             response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_NO_ERROR
-            response[mc.KEY_DATA] = {
-                mc.KEY_USERID_: tc.MOCK_PROFILE_ID,
-                mc.KEY_EMAIL: tc.MOCK_PROFILE_EMAIL,
-                mc.KEY_KEY: tc.MOCK_PROFILE_KEY,
-                mc.KEY_TOKEN: tc.MOCK_PROFILE_TOKEN,
-            }
-            self._token = tc.MOCK_PROFILE_TOKEN
+            response[mc.KEY_DATA] = tc.MOCK_PROFILE_CREDENTIALS_LOGIN
+        return response
+
+    def _v1_auth_signin(self, request: dict):
+        response = {}
+        if mc.KEY_EMAIL not in request:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_INVALID_EMAIL
+        elif request[mc.KEY_EMAIL] != tc.MOCK_PROFILE_EMAIL:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_UNEXISTING_ACCOUNT
+        elif mc.KEY_PASSWORD not in request:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_MISSING_PASSWORD
+        elif request[mc.KEY_PASSWORD] != hashlib.md5(tc.MOCK_PROFILE_PASSWORD.encode("utf8")).hexdigest():
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_WRONG_CREDENTIALS
+        else:
+            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_NO_ERROR
+            response[mc.KEY_DATA] = tc.MOCK_PROFILE_CREDENTIALS_SIGNIN
         return response
 
     def _v1_device_devlist(self, request: dict):
@@ -617,7 +623,6 @@ class CloudApiMocker(contextlib.AbstractContextManager):
 
     def _v1_profile_logout(self, request: dict):
         assert len(request) == 0
-        self._token = None
         return {mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR, mc.KEY_DATA: {}}
 
 
