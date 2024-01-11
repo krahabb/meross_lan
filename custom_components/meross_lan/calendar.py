@@ -249,6 +249,8 @@ class MtsSchedule(MLCalendar):
                         if self._schedule_entry_count != schedule_entry_count:
                             # this should fire only on first weekday scan
                             if self._schedule_entry_count:
+                                # TODO: mts200b (trace from #369) shows this is possible
+                                # so we'll have to rethink our algorithm
                                 self.warning(
                                     "unexpected device schedule entries count",
                                     timeout=14400,

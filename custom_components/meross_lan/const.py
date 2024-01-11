@@ -80,6 +80,7 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     timestamp: float | None
 
 
+CONF_CLOUD_REGION: Final = "cloud_region"
 CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
 CONF_SAVE_PASSWORD: Final = "save_password"
