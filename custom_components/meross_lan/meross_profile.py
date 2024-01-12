@@ -57,8 +57,8 @@ from .merossclient.cloudapi import (
     async_cloudapi_device_devlist,
     async_cloudapi_device_latestversion,
     async_cloudapi_hub_getsubdevices,
-    async_cloudapi_signin,
     async_cloudapi_logout,
+    async_cloudapi_signin,
 )
 from .merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
 from .sensor import MLSensor
@@ -302,6 +302,25 @@ class MQTTConnection(Loggable):
         await self.async_destroy_diagnostic_entities()
 
     # interface: self
+    def create_diagnostic_entities(self):
+        if not self.sensor_connection:
+            self.sensor_connection = ConnectionSensor(self)
+
+    async def async_destroy_diagnostic_entities(self):
+        if sensor_connection := self.sensor_connection:
+            self.sensor_connection = None
+            sensor_connection.manager.entities.pop(sensor_connection.id)
+            if sensor_connection._hass_connected:
+                await sensor_connection.async_remove()
+            await sensor_connection.async_shutdown()
+
+    async def entry_update_listener(self, profile: ApiProfile):
+        """Called by the ApiProfile to propagate config changes"""
+        if profile.create_diagnostic_entities:
+            self.create_diagnostic_entities()
+        else:
+            await self.async_destroy_diagnostic_entities()
+
     @property
     @abc.abstractmethod
     def is_cloud_connection(self):
@@ -332,18 +351,6 @@ class MQTTConnection(Loggable):
         self.mqttdevices.pop(device_id)
         if sensor_connection := self.sensor_connection:
             sensor_connection.update_devices()
-
-    def create_diagnostic_entities(self):
-        if not self.sensor_connection:
-            self.sensor_connection = ConnectionSensor(self)
-
-    async def async_destroy_diagnostic_entities(self):
-        if sensor_connection := self.sensor_connection:
-            self.sensor_connection = None
-            sensor_connection.manager.entities.pop(sensor_connection.id)
-            if sensor_connection._hass_connected:
-                await sensor_connection.async_remove()
-            await sensor_connection.async_shutdown()
 
     @typing.final
     def mqtt_publish(
@@ -766,8 +773,6 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         MQTTConnection.__init__(
             self, profile, connection_id, broker, self.topic_command
         )
-        # TODO: we want mqtt.Client logging only when our profile is set to VERBOSE
-        # so when ApiProfile updates config entry, propagate logger settings
         if profile.isEnabledFor(profile.VERBOSE):
             self.enable_logger(self)  # type: ignore (Loggable is duck-compatible with Logger)
 
@@ -800,6 +805,13 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             self._unsub_random_disconnect = None
         await MerossMQTTAppClient.async_shutdown(self)
         await MQTTConnection.async_shutdown(self)
+
+    async def entry_update_listener(self, profile: MerossCloudProfile):
+        await MQTTConnection.entry_update_listener(self, profile)
+        if profile.isEnabledFor(profile.VERBOSE):
+            self.enable_logger(self)  # type: ignore (Loggable is duck-compatible with Logger)
+        else:
+            self.disable_logger()
 
     @property
     def is_cloud_connection(self):

@@ -84,10 +84,7 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
     from .meross_entity import MerossEntity
     from .meross_profile import MerossCloudProfile, MQTTConnection
-    from .merossclient import (
-        MerossMessage,
-        MerossPayloadType,
-    )
+    from .merossclient import MerossMessage, MerossPayloadType
 
 
 def clamp(_value, _min, _max):
@@ -1165,15 +1162,9 @@ class ApiProfile(ConfigEntryManager):
             else:
                 for device in self.linkeddevices.values():
                     device._mqtt_publish = None
-        create_diagnostic_entities = config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
-        if create_diagnostic_entities != self.create_diagnostic_entities:
-            if create_diagnostic_entities:
-                for mqttconnection in self.mqttconnections.values():
-                    mqttconnection.create_diagnostic_entities()
-            else:
-                for mqttconnection in self.mqttconnections.values():
-                    await mqttconnection.async_destroy_diagnostic_entities()
         await super().entry_update_listener(hass, config_entry)
+        for mqttconnection in self.mqttconnections.values():
+            await mqttconnection.entry_update_listener(self)
 
     # interface: self
     @property
