@@ -107,7 +107,8 @@
                     "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                     "check_firmware_updates": "Vérifier les mises à jour du firmware",
                     "create_diagnostic_entities": "Créer des entités de diagnostic",
-                    "error": "Message d'erreur"
+                    "error": "Message d'erreur",
+                    "cloud_region": "Région du compte"
                 }
             },
             "finalize": {
@@ -264,6 +265,13 @@
             "options": {
                 "disable": "Désactiver l'entrée de configuration",
                 "delete": "Supprimer définitivement l'entrée de configuration"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "Asie\/Pacifique",
+                "eu": "Europe",
+                "us": "États-Unis"
             }
         }
     }

@@ -107,7 +107,8 @@
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                     "create_diagnostic_entities": "Vytvářejte diagnostické entity",
-                    "error": "Chybová zpráva"
+                    "error": "Chybová zpráva",
+                    "cloud_region": "Region účtu"
                 }
             },
             "finalize": {
@@ -264,6 +265,13 @@
             "options": {
                 "disable": "Konfigurace zařízení",
                 "delete": "Trvalé odstranění položky konfigurace"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "Asie\/Tichomoří",
+                "eu": "Evropa",
+                "us": "USA"
             }
         }
     }

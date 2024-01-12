@@ -107,7 +107,8 @@
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "create_diagnostic_entities": "診断エンティティの作成",
-                    "error": "エラーメッセージ"
+                    "error": "エラーメッセージ",
+                    "cloud_region": "アカウントの地域"
                 }
             },
             "finalize": {
@@ -264,6 +265,13 @@
             "options": {
                 "disable": "設定エントリーを無効にする",
                 "delete": "コンフィギュレーション・エントリーを永久に削除する"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "アジア\/太平洋",
+                "eu": "ヨーロッパ",
+                "us": "アメリカ"
             }
         }
     }

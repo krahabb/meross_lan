@@ -107,7 +107,8 @@
                     "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
                     "check_firmware_updates": "Überprüfen Sie Firmware-Updates",
                     "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten",
-                    "error": "Fehlermeldung"
+                    "error": "Fehlermeldung",
+                    "cloud_region": "Kontoregion"
                 }
             },
             "finalize": {
@@ -264,6 +265,13 @@
             "options": {
                 "disable": "Deaktivieren Sie den Konfigurationseintrag",
                 "delete": "Dauerhaftes Löschen des Konfigurationseintrags"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "Asien\/Pazifik",
+                "eu": "Europa",
+                "us": "USA"
             }
         }
     }

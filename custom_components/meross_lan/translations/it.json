@@ -107,7 +107,8 @@
                     "allow_mqtt_publish": "Consenti pubblicazione MQTT",
                     "check_firmware_updates": "Verifica aggiornamenti firmware",
                     "create_diagnostic_entities": "Crea entità disagnostiche",
-                    "error": "Messaggio di errore"
+                    "error": "Messaggio di errore",
+                    "cloud_region": "Regione dell'account"
                 }
             },
             "finalize": {
@@ -264,6 +265,13 @@
             "options": {
                 "disable": "Disattiva la voce di configurazione",
                 "delete": "Elimina definitivamente la voce di configurazione"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "Asia\/Pacifico",
+                "eu": "Europa",
+                "us": "USA"
             }
         }
     }

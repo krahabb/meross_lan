@@ -107,7 +107,8 @@
                     "allow_mqtt_publish": "Allow cloud MQTT publish",
                     "check_firmware_updates": "Check firmware updates",
                     "create_diagnostic_entities": "Create diagnostic entities",
-                    "error": "[%key:config::step::hub::data::error%]"
+                    "error": "[%key:config::step::hub::data::error%]",
+                    "cloud_region": "Account region"
                 }
             },
             "finalize": {
@@ -185,7 +186,7 @@
             },
             "diagnostics": {
                 "title": "[%key:options::step::menu::menu_options::diagnostics%]",
-                "description": "The configuration will be reloaded and debug tracing will start for the configured period",
+                "description": "Set the logging level for this device\/profile and optionally start a diagnostic trace for the configured period",
                 "data": {
                     "logging_level": "Logging level",
                     "trace": "Start diagnostics trace",
@@ -264,6 +265,13 @@
             "options": {
                 "disable": "Disable the configuration entry",
                 "delete": "Permanently delete the configuration entry"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "Asia/Pacific",
+                "eu": "Europe",
+                "us": "USA"
             }
         }
     }
