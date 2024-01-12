@@ -117,6 +117,7 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     """duration of the tracing feature when activated"""
 
 
+CONF_CLOUD_REGION: Final = "cloud_region"
 CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
 CONF_SAVE_PASSWORD: Final = "save_password"

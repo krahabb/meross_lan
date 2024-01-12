@@ -28,6 +28,7 @@ from .merossclient import (
     get_default_payload,
     json_loads,
 )
+from .merossclient.cloudapi import async_cloudapi_logout_safe
 from .merossclient.httpclient import MerossHttpClient
 
 if typing.TYPE_CHECKING:
@@ -35,9 +36,10 @@ if typing.TYPE_CHECKING:
 
     from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import ServiceCall, ServiceResponse
 
     from .merossclient import MerossHeaderType, MerossMessage, MerossPayloadType
+    from .merossclient.cloudapi import MerossCloudCredentials
+
 
 else:
     # In order to avoid a static dependency we resolve these
@@ -651,7 +653,18 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
     if unique_id[0] == "profile":
         profile_id = unique_id[1]
         ApiProfile.profiles.pop(profile_id)
-        await MerossCloudProfileStore(profile_id).async_remove()
+        credentials: MerossCloudCredentials = entry.data  # type: ignore
+        store = MerossCloudProfileStore(profile_id)
+        if data := await store.async_load():
+            # check if the (credentials) token has not expired
+            if data.get(mc.KEY_TOKEN) == credentials[mc.KEY_TOKEN]:
+                await async_cloudapi_logout_safe(
+                    credentials, async_get_clientsession(hass)
+                )
+        else:
+            # consider the token not expired
+            await async_cloudapi_logout_safe(credentials, async_get_clientsession(hass))
+        await store.async_remove()
         return
 
     ApiProfile.devices.pop(unique_id[0])

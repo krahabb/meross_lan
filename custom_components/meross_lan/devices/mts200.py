@@ -197,6 +197,17 @@ class Mts200Climate(MtsClimate):
         mc.KEY_MODE
 
     # message handlers
+    def _parse_holdAction(self, payload: dict):
+        """{"channel": 0, "mode": 0, "expire": 1697010767}"""
+        # TODO: it looks like this message is related to #369.
+        # The trace shows the log about the missing handler in 4.5.2
+        # and it looks like when we receive this, it is a notification
+        # the mts is not really changing its setpoint (as per the issue).
+        # We need more info about how to process this. This handler however
+        # will be fully implemented in next major (5.x) since the new Mts200
+        # architecture is too different from current version one and
+        # it would be a mess to merge branches afterway
+
     def _parse_mode(self, payload: dict):
         """{
             "channel": 0,

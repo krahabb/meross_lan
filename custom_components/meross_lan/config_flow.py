@@ -26,8 +26,9 @@ from .merossclient import (
     get_default_arguments,
 )
 from .merossclient.cloudapi import (
+    API_URL_MAP,
     CloudApiError,
-    async_cloudapi_login,
+    async_cloudapi_signin,
     async_cloudapi_logout_safe,
 )
 from .merossclient.httpclient import MerossHttpClient
@@ -205,10 +206,12 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 # all of the flows logic and try to directly manage the
                 # underlying ConfigEntry in a sort of a crazy generalization
                 if mlc.CONF_PASSWORD in user_input:
-                    credentials = await async_cloudapi_login(
+                    credentials = await async_cloudapi_signin(
                         profile_config[mlc.CONF_EMAIL],
                         user_input[mlc.CONF_PASSWORD],
-                        async_get_clientsession(self.hass),
+                        region=profile_config.pop(mlc.CONF_CLOUD_REGION, None),  # type: ignore
+                        domain=profile_config.get(mc.KEY_DOMAIN),
+                        session=async_get_clientsession(self.hass),
                     )
                     if (
                         mc.KEY_USERID_ in profile_config
@@ -216,7 +219,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                         != profile_config[mc.KEY_USERID_]
                     ):
                         await async_cloudapi_logout_safe(
-                            credentials[mc.KEY_TOKEN],
+                            credentials,
                             async_get_clientsession(self.hass),
                         )
                         raise FlowError(FlowErrorKey.CLOUD_PROFILE_MISMATCH)
@@ -296,6 +299,24 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         else:
             # this is not a profile OptionsFlow so we'd need to login for sure
             # with full credentials
+            config_schema[
+                vol.Optional(
+                    mlc.CONF_CLOUD_REGION,
+                    description={
+                        DESCR: user_input.get(mlc.CONF_CLOUD_REGION)
+                        if user_input
+                        else None
+                    },
+                )
+            ] = selector(
+                {
+                    "select": {
+                        "options": list(API_URL_MAP.keys()),
+                        "translation_key": mlc.CONF_CLOUD_REGION,
+                        "mode": "dropdown",
+                    }
+                }
+            )
             config_schema[
                 vol.Required(
                     mlc.CONF_EMAIL,
