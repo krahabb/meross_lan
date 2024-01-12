@@ -1320,7 +1320,6 @@ class MerossCloudProfile(ApiProfile):
                 return mqttconnection
             else:
                 return None
-
         try:
             await asyncio.wait_for(await mqttconnection.async_connect(broker), 5)
             return mqttconnection
@@ -1328,11 +1327,6 @@ class MerossCloudProfile(ApiProfile):
             self.log_exception(
                 self.DEBUG, exception, "waiting to subscribe to %s", str(broker)
             )
-            return None
-
-        if await mqttconnection.async_connect(broker):
-            return mqttconnection
-        else:
             return None
 
     async def _async_token_missing(self, should_raise_issue: bool):

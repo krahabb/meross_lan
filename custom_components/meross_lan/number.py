@@ -271,7 +271,6 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
                     f"{self.entitykey}_warning",
                     MLSensor.DeviceClass.ENUM,
                 )
-                # TODO: convert translation key (old was "mts200_overheat_warning")
                 sensor_warning._attr_translation_key = f"mts_{sensor_warning.entitykey}"
                 sensor_warning.update_state(payload[mc.KEY_WARNING])
 
