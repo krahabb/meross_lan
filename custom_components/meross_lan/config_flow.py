@@ -28,8 +28,8 @@ from .merossclient import (
 from .merossclient.cloudapi import (
     API_URL_MAP,
     CloudApiError,
-    async_cloudapi_signin,
     async_cloudapi_logout_safe,
+    async_cloudapi_signin,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
@@ -1089,6 +1089,8 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         bind_config = self.bind_config
         with self.show_form_errorcontext():
             if user_input:
+                hass = self.hass
+                api = self.api
                 bind_config[mc.KEY_DOMAIN] = domain = user_input.get(mc.KEY_DOMAIN)
                 bind_config[mc.KEY_KEY] = key = user_input.get(mc.KEY_KEY)
                 bind_config[mc.KEY_USERID] = userid = user_input.get(mc.KEY_USERID)
@@ -1096,14 +1098,14 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 if domain:
                     broker_address = HostAddress(domain, 8883)
                 else:
-                    mqtt_connection = self.api.mqtt_connection
+                    mqtt_connection = api.mqtt_connection
                     if not mqtt_connection.mqtt_is_connected:
                         raise FlowError(OptionsFlowErrorKey.HABROKER_NOT_CONNECTED)
                     broker_address = mqtt_connection.broker
                     if broker_address.port == 1883:
                         broker_address.port = 8883
                 # set back the value so the user has an hint in case of errors connecting
-                bind_config[mc.KEY_DOMAIN] = str(broker_address)
+                bind_config[mc.KEY_DOMAIN] = domain = str(broker_address)
                 # we have to check the broker address is a network bound IPV4 address
                 # since localhost would have no meaning (or a wrong one) in the device
                 import socket
@@ -1126,11 +1128,11 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                         from homeassistant.helpers.network import get_url
                         import yarl
 
-                        hasslocalhost = yarl.URL(get_url(self.hass, allow_ip=True)).host
+                        hasslocalhost = yarl.URL(get_url(hass, allow_ip=True)).host
                         if not hasslocalhost:
                             raise FlowError(FlowErrorKey.CANNOT_CONNECT)
                         broker_address.host = hasslocalhost
-                        bind_config[mc.KEY_DOMAIN] = str(broker_address)
+                        bind_config[mc.KEY_DOMAIN] = domain = str(broker_address)
                         break
 
                 device = ApiProfile.devices[self._device_id]
@@ -1143,25 +1145,33 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     device.id,
                     key=key,
                     userid=userid,
+                    loop=hass.loop
                 )
+                if api.isEnabledFor(api.VERBOSE):
+                    mqttclient.enable_logger(api)  # type: ignore (Loggable is duck-compatible with Logger)
                 try:
-                    await self.hass.async_add_executor_job(
-                        mqttclient.connect, broker_address.host, broker_address.port
+                    await asyncio.wait_for(await mqttclient.async_connect(broker_address), 5)
+                    await mqttclient.async_shutdown()
+                    device.log(device.DEBUG, "Initiating MQTT binding to %s", domain)
+                    response = await device.async_bind(
+                        broker_address, key=key, userid=userid
                     )
-                finally:
-                    mqttclient.disconnect()
-
-                response = await device.async_bind(
-                    broker_address, key=key, userid=userid
-                )
-                if (
-                    response
-                    and response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK
-                ):
-                    # binding succesful..update the key in case
-                    device_config = self.device_config
-                    device_config[mlc.CONF_KEY] = key
-                    return self.finish_options_flow(device_config)
+                    if (
+                        response
+                        and response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK
+                    ):
+                        device.log(device.INFO, "MQTT binding to %s was succesfull", domain)
+                        device_config = self.device_config
+                        device_config[mlc.CONF_KEY] = key
+                        hass.async_create_task(
+                            hass.config_entries.async_reload(self.config_entry_id)
+                        )
+                        return self.finish_options_flow(device_config)
+                    else:
+                        device.log(device.DEBUG, "MQTT binding to %s has failed", domain)
+                except Exception as exception:
+                    await mqttclient.async_shutdown()
+                    raise exception
 
                 raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 

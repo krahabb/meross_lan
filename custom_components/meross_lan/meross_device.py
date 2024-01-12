@@ -712,13 +712,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     async def async_bind(
         self, broker: HostAddress, *, key: str | None = None, userid: str | None = None
     ):
-        # TODO: test in the field and remove DEBUG code
-        if MEROSSDEBUG:
-            return {
-                mc.KEY_HEADER: {mc.KEY_METHOD: mc.METHOD_SETACK},
-                mc.KEY_PAYLOAD: {},
-            }
-
         if key is None:
             key = self.key
         if userid is None:
@@ -733,6 +726,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         mc.KEY_PORT: broker.port,
                         mc.KEY_SECONDHOST: broker.host,
                         mc.KEY_SECONDPORT: broker.port,
+                        "redirect": 1,
                     },
                     mc.KEY_KEY: key,
                     mc.KEY_USERID: userid,

@@ -1132,6 +1132,24 @@ class MerossCloudProfile(ApiProfile):
         return False
 
     def try_link(self, device: MerossDevice):
+        """
+        Device linking to a cloud profile sets the environment for
+        the device MQTT attachment/connection. This process uses a lot
+        of euristics to ensure the device really belongs to this cloud
+        profile.
+        A device binded to a cloud profile should:
+        - have the same userid
+        - have a broker address compatible with the profile available brokers
+        - be present in the davice_info db
+        The second check could be now enforced since the new Meross signin api
+        tells us ('mqttDomain') which is the (only) broker assigned to this profile.
+        It was historically not this way since devices binded to a cloud account could
+        be spread among a pool of brokers.
+        Presence in the device_info db might be unreliable since the query is only
+        done once in 24 hours and thus, the db being out of sync
+        """
+        if device.descriptor.userId != self.userid:
+            return False
         device_id = device.id
         device_info = self._data[self.KEY_DEVICE_INFO].get(device_id)
         if not device_info:
@@ -1143,6 +1161,8 @@ class MerossCloudProfile(ApiProfile):
             # userid from a cloud account even if the device is not binded
             # anymore)
             return False
+        # TODO: maybe add a check for device.mqtt_broker against device_info["domain"]
+        # and/or device_info["reserevdDomain"]
         if super().try_link(device):
             device.update_device_info(device_info)
             if latest_version := self.get_latest_version(device.descriptor):
