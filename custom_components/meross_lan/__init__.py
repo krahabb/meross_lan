@@ -14,7 +14,7 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const as mlc
-from .helpers import LOGGER, ApiProfile, schedule_async_callback
+from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, schedule_async_callback
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (
@@ -36,6 +36,7 @@ if typing.TYPE_CHECKING:
 
     from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import ServiceCall, ServiceResponse
 
     from .merossclient import MerossHeaderType, MerossMessage, MerossPayloadType
     from .merossclient.cloudapi import MerossCloudCredentials
@@ -196,15 +197,23 @@ class HAMQTTConnection(MQTTConnection):
         # At any rate I don't have a clue on how to properly
         # replicate this and the "from" field is set as ususal
 
-        # TODO: retrieve the key from a known device if any
-        # since it could be different than what this profile thinks
-        # also, if we're using the new 'bind' feature in meross_lan
-        # the key might be set there and we have to use that
+        if device_id in ApiProfile.devices:
+            if device := ApiProfile.devices[device_id]:
+                key = device.key
+            else: # device not loaded...
+                helper = ConfigEntriesHelper(ApiProfile.hass)
+                device_entry = helper.get_config_entry(device_id)
+                if device_entry:
+                    key = device_entry.data.get(mlc.CONF_KEY) or ""
+                else:
+                    key = self.profile.key
+        else:
+            key = self.profile.key
         if header[mc.KEY_METHOD] == mc.METHOD_SET:
             await self.async_mqtt_publish(
                 device_id,
                 MerossAckReply(
-                    self.profile.key,
+                    key,
                     header,
                     {},
                     mc.TOPIC_RESPONSE.format(device_id),
