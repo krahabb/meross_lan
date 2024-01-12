@@ -224,6 +224,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                         )
                         raise FlowError(FlowErrorKey.CLOUD_PROFILE_MISMATCH)
                     profile_config.update(credentials)  # type: ignore
+                    if not user_input.get(mlc.CONF_SAVE_PASSWORD):
+                        profile_config.pop(mlc.CONF_PASSWORD, None)
 
                 if self._profile_entry:
                     # we were managing a profile OptionsFlow: fast save
