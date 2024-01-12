@@ -125,24 +125,6 @@ class _MerossMQTTClient(mqtt.Client):
     def state_inactive(self):
         return self._stateext in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
 
-    def connect(self, host: str, port: int):
-        """
-        Executor 'friendly' connect. Raises the usual connection Exceptions
-        or, if the connection succeeds but we can't succesfully subscribe.
-        The thread-safety here is very optimistic: can be called from
-        any thread (main, executor, whatever) but do not overlap multiple
-        calls or overlap with calls to disconnect
-        """
-        if self._stateext != self.STATE_DISCONNECTED:
-            self.disconnect()
-        mqtt.Client.connect(self, host, port)
-        while mqtt.MQTT_ERR_SUCCESS == self.loop(1):
-            if self._stateext == self.STATE_CONNECTED:
-                # TODO: refactor awaiting for subscribe
-                if self._subscribe_error:
-                    raise Exception(self._subscribe_error)
-                break
-
     async def async_connect(self, broker: HostAddress):
         loop = self._asyncio_loop
         future = self._future_connected
@@ -302,12 +284,17 @@ class _MerossMQTTClient(mqtt.Client):
         """
         pass
 
-    def mqtt_message(self, msg):
+    def mqtt_message(self, msg: mqtt.MQTTMessage):
+        """
+        This is a placeholder method called by the asyncio implementation in the
+        main thread when the mqtt client receives a message. Defaults to creating
+        a task for processing the message in async_mqtt_message
+        """
         task = self._asyncio_loop.create_task(self.async_mqtt_message(msg))
         self._tasks.append(task)
         task.add_done_callback(self._tasks.remove)
 
-    async def async_mqtt_message(self, msg):
+    async def async_mqtt_message(self, msg: mqtt.MQTTMessage):
         """
         This is a placeholder method called by the asyncio implementation in the
         main thread when the mqtt client receives a message
@@ -346,7 +333,7 @@ class _MerossMQTTClient(mqtt.Client):
         self._asyncio_loop.call_soon_threadsafe(self._mqtt_published)
 
     def _mqttc_message_loop(self, client, userdata, msg: mqtt.MQTTMessage):
-        self._asyncio_loop.call_soon_threadsafe(self._mqtt_published)
+        self._asyncio_loop.call_soon_threadsafe(self.mqtt_message, msg)
 
 
 class MerossMQTTAppClient(_MerossMQTTClient):
