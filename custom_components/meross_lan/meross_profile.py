@@ -309,10 +309,10 @@ class MQTTConnection(Loggable):
     async def async_destroy_diagnostic_entities(self):
         if sensor_connection := self.sensor_connection:
             self.sensor_connection = None
-            sensor_connection.manager.entities.pop(sensor_connection.id)
-            if sensor_connection._hass_connected:
-                await sensor_connection.async_remove()
-            await sensor_connection.async_shutdown()
+            if sensor_connection.manager.entities.pop(sensor_connection.id, None):
+                if sensor_connection._hass_connected:
+                    await sensor_connection.async_remove()
+                await sensor_connection.async_shutdown()
 
     async def entry_update_listener(self, profile: ApiProfile):
         """Called by the ApiProfile to propagate config changes"""

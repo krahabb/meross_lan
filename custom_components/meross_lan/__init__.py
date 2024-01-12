@@ -14,7 +14,7 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const as mlc
-from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, schedule_async_callback
+from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, ConfigEntryManager, schedule_async_callback
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (
@@ -200,7 +200,7 @@ class HAMQTTConnection(MQTTConnection):
         if device_id in ApiProfile.devices:
             if device := ApiProfile.devices[device_id]:
                 key = device.key
-            else: # device not loaded...
+            else:  # device not loaded...
                 helper = ConfigEntriesHelper(ApiProfile.hass)
                 device_entry = helper.get_config_entry(device_id)
                 if device_entry:
@@ -288,22 +288,26 @@ class MerossApi(ApiProfile):
         'Our' truth singleton is saved in hass.data[DOMAIN] and
         ApiProfile.api is just a cache to speed access
         """
-        if mlc.DOMAIN not in hass.data:
-            hass.data[mlc.DOMAIN] = api = MerossApi(hass)
+        if not MerossApi.api:
+            ApiProfile.api = hass.data[mlc.DOMAIN] = MerossApi(hass)
+            ApiProfile.hass = hass
 
             async def _async_unload_merossapi(_event) -> None:
-                await api.async_shutdown()
-                hass.data.pop(mlc.DOMAIN)
+                for device in ApiProfile.active_devices():
+                    await device.async_shutdown()
+                for profile in ApiProfile.active_profiles():
+                    await profile.async_shutdown()
+                await ApiProfile.api.async_shutdown()
+                ApiProfile.api = None  # type: ignore
+                ApiProfile.hass.data.pop(mlc.DOMAIN)
+                ApiProfile.hass = None  # type: ignore
 
             hass.bus.async_listen_once(
                 EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi
             )
-            return api
         return MerossApi.api
 
     def __init__(self, hass: HomeAssistant):
-        ApiProfile.hass = hass
-        ApiProfile.api = self
         super().__init__(mlc.CONF_PROFILE_ID_LOCAL, None)
         self._deviceclasses: dict[str, type] = {}
         self._mqtt_connection: HAMQTTConnection | None = None
@@ -318,7 +322,7 @@ class MerossApi(ApiProfile):
             else:
                 self.devices[unique_id[0]] = None
 
-        async def async_service_request(service_call: ServiceCall) -> ServiceResponse:
+        async def _async_service_request(service_call: ServiceCall) -> ServiceResponse:
             service_response = {}
             device_id = service_call.data.get(mlc.CONF_DEVICE_ID)
             host = service_call.data.get(mlc.CONF_HOST)
@@ -418,21 +422,21 @@ class MerossApi(ApiProfile):
         hass.services.async_register(
             mlc.DOMAIN,
             mlc.SERVICE_REQUEST,
-            async_service_request,
+            _async_service_request,
             supports_response=SupportsResponse.OPTIONAL,
         )
         return
 
     # interface: ConfigEntryManager
     async def async_shutdown(self):
-        for device in self.active_devices():
-            await device.async_shutdown()
-        for profile in self.active_profiles():
-            await profile.async_shutdown()
-        self._mqtt_connection = None
-        await super().async_shutdown()
-        ApiProfile.hass = None  # type: ignore
-        ApiProfile.api = None  # type: ignore
+        # when unloading the config entry (either unload-remove-reload) we
+        # want to cleanup our entities for sure even though the MerossApi
+        # object is able to survive the unloading (it is a persistent singleton)
+        # We're then trying to preserve our mqtt_connection and device linking.
+        # That's a risky mess
+        await ConfigEntryManager.async_shutdown(self)
+        if (mqtt_connection := self._mqtt_connection):
+            await mqtt_connection.async_destroy_diagnostic_entities()
 
     def get_logger_name(self, id: str) -> str:
         return "api"
@@ -640,13 +644,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     LOGGER.debug("async_unload_entry { entry_id: %s }", config_entry.entry_id)
 
     manager = ApiProfile.managers[config_entry.entry_id]
-    if not await manager.async_unload_entry(hass, config_entry):
-        return False
-
-    if manager is not ApiProfile.api:
-        await manager.async_shutdown()
-
-    return True
+    return await manager.async_unload_entry(hass, config_entry)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):

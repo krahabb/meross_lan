@@ -779,8 +779,8 @@ class ConfigEntryManager(EntityManager):
             # this is the MerossApi: it will be better initialized when
             # the ConfigEntry is loaded
             config_entry_id = ""
-            self.key = ""
             self.config = {}
+            self.key = ""
             self.obfuscate = True
         # when we build an entity we also add the relative platform name here
         # so that the async_setup_entry for this integration will be able to forward
@@ -850,6 +850,9 @@ class ConfigEntryManager(EntityManager):
         self.unlisten_entry_update()
         self.unschedule_entry_reload()
         ApiProfile.managers.pop(self.config_entry_id)
+        self.platforms = {}
+        self.config = {}
+        await self.async_shutdown()
         return True
 
     def unlisten_entry_update(self):
@@ -877,8 +880,7 @@ class ConfigEntryManager(EntityManager):
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ):
-        self.config = config_entry.data
-        config = self.config
+        config = self.config = config_entry.data
         self.key = config.get(CONF_KEY) or ""
         self.obfuscate = config.get(CONF_OBFUSCATE, True)
         self.logger = self._get_configured_logger(self.id)
@@ -1137,6 +1139,7 @@ class ApiProfile(ConfigEntryManager):
         self.linkeddevices: dict[str, MerossDevice] = {}
         self.mqttconnections: dict[str, MQTTConnection] = {}
 
+     # interface: ConfigEntryManager
     async def async_shutdown(self):
         for mqttconnection in self.mqttconnections.values():
             await mqttconnection.async_shutdown()
@@ -1146,7 +1149,6 @@ class ApiProfile(ConfigEntryManager):
         self.linkeddevices.clear()
         await super().async_shutdown()
 
-    # interface: EntityManager
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
         config = config_entry.data
         # the ApiProfile always enable (independent of config) mqtt publish so far
