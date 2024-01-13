@@ -1388,6 +1388,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # already processed by the MQTTConnection session manager
         pass
 
+    def _handle_Appliance_System_Report(self, header: dict, payload: dict):
+        # No clue: sent (MQTT PUSH) by the device on initial connection
+        pass
+
     def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
         self.sensor_signal_strength.update_state(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])
 
