@@ -1577,9 +1577,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         and not at the configuration/option level
         see derived implementations
         """
-        if self.mqtt_locallyactive and (
-            mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability
-        ):
+        if mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability:
             global TIMEZONES_SET
             if TIMEZONES_SET is None:
                 try:
@@ -1612,10 +1610,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         (this is actually called in sequence with entry_update_listener
         just the latter is async)
         """
-        if self.mqtt_locallyactive and (
-            mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability
-        ):
-            self._config_device_timezone(user_input.get(mc.KEY_TIMEZONE))
+        if mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability:
+            timezone = user_input.get(mc.KEY_TIMEZONE)
+            if timezone != self.descriptor.timezone:
+                self._config_device_timezone(timezone)
 
     def _config_device_timestamp(self, epoch):
         if self.mqtt_locallyactive and (
@@ -1725,7 +1723,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         return False
 
-    def _config_device_timezone(self, tzname):
+    def _config_device_timezone(self, tzname: str | None):
         # assert self.mqtt_locallyactive
         timestamp = self.device_timestamp
         timerules = []
