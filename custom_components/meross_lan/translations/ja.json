@@ -191,21 +191,23 @@
                     "trace_timeout": "デバグトレース時間 [秒]",
                     "error": "エラーメッセージ",
                     "logging_level": "ログレベル",
-                    "trace": "診断トレースの開始"
+                    "trace": "診断トレースの開始",
+                    "obfuscate": "ログ内の機密データを難読化する"
                 }
             },
             "bind": {
                 "title": "MQTTの再設定（ローカルバインディング）",
                 "description": "デバイスを別のMQTTブローカーに接続（バインド）する",
                 "data": {
-                    "broker": "新しいMQTTブローカーのアドレス",
+                    "domain": "新しいMQTTブローカーのアドレス",
                     "check": "再設定前にMQTTブローカーとの互換性を確認する",
                     "key": "デバイスキー",
                     "userid": "ユーザーID",
                     "error": "エラーメッセージ"
                 },
                 "data_description": {
-                    "broker": "host(:port)'形式でアドレスを入力するか、HomeAssistantのものを使用する場合は空のままにします。"
+                    "domain": "host(:port)'形式でアドレスを入力するか、HomeAssistantのものを使用する場合は空のままにします。",
+                    "userid": "meross_lanとの互換性を高めるために空白にしてください"
                 }
             },
             "unbind": {

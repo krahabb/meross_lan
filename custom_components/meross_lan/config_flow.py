@@ -763,7 +763,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         {
             "domain": str | None,
             "key": str | None,
-            "userId": int | None,
+            "userid": int | None,
         },
     )
     bind_config: BindConfigType
@@ -820,7 +820,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         self.bind_config = {
             mc.KEY_DOMAIN: None,
             mc.KEY_KEY: self.api.key,
-            mc.KEY_USERID: None,
+            mc.KEY_USERID_: None,
         }
         return await self.async_step_menu(["device", "diagnostics", "bind", "unbind"])
 
@@ -1093,7 +1093,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 api = self.api
                 bind_config[mc.KEY_DOMAIN] = domain = user_input.get(mc.KEY_DOMAIN)
                 bind_config[mc.KEY_KEY] = key = user_input.get(mc.KEY_KEY)
-                bind_config[mc.KEY_USERID] = userid = user_input.get(mc.KEY_USERID)
+                bind_config[mc.KEY_USERID_] = userid = user_input.get(mc.KEY_USERID_)
 
                 if domain:
                     broker_address = HostAddress(domain, 8883)
@@ -1181,7 +1181,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             ): str,
             vol.Optional(mc.KEY_KEY, description={DESCR: bind_config[mc.KEY_KEY]}): str,
             vol.Optional(
-                mc.KEY_USERID, description={DESCR: bind_config[mc.KEY_USERID]}
+                mc.KEY_USERID_, description={DESCR: bind_config[mc.KEY_USERID_]}
             ): cv.positive_int,
         }
         return self.async_show_form_with_errors(

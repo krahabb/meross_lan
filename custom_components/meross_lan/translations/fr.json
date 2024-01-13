@@ -191,21 +191,23 @@
                     "trace_timeout": "Durée du suivi du débogage (sec)",
                     "error": "Message d'erreur",
                     "logging_level": "Niveau d'enregistrement",
-                    "trace": "Démarrer la trace de diagnostic"
+                    "trace": "Démarrer la trace de diagnostic",
+                    "obfuscate": "Obscurcir les données sensibles dans les journaux"
                 }
             },
             "bind": {
                 "title": "Reconfigurer MQTT (liaison locale)",
                 "description": "Connecter (Bind) l'appareil à un autre courtier MQTT",
                 "data": {
-                    "broker": "Adresse du nouveau courtier MQTT",
+                    "domain": "Adresse du nouveau courtier MQTT",
                     "check": "Vérifier la compatibilité du courtier MQTT avant de reconfigurer",
                     "key": "Clé",
                     "userid": "ID de l'utilisateur",
                     "error": "Message d'erreur"
                 },
                 "data_description": {
-                    "broker": "Entrez l'adresse sous la forme 'host(:port)' ou laissez vide pour utiliser celle de HomeAssistant."
+                    "domain": "Entrez l'adresse sous la forme 'host(:port)' ou laissez vide pour utiliser celle de HomeAssistant.",
+                    "userid": "Laissez vide pour une meilleure compatibilité avec meross_lan"
                 }
             },
             "unbind": {

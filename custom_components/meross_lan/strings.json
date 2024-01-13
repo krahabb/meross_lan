@@ -189,6 +189,7 @@
                 "description": "Set the logging level for this device\/profile and optionally start a diagnostic trace for the configured period",
                 "data": {
                     "logging_level": "Logging level",
+                    "obfuscate": "Obfuscate sensitive data in logs",
                     "trace": "Start diagnostics trace",
                     "trace_timeout": "Debug tracing duration (sec)",
                     "error": "[%key:config::step::hub::data::error%]"
@@ -198,14 +199,15 @@
                 "title": "[%key:options::step::menu::menu_options::bind%]",
                 "description": "Connect (Bind) the device to a different MQTT broker",
                 "data": {
-                    "broker": "Address of the new MQTT broker",
+                    "domain": "Address of the new MQTT broker",
                     "check": "Check broker compatibility before reconfiguring",
                     "key": "[%key:config::step::hub::data::key%]",
                     "userid": "User Id",
                     "error": "[%key:options::step::device::data::error%]"
                 },
                 "data_description": {
-                    "broker": "Enter the address in the form 'host(:port)' or leave empty to use the HA one"
+                    "domain": "Enter the address in the form 'host(:port)' or leave empty to use the HA one",
+                    "userid": "Leave empty for better compatibility with meross_lan"
                 }
             },
             "unbind": {
@@ -269,7 +271,7 @@
         },
         "cloud_region": {
             "options": {
-                "ap": "Asia/Pacific",
+                "ap": "Asia\/Pacific",
                 "eu": "Europe",
                 "us": "USA"
             }

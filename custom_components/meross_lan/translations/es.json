@@ -191,21 +191,23 @@
                     "trace_timeout": "Duración del seguimiento de debug (sec)",
                     "error": "Mensaje de error",
                     "logging_level": "Nivel de registro",
-                    "trace": "Iniciar traza de diagnóstico"
+                    "trace": "Iniciar traza de diagnóstico",
+                    "obfuscate": "Ofuscar datos sensibles en registros"
                 }
             },
             "bind": {
                 "title": "Reconfigurar MQTT (enlace local)",
                 "description": "Conectar (Bind) el dispositivo a un broker MQTT diferente",
                 "data": {
-                    "broker": "Dirección del nuevo broker MQTT",
+                    "domain": "Dirección del nuevo broker MQTT",
                     "check": "Compruebe la compatibilidad del broker MQTT antes de reconfigurar",
                     "key": "Clave de dispositivo",
                     "userid": "Id de usuario",
                     "error": "Mensaje de error"
                 },
                 "data_description": {
-                    "broker": "Introduzca la dirección en la forma 'host(:port)' o déjela vacía para utilizar la del Asistente de Casa"
+                    "domain": "Introduzca la dirección en la forma 'host(:port)' o déjela vacía para utilizar la del Asistente de Casa",
+                    "userid": "Deje vacío para una mejor compatibilidad con meross_lan"
                 }
             },
             "unbind": {

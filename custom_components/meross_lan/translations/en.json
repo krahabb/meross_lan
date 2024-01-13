@@ -191,21 +191,23 @@
                     "trace_timeout": "Debug tracing duration (sec)",
                     "error": "Error message",
                     "logging_level": "Logging level",
-                    "trace": "Start diagnostics trace"
+                    "trace": "Start diagnostics trace",
+                    "obfuscate": "Obfuscate sensitive data in logs"
                 }
             },
             "bind": {
                 "title": "Reconfigure MQTT (local binding)",
                 "description": "Connect (Bind) the device to a different MQTT broker",
                 "data": {
-                    "broker": "Address of the new MQTT broker",
+                    "domain": "Address of the new MQTT broker",
                     "check": "Check broker compatibility before reconfiguring",
                     "key": "Device key",
                     "userid": "User Id",
                     "error": "Error message"
                 },
                 "data_description": {
-                    "broker": "Enter the address in the form 'host(:port)' or leave empty to use the HA one"
+                    "domain": "Enter the address in the form 'host(:port)' or leave empty to use the HA one",
+                    "userid": "Leave empty for better compatibility with meross_lan"
                 }
             },
             "unbind": {

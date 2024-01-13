@@ -191,21 +191,23 @@
                     "trace_timeout": "Doba trvání trasování ladění (sec)",
                     "error": "Chybová zpráva",
                     "logging_level": "Úroveň protokolování",
-                    "trace": "Spusťte trasování diagnostiky"
+                    "trace": "Spusťte trasování diagnostiky",
+                    "obfuscate": "Zamaskujte citlivá data v protokolech"
                 }
             },
             "bind": {
                 "title": "Překonfigurovat MQTT (místní vazba)",
                 "description": "Připojení (Bind) zařízení k jinému zprostředkovateli MQTT",
                 "data": {
-                    "broker": "Adresa nového zprostředkovatele MQTT",
+                    "domain": "Adresa nového zprostředkovatele MQTT",
                     "check": "Zkontrolujte kompatibilitu zprostředkovatele MQTT před rekonfigurací",
                     "key": "Klíč zařízení",
                     "userid": "Id uživatele",
                     "error": "Chybová zpráva"
                 },
                 "data_description": {
-                    "broker": "Zadejte adresu ve tvaru 'host(:port)' nebo nechte prázdnou, chcete-li použít adresu HomeAssistant."
+                    "domain": "Zadejte adresu ve tvaru 'host(:port)' nebo nechte prázdnou, chcete-li použít adresu HomeAssistant.",
+                    "userid": "Pro lepší kompatibilitu s meross_lan ponechte prázdné"
                 }
             },
             "unbind": {
