@@ -197,7 +197,7 @@
             },
             "bind": {
                 "title": "[%key:options::step::menu::menu_options::bind%]",
-                "description": "Connect (Bind) the device to a different MQTT broker",
+                "description": "Connect (Bind) the device to a different MQTT broker\nCurrent broker: {domain}",
                 "data": {
                     "domain": "Address of the new MQTT broker",
                     "check": "Check broker compatibility before reconfiguring",
@@ -207,8 +207,13 @@
                 },
                 "data_description": {
                     "domain": "Enter the address in the form 'host(:port)' or leave empty to use the HA one",
-                    "userid": "Leave empty for better compatibility with meross_lan"
+                    "userid": "Leave empty for better compatibility with meross_lan",
+                    "key": "[%key:options::step::bind::data_description::userid%]"
                 }
+            },
+            "bind_finalize": {
+                "title": "[%key:options::step::menu::menu_options::bind%]",
+                "description": "The device has been succesfully configured with the new MQTT broker at {domain}.\nThe configuration has been updated and reloaded but you might need to reboot (power-cycle) the device for it to connect to the new broker."
             },
             "unbind": {
                 "title": "[%key:options::step::menu::menu_options::unbind%]",

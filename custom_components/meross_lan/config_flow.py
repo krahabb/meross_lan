@@ -773,6 +773,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         "config_entry_id",
         "config",
         "bind_config",
+        "bind_placeholders",
     )
 
     def __init__(self, config_entry: config_entries.ConfigEntry):
@@ -816,11 +817,6 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         self.device_placeholders = {
             "device_type": self.device_descriptor.productnametype,
             "device_id": self._device_id,
-        }
-        self.bind_config = {
-            mc.KEY_DOMAIN: None,
-            mc.KEY_KEY: self.api.key,
-            mc.KEY_USERID_: None,
         }
         return await self.async_step_menu(["device", "diagnostics", "bind", "unbind"])
 
@@ -1086,17 +1082,17 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         )
 
     async def async_step_bind(self, user_input=None):
-        bind_config = self.bind_config
         with self.show_form_errorcontext():
             if user_input:
                 hass = self.hass
                 api = self.api
+                bind_config = self.bind_config
                 bind_config[mc.KEY_DOMAIN] = domain = user_input.get(mc.KEY_DOMAIN)
                 bind_config[mc.KEY_KEY] = key = user_input.get(mc.KEY_KEY)
                 bind_config[mc.KEY_USERID_] = userid = user_input.get(mc.KEY_USERID_)
 
                 if domain:
-                    broker_address = HostAddress(domain, 8883)
+                    broker_address = HostAddress.build(domain, 8883)
                 else:
                     mqtt_connection = api.mqtt_connection
                     if not mqtt_connection.mqtt_is_connected:
@@ -1139,41 +1135,70 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 if not (device and device.online):
                     raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 
-                key = key or ""
+                key = key or self.api.key or ""
                 userid = "" if userid is None else str(userid)
                 mqttclient = MerossMQTTDeviceClient(
-                    device.id,
-                    key=key,
-                    userid=userid,
-                    loop=hass.loop
+                    device.id, key=key, userid=userid, loop=hass.loop
                 )
                 if api.isEnabledFor(api.VERBOSE):
                     mqttclient.enable_logger(api)  # type: ignore (Loggable is duck-compatible with Logger)
                 try:
-                    await asyncio.wait_for(await mqttclient.async_connect(broker_address), 5)
-                    await mqttclient.async_shutdown()
-                    device.log(device.DEBUG, "Initiating MQTT binding to %s", domain)
-                    response = await device.async_bind(
-                        broker_address, key=key, userid=userid
+                    await asyncio.wait_for(
+                        await mqttclient.async_connect(broker_address), 5
                     )
-                    if (
-                        response
-                        and response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK
-                    ):
-                        device.log(device.INFO, "MQTT binding to %s was succesfull", domain)
-                        device_config = self.device_config
-                        device_config[mlc.CONF_KEY] = key
-                        hass.async_create_task(
-                            hass.config_entries.async_reload(self.config_entry_id)
-                        )
-                        return self.finish_options_flow(device_config)
-                    else:
-                        device.log(device.DEBUG, "MQTT binding to %s has failed", domain)
-                except Exception as exception:
+                finally:
                     await mqttclient.async_shutdown()
-                    raise exception
+
+                device.log(device.DEBUG, "Initiating MQTT binding to %s", domain)
+                response = await device.async_bind(
+                    broker_address, key=key, userid=userid
+                )
+                if (
+                    response
+                    and response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK
+                ):
+                    device.log(device.INFO, "MQTT binding to %s was succesfull", domain)
+                    device_config = self.device_config
+                    device_config[mlc.CONF_KEY] = key
+                    # the device config needs to be updated too. This is not critical
+                    # since the device, when onlining will refresh this but we have a chance to speed
+                    # up the process so when it restart it'll be already updated
+                    if host := device.host:
+                        try:
+                            (
+                                device_config_update,
+                                descriptor_update,
+                            ) = await self._async_http_discovery(host, key)
+                            device_config[mlc.CONF_PAYLOAD] = device_config_update[
+                                mlc.CONF_PAYLOAD
+                            ]
+                        except Exception as e:
+                            pass
+                    hass.async_create_task(
+                        hass.config_entries.async_reload(self.config_entry_id)
+                    )
+                    hass.config_entries.async_update_entry(
+                        self.config_entry, data=device_config
+                    )
+                    return self.async_show_form(
+                        step_id="bind_finalize",
+                        data_schema=vol.Schema({}),
+                        description_placeholders={"domain": domain},
+                    )
+                else:
+                    device.log(device.DEBUG, "MQTT binding to %s has failed", domain)
 
                 raise FlowError(FlowErrorKey.CANNOT_CONNECT)
+            else:
+                self.bind_config = {
+                    mc.KEY_DOMAIN: None,
+                    mc.KEY_KEY: None,
+                    mc.KEY_USERID_: None,
+                }
+                bind_config = self.bind_config
+                self.bind_placeholders = {
+                    "domain": str(next(iter(self.device_descriptor.brokers), None))
+                }
 
         config_schema = {
             vol.Optional(
@@ -1185,8 +1210,13 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             ): cv.positive_int,
         }
         return self.async_show_form_with_errors(
-            step_id="bind", config_schema=config_schema
+            step_id="bind",
+            config_schema=config_schema,
+            description_placeholders=self.bind_placeholders,
         )
+
+    async def async_step_bind_finalize(self, user_input=None):
+        return self.async_create_entry(data=None)  # type: ignore
 
     async def async_step_unbind(self, user_input=None):
         KEY_ACTION = "post_action"

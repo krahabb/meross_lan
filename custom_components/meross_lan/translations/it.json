@@ -197,7 +197,7 @@
             },
             "bind": {
                 "title": "Riconfigura MQTT (binding locale)",
-                "description": "Collega (Bind) il dispositivo a un altro broker MQTT",
+                "description": "Collega (Bind) il dispositivo a un altro broker MQTT\nAttuale: {domain}",
                 "data": {
                     "domain": "Indirizzo del nuovo broker MQTT",
                     "check": "Verifica la compatibilità del broker MQTT prima di riconfigurarlo",
@@ -207,7 +207,8 @@
                 },
                 "data_description": {
                     "domain": "Inserire l'indirizzo nella forma \"host(:port)\" o lasciare vuoto per utilizzare quello di HomeAssistant.",
-                    "userid": "Lascia vuoto per una migliore compatibilità con meross_lan"
+                    "userid": "Lascia vuoto per una migliore compatibilità con meross_lan",
+                    "key": "Lascia vuoto per una migliore compatibilità con meross_lan"
                 }
             },
             "unbind": {
@@ -217,6 +218,10 @@
                     "post_action": "Dopo il reset:",
                     "error": "Messaggio di errore"
                 }
+            },
+            "bind_finalize": {
+                "title": "Riconfigura MQTT (binding locale)",
+                "description": "Il dispositivo è stato configurato con successo con il nuovo broker MQTT su {domain}.\nLa configurazione è stata aggiornata e ricaricata, ma potrebbe essere necessario riavviare (spegnere e riaccendere) il dispositivo per connettersi al nuovo broker."
             }
         }
     },

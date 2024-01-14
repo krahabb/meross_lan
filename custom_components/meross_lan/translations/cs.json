@@ -197,7 +197,7 @@
             },
             "bind": {
                 "title": "Překonfigurovat MQTT (místní vazba)",
-                "description": "Připojení (Bind) zařízení k jinému zprostředkovateli MQTT",
+                "description": "Připojte (svažte) zařízení k jinému MQTT brokerovi\nAktuální broker: {domain}",
                 "data": {
                     "domain": "Adresa nového zprostředkovatele MQTT",
                     "check": "Zkontrolujte kompatibilitu zprostředkovatele MQTT před rekonfigurací",
@@ -207,7 +207,8 @@
                 },
                 "data_description": {
                     "domain": "Zadejte adresu ve tvaru 'host(:port)' nebo nechte prázdnou, chcete-li použít adresu HomeAssistant.",
-                    "userid": "Pro lepší kompatibilitu s meross_lan ponechte prázdné"
+                    "userid": "Pro lepší kompatibilitu s meross_lan ponechte prázdné",
+                    "key": "Pro lepší kompatibilitu s meross_lan ponechte prázdné"
                 }
             },
             "unbind": {
@@ -217,6 +218,10 @@
                     "post_action": "Po rozvázání:",
                     "error": "Chybová zpráva"
                 }
+            },
+            "bind_finalize": {
+                "title": "Překonfigurovat MQTT (místní vazba)",
+                "description": "Zařízení bylo úspěšně nakonfigurováno s novým MQTT brokerem na {domain}.\nKonfigurace byla aktualizována a znovu načtena, ale může být nutné zařízení restartovat (vypnout a zapnout), aby se mohlo připojit k novému brokerovi."
             }
         }
     },

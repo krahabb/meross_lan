@@ -197,7 +197,7 @@
             },
             "bind": {
                 "title": "Reconfigurer MQTT (liaison locale)",
-                "description": "Connecter (Bind) l'appareil à un autre courtier MQTT",
+                "description": "Connectez (Liez) l'appareil à un autre courtier MQTT\nCourtier actuel : {domain}",
                 "data": {
                     "domain": "Adresse du nouveau courtier MQTT",
                     "check": "Vérifier la compatibilité du courtier MQTT avant de reconfigurer",
@@ -207,7 +207,8 @@
                 },
                 "data_description": {
                     "domain": "Entrez l'adresse sous la forme 'host(:port)' ou laissez vide pour utiliser celle de HomeAssistant.",
-                    "userid": "Laissez vide pour une meilleure compatibilité avec meross_lan"
+                    "userid": "Laissez vide pour une meilleure compatibilité avec meross_lan",
+                    "key": "Laissez vide pour une meilleure compatibilité avec meross_lan"
                 }
             },
             "unbind": {
@@ -217,6 +218,10 @@
                     "post_action": "Après la déliaison:",
                     "error": "Message d'erreur"
                 }
+            },
+            "bind_finalize": {
+                "title": "Reconfigurer MQTT (liaison locale)",
+                "description": "L'appareil a été configuré avec succès avec le nouveau courtier MQTT à {domain}.\nLa configuration a été mise à jour et rechargée, mais vous devrez peut-être redémarrer (cycle d'alimentation) l'appareil pour qu'il se connecte au nouveau courtier."
             }
         }
     },

@@ -197,7 +197,7 @@
             },
             "bind": {
                 "title": "MQTTの再設定（ローカルバインディング）",
-                "description": "デバイスを別のMQTTブローカーに接続（バインド）する",
+                "description": "デバイスを別のMQTTブローカーに接続（バインド）します\n現在のブローカー：{domain}",
                 "data": {
                     "domain": "新しいMQTTブローカーのアドレス",
                     "check": "再設定前にMQTTブローカーとの互換性を確認する",
@@ -207,7 +207,8 @@
                 },
                 "data_description": {
                     "domain": "host(:port)'形式でアドレスを入力するか、HomeAssistantのものを使用する場合は空のままにします。",
-                    "userid": "meross_lanとの互換性を高めるために空白にしてください"
+                    "userid": "meross_lanとの互換性を高めるために空白にしてください",
+                    "key": "meross_lanとの互換性を高めるために空白にしてください"
                 }
             },
             "unbind": {
@@ -217,6 +218,10 @@
                     "post_action": "バインドを解いた後",
                     "error": "エラーメッセージ"
                 }
+            },
+            "bind_finalize": {
+                "title": "MQTTの再設定（ローカルバインディング）",
+                "description": "デバイスは新しいMQTTブローカーに成功的に設定されました{domain}。\n設定は更新され、再読み込みされましたが、新しいブローカーに接続するためにはデバイスを再起動（電源を切る）する必要があるかもしれません。"
             }
         }
     },

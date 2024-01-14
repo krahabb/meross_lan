@@ -1859,6 +1859,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def profile_linked(self, profile: ApiProfile):
         if self._profile is not profile:
+            self.log(self.DEBUG, "linked to profile:%s", profile.logtag)
             if self._mqtt_connection:
                 self._mqtt_connection.detach(self)
             if self._profile:
@@ -1867,7 +1868,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._check_mqtt_connection_attach()
 
     def profile_unlinked(self):
-        # assert self._profile
+        assert self._profile
+        self.log(self.DEBUG, "unlinked from profile:%s", self._profile.logtag)
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
         self._profile = None

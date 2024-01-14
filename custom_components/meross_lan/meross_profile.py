@@ -460,7 +460,7 @@ class MQTTConnection(Loggable):
                     # integration was already loaded so not really often
                     if profile.try_link(device):
                         self.log(
-                            self.WARNING,
+                            self.INFO,
                             "Device uuid:%s has been automatically re-linked to this profile",
                             profile.obfuscated_device_id(device_id),
                         )
@@ -470,10 +470,12 @@ class MQTTConnection(Loggable):
                             return
                         # else..keep going so we log the '...HTTP_ONLY..'
                     else:
-                        # this is not really expected and deserves a warning
+                        # this is not really expected and deserves a warning but is expected
+                        # when you (re)bind a device and it still is connected to the old broker
+                        # until reboot
                         self.log(
                             self.WARNING,
-                            "Device uuid:%s cannot not registered for MQTT handling on this profile",
+                            "Device uuid:%s cannot be registered for MQTT handling on this profile",
                             profile.obfuscated_device_id(device_id),
                             timeout=14400,
                         )
@@ -1139,8 +1141,9 @@ class MerossCloudProfile(ApiProfile):
         profile.
         A device binded to a cloud profile should:
         - have the same userid
+        - have the same key
         - have a broker address compatible with the profile available brokers
-        - be present in the davice_info db
+        - be present in the device_info db
         The second check could be now enforced since the new Meross signin api
         tells us ('mqttDomain') which is the (only) broker assigned to this profile.
         It was historically not this way since devices binded to a cloud account could
@@ -1148,7 +1151,7 @@ class MerossCloudProfile(ApiProfile):
         Presence in the device_info db might be unreliable since the query is only
         done once in 24 hours and thus, the db being out of sync
         """
-        if device.descriptor.userId != self.userid:
+        if (device.key != self.key) or (device.descriptor.userId != self.userid):
             return False
         device_id = device.id
         device_info = self._data[self.KEY_DEVICE_INFO].get(device_id)
@@ -1162,7 +1165,7 @@ class MerossCloudProfile(ApiProfile):
             # anymore)
             return False
         # TODO: maybe add a check for device.mqtt_broker against device_info["domain"]
-        # and/or device_info["reserevdDomain"]
+        # and/or device_info["reservedDomain"]
         if super().try_link(device):
             device.update_device_info(device_info)
             if latest_version := self.get_latest_version(device.descriptor):
