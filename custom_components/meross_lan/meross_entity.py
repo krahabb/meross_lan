@@ -107,7 +107,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         assert channel is not None or (
             entitykey is not None
         ), "provide at least channel or entitykey (cannot be 'None' together)"
-
         id = (
             channel
             if entitykey is None
@@ -115,7 +114,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             if channel is None
             else f"{channel}_{entitykey}"
         )
-        Loggable.__init__(self, id, logger=manager)
         assert (
             manager.entities.get(id) is None
         ), f"(channel:{channel}, entitykey:{entitykey}) is not unique inside manager.entities"
@@ -123,6 +121,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.channel = channel
         self.entitykey = entitykey
         self._attr_device_class = device_class
+        Loggable.__init__(self, id, logger=manager)
         attr_name = self._attr_name
         if attr_name is None and (entitykey or device_class):
             attr_name = f"{entitykey or device_class}".capitalize()

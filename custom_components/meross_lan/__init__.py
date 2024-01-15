@@ -14,7 +14,13 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const as mlc
-from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, ConfigEntryManager, schedule_async_callback
+from .helpers import (
+    LOGGER,
+    ApiProfile,
+    ConfigEntriesHelper,
+    ConfigEntryManager,
+    schedule_async_callback,
+)
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (
@@ -60,7 +66,6 @@ class HAMQTTConnection(MQTTConnection):
     def __init__(self, api: MerossApi):
         super().__init__(
             api,
-            "homeassistant:0",
             HostAddress("homeassistant", 0),
             mc.TOPIC_RESPONSE.format(mlc.DOMAIN),
         )
@@ -169,7 +174,7 @@ class HAMQTTConnection(MQTTConnection):
                 conf = mqtt_data.client.conf
                 self.broker.host = conf[mqtt.CONF_BROKER]
                 self.broker.port = conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT)
-                self.logtag = f"{self.__class__.__name__}({self.broker})"
+                self.configure_logger()
 
         super()._mqtt_connected()
 
@@ -435,10 +440,10 @@ class MerossApi(ApiProfile):
         # We're then trying to preserve our mqtt_connection and device linking.
         # That's a risky mess
         await ConfigEntryManager.async_shutdown(self)
-        if (mqtt_connection := self._mqtt_connection):
+        if mqtt_connection := self._mqtt_connection:
             await mqtt_connection.async_destroy_diagnostic_entities()
 
-    def get_logger_name(self, id: str) -> str:
+    def get_logger_name(self) -> str:
         return "api"
 
     # interface: ApiProfile
@@ -571,7 +576,6 @@ class MerossApi(ApiProfile):
     def mqtt_connection(self):
         if not (mqtt_connection := self._mqtt_connection):
             self._mqtt_connection = mqtt_connection = HAMQTTConnection(self)
-            self.mqttconnections[mqtt_connection.id] = mqtt_connection
         return mqtt_connection
 
 

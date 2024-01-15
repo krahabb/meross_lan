@@ -154,19 +154,19 @@ class MerossDeviceBase(EntityManager):
         id: str,
         *,
         config_entry_id: str,
-        logger: Loggable | logging.Logger,
         default_name: str,
         model: str,
         hw_version: str | None = None,
         sw_version: str | None = None,
         connections: set[tuple[str, str]] | None = None,
         via_device: tuple[str, str] | None = None,
+        **kwargs,
     ):
         super().__init__(
             id,
             config_entry_id=config_entry_id,
             deviceentry_id={"identifiers": {(DOMAIN, id)}},
-            logger=logger,
+            **kwargs,
         )
         self.device_info = None
         self._online = False
@@ -531,8 +531,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if not self._online:
             self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
 
-    def get_logger_name(self, id: str) -> str:
-        return f"device_{self.obfuscated_device_id(id)}"
+    def get_logger_name(self) -> str:
+        return f"{self.descriptor.type}_{self.obfuscated_device_id(self.id)}"
 
     def _trace_opened(self, epoch: float):
         descr = self.descriptor
@@ -1413,7 +1413,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.receive(epoch, message)
 
     def mqtt_attached(self, mqtt_connection: MQTTConnection):
-        self.log(self.DEBUG, "mqtt_attached to %s", mqtt_connection.broker)
+        self.log(
+            self.DEBUG,
+            "mqtt_attached to %s",
+            self.obfuscated_broker(mqtt_connection.broker),
+        )
         self._mqtt_connection = mqtt_connection
         self._topic_response = mqtt_connection.topic_response
         if mqtt_connection.mqtt_is_connected:
@@ -1421,7 +1425,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def mqtt_detached(self):
         assert self._mqtt_connection
-        self.log(self.DEBUG, "mqtt_detached from %s", self._mqtt_connection.broker)
+        self.log(
+            self.DEBUG,
+            "mqtt_detached from %s",
+            self.obfuscated_broker(self._mqtt_connection.broker),
+        )
         if self._mqtt_connected:
             self.mqtt_disconnected()
         self._mqtt_connection = None
@@ -1429,7 +1437,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def mqtt_connected(self):
         _mqtt_connection = self._mqtt_connection
         assert _mqtt_connection
-        self.log(self.DEBUG, "mqtt_connected to %s", _mqtt_connection.broker)
+        self.log(
+            self.DEBUG,
+            "mqtt_connected to %s",
+            self.obfuscated_broker(_mqtt_connection.broker),
+        )
         self._mqtt_connected = _mqtt_connection
         if _mqtt_connection.allow_mqtt_publish:
             self._mqtt_publish = _mqtt_connection
@@ -1450,7 +1462,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def mqtt_disconnected(self):
         assert self._mqtt_connection
-        self.log(self.DEBUG, "mqtt_disconnected from %s", self._mqtt_connection.broker)
+        self.log(
+            self.DEBUG,
+            "mqtt_disconnected from %s",
+            self.obfuscated_broker(self._mqtt_connection.broker),
+        )
         self._mqtt_connected = self._mqtt_publish = self._mqtt_active = None
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             if self.conf_protocol is CONF_PROTOCOL_AUTO:
@@ -1859,7 +1875,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def profile_linked(self, profile: ApiProfile):
         if self._profile is not profile:
-            self.log(self.DEBUG, "linked to profile:%s", profile.logtag)
+            self.log(
+                self.DEBUG,
+                "linked to profile:%s",
+                self.obfuscated_profile_id(profile.id),
+            )
             if self._mqtt_connection:
                 self._mqtt_connection.detach(self)
             if self._profile:
@@ -1869,7 +1889,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def profile_unlinked(self):
         assert self._profile
-        self.log(self.DEBUG, "unlinked from profile:%s", self._profile.logtag)
+        self.log(
+            self.DEBUG,
+            "unlinked from profile:%s",
+            self.obfuscated_profile_id(self._profile.id),
+        )
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
         self._profile = None

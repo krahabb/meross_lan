@@ -84,7 +84,7 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
     from .meross_entity import MerossEntity
     from .meross_profile import MerossCloudProfile, MQTTConnection
-    from .merossclient import MerossMessage, MerossPayloadType
+    from .merossclient import HostAddress, MerossMessage, MerossPayloadType
 
 
 def clamp(_value, _min, _max):
@@ -221,6 +221,12 @@ LOGGER = getLogger(__name__[:-8])  # get base custom_component name for logging
 
 class ObfuscateMap(dict):
     def obfuscate(self, value):
+        """
+        for every value we obfuscate, we'll keep
+        a cache of 'unique' obfuscated values in order
+        to be able to relate 'stable' identical vales in traces
+        for debugging/diagnostics purposes
+        """
         if value not in self:
             # first time seen: generate the obfuscation
             count = len(self)
@@ -238,14 +244,51 @@ class ObfuscateMap(dict):
         return self[value]
 
 
+class ObfuscateUserIdMap(ObfuscateMap):
+    def obfuscate(self, value: str | int):
+        # terrible patch here since we want to match
+        # values (userid) which are carried both as strings
+        # (in mc.KEY_USERID_) and as int (in mc.KEY_USERID)
+        try:
+            # no type checks before conversion since we're
+            # confident its almost an integer decimal number
+            value = int(value)
+        except Exception:
+            # but we play safe anyway
+            pass
+        return super().obfuscate(value)
+
+
+class ObfuscateServerMap(ObfuscateMap):
+    def obfuscate(self, value: str):
+        # mc.KEY_DOMAIN and mc.KEY_RESERVEDDOMAIN could
+        # carry the protocol port embedded like: "server.domain.com:port"
+        # so, in order to map to the same values as in mc.KEY_SERVER,
+        # mc.KEY_PORT and the likes we'll need special processing
+        try:
+            if (colon_index := value.find(":")) != -1:
+                host = value[0:colon_index]
+                port = int(value[colon_index + 1 :])
+                return ":".join(
+                    (
+                        OBFUSCATE_SERVER_MAP.obfuscate(host),
+                        OBFUSCATE_PORT_MAP.obfuscate(port),
+                    )
+                )
+        except Exception:
+            pass
+
+        return super().obfuscate(value)
+
+
 # common (shared) obfuscation mappings for related keys
 OBFUSCATE_DEVICE_ID_MAP = ObfuscateMap({})
 OBFUSCATE_HOST_MAP = ObfuscateMap({})
-OBFUSCATE_USERID_MAP = ObfuscateMap({})
-OBFUSCATE_SERVER_MAP = ObfuscateMap({})
+OBFUSCATE_USERID_MAP = ObfuscateUserIdMap({})
+OBFUSCATE_SERVER_MAP = ObfuscateServerMap({})
 OBFUSCATE_PORT_MAP = ObfuscateMap({})
 OBFUSCATE_KEY_MAP = ObfuscateMap({})
-OBFUSCATE_KEYS = {
+OBFUSCATE_KEYS: dict[str, ObfuscateMap] = {
     # MEROSS PROTOCOL PAYLOADS keys
     # devices uuid(s) is better obscured since knowing this
     # could allow malicious attempts at the public Meross mqtt to
@@ -275,6 +318,7 @@ OBFUSCATE_KEYS = {
     mc.KEY_CLUSTER: ObfuscateMap({}),
     mc.KEY_DOMAIN: OBFUSCATE_SERVER_MAP,
     mc.KEY_RESERVEDDOMAIN: OBFUSCATE_SERVER_MAP,
+    mc.KEY_MQTTDOMAIN: OBFUSCATE_SERVER_MAP,
     # subdevice(s) ids are hardly sensitive since they
     # cannot be accessed over the api without knowing the uuid
     # of the hub device (which is obfuscated indeed). Masking
@@ -291,45 +335,6 @@ OBFUSCATE_KEYS = {
     # MerossCloudProfile keys
     "appId": ObfuscateMap({}),
 }
-
-
-def _obfuscated_value(obfuscated_map: ObfuscateMap, value: typing.Any):
-    """
-    for every value we obfuscate, we'll keep
-    a cache of 'unique' obfuscated values in order
-    to be able to relate 'stable' identical vales in traces
-    for debugging/diagnostics purposes
-    """
-    if obfuscated_map is OBFUSCATE_USERID_MAP:
-        # terrible patch here since we want to match
-        # values (userid) which are carried both as strings
-        # (in mc.KEY_USERID_) and as int (in mc.KEY_USERID)
-        try:
-            # no type checks before conversion since we're
-            # confident its almost an integer decimal number
-            value = int(value)
-        except Exception:
-            # but we play safe anyway
-            pass
-    elif obfuscated_map is OBFUSCATE_SERVER_MAP:
-        # mc.KEY_DOMAIN and mc.KEY_RESERVEDDOMAIN could
-        # carry the protocol port embedded like: "server.domain.com:port"
-        # so, in order to map to the same values as in mc.KEY_SERVER,
-        # mc.KEY_PORT and the likes we'll need special processing
-        try:
-            if (colon_index := value.find(":")) != -1:
-                host = value[0:colon_index]
-                port = int(value[colon_index + 1 :])
-                return ":".join(
-                    (
-                        _obfuscated_value(OBFUSCATE_SERVER_MAP, host),
-                        _obfuscated_value(OBFUSCATE_PORT_MAP, port),
-                    )
-                )
-        except Exception:
-            pass
-
-    return obfuscated_map.obfuscate(value)
 
 
 def obfuscated_list_copy(data: list):
@@ -351,7 +356,7 @@ def obfuscated_dict_copy(
         if isinstance(value, dict)
         else obfuscated_list_copy(value)
         if isinstance(value, list)
-        else _obfuscated_value(OBFUSCATE_KEYS[key], value)
+        else OBFUSCATE_KEYS[key].obfuscate(value)
         if key in OBFUSCATE_KEYS
         else value
         for key, value in data.items()
@@ -627,11 +632,19 @@ class Loggable(abc.ABC):
         "logger",
     )
 
-    def __init__(self, id, *, logger: Loggable | logging.Logger = LOGGER):
+    def __init__(
+        self,
+        id,
+        *,
+        logger: Loggable | logging.Logger = LOGGER,
+    ):
         self.id: Final = id
-        self.logtag = f"{self.__class__.__name__}({id})"
         self.logger = logger
+        self.configure_logger()
         self.log(self.DEBUG, "init")
+
+    def configure_logger(self):
+        self.logtag = f"{self.__class__.__name__}({self.id})"
 
     def isEnabledFor(self, level: int):
         return self.logger.isEnabledFor(level)
@@ -701,7 +714,7 @@ class EntityManager(Loggable):
         *,
         config_entry_id: str,
         deviceentry_id: dict[str, set[tuple[str, str]]] | None = None,
-        logger: Loggable | logging.Logger,
+        **kwargs,
     ):
         self.config_entry_id = config_entry_id
         self.deviceentry_id = deviceentry_id
@@ -709,7 +722,7 @@ class EntityManager(Loggable):
         # they're generally built here during inherited __init__ and will be registered
         # in platforms(s) async_setup_entry with their corresponding platform
         self.entities: Final[dict[object, MerossEntity]] = {}
-        super().__init__(id, logger=logger)
+        super().__init__(id, **kwargs)
 
     async def async_shutdown(self):
         """
@@ -795,8 +808,7 @@ class ConfigEntryManager(EntityManager):
         self._unsub_trace_endtime: asyncio.TimerHandle | None = None
         self._unsub_entry_update_listener = None
         self._unsub_entry_reload_scheduler: asyncio.TimerHandle | None = None
-        logger = self._get_configured_logger(id)
-        super().__init__(id, config_entry_id=config_entry_id, logger=logger, **kwargs)
+        super().__init__(id, config_entry_id=config_entry_id, **kwargs)
 
     async def async_shutdown(self):
         """
@@ -814,8 +826,27 @@ class ConfigEntryManager(EntityManager):
             self.trace_close()
 
     # interface: Loggable
+    def configure_logger(self):
+        """
+        Configure a 'logger' and a 'logtag' based off current config for every ConfigEntry.
+        We'll need this updated when CONF_OBFUSCATE changes since
+        the name might depend on it. We're then using this call during
+        __init__ for the first setup and subsequently when ConfigEntry changes
+        """
+        self.logtag = self.get_logger_name()
+        self.logger = logger = getLogger(f"{LOGGER.name}.{self.logtag}")
+        try:
+            logger.setLevel(self.config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
+        except Exception as exception:
+            # do not use self Loggable interface since we might be not set yet
+            LOGGER.warning(
+                "error (%s) setting log level: likely a corrupted configuration entry",
+                str(exception),
+            )
+
     def log(self, level: int, msg: str, *args, **kwargs):
-        self.logger.log(level, msg, *args, **kwargs)
+        if (logger := self.logger).isEnabledFor(level):
+            logger._log(level, msg, args, **kwargs)
         if self.trace_file:
             self.trace_log(
                 level,
@@ -883,29 +914,11 @@ class ConfigEntryManager(EntityManager):
         config = self.config = config_entry.data
         self.key = config.get(CONF_KEY) or ""
         self.obfuscate = config.get(CONF_OBFUSCATE, True)
-        self.logger = self._get_configured_logger(self.id)
+        self.configure_logger()
 
     @abc.abstractmethod
-    def get_logger_name(self, id: str) -> str:
+    def get_logger_name(self) -> str:
         raise NotImplementedError()
-
-    def _get_configured_logger(self, id: str) -> logging.Logger:
-        """
-        Configure a Logger based off current config for every ConfigEntry.
-        We'll need this updated when CONF_OBFUSCATE changes since
-        the name might depend on it. We're then using this call during
-        __init__ for the first setup and subsequently when ConfigEntry changes
-        """
-        logger = getLogger(f"{LOGGER.name}.{self.get_logger_name(id)}")
-        try:
-            # do not use self.exception_warning since we're not set yet
-            logger.setLevel(self.config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
-        except Exception as exception:
-            LOGGER.warning(
-                "error (%s) setting log level: likely a corrupted configuration entry",
-                str(exception),
-            )
-        return logger
 
     # tracing capabilities
     def get_diagnostics_trace(self) -> asyncio.Future:
@@ -932,6 +945,14 @@ class ConfigEntryManager(EntityManager):
         """Conditionally obfuscate the device_id to send to logging/tracing"""
         return obfuscated_dict_copy(payload) if self.obfuscate else payload
 
+    def obfuscated_broker(self, broker: HostAddress | str):
+        """Conditionally obfuscate the connection_id (which is a broker address host:port) to send to logging/tracing"""
+        return (
+            OBFUSCATE_SERVER_MAP.obfuscate(str(broker))
+            if self.obfuscate
+            else str(broker)
+        )
+
     def obfuscated_device_id(self, device_id: str):
         """Conditionally obfuscate the device_id to send to logging/tracing"""
         return (
@@ -948,6 +969,7 @@ class ConfigEntryManager(EntityManager):
 
     def _trace_open(self):
         try:
+            self.log(self.DEBUG, "Tracing start")
             epoch = time()
             # assert not self.trace_file
             tracedir = ApiProfile.hass.config.path(
@@ -1006,6 +1028,7 @@ class ConfigEntryManager(EntityManager):
             self._trace_future.set_result(self._trace_data)
             self._trace_future = None
             self._trace_data = None
+        self.log(self.DEBUG, "Tracing end")
 
     def _trace_closed(self):
         """
@@ -1139,7 +1162,7 @@ class ApiProfile(ConfigEntryManager):
         self.linkeddevices: dict[str, MerossDevice] = {}
         self.mqttconnections: dict[str, MQTTConnection] = {}
 
-     # interface: ConfigEntryManager
+    # interface: ConfigEntryManager
     async def async_shutdown(self):
         for mqttconnection in self.mqttconnections.values():
             await mqttconnection.async_shutdown()

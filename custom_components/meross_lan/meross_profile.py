@@ -137,12 +137,20 @@ class ConnectionSensor(MLSensor):
         super().__init__(
             connection.profile, None, connection.id, MLSensor.DeviceClass.ENUM
         )
+        connection.sensor_connection = self
         self.update_state(
             self.STATE_CONNECTED
             if connection.mqtt_is_connected
             else self.STATE_DISCONNECTED
         )
 
+    # interface: Loggable
+    def configure_logger(self):
+        self.logtag = (
+            f"{self.__class__.__name__}({self.manager.obfuscated_broker(self.id)})"
+        )
+
+    # interface: MLSensor
     async def async_shutdown(self):
         await super().async_shutdown()
         self.connection: MQTTConnection = None  # type: ignore
@@ -275,7 +283,6 @@ class MQTTConnection(Loggable):
     def __init__(
         self,
         profile: MerossCloudProfile | MerossApi,
-        connection_id: str,
         broker: HostAddress,
         topic_response: str,
     ):
@@ -285,13 +292,24 @@ class MQTTConnection(Loggable):
         self.mqttdevices: Final[dict[str, MerossDevice]] = {}
         self.mqttdiscovering: Final[set[str]] = set()
         self.namespace_handlers = self.SESSION_HANDLERS
-        self.sensor_connection = None
+        self.sensor_connection: ConnectionSensor | None = None
         self._mqtt_transactions: Final[dict[str, _MQTTTransaction]] = {}
         self._mqtt_is_connected = False
-        super().__init__(connection_id, logger=profile)
+        super().__init__(
+            str(broker),
+            logger=profile,
+        )
+        profile.mqttconnections[self.id] = self
         if profile.create_diagnostic_entities:
-            self.create_diagnostic_entities()
+            ConnectionSensor(self)
 
+    # interface: Loggable
+    def configure_logger(self):
+        self.logtag = (
+            f"{self.__class__.__name__}({self.profile.obfuscated_broker(self.broker)})"
+        )
+
+    # interface: self
     async def async_shutdown(self):
         for mqtt_transaction in list(self._mqtt_transactions.values()):
             mqtt_transaction.cancel()
@@ -300,11 +318,6 @@ class MQTTConnection(Loggable):
             device.mqtt_detached()
         self.mqttdevices.clear()
         await self.async_destroy_diagnostic_entities()
-
-    # interface: self
-    def create_diagnostic_entities(self):
-        if not self.sensor_connection:
-            self.sensor_connection = ConnectionSensor(self)
 
     async def async_destroy_diagnostic_entities(self):
         if sensor_connection := self.sensor_connection:
@@ -317,9 +330,13 @@ class MQTTConnection(Loggable):
     async def entry_update_listener(self, profile: ApiProfile):
         """Called by the ApiProfile to propagate config changes"""
         if profile.create_diagnostic_entities:
-            self.create_diagnostic_entities()
+            if self.sensor_connection:
+                self.sensor_connection.configure_logger()
+            else:
+                ConnectionSensor(self)
         else:
             await self.async_destroy_diagnostic_entities()
+        self.configure_logger()
 
     @property
     @abc.abstractmethod
@@ -765,16 +782,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         "_unsub_random_disconnect",
     )
 
-    def __init__(
-        self, profile: MerossCloudProfile, connection_id: str, broker: HostAddress
-    ):
+    def __init__(self, profile: MerossCloudProfile, broker: HostAddress):
         hass = ApiProfile.hass
         MerossMQTTAppClient.__init__(
             self, profile.key, profile.userid, app_id=profile.app_id, loop=hass.loop
         )
-        MQTTConnection.__init__(
-            self, profile, connection_id, broker, self.topic_command
-        )
+        MQTTConnection.__init__(self, profile, broker, self.topic_command)
         if profile.isEnabledFor(profile.VERBOSE):
             self.enable_logger(self)  # type: ignore (Loggable is duck-compatible with Logger)
 
@@ -1063,8 +1076,8 @@ class MerossCloudProfile(ApiProfile):
         await self.async_update_credentials(config)  # type: ignore
         await super().entry_update_listener(hass, config_entry)
 
-    def get_logger_name(self, id: str) -> str:
-        return f"profile_{self.obfuscated_profile_id(id)}"
+    def get_logger_name(self) -> str:
+        return f"profile_{self.obfuscated_profile_id(self.id)}"
 
     # interface: ApiProfile
     def attach_mqtt(self, device: MerossDevice):
@@ -1322,13 +1335,10 @@ class MerossCloudProfile(ApiProfile):
         Returns an existing connection from the managed pool or create one and add
         to the mqttconnections pool. The connection state is not ensured.
         """
-        connection_id = f"{broker.host}:{broker.port}"
+        connection_id = str(broker)
         if connection_id in self.mqttconnections:
             return self.mqttconnections[connection_id]  # type: ignore
-        self.mqttconnections[connection_id] = mqttconnection = MerossMQTTConnection(
-            self, connection_id, broker
-        )
-        return mqttconnection
+        return MerossMQTTConnection(self, broker)
 
     async def _async_get_mqttconnection(self, broker: HostAddress):
         """
