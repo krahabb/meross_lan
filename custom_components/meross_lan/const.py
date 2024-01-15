@@ -37,7 +37,7 @@ CONF_POLLING_PERIOD_MIN: Final = 5
 CONF_POLLING_PERIOD_DEFAULT: Final = 30
 # sets the logging level x ConfigEntry
 CONF_LOGGING_LEVEL: Final = "logging_level"
-CONF_LOGGING_VERBOSE: Final = 1
+CONF_LOGGING_VERBOSE: Final = 5
 CONF_LOGGING_DEBUG: Final = logging.DEBUG
 CONF_LOGGING_INFO: Final = logging.INFO
 CONF_LOGGING_WARNING: Final = logging.WARNING
