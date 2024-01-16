@@ -265,6 +265,14 @@
                     }
                 }
             }
+        },
+        "device_timezone": {
+            "title": "Le fuseau horaire pour {device_name} n'est pas défini ou diffère de celui par défaut de HomeAssistant",
+            "fix_flow": {
+                "abort": {
+                    "cannot_connect": "Pas de connect"
+                }
+            }
         }
     },
     "selector": {

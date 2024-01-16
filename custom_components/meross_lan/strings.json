@@ -265,6 +265,14 @@
                     }
                 }
             }
+        },
+        "device_timezone": {
+            "title": "Time zone for {device_name} is not set or different from HomeAssistant default",
+            "fix_flow": {
+                "abort": {
+                    "cannot_connect": "[%key:config::error::cannot_connect%]"
+                }
+            }
         }
     },
     "selector": {

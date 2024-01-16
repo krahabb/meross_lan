@@ -265,6 +265,14 @@
                     }
                 }
             }
+        },
+        "device_timezone": {
+            "title": "Časové pásmo pro {device_name} není nastaveno nebo se liší od výchozího nastavení HomeAssistant",
+            "fix_flow": {
+                "abort": {
+                    "cannot_connect": "Pokus o připojení se nezdařil"
+                }
+            }
         }
     },
     "selector": {

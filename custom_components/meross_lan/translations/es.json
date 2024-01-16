@@ -265,6 +265,14 @@
                     }
                 }
             }
+        },
+        "device_timezone": {
+            "title": "La zona horaria para {device_name} no está establecida o es diferente de la predeterminada de HomeAssistant",
+            "fix_flow": {
+                "abort": {
+                    "cannot_connect": "No es posible conectarse"
+                }
+            }
         }
     },
     "selector": {

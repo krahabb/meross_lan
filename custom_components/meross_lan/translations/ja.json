@@ -265,6 +265,14 @@
                     }
                 }
             }
+        },
+        "device_timezone": {
+            "title": "{device_name}のタイムゾーンが設定されていないか、HomeAssistantのデフォルトと異なります",
+            "fix_flow": {
+                "abort": {
+                    "cannot_connect": "接続できません"
+                }
+            }
         }
     },
     "selector": {
