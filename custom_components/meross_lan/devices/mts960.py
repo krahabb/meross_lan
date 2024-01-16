@@ -140,21 +140,25 @@ class Mts960Climate(MtsClimate):
             self.flush_state()
 
     async def async_set_temperature(self, **kwargs):
-        t = kwargs[self.ATTR_TEMPERATURE]
         key = self.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or self.PRESET_CUSTOM
         ]
-        if await self.manager.async_request_ack(
+        if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
             mc.METHOD_SET,
             {
                 mc.KEY_MODEB: [
-                    {mc.KEY_CHANNEL: self.channel, key: round(t * self.device_scale)}
+                    {mc.KEY_CHANNEL: self.channel, key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale)}
                 ]
             },
         ):
-            self._attr_target_temperature = t
-            self.flush_state()
+            payload = response[mc.KEY_PAYLOAD]
+            if mc.KEY_MODEB in payload:
+                self._parse_modeB(payload[mc.KEY_MODEB][0])
+            else:
+                # optimistic update
+                self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
+                self.flush_state()
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(

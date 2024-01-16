@@ -207,7 +207,7 @@ class MtsTemperatureNumber(MLConfigNumber):
 class MtsRichTemperatureNumber(MtsTemperatureNumber):
     """
     Slightly enriched MtsTemperatureNumber to generalize  a lot of Thermostat namespaces
-    which usually carry a temperature value together with some added enitities (typically a switch
+    which usually carry a temperature value together with some added entities (typically a switch
     to enable the feature and a 'warning sensor')
     typical examples are :
     "calibration": {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}

@@ -44,8 +44,8 @@ class Mts200Climate(MtsClimate):
         MtsClimate.HVACMode.COOL: mc.MTS200_SUMMERMODE_COOL,
     }
     # when setting target temp we'll set an appropriate payload key
-    # for the mts100 depending on current 'preset' mode.
-    # if mts100 is in any of 'off', 'auto' we just set the 'custom'
+    # for the mts200 depending on current 'preset' mode.
+    # if mts200 is in any of 'off', 'auto' we just set the 'custom'
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
     PRESET_TO_TEMPERATUREKEY_MAP = {
@@ -145,21 +145,26 @@ class Mts200Climate(MtsClimate):
             self.flush_state()
 
     async def async_set_temperature(self, **kwargs):
-        t = kwargs[self.ATTR_TEMPERATURE]
         key = self.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or self.PRESET_CUSTOM
         ]
-        if await self.manager.async_request_ack(
+        if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
             {
                 mc.KEY_MODE: [
-                    {mc.KEY_CHANNEL: self.channel, key: round(t * self.device_scale)}
+                    {mc.KEY_CHANNEL: self.channel, key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale)}
                 ]
             },
         ):
-            self._attr_target_temperature = t
-            self.flush_state()
+            payload = response[mc.KEY_PAYLOAD]
+            if mc.KEY_MODE in payload:
+                self._parse_mode(payload[mc.KEY_MODE][0])
+            else:
+                # optimistic update
+                self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
+                self.flush_state()
+
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(

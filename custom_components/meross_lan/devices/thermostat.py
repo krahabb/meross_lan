@@ -76,7 +76,6 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
     def __init__(self, climate: MtsClimate):
         self._attr_native_max_value = 70
         self._attr_native_min_value = 20
-        # super().__init__(climate, "overheat threshold")
         super().__init__(climate, self.key_namespace)
         self.sensor_external_temperature = MLSensor(
             self.manager,
