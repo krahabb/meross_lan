@@ -408,7 +408,7 @@ class MerossApi(ApiProfile):
                                 host,
                                 key or self.key,
                                 async_get_clientsession(self.hass),
-                                self,  # type: ignore (our Loggable interface is compatible with the MerossHttpClient logger)
+                                self,  # type: ignore (self almost duck-compatible with logging.Logger)
                                 self.VERBOSE,
                             ).async_request_message(request)
                             or {}

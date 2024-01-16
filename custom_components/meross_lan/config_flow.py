@@ -212,6 +212,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                         region=profile_config.pop(mlc.CONF_CLOUD_REGION, None),  # type: ignore
                         domain=profile_config.get(mc.KEY_DOMAIN),
                         session=async_get_clientsession(self.hass),
+                        logger=self.api,  # type: ignore (api almost duck-compatible with logging.Logger)
                     )
                     if (
                         mc.KEY_USERID_ in profile_config
@@ -221,6 +222,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                         await async_cloudapi_logout_safe(
                             credentials,
                             async_get_clientsession(self.hass),
+                            self.api,  # type: ignore (api almost duck-compatible with logging.Logger)
                         )
                         raise FlowError(FlowErrorKey.CLOUD_PROFILE_MISMATCH)
                     profile_config.update(credentials)  # type: ignore
@@ -252,6 +254,9 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                         # already in place (and updated)
                         return self.async_abort()
                 else:
+                    # this profile config is new either because of keyerror
+                    # or user creating a cloud profile. We'll then preset
+                    # the diagnostics settings by cloning actual MerossApi config (TODO)
                     if self._is_keyerror:
                         # this flow is managing a device but since the profile
                         # entry is new, we'll directly setup that
@@ -402,7 +407,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 host,
                 key,
                 async_get_clientsession(self.hass),
-                api,  # type: ignore
+                api,  # type: ignore (api almost duck-compatible with logging.Logger)
                 api.VERBOSE,
             )
 
@@ -783,7 +788,11 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         "bind_placeholders",
     )
 
-    def __init__(self, config_entry: config_entries.ConfigEntry, repair_issue_id: str | None = None):
+    def __init__(
+        self,
+        config_entry: config_entries.ConfigEntry,
+        repair_issue_id: str | None = None,
+    ):
         self.config_entry: Final = config_entry
         self.config_entry_id: Final = config_entry.entry_id
         self.config = dict(self.config_entry.data)  # type: ignore

@@ -3,6 +3,7 @@ from __future__ import annotations
 from base64 import b64encode
 from hashlib import md5
 import json
+import logging
 from time import time
 import typing
 from uuid import uuid4
@@ -200,12 +201,25 @@ CLOUDAPI_ERROR_MAP: dict[int | None, type[CloudApiError]] = {
     APISTATUS_REDIRECT_REGION: CloudApiRedirectError,
 }
 
+LOGGER = None
+
+
+def enable_logger(logger: logging.Logger | None = None):
+    global LOGGER
+    LOGGER = logger.getChild("cloudapi") if logger else logging.getLogger(__name__)
+
+
+def disable_logger():
+    global LOGGER
+    LOGGER = None
+
 
 async def async_cloudapi_post_raw(
     url_or_path: str,
     data: object,
     credentials: MerossCloudCredentials | None = None,
     session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ) -> dict:
     """
     Low-level Meross cloud api query:
@@ -213,10 +227,11 @@ async def async_cloudapi_post_raw(
     url of the api endpoint, while when used to access the endpoint with an access token (crdentials != None)
     it needs to be the path since the full url will be created from the credentials itself
     """
+    logger = logger or LOGGER
     timestamp = int(time() * 1000)
     nonce = uuid4().hex
-    params = json.dumps(data, ensure_ascii=False)
-    params = b64encode(params.encode("utf-8")).decode("utf-8")
+    data = json.dumps(data, ensure_ascii=False)
+    params = b64encode(data.encode("utf-8")).decode("utf-8")
     sign = md5(
         "".join((SECRET, str(timestamp), nonce, params)).encode("utf-8")
     ).hexdigest()
@@ -230,6 +245,8 @@ async def async_cloudapi_post_raw(
     else:
         headers = None
     async with async_timeout.timeout(10):
+        if logger:
+            logger.log(logging.DEBUG, "HTTP(%s) POST:%s", url_or_path, data)
         response = await (session or aiohttp.ClientSession()).post(
             url=url_or_path,
             json={
@@ -241,16 +258,23 @@ async def async_cloudapi_post_raw(
             headers=headers,
         )
         response.raise_for_status()
-    return await response.json()
+
+    received = await response.text()
+    if logger:
+        logger.log(logging.DEBUG, "HTTP(%s) RECEIVE:%s", url_or_path, received)
+    return json.loads(received)
 
 
 async def async_cloudapi_post(
     url_or_path: str,
-    data: object,
+    data: dict,
     credentials: MerossCloudCredentials | None = None,
     session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ) -> dict:
-    response = await async_cloudapi_post_raw(url_or_path, data, credentials, session)
+    response = await async_cloudapi_post_raw(
+        url_or_path, data, credentials, session, logger
+    )
     apistatus = response.get(mc.KEY_APISTATUS)
     if apistatus or (mc.KEY_DATA not in response):
         raise CLOUDAPI_ERROR_MAP.get(apistatus, CloudApiError)(response)
@@ -296,6 +320,7 @@ async def async_cloudapi_signin(
     region: str | None = None,
     domain: str | None = None,
     session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ) -> MerossCloudCredentials:
     if MEROSSDEBUG and MEROSSDEBUG.cloudapi_login:
         if email == MEROSSDEBUG.cloudapi_login[mc.KEY_EMAIL]:
@@ -315,13 +340,17 @@ async def async_cloudapi_signin(
         response = await async_cloudapi_post(
             (domain or API_URL_MAP.get(region, LEGACY_API_URL)) + API_AUTH_SIGNIN_PATH,
             data,
-            session=session,
+            None,
+            session,
+            logger,
         )
     except CloudApiRedirectError as error:
         response = await async_cloudapi_post(
             error.response[mc.KEY_DATA][mc.KEY_DOMAIN] + API_AUTH_SIGNIN_PATH,
             data,
-            session=session,
+            None,
+            session,
+            logger,
         )
 
     data = response[mc.KEY_DATA]
@@ -342,7 +371,9 @@ async def async_cloudapi_signin(
 
 
 async def async_cloudapi_device_devlist(
-    credentials: MerossCloudCredentials, session: aiohttp.ClientSession | None = None
+    credentials: MerossCloudCredentials,
+    session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ) -> list[DeviceInfoType]:
     """
     returns the {devInfo} list of all the account-bound devices
@@ -350,7 +381,7 @@ async def async_cloudapi_device_devlist(
     if MEROSSDEBUG and MEROSSDEBUG.cloudapi_device_devlist:
         return MEROSSDEBUG.cloudapi_device_devlist
     response = await async_cloudapi_post(
-        API_DEVICE_DEVLIST_PATH, {}, credentials, session
+        API_DEVICE_DEVLIST_PATH, {}, credentials, session, logger
     )
     return response[mc.KEY_DATA]
 
@@ -359,30 +390,35 @@ async def async_cloudapi_device_devinfo(
     credentials: MerossCloudCredentials,
     uuid: str,
     session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ) -> DeviceInfoType:
     """
     given the uuid, returns the {devInfo}
     """
     response = await async_cloudapi_post(
-        API_DEVICE_DEVINFO_PATH, {mc.KEY_UUID: uuid}, credentials, session
+        API_DEVICE_DEVINFO_PATH, {mc.KEY_UUID: uuid}, credentials, session, logger
     )
     return response[mc.KEY_DATA]
 
 
 async def async_cloudapi_device_devextrainfo(
-    credentials: MerossCloudCredentials, session: aiohttp.ClientSession | None = None
+    credentials: MerossCloudCredentials,
+    session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ) -> DeviceInfoType:
     """
     returns a list of all device types with their manuals download link
     """
     response = await async_cloudapi_post(
-        API_DEVICE_DEVEXTRAINFO_PATH, {}, credentials, session
+        API_DEVICE_DEVEXTRAINFO_PATH, {}, credentials, session, logger
     )
     return response[mc.KEY_DATA]
 
 
 async def async_cloudapi_device_latestversion(
-    credentials: MerossCloudCredentials, session: aiohttp.ClientSession | None = None
+    credentials: MerossCloudCredentials,
+    session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ) -> list[LatestVersionType]:
     """
     returns the list of all the account-bound device types latest firmwares
@@ -390,7 +426,7 @@ async def async_cloudapi_device_latestversion(
     if MEROSSDEBUG and MEROSSDEBUG.cloudapi_device_latestversion:
         return MEROSSDEBUG.cloudapi_device_latestversion
     response = await async_cloudapi_post(
-        API_DEVICE_LATESTVERSION_PATH, {}, credentials, session
+        API_DEVICE_LATESTVERSION_PATH, {}, credentials, session, logger
     )
     return response[mc.KEY_DATA]
 
@@ -399,27 +435,34 @@ async def async_cloudapi_hub_getsubdevices(
     credentials: MerossCloudCredentials,
     uuid: str,
     session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ) -> list[SubDeviceInfoType]:
     """
     given the uuid, returns the list of subdevices binded to the hub
     """
     response = await async_cloudapi_post(
-        API_HUB_GETSUBDEVICES_PATH, {mc.KEY_UUID: uuid}, credentials, session
+        API_HUB_GETSUBDEVICES_PATH, {mc.KEY_UUID: uuid}, credentials, session, logger
     )
     return response[mc.KEY_DATA]
 
 
 async def async_cloudapi_logout(
-    credentials: MerossCloudCredentials, session: aiohttp.ClientSession | None = None
+    credentials: MerossCloudCredentials,
+    session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ):
-    await async_cloudapi_post(API_PROFILE_LOGOUT_PATH, {}, credentials, session)
+    await async_cloudapi_post(API_PROFILE_LOGOUT_PATH, {}, credentials, session, logger)
 
 
 async def async_cloudapi_logout_safe(
-    credentials: MerossCloudCredentials, session: aiohttp.ClientSession | None = None
+    credentials: MerossCloudCredentials,
+    session: aiohttp.ClientSession | None = None,
+    logger: logging.Logger | None = None,
 ):
     try:
-        await async_cloudapi_post(API_PROFILE_LOGOUT_PATH, {}, credentials, session)
+        await async_cloudapi_post(
+            API_PROFILE_LOGOUT_PATH, {}, credentials, session, logger
+        )
     except Exception:
         # this is very broad and might catch errors at the http layer which
         # mean we're not effectively invalidating the token but we don't

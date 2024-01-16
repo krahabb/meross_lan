@@ -1225,7 +1225,9 @@ class MerossCloudProfile(ApiProfile):
                     # discard old one to play it nice but token might be expired
                     with self.exception_warning("async_cloudapi_logout"):
                         await async_cloudapi_logout(
-                            self.config, async_get_clientsession(ApiProfile.hass)
+                            self.config,
+                            async_get_clientsession(ApiProfile.hass),
+                            self,  # type: ignore (self almost duck-compatible with logging.Logger)
                         )
                 else:
                     remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED, self.id)
@@ -1252,7 +1254,9 @@ class MerossCloudProfile(ApiProfile):
                 return None
             self._device_info_time = time()
             device_info_new = await async_cloudapi_device_devlist(
-                self.config, async_get_clientsession(ApiProfile.hass)
+                self.config,
+                async_get_clientsession(ApiProfile.hass),
+                self,  # type: ignore (self almost duck-compatible with logging.Logger)
             )
             await self._process_device_info_new(device_info_new)
             self._data[self.KEY_DEVICE_INFO_TIME] = self._device_info_time
@@ -1297,7 +1301,9 @@ class MerossCloudProfile(ApiProfile):
                 self._data[
                     self.KEY_LATEST_VERSION
                 ] = await async_cloudapi_device_latestversion(
-                    self.config, async_get_clientsession(ApiProfile.hass)
+                    self.config,
+                    async_get_clientsession(ApiProfile.hass),
+                    self,  # type: ignore (self almost duck-compatible with logging.Logger)
                 )
                 self._schedule_save_store()
                 for device in ApiProfile.active_devices():
@@ -1385,9 +1391,10 @@ class MerossCloudProfile(ApiProfile):
             self._schedule_save_store()
             credentials = await async_cloudapi_signin(
                 config[CONF_EMAIL],
-                config[CONF_PASSWORD],  # type: ignore
+                config[CONF_PASSWORD],
                 domain=config.get(mc.KEY_DOMAIN),
                 session=async_get_clientsession(self.hass),
+                logger=self,  # type: ignore (self almost duck-compatible with logging.Logger)
             )
             profile_id = self.id
             if profile_id != credentials[mc.KEY_USERID_]:
@@ -1455,7 +1462,10 @@ class MerossCloudProfile(ApiProfile):
                 return None
             self.log(self.DEBUG, "Querying subdevice list")
             return await async_cloudapi_hub_getsubdevices(
-                self.config, device_id, async_get_clientsession(ApiProfile.hass)
+                self.config,
+                device_id,
+                async_get_clientsession(ApiProfile.hass),
+                self,  # type: ignore (self almost duck-compatible with logging.Logger)
             )
         return None
 
