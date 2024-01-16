@@ -271,6 +271,8 @@
             "fix_flow": {
                 "abort": {
                     "cannot_connect": "[%key:config::error::cannot_connect%]"
+                },
+                "step": {
                 }
             }
         }

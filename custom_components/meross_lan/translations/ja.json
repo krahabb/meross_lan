@@ -271,6 +271,8 @@
             "fix_flow": {
                 "abort": {
                     "cannot_connect": "接続できません"
+                },
+                "step": {
                 }
             }
         }
