@@ -109,7 +109,6 @@ class MerossEmulator:
         self.lock = threading.Lock()
         self.key = key
         self.descriptor = descriptor
-        self.p_all_system_time = descriptor.system.get(mc.KEY_TIME)
         if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
             self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
@@ -144,9 +143,7 @@ class MerossEmulator:
         Called (by default) on every command processing.
         Could be used to (rather asynchronously) trigger internal state changes
         """
-        self.epoch = int(time())
-        if self.p_all_system_time:
-            self.p_all_system_time[mc.KEY_TIMESTAMP] = self.epoch
+        self.descriptor.time[mc.KEY_TIMESTAMP] = self.epoch = int(time())
 
     def handle(self, s_request: str) -> MerossMessageType | None:
         """
@@ -199,36 +196,6 @@ class MerossEmulator:
 
     def handle_disconnect(self, client: mqtt.Client):
         self.mqtt = None
-
-    def _get_key_state(self, namespace: str) -> tuple[str, dict]:
-        """
-        general device state is usually carried in NS_ALL into the "digest" key
-        and is also almost regularly keyed by using the camelCase of the last verb
-        in namespace.
-        For some devices not all state is carried there tho, so we'll inspect the
-        GETACK payload for the relevant namespace looking for state there too
-        """
-        n = namespace.split(".")
-        if n[1] != "Control":
-            raise Exception(f"{namespace} not supported in emulator")
-
-        key = get_namespacekey(namespace)
-        p_digest = self.descriptor.digest
-        if len(n) == 4:
-            # 4 parts namespaces usually access a subkey in digest
-            subkey = n[2].lower()
-            if subkey in p_digest:
-                p_digest = p_digest[subkey]
-
-        if key not in p_digest:
-            if namespace in self.descriptor.namespaces:
-                p_digest = self.descriptor.namespaces[namespace]
-                if key not in p_digest:
-                    raise Exception(f"{key} not present in digest and {namespace}")
-            else:
-                raise Exception(f"{key} not present in digest")
-
-        return key, p_digest[key]
 
     def _handle_message(self, header: MerossHeaderType, payload: MerossPayloadType):
         namespace = header[mc.KEY_NAMESPACE]
@@ -316,6 +283,15 @@ class MerossEmulator:
     def _SETACK_Appliance_Control_Bind(self, header, payload):
         return None, None
 
+    def _SET_Appliance_Control_Mp3(self, header, payload):
+        if mc.NS_APPLIANCE_CONTROL_MP3 not in self.descriptor.namespaces:
+            raise Exception(
+                f"{mc.NS_APPLIANCE_CONTROL_MP3} not supported in namespaces"
+            )
+        mp3 = self.descriptor.namespaces[mc.NS_APPLIANCE_CONTROL_MP3]
+        mp3[mc.KEY_MP3].update(payload[mc.KEY_MP3])
+        return mc.METHOD_SETACK, {}
+
     def _SET_Appliance_Control_Multiple(self, header, payload):
         multiple = []
         for message in payload[mc.KEY_MULTIPLE]:
@@ -324,21 +300,6 @@ class MerossEmulator:
             ):
                 multiple.append(response)
         return mc.METHOD_SETACK, {mc.KEY_MULTIPLE: multiple}
-
-    def _GET_Appliance_System_DNDMode(self, header, payload):
-        return mc.METHOD_GETACK, self.p_dndmode
-
-    def _SET_Appliance_System_DNDMode(self, header, payload):
-        self.p_dndmode = payload
-        return mc.METHOD_SETACK, {}
-
-    def _get_control_key(self, key):
-        p_control = self.descriptor.all.get(mc.KEY_CONTROL)
-        if p_control is None:
-            raise Exception(f"{mc.KEY_CONTROL} not present")
-        if key not in p_control:
-            raise Exception(f"{key} not present in control")
-        return p_control[key]
 
     def _GET_Appliance_Control_Toggle(self, header, payload):
         # only acual example of this usage comes from legacy firmwares
@@ -353,11 +314,53 @@ class MerossEmulator:
         ]
         return mc.METHOD_SETACK, {}
 
-    def _SET_Appliance_Control_Mp3(self, header, payload):
-        if mc.NS_APPLIANCE_CONTROL_MP3 not in self.descriptor.namespaces:
-            raise Exception(
-                f"{mc.NS_APPLIANCE_CONTROL_MP3} not supported in namespaces"
-            )
-        mp3 = self.descriptor.namespaces[mc.NS_APPLIANCE_CONTROL_MP3]
-        mp3[mc.KEY_MP3].update(payload[mc.KEY_MP3])
+    def _GET_Appliance_System_DNDMode(self, header, payload):
+        return mc.METHOD_GETACK, self.p_dndmode
+
+    def _SET_Appliance_System_DNDMode(self, header, payload):
+        self.p_dndmode = payload
         return mc.METHOD_SETACK, {}
+
+    def _SET_Appliance_System_Time(self, header, payload):
+        self.descriptor.update_time(payload[mc.KEY_TIME])
+        self.update_epoch()
+        return mc.METHOD_SETACK, {}
+
+    def _get_key_state(self, namespace: str) -> tuple[str, dict]:
+        """
+        general device state is usually carried in NS_ALL into the "digest" key
+        and is also almost regularly keyed by using the camelCase of the last verb
+        in namespace.
+        For some devices not all state is carried there tho, so we'll inspect the
+        GETACK payload for the relevant namespace looking for state there too
+        """
+        n = namespace.split(".")
+        if n[1] != "Control":
+            raise Exception(f"{namespace} not supported in emulator")
+
+        key = get_namespacekey(namespace)
+        p_digest = self.descriptor.digest
+        if len(n) == 4:
+            # 4 parts namespaces usually access a subkey in digest
+            subkey = n[2].lower()
+            if subkey in p_digest:
+                p_digest = p_digest[subkey]
+
+        if key not in p_digest:
+            if namespace in self.descriptor.namespaces:
+                p_digest = self.descriptor.namespaces[namespace]
+                if key not in p_digest:
+                    raise Exception(f"{key} not present in digest and {namespace}")
+            else:
+                raise Exception(f"{key} not present in digest")
+
+        return key, p_digest[key]
+
+    def _get_control_key(self, key):
+        """Extracts the legacy 'control' key from NS_ALL (previous to 'digest' introduction)."""
+        p_control = self.descriptor.all.get(mc.KEY_CONTROL)
+        if p_control is None:
+            raise Exception(f"{mc.KEY_CONTROL} not present")
+        if key not in p_control:
+            raise Exception(f"{key} not present in control")
+        return p_control[key]
