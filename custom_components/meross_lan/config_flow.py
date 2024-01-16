@@ -195,6 +195,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 
         with self.show_form_errorcontext():
             if user_input:
+                hass = self.hass
+                api = self.api
                 # profile_config has both user set keys (updated through user_input)
                 # and MerossCloudCredentials keys (updated when logging into Meross http api)
                 self.merge_userinput(profile_config, user_input, ())
@@ -211,8 +213,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                         user_input[mlc.CONF_PASSWORD],
                         region=profile_config.pop(mlc.CONF_CLOUD_REGION, None),  # type: ignore
                         domain=profile_config.get(mc.KEY_DOMAIN),
-                        session=async_get_clientsession(self.hass),
-                        logger=self.api,  # type: ignore (api almost duck-compatible with logging.Logger)
+                        session=async_get_clientsession(hass),
+                        logger=api,  # type: ignore (api almost duck-compatible with logging.Logger)
                     )
                     if (
                         mc.KEY_USERID_ in profile_config
@@ -221,8 +223,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                     ):
                         await async_cloudapi_logout_safe(
                             credentials,
-                            async_get_clientsession(self.hass),
-                            self.api,  # type: ignore (api almost duck-compatible with logging.Logger)
+                            async_get_clientsession(hass),
+                            api,  # type: ignore (api almost duck-compatible with logging.Logger)
                         )
                         raise FlowError(FlowErrorKey.CLOUD_PROFILE_MISMATCH)
                     profile_config.update(credentials)  # type: ignore
@@ -238,7 +240,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 # updates any eventually existing one...
                 # we will eventually abort this flow later
                 unique_id = f"profile.{profile_config[mc.KEY_USERID_]}"
-                helper = ConfigEntriesHelper(self.hass)
+                helper = ConfigEntriesHelper(hass)
                 profile_flow = helper.get_config_flow(unique_id)
                 if profile_flow and (profile_flow["flow_id"] != self.flow_id):
                     helper.config_entries.flow.async_abort(profile_flow["flow_id"])
@@ -256,7 +258,12 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 else:
                     # this profile config is new either because of keyerror
                     # or user creating a cloud profile. We'll then preset
-                    # the diagnostics settings by cloning actual MerossApi config (TODO)
+                    # the diagnostics settings by cloning actual MerossApi config
+                    if api_config := api.config:
+                        if mlc.CONF_LOGGING_LEVEL in api_config:
+                            profile_config[mlc.CONF_LOGGING_LEVEL] = api_config[mlc.CONF_LOGGING_LEVEL]
+                        if mlc.CONF_OBFUSCATE in api_config:
+                            profile_config[mlc.CONF_OBFUSCATE] = api_config[mlc.CONF_OBFUSCATE]
                     if self._is_keyerror:
                         # this flow is managing a device but since the profile
                         # entry is new, we'll directly setup that
@@ -1155,7 +1162,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 if not (device and device.online):
                     raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 
-                key = key or self.api.key or ""
+                key = key or api.key or ""
                 userid = "" if userid is None else str(userid)
                 mqttclient = MerossMQTTDeviceClient(
                     device.id, key=key, userid=userid, loop=hass.loop
@@ -1251,16 +1258,17 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
 
                 device.unbind()
                 action = user_input[KEY_ACTION]
+                hass = self.hass
                 if action == KEY_ACTION_DISABLE:
-                    self.hass.async_create_task(
-                        self.hass.config_entries.async_set_disabled_by(
+                    hass.async_create_task(
+                        hass.config_entries.async_set_disabled_by(
                             self.config_entry_id,
                             config_entries.ConfigEntryDisabler.USER,
                         )
                     )
                 elif action == KEY_ACTION_DELETE:
-                    self.hass.async_create_task(
-                        self.hass.config_entries.async_remove(self.config_entry_id)
+                    hass.async_create_task(
+                        hass.config_entries.async_remove(self.config_entry_id)
                     )
                 return self.async_create_entry(data=None)  # type: ignore
 
