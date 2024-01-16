@@ -12,10 +12,12 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import ServerDisconnectedError
 from homeassistant.core import callback
-from homeassistant.helpers import device_registry, issue_registry
+from homeassistant.helpers import device_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
+from . import const as mlc
 from .const import (
     CONF_DEVICE_ID,
     CONF_HOST,
@@ -30,7 +32,6 @@ from .const import (
     CONF_PROTOCOL_OPTIONS,
     CONF_TIMESTAMP,
     DOMAIN,
-    ISSUE_DEVICE_ID_MISMATCH,
     PARAM_HEADER_SIZE,
     PARAM_HEARTBEAT_PERIOD,
     PARAM_INFINITE_EPOCH,
@@ -54,7 +55,6 @@ from .helpers import (
 )
 from .meross_entity import MerossFakeEntity
 from .merossclient import (
-    MEROSSDEBUG,
     HostAddress,
     MerossRequest,
     MerossResponse,
@@ -68,12 +68,11 @@ from .merossclient import (
     json_dumps,
 )
 from .merossclient.httpclient import MerossHttpClient, TerminatedException
+from .repairs import IssueSeverity, create_issue, remove_issue
 from .sensor import PERCENTAGE, MLSensor, ProtocolSensor
 from .update import MLUpdate
 
 if typing.TYPE_CHECKING:
-    import logging
-
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -278,6 +277,9 @@ class MerossDeviceBase(EntityManager):
     def tz(self) -> tzinfo:
         return None
 
+    def check_device_timezone(self):
+        raise NotImplementedError
+
     @abc.abstractmethod
     def _get_device_info_name_key(self) -> str:
         return ""
@@ -328,6 +330,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     pref_protocol: str
     curr_protocol: str
     # other default property values
+    device_timestamp: int
     _tzinfo: ZoneInfo | None  # smart cache of device tzinfo
     _unsub_polling_callback: asyncio.TimerHandle | None
     entity_dnd: MerossEntity
@@ -353,7 +356,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "lastrequest",
         "lastresponse",
         "_topic_response",  # sets the "from" field in request messages
-        "_has_issue_id",
         "_profile",
         "_mqtt_connection",  # we're binded to an MQTT profile/broker
         "_mqtt_connected",  # the broker is online/connected
@@ -390,7 +392,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.descriptor = descriptor
         self.needsave = False
         self.curr_protocol = CONF_PROTOCOL_AUTO
-        self.device_timestamp: int = 0
+        self.device_timestamp = 0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
@@ -400,7 +402,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.lastrequest = 0.0
         self.lastresponse = 0.0
         self._topic_response = mc.MANUFACTURER
-        self._has_issue_id = None
         self._profile: ApiProfile | None = None
         self._mqtt_connection: MQTTConnection | None = None
         self._mqtt_connected: MQTTConnection | None = None
@@ -551,6 +552,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     # interface: MerossDeviceBase
     async def async_shutdown(self):
+        remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
         if self._profile:
@@ -628,24 +630,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             MerossRequest(self.key, namespace, method, payload, self._topic_response)
         )
 
-    def _get_device_info_name_key(self) -> str:
-        return mc.KEY_DEVNAME
-
-    def _get_internal_name(self) -> str:
-        return self.descriptor.productname
-
-    def _set_offline(self):
-        super()._set_offline()
-        self._polling_delay = self.polling_period
-        self._mqtt_active = self._http_active = None
-        for strategy in self.polling_strategies.values():
-            strategy.lastrequest = 0
-
-    # interface: self
-    @property
-    def host(self):
-        return self.config.get(CONF_HOST) or self.descriptor.innerIp
-
     @property
     def tz(self) -> tzinfo:
         tz_name = self.descriptor.timezone
@@ -665,6 +649,42 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
             self._tzinfo = None
         return timezone.utc
+
+    def check_device_timezone(self):
+        """
+        Verifies the device timezone is set the same as HA local timezone.
+        This is expecially sensible when the device has 'Consumption' or
+        schedules (calendar entities) in order to align device local time to
+        what is expected in HA.
+        """
+        device_tz = self.descriptor.timezone
+        if (not device_tz) or (device_tz != dt_util.now().tzname()):
+            create_issue(
+                mlc.ISSUE_DEVICE_TIMEZONE,
+                self.id,
+                severity=IssueSeverity.WARNING,
+                translation_placeholders={"device_name": self.name},
+            )
+        else:
+            remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
+
+    def _get_device_info_name_key(self) -> str:
+        return mc.KEY_DEVNAME
+
+    def _get_internal_name(self) -> str:
+        return self.descriptor.productname
+
+    def _set_offline(self):
+        super()._set_offline()
+        self._polling_delay = self.polling_period
+        self._mqtt_active = self._http_active = None
+        for strategy in self.polling_strategies.values():
+            strategy.lastrequest = 0
+
+    # interface: self
+    @property
+    def host(self):
+        return self.config.get(CONF_HOST) or self.descriptor.innerIp
 
     @property
     def mqtt_locallyactive(self):
@@ -708,6 +728,55 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._unsub_polling_callback = schedule_async_callback(
             ApiProfile.hass, 0, self._async_polling_callback, None
         )
+
+    def entry_option_setup(self, config_schema: dict):
+        """
+        called when setting up an OptionsFlowHandler to expose
+        configurable device preoperties which are stored at the device level
+        and not at the configuration/option level
+        see derived implementations
+        """
+        if mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability:
+            global TIMEZONES_SET
+            if TIMEZONES_SET is None:
+                try:
+                    import zoneinfo
+
+                    TIMEZONES_SET = zoneinfo.available_timezones()
+                except Exception:
+                    pass
+                if TIMEZONES_SET:
+                    TIMEZONES_SET = vol.In(sorted(TIMEZONES_SET))
+                else:
+                    # if error or empty try fallback to pytz if avail
+                    try:
+                        from pytz import common_timezones
+
+                        TIMEZONES_SET = vol.In(sorted(common_timezones))
+                    except Exception:
+                        TIMEZONES_SET = str
+            config_schema[
+                vol.Optional(
+                    mc.KEY_TIMEZONE,
+                    description={"suggested_value": self.descriptor.timezone},
+                )
+            ] = TIMEZONES_SET
+
+    async def async_entry_option_update(self, user_input: DeviceConfigType):
+        """
+        called when the user 'SUBMIT' an OptionsFlowHandler: here we'll
+        receive the full user_input so to update device config properties
+        (this is actually called in sequence with entry_update_listener
+        just the latter is async)
+        """
+        if mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability:
+            timezone = user_input.get(mc.KEY_TIMEZONE)
+            if timezone != self.descriptor.timezone:
+                if await self.async_config_device_timezone(timezone):
+                    # if there's a pending issue, the user might still
+                    # use the OptionsFlow to fix stuff so we'll
+                    # shut this down anyway..it will reappear in case
+                    remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
 
     async def async_bind(
         self, broker: HostAddress, *, key: str | None = None, userid: str | None = None
@@ -958,7 +1027,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     not self._mqtt_active
                 ):
                     self._switch_protocol(CONF_PROTOCOL_HTTP)
-            self.receive(epoch, response)
+            self._receive(epoch, response)
             return response
 
         return None
@@ -1098,7 +1167,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             requests_len = len(multiple_requests)
             multiple_response_size = -1  # logging purpose
 
-    async def async_request_updates(self, epoch: float, namespace: str | None):
+    async def _async_request_updates(self, epoch: float, namespace: str | None):
         """
         This is a 'versatile' polling strategy called on timer
         or when the device comes online (passing in the received namespace)
@@ -1123,7 +1192,272 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_request_flush()
 
-    def receive(self, epoch: float, message: MerossResponse):
+    @callback
+    async def _async_polling_callback(self, namespace: str):
+        self.log(self.DEBUG, "Polling start")
+        try:
+            self._unsub_polling_callback = None
+            epoch = time()
+
+            if self._online:
+                # evaluate device availability by checking lastrequest got answered in less than polling_period
+                if (self.lastresponse > self.lastrequest) or (
+                    (epoch - self.lastrequest) < (self.polling_period - 2)
+                ):
+                    pass
+                # when we 'fall' offline while on MQTT eventually retrigger HTTP.
+                # the reverse is not needed since we switch HTTP -> MQTT right-away
+                # when HTTP fails (see async_request)
+                elif (self.conf_protocol is CONF_PROTOCOL_AUTO) and (
+                    self.curr_protocol is not CONF_PROTOCOL_HTTP
+                ):
+                    self._switch_protocol(CONF_PROTOCOL_HTTP)
+                else:
+                    self._set_offline()
+                    return
+
+                # when mqtt is working as a fallback for HTTP
+                # we should periodically check if http comes back
+                # in case our self.pref_protocol is HTTP.
+                # when self.pref_protocol is MQTT we don't care
+                # since we'll just try the switch when mqtt fails
+                if (
+                    (self.curr_protocol is CONF_PROTOCOL_MQTT)
+                    and (self.pref_protocol is CONF_PROTOCOL_HTTP)
+                    and ((epoch - self._http_lastrequest) > PARAM_HEARTBEAT_PERIOD)
+                ):
+                    await self.async_http_request(
+                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                    )
+                    # going on, should the http come online, the next
+                    # async_request_updates will be 'smart' again, skipping
+                    # state updates coming through mqtt (since we're still
+                    # connected) but now requesting over http as preferred
+
+                if self.mqtt_locallyactive:
+                    # implement an heartbeat since mqtt might
+                    # be unused for quite a bit
+                    if (epoch - self._mqtt_lastresponse) > PARAM_HEARTBEAT_PERIOD:
+                        if not await self.async_mqtt_request(
+                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                        ):
+                            self._mqtt_active = None
+                            self.sensor_protocol.update_attr_inactive(
+                                ProtocolSensor.ATTR_MQTT
+                            )
+                        # going on could eventually try/switch to HTTP
+                    elif epoch > self._timezone_next_check:
+                        # when on local mqtt we have the responsibility for
+                        # setting the device timezone/dst transition times
+                        # but this is a process potentially consuming a lot
+                        # (checking future DST) so we'll be lazy on this by
+                        # scheduling not so often and depending on a bunch of
+                        # side conditions (like the device being time-aligned)
+                        self._timezone_next_check = (
+                            epoch + PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
+                        )
+                        if self.device_timedelta < PARAM_TIMESTAMP_TOLERANCE:
+                            with self.exception_warning("_check_device_timezone"):
+                                if self._check_device_timerules():
+                                    # timezone trans not good..fix and check again soon
+                                    await self.async_config_device_timezone(
+                                        self.descriptor.timezone
+                                    )
+                                else:  # timezone trans good..check again in more time
+                                    self._timezone_next_check = (
+                                        epoch + PARAM_TIMEZONE_CHECK_OK_PERIOD
+                                    )
+
+                await self._async_request_updates(epoch, namespace)
+
+            else:  # offline
+                ns_all = get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                if self.conf_protocol is CONF_PROTOCOL_AUTO:
+                    if self.host:
+                        if await self.async_http_request(*ns_all):
+                            return
+                    if self._mqtt_publish:
+                        await self.async_mqtt_request(*ns_all)
+                elif self.conf_protocol is CONF_PROTOCOL_MQTT:
+                    if self._mqtt_publish:
+                        await self.async_mqtt_request(*ns_all)
+                else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
+                    await self.async_http_request(*ns_all)
+
+                if self._online:
+                    await self._async_request_updates(epoch, mc.NS_APPLIANCE_SYSTEM_ALL)
+                else:
+                    if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
+                        self._polling_delay += self.polling_period
+                    else:
+                        self._polling_delay = PARAM_HEARTBEAT_PERIOD
+        finally:
+            self._unsub_polling_callback = schedule_async_callback(
+                ApiProfile.hass, self._polling_delay, self._async_polling_callback, None
+            )
+            self.log(self.DEBUG, "Polling end")
+
+    def mqtt_receive(self, message: MerossResponse):
+        assert self._mqtt_connected and (self.conf_protocol is not CONF_PROTOCOL_HTTP)
+        self._mqtt_lastresponse = epoch = time()
+        self._trace_or_log(epoch, message, CONF_PROTOCOL_MQTT, self.TRACE_RX)
+        if not self._mqtt_active:
+            self._mqtt_active = self._mqtt_connected
+            if self._online:
+                self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
+        if self.curr_protocol is not CONF_PROTOCOL_MQTT:
+            if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (not self._http_active):
+                self._switch_protocol(CONF_PROTOCOL_MQTT)
+        self._receive(epoch, message)
+
+    def mqtt_attached(self, mqtt_connection: MQTTConnection):
+        self.log(
+            self.DEBUG,
+            "mqtt_attached to %s",
+            self.obfuscated_broker(mqtt_connection.broker),
+        )
+        self._mqtt_connection = mqtt_connection
+        self._topic_response = mqtt_connection.topic_response
+        if mqtt_connection.mqtt_is_connected:
+            self.mqtt_connected()
+
+    def mqtt_detached(self):
+        assert self._mqtt_connection
+        self.log(
+            self.DEBUG,
+            "mqtt_detached from %s",
+            self.obfuscated_broker(self._mqtt_connection.broker),
+        )
+        if self._mqtt_connected:
+            self.mqtt_disconnected()
+        self._mqtt_connection = None
+
+    def mqtt_connected(self):
+        _mqtt_connection = self._mqtt_connection
+        assert _mqtt_connection
+        self.log(
+            self.DEBUG,
+            "mqtt_connected to %s",
+            self.obfuscated_broker(_mqtt_connection.broker),
+        )
+        self._mqtt_connected = _mqtt_connection
+        if _mqtt_connection.allow_mqtt_publish:
+            self._mqtt_publish = _mqtt_connection
+            if not self._online and self._unsub_polling_callback:
+                # reschedule immediately
+                self._unsub_polling_callback.cancel()
+                self._unsub_polling_callback = schedule_async_callback(
+                    ApiProfile.hass, 0, self._async_polling_callback, None
+                )
+
+        elif self.conf_protocol is CONF_PROTOCOL_MQTT:
+            self.log(
+                self.WARNING,
+                "MQTT connection doesn't allow publishing - device will not be able send commands",
+                timeout=14400,
+            )
+        self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT_BROKER)
+
+    def mqtt_disconnected(self):
+        assert self._mqtt_connection
+        self.log(
+            self.DEBUG,
+            "mqtt_disconnected from %s",
+            self.obfuscated_broker(self._mqtt_connection.broker),
+        )
+        self._mqtt_connected = self._mqtt_publish = self._mqtt_active = None
+        if self.curr_protocol is CONF_PROTOCOL_MQTT:
+            if self.conf_protocol is CONF_PROTOCOL_AUTO:
+                self._switch_protocol(CONF_PROTOCOL_HTTP)
+                return
+            # conf_protocol should be CONF_PROTOCOL_MQTT:
+            elif self._online:
+                self._set_offline()
+                return
+        # run this at the end so it will not double flush
+        self.sensor_protocol.update_attrs_inactive(
+            ProtocolSensor.ATTR_MQTT_BROKER, ProtocolSensor.ATTR_MQTT
+        )
+
+    def profile_linked(self, profile: ApiProfile):
+        if self._profile is not profile:
+            self.log(
+                self.DEBUG,
+                "linked to profile:%s",
+                self.obfuscated_profile_id(profile.id),
+            )
+            if self._mqtt_connection:
+                self._mqtt_connection.detach(self)
+            if self._profile:
+                self._profile.unlink(self)
+            self._profile = profile
+            self._check_mqtt_connection_attach()
+
+    def profile_unlinked(self):
+        assert self._profile
+        self.log(
+            self.DEBUG,
+            "unlinked from profile:%s",
+            self.obfuscated_profile_id(self._profile.id),
+        )
+        if self._mqtt_connection:
+            self._mqtt_connection.detach(self)
+        self._profile = None
+
+    def _check_mqtt_connection_attach(self):
+        _profile = self._profile
+        _mqtt_connection = self._mqtt_connection
+
+        if self.conf_protocol is CONF_PROTOCOL_AUTO:
+            # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
+            # and eventually fallback (curr_protocol) until some good news allow us
+            # to retry pref_protocol. When binded to a cloud_profile always prefer
+            # 'local' http since it should be faster and less prone to cloud 'issues'
+            if self.config.get(CONF_HOST) or (_profile and _profile.id):
+                self.pref_protocol = CONF_PROTOCOL_HTTP
+                if self.curr_protocol is not CONF_PROTOCOL_HTTP and self._http_active:
+                    self._switch_protocol(CONF_PROTOCOL_HTTP)
+            else:
+                self.pref_protocol = CONF_PROTOCOL_MQTT
+                if self.curr_protocol is not CONF_PROTOCOL_MQTT and self._mqtt_active:
+                    self._switch_protocol(CONF_PROTOCOL_MQTT)
+        else:
+            self.pref_protocol = self.conf_protocol
+            if self.curr_protocol is not self.pref_protocol:
+                self._switch_protocol(self.pref_protocol)
+
+        if self.conf_protocol is CONF_PROTOCOL_HTTP:
+            # strictly HTTP so detach MQTT in case
+            if _mqtt_connection:
+                _mqtt_connection.detach(self)
+            self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
+        else:
+            if _profile and (self.conf_protocol is CONF_PROTOCOL_AUTO):
+                if mc.NS_APPLIANCE_SYSTEM_DEBUG not in self.polling_strategies:
+                    SystemDebugPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DEBUG)
+            else:
+                self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
+
+            if _mqtt_connection:
+                if _mqtt_connection.profile == _profile:
+                    return
+                _mqtt_connection.detach(self)
+
+            if _profile:
+                _profile.attach_mqtt(self)
+            else:
+                # this will cause 1 level recursion by
+                # calling profile_linked. In general, devices
+                # are attached right when loaded (by default they're attached to MerossApi
+                # if no CloudProfile matches). Whenever a Cloud profile appears, it can
+                # steal the device from another ApiProfile (and this should be safe).
+                # but when a cloud profile is unloaded, it unlinks its devices which will
+                # rest without an ApiProfile. This is still to be fixed but at least,
+                # whenever we refresh the device config, this kind of 'failover' will
+                # definitely bind the device to the local broker in case it got orphaned
+                ApiProfile.api.try_link(self)
+
+    def _receive(self, epoch: float, message: MerossResponse):
         """
         default (received) message handling entry point
         """
@@ -1134,7 +1468,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # and we want to 'translate' this timings in our (local) time.
         # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
         # we'll always be a bit late in processing
-        self.device_timestamp: int = header[mc.KEY_TIMESTAMP]
+        self.device_timestamp = header[mc.KEY_TIMESTAMP]
         device_timedelta = epoch - self.device_timestamp
         if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
             if (
@@ -1328,13 +1662,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             payload[mc.KEY_ALL][mc.KEY_SYSTEM][mc.KEY_HARDWARE][mc.KEY_UUID]
         ):
             return
-        elif self._has_issue_id:
-            issue_registry.async_delete_issue(
-                ApiProfile.hass,
-                DOMAIN,
-                self._has_issue_id,
-            )
-            self._has_issue_id = None
+        else:
+            remove_issue(mlc.ISSUE_DEVICE_ID_MISMATCH, self.id)
 
         descr = self.descriptor
         oldfirmware = descr.firmware
@@ -1399,238 +1728,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
             self.descriptor.update_time(payload[mc.KEY_TIME])
 
-    def mqtt_receive(self, message: MerossResponse):
-        assert self._mqtt_connected and (self.conf_protocol is not CONF_PROTOCOL_HTTP)
-        self._mqtt_lastresponse = epoch = time()
-        self._trace_or_log(epoch, message, CONF_PROTOCOL_MQTT, self.TRACE_RX)
-        if not self._mqtt_active:
-            self._mqtt_active = self._mqtt_connected
-            if self._online:
-                self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
-        if self.curr_protocol is not CONF_PROTOCOL_MQTT:
-            if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (not self._http_active):
-                self._switch_protocol(CONF_PROTOCOL_MQTT)
-        self.receive(epoch, message)
-
-    def mqtt_attached(self, mqtt_connection: MQTTConnection):
-        self.log(
-            self.DEBUG,
-            "mqtt_attached to %s",
-            self.obfuscated_broker(mqtt_connection.broker),
-        )
-        self._mqtt_connection = mqtt_connection
-        self._topic_response = mqtt_connection.topic_response
-        if mqtt_connection.mqtt_is_connected:
-            self.mqtt_connected()
-
-    def mqtt_detached(self):
-        assert self._mqtt_connection
-        self.log(
-            self.DEBUG,
-            "mqtt_detached from %s",
-            self.obfuscated_broker(self._mqtt_connection.broker),
-        )
-        if self._mqtt_connected:
-            self.mqtt_disconnected()
-        self._mqtt_connection = None
-
-    def mqtt_connected(self):
-        _mqtt_connection = self._mqtt_connection
-        assert _mqtt_connection
-        self.log(
-            self.DEBUG,
-            "mqtt_connected to %s",
-            self.obfuscated_broker(_mqtt_connection.broker),
-        )
-        self._mqtt_connected = _mqtt_connection
-        if _mqtt_connection.allow_mqtt_publish:
-            self._mqtt_publish = _mqtt_connection
-            if not self._online and self._unsub_polling_callback:
-                # reschedule immediately
-                self._unsub_polling_callback.cancel()
-                self._unsub_polling_callback = schedule_async_callback(
-                    ApiProfile.hass, 0, self._async_polling_callback, None
-                )
-
-        elif self.conf_protocol is CONF_PROTOCOL_MQTT:
-            self.log(
-                self.WARNING,
-                "MQTT connection doesn't allow publishing - device will not be able send commands",
-                timeout=14400,
-            )
-        self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT_BROKER)
-
-    def mqtt_disconnected(self):
-        assert self._mqtt_connection
-        self.log(
-            self.DEBUG,
-            "mqtt_disconnected from %s",
-            self.obfuscated_broker(self._mqtt_connection.broker),
-        )
-        self._mqtt_connected = self._mqtt_publish = self._mqtt_active = None
-        if self.curr_protocol is CONF_PROTOCOL_MQTT:
-            if self.conf_protocol is CONF_PROTOCOL_AUTO:
-                self._switch_protocol(CONF_PROTOCOL_HTTP)
-                return
-            # conf_protocol should be CONF_PROTOCOL_MQTT:
-            elif self._online:
-                self._set_offline()
-                return
-        # run this at the end so it will not double flush
-        self.sensor_protocol.update_attrs_inactive(
-            ProtocolSensor.ATTR_MQTT_BROKER, ProtocolSensor.ATTR_MQTT
-        )
-
-    @callback
-    async def _async_polling_callback(self, namespace: str):
-        self.log(self.DEBUG, "Polling start")
-        try:
-            self._unsub_polling_callback = None
-            epoch = time()
-
-            if self._online:
-                # evaluate device availability by checking lastrequest got answered in less than polling_period
-                if (self.lastresponse > self.lastrequest) or (
-                    (epoch - self.lastrequest) < (self.polling_period - 2)
-                ):
-                    pass
-                # when we 'fall' offline while on MQTT eventually retrigger HTTP.
-                # the reverse is not needed since we switch HTTP -> MQTT right-away
-                # when HTTP fails (see async_request)
-                elif (self.conf_protocol is CONF_PROTOCOL_AUTO) and (
-                    self.curr_protocol is not CONF_PROTOCOL_HTTP
-                ):
-                    self._switch_protocol(CONF_PROTOCOL_HTTP)
-                else:
-                    self._set_offline()
-                    return
-
-                # when mqtt is working as a fallback for HTTP
-                # we should periodically check if http comes back
-                # in case our self.pref_protocol is HTTP.
-                # when self.pref_protocol is MQTT we don't care
-                # since we'll just try the switch when mqtt fails
-                if (
-                    (self.curr_protocol is CONF_PROTOCOL_MQTT)
-                    and (self.pref_protocol is CONF_PROTOCOL_HTTP)
-                    and ((epoch - self._http_lastrequest) > PARAM_HEARTBEAT_PERIOD)
-                ):
-                    await self.async_http_request(
-                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
-                    )
-                    # going on, should the http come online, the next
-                    # async_request_updates will be 'smart' again, skipping
-                    # state updates coming through mqtt (since we're still
-                    # connected) but now requesting over http as preferred
-
-                if self.mqtt_locallyactive:
-                    # implement an heartbeat since mqtt might
-                    # be unused for quite a bit
-                    if (epoch - self._mqtt_lastresponse) > PARAM_HEARTBEAT_PERIOD:
-                        if not await self.async_mqtt_request(
-                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
-                        ):
-                            self._mqtt_active = None
-                            self.sensor_protocol.update_attr_inactive(
-                                ProtocolSensor.ATTR_MQTT
-                            )
-                        # going on could eventually try/switch to HTTP
-                    elif epoch > self._timezone_next_check:
-                        # when on local mqtt we have the responsibility for
-                        # setting the device timezone/dst transition times
-                        # but this is a process potentially consuming a lot
-                        # (checking future DST) so we'll be lazy on this by
-                        # scheduling not so often and depending on a bunch of
-                        # side conditions (like the device being time-aligned)
-                        self._timezone_next_check = (
-                            epoch + PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
-                        )
-                        if self.device_timedelta < PARAM_TIMESTAMP_TOLERANCE:
-                            with self.exception_warning("_check_device_timezone"):
-                                if self._check_device_timezone():
-                                    # timezone trans not good..fix and check again soon
-                                    self._config_device_timezone(
-                                        self.descriptor.timezone
-                                    )
-                                else:  # timezone trans good..check again in more time
-                                    self._timezone_next_check = (
-                                        epoch + PARAM_TIMEZONE_CHECK_OK_PERIOD
-                                    )
-
-                await self.async_request_updates(epoch, namespace)
-
-            else:  # offline
-                ns_all = get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
-                if self.conf_protocol is CONF_PROTOCOL_AUTO:
-                    if self.host:
-                        if await self.async_http_request(*ns_all):
-                            return
-                    if self._mqtt_publish:
-                        await self.async_mqtt_request(*ns_all)
-                elif self.conf_protocol is CONF_PROTOCOL_MQTT:
-                    if self._mqtt_publish:
-                        await self.async_mqtt_request(*ns_all)
-                else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
-                    await self.async_http_request(*ns_all)
-
-                if self._online:
-                    await self.async_request_updates(epoch, mc.NS_APPLIANCE_SYSTEM_ALL)
-                else:
-                    if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
-                        self._polling_delay += self.polling_period
-                    else:
-                        self._polling_delay = PARAM_HEARTBEAT_PERIOD
-        finally:
-            self._unsub_polling_callback = schedule_async_callback(
-                ApiProfile.hass, self._polling_delay, self._async_polling_callback, None
-            )
-            self.log(self.DEBUG, "Polling end")
-
-    def entry_option_setup(self, config_schema: dict):
-        """
-        called when setting up an OptionsFlowHandler to expose
-        configurable device preoperties which are stored at the device level
-        and not at the configuration/option level
-        see derived implementations
-        """
-        if mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability:
-            global TIMEZONES_SET
-            if TIMEZONES_SET is None:
-                try:
-                    import zoneinfo
-
-                    TIMEZONES_SET = zoneinfo.available_timezones()
-                except Exception:
-                    pass
-                if TIMEZONES_SET:
-                    TIMEZONES_SET = vol.In(sorted(TIMEZONES_SET))
-                else:
-                    # if error or empty try fallback to pytz if avail
-                    try:
-                        from pytz import common_timezones
-
-                        TIMEZONES_SET = vol.In(sorted(common_timezones))
-                    except Exception:
-                        TIMEZONES_SET = str
-            config_schema[
-                vol.Optional(
-                    mc.KEY_TIMEZONE,
-                    description={"suggested_value": self.descriptor.timezone},
-                )
-            ] = TIMEZONES_SET
-
-    def entry_option_update(self, user_input: DeviceConfigType):
-        """
-        called when the user 'SUBMIT' an OptionsFlowHandler: here we'll
-        receive the full user_input so to update device config properties
-        (this is actually called in sequence with entry_update_listener
-        just the latter is async)
-        """
-        if mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability:
-            timezone = user_input.get(mc.KEY_TIMEZONE)
-            if timezone != self.descriptor.timezone:
-                self._config_device_timezone(timezone)
-
     def _config_device_timestamp(self, epoch):
         if self.mqtt_locallyactive and (
             mc.NS_APPLIANCE_SYSTEM_CLOCK in self.descriptor.ability
@@ -1656,7 +1753,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 int(self.device_timedelta),
             )
 
-    def _check_device_timezone(self) -> bool:
+    def _check_device_timerules(self) -> bool:
         """
         verify the data about DST changes in the configured timezone are ok by checking
         the "time" key in the Appliance.System.All payload:
@@ -1739,7 +1836,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         return False
 
-    def _config_device_timezone(self, tzname: str | None):
+    async def async_config_device_timezone(self, tzname: str | None):
         # assert self.mqtt_locallyactive
         timestamp = self.device_timestamp
         timerules = []
@@ -1810,7 +1907,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         else:
             tzname = ""
 
-        self.mqtt_request(
+        return await self.async_request_ack(
             mc.NS_APPLIANCE_SYSTEM_TIME,
             mc.METHOD_SET,
             payload={
@@ -1849,17 +1946,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def _check_uuid_mismatch(self, response_uuid: str):
         """when detecting a wrong uuid from a response we offline the device"""
         if response_uuid != self.id:
-            if not self._has_issue_id:
-                self._has_issue_id = f"{ISSUE_DEVICE_ID_MISMATCH}.{self.id}"
-                issue_registry.async_create_issue(
-                    ApiProfile.hass,
-                    DOMAIN,
-                    self._has_issue_id,
-                    is_fixable=True,
-                    severity=issue_registry.IssueSeverity.CRITICAL,
-                    translation_key=ISSUE_DEVICE_ID_MISMATCH,
-                    translation_placeholders={"device_name": self.name},
-                )
             # here we're not obfuscating device uuid since we might have an hard time identifying the bogus one
             self.log(
                 self.CRITICAL,
@@ -1870,86 +1956,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
             if self._online:
                 self._set_offline()
+            create_issue(
+                mlc.ISSUE_DEVICE_ID_MISMATCH,
+                self.id,
+                severity=IssueSeverity.CRITICAL,
+                translation_placeholders={"device_name": self.name},
+            )
             return True
         return False
-
-    def profile_linked(self, profile: ApiProfile):
-        if self._profile is not profile:
-            self.log(
-                self.DEBUG,
-                "linked to profile:%s",
-                self.obfuscated_profile_id(profile.id),
-            )
-            if self._mqtt_connection:
-                self._mqtt_connection.detach(self)
-            if self._profile:
-                self._profile.unlink(self)
-            self._profile = profile
-            self._check_mqtt_connection_attach()
-
-    def profile_unlinked(self):
-        assert self._profile
-        self.log(
-            self.DEBUG,
-            "unlinked from profile:%s",
-            self.obfuscated_profile_id(self._profile.id),
-        )
-        if self._mqtt_connection:
-            self._mqtt_connection.detach(self)
-        self._profile = None
-
-    def _check_mqtt_connection_attach(self):
-        _profile = self._profile
-        _mqtt_connection = self._mqtt_connection
-
-        if self.conf_protocol is CONF_PROTOCOL_AUTO:
-            # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
-            # and eventually fallback (curr_protocol) until some good news allow us
-            # to retry pref_protocol. When binded to a cloud_profile always prefer
-            # 'local' http since it should be faster and less prone to cloud 'issues'
-            if self.config.get(CONF_HOST) or (_profile and _profile.id):
-                self.pref_protocol = CONF_PROTOCOL_HTTP
-                if self.curr_protocol is not CONF_PROTOCOL_HTTP and self._http_active:
-                    self._switch_protocol(CONF_PROTOCOL_HTTP)
-            else:
-                self.pref_protocol = CONF_PROTOCOL_MQTT
-                if self.curr_protocol is not CONF_PROTOCOL_MQTT and self._mqtt_active:
-                    self._switch_protocol(CONF_PROTOCOL_MQTT)
-        else:
-            self.pref_protocol = self.conf_protocol
-            if self.curr_protocol is not self.pref_protocol:
-                self._switch_protocol(self.pref_protocol)
-
-        if self.conf_protocol is CONF_PROTOCOL_HTTP:
-            # strictly HTTP so detach MQTT in case
-            if _mqtt_connection:
-                _mqtt_connection.detach(self)
-            self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
-        else:
-            if _profile and (self.conf_protocol is CONF_PROTOCOL_AUTO):
-                if mc.NS_APPLIANCE_SYSTEM_DEBUG not in self.polling_strategies:
-                    SystemDebugPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DEBUG)
-            else:
-                self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
-
-            if _mqtt_connection:
-                if _mqtt_connection.profile == _profile:
-                    return
-                _mqtt_connection.detach(self)
-
-            if _profile:
-                _profile.attach_mqtt(self)
-            else:
-                # this will cause 1 level recursion by
-                # calling profile_linked. In general, devices
-                # are attached right when loaded (by default they're attached to MerossApi
-                # if no CloudProfile matches). Whenever a Cloud profile appears, it can
-                # steal the device from another ApiProfile (and this should be safe).
-                # but when a cloud profile is unloaded, it unlinks its devices which will
-                # rest without an ApiProfile. This is still to be fixed but at least,
-                # whenever we refresh the device config, this kind of 'failover' will
-                # definitely bind the device to the local broker in case it got orphaned
-                ApiProfile.api.try_link(self)
 
     def update_latest_version(self, latest_version: LatestVersionType):
         if not (update_firmware := self.update_firmware):

@@ -16,7 +16,7 @@ import typing
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
-from homeassistant.util.dt import DEFAULT_TIME_ZONE, utcnow
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ALLOW_MQTT_PUBLISH,
@@ -135,7 +135,7 @@ def datetime_from_epoch(epoch, tz: tzinfo | None = None):
     """
     y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
     utcdt = datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
-    return utcdt if tz is timezone.utc else utcdt.astimezone(tz or DEFAULT_TIME_ZONE)
+    return utcdt if tz is timezone.utc else utcdt.astimezone(tz or dt_util.DEFAULT_TIME_ZONE)
 
 
 def getLogger(name):
@@ -394,7 +394,7 @@ async def get_entity_last_states(
     from homeassistant.components.recorder import history
 
     if hasattr(history, "get_state"):  # removed in 2022.6.x
-        return history.get_state(hass, utcnow(), entity_id)  # type: ignore
+        return history.get_state(hass, dt_util.utcnow(), entity_id)  # type: ignore
 
     elif hasattr(history, "get_last_state_changes"):
         """

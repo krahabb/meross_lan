@@ -152,6 +152,10 @@ class ElectricityMixin(
         self._sensor_power.update_state(power)
         self._sensor_current.update_state(electricity[mc.KEY_CURRENT] / 1000)  # type: ignore
         self._sensor_voltage.update_state(electricity[mc.KEY_VOLTAGE] / 10)  # type: ignore
+        if not power:
+            # might be an indication of issue #367 where the problem lies in missing
+            # device timezone configuration
+            self.check_device_timezone()
 
     def _schedule_next_reset(self, _now: datetime):
         with self.exception_warning("_schedule_next_reset"):

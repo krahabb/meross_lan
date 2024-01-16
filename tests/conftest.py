@@ -53,10 +53,10 @@ def disable_debug_fixture():
     """Disable development debug code so to test in a production env."""
     with patch("custom_components.meross_lan.MEROSSDEBUG", None), patch(
         "custom_components.meross_lan.meross_profile.MEROSSDEBUG", None
-    ), patch("custom_components.meross_lan.meross_device.MEROSSDEBUG", None), patch(
-        "custom_components.meross_lan.merossclient.MEROSSDEBUG", None
-    ), patch(
+    ), patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None), patch(
         "custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None
+    ), patch(
+        "custom_components.meross_lan.merossclient.mqttclient.MEROSSDEBUG", None
     ), patch(
         "custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", None
     ):

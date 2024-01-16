@@ -756,6 +756,12 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
     Manage device options configuration
     """
 
+    _MENU_OPTIONS = {
+        "hub": ["hub", "diagnostics"],
+        "profile": ["profile", "diagnostics"],
+        "device": ["device", "diagnostics", "bind", "unbind"],
+    }
+
     config: mlc.HubConfigType | mlc.DeviceConfigType | mlc.ProfileConfigType
 
     BindConfigType = typing.TypedDict(
@@ -772,19 +778,21 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         "config_entry",
         "config_entry_id",
         "config",
+        "repair_issue_id",
         "bind_config",
         "bind_placeholders",
     )
 
-    def __init__(self, config_entry: config_entries.ConfigEntry):
+    def __init__(self, config_entry: config_entries.ConfigEntry, repair_issue_id: str | None = None):
         self.config_entry: Final = config_entry
         self.config_entry_id: Final = config_entry.entry_id
         self.config = dict(self.config_entry.data)  # type: ignore
+        self.repair_issue_id = repair_issue_id
 
     async def async_step_init(self, user_input=None):
         unique_id = self.config_entry.unique_id
         if unique_id == mlc.DOMAIN:
-            return await self.async_step_menu(["hub", "diagnostics"])
+            return await self.async_step_menu("hub")
 
         unique_id = unique_id.split(".")  # type: ignore
         if unique_id[0] == "profile":
@@ -800,7 +808,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     indent=2,
                 ),
             }
-            return await self.async_step_menu(["profile", "diagnostics"])
+            return await self.async_step_menu("profile")
 
         self.device_config = typing.cast(mlc.DeviceConfigType, self.config)
         if mlc.CONF_TRACE in self.device_config:
@@ -818,13 +826,16 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             "device_type": self.device_descriptor.productnametype,
             "device_id": self._device_id,
         }
-        return await self.async_step_menu(["device", "diagnostics", "bind", "unbind"])
+        return await self.async_step_menu("device")
 
-    async def async_step_menu(self, user_input=[]):
-        return self.async_show_menu(
-            step_id="menu",
-            menu_options=user_input,
-        )
+    async def async_step_menu(self, user_input):
+        if self.repair_issue_id:
+            return await getattr(self, f"async_step_{user_input}")(None)
+        else:
+            return self.async_show_menu(
+                step_id="menu",
+                menu_options=self._MENU_OPTIONS[user_input],
+            )
 
     async def async_step_hub(self, user_input=None):
         hub_config = self.config
@@ -914,7 +925,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                             device_config.pop(mlc.CONF_CLOUD_KEY)
                     if device:
                         try:
-                            device.entry_option_update(user_input)
+                            await device.async_entry_option_update(user_input)
                         except Exception:
                             pass  # forgive any error
                     # we're not following HA 'etiquette' and we're just updating the

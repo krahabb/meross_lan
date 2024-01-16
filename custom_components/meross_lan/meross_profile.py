@@ -11,9 +11,10 @@ import typing
 
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
-from homeassistant.helpers import issue_registry, storage
+from homeassistant.helpers import storage
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from . import const as mlc
 from .const import (
     CONF_CHECK_FIRMWARE_UPDATES,
     CONF_DEVICE_ID,
@@ -21,9 +22,7 @@ from .const import (
     CONF_KEY,
     CONF_PASSWORD,
     CONF_PAYLOAD,
-    CONF_PROTOCOL_MQTT,
     DOMAIN,
-    ISSUE_CLOUD_TOKEN_EXPIRED,
     PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
     PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT,
@@ -61,6 +60,7 @@ from .merossclient.cloudapi import (
     async_cloudapi_signin,
 )
 from .merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
+from .repairs import IssueSeverity, create_issue, remove_issue
 from .sensor import MLSensor
 
 if typing.TYPE_CHECKING:
@@ -1228,9 +1228,7 @@ class MerossCloudProfile(ApiProfile):
                             self.config, async_get_clientsession(ApiProfile.hass)
                         )
                 else:
-                    issue_registry.async_delete_issue(
-                        self.hass, DOMAIN, f"{ISSUE_CLOUD_TOKEN_EXPIRED}.{self.id}"
-                    )
+                    remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED, self.id)
 
                 self._data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
                 self._schedule_save_store()
@@ -1371,13 +1369,10 @@ class MerossCloudProfile(ApiProfile):
             config = self.config
             if CONF_PASSWORD not in config:
                 if should_raise_issue:
-                    issue_registry.async_create_issue(
-                        self.hass,
-                        DOMAIN,
-                        f"{ISSUE_CLOUD_TOKEN_EXPIRED}.{self.id}",
-                        is_fixable=True,
-                        severity=issue_registry.IssueSeverity.WARNING,
-                        translation_key=ISSUE_CLOUD_TOKEN_EXPIRED,
+                    create_issue(
+                        mlc.ISSUE_CLOUD_TOKEN_EXPIRED,
+                        self.id,
+                        severity=IssueSeverity.WARNING,
                         translation_placeholders={"email": config.get(mc.KEY_EMAIL)},
                     )
                 return None

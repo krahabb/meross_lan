@@ -420,6 +420,7 @@ class MerossSubDevice(MerossDeviceBase):
         "build_request",
         "async_request_raw",
         "async_request",
+        "check_device_timezone",
         "hub",
         "type",
         "p_digest",
@@ -434,6 +435,7 @@ class MerossSubDevice(MerossDeviceBase):
         self.build_request = hub.build_request
         self.async_request_raw = hub.async_request_raw
         self.async_request = hub.async_request
+        self.check_device_timezone = hub.check_device_timezone
         # these properties are needed to be in place before base class init
         self.hub = hub
         self.type = _type
@@ -468,6 +470,7 @@ class MerossSubDevice(MerossDeviceBase):
     # interface: MerossDeviceBase
     async def async_shutdown(self):
         await super().async_shutdown()
+        self.check_device_timezone = None  # type: ignore
         self.async_request = None  # type: ignore
         self.async_request_raw = None  # type: ignore
         self.build_request = None  # type: ignore

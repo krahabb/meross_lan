@@ -163,6 +163,8 @@ ISSUE_CLOUD_TOKEN_EXPIRED = "cloud_token_expired"
 """raised when the token used to access the cloud api expires and need to be refreshed"""
 ISSUE_DEVICE_ID_MISMATCH = "device_identity_mismatch"
 """raised when a device receives data from a different (uuid) appliance"""
+ISSUE_DEVICE_TIMEZONE = "device_timezone"
+"""raised when a device timezone is not set or is anyway different from HA default"""
 
 # general working/configuration parameters
 PARAM_INFINITE_EPOCH = 2147483647  # inifinite epoch (2038 bug?)

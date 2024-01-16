@@ -26,7 +26,7 @@ async def profile_async_request_updates(hass, aioclient_mock, capsys):
 
         for i in range(1000):
             epoch += device.polling_period
-            await device.async_request_updates(epoch, None)
+            await device._async_request_updates(epoch, None)
 
         pr.disable()
         with capsys.disabled():

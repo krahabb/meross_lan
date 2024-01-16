@@ -63,7 +63,7 @@ class MtsScheduleEntry:
     day: datetime  # base date of day used when querying this: used to calculate CalendarEvent
     data: MtsScheduleNativeEntry  # actually points to the inner list in the native payload (not a copy)
 
-    def get_event(self) -> calendar.CalendarEvent:
+    def get_event(self, climate: MtsClimate) -> calendar.CalendarEvent:
         """
         returns an HA CalendarEvent set up with this entry data (schedule)
         relevant for the calendar day provided in event_day
@@ -88,7 +88,7 @@ class MtsScheduleEntry:
         return calendar.CalendarEvent(
             start=dt.as_utc(event_begin),
             end=dt.as_utc(event_end),
-            summary=f"{self.data[1] / 10} {MtsClimate.TEMP_CELSIUS}",
+            summary=f"{self.data[1] / climate.device_scale} {climate.temperature_unit}",
             description="",
             uid=f"{MTS_SCHEDULE_WEEKDAY[self.weekday_index]}#{self.index}",
             rrule=MTS_SCHEDULE_RRULE,
@@ -150,13 +150,17 @@ class MtsSchedule(MLCalendar):
         self.climate = None  # type: ignore
         await super().async_shutdown()
 
+    async def async_added_to_hass(self):
+        self.manager.check_device_timezone()
+        return await super().async_added_to_hass()
+
     # interface: Calendar
     @property
     def event(self) -> calendar.CalendarEvent | None:
         """Return the next upcoming event."""
         if self.climate.is_mts_scheduled():
             if event_index := self._get_event_entry(datetime.now(tz=self.manager.tz)):
-                return event_index.get_event()
+                return event_index.get_event(self.climate)
         return None
 
     async def async_get_events(
@@ -169,7 +173,7 @@ class MtsSchedule(MLCalendar):
         events = []
         event_entry = self._get_event_entry(start_date.astimezone(self.manager.tz))
         while event_entry:
-            event = event_entry.get_event()
+            event = event_entry.get_event(self.climate)
             if event.start >= end_date:
                 break
             events.append(event)
