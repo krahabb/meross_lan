@@ -1667,7 +1667,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         descr = self.descriptor
         oldfirmware = descr.firmware
+        oldtimezone = descr.timezone
         descr.update(payload)
+
+        if oldtimezone != descr.timezone:
+            self.needsave = True
 
         if oldfirmware != descr.firmware:
             self.needsave = True
