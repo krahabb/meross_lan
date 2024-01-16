@@ -8,6 +8,7 @@ from ..climate import MtsClimate
 from ..helpers import reverse_lookup
 from ..merossclient import const as mc
 from ..number import MtsCalibrationNumber, MtsSetPointNumber
+from ..sensor import MLSensor
 
 if typing.TYPE_CHECKING:
     from .thermostat import ThermostatMixin
@@ -33,6 +34,15 @@ class Mts960FakeSetPointNumber(MtsSetPointNumber):
         return cls
 
 
+class Mts960DiagnosticSensor(MLSensor):
+    _attr_entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
+
+    def __init__(self, climate: Mts960Climate, entitykey: str | None):
+        super().__init__(
+            climate.manager, climate.channel, entitykey, MLSensor.DeviceClass.ENUM
+        )
+
+
 class Mts960Climate(MtsClimate):
     """Climate entity for MTS200 devices"""
 
@@ -56,9 +66,23 @@ class Mts960Climate(MtsClimate):
         MtsClimate.PRESET_AUTO: mc.KEY_TARGETTEMP,
     }
 
+    DIAGNOSTIC_SENSOR_KEYS = (
+        mc.KEY_MODE,
+        mc.KEY_ONOFF,
+        mc.KEY_STATE,
+        mc.KEY_SENSORSTATUS,
+        mc.KEY_WORKING,
+    )
+
     manager: ThermostatMixin
 
-    __slots__ = ()
+    __slots__ = (
+        "sensor_mode",
+        "sensor_onoff",
+        "sensor_state",
+        "sensor_status",
+        "sensor_working",
+    )
 
     def __init__(self, manager: ThermostatMixin, channel: object):
         super().__init__(
@@ -71,6 +95,8 @@ class Mts960Climate(MtsClimate):
             Mts960FakeSetPointNumber,
             Mts960Schedule,
         )
+        for key in self.DIAGNOSTIC_SENSOR_KEYS:
+            Mts960DiagnosticSensor(self, key)
 
     # interface: MtsClimate
     async def async_shutdown(self):
@@ -187,6 +213,12 @@ class Mts960Climate(MtsClimate):
             self._attr_target_temperature = (
                 payload[mc.KEY_TARGETTEMP] / self.device_scale
             )
+
+        entities = self.manager.entities
+        for key in self.DIAGNOSTIC_SENSOR_KEYS:
+            if key in payload:
+                entities[f"{self.channel}_{key}"].update_state(payload[key])
+
         self.flush_state()
 
 
