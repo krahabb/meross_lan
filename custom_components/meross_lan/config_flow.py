@@ -1256,7 +1256,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 if not (device and device.online):
                     raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 
-                device.unbind()
+                await device.async_unbind()
                 action = user_input[KEY_ACTION]
                 hass = self.hass
                 if action == KEY_ACTION_DISABLE:

@@ -805,7 +805,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # we don't have a clue if it works or not..just go over http
         return await self.async_http_request(*bind)
 
-    def unbind(self):
+    async def async_unbind(self):
         """
         WARNING!!!
         Hardware reset to factory default: the device will unpair itself from
@@ -816,10 +816,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # it appears the broker session level will take care of also removing
         # the device from its list, thus totally cancelling it from the Meross account
         if self._mqtt_publish and self._mqtt_publish.is_cloud_connection:
-            self.mqtt_request(*unbind)
-            return
+            return await self.async_mqtt_request(*unbind)
         # else go with whatever transport: the device will reset it's configuration
-        self.request(unbind)
+        return await self.async_request(*unbind)
 
     def get_device_datetime(self, epoch):
         """
