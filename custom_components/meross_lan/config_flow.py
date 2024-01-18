@@ -17,19 +17,20 @@ from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
-from .helpers import ApiProfile, ConfigEntriesHelper, StrEnum, reverse_lookup
+from .helpers import (
+    ApiProfile,
+    CloudApiClient,
+    ConfigEntriesHelper,
+    StrEnum,
+    reverse_lookup,
+)
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
     MerossKeyError,
+    cloudapi,
     const as mc,
     get_default_arguments,
-)
-from .merossclient.cloudapi import (
-    API_URL_MAP,
-    CloudApiError,
-    async_cloudapi_logout_safe,
-    async_cloudapi_signin,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
@@ -125,7 +126,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             self._errors = None
             self._conf_error = None
             yield
-        except CloudApiError as error:
+        except cloudapi.CloudApiError as error:
             self._errors = {CONF_ERROR: FlowErrorKey.INVALID_AUTH.value}
             self._conf_error = str(error)
         except FlowError as error:
@@ -208,24 +209,19 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 # all of the flows logic and try to directly manage the
                 # underlying ConfigEntry in a sort of a crazy generalization
                 if mlc.CONF_PASSWORD in user_input:
-                    credentials = await async_cloudapi_signin(
+                    cloudapiclient = CloudApiClient(api)
+                    credentials = await cloudapiclient.async_signin(
                         profile_config[mlc.CONF_EMAIL],
                         user_input[mlc.CONF_PASSWORD],
                         region=profile_config.pop(mlc.CONF_CLOUD_REGION, None),  # type: ignore
                         domain=profile_config.get(mc.KEY_DOMAIN),
-                        session=async_get_clientsession(hass),
-                        logger=api,  # type: ignore (api almost duck-compatible with logging.Logger)
                     )
                     if (
                         mc.KEY_USERID_ in profile_config
                         and credentials[mc.KEY_USERID_]
                         != profile_config[mc.KEY_USERID_]
                     ):
-                        await async_cloudapi_logout_safe(
-                            credentials,
-                            async_get_clientsession(hass),
-                            api,  # type: ignore (api almost duck-compatible with logging.Logger)
-                        )
+                        await cloudapiclient.async_logout_safe()
                         raise FlowError(FlowErrorKey.CLOUD_PROFILE_MISMATCH)
                     profile_config.update(credentials)  # type: ignore
                     if not user_input.get(mlc.CONF_SAVE_PASSWORD):
@@ -261,9 +257,13 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                     # the diagnostics settings by cloning actual MerossApi config
                     if api_config := api.config:
                         if mlc.CONF_LOGGING_LEVEL in api_config:
-                            profile_config[mlc.CONF_LOGGING_LEVEL] = api_config[mlc.CONF_LOGGING_LEVEL]
+                            profile_config[mlc.CONF_LOGGING_LEVEL] = api_config[
+                                mlc.CONF_LOGGING_LEVEL
+                            ]
                         if mlc.CONF_OBFUSCATE in api_config:
-                            profile_config[mlc.CONF_OBFUSCATE] = api_config[mlc.CONF_OBFUSCATE]
+                            profile_config[mlc.CONF_OBFUSCATE] = api_config[
+                                mlc.CONF_OBFUSCATE
+                            ]
                     if self._is_keyerror:
                         # this flow is managing a device but since the profile
                         # entry is new, we'll directly setup that
@@ -309,7 +309,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         if self._profile_entry:
             # this is a profile OptionsFlow
             profile = ApiProfile.profiles.get(profile_config[mc.KEY_USERID_])
-            require_login = not (profile and profile.token)
+            require_login = not (profile and profile.token_is_valid)
         else:
             # this is not a profile OptionsFlow so we'd need to login for sure
             # with full credentials
@@ -325,7 +325,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             ] = selector(
                 {
                     "select": {
-                        "options": list(API_URL_MAP.keys()),
+                        "options": list(cloudapi.API_URL_MAP.keys()),
                         "translation_key": mlc.CONF_CLOUD_REGION,
                         "mode": "dropdown",
                     }

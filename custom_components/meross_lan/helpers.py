@@ -13,9 +13,11 @@ import os
 from time import gmtime, localtime, strftime, time
 import typing
 
+import aiohttp
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -33,6 +35,7 @@ from .const import (
     CONF_LOGGING_VERBOSE,
     CONF_LOGGING_WARNING,
     CONF_OBFUSCATE,
+    CONF_PASSWORD,
     CONF_PROTOCOL_AUTO,
     CONF_PROTOCOL_MQTT,
     CONF_TRACE,
@@ -45,6 +48,7 @@ from .const import (
     POLLING_STRATEGY_CONF,
 )
 from .merossclient import (
+    cloudapi,
     const as mc,
     get_default_arguments,
     get_namespacekey,
@@ -135,7 +139,11 @@ def datetime_from_epoch(epoch, tz: tzinfo | None = None):
     """
     y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
     utcdt = datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
-    return utcdt if tz is timezone.utc else utcdt.astimezone(tz or dt_util.DEFAULT_TIME_ZONE)
+    return (
+        utcdt
+        if tz is timezone.utc
+        else utcdt.astimezone(tz or dt_util.DEFAULT_TIME_ZONE)
+    )
 
 
 def getLogger(name):
@@ -213,13 +221,24 @@ LOGGER = getLogger(__name__[:-8])  # get base custom_component name for logging
     working on a set of well-known keys to hide values from a structure
     when logging/tracing.
     The 'OBFUSCATE_KEYS' dict mandates which key values are patched and
-    mantains a set of obfuscated values stored in the OBFUSCATE_XXX_MAP
-    so that every time we obfuscate a key value, we return the same (stable)
-    obfuscation in order to correlate data in traces and logs
+    how (ObfuscateRule). It generally mantains a set of obfuscated values stored in
+    the ObfuscateMap instance so that every time we obfuscate a key value,
+    we return the same (stable) obfuscation in order to correlate data in
+    traces and logs. Some keys are not cached/mapped and just 'redacted'
 """
 
 
-class ObfuscateMap(dict):
+class ObfuscateRule:
+    """
+    Obfuscate data without caching and mapping. This is needed
+    for ever-varying key values like i.e. KEY_PARAMS (in cloudapi requests)
+    """
+
+    def obfuscate(self, value):
+        return "<redacted>"
+
+
+class ObfuscateMap(ObfuscateRule, dict):
     def obfuscate(self, value):
         """
         for every value we obfuscate, we'll keep
@@ -282,13 +301,14 @@ class ObfuscateServerMap(ObfuscateMap):
 
 
 # common (shared) obfuscation mappings for related keys
+OBFUSCATE_NO_MAP = ObfuscateRule()
 OBFUSCATE_DEVICE_ID_MAP = ObfuscateMap({})
 OBFUSCATE_HOST_MAP = ObfuscateMap({})
 OBFUSCATE_USERID_MAP = ObfuscateUserIdMap({})
 OBFUSCATE_SERVER_MAP = ObfuscateServerMap({})
 OBFUSCATE_PORT_MAP = ObfuscateMap({})
 OBFUSCATE_KEY_MAP = ObfuscateMap({})
-OBFUSCATE_KEYS: dict[str, ObfuscateMap] = {
+OBFUSCATE_KEYS: dict[str, ObfuscateRule] = {
     # MEROSS PROTOCOL PAYLOADS keys
     # devices uuid(s) is better obscured since knowing this
     # could allow malicious attempts at the public Meross mqtt to
@@ -311,14 +331,16 @@ OBFUSCATE_KEYS: dict[str, ObfuscateMap] = {
     mc.KEY_KEY: OBFUSCATE_KEY_MAP,
     #
     # MEROSS CLOUD HTTP API KEYS
-    mc.KEY_USERID_: OBFUSCATE_USERID_MAP,
-    mc.KEY_EMAIL: ObfuscateMap({}),
-    # mc.KEY_KEY: OBFUSCATE_KEY_MAP,
-    # mc.KEY_TOKEN: ObfuscateMap({}),
-    mc.KEY_CLUSTER: ObfuscateMap({}),
-    mc.KEY_DOMAIN: OBFUSCATE_SERVER_MAP,
-    mc.KEY_RESERVEDDOMAIN: OBFUSCATE_SERVER_MAP,
-    mc.KEY_MQTTDOMAIN: OBFUSCATE_SERVER_MAP,
+    mc.KEY_USERID_: OBFUSCATE_USERID_MAP,  # MerossCloudCredentials
+    mc.KEY_EMAIL: ObfuscateMap({}),  # MerossCloudCredentials
+    # mc.KEY_KEY: OBFUSCATE_KEY_MAP,# MerossCloudCredentials
+    # mc.KEY_TOKEN: ObfuscateMap({}),# MerossCloudCredentials
+    mc.KEY_DOMAIN: OBFUSCATE_SERVER_MAP,  # MerossCloudCredentials and DeviceInfoType
+    mc.KEY_MQTTDOMAIN: OBFUSCATE_SERVER_MAP,  # MerossCloudCredentials
+    mc.KEY_CLUSTER: ObfuscateMap({}),  # DeviceInfoType
+    mc.KEY_RESERVEDDOMAIN: OBFUSCATE_SERVER_MAP,  # DeviceInfoType
+    mc.KEY_PARAMS: OBFUSCATE_NO_MAP,  # used in cloudapi POST request
+    "Authorization": OBFUSCATE_NO_MAP,  # used in cloudapi POST headers
     # subdevice(s) ids are hardly sensitive since they
     # cannot be accessed over the api without knowing the uuid
     # of the hub device (which is obfuscated indeed). Masking
@@ -331,6 +353,7 @@ OBFUSCATE_KEYS: dict[str, ObfuscateMap] = {
     CONF_HOST: OBFUSCATE_HOST_MAP,
     # CONF_KEY: OBFUSCATE_KEY_MAP,
     CONF_CLOUD_KEY: OBFUSCATE_KEY_MAP,
+    CONF_PASSWORD: OBFUSCATE_NO_MAP,
     #
     # MerossCloudProfile keys
     "appId": ObfuscateMap({}),
@@ -1262,3 +1285,24 @@ class ApiProfile(ConfigEntryManager):
                 self.obfuscated_device_id(device_id),
                 header[mc.KEY_MESSAGEID],
             )
+
+
+class CloudApiClient(cloudapi.CloudApiClient, Loggable):
+    """
+    A specialized cloudapi.CloudApiClient providing meross_lan style logging
+    interface to the underlying cloudapi services.
+    """
+
+    def __init__(
+        self,
+        manager: ConfigEntryManager,
+        credentials: cloudapi.MerossCloudCredentials | None = None,
+    ):
+        Loggable.__init__(self, "", logger=manager)
+        cloudapi.CloudApiClient.__init__(
+            self,
+            credentials=credentials,
+            session=async_get_clientsession(ApiProfile.hass),
+            logger=self,  # type: ignore (Loggable almost duck-compatible with logging.Logger)
+            obfuscate_func=manager.obfuscated_payload,
+        )

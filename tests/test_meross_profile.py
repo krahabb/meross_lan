@@ -13,24 +13,21 @@ from . import const as tc, helpers
 
 
 async def test_cloudapi(hass, cloudapi_mock: helpers.CloudApiMocker):
-    clientsession = async_get_clientsession(hass)
-
-    credentials = await cloudapi.async_cloudapi_signin(
-        tc.MOCK_PROFILE_EMAIL, tc.MOCK_PROFILE_PASSWORD, session=clientsession
+    cloudapiclient = cloudapi.CloudApiClient(session=async_get_clientsession(hass))
+    credentials = await cloudapiclient.async_signin(
+        tc.MOCK_PROFILE_EMAIL, tc.MOCK_PROFILE_PASSWORD
     )
     assert credentials == tc.MOCK_PROFILE_CREDENTIALS_SIGNIN
 
-    result = await cloudapi.async_cloudapi_device_devlist(credentials, clientsession)
+    result = await cloudapiclient.async_device_devlist()
     assert result == tc.MOCK_PROFILE_CLOUDAPI_DEVLIST
 
-    result = await cloudapi.async_cloudapi_hub_getsubdevices(
-        credentials, tc.MOCK_PROFILE_MSH300_UUID, clientsession
-    )
+    result = await cloudapiclient.async_hub_getsubdevices(tc.MOCK_PROFILE_MSH300_UUID)
     assert (
         result == tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT[tc.MOCK_PROFILE_MSH300_UUID]
     )
 
-    result = await cloudapi.async_cloudapi_logout(credentials, clientsession)
+    await cloudapiclient.async_logout()
 
 
 async def test_meross_profile(

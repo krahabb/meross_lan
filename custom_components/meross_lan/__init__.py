@@ -30,11 +30,11 @@ from .merossclient import (
     MerossDeviceDescriptor,
     MerossPushReply,
     MerossRequest,
+    cloudapi,
     const as mc,
     get_default_payload,
     json_loads,
 )
-from .merossclient.cloudapi import async_cloudapi_logout_safe
 from .merossclient.httpclient import MerossHttpClient
 
 if typing.TYPE_CHECKING:
@@ -605,7 +605,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
             # this could happen when we add profile entries
             # after boot
             api.profiles[profile_id] = None
-        profile = MerossCloudProfile(config_entry)
+        profile = MerossCloudProfile(profile_id, config_entry)
         try:
             await profile.async_start()
             await profile.async_setup_entry(hass, config_entry)
@@ -664,18 +664,11 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
     if unique_id[0] == "profile":
         profile_id = unique_id[1]
         ApiProfile.profiles.pop(profile_id)
+        await MerossCloudProfileStore(profile_id).async_remove()
         credentials: MerossCloudCredentials = entry.data  # type: ignore
-        store = MerossCloudProfileStore(profile_id)
-        if data := await store.async_load():
-            # check if the (credentials) token has not expired
-            if data.get(mc.KEY_TOKEN) == credentials[mc.KEY_TOKEN]:
-                await async_cloudapi_logout_safe(
-                    credentials, async_get_clientsession(hass)
-                )
-        else:
-            # consider the token not expired
-            await async_cloudapi_logout_safe(credentials, async_get_clientsession(hass))
-        await store.async_remove()
+        await cloudapi.CloudApiClient(
+            credentials=credentials, session=async_get_clientsession(hass)
+        ).async_logout_safe()
         return
 
     ApiProfile.devices.pop(unique_id[0])

@@ -30,6 +30,7 @@ from .const import (
 )
 from .helpers import (
     ApiProfile,
+    CloudApiClient,
     ConfigEntriesHelper,
     Loggable,
     datetime_from_epoch,
@@ -50,15 +51,7 @@ from .merossclient import (
     get_message_uuid,
     get_replykey,
 )
-from .merossclient.cloudapi import (
-    APISTATUS_TOKEN_ERRORS,
-    CloudApiError,
-    async_cloudapi_device_devlist,
-    async_cloudapi_device_latestversion,
-    async_cloudapi_hub_getsubdevices,
-    async_cloudapi_logout,
-    async_cloudapi_signin,
-)
+from .merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
 from .merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
 from .repairs import IssueSeverity, create_issue, remove_issue
 from .sensor import MLSensor
@@ -928,11 +921,12 @@ MerossMQTTConnection.SESSION_HANDLERS = {
 
 class MerossCloudProfileStoreType(typing.TypedDict):
     appId: str
+    # TODO credentials: typing.NotRequired[MerossCloudCredentials]
     deviceInfo: DeviceInfoDictType
     deviceInfoTime: float
     latestVersion: list[LatestVersionType]
     latestVersionTime: float
-    token: str | None
+    token: str | None  # TODO remove
     tokenRequestTime: float
 
 
@@ -965,15 +959,25 @@ class MerossCloudProfile(ApiProfile):
     _data: MerossCloudProfileStoreType
 
     __slots__ = (
+        "apiclient",
         "_data",
         "_store",
         "_unsub_polling_query_device_info",
         "_device_info_time",
     )
 
-    def __init__(self, config_entry: ConfigEntry):
-        super().__init__(config_entry.data[mc.KEY_USERID_], config_entry)
-        self._store = MerossCloudProfileStore(self.id)
+    def __init__(self, profile_id: str, config_entry: ConfigEntry):
+        ApiProfile.__init__(self, profile_id, config_entry)
+        # state of the art for credentials is that they're mixed in
+        # into the config_entry.data but this is prone to issues and confusing
+        # so we 'might' decide to move them to a dict valued key in configentry.data
+        # or completely remove and store them in storage. Whatever
+        # we might desire compatibility between storage formats with previous versions
+        # so we're putting the migration code in 5.0.0 but still not going
+        # to change the version(s) in storage/config. At the moment I'm still very confused
+        # and opting to keep the credentials where they are embedded in ConfigEntry
+        self.apiclient = CloudApiClient(self, self.config)
+        self._store = MerossCloudProfileStore(profile_id)
         self._unsub_polling_query_device_info: asyncio.TimerHandle | None = None
 
     async def async_start(self):
@@ -1001,24 +1005,24 @@ class MerossCloudProfile(ApiProfile):
             if self.KEY_TOKEN_REQUEST_TIME not in data:
                 data[self.KEY_TOKEN_REQUEST_TIME] = 0.0
 
-            if mc.KEY_TOKEN not in data:
+            if not data.get(mc.KEY_TOKEN):
                 # the token would be auto-refreshed when needed in
                 # _async_token_manager but we'd eventually need
                 # to just setup the issue registry in case we're
                 # not configured to automatically refresh
+                self.apiclient.credentials = None
                 await self._async_token_missing(True)
         else:
             self._device_info_time = 0.0
-            data: MerossCloudProfileStoreType | None = {
+            self._data: MerossCloudProfileStoreType = {
                 self.KEY_APP_ID: generate_app_id(),
-                mc.KEY_TOKEN: self.config[mc.KEY_TOKEN],
+                mc.KEY_TOKEN: self.config.get(mc.KEY_TOKEN),
                 self.KEY_DEVICE_INFO: {},
                 self.KEY_DEVICE_INFO_TIME: 0.0,
                 self.KEY_LATEST_VERSION: [],
                 self.KEY_LATEST_VERSION_TIME: 0.0,
                 self.KEY_TOKEN_REQUEST_TIME: 0.0,
             }
-            self._data = data
 
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
@@ -1101,8 +1105,8 @@ class MerossCloudProfile(ApiProfile):
         return self._data[self.KEY_APP_ID]
 
     @property
-    def token(self):
-        return self._data.get(mc.KEY_TOKEN)
+    def token_is_valid(self):
+        return bool(self._data.get(mc.KEY_TOKEN))
 
     @property
     def userid(self):
@@ -1216,48 +1220,37 @@ class MerossCloudProfile(ApiProfile):
 
     async def async_update_credentials(self, credentials: MerossCloudCredentials):
         with self.exception_warning("async_update_credentials"):
-            assert self.id == credentials[mc.KEY_USERID_]
-            assert self.key == credentials[mc.KEY_KEY]
-            token = self._data.get(mc.KEY_TOKEN)
-            if token != credentials[mc.KEY_TOKEN]:
+            remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED, self.id)
+            curr_credentials = self.apiclient.credentials
+            if not curr_credentials or (
+                curr_credentials[mc.KEY_TOKEN] != credentials[mc.KEY_TOKEN]
+            ):
                 self.log(self.DEBUG, "Updating credentials with new token")
-                if token:
-                    # discard old one to play it nice but token might be expired
-                    with self.exception_warning("async_cloudapi_logout"):
-                        await async_cloudapi_logout(
-                            self.config,
-                            async_get_clientsession(ApiProfile.hass),
-                            self,  # type: ignore (self almost duck-compatible with logging.Logger)
-                        )
-                else:
-                    remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED, self.id)
-
+                if curr_credentials:
+                    await self.apiclient.async_logout_safe()
+                self.apiclient.credentials = credentials
                 self._data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
                 self._schedule_save_store()
                 # the 'async_check_query_devices' will only occur if we didn't refresh
                 # on our polling schedule for whatever reason (invalid token -
                 # no connection - whatsoever) so, having a fresh token and likely
                 # good connectivity we're going to retrigger that
-                await self.async_check_query_device_info()
+                if self.need_query_device_info():
+                    await self.async_query_device_info()
 
     async def async_query_device_info(self):
-        async with self._async_token_manager("async_query_device_info") as token:
+        async with self._async_credentials_manager(
+            "async_query_device_info"
+        ) as credentials:
+            if not credentials:
+                return None
             self.log(
                 self.DEBUG,
                 "Querying device list - last query was at: %s",
                 datetime_from_epoch(self._device_info_time).isoformat(),
             )
-            if not token:
-                self.log(
-                    self.WARNING, "Querying device list cancelled: missing api token"
-                )
-                return None
             self._device_info_time = time()
-            device_info_new = await async_cloudapi_device_devlist(
-                self.config,
-                async_get_clientsession(ApiProfile.hass),
-                self,  # type: ignore (self almost duck-compatible with logging.Logger)
-            )
+            device_info_new = await self.apiclient.async_device_devlist()
             await self._process_device_info_new(device_info_new)
             self._data[self.KEY_DEVICE_INFO_TIME] = self._device_info_time
             self._schedule_save_store()
@@ -1275,7 +1268,7 @@ class MerossCloudProfile(ApiProfile):
             # when new updates are available: we're not going (yet) to manage the
             # effective update since we're not able to do any basic validation
             # of the whole process and it might be a bit 'dangerous'
-            await self.async_check_query_latest_version(self._device_info_time, token)
+            await self.async_check_query_latest_version(self._device_info_time)
             return device_info_new
 
         return None
@@ -1285,26 +1278,21 @@ class MerossCloudProfile(ApiProfile):
             time() - self._device_info_time
         ) > PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
 
-    async def async_check_query_device_info(self):
-        if self.need_query_device_info():
-            return await self.async_query_device_info()
-        return None
-
-    async def async_check_query_latest_version(self, epoch: float, token: str):
+    async def async_check_query_latest_version(self, epoch: float):
         if (
             self.config.get(CONF_CHECK_FIRMWARE_UPDATES)
             and (epoch - self._data[self.KEY_LATEST_VERSION_TIME])
             > PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
         ):
             self._data[self.KEY_LATEST_VERSION_TIME] = epoch
-            with self.exception_warning("async_check_query_latest_version"):
+            async with self._async_credentials_manager(
+                "async_check_query_latest_version"
+            ) as credentials:
+                if not credentials:
+                    return
                 self._data[
                     self.KEY_LATEST_VERSION
-                ] = await async_cloudapi_device_latestversion(
-                    self.config,
-                    async_get_clientsession(ApiProfile.hass),
-                    self,  # type: ignore (self almost duck-compatible with logging.Logger)
-                )
+                ] = await self.apiclient.async_device_latestversion()
                 self._schedule_save_store()
                 for device in ApiProfile.active_devices():
                     if latest_version := self.get_latest_version(device.descriptor):
@@ -1389,24 +1377,16 @@ class MerossCloudProfile(ApiProfile):
                 return None
             data[self.KEY_TOKEN_REQUEST_TIME] = _time
             self._schedule_save_store()
-            credentials = await async_cloudapi_signin(
-                config[CONF_EMAIL],
-                config[CONF_PASSWORD],
-                domain=config.get(mc.KEY_DOMAIN),
-                session=async_get_clientsession(self.hass),
-                logger=self,  # type: ignore (self almost duck-compatible with logging.Logger)
+            credentials = await self.apiclient.async_token_refresh(
+                config[CONF_PASSWORD], config
             )
-            profile_id = self.id
-            if profile_id != credentials[mc.KEY_USERID_]:
-                raise Exception("cloud_profile_mismatch")
-            token = credentials[mc.KEY_TOKEN]
             # set our (stored) key so the ConfigEntry update will find everything in place
             # and not trigger any side effects. No need to re-trigger _schedule_save_store
             # since it should still be pending...
-            data[mc.KEY_TOKEN] = token
-            self.log(self.INFO, "Cloud token was automatically refreshed")
+            data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
+            self.log(self.INFO, "Cloud api token was automatically refreshed")
             helper = ConfigEntriesHelper(self.hass)
-            profile_entry = helper.get_config_entry(f"profile.{profile_id}")
+            profile_entry = helper.get_config_entry(f"profile.{self.id}")
             if profile_entry:
                 # weird enough if this isnt true...
                 profile_config = dict(profile_entry.data)
@@ -1416,24 +1396,26 @@ class MerossCloudProfile(ApiProfile):
                     profile_entry,
                     data=profile_config,
                 )
-            return token
+            return credentials
 
         return None
 
     @asynccontextmanager
-    async def _async_token_manager(self, msg: str, *args, **kwargs):
-        data = self._data
+    async def _async_credentials_manager(self, msg: str, *args, **kwargs):
         try:
             # this is called every time we'd need a token to query the cloudapi
             # it just yields the current one or tries it's best to recover a fresh
             # token with a guard to avoid issuing too many requests...
-            if mc.KEY_TOKEN in data:
-                yield data[mc.KEY_TOKEN]
-            else:
-                yield await self._async_token_missing(False)
+            credentials = self.apiclient.credentials or (
+                await self._async_token_missing(False)
+            )
+            if not credentials:
+                self.log(self.WARNING, f"{msg} cancelled: missing cloudapi token")
+            yield credentials
         except CloudApiError as clouderror:
             if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
-                if data.pop(mc.KEY_TOKEN, None):  # type: ignore
+                self.apiclient.credentials = None
+                if self._data.pop(mc.KEY_TOKEN, None):  # type: ignore
                     await self._async_token_missing(True)
             self.log_exception(self.WARNING, clouderror, msg)
         except Exception as exception:
@@ -1454,19 +1436,17 @@ class MerossCloudProfile(ApiProfile):
                 )
 
     async def _async_query_subdevices(self, device_id: str):
-        async with self._async_token_manager("_async_query_subdevices") as token:
-            if not token:
-                self.log(
-                    self.WARNING, "Querying subdevice list cancelled: missing api token"
-                )
+        async with self._async_credentials_manager(
+            "_async_query_subdevices"
+        ) as credentials:
+            if not credentials:
                 return None
-            self.log(self.DEBUG, "Querying subdevice list")
-            return await async_cloudapi_hub_getsubdevices(
-                self.config,
-                device_id,
-                async_get_clientsession(ApiProfile.hass),
-                self,  # type: ignore (self almost duck-compatible with logging.Logger)
+            self.log(
+                self.DEBUG,
+                "Querying hub subdevice list (uuid:%s)",
+                self.obfuscated_device_id(device_id),
             )
+            return await self.apiclient.async_hub_getsubdevices(device_id)
         return None
 
     async def _process_device_info_new(
