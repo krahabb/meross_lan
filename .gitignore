@@ -10,3 +10,4 @@ coverage.xml
 traces
 .DS_Store
 config
+bin
