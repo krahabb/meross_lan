@@ -959,20 +959,15 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     device_config[mlc.CONF_PAYLOAD] = device_config_update[
                         mlc.CONF_PAYLOAD
                     ]
-                    if mlc.CONF_CLOUD_KEY in device_config:
-                        # cloud_key functionality has been superseeded by
-                        # meross cloud profiles and we could just remove it.
-                        # Actually, we leave it in place as a way to 'force/trigger'
-                        # the user to properly configure a meross cloud profile.
-                        # In fact it is checked when loading the device config entry
-                        # to see if a (profile) flow need to be started
-                        if descriptor_update.userId in ApiProfile.profiles:
-                            device_config.pop(mlc.CONF_CLOUD_KEY)
                     if device:
                         try:
                             await device.async_entry_option_update(user_input)
                         except Exception:
                             pass  # forgive any error
+
+                    # cleanup keys which might wrongly have been persisted
+                    device_config.pop(mlc.CONF_CLOUD_KEY, None)
+                    device_config.pop(mc.KEY_TIMEZONE, None)
                     # we're not following HA 'etiquette' and we're just updating the
                     # config_entry data with this dirty trick
                     hass = self.hass
