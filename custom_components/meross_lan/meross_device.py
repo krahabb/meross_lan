@@ -46,7 +46,6 @@ from .helpers import (
     ConfigEntryManager,
     EntityManager,
     EntityPollingStrategy,
-    Loggable,
     NamespaceHandler,
     PollingStrategy,
     datetime_from_epoch,
@@ -533,7 +532,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
 
     def get_logger_name(self) -> str:
-        return f"{self.descriptor.type}_{self.obfuscated_device_id(self.id)}"
+        return f"{self.descriptor.type}_{self.loggable_device_id(self.id)}"
 
     def _trace_opened(self, epoch: float):
         descr = self.descriptor
@@ -1313,7 +1312,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.log(
             self.DEBUG,
             "mqtt_attached to %s",
-            self.obfuscated_broker(mqtt_connection.broker),
+            self.loggable_broker(mqtt_connection.broker),
         )
         self._mqtt_connection = mqtt_connection
         self._topic_response = mqtt_connection.topic_response
@@ -1325,7 +1324,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.log(
             self.DEBUG,
             "mqtt_detached from %s",
-            self.obfuscated_broker(self._mqtt_connection.broker),
+            self.loggable_broker(self._mqtt_connection.broker),
         )
         if self._mqtt_connected:
             self.mqtt_disconnected()
@@ -1337,7 +1336,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.log(
             self.DEBUG,
             "mqtt_connected to %s",
-            self.obfuscated_broker(_mqtt_connection.broker),
+            self.loggable_broker(_mqtt_connection.broker),
         )
         self._mqtt_connected = _mqtt_connection
         if _mqtt_connection.allow_mqtt_publish:
@@ -1362,7 +1361,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.log(
             self.DEBUG,
             "mqtt_disconnected from %s",
-            self.obfuscated_broker(self._mqtt_connection.broker),
+            self.loggable_broker(self._mqtt_connection.broker),
         )
         self._mqtt_connected = self._mqtt_publish = self._mqtt_active = None
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
@@ -1383,7 +1382,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self.log(
                 self.DEBUG,
                 "linked to profile:%s",
-                self.obfuscated_profile_id(profile.id),
+                self.loggable_profile_id(profile.id),
             )
             if self._mqtt_connection:
                 self._mqtt_connection.detach(self)
@@ -1397,7 +1396,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.log(
             self.DEBUG,
             "unlinked from profile:%s",
-            self.obfuscated_profile_id(self._profile.id),
+            self.loggable_profile_id(self._profile.id),
         )
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
@@ -1535,7 +1534,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     self.WARNING,
                     "Protocol error: namespace:%s payload:%s",
                     namespace,
-                    str(self.obfuscated_payload(payload)),
+                    str(self.loggable_dict(payload)),
                     timeout=14400,
                 )
             return
@@ -1557,7 +1556,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             "Handler undefined for method:%s namespace:%s payload:%s",
             header[mc.KEY_METHOD],
             header[mc.KEY_NAMESPACE],
-            str(self.obfuscated_payload(payload)),
+            str(self.loggable_dict(payload)),
         )
 
     def _parse__generic(self, key: str, payload, entitykey: str | None = None):
@@ -2026,7 +2025,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 header[mc.KEY_METHOD],
                 header[mc.KEY_NAMESPACE],
                 header[mc.KEY_MESSAGEID],
-                json_dumps(self.obfuscated_payload(message)),
+                json_dumps(self.loggable_dict(message)),
             )
         elif self.isEnabledFor(self.DEBUG):
             header = message[mc.KEY_HEADER]

@@ -360,30 +360,34 @@ OBFUSCATE_KEYS: dict[str, ObfuscateRule] = {
 }
 
 
-def obfuscated_list_copy(data: list):
-    return [
-        obfuscated_dict_copy(value)
-        if isinstance(value, dict)
-        else obfuscated_list_copy(value)
-        if isinstance(value, list)
-        else value
-        for value in data
-    ]
+def obfuscated_list(data: list):
+    """List obfuscation: invokes type-variant obfuscation on the list items"""
+    return [obfuscated_any(value) for value in data]
 
 
-def obfuscated_dict_copy(
-    data: typing.Mapping[str, typing.Any]
-) -> dict[str, typing.Any]:
+def obfuscated_dict(data: typing.Mapping[str, typing.Any]) -> dict[str, typing.Any]:
+    """Dictionary obfuscation based on the set keys defined in OBFUSCATE_KEYS."""
     return {
-        key: obfuscated_dict_copy(value)
+        key: obfuscated_dict(value)
         if isinstance(value, dict)
-        else obfuscated_list_copy(value)
+        else obfuscated_list(value)
         if isinstance(value, list)
         else OBFUSCATE_KEYS[key].obfuscate(value)
         if key in OBFUSCATE_KEYS
         else value
         for key, value in data.items()
     }
+
+
+def obfuscated_any(value):
+    """Generalized type-variant obfuscation."""
+    return (
+        obfuscated_dict(value)
+        if isinstance(value, dict)
+        else obfuscated_list(value)
+        if isinstance(value, list)
+        else OBFUSCATE_NO_MAP.obfuscate(value)
+    )
 
 
 def schedule_async_callback(
@@ -964,11 +968,18 @@ class ConfigEntryManager(EntityManager):
         self._trace_open()
         return self._trace_future
 
-    def obfuscated_payload(self, payload: typing.Mapping[str, typing.Any]):
-        """Conditionally obfuscate the device_id to send to logging/tracing"""
-        return obfuscated_dict_copy(payload) if self.obfuscate else payload
+    def loggable_any(self, value):
+        """
+        Conditionally obfuscate any type to send to logging/tracing.
+        use the typed versions to increase efficiency/context
+        """
+        return obfuscated_any(value) if self.obfuscate else value
 
-    def obfuscated_broker(self, broker: HostAddress | str):
+    def loggable_dict(self, value: typing.Mapping[str, typing.Any]):
+        """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
+        return obfuscated_dict(value) if self.obfuscate else value
+
+    def loggable_broker(self, broker: HostAddress | str):
         """Conditionally obfuscate the connection_id (which is a broker address host:port) to send to logging/tracing"""
         return (
             OBFUSCATE_SERVER_MAP.obfuscate(str(broker))
@@ -976,7 +987,7 @@ class ConfigEntryManager(EntityManager):
             else str(broker)
         )
 
-    def obfuscated_device_id(self, device_id: str):
+    def loggable_device_id(self, device_id: str):
         """Conditionally obfuscate the device_id to send to logging/tracing"""
         return (
             OBFUSCATE_DEVICE_ID_MAP.obfuscate(device_id)
@@ -984,7 +995,7 @@ class ConfigEntryManager(EntityManager):
             else device_id
         )
 
-    def obfuscated_profile_id(self, profile_id: str):
+    def loggable_profile_id(self, profile_id: str):
         """Conditionally obfuscate the profile_id (which is the Meross account userId) to send to logging/tracing"""
         return (
             OBFUSCATE_USERID_MAP.obfuscate(profile_id) if self.obfuscate else profile_id
@@ -1071,7 +1082,7 @@ class ConfigEntryManager(EntityManager):
     ):
         try:
             assert self.trace_file
-            data = self.obfuscated_payload(payload)
+            data = self.loggable_dict(payload)
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch)),
                 rxtx,
@@ -1267,9 +1278,9 @@ class ApiProfile(ConfigEntryManager):
                 CONF_PROTOCOL_MQTT,
                 header[mc.KEY_METHOD],
                 header[mc.KEY_NAMESPACE],
-                self.obfuscated_device_id(device_id),
+                self.loggable_device_id(device_id),
                 header[mc.KEY_MESSAGEID],
-                json_dumps(obfuscated_dict_copy(message))
+                json_dumps(obfuscated_dict(message))
                 if self.obfuscate
                 else message.json(),
             )
@@ -1282,7 +1293,7 @@ class ApiProfile(ConfigEntryManager):
                 CONF_PROTOCOL_MQTT,
                 header[mc.KEY_METHOD],
                 header[mc.KEY_NAMESPACE],
-                self.obfuscated_device_id(device_id),
+                self.loggable_device_id(device_id),
                 header[mc.KEY_MESSAGEID],
             )
 
@@ -1304,5 +1315,5 @@ class CloudApiClient(cloudapi.CloudApiClient, Loggable):
             credentials=credentials,
             session=async_get_clientsession(ApiProfile.hass),
             logger=self,  # type: ignore (Loggable almost duck-compatible with logging.Logger)
-            obfuscate_func=manager.obfuscated_payload,
+            obfuscate_func=manager.loggable_any,
         )

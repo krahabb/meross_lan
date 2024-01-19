@@ -1,7 +1,7 @@
 import typing
 
 from . import MerossApi, const as mlc
-from .helpers import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict_copy
+from .helpers import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore
 
 if typing.TYPE_CHECKING:
@@ -24,7 +24,7 @@ async def async_get_config_entry_diagnostics(
 
     data = entry.data
     obfuscate = data.get(mlc.CONF_OBFUSCATE, True)
-    data = obfuscated_dict_copy(data) if obfuscate else dict(data)
+    data = obfuscated_dict(data) if obfuscate else dict(data)
 
     if unique_id == mlc.DOMAIN:
         # MQTT Hub entry
@@ -42,7 +42,7 @@ async def async_get_config_entry_diagnostics(
             except Exception:
                 store_data = None
         if obfuscate:
-            store_data = obfuscated_dict_copy(store_data or {})
+            store_data = obfuscated_dict(store_data or {})
             # the profile contains uuid as keys and obfuscation
             # is not smart enough (but OBFUSCATE_DEVICE_ID_MAP is already
             # filled with uuid(s) from the profile device_info(s) and

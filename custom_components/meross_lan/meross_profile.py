@@ -140,7 +140,7 @@ class ConnectionSensor(MLSensor):
     # interface: Loggable
     def configure_logger(self):
         self.logtag = (
-            f"{self.__class__.__name__}({self.manager.obfuscated_broker(self.id)})"
+            f"{self.__class__.__name__}({self.manager.loggable_broker(self.id)})"
         )
 
     # interface: MLSensor
@@ -225,7 +225,7 @@ class _MQTTTransaction:
             "Cancelling mqtt transaction on %s %s (uuid:%s messageId:%s)",
             self.method,
             self.namespace,
-            mqtt_connection.profile.obfuscated_device_id(self.device_id),
+            mqtt_connection.profile.loggable_device_id(self.device_id),
             self.messageid,
         )
         self.response_future.cancel()
@@ -299,7 +299,7 @@ class MQTTConnection(Loggable):
     # interface: Loggable
     def configure_logger(self):
         self.logtag = (
-            f"{self.__class__.__name__}({self.profile.obfuscated_broker(self.broker)})"
+            f"{self.__class__.__name__}({self.profile.loggable_broker(self.broker)})"
         )
 
     # interface: self
@@ -398,7 +398,7 @@ class MQTTConnection(Loggable):
                         "waiting for MQTT reply to %s %s (uuid:%s messageId:%s)",
                         request.method,
                         request.namespace,
-                        self.profile.obfuscated_device_id(device_id),
+                        self.profile.loggable_device_id(device_id),
                         request.messageid,
                     )
                     return None
@@ -412,7 +412,7 @@ class MQTTConnection(Loggable):
                 "async_mqtt_publish %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
-                self.profile.obfuscated_device_id(device_id),
+                self.profile.loggable_device_id(device_id),
                 request.messageid,
             )
             if transaction:
@@ -472,7 +472,7 @@ class MQTTConnection(Loggable):
                         self.log(
                             self.INFO,
                             "Device uuid:%s has been automatically re-linked to this profile",
-                            profile.obfuscated_device_id(device_id),
+                            profile.loggable_device_id(device_id),
                         )
                         # keep checking MQTT proto is allowed at the device level
                         if device._mqtt_connection == self:
@@ -486,7 +486,7 @@ class MQTTConnection(Loggable):
                         self.log(
                             self.WARNING,
                             "Device uuid:%s cannot be registered for MQTT handling on this profile",
-                            profile.obfuscated_device_id(device_id),
+                            profile.loggable_device_id(device_id),
                             timeout=14400,
                         )
                         return
@@ -494,7 +494,7 @@ class MQTTConnection(Loggable):
                 self.log(
                     self.DEBUG,
                     "Device uuid:%s not registered for MQTT handling. It is likely HTTP_ONLY",
-                    profile.obfuscated_device_id(device_id),
+                    profile.loggable_device_id(device_id),
                     timeout=14400,
                 )
                 return
@@ -523,7 +523,7 @@ class MQTTConnection(Loggable):
                 self.log(
                     self.INFO,
                     "Ignoring MQTT discovery for already configured uuid:%s (ConfigEntry is %s)",
-                    profile.obfuscated_device_id(device_id),
+                    profile.loggable_device_id(device_id),
                     "disabled"
                     if config_entry.disabled_by
                     else "ignored"
@@ -538,7 +538,7 @@ class MQTTConnection(Loggable):
                 self.log(
                     self.DEBUG,
                     "Ignoring MQTT discovery for uuid:%s (ConfigFlow is in progress)",
-                    profile.obfuscated_device_id(device_id),
+                    profile.loggable_device_id(device_id),
                     timeout=14400,  # type: ignore
                 )
                 return
@@ -548,7 +548,7 @@ class MQTTConnection(Loggable):
                 self.log(
                     self.WARNING,
                     "Discovery key error for uuid:%s",
-                    profile.obfuscated_device_id(device_id),
+                    profile.loggable_device_id(device_id),
                     timeout=300,
                 )
                 if key is not None:
@@ -564,7 +564,7 @@ class MQTTConnection(Loggable):
         self.log(
             self.DEBUG,
             "Initiating 1-step identification for uuid:%s",
-            self.profile.obfuscated_device_id(device_id),
+            self.profile.loggable_device_id(device_id),
         )
         topic_response = self.topic_response
         response = await self.async_mqtt_publish(
@@ -615,7 +615,7 @@ class MQTTConnection(Loggable):
                 self.DEBUG,
                 "Identification error('%s') for uuid:%s. Falling back to 2-steps procedure",
                 str(exception),
-                self.profile.obfuscated_device_id(device_id),
+                self.profile.loggable_device_id(device_id),
             )
             try:
                 response = check_message_strict(
@@ -667,7 +667,7 @@ class MQTTConnection(Loggable):
         self.mqttdiscovering.add(device_id)
         with self.exception_warning(
             "async_try_discovery (uuid:%s)",
-            self.profile.obfuscated_device_id(device_id),
+            self.profile.loggable_device_id(device_id),
             timeout=14400,
         ):
             result = await ApiProfile.hass.config_entries.flow.async_init(
@@ -889,7 +889,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                 "MQTT DROP %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
-                self.profile.obfuscated_device_id(device_id),
+                self.profile.loggable_device_id(device_id),
                 request.messageid,
             )
             return (self._MQTT_DROP, 0)
@@ -904,7 +904,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                 "MQTT QUEUE %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
-                self.profile.obfuscated_device_id(device_id),
+                self.profile.loggable_device_id(device_id),
                 request.messageid,
             )
             return (
@@ -1081,7 +1081,7 @@ class MerossCloudProfile(ApiProfile):
         await super().entry_update_listener(hass, config_entry)
 
     def get_logger_name(self) -> str:
-        return f"profile_{self.obfuscated_profile_id(self.id)}"
+        return f"profile_{self.loggable_profile_id(self.id)}"
 
     # interface: ApiProfile
     def attach_mqtt(self, device: MerossDevice):
@@ -1444,7 +1444,7 @@ class MerossCloudProfile(ApiProfile):
             self.log(
                 self.DEBUG,
                 "Querying hub subdevice list (uuid:%s)",
-                self.obfuscated_device_id(device_id),
+                self.loggable_device_id(device_id),
             )
             return await self.apiclient.async_hub_getsubdevices(device_id)
         return None
@@ -1497,7 +1497,7 @@ class MerossCloudProfile(ApiProfile):
             self.log(
                 self.DEBUG,
                 "The uuid:%s has been removed from the cloud profile",
-                self.obfuscated_device_id(device_id),
+                self.loggable_device_id(device_id),
             )
             device_info_dict.pop(device_id)
             if device := self.linkeddevices.get(device_id):
@@ -1557,7 +1557,7 @@ class MerossCloudProfile(ApiProfile):
                 self.log(
                     self.DEBUG,
                     "Trying/Initiating discovery for (new) uuid:%s",
-                    self.obfuscated_device_id(device_id),
+                    self.loggable_device_id(device_id),
                 )
                 if config_entries_helper.get_config_flow(device_id):
                     continue  # device configuration already progressing

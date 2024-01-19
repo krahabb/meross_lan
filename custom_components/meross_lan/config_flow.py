@@ -653,7 +653,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                                 "DHCP updated (ip:%s mac:%s) for uuid:%s",
                                 host,
                                 discovery_info.macaddress,
-                                api.obfuscated_device_id(entry_descriptor.uuid),
+                                api.loggable_device_id(entry_descriptor.uuid),
                             )
                         else:
                             api.log(
@@ -661,8 +661,8 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                                 "received a DHCP update (ip:%s mac:%s) but the new uuid:%s doesn't match the configured one (uuid:%s)",
                                 host,
                                 discovery_info.macaddress,
-                                api.obfuscated_device_id(_descriptor.uuid),
-                                api.obfuscated_device_id(entry_descriptor.uuid),
+                                api.loggable_device_id(_descriptor.uuid),
+                                api.loggable_device_id(entry_descriptor.uuid),
                             )
 
                     except Exception as error:
@@ -670,7 +670,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                             api.WARNING,
                             "DHCP update error %s trying to identify uuid:%s at (ip:%s mac:%s)",
                             str(error),
-                            api.obfuscated_device_id(entry_descriptor.uuid),
+                            api.loggable_device_id(entry_descriptor.uuid),
                             host,
                             discovery_info.macaddress,
                         )
@@ -1017,7 +1017,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                                     api.WARNING,
                                     "Device registry entry for %s (uuid:%s) was updated in order to fix it. The friendly name ('%s') has been lost and needs to be manually re-entered",
                                     descriptor_update.productmodel,
-                                    api.obfuscated_device_id(self._device_id),
+                                    api.loggable_device_id(self._device_id),
                                     _name_by_user,
                                 )
 
@@ -1027,7 +1027,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                                 "error (%s) while trying to repair device registry for %s (uuid:%s)",
                                 str(error),
                                 descriptor_update.productmodel,
-                                api.obfuscated_device_id(self._device_id),
+                                api.loggable_device_id(self._device_id),
                             )
 
                         await hass.config_entries.async_reload(
