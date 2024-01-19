@@ -1356,12 +1356,12 @@ class MerossCloudProfile(ApiProfile):
 
     async def _async_token_missing(self, should_raise_issue: bool):
         """
-        Called when the stored token is dropped (expired) or when needed
-        through _async_cloud_token_manager: try silently (re)login or raise an issue
+        Called when the stored token is dropped (expired) or when needed.
+        Tries silently (re)login or raises an issue.
         """
         with self.exception_warning("_async_token_missing"):
             config = self.config
-            if CONF_PASSWORD not in config:
+            if (CONF_PASSWORD not in config) or (config.get(mc.KEY_MFALOCKEXPIRE)):
                 if should_raise_issue:
                     create_issue(
                         mlc.ISSUE_CLOUD_TOKEN_EXPIRED,

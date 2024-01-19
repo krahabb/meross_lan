@@ -109,8 +109,10 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     _is_keyerror: bool = False
     _httpclient: MerossHttpClient | None = None
 
-    _errors: dict[str, str] | None = None
-    _conf_error: str | None = None
+    # instance properties managed with show_form_errorcontext
+    # and async_show_form_with_errors
+    _config_schema: dict
+    _errors: dict[str, str] | None
 
     @property
     def api(self):
@@ -123,42 +125,39 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     @contextmanager
     def show_form_errorcontext(self):
         try:
+            self._config_schema = {}
             self._errors = None
-            self._conf_error = None
             yield
         except cloudapi.CloudApiError as error:
             self._errors = {CONF_ERROR: FlowErrorKey.INVALID_AUTH.value}
-            self._conf_error = str(error)
+            self._config_schema = {
+                vol.Optional(CONF_ERROR, description={DESCR: str(error)}): str
+            }
         except FlowError as error:
             self._errors = {ERR_BASE: error.key.value}
-            self.conf_error = None
         except Exception as exception:
             self._errors = {CONF_ERROR: FlowErrorKey.CANNOT_CONNECT.value}
-            self._conf_error = str(exception) or exception.__class__.__name__
+            self._config_schema = {
+                vol.Optional(
+                    CONF_ERROR,
+                    description={DESCR: str(exception) or exception.__class__.__name__},
+                ): str
+            }
+
+    def get_schema_with_errors(self):
+        return self._config_schema
 
     def async_show_form_with_errors(
         self,
         step_id: str,
-        config_schema: dict | None = None,
+        *,
+        config_schema: dict = {},
         description_placeholders: typing.Mapping[str, str | None] | None = None,
     ):
-        """modularize errors managment: use together with flowerrorcontext"""
-        if self._conf_error:
-            if config_schema:
-                # recreate to put the CONF_ERROR at the top of the form
-                config_schema = {
-                    vol.Optional(
-                        CONF_ERROR, description={DESCR: self._conf_error}
-                    ): str,
-                } | config_schema
-            else:
-                config_schema = {
-                    vol.Optional(CONF_ERROR, description={DESCR: self._conf_error}): str
-                }
-
+        """modularize errors managment: use together with show_form_errorcontext and get_schema_with_errors"""
         return super().async_show_form(
             step_id=step_id,
-            data_schema=vol.Schema(config_schema),
+            data_schema=vol.Schema(self._config_schema | config_schema),
             errors=self._errors,
             description_placeholders=description_placeholders,
         )
@@ -191,7 +190,13 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 
     async def async_step_profile(self, user_input=None):
         """configure a Meross cloud profile"""
-        profile = None
+        # this flow step is really hybrid: it could come from
+        # a user flow deciding to create a profile or a user flow
+        # when a device key is needed. Or, it could be an OptionFlow
+        # for both of the same reasons: either a device key needed
+        # or a profile configuration. In any case, we 'force' a bit
+        # all of the flows logic and try to directly manage the
+        # underlying ConfigEntry in a sort of a crazy generalization
         profile_config = self.profile_config
 
         with self.show_form_errorcontext():
@@ -200,22 +205,45 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 api = self.api
                 # profile_config has both user set keys (updated through user_input)
                 # and MerossCloudCredentials keys (updated when logging into Meross http api)
+                # it also serves as a cache for the UI step and so carries some temporary
+                # keys which need to be removed before persisting to config entry
                 self.merge_userinput(profile_config, user_input, ())
-                # this flow step is really hybrid: it could come from
-                # a user flow deciding to create a profile or a user flow
-                # when a device key is needed. Or, it could be an OptionFlow
-                # for both of the same reasons: either a device key needed
-                # or a profile configuration. In any case, we 'force' a bit
-                # all of the flows logic and try to directly manage the
-                # underlying ConfigEntry in a sort of a crazy generalization
-                if mlc.CONF_PASSWORD in user_input:
+                if (mlc.CONF_PASSWORD in user_input) or (
+                    mlc.CONF_MFA_CODE in user_input
+                ):
+                    # this is setup conditionally, only when login is required in order to
+                    # initially create an account (either new profile or device.key_error)
+                    # or to manually refresh a token (it would be a profile OptionFlow).
+                    # In either cases we're prepared to (optionally) handle MFA.
+                    # On first try we're not setting that (we don't ask the user) but
+                    # if an MFA error arises we'll repeat the same step ('profile')
+                    # with only the mfa code request field (like if it was an optional sub-step)
                     cloudapiclient = CloudApiClient(api)
-                    credentials = await cloudapiclient.async_signin(
-                        profile_config[mlc.CONF_EMAIL],
-                        user_input[mlc.CONF_PASSWORD],
-                        region=profile_config.pop(mlc.CONF_CLOUD_REGION, None),  # type: ignore
-                        domain=profile_config.get(mc.KEY_DOMAIN),
-                    )
+                    try:
+                        credentials = await cloudapiclient.async_signin(
+                            profile_config[mlc.CONF_EMAIL],
+                            profile_config[mlc.CONF_PASSWORD],
+                            region=profile_config.get(mlc.CONF_CLOUD_REGION),
+                            domain=profile_config.get(mc.KEY_DOMAIN),
+                            mfa_code=profile_config.get(mlc.CONF_MFA_CODE),
+                        )
+                    except cloudapi.CloudApiMfaError as mfa_error:
+                        return self.async_show_form(
+                            step_id="profile",
+                            data_schema=vol.Schema(
+                                {
+                                    vol.Optional(
+                                        CONF_ERROR,
+                                        description={DESCR: str(mfa_error)},
+                                    ): str,
+                                    vol.Required(
+                                        mlc.CONF_MFA_CODE,
+                                    ): str,
+                                }
+                            ),
+                            errors={CONF_ERROR: FlowErrorKey.INVALID_AUTH.value},
+                            description_placeholders=self.profile_placeholders,
+                        )
                     if (
                         mc.KEY_USERID_ in profile_config
                         and credentials[mc.KEY_USERID_]
@@ -223,9 +251,13 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                     ):
                         await cloudapiclient.async_logout_safe()
                         raise FlowError(FlowErrorKey.CLOUD_PROFILE_MISMATCH)
-                    profile_config.update(credentials)  # type: ignore
-                    if not user_input.get(mlc.CONF_SAVE_PASSWORD):
+                    # pop eventual temporary params from config
+                    if not profile_config.get(mlc.CONF_SAVE_PASSWORD):
                         profile_config.pop(mlc.CONF_PASSWORD, None)
+                    profile_config.pop(mlc.CONF_CLOUD_REGION, None)  # type: ignore
+                    profile_config.pop(mlc.CONF_MFA_CODE, None),  # type: ignore
+                    # store the fresh credentials
+                    profile_config.update(credentials)  # type: ignore
 
                 if self._profile_entry:
                     # we were managing a profile OptionsFlow: fast save
@@ -244,7 +276,6 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 if profile_entry:
                     helper.config_entries.async_update_entry(
                         profile_entry,
-                        title=profile_config[mc.KEY_EMAIL],
                         data=profile_config,
                     )
                     if not self._is_keyerror:
@@ -305,7 +336,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 self.device_config[mlc.CONF_KEY] = profile_config[mc.KEY_KEY]
                 return await self.async_step_device()
 
-        config_schema = {}
+        config_schema = self.get_schema_with_errors()
         if self._profile_entry:
             # this is a profile OptionsFlow
             profile = ApiProfile.profiles.get(profile_config[mc.KEY_USERID_])
@@ -316,11 +347,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             config_schema[
                 vol.Optional(
                     mlc.CONF_CLOUD_REGION,
-                    description={
-                        DESCR: user_input.get(mlc.CONF_CLOUD_REGION)
-                        if user_input
-                        else None
-                    },
+                    description={DESCR: profile_config.get(mlc.CONF_CLOUD_REGION)},
                 )
             ] = selector(
                 {
@@ -354,6 +381,10 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                     },
                 )
             ] = bool
+            if profile_config.get(mc.KEY_MFALOCKEXPIRE):
+                # this is when we already have credentials (OptionsFlow then)
+                # and those are stating the login was an MFA
+                config_schema[vol.Optional(mlc.CONF_MFA_CODE)] = str
         config_schema[
             vol.Required(
                 mlc.CONF_ALLOW_MQTT_PUBLISH,
@@ -382,10 +413,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         ] = bool
         if self._profile_entry:
             self._setup_entitymanager_schema(config_schema, profile_config)
-
         return self.async_show_form_with_errors(
-            step_id="profile",
-            config_schema=config_schema,
+            "profile",
             description_placeholders=self.profile_placeholders,
         )
 
@@ -558,7 +587,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                     device_config[mlc.CONF_KEY] = profile.key
 
         return self.async_show_form_with_errors(
-            step_id="device",
+            "device",
             config_schema={
                 vol.Required(
                     mlc.CONF_HOST,
@@ -1017,7 +1046,8 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 _key = device_config.get(mlc.CONF_KEY)
 
         self.device_placeholders["host"] = _host or "MQTT"
-        config_schema = {
+        config_schema = self.get_schema_with_errors()
+        config_schema |= {
             vol.Optional(mlc.CONF_HOST, description={DESCR: _host}): str,
             vol.Optional(mlc.CONF_KEY, description={DESCR: _key}): str,
             vol.Required(
@@ -1040,8 +1070,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
 
         self._setup_entitymanager_schema(config_schema, device_config)
         return self.async_show_form_with_errors(
-            step_id="device",
-            config_schema=config_schema,
+            "device",
             description_placeholders=self.device_placeholders,
         )
 
@@ -1227,18 +1256,19 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     "domain": str(next(iter(self.device_descriptor.brokers), None))
                 }
 
-        config_schema = {
-            vol.Optional(
-                mc.KEY_DOMAIN, description={DESCR: bind_config[mc.KEY_DOMAIN]}
-            ): str,
-            vol.Optional(mc.KEY_KEY, description={DESCR: bind_config[mc.KEY_KEY]}): str,
-            vol.Optional(
-                mc.KEY_USERID_, description={DESCR: bind_config[mc.KEY_USERID_]}
-            ): cv.positive_int,
-        }
         return self.async_show_form_with_errors(
-            step_id="bind",
-            config_schema=config_schema,
+            "bind",
+            config_schema={
+                vol.Optional(
+                    mc.KEY_DOMAIN, description={DESCR: bind_config[mc.KEY_DOMAIN]}
+                ): str,
+                vol.Optional(
+                    mc.KEY_KEY, description={DESCR: bind_config[mc.KEY_KEY]}
+                ): str,
+                vol.Optional(
+                    mc.KEY_USERID_, description={DESCR: bind_config[mc.KEY_USERID_]}
+                ): cv.positive_int,
+            },
             description_placeholders=self.bind_placeholders,
         )
 
@@ -1272,21 +1302,21 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     )
                 return self.async_create_entry(data=None)  # type: ignore
 
-        config_schema = {
-            vol.Required(
-                KEY_ACTION,
-                default=KEY_ACTION_DISABLE,  # type: ignore
-            ): selector(
-                {
-                    "select": {
-                        "options": [KEY_ACTION_DISABLE, KEY_ACTION_DELETE],
-                        "translation_key": "unbind_post_action",
-                    }
-                }
-            )
-        }
         return self.async_show_form_with_errors(
-            step_id="unbind", config_schema=config_schema
+            "unbind",
+            config_schema={
+                vol.Required(
+                    KEY_ACTION,
+                    default=KEY_ACTION_DISABLE,  # type: ignore
+                ): selector(
+                    {
+                        "select": {
+                            "options": [KEY_ACTION_DISABLE, KEY_ACTION_DELETE],
+                            "translation_key": "unbind_post_action",
+                        }
+                    }
+                )
+            },
         )
 
     def finish_options_flow(

@@ -120,6 +120,7 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
 CONF_CLOUD_REGION: Final = "cloud_region"
 CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
+CONF_MFA_CODE: Final = "mfa_code"
 CONF_SAVE_PASSWORD: Final = "save_password"
 CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
 CONF_CHECK_FIRMWARE_UPDATES: Final = "check_firmware_updates"
