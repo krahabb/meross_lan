@@ -108,7 +108,8 @@
                     "check_firmware_updates": "Check firmware updates",
                     "create_diagnostic_entities": "Create diagnostic entities",
                     "error": "Error message",
-                    "cloud_region": "Account region"
+                    "cloud_region": "Account region",
+                    "mfa_code": "Authenticator code"
                 }
             },
             "finalize": {
@@ -170,7 +171,8 @@
                     "allow_mqtt_publish": "Allow cloud MQTT publish",
                     "check_firmware_updates": "Check firmware updates",
                     "create_diagnostic_entities": "Create diagnostic entities",
-                    "error": "Error message"
+                    "error": "Error message",
+                    "mfa_code": "Authenticator code"
                 }
             },
             "menu": {
@@ -273,6 +275,9 @@
                     "cannot_connect": "Unable to connect"
                 },
                 "step": {
+                    "confirm": {
+                        "title": "Time zone for {device_name} is not set or different from HomeAssistant default"
+                    }
                 }
             }
         }

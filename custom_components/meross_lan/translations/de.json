@@ -108,7 +108,8 @@
                     "check_firmware_updates": "Überprüfen Sie Firmware-Updates",
                     "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten",
                     "error": "Fehlermeldung",
-                    "cloud_region": "Kontoregion"
+                    "cloud_region": "Kontoregion",
+                    "mfa_code": "Authenticator-Code"
                 }
             },
             "finalize": {
@@ -170,7 +171,8 @@
                     "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
                     "check_firmware_updates": "Überprüfen Sie Firmware-Updates",
                     "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten",
-                    "error": "Fehlermeldung"
+                    "error": "Fehlermeldung",
+                    "mfa_code": "Authenticator-Code"
                 }
             },
             "menu": {
@@ -273,6 +275,9 @@
                     "cannot_connect": "Verbindung nicht möglich"
                 },
                 "step": {
+                    "confirm": {
+                        "title": "Die Zeitzone für {device_name} ist nicht eingestellt oder unterscheidet sich von der HomeAssistant-Standard"
+                    }
                 }
             }
         }

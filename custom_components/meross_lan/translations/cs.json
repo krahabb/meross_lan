@@ -108,7 +108,8 @@
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                     "create_diagnostic_entities": "Vytvářejte diagnostické entity",
                     "error": "Chybová zpráva",
-                    "cloud_region": "Region účtu"
+                    "cloud_region": "Region účtu",
+                    "mfa_code": "Autentizační kód"
                 }
             },
             "finalize": {
@@ -170,7 +171,8 @@
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
                     "create_diagnostic_entities": "Vytvářejte diagnostické entity",
-                    "error": "Chybová zpráva"
+                    "error": "Chybová zpráva",
+                    "mfa_code": "Autentizační kód"
                 }
             },
             "menu": {
@@ -273,6 +275,9 @@
                     "cannot_connect": "Pokus o připojení se nezdařil"
                 },
                 "step": {
+                    "confirm": {
+                        "title": "Časové pásmo pro {device_name} není nastaveno nebo se liší od výchozího nastavení HomeAssistant"
+                    }
                 }
             }
         }

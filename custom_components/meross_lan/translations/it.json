@@ -108,7 +108,8 @@
                     "check_firmware_updates": "Verifica aggiornamenti firmware",
                     "create_diagnostic_entities": "Crea entità disagnostiche",
                     "error": "Messaggio di errore",
-                    "cloud_region": "Regione dell'account"
+                    "cloud_region": "Regione dell'account",
+                    "mfa_code": "Codice autenticatore"
                 }
             },
             "finalize": {
@@ -170,7 +171,8 @@
                     "allow_mqtt_publish": "Consenti pubblicazione MQTT",
                     "check_firmware_updates": "Verifica aggiornamenti firmware",
                     "create_diagnostic_entities": "Crea entità disagnostiche",
-                    "error": "Messaggio di errore"
+                    "error": "Messaggio di errore",
+                    "mfa_code": "Codice autenticatore"
                 }
             },
             "menu": {
@@ -273,6 +275,9 @@
                     "cannot_connect": "Impossibile connettersi"
                 },
                 "step": {
+                    "confirm": {
+                        "title": "Il fuso orario per {device_name} non è impostato o è diverso dal predefinito di HomeAssistant"
+                    }
                 }
             }
         }

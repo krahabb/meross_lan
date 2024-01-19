@@ -108,7 +108,8 @@
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "create_diagnostic_entities": "診断エンティティの作成",
                     "error": "エラーメッセージ",
-                    "cloud_region": "アカウントの地域"
+                    "cloud_region": "アカウントの地域",
+                    "mfa_code": "認証コード"
                 }
             },
             "finalize": {
@@ -170,7 +171,8 @@
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
                     "create_diagnostic_entities": "診断エンティティの作成",
-                    "error": "エラーメッセージ"
+                    "error": "エラーメッセージ",
+                    "mfa_code": "認証コード"
                 }
             },
             "menu": {
@@ -273,6 +275,9 @@
                     "cannot_connect": "接続できません"
                 },
                 "step": {
+                    "confirm": {
+                        "title": "{device_name}のタイムゾーンが設定されていないか、HomeAssistantのデフォルトと異なります"
+                    }
                 }
             }
         }

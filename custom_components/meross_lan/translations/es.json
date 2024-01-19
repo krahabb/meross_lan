@@ -108,7 +108,8 @@
                     "check_firmware_updates": "Comprobar actualizaciones de firmware",
                     "create_diagnostic_entities": "Crear entidades de diagnóstico",
                     "error": "Mensaje de error",
-                    "cloud_region": "Región de la cuenta"
+                    "cloud_region": "Región de la cuenta",
+                    "mfa_code": "Código de autenticación"
                 }
             },
             "finalize": {
@@ -170,7 +171,8 @@
                     "allow_mqtt_publish": "Permitir la publicación de MQTT en la nube",
                     "check_firmware_updates": "Comprobar actualizaciones de firmware",
                     "create_diagnostic_entities": "Crear entidades de diagnóstico",
-                    "error": "Mensaje de error"
+                    "error": "Mensaje de error",
+                    "mfa_code": "Código de autenticación"
                 }
             },
             "menu": {
@@ -273,6 +275,9 @@
                     "cannot_connect": "No es posible conectarse"
                 },
                 "step": {
+                    "confirm": {
+                        "title": "La zona horaria para {device_name} no está establecida o es diferente de la predeterminada de HomeAssistant"
+                    }
                 }
             }
         }
