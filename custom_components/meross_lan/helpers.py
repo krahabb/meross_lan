@@ -361,8 +361,18 @@ OBFUSCATE_KEYS: dict[str, ObfuscateRule] = {
 
 
 def obfuscated_list(data: list):
-    """List obfuscation: invokes type-variant obfuscation on the list items"""
-    return [obfuscated_any(value) for value in data]
+    """
+    List obfuscation: recursevely invokes dict/list obfuscation on the list items.
+    Simple objects are not obfuscated.
+    """
+    return [
+        obfuscated_dict(value)
+        if isinstance(value, dict)
+        else obfuscated_list(value)
+        if isinstance(value, list)
+        else value
+        for value in data
+    ]
 
 
 def obfuscated_dict(data: typing.Mapping[str, typing.Any]) -> dict[str, typing.Any]:
@@ -380,7 +390,7 @@ def obfuscated_dict(data: typing.Mapping[str, typing.Any]) -> dict[str, typing.A
 
 
 def obfuscated_any(value):
-    """Generalized type-variant obfuscation."""
+    """Generalized type-variant obfuscation. Simple objects (not dict/list) are obfuscated."""
     return (
         obfuscated_dict(value)
         if isinstance(value, dict)
