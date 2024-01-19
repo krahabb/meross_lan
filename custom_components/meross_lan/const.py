@@ -131,7 +131,9 @@ class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
     """
     Meross cloud profile config_entry keys
     """
-
+    cloud_region: NotRequired[str]
+    mfa_code: NotRequired[bool]
+    """logged in with MFA"""
     password: NotRequired[str]
     """password of the Meross user account"""
     save_password: NotRequired[bool]

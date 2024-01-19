@@ -1361,7 +1361,7 @@ class MerossCloudProfile(ApiProfile):
         """
         with self.exception_warning("_async_token_missing"):
             config = self.config
-            if (CONF_PASSWORD not in config) or (config.get(mc.KEY_MFALOCKEXPIRE)):
+            if (mlc.CONF_PASSWORD not in config) or (config.get(mlc.CONF_MFA_CODE)):
                 if should_raise_issue:
                     create_issue(
                         mlc.ISSUE_CLOUD_TOKEN_EXPIRED,

@@ -207,7 +207,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 # and MerossCloudCredentials keys (updated when logging into Meross http api)
                 # it also serves as a cache for the UI step and so carries some temporary
                 # keys which need to be removed before persisting to config entry
-                self.merge_userinput(profile_config, user_input, ())
+                self.merge_userinput(profile_config, user_input, (mlc.CONF_CLOUD_REGION, mlc.CONF_MFA_CODE))
                 if (mlc.CONF_PASSWORD in user_input) or (
                     mlc.CONF_MFA_CODE in user_input
                 ):
@@ -222,10 +222,10 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                     try:
                         credentials = await cloudapiclient.async_signin(
                             profile_config[mlc.CONF_EMAIL],
-                            profile_config[mlc.CONF_PASSWORD],
-                            region=profile_config.get(mlc.CONF_CLOUD_REGION),
+                            user_input[mlc.CONF_PASSWORD],
+                            region=user_input.get(mlc.CONF_CLOUD_REGION),
                             domain=profile_config.get(mc.KEY_DOMAIN),
-                            mfa_code=profile_config.get(mlc.CONF_MFA_CODE),
+                            mfa_code=user_input.get(mlc.CONF_MFA_CODE),
                         )
                     except cloudapi.CloudApiMfaError as mfa_error:
                         return self.async_show_form(
@@ -251,11 +251,11 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                     ):
                         await cloudapiclient.async_logout_safe()
                         raise FlowError(FlowErrorKey.CLOUD_PROFILE_MISMATCH)
-                    # pop eventual temporary params from config
+                    # adjust eventual temporary params from config
                     if not profile_config.get(mlc.CONF_SAVE_PASSWORD):
                         profile_config.pop(mlc.CONF_PASSWORD, None)
-                    profile_config.pop(mlc.CONF_CLOUD_REGION, None)  # type: ignore
-                    profile_config.pop(mlc.CONF_MFA_CODE, None),  # type: ignore
+                    if mlc.CONF_MFA_CODE in profile_config:
+                        profile_config[mlc.CONF_MFA_CODE] = True
                     # store the fresh credentials
                     profile_config.update(credentials)  # type: ignore
 
@@ -381,7 +381,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                     },
                 )
             ] = bool
-            if profile_config.get(mc.KEY_MFALOCKEXPIRE):
+            if profile_config.get(mlc.CONF_MFA_CODE):
                 # this is when we already have credentials (OptionsFlow then)
                 # and those are stating the login was an MFA
                 config_schema[vol.Optional(mlc.CONF_MFA_CODE)] = str
