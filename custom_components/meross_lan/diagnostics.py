@@ -5,8 +5,7 @@ from .helpers import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict_copy
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore
 
 if typing.TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry, MappingProxyType
-    from .meross_profile import MerossCloudProfileStoreType
+    from homeassistant.config_entries import ConfigEntry
 
 
 async def async_get_device_diagnostics(
