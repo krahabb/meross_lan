@@ -9,6 +9,7 @@ from ..merossclient import const as mc
 from ..number import MtsSetPointNumber, MtsTemperatureNumber
 
 if typing.TYPE_CHECKING:
+    from ..binary_sensor import MLBinarySensor
     from ..meross_device_hub import MTS100SubDevice
 
 
@@ -68,16 +69,18 @@ class Mts100Climate(MtsClimate):
 
     manager: MTS100SubDevice
 
+    __slots__ = ("binary_sensor_window",)
+
     def __init__(self, manager: MTS100SubDevice):
         self._attr_extra_state_attributes = {}
         super().__init__(
             manager,
             manager.id,
-            manager.build_binary_sensor_window(),
             Mts100AdjustNumber,
             Mts100SetPointNumber,
             Mts100Schedule,
         )
+        self.binary_sensor_window = manager.build_binary_sensor_window()
 
     @property
     def scheduleBMode(self):
@@ -91,10 +94,18 @@ class Mts100Climate(MtsClimate):
             self._attr_extra_state_attributes.pop(mc.KEY_SCHEDULEBMODE)
 
     # interface: MtsClimate
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.binary_sensor_window: MLBinarySensor = None  # type: ignore
+
     def flush_state(self):
         if self._mts_onoff:
             self._attr_hvac_mode = MtsClimate.HVACMode.HEAT
-            self._attr_hvac_action = MtsClimate.HVACAction.HEATING if self._mts_active else MtsClimate.HVACAction.IDLE
+            self._attr_hvac_action = (
+                MtsClimate.HVACAction.HEATING
+                if self._mts_active
+                else MtsClimate.HVACAction.IDLE
+            )
         else:
             self._attr_hvac_mode = MtsClimate.HVACMode.OFF
             self._attr_hvac_action = MtsClimate.HVACAction.OFF

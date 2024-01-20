@@ -54,7 +54,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     """lookups used in MtsSetpointNumber to map a pretty icon to the setpoint entity"""
 
     manager: MerossDeviceBase
-    binary_sensor_window: Final[MLBinarySensor]
     number_adjust_temperature: Final[MtsTemperatureNumber]
     number_away_temperature: Final[MtsSetPointNumber]
     number_comfort_temperature: Final[MtsSetPointNumber]
@@ -88,7 +87,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_onoff",
         "_mts_adjust_offset",
         "_mts_adjusted_temperature",
-        "binary_sensor_window",
         "number_adjust_temperature",
         "number_comfort_temperature",
         "number_sleep_temperature",
@@ -101,7 +99,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self,
         manager: MerossDeviceBase,
         channel: object,
-        binary_sensor_window: MLBinarySensor,
         adjust_number_class: typing.Type[MtsTemperatureNumber],
         preset_number_class: typing.Type[MtsSetPointNumber],
         calendar_class: typing.Type[MtsSchedule],
@@ -119,7 +116,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_adjust_offset = 0
         self._mts_adjusted_temperature = {}
         super().__init__(manager, channel, None, None)
-        self.binary_sensor_window = binary_sensor_window
         self.number_adjust_temperature = adjust_number_class(self)  # type: ignore
         self.number_away_temperature = preset_number_class(self, MtsClimate.PRESET_AWAY)
         self.number_comfort_temperature = preset_number_class(
@@ -133,14 +129,13 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     # interface: MerossEntity
     async def async_shutdown(self):
+        await super().async_shutdown()
         self.select_tracked_sensor = None  # type: ignore
         self.schedule = None  # type: ignore
         self.number_sleep_temperature = None  # type: ignore
         self.number_comfort_temperature = None  # type: ignore
         self.number_away_temperature = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
-        self.binary_sensor_window = None  # type: ignore
-        await super().async_shutdown()
 
     @property
     def available(self):

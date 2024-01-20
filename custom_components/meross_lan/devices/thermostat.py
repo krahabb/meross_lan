@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import typing
 
+from ..binary_sensor import MLBinarySensor
 from ..climate import MtsClimate
 from ..helpers import PollingStrategy, SmartPollingStrategy
 from ..merossclient import const as mc
@@ -102,6 +103,22 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
             )
 
 
+class MtsWindowOpened(MLBinarySensor):
+    """specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe)."""
+
+    def __init__(self, climate: MtsClimate):
+        super().__init__(
+            climate.manager,
+            climate.channel,
+            mc.KEY_WINDOWOPENED,
+            MLBinarySensor.DeviceClass.WINDOW,
+        )
+
+    def _parse_windowOpened(self, payload: dict):
+        """{ "channel": 0, "status": 0, "detect": 1, "lmTime": 1642425303 }"""
+        self.update_onoff(payload[mc.KEY_STATUS])
+
+
 class ThermostatMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
@@ -123,23 +140,25 @@ class ThermostatMixin(
         ability = self.descriptor.ability
 
         for ns_key, ns_payload in payload.items():
-            if _init_key := self.CLIMATE_INITIALIZERS.get(ns_key):
+            if climate_class := self.CLIMATE_INITIALIZERS.get(ns_key):
                 for channel_payload in ns_payload:
                     channel = channel_payload[mc.KEY_CHANNEL]
-                    climate = _init_key(self, channel)
+                    climate = climate_class(self, channel)
                     if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE in ability:
                         MtsDeadZoneNumber(climate)
                     if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST in ability:
                         MtsFrostNumber(climate)
                     if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT in ability:
                         MtsOverheatNumber(climate)
+                    if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED in ability:
+                        MtsWindowOpened(climate)
                     self._polling_payload.append({mc.KEY_CHANNEL: channel})
 
         if channel_count := len(self._polling_payload):
             """
-            "Mode","SummerMode","WindowOpened" are carried in digest so we don't poll them
-            "Schedule" (and "ScheduleB"?) is pushed over mqtt
-            The rest are actually guesses
+            "Mode", "ModeB","SummerMode","WindowOpened" are carried in digest so we don't poll them
+            We're using PollingStrategy for namespaces actually confirmed (by trace/diagnstics)
+            to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
             """
             if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION in ability:
                 SmartPollingStrategy(
@@ -235,40 +254,27 @@ class ThermostatMixin(
         self._parse__array(mc.KEY_SUMMERMODE, payload[mc.KEY_SUMMERMODE])
 
     def _handle_Appliance_Control_Thermostat_WindowOpened(self, header, payload):
-        self._parse__array(mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED])
+        self._parse__array_key(
+            mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED], mc.KEY_WINDOWOPENED
+        )
 
     def _parse_thermostat(self, payload: dict):
         """
+        Parser for thermostat digest in NS_ALL
+        MTS200 typically carries:
         "thermostat": {
-            "mode": [{
-                "channel": 0,
-                "onoff": 1,
-                "mode": 3,
-                "state": 0,
-                "currentTemp": 210,
-                "heatTemp": 240,
-                "coolTemp": 210,
-                "ecoTemp": 120,
-                "manualTemp": 230,
-                "warning": 0,
-                "targetTemp": 205,
-                "min": 50,
-                "max": 350,
-                "lmTime": 1642425303
-            }],
-            "summerMode": [
-              {
-                "channel": 0,
-                "mode": 1
-              }
-            ],
-            "windowOpened": [{
-                "channel": 0,
-                "status": 0,
-                "detect": 1,
-                "lmTime": 1642425303
-            }]
+            "mode": [...],
+            "summerMode": [],
+            "windowOpened": []
+        }
+        MTS960 typically carries:
+        "thermostat": {
+            "modeB": [...]
         }
         """
         for key, value in payload.items():
-            self._parse__array(key, value)
+            match key:
+                case "windowOpened":
+                    self._parse__array_key(key, value, key)
+                case _:
+                    self._parse__array(key, value)

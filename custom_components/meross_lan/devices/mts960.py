@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing
 
-from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..helpers import reverse_lookup
@@ -25,7 +24,7 @@ class Mts960FakeSetPointNumber(MtsSetPointNumber):
 
 
 class Mts960DiagnosticSensor(MLSensor):
-    _attr_entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
+    _attr_entity_category = MLSensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, climate: Mts960Climate, entitykey: str | None):
         super().__init__(
@@ -100,9 +99,6 @@ class Mts960Climate(MtsClimate):
         super().__init__(
             manager,
             channel,
-            MLBinarySensor(
-                manager, channel, mc.KEY_WINDOWOPENED, MLBinarySensor.DeviceClass.WINDOW
-            ),
             MtsCalibrationNumber,
             Mts960FakeSetPointNumber,
             Mts960Schedule,
