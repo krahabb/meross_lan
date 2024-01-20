@@ -272,14 +272,16 @@ def get_default_payload(namespace: str) -> MerossPayloadType:
     if namespace in mc.PAYLOAD_GET:
         return mc.PAYLOAD_GET[namespace]
     split = namespace.split(".")
-    key_namespace = split[-1]
-    key_namespace = key_namespace[0].lower() + key_namespace[1:]
-    if split[1] == "Hub":
-        return {key_namespace: []}
-    elif split[2] == "Thermostat":
-        return {key_namespace: [{mc.KEY_CHANNEL: 0}]}
-    else:
-        return {key_namespace: {}}
+    key = split[-1]
+    key = key[0].lower() + key[1:]
+    match split:
+        case (_, "Hub", *args):
+            return {key: []}
+        case (_, "RollerShutter", *args):
+            return {key: []}
+        case (_, _, "Thermostat", *args):
+            return {key: [{mc.KEY_CHANNEL: 0}]}
+    return {key: {}}
 
 
 def get_default_arguments(namespace: str):
