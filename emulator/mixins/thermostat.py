@@ -56,7 +56,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     def _SET_Appliance_Control_Thermostat_Mode(self, header, payload):
         p_digest = self.descriptor.digest
         p_digest_mode_list = p_digest[mc.KEY_THERMOSTAT][mc.KEY_MODE]
-        p_digest_windowopened_list = {}
+        p_digest_windowopened_list = []
         p_mode_list = payload[mc.KEY_MODE]
         for p_mode in p_mode_list:
             channel = p_mode[mc.KEY_CHANNEL]
@@ -74,9 +74,9 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             if mode in MODE_KEY_MAP:
                 p_digest_mode[mc.KEY_TARGETTEMP] = p_digest_mode[MODE_KEY_MAP[mode]]
             else:  # we use this to trigger a windowOpened later in code
-                p_digest_windowopened_list = p_digest[mc.KEY_THERMOSTAT][
+                p_digest_windowopened_list = p_digest[mc.KEY_THERMOSTAT].get(
                     mc.KEY_WINDOWOPENED
-                ]
+                , [])
             if p_digest_mode[mc.KEY_ONOFF]:
                 p_digest_mode[mc.KEY_STATE] = (
                     1
