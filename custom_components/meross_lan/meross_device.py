@@ -1272,9 +1272,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 ns_all = get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self.host:
-                        if await self.async_http_request(*ns_all):
-                            return
-                    if self._mqtt_publish:
+                        await self.async_http_request(*ns_all)
+                    if self._mqtt_publish and not self._online:
                         await self.async_mqtt_request(*ns_all)
                 elif self.conf_protocol is CONF_PROTOCOL_MQTT:
                     if self._mqtt_publish:
@@ -1684,10 +1683,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 if not is_device_online(descr.system):
                     self._mqtt_active = None
                     self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
-            elif self._mqtt_connected and is_device_online(descr.system):
-                if self._mqtt_connected.broker == self.mqtt_broker:
-                    self._mqtt_active = self._mqtt_connected
+            elif (_mqtt_connected := self._mqtt_connected) and is_device_online(descr.system):
+                if _mqtt_connected.broker.host == self.mqtt_broker.host:
+                    self._mqtt_active = _mqtt_connected
                     self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
+                    # this code path actually only happens when we're working on HTTP so we
+                    # skip/optimize the checks (but still on the safe side)
+                    if self.curr_protocol is not self.pref_protocol:
+                        self._switch_protocol(self.pref_protocol)
 
         for _key, _value in descr.digest.items():
             if _parse := getattr(self, f"_parse_{_key}", None):
