@@ -34,14 +34,19 @@ class Mts200Climate(MtsClimate):
         mc.MTS200_MODE_AUTO: MtsClimate.PRESET_AUTO,
     }
     # right now we're only sure summermode == '1' is 'HEAT'
-    SUMMERMODE_TO_HVACMODE = {
+    MTS_SUMMERMODE_TO_HVAC_MODE = {
         None: MtsClimate.HVACMode.HEAT,  # mapping when no summerMode avail
         mc.MTS200_SUMMERMODE_COOL: MtsClimate.HVACMode.COOL,
         mc.MTS200_SUMMERMODE_HEAT: MtsClimate.HVACMode.HEAT,
     }
-    HVACMODE_TO_SUMMERMODE = {
+    HVAC_MODE_TO_MTS_SUMMERMODE = {
         MtsClimate.HVACMode.HEAT: mc.MTS200_SUMMERMODE_HEAT,
         MtsClimate.HVACMode.COOL: mc.MTS200_SUMMERMODE_COOL,
+    }
+    MTS_SUMMERMODE_TO_HVAC_ACTION: dict[int | None, MtsClimate.HVACAction] = {
+        None: MtsClimate.HVACAction.HEATING,  # mapping when no summerMode avail
+        mc.MTS200_SUMMERMODE_COOL: MtsClimate.HVACAction.COOLING,
+        mc.MTS200_SUMMERMODE_HEAT: MtsClimate.HVACAction.HEATING,
     }
     # when setting target temp we'll set an appropriate payload key
     # for the mts200 depending on current 'preset' mode.
@@ -93,19 +98,15 @@ class Mts200Climate(MtsClimate):
         await super().async_shutdown()
 
     def flush_state(self):
-        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
         if self._mts_onoff:
-            self._attr_hvac_mode = self.SUMMERMODE_TO_HVACMODE.get(
-                self._mts_summermode, MtsClimate.HVACMode.HEAT
+            self._attr_hvac_mode = self.MTS_SUMMERMODE_TO_HVAC_MODE.get(
+                self._mts_summermode
             )
-            if self._mts_active:
-                self._attr_hvac_action = (
-                    MtsClimate.HVACAction.HEATING
-                    if self._attr_hvac_mode is MtsClimate.HVACMode.HEAT
-                    else MtsClimate.HVACAction.COOLING
-                )
-            else:
-                self._attr_hvac_action = MtsClimate.HVACAction.IDLE
+            self._attr_hvac_action = (
+                self.MTS_SUMMERMODE_TO_HVAC_ACTION.get(self._mts_summermode)
+                if self._mts_active
+                else MtsClimate.HVACAction.IDLE
+            )
         else:
             self._attr_hvac_mode = MtsClimate.HVACMode.OFF
             self._attr_hvac_action = MtsClimate.HVACAction.OFF
@@ -119,7 +120,7 @@ class Mts200Climate(MtsClimate):
 
         if not (self._mts_summermode is None):
             # this is an indicator the device supports it
-            summermode = self.HVACMODE_TO_SUMMERMODE[hvac_mode]
+            summermode = self.HVAC_MODE_TO_MTS_SUMMERMODE[hvac_mode]
             if self._mts_summermode != summermode:
                 await self.async_request_summermode(summermode)
 
@@ -153,7 +154,10 @@ class Mts200Climate(MtsClimate):
             mc.METHOD_SET,
             {
                 mc.KEY_MODE: [
-                    {mc.KEY_CHANNEL: self.channel, key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale)}
+                    {
+                        mc.KEY_CHANNEL: self.channel,
+                        key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale),
+                    }
                 ]
             },
         ):
@@ -164,7 +168,6 @@ class Mts200Climate(MtsClimate):
                 # optimistic update
                 self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
                 self.flush_state()
-
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(

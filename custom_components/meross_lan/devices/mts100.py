@@ -92,22 +92,16 @@ class Mts100Climate(MtsClimate):
 
     # interface: MtsClimate
     def flush_state(self):
-        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)  # type: ignore
         if self._mts_onoff:
             self._attr_hvac_mode = MtsClimate.HVACMode.HEAT
-            self._attr_hvac_action = (
-                MtsClimate.HVACAction.HEATING
-                if self._mts_active
-                else MtsClimate.HVACAction.IDLE
-            )
+            self._attr_hvac_action = MtsClimate.HVACAction.HEATING if self._mts_active else MtsClimate.HVACAction.IDLE
         else:
             self._attr_hvac_mode = MtsClimate.HVACMode.OFF
             self._attr_hvac_action = MtsClimate.HVACAction.OFF
-
         super().flush_state()
 
     async def async_set_preset_mode(self, preset_mode: str):
-        mode = reverse_lookup(Mts100Climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
+        mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
         if mode is not None:
             if await self.manager.async_request_ack(
                 mc.NS_APPLIANCE_HUB_MTS100_MODE,
@@ -124,8 +118,8 @@ class Mts100Climate(MtsClimate):
         # and offsets them by the current temp adjust
         # we'll add 4 so it will eventually round down to the correct
         # internal setpoint
-        key = Mts100Climate.PRESET_TO_TEMPERATUREKEY_MAP[
-            self._attr_preset_mode or Mts100Climate.PRESET_CUSTOM
+        key = self.PRESET_TO_TEMPERATUREKEY_MAP[
+            self._attr_preset_mode or self.PRESET_CUSTOM
         ]
         # when sending a temp this way the device will automatically
         # exit auto mode if needed. Also it will round-down the value

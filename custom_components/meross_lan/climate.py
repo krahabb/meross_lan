@@ -33,14 +33,25 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     ATTR_TEMPERATURE: Final = climate.ATTR_TEMPERATURE
     TEMP_CELSIUS: Final = UnitOfTemperature.CELSIUS
 
-    HVACAction = climate.HVACAction
-    HVACMode = climate.HVACMode
+    HVACAction: Final = climate.HVACAction
+    HVACMode: Final = climate.HVACMode
 
     PRESET_CUSTOM: Final = "custom"
     PRESET_COMFORT: Final = "comfort"
     PRESET_SLEEP: Final = "sleep"
     PRESET_AWAY: Final = "away"
     PRESET_AUTO: Final = "auto"
+
+    MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
+    """maps device 'mode' value to the HA climate.preset_mode"""
+    PRESET_TO_TEMPERATUREKEY_MAP: ClassVar[dict[str, str]]
+    """maps the current HA preset mode to the name of temperature setpoint key"""
+    PRESET_TO_ICON_MAP: Final = {
+        PRESET_COMFORT: "mdi:sun-thermometer",
+        PRESET_SLEEP: "mdi:power-sleep",
+        PRESET_AWAY: "mdi:bag-checked",
+    }
+    """lookups used in MtsSetpointNumber to map a pretty icon to the setpoint entity"""
 
     manager: MerossDeviceBase
     binary_sensor_window: Final[MLBinarySensor]
@@ -51,36 +62,23 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     schedule: Final[MtsSchedule]
     select_tracked_sensor: Final[MtsTrackedSensor]
 
-    _attr_preset_modes: Final = [
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
+    _attr_preset_modes = [
         PRESET_CUSTOM,
         PRESET_COMFORT,
         PRESET_SLEEP,
         PRESET_AWAY,
         PRESET_AUTO,
     ]
-    _attr_supported_features: Final = (
+    _attr_supported_features = (
         climate.ClimateEntityFeature.PRESET_MODE
         | climate.ClimateEntityFeature.TARGET_TEMPERATURE
     )
-
-    MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int, str]]
-    """maps device 'mode' value to the HA climate.preset_mode"""
-    PRESET_TO_TEMPERATUREKEY_MAP: ClassVar[dict[str, str]]
-    """maps the current HA preset mode to the name of temperature setpoint key"""
-    MTS_HVAC_MODES: Final = [HVACMode.OFF, HVACMode.HEAT]
-    """support HVSC modes for the Mts"""
-    PRESET_TO_ICON_MAP: typing.Final = {
-        PRESET_COMFORT: "mdi:sun-thermometer",
-        PRESET_SLEEP: "mdi:power-sleep",
-        PRESET_AWAY: "mdi:bag-checked",
-    }
-    """lookups used in MtsSetpoinNumber to map a pretty icon to the setpoint entity"""
 
     __slots__ = (
         "_attr_current_temperature",
         "_attr_hvac_action",
         "_attr_hvac_mode",
-        "_attr_hvac_modes",
         "_attr_max_temp",
         "_attr_min_temp",
         "_attr_preset_mode",
@@ -111,7 +109,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._attr_current_temperature = None
         self._attr_hvac_action = None
         self._attr_hvac_mode = None
-        self._attr_hvac_modes = self.MTS_HVAC_MODES
         self._attr_max_temp = 35
         self._attr_min_temp = 5
         self._attr_preset_mode = None
@@ -145,15 +142,22 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.binary_sensor_window = None  # type: ignore
         await super().async_shutdown()
 
+    @property
+    def available(self):
+        return self._mts_mode is not None
+
     def set_unavailable(self):
         self._mts_active = None
         self._mts_mode = None
         self._mts_onoff = None
         self._mts_adjusted_temperature = {}
-        super().set_unavailable()
+        self._attr_preset_mode = None
+        self._attr_hvac_action = None
+        self._attr_hvac_mode = None
+        super().flush_state()
 
     def flush_state(self):
-        self._attr_state = self._attr_hvac_mode if self.manager.online else None
+        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         super().flush_state()
         self.schedule.flush_state()
 
