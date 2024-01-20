@@ -1,7 +1,7 @@
 """Constants for integration_blueprint tests."""
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import cloudapi, const as mc
 from custom_components.meross_lan.meross_profile import MerossCloudProfileStoreType
+from custom_components.meross_lan.merossclient import cloudapi, const as mc
 
 # Mock config data to be used across multiple tests
 MOCK_DEVICE_UUID = "01234567890123456789001122334455"

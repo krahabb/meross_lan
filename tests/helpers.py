@@ -15,19 +15,20 @@ from homeassistant import config_entries, const as hac
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowManager, FlowResult, FlowResultType
 from homeassistant.helpers import entity_registry
-from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry,  # type: ignore
-    async_fire_time_changed_exact,
-)
+from pytest_homeassistant_custom_component.common import MockConfigEntry  # type: ignore
+from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
     AiohttpClientMockResponse,
 )
 
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
-from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
 from custom_components.meross_lan.config_flow import ConfigFlow
-from custom_components.meross_lan.meross_profile import MerossCloudProfileStoreType, MerossMQTTConnection
+from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
+from custom_components.meross_lan.meross_profile import (
+    MerossCloudProfileStoreType,
+    MerossMQTTConnection,
+)
 from custom_components.meross_lan.merossclient import (
     HostAddress,
     cloudapi,
@@ -721,7 +722,10 @@ class CloudApiMocker(contextlib.AbstractContextManager):
             response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_UNEXISTING_ACCOUNT
         elif mc.KEY_PASSWORD not in request:
             response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_MISSING_PASSWORD
-        elif request[mc.KEY_PASSWORD] != hashlib.md5(tc.MOCK_PROFILE_PASSWORD.encode("utf8")).hexdigest():
+        elif (
+            request[mc.KEY_PASSWORD]
+            != hashlib.md5(tc.MOCK_PROFILE_PASSWORD.encode("utf8")).hexdigest()
+        ):
             response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_WRONG_CREDENTIALS
         else:
             response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_NO_ERROR
@@ -736,19 +740,17 @@ class CloudApiMocker(contextlib.AbstractContextManager):
         }
 
     def _v1_hub_getsubdevices(self, request: dict):
-        response = {}
         if mc.KEY_UUID not in request:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_GENERIC_ERROR
-            response[mc.KEY_INFO] = "Missing uuid in request"
+            return {mc.KEY_APISTATUS: -1, mc.KEY_INFO: "Missing uuid in request"}
         else:
             uuid = request[mc.KEY_UUID]
             if uuid not in tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT:
-                response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_GENERIC_ERROR
-                response[mc.KEY_INFO] = "uuid not registered"
+                return {mc.KEY_APISTATUS: -1, mc.KEY_INFO: "uuid not registered"}
             else:
-                response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_NO_ERROR
-                response[mc.KEY_DATA] = tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT[uuid]
-        return response
+                return {
+                    mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
+                    mc.KEY_DATA: tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT[uuid],
+                }
 
     def _v1_profile_logout(self, request: dict):
         assert len(request) == 0
