@@ -651,21 +651,25 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def check_device_timezone(self):
         """
-        Verifies the device timezone is set the same as HA local timezone.
+        Verifies the device timezone has the same utc offset as HA local timezone.
         This is expecially sensible when the device has 'Consumption' or
         schedules (calendar entities) in order to align device local time to
         what is expected in HA.
         """
-        device_tz = self.descriptor.timezone
-        if (not device_tz) or (device_tz != dt_util.now().tzname()):
-            create_issue(
-                mlc.ISSUE_DEVICE_TIMEZONE,
-                self.id,
-                severity=IssueSeverity.WARNING,
-                translation_placeholders={"device_name": self.name},
-            )
-        else:
-            remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
+        tz_name = self.descriptor.timezone
+        if tz_name:
+            ha_now = dt_util.now()
+            device_now = ha_now.astimezone(self.tz)
+            if ha_now.utcoffset() == device_now.utcoffset():
+                remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
+                return
+
+        create_issue(
+            mlc.ISSUE_DEVICE_TIMEZONE,
+            self.id,
+            severity=IssueSeverity.WARNING,
+            translation_placeholders={"device_name": self.name},
+        )
 
     def _get_device_info_name_key(self) -> str:
         return mc.KEY_DEVNAME
