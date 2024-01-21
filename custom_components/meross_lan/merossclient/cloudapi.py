@@ -197,13 +197,13 @@ def disable_logger():
     LOGGER = None
 
 
-def _obfuscate_nothing(value: typing.Mapping[str, typing.Any]) -> typing.Any:
+def _obfuscate_nothing(value: typing.Any) -> typing.Any:
     """placeholder obfuscation function: pass along to logger with no obfuscation"""
     return value
 
 
 _obfuscate_function_type = typing.Callable[
-    [typing.Mapping[str, typing.Any]], typing.Any
+    [typing.Any], typing.Any
 ]
 
 
@@ -279,9 +279,7 @@ async def async_cloudapi_post(
                 logging.DEBUG,
                 "async_cloudapi_post:RECEIVE url:%s response:%s",
                 url_or_path,
-                text_response
-                if obfuscate_func is _obfuscate_nothing
-                else "#obfuscated#",
+                obfuscate_func(text_response)
             )
 
         json_response = json.loads(text_response)
