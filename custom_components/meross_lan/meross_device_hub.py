@@ -769,7 +769,7 @@ class MTS100SubDevice(MerossSubDevice):
             climate._mts_onoff = p_togglex.get(mc.KEY_ONOFF)
 
         if isinstance(p_temperature := p_all.get(mc.KEY_TEMPERATURE), dict):
-            climate._parse_temperature(p_temperature)
+            climate._parse(p_temperature)
         else:
             climate.flush_state()
 
@@ -787,10 +787,10 @@ class MTS100SubDevice(MerossSubDevice):
         pass
 
     def _parse_schedule(self, p_schedule: dict):
-        self.climate.schedule._parse_schedule(p_schedule)
+        self.climate.schedule._parse(p_schedule)
 
     def _parse_temperature(self, p_temperature: dict):
-        self.climate._parse_temperature(p_temperature)
+        self.climate._parse(p_temperature)
 
     def _parse_togglex(self, p_togglex: dict):
         climate = self.climate

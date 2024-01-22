@@ -12,8 +12,8 @@ import logging
 import os
 from time import gmtime, localtime, strftime, time
 import typing
+from typing import Callable
 
-import aiohttp
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
@@ -51,8 +51,9 @@ from .merossclient import (
     cloudapi,
     const as mc,
     get_default_arguments,
-    get_namespacekey,
     json_dumps,
+    NAMESPACE_TO_KEY,
+    KEY_TO_NAMESPACE,
 )
 
 try:
@@ -496,6 +497,7 @@ class NamespaceHandler:
         "key_namespace",
         "lastrequest",
         "handler",
+        "entities",
     )
 
     def __init__(
@@ -507,12 +509,49 @@ class NamespaceHandler:
     ):
         self.device: typing.Final = device
         self.namespace: typing.Final = namespace
-        self.key_namespace = get_namespacekey(namespace)
-        self.handler: typing.Final = handler or getattr(
+        self.key_namespace = NAMESPACE_TO_KEY[namespace]
+        # this 'default' handler mapping might become obsolete
+        # as soon as we move our handlers to the entity register/unregister
+        # metaphore. As for now it is no harm
+        self.handler = handler or getattr(
             device, f"_handle_{namespace.replace('.', '_')}", device._handle_undefined
         )
         self.lastrequest = 0
+        self.entities: dict[object, Callable[[dict], None]] = {}
         device.namespace_handlers[namespace] = self
+
+    def register(
+        self, entity: MerossEntity, parse_func: Callable[[dict], None] | None = None
+    ):
+        self.handler = self._handle
+        self.entities[entity.channel] = parse_func or getattr(
+            entity, f"_parse_{self.key_namespace}", entity._parse_undefined
+        )
+
+    def unregister(self, entity: MerossEntity):
+        self.entities.pop(entity.channel, None)
+
+    def _handle(self, header, payload):
+        """splits and forwards the received NS payload to
+        the registered entity(es)"""
+        try:
+            for p_channel in payload[self.key_namespace]:
+                self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+        except Exception as exception:
+            self.device.log_exception(
+                self.device.DEBUG, exception, "NamespaceHandler._handle"
+            )
+
+    def _parse(self, payload):
+        """twin method for _handle (same job - different context).
+        Used when parsing digest(s) in NS_ALL"""
+        try:
+            for p_channel in payload:
+                self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+        except Exception as exception:
+            self.device.log_exception(
+                self.device.DEBUG, exception, "NamespaceHandler._parse"
+            )
 
 
 class PollingStrategy(NamespaceHandler):

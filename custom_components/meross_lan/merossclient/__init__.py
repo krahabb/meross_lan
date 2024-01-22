@@ -251,17 +251,45 @@ def build_message_reply(
     }
 
 
+class NameSpaceToKeyMap(dict):
+    """
+    Map a namespace to the main key carrying the asociated payload.
+    This map is incrementally built at runtime (so we don't waste time manually coding this)
+    whenever we use it
+    """
+    def __getitem__(self, namespace: str) -> str:
+        try:
+            return super().__getitem__(namespace)
+        except KeyError:
+            if namespace in mc.PAYLOAD_GET:
+                key = next(iter(mc.PAYLOAD_GET[namespace]))
+            else:
+                key = namespace.split(".")[-1]
+                key = key[0].lower() + key[1:]
+
+            NAMESPACE_TO_KEY[namespace] = key
+            KEY_TO_NAMESPACE[key] = namespace
+            return key
+
+NAMESPACE_TO_KEY = NameSpaceToKeyMap()
+
+class KeyToNameSpaceMap(dict):
+    """
+    Map a key (the main payload carrying key associated with a namespace) to
+    the associated namespace.
+    This map is incrementally built at runtime
+    whenever we use NAMESPACE_TO_KEY
+    """
+
+KEY_TO_NAMESPACE = KeyToNameSpaceMap()
+
 def get_namespacekey(namespace: str) -> str:
     """
     return the 'well known' key for the provided namespace
     which is used as the root key of the associated payload
     This is usually the camelCase of the last split of the namespace
     """
-    if namespace in mc.PAYLOAD_GET:
-        return next(iter(mc.PAYLOAD_GET[namespace]))
-    key = namespace.split(".")[-1]
-    return key[0].lower() + key[1:]
-
+    return NAMESPACE_TO_KEY[namespace]
 
 def get_default_payload(namespace: str) -> MerossPayloadType:
     """

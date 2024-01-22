@@ -493,17 +493,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.platforms[MLUpdate.PLATFORM] = None
         self.update_firmware = None
 
-        for _key, _payload in descriptor.digest.items():
+        for _key, _digest in descriptor.digest.items():
             # _init_xxxx methods provided by mixins
             _init_method_name = f"_init_{_key}"
             if _init := getattr(self, _init_method_name, None):
-                if isinstance(_payload, list):
-                    for p in _payload:
+                if isinstance(_digest, list):
+                    for _channel_digest in _digest:
                         with self.exception_warning(_init_method_name):
-                            _init(p)
+                            _init(_channel_digest)
                 else:
                     with self.exception_warning(_init_method_name):
-                        _init(_payload)
+                        _init(_digest)
 
     # interface: ConfigEntryManager
     @callback
@@ -723,6 +723,27 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         fw = self.descriptor.firmware
         return HostAddress(str(fw[mc.KEY_SERVER]), get_port_safe(fw, mc.KEY_PORT))
 
+    def get_device_datetime(self, epoch):
+        """
+        given the epoch (utc timestamp) returns the datetime
+        in device local timezone
+        """
+        return datetime_from_epoch(epoch, self.tz)
+
+    def register_parser(
+        self,
+        namespace: str,
+        entity: MerossEntity,
+        parse_func: typing.Callable[[dict], None] | None = None,
+    ):
+        if not (handler := self.namespace_handlers.get(namespace)):
+            handler = NamespaceHandler(self, namespace)
+        handler.register(entity, parse_func)
+
+    def unregister_parser(self, namespace: str, entity: MerossEntity):
+        if handler := self.namespace_handlers.get(namespace):
+            handler.unregister(entity)
+
     def start(self):
         # called by async_setup_entry after the entities have been registered
         # here we'll register mqtt listening (in case) and start polling after
@@ -822,13 +843,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             return await self.async_mqtt_request(*unbind)
         # else go with whatever transport: the device will reset it's configuration
         return await self.async_request(*unbind)
-
-    def get_device_datetime(self, epoch):
-        """
-        given the epoch (utc timestamp) returns the datetime
-        in device local timezone
-        """
-        return datetime_from_epoch(epoch, self.tz)
 
     async def async_mqtt_request_raw(
         self,
@@ -1687,7 +1701,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 if not is_device_online(descr.system):
                     self._mqtt_active = None
                     self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
-            elif (_mqtt_connected := self._mqtt_connected) and is_device_online(descr.system):
+            elif (_mqtt_connected := self._mqtt_connected) and is_device_online(
+                descr.system
+            ):
                 if _mqtt_connected.broker.host == self.mqtt_broker.host:
                     self._mqtt_active = _mqtt_connected
                     self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
@@ -1696,15 +1712,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if self.curr_protocol is not self.pref_protocol:
                         self._switch_protocol(self.pref_protocol)
 
-        for _key, _value in descr.digest.items():
+        for _key, _digest in descr.digest.items():
             if _parse := getattr(self, f"_parse_{_key}", None):
-                _parse(_value)
+                _parse(_digest)
         # older firmwares (MSS110 with 1.1.28) look like
         # carrying 'control' instead of 'digest'
         if isinstance(p_control := descr.all.get(mc.KEY_CONTROL), dict):
-            for _key, _value in p_control.items():
+            for _key, _control in p_control.items():
                 if _parse := getattr(self, f"_parse_{_key}", None):
-                    _parse(_value)
+                    _parse(_control)
 
         if self.needsave:
             # fw update or whatever might have modified the device abilities.

@@ -1,3 +1,6 @@
+"""
+    static constants symbols for Meross protocol symbols/semantics
+"""
 import collections
 import re
 

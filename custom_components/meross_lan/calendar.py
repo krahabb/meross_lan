@@ -646,7 +646,7 @@ class MtsSchedule(MLCalendar):
             # end for weekday
 
     # message handlers
-    def _parse_schedule(self, payload: dict):
+    def _parse(self, payload: dict):
         # the payload we receive from the device might be partial
         # if we're getting the PUSH in realtime since it only carries
         # the updated entries for the updated day.

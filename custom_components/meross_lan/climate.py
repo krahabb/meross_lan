@@ -246,3 +246,12 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     def device_scale(self):
         """historically set at 10. Overriden in mts960 to 100"""
         return mc.MTS_TEMP_SCALE
+
+    def _parse(self, p_temperature: dict):
+        """
+        This the handler for the default payload carrying the gross state of the climate entity.
+        It is dynamically binded to the self.namespace NamespaceHandler on __init__.
+        By convention every implementation used to define this as _parse_'key_namespace' but
+        it is not needed anymore since that was due to the legacy message handle/parse engine
+        """
+        raise NotImplementedError()

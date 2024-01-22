@@ -159,7 +159,7 @@ class Mts200Climate(MtsClimate):
         ):
             payload = response[mc.KEY_PAYLOAD]
             if mc.KEY_MODE in payload:
-                self._parse_mode(payload[mc.KEY_MODE][0])
+                self._parse(payload[mc.KEY_MODE][0])
             else:
                 # optimistic update
                 self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
@@ -212,7 +212,7 @@ class Mts200Climate(MtsClimate):
         # architecture is too different from current version one and
         # it would be a mess to merge branches afterway
 
-    def _parse_mode(self, payload: dict):
+    def _parse(self, payload: dict):
         """{
             "channel": 0,
             "onoff": 1,

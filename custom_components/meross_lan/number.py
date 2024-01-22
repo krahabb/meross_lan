@@ -226,20 +226,29 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
 
     def __init__(self, climate: MtsClimate, entitykey: str):
         super().__init__(climate, entitykey)
+        manager = self.manager
+        manager.register_parser(
+            self.namespace,
+            self,
+            self._parse,
+        )
         # preset entity platforms since these might be instantiated later
         from .switch import MtsConfigSwitch
-        self.manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
+        manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
         from .sensor import MLSensor
-        self.manager.platforms.setdefault(MLSensor.PLATFORM)
+        manager.platforms.setdefault(MLSensor.PLATFORM)
         self.sensor_warning = None
         self.switch = None
 
     async def async_shutdown(self):
+        self.manager.unregister_parser(
+            self.namespace, self
+        )
         self.switch = None
         self.sensor_warning = None
         await super().async_shutdown()
 
-    def _parse_value(self, payload: dict):
+    def _parse(self, payload: dict):
         """
         {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
         """
@@ -277,8 +286,9 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
 
 class MtsCalibrationNumber(MtsRichTemperatureNumber):
     """
-    adjust temperature readings for mts200 and mts960 or
-    whatever carries the Appliance.Control.Thermostat.Calibration
+    Adjust temperature readings for mts200 and mts960.
+    Manages Appliance.Control.Thermostat.Calibration:
+    {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
     """
 
     _attr_name = "Calibration"
@@ -295,10 +305,6 @@ class MtsCalibrationNumber(MtsRichTemperatureNumber):
     @property
     def native_step(self):
         return 0.1
-
-    def _parse_calibration(self, payload: dict):
-        """{"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}"""
-        self._parse_value(payload)
 
 
 class MtsSetPointNumber(MtsTemperatureNumber):
@@ -340,8 +346,6 @@ class MtsSetPointNumber(MtsTemperatureNumber):
             payload = response[mc.KEY_PAYLOAD]
             if key_namespace in payload:
                 # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)
-                getattr(self.climate, f"_parse_{key_namespace}")(
-                    payload[key_namespace][0]
-                )
+                self.climate._parse(payload[key_namespace][0])
 
         return response

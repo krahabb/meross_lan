@@ -5,7 +5,7 @@ import typing
 from ..binary_sensor import MLBinarySensor
 from ..climate import MtsClimate
 from ..helpers import PollingStrategy, SmartPollingStrategy
-from ..merossclient import const as mc
+from ..merossclient import KEY_TO_NAMESPACE, NAMESPACE_TO_KEY, const as mc
 from ..number import MtsRichTemperatureNumber
 from ..sensor import MLSensor
 from .mts200 import Mts200Climate
@@ -36,13 +36,11 @@ class MtsDeadZoneNumber(MtsRichTemperatureNumber):
     def native_step(self):
         return 0.1
 
-    def _parse_deadZone(self, payload: dict):
-        self._parse_value(payload)
-
 
 class MtsFrostNumber(MtsRichTemperatureNumber):
     """
-    adjust "frost": dunno what it is for
+    Manages Appliance.Control.Thermostat.Frost:
+    {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
     """
 
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST
@@ -58,13 +56,14 @@ class MtsFrostNumber(MtsRichTemperatureNumber):
     def native_step(self):
         return self.climate.target_temperature_step
 
-    def _parse_frost(self, payload: dict):
-        """{"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}"""
-        self._parse_value(payload)
-
 
 class MtsOverheatNumber(MtsRichTemperatureNumber):
-    """Configure overheat protection value"""
+    """
+    Configure overheat protection.
+    Manages Appliance.Control.Thermostat.Overheat:
+    {"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
+        "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
+    """
 
     _attr_name = "Overheat threshold"
 
@@ -93,10 +92,10 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
     def native_step(self):
         return 0.5
 
-    def _parse_overheat(self, payload: dict):
+    def _parse(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}"""
-        self._parse_value(payload)
+        super()._parse(payload)
         if mc.KEY_CURRENTTEMP in payload:
             self.sensor_external_temperature.update_state(
                 payload[mc.KEY_CURRENTTEMP] / self.device_scale
@@ -106,6 +105,8 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
 class MtsWindowOpened(MLBinarySensor):
     """specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe)."""
 
+    manager: ThermostatMixin
+
     def __init__(self, climate: MtsClimate):
         super().__init__(
             climate.manager,
@@ -113,6 +114,17 @@ class MtsWindowOpened(MLBinarySensor):
             mc.KEY_WINDOWOPENED,
             MLBinarySensor.DeviceClass.WINDOW,
         )
+        self.manager.register_parser(
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED,
+            self,
+            self._parse_windowOpened,
+        )
+
+    async def async_shutdown(self):
+        self.manager.unregister_parser(
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED, self
+        )
+        await super().async_shutdown()
 
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "detect": 1, "lmTime": 1642425303 }"""
@@ -132,133 +144,98 @@ class ThermostatMixin(
     breaking the mts200
     """
 
-    CLIMATE_INITIALIZERS = {mc.KEY_MODE: Mts200Climate, mc.KEY_MODEB: Mts960Climate}
+    CLIMATE_INITIALIZERS: dict[str, type[Mts200Climate | Mts960Climate]] = {
+        mc.KEY_MODE: Mts200Climate,
+        mc.KEY_MODEB: Mts960Climate,
+    }
+    """Core (climate) entities to initialize in _init_thermostat"""
+
+    OPTIONAL_NAMESPACES_INITIALIZERS = {
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+    }
+    """These namespaces handlers will forward message parsing to the climate entity"""
+
+    OPTIONAL_ENTITIES_INITIALIZERS: dict[
+        str, typing.Callable[[MtsClimate], typing.Any]
+    ] = {
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: MtsDeadZoneNumber,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: MtsFrostNumber,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: MtsOverheatNumber,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED: MtsWindowOpened,
+    }
+    """Additional entities (linked to the climate one) in case their ns is supported/available"""
+
+    POLLING_STRATEGY_INITIALIZERS = {
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: SmartPollingStrategy,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: SmartPollingStrategy,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: SmartPollingStrategy,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: PollingStrategy,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: PollingStrategy,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: PollingStrategy,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: PollingStrategy,
+    }
+    """
+    "Mode", "ModeB","SummerMode","WindowOpened" are carried in digest so we don't poll them
+    We're using PollingStrategy for namespaces actually confirmed (by trace/diagnostics)
+    to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
+    """
 
     # interface: self
-    def _init_thermostat(self, payload: dict):
-        self._polling_payload = []
+    def _init_thermostat(self, digest: dict):
         ability = self.descriptor.ability
+        # we (might) have an issue here since the entities need to be initialized after
+        # the (eventual) namespace polling strategy has been set in order for
+        # those entities to correctly register the _parse callback.
+        # So we're initializing the polling without knowing the actual channel number
+        # Anyway, since we're passing in the ref to self._polling_payload it will
+        # correctly be updated while creating the entities for the channel. At the
+        # moment the only 'bug' could be the wrong item_count (and so the estimated
+        # response payload size used to actually determine how to pack requests)
+        # It shouldn't really be criticcal anyway since there are a lot of protections
+        channel_count = 1
+        self._polling_payload = []
+        for ns, polling_strategy_class in self.POLLING_STRATEGY_INITIALIZERS.items():
+            if ns in ability:
+                polling_strategy_class(
+                    self,
+                    ns,
+                    payload={NAMESPACE_TO_KEY[ns]: self._polling_payload},
+                    item_count=channel_count,
+                )
 
-        for ns_key, ns_payload in payload.items():
+        for ns_key, ns_digest in digest.items():
             if climate_class := self.CLIMATE_INITIALIZERS.get(ns_key):
-                for channel_payload in ns_payload:
+                for channel_payload in ns_digest:
                     channel = channel_payload[mc.KEY_CHANNEL]
                     climate = climate_class(self, channel)
-                    if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE in ability:
-                        MtsDeadZoneNumber(climate)
-                    if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST in ability:
-                        MtsFrostNumber(climate)
-                    if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT in ability:
-                        MtsOverheatNumber(climate)
-                    if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED in ability:
-                        MtsWindowOpened(climate)
+                    self.register_parser(
+                        climate.namespace,
+                        climate,
+                        climate._parse,
+                    )
+                    schedule = climate.schedule
+                    # TODO: the scheduleB parsing might be different than 'classic' schedule
+                    self.register_parser(
+                        schedule.namespace,
+                        schedule,
+                        schedule._parse,
+                    )
+                    for ns in self.OPTIONAL_NAMESPACES_INITIALIZERS:
+                        if ns in ability:
+                            self.register_parser(
+                                ns,
+                                climate,
+                            )
+
+                    for ns, entity_class in self.OPTIONAL_ENTITIES_INITIALIZERS.items():
+                        if ns in ability:
+                            entity_class(climate)
+
                     self._polling_payload.append({mc.KEY_CHANNEL: channel})
 
-        if channel_count := len(self._polling_payload):
-            """
-            "Mode", "ModeB","SummerMode","WindowOpened" are carried in digest so we don't poll them
-            We're using PollingStrategy for namespaces actually confirmed (by trace/diagnstics)
-            to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
-            """
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION in ability:
-                SmartPollingStrategy(
-                    self,
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION,
-                    payload={mc.KEY_CALIBRATION: self._polling_payload},
-                    item_count=channel_count,
-                )
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE in ability:
-                SmartPollingStrategy(
-                    self,
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE,
-                    payload={mc.KEY_DEADZONE: self._polling_payload},
-                    item_count=channel_count,
-                )
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST in ability:
-                SmartPollingStrategy(
-                    self,
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST,
-                    payload={mc.KEY_FROST: self._polling_payload},
-                    item_count=channel_count,
-                )
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT in ability:
-                PollingStrategy(
-                    self,
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT,
-                    payload={mc.KEY_OVERHEAT: self._polling_payload},
-                    item_count=channel_count,
-                )
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE in ability:
-                PollingStrategy(
-                    self,
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE,
-                    payload={mc.KEY_SCHEDULE: self._polling_payload},
-                    item_count=channel_count,
-                )
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB in ability:
-                PollingStrategy(
-                    self,
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB,
-                    payload={mc.KEY_SCHEDULEB: self._polling_payload},
-                    item_count=channel_count,
-                )
-            if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR in ability:
-                PollingStrategy(
-                    self,
-                    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
-                    payload={mc.KEY_SENSOR: self._polling_payload},
-                    item_count=channel_count,
-                )
-
-    def _handle_Appliance_Control_Thermostat_Calibration(self, header, payload):
-        self._parse__array_key(
-            mc.KEY_CALIBRATION, payload[mc.KEY_CALIBRATION], mc.KEY_CALIBRATION
-        )
-
-    def _handle_Appliance_Control_Thermostat_DeadZone(self, header, payload):
-        self._parse__array_key(
-            mc.KEY_DEADZONE, payload[mc.KEY_DEADZONE], mc.KEY_DEADZONE
-        )
-
-    def _handle_Appliance_Control_Thermostat_Frost(self, header, payload):
-        self._parse__array_key(mc.KEY_FROST, payload[mc.KEY_FROST], mc.KEY_FROST)
-
-    def _handle_Appliance_Control_Thermostat_HoldAction(self, header, payload):
-        self._parse__array(mc.KEY_HOLDACTION, payload[mc.KEY_HOLDACTION])
-
-    def _handle_Appliance_Control_Thermostat_Mode(self, header, payload):
-        self._parse__array(mc.KEY_MODE, payload[mc.KEY_MODE])
-
-    def _handle_Appliance_Control_Thermostat_ModeB(self, header, payload):
-        self._parse__array(mc.KEY_MODEB, payload[mc.KEY_MODEB])
-
-    def _handle_Appliance_Control_Thermostat_Overheat(self, header, payload):
-        self._parse__array_key(
-            mc.KEY_OVERHEAT, payload[mc.KEY_OVERHEAT], mc.KEY_OVERHEAT
-        )
-
-    def _handle_Appliance_Control_Thermostat_Schedule(self, header, payload):
-        self._parse__array_key(
-            mc.KEY_SCHEDULE, payload[mc.KEY_SCHEDULE], mc.KEY_SCHEDULE
-        )
-
-    def _handle_Appliance_Control_Thermostat_ScheduleB(self, header, payload):
-        self._parse__array_key(
-            mc.KEY_SCHEDULEB, payload[mc.KEY_SCHEDULEB], mc.KEY_SCHEDULEB
-        )
-
-    def _handle_Appliance_Control_Thermostat_Sensor(self, header, payload):
-        self._parse__array(mc.KEY_SENSOR, payload[mc.KEY_SENSOR])
-
-    def _handle_Appliance_Control_Thermostat_SummerMode(self, header, payload):
-        self._parse__array(mc.KEY_SUMMERMODE, payload[mc.KEY_SUMMERMODE])
-
-    def _handle_Appliance_Control_Thermostat_WindowOpened(self, header, payload):
-        self._parse__array_key(
-            mc.KEY_WINDOWOPENED, payload[mc.KEY_WINDOWOPENED], mc.KEY_WINDOWOPENED
-        )
-
-    def _parse_thermostat(self, payload: dict):
+    def _parse_thermostat(self, digest: dict):
         """
         Parser for thermostat digest in NS_ALL
         MTS200 typically carries:
@@ -272,9 +249,5 @@ class ThermostatMixin(
             "modeB": [...]
         }
         """
-        for key, value in payload.items():
-            match key:
-                case "windowOpened":
-                    self._parse__array_key(key, value, key)
-                case _:
-                    self._parse__array(key, value)
+        for ns_key, ns_digest in digest.items():
+            self.namespace_handlers[KEY_TO_NAMESPACE[ns_key]]._parse(ns_digest)

@@ -133,7 +133,9 @@ class Mts960Climate(MtsClimate):
         mode = self.HVAC_MODE_TO_MTS_MODE[hvac_mode](self._mts_mode)
         if mode is None:
             # could (rarely?) return None if self._mts_mode is None and hvac_mode is AUTO
-            mode = mc.MTS960_MODE_SCHEDULE_HEAT  # guess we want heating as a baseline...
+            mode = (
+                mc.MTS960_MODE_SCHEDULE_HEAT
+            )  # guess we want heating as a baseline...
 
         if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
@@ -188,7 +190,7 @@ class Mts960Climate(MtsClimate):
         ):
             payload = response[mc.KEY_PAYLOAD]
             if mc.KEY_MODEB in payload:
-                self._parse_modeB(payload[mc.KEY_MODEB][0])
+                self._parse(payload[mc.KEY_MODEB][0])
             else:
                 # optimistic update
                 self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
@@ -223,7 +225,7 @@ class Mts960Climate(MtsClimate):
         return mc.MTS960_TEMP_SCALE
 
     # message handlers
-    def _parse_modeB(self, payload: dict):
+    def _parse(self, payload: dict):
         """
         {
             "channel": 0,

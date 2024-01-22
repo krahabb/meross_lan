@@ -149,7 +149,7 @@ class Mts100Climate(MtsClimate):
                 ]
             },
         ):
-            self._parse_temperature(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
+            self._parse(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(
@@ -172,7 +172,7 @@ class Mts100Climate(MtsClimate):
         mc.KEY_TEMPERATURE
 
     # message handlers
-    def _parse_temperature(self, p_temperature: dict):
+    def _parse(self, p_temperature: dict):
         if mc.KEY_ROOM in p_temperature:
             self._attr_current_temperature = (
                 p_temperature[mc.KEY_ROOM] / self.device_scale
