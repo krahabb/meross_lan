@@ -162,6 +162,18 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             description_placeholders=description_placeholders,
         )
 
+    def clone_api_diagnostic_config(self, config: mlc.DeviceConfigType | mlc.ProfileConfigType):
+        """Clone actual MerossApi diagnostic settings on new device/profile config being created."""
+        if api_config := self.api.config:
+            if mlc.CONF_LOGGING_LEVEL in api_config:
+                config[mlc.CONF_LOGGING_LEVEL] = api_config[
+                    mlc.CONF_LOGGING_LEVEL
+                ]
+            if mlc.CONF_OBFUSCATE in api_config:
+                config[mlc.CONF_OBFUSCATE] = api_config[
+                    mlc.CONF_OBFUSCATE
+                ]
+
     def finish_options_flow(
         self, config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType
     ):
@@ -284,17 +296,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                         return self.async_abort()
                 else:
                     # this profile config is new either because of keyerror
-                    # or user creating a cloud profile. We'll then preset
-                    # the diagnostics settings by cloning actual MerossApi config
-                    if api_config := api.config:
-                        if mlc.CONF_LOGGING_LEVEL in api_config:
-                            profile_config[mlc.CONF_LOGGING_LEVEL] = api_config[
-                                mlc.CONF_LOGGING_LEVEL
-                            ]
-                        if mlc.CONF_OBFUSCATE in api_config:
-                            profile_config[mlc.CONF_OBFUSCATE] = api_config[
-                                mlc.CONF_OBFUSCATE
-                            ]
+                    # or user creating a cloud profile.
+                    self.clone_api_diagnostic_config(profile_config)
                     if self._is_keyerror:
                         # this flow is managing a device but since the profile
                         # entry is new, we'll directly setup that
@@ -784,6 +787,8 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         }
         if await self.async_set_unique_id(device_id):
             raise AbortFlow("already_configured")
+
+        self.clone_api_diagnostic_config(device_config)
 
         return self.async_show_form(
             step_id="finalize",
