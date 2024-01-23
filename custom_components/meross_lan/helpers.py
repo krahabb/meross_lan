@@ -948,6 +948,10 @@ class ConfigEntryManager(EntityManager):
     TRACE_RX = "RX"
     TRACE_TX = "TX"
 
+    DEFAULT_PLATFORMS: typing.ClassVar[dict[str, Callable | None]] = {}
+    """Defined at the class level to preset a list of domains for entities
+    which could be dynamically added after ConfigEntry loading."""
+
     key: str
     logger: logging.Logger
 
@@ -975,7 +979,7 @@ class ConfigEntryManager(EntityManager):
         # The item value here will be set to the async_add_entities callback
         # during the corresponding platform async_setup_entry so to be able
         # to dynamically add more entities should they 'pop-up' (Hub only?)
-        self.platforms: dict[str, Callable | None] = {}
+        self.platforms = self.DEFAULT_PLATFORMS.copy()
         self.trace_file: typing.Final[TextIOWrapper | None] = None
         self._trace_future: asyncio.Future | None = None
         self._trace_data: list | None = None
@@ -1284,6 +1288,10 @@ class ApiProfile(ConfigEntryManager):
     sharing of globals and defining some common interfaces.
     """
 
+    DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
+        SENSOR_DOMAIN: None,
+    }
+
     # hass, api: set when initializing MerossApi
     hass: ClassVar[HomeAssistant] = None  # type: ignore
     """Cached HomeAssistant instance (Boom!)"""
@@ -1339,7 +1347,6 @@ class ApiProfile(ConfigEntryManager):
 
     def __init__(self, id: str, config_entry: ConfigEntry | None):
         super().__init__(id, config_entry)
-        self.platforms[SENSOR_DOMAIN] = None
         self.linkeddevices: dict[str, MerossDevice] = {}
         self.mqttconnections: dict[str, MQTTConnection] = {}
 

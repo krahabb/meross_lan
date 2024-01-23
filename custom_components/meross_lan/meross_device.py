@@ -320,6 +320,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     Generic protocol handler class managing the physical device stack/state
     """
 
+    DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
+        MLUpdate.PLATFORM: None,
+    }
+
     # these are set from ConfigEntry
     config: DeviceConfigType
     polling_period: int
@@ -489,7 +493,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         # the update entity will only be instantiated 'on demand' since
         # we might not have this for devices not related to a cloud profile
-        self.platforms[MLUpdate.PLATFORM] = None
         self.update_firmware = None
 
         for _key, _digest in descriptor.digest.items():

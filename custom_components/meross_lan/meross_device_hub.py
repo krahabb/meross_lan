@@ -150,21 +150,17 @@ class MerossDeviceHub(MerossDevice):
     Specialized MerossDevice for smart hub(s) like MSH300
     """
 
-    __slots__ = ("subdevices",)
+    DEFAULT_PLATFORMS = MerossDevice.DEFAULT_PLATFORMS | {
+        MLBinarySensor.PLATFORM: None,
+        MLCalendar.PLATFORM: None,
+        MLConfigNumber.PLATFORM: None,
+        MLSensor.PLATFORM: None,
+        MLSwitch.PLATFORM: None,
+        MtsClimate.PLATFORM: None,
+        MtsTrackedSensor.PLATFORM: None,
+    }
 
-    def __init__(self, descriptor, entry):
-        self.subdevices: dict[object, MerossSubDevice] = {}
-        super().__init__(descriptor, entry)
-        # invoke platform(s) async_setup_entry
-        # in order to be able to eventually add entities when they 'pop up'
-        # in the hub (see also self.async_add_sensors)
-        self.platforms[MLSensor.PLATFORM] = None
-        self.platforms[MLBinarySensor.PLATFORM] = None
-        self.platforms[MtsClimate.PLATFORM] = None
-        self.platforms[MtsTrackedSensor.PLATFORM] = None
-        self.platforms[MLHubSensorAdjustNumber.PLATFORM] = None
-        self.platforms[MLSwitch.PLATFORM] = None
-        self.platforms[MLCalendar.PLATFORM] = None
+    __slots__ = ("subdevices",)
 
     # interface: EntityManager
     def managed_entities(self, platform):
@@ -186,6 +182,7 @@ class MerossDeviceHub(MerossDevice):
         super()._set_offline()
 
     def _init_hub(self, digest: dict):
+        self.subdevices: dict[object, MerossSubDevice] = {}
         for p_subdevice in digest[mc.KEY_SUBDEVICE]:
             self._subdevice_build(p_subdevice)
 
