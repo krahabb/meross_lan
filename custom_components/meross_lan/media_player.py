@@ -51,6 +51,7 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
             | MediaPlayerEntityFeature.PLAY
             | MediaPlayerEntityFeature.STOP
         )  # type: ignore
+        manager.register_parser(mc.NS_APPLIANCE_CONTROL_MP3, self)
 
     @property
     def volume_level(self):
@@ -141,15 +142,9 @@ class Mp3Mixin(
         with self.exception_warning("Mp3Mixin init"):
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here
-            MLMp3Player(self, 0)
             PollingStrategy(self, mc.NS_APPLIANCE_CONTROL_MP3)
+            MLMp3Player(self, 0)
             # cherub light entity should be there...
             light: MLLight = self.entities.get(0)  # type: ignore
             if light:
                 light.update_effect_map(mc.HP110A_LIGHT_EFFECT_MAP)
-
-    def _handle_Appliance_Control_Mp3(self, header: dict, payload: dict):
-        """
-        {"mp3": {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}}
-        """
-        self._parse__generic(mc.KEY_MP3, payload.get(mc.KEY_MP3), mc.KEY_MP3)

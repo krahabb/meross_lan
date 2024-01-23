@@ -8,7 +8,7 @@ from custom_components.meross_lan.helpers import clamp
 from custom_components.meross_lan.merossclient import (
     const as mc,
     get_element_by_key,
-    get_namespacekey,
+    NAMESPACE_TO_KEY,
 )
 
 if typing.TYPE_CHECKING:
@@ -75,8 +75,8 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 p_digest_mode[mc.KEY_TARGETTEMP] = p_digest_mode[MODE_KEY_MAP[mode]]
             else:  # we use this to trigger a windowOpened later in code
                 p_digest_windowopened_list = p_digest[mc.KEY_THERMOSTAT].get(
-                    mc.KEY_WINDOWOPENED
-                , [])
+                    mc.KEY_WINDOWOPENED, []
+                )
             if p_digest_mode[mc.KEY_ONOFF]:
                 p_digest_mode[mc.KEY_STATE] = (
                     1
@@ -109,7 +109,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         }
         """
         namespace = header[mc.KEY_NAMESPACE]
-        namespace_key = get_namespacekey(namespace)
+        namespace_key = NAMESPACE_TO_KEY[namespace]
         method = header[mc.KEY_METHOD]
 
         digest: list[dict[str, object]] = self.descriptor.namespaces[namespace][

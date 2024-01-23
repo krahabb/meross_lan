@@ -61,7 +61,6 @@ from .merossclient import (
     get_default_arguments,
     get_message_signature,
     get_message_uuid,
-    get_namespacekey,
     get_port_safe,
     is_device_online,
     json_dumps,
@@ -497,13 +496,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # _init_xxxx methods provided by mixins
             _init_method_name = f"_init_{_key}"
             if _init := getattr(self, _init_method_name, None):
-                if isinstance(_digest, list):
-                    for _channel_digest in _digest:
-                        with self.exception_warning(_init_method_name):
-                            _init(_channel_digest)
-                else:
-                    with self.exception_warning(_init_method_name):
-                        _init(_digest)
+                with self.exception_warning(_init_method_name):
+                    _init(_digest)
 
     # interface: ConfigEntryManager
     @callback
@@ -1575,56 +1569,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             header[mc.KEY_NAMESPACE],
             str(self.loggable_dict(payload)),
         )
-
-    def _parse__generic(self, key: str, payload, entitykey: str | None = None):
-        if isinstance(payload, dict):
-            # we'll use an 'unsafe' access to payload[mc.KEY_CHANNEL]
-            # so to better diagnose issues with non-standard payloads
-            # we were previously using a safer approach but that could hide
-            # unforeseen behaviours
-            entity = self.entities[
-                payload[mc.KEY_CHANNEL]
-                if entitykey is None
-                else f"{payload[mc.KEY_CHANNEL]}_{entitykey}"
-            ]
-            getattr(entity, f"_parse_{key}", entity._parse_undefined)(payload)
-        elif isinstance(payload, list):
-            for p_channel in payload:
-                self._parse__generic(key, p_channel, entitykey)
-
-    def _handle_generic(self, header: MerossHeaderType, payload: MerossPayloadType):
-        """
-        This is a basic implementation for dynamic protocol handlers
-        since most of the payloads just need to extract a key and
-        pass along to entities
-        """
-        key = get_namespacekey(header[mc.KEY_NAMESPACE])
-        self._parse__generic(key, payload[key])
-
-    def _parse__array(self, key: str, payload):
-        # optimized version for well-known payloads which carry channel structs
-        # this will direct the parsing to the entity keyed by channel alone
-        for p_channel in payload:
-            entity = self.entities[p_channel[mc.KEY_CHANNEL]]
-            getattr(entity, f"_parse_{key}", entity._parse_undefined)(p_channel)
-
-    def _parse__array_key(self, key: str, payload, entitykey: str):
-        # optimized version for well-known payloads which carry channel structs
-        # this will direct the parsing to the entity keyed by channel and entitykey
-        for p_channel in payload:
-            entity = self.entities[f"{p_channel[mc.KEY_CHANNEL]}_{entitykey}"]
-            getattr(entity, f"_parse_{key}", entity._parse_undefined)(p_channel)
-
-    def _handle_generic_array(
-        self, header: MerossHeaderType, payload: MerossPayloadType
-    ):
-        """
-        This is a basic implementation for dynamic protocol handlers
-        since most of the payloads just need to extract a key and
-        pass along to entities
-        """
-        key = get_namespacekey(header[mc.KEY_NAMESPACE])
-        self._parse__array(key, payload[key])
 
     def _handle_Appliance_Control_Bind(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager

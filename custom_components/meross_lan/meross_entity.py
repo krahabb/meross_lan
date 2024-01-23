@@ -16,7 +16,7 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.typing import StateType
 
 from .helpers import ApiProfile, Loggable, StrEnum
-from .merossclient import const as mc, get_namespacekey
+from .merossclient import NAMESPACE_TO_KEY, const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -236,7 +236,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     def _parse_undefined(self, payload):
         # this is a default handler for any message (in protocol routing)
-        # for which we haven't defined a specific handler (see MerossDevice._parse__generic)
+        # for which we haven't defined a specific handler
         self.log(
             self.WARNING,
             "Handler undefined for payload:(%s)",
@@ -282,7 +282,7 @@ class MerossToggle(MerossEntity):
         super().__init__(manager, channel, entitykey, device_class)
         if namespace:
             self.namespace = namespace
-            self.key_namespace = get_namespacekey(namespace)
+            self.key_namespace = NAMESPACE_TO_KEY[namespace]
 
     async def async_turn_on(self, **kwargs):
         await self.async_request_onoff(1)

@@ -185,9 +185,38 @@ class MerossDeviceHub(MerossDevice):
             subdevice._set_offline()
         super()._set_offline()
 
-    def _init_hub(self, payload: dict):
-        for p_subdevice in payload[mc.KEY_SUBDEVICE]:
+    def _init_hub(self, digest: dict):
+        for p_subdevice in digest[mc.KEY_SUBDEVICE]:
             self._subdevice_build(p_subdevice)
+
+    def _parse_hub(self, p_hub: dict):
+        # This is usually called inside _parse_all as part of the digest parsing
+        # Here we'll check the fresh subdevice list against the actual one and
+        # eventually manage newly added subdevices or removed ones #119
+        # telling the caller to persist the changed configuration (self.needsave)
+        subdevices_actual = set(self.subdevices.keys())
+        for p_digest in p_hub[mc.KEY_SUBDEVICE]:
+            p_id = p_digest.get(mc.KEY_ID)
+            if subdevice := self.subdevices.get(p_id):
+                subdevices_actual.remove(p_id)
+            elif subdevice := self._subdevice_build(p_digest):
+                self.needsave = True
+            else:
+                continue
+            subdevice.parse_digest(p_digest)
+
+        if subdevices_actual:
+            # now we're left with non-existent (removed) subdevices
+            self.needsave = True
+            for p_id in subdevices_actual:
+                subdevice = self.subdevices[p_id]
+                self.log(
+                    self.WARNING,
+                    "Removing subdevice %s(%s) - configuration will be reloaded in few sec",
+                    subdevice.name,
+                    p_id,
+                )
+            self.schedule_entry_reload()
 
     # interface: self
     def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
@@ -261,35 +290,6 @@ class MerossDeviceHub(MerossDevice):
 
     def _handle_Appliance_Hub_ToggleX(self, header: dict, payload: dict):
         self._subdevice_parse(mc.KEY_TOGGLEX, payload)
-
-    def _parse_hub(self, p_hub: dict):
-        # This is usually called inside _parse_all as part of the digest parsing
-        # Here we'll check the fresh subdevice list against the actual one and
-        # eventually manage newly added subdevices or removed ones #119
-        # telling the caller to persist the changed configuration (self.needsave)
-        subdevices_actual = set(self.subdevices.keys())
-        for p_digest in p_hub[mc.KEY_SUBDEVICE]:
-            p_id = p_digest.get(mc.KEY_ID)
-            if subdevice := self.subdevices.get(p_id):
-                subdevices_actual.remove(p_id)
-            elif subdevice := self._subdevice_build(p_digest):
-                self.needsave = True
-            else:
-                continue
-            subdevice.parse_digest(p_digest)
-
-        if subdevices_actual:
-            # now we're left with non-existent (removed) subdevices
-            self.needsave = True
-            for p_id in subdevices_actual:
-                subdevice = self.subdevices[p_id]
-                self.log(
-                    self.WARNING,
-                    "Removing subdevice %s(%s) - configuration will be reloaded in few sec",
-                    subdevice.name,
-                    p_id,
-                )
-            self.schedule_entry_reload()
 
     def _subdevice_build(self, p_subdevice: dict):
         # parses the subdevice payload in 'digest' to look for a well-known type

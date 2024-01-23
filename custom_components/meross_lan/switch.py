@@ -34,17 +34,14 @@ async def async_setup_entry(
 
 class MLSwitch(me.MerossToggle, switch.SwitchEntity):
     """
-    generic plugs (single/multi outlet and so)
+    Generic HA switch: could either be a physical outlet or another 'logical' setting
+    (see various config switches)
+    Switches are sometimes polymorphic and their message dispatching is not 'set in stone'
+    since the status updates are likely managed in higher level implementations or so.
     """
 
     PLATFORM = switch.DOMAIN
     DeviceClass = SwitchDeviceClass
-
-    @staticmethod
-    def build_for_device(device: MerossDevice, channel: object, namespace: str):
-        return MLSwitch(
-            device, channel, None, SwitchDeviceClass.OUTLET, namespace
-        )
 
 
 class MtsConfigSwitch(MLSwitch):
@@ -87,25 +84,40 @@ class ToggleXMixin(MerossDevice if typing.TYPE_CHECKING else object):
         if isinstance(togglex, list):
             for t in togglex:
                 channel = t.get(mc.KEY_CHANNEL)
-                if channel not in self.entities:
-                    MLSwitch.build_for_device(self, channel, mc.NS_APPLIANCE_CONTROL_TOGGLEX)
+                switch = (
+                    self.entities[channel]
+                    if channel in self.entities
+                    else self._build_outlet(channel)
+                )
+                self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, switch)
         elif isinstance(togglex, dict):
             channel = togglex.get(mc.KEY_CHANNEL)
-            if channel not in self.entities:
-                MLSwitch.build_for_device(self, channel, mc.NS_APPLIANCE_CONTROL_TOGGLEX)
+            switch = (
+                self.entities[channel]
+                if channel in self.entities
+                else self._build_outlet(channel)
+            )
+            self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, switch)
         # This is an euristhic for legacy firmwares or
         # so when we cannot init any entity from system.all.digest
         # we then guess we should have at least a switch
         # edit: I guess ToggleX firmwares and on already support
         # system.all.digest status broadcast
         if not self.entities:
-            MLSwitch.build_for_device(self, 0, mc.NS_APPLIANCE_CONTROL_TOGGLEX)
+            switch = self._build_outlet(0)
+            self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, switch)
 
-    def _handle_Appliance_Control_ToggleX(self, header: dict, payload: dict):
-        self._parse__generic(mc.KEY_TOGGLEX, payload.get(mc.KEY_TOGGLEX))
+    def _parse_togglex(self, digest: list):
+        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLEX]._parse_list(digest)
 
-    def _parse_togglex(self, payload: dict):
-        self._parse__generic(mc.KEY_TOGGLEX, payload)
+    def _build_outlet(self, channel: object):
+        return MLSwitch(
+            self,
+            channel,
+            None,
+            SwitchDeviceClass.OUTLET,
+            mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+        )
 
 
 class ToggleMixin(MerossDevice if typing.TYPE_CHECKING else object):
@@ -117,22 +129,23 @@ class ToggleMixin(MerossDevice if typing.TYPE_CHECKING else object):
         if p_control:
             p_toggle = p_control.get(mc.KEY_TOGGLE)
             if isinstance(p_toggle, dict):
-                MLSwitch.build_for_device(
-                    self,
-                    p_toggle.get(mc.KEY_CHANNEL, 0),
-                    mc.NS_APPLIANCE_CONTROL_TOGGLE,
-                )
+                self._build_outlet(p_toggle.get(mc.KEY_CHANNEL, 0))
 
         if not self.entities:
-            MLSwitch.build_for_device(self, 0, mc.NS_APPLIANCE_CONTROL_TOGGLE)
+            self._build_outlet(0)
 
-    def _handle_Appliance_Control_Toggle(self, header: dict, payload: dict):
-        self._parse_toggle(payload[mc.KEY_TOGGLE])
-
-    def _parse_toggle(self, payload):
+    def _parse_toggle(self, digest):
         """
         toggle doesn't have channel (#172)
         """
-        if isinstance(payload, dict):
-            entity: MLSwitch = self.entities[payload.get(mc.KEY_CHANNEL, 0)]  # type: ignore
-            entity._parse_toggle(payload)
+        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLE]._parse_generic(digest)
+
+    def _build_outlet(self, channel: object):
+        switch = MLSwitch(
+            self,
+            channel,
+            None,
+            SwitchDeviceClass.OUTLET,
+            mc.NS_APPLIANCE_CONTROL_TOGGLE,
+        )
+        self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLE, switch)

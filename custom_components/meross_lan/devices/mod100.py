@@ -96,7 +96,13 @@ class DiffuserMixin(
         mc.DIFFUSER_SPRAY_MODE_FULL: OPTION_SPRAY_MODE_CONTINUOUS,
     }
 
-    def _init_diffuser(self, payload):
+    # interface: MerossDevice
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self._sensor_humidity = None
+        self._sensor_temperature = None
+
+    def _init_diffuser(self, digest: dict):
         """
         "diffuser":
         {
@@ -105,17 +111,16 @@ class DiffuserMixin(
             "spray": [{"channel": 0, "mode": 2, "lmTime": 1644353195}]
         }
         """
-        self._type = payload.get(mc.KEY_TYPE, "")
-        light = payload.get(mc.KEY_LIGHT)
-        if isinstance(light, list):
-            for p_light in light:
-                MLDiffuserLight(self, p_light)
-        spray = payload.get(mc.KEY_SPRAY)
-        if isinstance(spray, list):
-            for p_spray in spray:
-                MLSpray(
-                    self, p_spray.get(mc.KEY_CHANNEL, 0), DiffuserMixin.SPRAY_MODE_MAP
-                )
+        self._type = digest.get(mc.KEY_TYPE, "")
+        for light_digest in digest.get(mc.KEY_LIGHT, []):
+            light = MLDiffuserLight(self, light_digest)
+            self.register_parser(mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT, light)
+        for spray_digest in digest.get(mc.KEY_SPRAY, []):
+            spray = MLSpray(
+                self, spray_digest[mc.KEY_CHANNEL], DiffuserMixin.SPRAY_MODE_MAP
+            )
+            self.register_parser(mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY, spray)
+
         if mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR in self.descriptor.ability:
             # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
             # are supporting correct values so we implement them (#243)
@@ -127,25 +132,23 @@ class DiffuserMixin(
             )
             PollingStrategy(self, mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR, item_count=1)
 
-    # interface: MerossDevice
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self._sensor_humidity = None
-        self._sensor_temperature = None
-
-    # interface: self
-    def _handle_Appliance_Control_Diffuser_Light(self, header: dict, payload: dict):
-        self._parse_diffuser_light(payload.get(mc.KEY_LIGHT))
-
-    def _handle_Appliance_Control_Diffuser_Spray(self, header: dict, payload: dict):
+    def _parse_diffuser(self, digest: dict):
         """
+        "diffuser":
         {
             "type": "mod100",
+            "light": [{"channel": 0, "onoff": 0, "lmTime": 1639082117, "mode": 0, "luminance": 100, "rgb": 4129023}],
             "spray": [{"channel": 0, "mode": 2, "lmTime": 1644353195}]
         }
         """
-        self._parse_diffuser_spray(payload.get(mc.KEY_SPRAY))
+        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT]._parse_list(
+            digest.get(mc.KEY_LIGHT, [])
+        )
+        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY]._parse_list(
+            digest.get(mc.KEY_SPRAY, [])
+        )
 
+    # interface: self
     def _handle_Appliance_Control_Diffuser_Sensor(self, header: dict, payload: dict):
         """
         {
@@ -158,25 +161,6 @@ class DiffuserMixin(
             self._sensor_humidity.update_state(humidity.get(mc.KEY_VALUE) / 10)  # type: ignore
         if isinstance(temperature := payload.get(mc.KEY_TEMPERATURE), dict):
             self._sensor_temperature.update_state(temperature.get(mc.KEY_VALUE) / 10)  # type: ignore
-
-    def _parse_diffuser_light(self, payload):
-        self._parse__array(mc.KEY_LIGHT, payload)
-
-    def _parse_diffuser_spray(self, payload):
-        self._parse__array_key(mc.KEY_SPRAY, payload, mc.KEY_SPRAY)
-
-    def _parse_diffuser(self, payload: dict):
-        """
-        "diffuser":
-        {
-            "type": "mod100",
-            "light": [{"channel": 0, "onoff": 0, "lmTime": 1639082117, "mode": 0, "luminance": 100, "rgb": 4129023}],
-            "spray": [{"channel": 0, "mode": 2, "lmTime": 1644353195}]
-        }
-        """
-        for key, value in payload.items():
-            if _parse := getattr(self, f"_parse_diffuser_{key}", None):
-                _parse(value)
 
     async def async_request_light_ack(self, payload):
         return await self.async_request_ack(

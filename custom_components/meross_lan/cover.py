@@ -293,6 +293,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         self._attr_extra_state_attributes = {
             EXTRA_ATTR_TRANSITION_DURATION: self._transition_duration
         }
+        manager.register_parser(mc.NS_APPLIANCE_GARAGEDOOR_STATE, self)
         self.binary_sensor_timeout = MLGarageTimeoutBinarySensor(self)
         if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in manager.descriptor.ability:
             self.number_signalClose = MLGarageMultipleConfigNumber(
@@ -307,6 +308,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             self.switch_doorEnable = MLGarageDoorEnableSwitch(
                 manager, channel, mc.KEY_DOORENABLE
             )
+            manager.register_parser(mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG, self)
         else:
             self.number_signalClose = None
             self.number_signalOpen = None
@@ -583,21 +585,6 @@ class GarageMixin(
     number_doorOpenDuration: MLGarageMultipleConfigNumber = None  # type: ignore
     number_doorCloseDuration: MLGarageMultipleConfigNumber = None  # type: ignore
 
-    def __init__(self, descriptor: MerossDeviceDescriptor, entry):
-        self._polling_payload = []
-        super().__init__(descriptor, entry)
-        self.platforms.setdefault(MLConfigNumber.PLATFORM, None)
-        self.platforms.setdefault(MLSwitch.PLATFORM, None)
-        if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in descriptor.ability:
-            SmartPollingStrategy(self, mc.NS_APPLIANCE_GARAGEDOOR_CONFIG)
-        if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in descriptor.ability:
-            SmartPollingStrategy(
-                self,
-                mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
-                payload={mc.KEY_CONFIG: self._polling_payload},
-                item_count=len(self._polling_payload),
-            )
-
     async def async_shutdown(self):
         await super().async_shutdown()
         self.number_signalDuration = None  # type: ignore
@@ -605,12 +592,28 @@ class GarageMixin(
         self.number_doorOpenDuration = None  # type: ignore
         self.number_doorCloseDuration = None  # type: ignore
 
-    def _init_garageDoor(self, payload: dict):
-        MLGarage(self, channel := payload[mc.KEY_CHANNEL])
-        self._polling_payload.append({mc.KEY_CHANNEL: channel})
+    def _init_garageDoor(self, digest: list):
+        channel_count = len(digest)
+        self._polling_payload = []
+        self.platforms.setdefault(MLConfigNumber.PLATFORM, None)
+        self.platforms.setdefault(MLSwitch.PLATFORM, None)
+        ability = self.descriptor.ability
+        if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in ability:
+            SmartPollingStrategy(self, mc.NS_APPLIANCE_GARAGEDOOR_CONFIG)
+        if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in ability:
+            SmartPollingStrategy(
+                self,
+                mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
+                payload={mc.KEY_CONFIG: self._polling_payload},
+                item_count=channel_count,
+            )
+        for channel_digest in digest:
+            channel = channel_digest[mc.KEY_CHANNEL]
+            MLGarage(self, channel)
+            self._polling_payload.append({mc.KEY_CHANNEL: channel})
 
-    def _handle_Appliance_GarageDoor_State(self, header: dict, payload: dict):
-        self._parse__generic(mc.KEY_STATE, payload.get(mc.KEY_STATE))
+    def _parse_garageDoor(self, digest: list):
+        self.namespace_handlers[mc.NS_APPLIANCE_GARAGEDOOR_STATE]._parse_list(digest)
 
     def _handle_Appliance_GarageDoor_Config(self, header: dict, payload: dict):
         # {"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
@@ -698,21 +701,6 @@ class GarageMixin(
                     # set guard so we don't repeat this 'late conditional init'
                     self.number_doorCloseDuration = garage.number_signalClose
 
-    def _handle_Appliance_GarageDoor_MultipleConfig(self, header: dict, payload: dict):
-        """
-        payload := {
-            "config": [
-                {"channel": 1,"doorEnable": 1,"timestamp": 0,"timestampMs": 0,"signalClose": 2000,"signalOpen": 2000,"buzzerEnable": 1},
-                {"channel": 2,"doorEnable": 0,"timestamp": 1699130744,"timestampMs": 87,"signalClose": 2000,"signalOpen": 2000,"buzzerEnable": 1},
-                {"channel": 3,"doorEnable": 0,"timestamp": 1699130748,"timestampMs": 663,"signalClose": 2000,"signalOpen": 2000,"buzzerEnable": 1},
-            ]
-        }
-        """
-        self._parse__array(mc.KEY_CONFIG, payload[mc.KEY_CONFIG])
-
-    def _parse_garageDoor(self, payload):
-        self._parse__generic(mc.KEY_STATE, payload)
-
 
 class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
     """
@@ -758,6 +746,9 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             ) >= versiontuple("6.6.6")
         except Exception:
             self._position_native_isgood = None
+        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, self)
+        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, self)
+        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, self)
 
     @property
     def assumed_state(self):
@@ -1081,18 +1072,9 @@ class RollerShutterMixin(
         with self.exception_warning("RollerShutterMixin init"):
             # looks like digest (in NS_ALL) doesn't carry state
             # so we're not implementing _init_xxx and _parse_xxx methods here
-            MLRollerShutter(self, 0)
-            PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, item_count=1)
-            PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, item_count=1)
             SmartPollingStrategy(
                 self, mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, item_count=1
             )
-
-    def _handle_Appliance_RollerShutter_Position(self, header: dict, payload: dict):
-        self._parse__array(mc.KEY_POSITION, payload.get(mc.KEY_POSITION))
-
-    def _handle_Appliance_RollerShutter_State(self, header: dict, payload: dict):
-        self._parse__array(mc.KEY_STATE, payload.get(mc.KEY_STATE))
-
-    def _handle_Appliance_RollerShutter_Config(self, header: dict, payload: dict):
-        self._parse__array(mc.KEY_CONFIG, payload.get(mc.KEY_CONFIG))
+            PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, item_count=1)
+            PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, item_count=1)
+            roller_shutter = MLRollerShutter(self, 0)

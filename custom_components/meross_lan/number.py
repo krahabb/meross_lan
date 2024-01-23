@@ -227,11 +227,6 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
     def __init__(self, climate: MtsClimate, entitykey: str):
         super().__init__(climate, entitykey)
         manager = self.manager
-        manager.register_parser(
-            self.namespace,
-            self,
-            self._parse,
-        )
         # preset entity platforms since these might be instantiated later
         from .switch import MtsConfigSwitch
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
@@ -239,6 +234,11 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         manager.platforms.setdefault(MLSensor.PLATFORM)
         self.sensor_warning = None
         self.switch = None
+        manager.register_parser(
+            self.namespace,
+            self,
+            self._parse,
+        )
 
     async def async_shutdown(self):
         self.manager.unregister_parser(

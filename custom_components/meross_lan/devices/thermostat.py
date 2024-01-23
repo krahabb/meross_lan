@@ -182,7 +182,7 @@ class ThermostatMixin(
     to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
     """
 
-    # interface: self
+    # interface: MerossDevice
     def _init_thermostat(self, digest: dict):
         ability = self.descriptor.ability
         # we (might) have an issue here since the entities need to be initialized after
@@ -194,7 +194,7 @@ class ThermostatMixin(
         # moment the only 'bug' could be the wrong item_count (and so the estimated
         # response payload size used to actually determine how to pack requests)
         # It shouldn't really be criticcal anyway since there are a lot of protections
-        channel_count = 1
+        channel_count = 1  # TODO: update item_count in polling strategy
         self._polling_payload = []
         for ns, polling_strategy_class in self.POLLING_STRATEGY_INITIALIZERS.items():
             if ns in ability:
@@ -207,8 +207,8 @@ class ThermostatMixin(
 
         for ns_key, ns_digest in digest.items():
             if climate_class := self.CLIMATE_INITIALIZERS.get(ns_key):
-                for channel_payload in ns_digest:
-                    channel = channel_payload[mc.KEY_CHANNEL]
+                for channel_digest in ns_digest:
+                    channel = channel_digest[mc.KEY_CHANNEL]
                     climate = climate_class(self, channel)
                     self.register_parser(
                         climate.namespace,
@@ -250,4 +250,4 @@ class ThermostatMixin(
         }
         """
         for ns_key, ns_digest in digest.items():
-            self.namespace_handlers[KEY_TO_NAMESPACE[ns_key]]._parse(ns_digest)
+            self.namespace_handlers[KEY_TO_NAMESPACE[ns_key]]._parse_list(ns_digest)

@@ -13,10 +13,10 @@ from custom_components.meross_lan.merossclient import (
     build_message,
     const as mc,
     get_macaddress_from_uuid,
-    get_namespacekey,
     get_replykey,
     json_dumps,
     json_loads,
+    NAMESPACE_TO_KEY,
 )
 
 if typing.TYPE_CHECKING:
@@ -81,7 +81,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         if method == mc.METHOD_GETACK:
             if protocol == "auto":
                 self.namespaces[namespace] = {
-                    get_namespacekey(namespace): data
+                    NAMESPACE_TO_KEY[namespace]: data
                     if isinstance(data, dict)
                     else json_loads(data)
                 }
@@ -338,7 +338,7 @@ class MerossEmulator:
         if n[1] != "Control":
             raise Exception(f"{namespace} not supported in emulator")
 
-        key = get_namespacekey(namespace)
+        key = NAMESPACE_TO_KEY[namespace]
         p_digest = self.descriptor.digest
         if len(n) == 4:
             # 4 parts namespaces usually access a subkey in digest

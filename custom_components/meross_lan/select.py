@@ -118,15 +118,14 @@ class SprayMixin(
         mc.SPRAY_MODE_CONTINUOUS: OPTION_SPRAY_MODE_CONTINUOUS,
     }
 
-    def _init_spray(self, payload: dict):
+    def _init_spray(self, digest: list):
         # spray = [{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]
-        MLSpray(self, payload.get(mc.KEY_CHANNEL, 0), SprayMixin.SPRAY_MODE_MAP)
+        for channel_digest in digest:
+            spray = MLSpray(self, channel_digest[mc.KEY_CHANNEL], self.SPRAY_MODE_MAP)
+            self.register_parser(mc.NS_APPLIANCE_CONTROL_SPRAY, spray)
 
-    def _handle_Appliance_Control_Spray(self, header: dict, payload: dict):
-        self._parse_spray(payload.get(mc.KEY_SPRAY))
-
-    def _parse_spray(self, payload):
-        self._parse__generic(mc.KEY_SPRAY, payload, mc.KEY_SPRAY)
+    def _parse_spray(self, digest: list):
+        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_SPRAY]._parse_list(digest)
 
     async def async_request_spray_ack(self, payload):
         return await self.async_request_ack(

@@ -257,6 +257,7 @@ class NameSpaceToKeyMap(dict):
     This map is incrementally built at runtime (so we don't waste time manually coding this)
     whenever we use it
     """
+
     def __getitem__(self, namespace: str) -> str:
         try:
             return super().__getitem__(namespace)
@@ -271,7 +272,9 @@ class NameSpaceToKeyMap(dict):
             KEY_TO_NAMESPACE[key] = namespace
             return key
 
+
 NAMESPACE_TO_KEY = NameSpaceToKeyMap()
+
 
 class KeyToNameSpaceMap(dict):
     """
@@ -281,15 +284,9 @@ class KeyToNameSpaceMap(dict):
     whenever we use NAMESPACE_TO_KEY
     """
 
+
 KEY_TO_NAMESPACE = KeyToNameSpaceMap()
 
-def get_namespacekey(namespace: str) -> str:
-    """
-    return the 'well known' key for the provided namespace
-    which is used as the root key of the associated payload
-    This is usually the camelCase of the last split of the namespace
-    """
-    return NAMESPACE_TO_KEY[namespace]
 
 def get_default_payload(namespace: str) -> MerossPayloadType:
     """

@@ -185,9 +185,9 @@ class MLLight(MLLightBase):
         # and kindly ignore any 'onoff' in the 'light' payload (except digest didn't presented togglex)
         # also (issue #218) the newer mss560-570 dimmer switches are implemented as 'light' devices with ToggleX
         # api and show a glitch when used this way (ToggleX + Light)
-        # we'll try implement a new command flow where we'll just use the 'Light' payload to turn on the device
-        # skipping the initial 'ToggleX' assuming this behaviour works on any fw
+        # State-of-the-art is now to auto-detect (when booting the entity) what is the behavior
         super().__init__(manager, payload)
+        manager.register_parser(mc.NS_APPLIANCE_CONTROL_LIGHT, self)
         descr = manager.descriptor
         if get_element_by_key_safe(
             descr.digest.get(mc.KEY_TOGGLEX),
@@ -421,11 +421,11 @@ class LightMixin(
         if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in descriptor.ability:
             SmartPollingStrategy(self, mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT)
 
-    def _init_light(self, payload: dict):
-        MLLight(self, payload)
+    def _init_light(self, digest: dict):
+        MLLight(self, digest)
 
-    def _handle_Appliance_Control_Light(self, header: dict, payload: dict):
-        self._parse__generic(mc.KEY_LIGHT, payload[mc.KEY_LIGHT])
+    def _parse_light(self, digest):
+        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT]._parse_generic(digest)
 
     def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
         light_effect_map = {}
@@ -436,9 +436,6 @@ class LightMixin(
             for entity in self.entities.values():
                 if isinstance(entity, MLLight):
                     entity.update_effect_map(light_effect_map)
-
-    def _parse_light(self, payload):
-        self._parse__generic(mc.KEY_LIGHT, payload)
 
     async def async_request_light_ack(self, payload):
         return await self.async_request_ack(

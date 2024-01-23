@@ -48,12 +48,12 @@ from .const import (
     POLLING_STRATEGY_CONF,
 )
 from .merossclient import (
+    KEY_TO_NAMESPACE,
+    NAMESPACE_TO_KEY,
     cloudapi,
     const as mc,
     get_default_arguments,
     json_dumps,
-    NAMESPACE_TO_KEY,
-    KEY_TO_NAMESPACE,
 )
 
 try:
@@ -523,7 +523,18 @@ class NamespaceHandler:
     def register(
         self, entity: MerossEntity, parse_func: Callable[[dict], None] | None = None
     ):
-        self.handler = self._handle
+        # when setting up the entity-dispatching we'll substitute the legacy handler
+        # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
+        # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
+        # to be optimized against a well known type of payload. We're starting by guessing our
+        # payload is a list but we'll dynamically adjust this whenever we find (in real world)
+        # a different payload structure so we can adapt.
+        # As an example of why this is needed, many modern payloads are just lists (
+        # Thermostat payloads for instance) but many older ones are not, and still
+        # either carry dict or, worse, could present themselves in both forms
+        # (ToggleX is a well-known example)
+        self.handler = self._handle_list
+        assert entity.channel is not None
         self.entities[entity.channel] = parse_func or getattr(
             entity, f"_parse_{self.key_namespace}", entity._parse_undefined
         )
@@ -531,26 +542,113 @@ class NamespaceHandler:
     def unregister(self, entity: MerossEntity):
         self.entities.pop(entity.channel, None)
 
-    def _handle(self, header, payload):
-        """splits and forwards the received NS payload to
-        the registered entity(es)"""
+    def _handle_list(self, header, payload):
+        """
+        splits and forwards the received NS payload to
+        the registered entity(es).
+        This handler si optimized for list payloads:
+        "payload": { "key_namespace": [{"channel":...., ...}] }
+        """
         try:
             for p_channel in payload[self.key_namespace]:
                 self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+        except TypeError:
+            # this might be expected: the payload is not a list
+            self.handler = self._handle_dict
+            self._handle_dict(header, payload)
         except Exception as exception:
-            self.device.log_exception(
-                self.device.DEBUG, exception, "NamespaceHandler._handle"
+            device = self.device
+            device.log_exception(
+                device.WARNING,
+                exception,
+                "NamespaceHandler(%s)._handle_list: payload=%s",
+                self.namespace,
+                device.loggable_dict(payload),
             )
 
-    def _parse(self, payload):
+    def _handle_dict(self, header, payload):
+        """
+        splits and forwards the received NS payload to
+        the registered entity(es).
+        This handler si optimized for dict payloads:
+        "payload": { "key_namespace": {"channel":...., ...} }
+        """
+        try:
+            p_channel = payload[self.key_namespace]
+            self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+        except TypeError:
+            # this might be expected: the payload is not a dict
+            # final fallback to the safe _handle_generic
+            self.handler = self._handle_generic
+            self._handle_generic(header, payload)
+        except Exception as exception:
+            device = self.device
+            device.log_exception(
+                device.WARNING,
+                exception,
+                "NamespaceHandler(%s)._handle_dict: payload=%s",
+                self.namespace,
+                device.loggable_dict(payload),
+            )
+
+    def _handle_generic(self, header, payload):
+        """
+        splits and forwards the received NS payload to
+        the registered entity(es)
+        This handler can manage both lists or dicts or even
+        payloads without the "channel" key (see namespace Toggle)
+        which will default forwarding to channel == 0
+        """
+        try:
+            p_channel = payload[self.key_namespace]
+            if isinstance(p_channel, dict):
+                self.entities[p_channel.get(mc.KEY_CHANNEL, 0)](p_channel)
+            else:
+                for p_channel in p_channel:
+                    self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+        except Exception as exception:
+            device = self.device
+            device.log_exception(
+                device.WARNING,
+                exception,
+                "NamespaceHandler(%s)._handle_generic: payload=%s",
+                self.namespace,
+                device.loggable_dict(payload),
+            )
+
+    def _parse_list(self, digest: list):
         """twin method for _handle (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
         try:
-            for p_channel in payload:
-                self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+            for channel_digest in digest:
+                self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
         except Exception as exception:
-            self.device.log_exception(
-                self.device.DEBUG, exception, "NamespaceHandler._parse"
+            device = self.device
+            device.log_exception(
+                device.WARNING,
+                exception,
+                "NamespaceHandler(%s)._parse_list: digest=%s",
+                self.namespace,
+                device.loggable_any(digest),
+            )
+
+    def _parse_generic(self, digest):
+        """twin method for _handle (same job - different context).
+        Used when parsing digest(s) in NS_ALL"""
+        try:
+            if isinstance(digest, dict):
+                self.entities[digest.get(mc.KEY_CHANNEL, 0)](digest)
+            else:
+                for channel_digest in digest:
+                    self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
+        except Exception as exception:
+            device = self.device
+            device.log_exception(
+                device.WARNING,
+                exception,
+                "NamespaceHandler(%s)._parse_generic: digest=%s",
+                self.namespace,
+                device.loggable_any(digest),
             )
 
 
