@@ -35,7 +35,7 @@ class MLButton(me.MerossEntity, button.ButtonEntity):
         manager: EntityManager,
         channel: object | None,
         entitykey: str | None = None,
-        device_class: button.ButtonDeviceClass | None = None,
+        device_class: DeviceClass | None = None,
     ):
         super().__init__(manager, channel, entitykey, device_class)
 

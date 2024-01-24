@@ -16,16 +16,6 @@ if typing.TYPE_CHECKING:
     from .merossclient import MerossDeviceDescriptor
 
 
-try:
-    SwitchDeviceClass = switch.SwitchDeviceClass  # type: ignore
-except Exception:
-    from .helpers import StrEnum
-
-    class SwitchDeviceClass(StrEnum):
-        OUTLET = "outlet"
-        SWITCH = "switch"
-
-
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
@@ -41,7 +31,7 @@ class MLSwitch(me.MerossToggle, switch.SwitchEntity):
     """
 
     PLATFORM = switch.DOMAIN
-    DeviceClass = SwitchDeviceClass
+    DeviceClass = switch.SwitchDeviceClass
 
 
 class MtsConfigSwitch(MLSwitch):
@@ -115,7 +105,7 @@ class ToggleXMixin(MerossDevice if typing.TYPE_CHECKING else object):
             self,
             channel,
             None,
-            SwitchDeviceClass.OUTLET,
+            MLSwitch.DeviceClass.OUTLET,
             mc.NS_APPLIANCE_CONTROL_TOGGLEX,
         )
 
@@ -145,7 +135,7 @@ class ToggleMixin(MerossDevice if typing.TYPE_CHECKING else object):
             self,
             channel,
             None,
-            SwitchDeviceClass.OUTLET,
+            MLSwitch.DeviceClass.OUTLET,
             mc.NS_APPLIANCE_CONTROL_TOGGLE,
         )
         self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLE, switch)

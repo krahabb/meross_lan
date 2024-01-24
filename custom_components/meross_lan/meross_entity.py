@@ -12,10 +12,10 @@ from __future__ import annotations
 import typing
 
 from homeassistant import const as hac
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity import Entity, EntityCategory
 from homeassistant.helpers.typing import StateType
 
-from .helpers import ApiProfile, Loggable, StrEnum
+from .helpers import ApiProfile, Loggable
 from .merossclient import NAMESPACE_TO_KEY, const as mc
 
 if typing.TYPE_CHECKING:
@@ -24,15 +24,6 @@ if typing.TYPE_CHECKING:
 
     from .helpers import EntityManager
     from .meross_device import MerossDeviceBase
-
-
-try:  # 2022.2 new symbols
-    from homeassistant.helpers.entity import EntityCategory  # type: ignore
-except Exception:
-
-    class EntityCategory(StrEnum):
-        CONFIG = "config"
-        DIAGNOSTIC = "diagnostic"
 
 
 CORE_HAS_ENTITY_NAME = hasattr(Entity, "has_entity_name")

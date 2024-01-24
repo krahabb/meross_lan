@@ -15,7 +15,6 @@ from homeassistant.const import (
 
 from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT
-from .helpers import StrEnum
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -24,21 +23,6 @@ if typing.TYPE_CHECKING:
     from .helpers import EntityManager
     from .meross_device import MerossDevice
 
-SensorStateClass = sensor.SensorStateClass
-try:
-    SensorDeviceClass = sensor.SensorDeviceClass  # type: ignore
-except Exception:
-
-    class SensorDeviceClass(StrEnum):
-        BATTERY = "battery"
-        CURRENT = "current"
-        ENERGY = "energy"
-        ENUM = "enum"
-        HUMIDITY = "humidity"
-        POWER = "power"
-        TEMPERATURE = "temperature"
-        VOLTAGE = "voltage"
-
 
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
@@ -46,36 +30,34 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
 
 
-DEVICECLASS_TO_UNIT_MAP: dict[SensorDeviceClass | None, str] = {
-    SensorDeviceClass.POWER: UnitOfPower.WATT,
-    SensorDeviceClass.CURRENT: UnitOfElectricCurrent.AMPERE,
-    SensorDeviceClass.VOLTAGE: UnitOfElectricPotential.VOLT,
-    SensorDeviceClass.ENERGY: UnitOfEnergy.WATT_HOUR,
-    SensorDeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
-    SensorDeviceClass.HUMIDITY: PERCENTAGE,
-    SensorDeviceClass.BATTERY: PERCENTAGE,
-}
-
-# we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
-# except these device classes
-DEVICECLASS_TO_STATECLASS_MAP: dict[
-    SensorDeviceClass | None, SensorStateClass | None
-] = {
-    SensorDeviceClass.ENUM: None,
-    SensorDeviceClass.ENERGY: SensorStateClass.TOTAL_INCREASING,
-}
-
 NativeValueCallbackType = typing.Callable[[], me.StateType]
 
 
 class MLSensor(me.MerossEntity, sensor.SensorEntity):
     PLATFORM = sensor.DOMAIN
-    DeviceClass = SensorDeviceClass
-    StateClass = SensorStateClass
+    DeviceClass = sensor.SensorDeviceClass
+    StateClass = sensor.SensorStateClass
+
+    # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
+    # except these device classes
+    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass | None, StateClass | None] = {
+        DeviceClass.ENUM: None,
+        DeviceClass.ENERGY: StateClass.TOTAL_INCREASING,
+    }
+
+    DEVICECLASS_TO_UNIT_MAP: dict[DeviceClass | None, str] = {
+        DeviceClass.POWER: UnitOfPower.WATT,
+        DeviceClass.CURRENT: UnitOfElectricCurrent.AMPERE,
+        DeviceClass.VOLTAGE: UnitOfElectricPotential.VOLT,
+        DeviceClass.ENERGY: UnitOfEnergy.WATT_HOUR,
+        DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
+        DeviceClass.HUMIDITY: PERCENTAGE,
+        DeviceClass.BATTERY: PERCENTAGE,
+    }
 
     _attr_native_unit_of_measurement: str | None
     _attr_state: int | float | None
-    _attr_state_class: SensorStateClass | None
+    _attr_state_class: StateClass | None
 
     __slots__ = (
         "_attr_native_unit_of_measurement",
@@ -87,18 +69,18 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         manager: EntityManager,
         channel: object | None,
         entitykey: str | None,
-        device_class: SensorDeviceClass | None,
+        device_class: DeviceClass | None,
     ):
         super().__init__(manager, channel, entitykey, device_class)
-        self._attr_native_unit_of_measurement = DEVICECLASS_TO_UNIT_MAP.get(
+        self._attr_native_unit_of_measurement = self.DEVICECLASS_TO_UNIT_MAP.get(
             device_class
         )
-        self._attr_state_class = DEVICECLASS_TO_STATECLASS_MAP.get(
-            device_class, SensorStateClass.MEASUREMENT
+        self._attr_state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
+            device_class, MLSensor.StateClass.MEASUREMENT
         )
 
     @staticmethod
-    def build_for_device(device: MerossDevice, device_class: SensorDeviceClass):
+    def build_for_device(device: MerossDevice, device_class: MLSensor.DeviceClass):
         return MLSensor(device, None, str(device_class), device_class)
 
     @property

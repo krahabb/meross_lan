@@ -19,16 +19,6 @@ if typing.TYPE_CHECKING:
 
 
 try:
-    NumberDeviceClass = number.NumberDeviceClass  # type: ignore
-except Exception:
-    from .helpers import StrEnum
-
-    class NumberDeviceClass(StrEnum):
-        HUMIDITY = "humidity"
-        TEMPERATURE = "temperature"
-
-
-try:
     NUMBERMODE_AUTO = number.NumberMode.AUTO
     NUMBERMODE_BOX = number.NumberMode.BOX
     NUMBERMODE_SLIDER = number.NumberMode.SLIDER
@@ -46,10 +36,10 @@ async def async_setup_entry(
 
 class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     PLATFORM = number.DOMAIN
-    DeviceClass = NumberDeviceClass
+    DeviceClass = number.NumberDeviceClass
     DEVICECLASS_TO_UNIT_MAP = {
-        NumberDeviceClass.HUMIDITY: PERCENTAGE,
-        NumberDeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
+        DeviceClass.HUMIDITY: PERCENTAGE,
+        DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
     }
 
     DEBOUNCE_DELAY = 1
@@ -84,7 +74,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         manager: EntityManager,
         channel: object | None,
         entitykey: str | None = None,
-        device_class: NumberDeviceClass | None = None,
+        device_class: DeviceClass | None = None,
     ):
         super().__init__(manager, channel, entitykey, device_class)
         self._unsub_request = None
