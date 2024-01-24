@@ -14,13 +14,8 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const as mlc
-from .helpers import (
-    LOGGER,
-    ApiProfile,
-    ConfigEntriesHelper,
-    ConfigEntryManager,
-    schedule_async_callback,
-)
+from .helpers import LOGGER, ConfigEntriesHelper, schedule_async_callback
+from .helpers.manager import ApiProfile, ConfigEntryManager
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (

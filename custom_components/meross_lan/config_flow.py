@@ -18,12 +18,8 @@ from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
-from .helpers import (
-    ApiProfile,
-    CloudApiClient,
-    ConfigEntriesHelper,
-    reverse_lookup,
-)
+from .helpers import ConfigEntriesHelper, reverse_lookup
+from .helpers.manager import ApiProfile, CloudApiClient
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
@@ -162,17 +158,15 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             description_placeholders=description_placeholders,
         )
 
-    def clone_api_diagnostic_config(self, config: mlc.DeviceConfigType | mlc.ProfileConfigType):
+    def clone_api_diagnostic_config(
+        self, config: mlc.DeviceConfigType | mlc.ProfileConfigType
+    ):
         """Clone actual MerossApi diagnostic settings on new device/profile config being created."""
         if api_config := self.api.config:
             if mlc.CONF_LOGGING_LEVEL in api_config:
-                config[mlc.CONF_LOGGING_LEVEL] = api_config[
-                    mlc.CONF_LOGGING_LEVEL
-                ]
+                config[mlc.CONF_LOGGING_LEVEL] = api_config[mlc.CONF_LOGGING_LEVEL]
             if mlc.CONF_OBFUSCATE in api_config:
-                config[mlc.CONF_OBFUSCATE] = api_config[
-                    mlc.CONF_OBFUSCATE
-                ]
+                config[mlc.CONF_OBFUSCATE] = api_config[mlc.CONF_OBFUSCATE]
 
     def finish_options_flow(
         self, config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType
@@ -219,7 +213,11 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 # and MerossCloudCredentials keys (updated when logging into Meross http api)
                 # it also serves as a cache for the UI step and so carries some temporary
                 # keys which need to be removed before persisting to config entry
-                self.merge_userinput(profile_config, user_input, (mlc.CONF_CLOUD_REGION, mlc.CONF_MFA_CODE))
+                self.merge_userinput(
+                    profile_config,
+                    user_input,
+                    (mlc.CONF_CLOUD_REGION, mlc.CONF_MFA_CODE),
+                )
                 if (mlc.CONF_PASSWORD in user_input) or (
                     mlc.CONF_MFA_CODE in user_input
                 ):

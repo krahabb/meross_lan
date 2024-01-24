@@ -4,7 +4,7 @@ import typing
 
 from ..binary_sensor import MLBinarySensor
 from ..climate import MtsClimate
-from ..helpers import PollingStrategy, SmartPollingStrategy
+from ..helpers.namespaces import PollingStrategy, SmartPollingStrategy
 from ..merossclient import KEY_TO_NAMESPACE, const as mc
 from ..number import MtsRichTemperatureNumber
 from ..sensor import MLSensor

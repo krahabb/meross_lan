@@ -27,14 +27,13 @@ from .const import (
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
 from .helpers import (
-    PollingStrategy,
-    SmartPollingStrategy,
     clamp,
     get_entity_last_state_available,
     schedule_async_callback,
     schedule_callback,
     versiontuple,
 )
+from .helpers.namespaces import PollingStrategy, SmartPollingStrategy
 from .merossclient import const as mc, get_default_arguments
 from .number import MLConfigNumber
 from .switch import MLSwitch
@@ -43,7 +42,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import MerossDevice, MerossDeviceDescriptor
+    from .meross_device import MerossDevice
 
 STATE_MAP = {0: STATE_CLOSED, 1: STATE_OPEN}
 

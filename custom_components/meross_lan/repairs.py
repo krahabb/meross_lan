@@ -8,7 +8,8 @@ from homeassistant.helpers.issue_registry import IssueSeverity
 from homeassistant.util import dt as dt_util
 
 from . import const as mlc
-from .helpers import ApiProfile, ConfigEntriesHelper
+from .helpers import ConfigEntriesHelper
+from .helpers.manager import ApiProfile
 
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant

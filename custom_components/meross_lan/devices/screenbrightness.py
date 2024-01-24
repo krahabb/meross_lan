@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing
 
-from ..helpers import SmartPollingStrategy
+from ..helpers.namespaces import SmartPollingStrategy
 from ..merossclient import const as mc
 from ..number import PERCENTAGE, MLConfigNumber
 

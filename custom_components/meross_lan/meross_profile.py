@@ -29,8 +29,6 @@ from .const import (
     DeviceConfigType,
 )
 from .helpers import (
-    ApiProfile,
-    CloudApiClient,
     ConfigEntriesHelper,
     Loggable,
     datetime_from_epoch,
@@ -38,6 +36,7 @@ from .helpers import (
     schedule_callback,
     versiontuple,
 )
+from .helpers.manager import ApiProfile, CloudApiClient
 from .meross_device_hub import MerossDeviceHub
 from .merossclient import (
     MEROSSDEBUG,

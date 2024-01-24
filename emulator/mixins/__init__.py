@@ -6,6 +6,7 @@ import typing
 from zoneinfo import ZoneInfo
 
 from custom_components.meross_lan.merossclient import (
+    NAMESPACE_TO_KEY,
     MerossDeviceDescriptor,
     MerossHeaderType,
     MerossMessageType,
@@ -16,7 +17,6 @@ from custom_components.meross_lan.merossclient import (
     get_replykey,
     json_dumps,
     json_loads,
-    NAMESPACE_TO_KEY,
 )
 
 if typing.TYPE_CHECKING:

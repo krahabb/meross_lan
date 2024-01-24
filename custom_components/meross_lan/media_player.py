@@ -14,7 +14,8 @@ from homeassistant.components.media_player.const import (
 from homeassistant.const import STATE_IDLE, STATE_PLAYING
 
 from . import meross_entity as me
-from .helpers import PollingStrategy, clamp
+from .helpers import clamp
+from .helpers.namespaces import PollingStrategy
 from .light import MLLight
 from .merossclient import const as mc  # mEROSS cONST
 

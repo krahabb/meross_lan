@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import typing
 
-from ..helpers import PollingStrategy, reverse_lookup
+from ..helpers import reverse_lookup
+from ..helpers.namespaces import PollingStrategy
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,

@@ -9,7 +9,8 @@ from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
 from .const import DOMAIN
-from .helpers import ApiProfile, NamespaceHandler, PollingStrategy, SmartPollingStrategy
+from .helpers.manager import ApiProfile
+from .helpers.namespaces import NamespaceHandler, PollingStrategy, SmartPollingStrategy
 from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (
     const as mc,
@@ -104,14 +105,19 @@ class HubNamespaceHandler(NamespaceHandler):
         subdevices = self.device.subdevices
         for p_subdevice in payload[self.key_namespace]:
             try:
-                subdevices[p_subdevice[mc.KEY_ID]]._parse(self.key_namespace, p_subdevice)
+                subdevices[p_subdevice[mc.KEY_ID]]._parse(
+                    self.key_namespace, p_subdevice
+                )
             except KeyError:
                 # force a rescan since we discovered a new subdevice
                 # only if it appears this device is online else it
                 # would be a waste since we wouldnt have enough info
                 # to correctly build that
                 if is_device_online(p_subdevice):
-                    self.device.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
+                    self.device.request(
+                        get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                    )
+
 
 class HubChunkedPollingStrategy(PollingStrategy):
     """
@@ -172,8 +178,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
                 ):
                     max_queuable += 1
 
-    def _build_subdevices_payload(self, subdevices: typing.Collection[MerossSubDevice]
-    ):
+    def _build_subdevices_payload(self, subdevices: typing.Collection[MerossSubDevice]):
         """
         This generator helps dealing with hubs hosting an high number
         of subdevices: when queried, the response payload might became huge

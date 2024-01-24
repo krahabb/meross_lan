@@ -14,7 +14,8 @@ from homeassistant.components.light import (
 
 from . import meross_entity as me
 from .const import DND_ID
-from .helpers import SmartPollingStrategy, reverse_lookup
+from .helpers import reverse_lookup
+from .helpers.namespaces import SmartPollingStrategy
 from .merossclient import const as mc, get_element_by_key_safe
 
 if typing.TYPE_CHECKING:

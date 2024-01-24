@@ -8,12 +8,9 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
-from ..helpers import (
-    ApiProfile,
-    EntityPollingStrategy,
-    SmartPollingStrategy,
-    get_entity_last_state_available,
-)
+from ..helpers import get_entity_last_state_available
+from ..helpers.manager import ApiProfile
+from ..helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
 from ..merossclient import const as mc
 from ..sensor import MLSensor
 from ..switch import MLSwitch

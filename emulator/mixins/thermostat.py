@@ -6,9 +6,9 @@ import typing
 
 from custom_components.meross_lan.helpers import clamp
 from custom_components.meross_lan.merossclient import (
+    NAMESPACE_TO_KEY,
     const as mc,
     get_element_by_key,
-    NAMESPACE_TO_KEY,
 )
 
 if typing.TYPE_CHECKING:

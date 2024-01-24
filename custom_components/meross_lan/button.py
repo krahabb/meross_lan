@@ -5,13 +5,12 @@ import typing
 from homeassistant.components import button
 
 from . import meross_entity as me
-from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers import EntityManager
+    from .helpers.manager import EntityManager
     from .meross_device import MerossDevice
 
 

@@ -41,17 +41,9 @@ from .const import (
     PARAM_TRACING_ABILITY_POLL_TIMEOUT,
     DeviceConfigType,
 )
-from .helpers import (
-    ApiProfile,
-    ConfigEntryManager,
-    EntityManager,
-    EntityPollingStrategy,
-    NamespaceHandler,
-    PollingStrategy,
-    datetime_from_epoch,
-    schedule_async_callback,
-    schedule_callback,
-)
+from .helpers import datetime_from_epoch, schedule_async_callback, schedule_callback
+from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager
+from .helpers.namespaces import EntityPollingStrategy, NamespaceHandler, PollingStrategy
 from .meross_entity import MerossFakeEntity
 from .merossclient import (
     HostAddress,

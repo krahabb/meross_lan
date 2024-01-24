@@ -15,14 +15,15 @@ from homeassistant import const as hac
 from homeassistant.helpers.entity import Entity, EntityCategory
 from homeassistant.helpers.typing import StateType
 
-from .helpers import ApiProfile, Loggable
+from .helpers import Loggable
+from .helpers.manager import ApiProfile
 from .merossclient import NAMESPACE_TO_KEY, const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers import EntityManager
+    from .helpers.manager import EntityManager
     from .meross_device import MerossDeviceBase
 
 
