@@ -450,6 +450,10 @@ MTS960_MODE_COUNTDOWN_ON = 4
 MTS960_MODE_COUNTDOWN_OFF = 5
 MTS960_MODE_SCHEDULE_HEAT = 6
 MTS960_MODE_SCHEDULE_COOL = 7
+# mapping the "state" key value to the socket/plug action
+MTS960_STATE_UNKNOWN = 0
+MTS960_STATE_ON = 1
+MTS960_STATE_OFF = 2  # this appears when the plug is off (why not 0?)
 
 # diffuser mode enums
 DIFFUSER_SPRAY_MODE_OFF = 2  # or 255 ? or 'any' ?

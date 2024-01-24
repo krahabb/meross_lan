@@ -246,7 +246,7 @@ class Mts960Climate(MtsClimate):
         if mc.KEY_ONOFF in payload:
             self._mts_onoff = payload[mc.KEY_ONOFF]
         if mc.KEY_STATE in payload:
-            self._mts_active = payload[mc.KEY_STATE]
+            self._mts_active = payload[mc.KEY_STATE] == mc.MTS960_STATE_ON
         if mc.KEY_CURRENTTEMP in payload:
             self._attr_current_temperature = (
                 payload[mc.KEY_CURRENTTEMP] / self.device_scale
