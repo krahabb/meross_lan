@@ -20,7 +20,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
-from .const import (
+from ..const import (
     CONF_ALLOW_MQTT_PUBLISH,
     CONF_CLOUD_KEY,
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
@@ -47,7 +47,7 @@ from .const import (
     DOMAIN,
     POLLING_STRATEGY_CONF,
 )
-from .merossclient import (
+from ..merossclient import (
     KEY_TO_NAMESPACE,
     NAMESPACE_TO_KEY,
     cloudapi,
@@ -85,11 +85,11 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, State
 
-    from . import MerossApi
-    from .meross_device import MerossDevice
-    from .meross_entity import MerossEntity
-    from .meross_profile import MerossCloudProfile, MQTTConnection
-    from .merossclient import HostAddress, MerossMessage, MerossPayloadType
+    from .. import MerossApi
+    from ..meross_device import MerossDevice
+    from ..meross_entity import MerossEntity
+    from ..meross_profile import MerossCloudProfile, MQTTConnection
+    from ..merossclient import HostAddress, MerossMessage, MerossPayloadType
 
 
 def clamp(_value, _min, _max):
