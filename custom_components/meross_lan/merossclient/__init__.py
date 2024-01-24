@@ -266,7 +266,14 @@ class NameSpaceToKeyMap(dict):
                 key = next(iter(mc.PAYLOAD_GET[namespace]))
             else:
                 key = namespace.split(".")[-1]
-                key = key[0].lower() + key[1:]
+                # mainly camelCasing the last split of the namespace
+                # with special care for also the last char which looks
+                # lowercase when it's a X (i.e. ToggleX -> togglex)
+                lastchar = key[-1]
+                if lastchar == "X":
+                    key = "".join((key[0].lower(), key[1:-1], "x"))
+                else:
+                    key = "".join((key[0].lower(), key[1:]))
 
             NAMESPACE_TO_KEY[namespace] = key
             KEY_TO_NAMESPACE[key] = namespace
@@ -296,17 +303,14 @@ def get_default_payload(namespace: str) -> MerossPayloadType:
     """
     if namespace in mc.PAYLOAD_GET:
         return mc.PAYLOAD_GET[namespace]
-    split = namespace.split(".")
-    key = split[-1]
-    key = key[0].lower() + key[1:]
-    match split:
+    match namespace.split("."):
         case (_, "Hub", *args):
-            return {key: []}
+            return {NAMESPACE_TO_KEY[namespace]: []}
         case (_, "RollerShutter", *args):
-            return {key: []}
+            return {NAMESPACE_TO_KEY[namespace]: []}
         case (_, _, "Thermostat", *args):
-            return {key: [{mc.KEY_CHANNEL: 0}]}
-    return {key: {}}
+            return {NAMESPACE_TO_KEY[namespace]: [{mc.KEY_CHANNEL: 0}]}
+    return {NAMESPACE_TO_KEY[namespace]: {}}
 
 
 def get_default_arguments(namespace: str):
