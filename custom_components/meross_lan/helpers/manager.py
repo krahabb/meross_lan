@@ -294,10 +294,10 @@ class ConfigEntryManager(EntityManager):
 
         async def _async_entry_reload():
             self._unsub_entry_reload_scheduler = None
-            await ApiProfile.hass.config_entries.async_reload(self.config_entry_id)
+            await self.hass.config_entries.async_reload(self.config_entry_id)
 
         self._unsub_entry_reload_scheduler = schedule_async_callback(
-            ApiProfile.hass, 15, _async_entry_reload
+            self.hass, 15, _async_entry_reload
         )
 
     def unschedule_entry_reload(self):
@@ -376,7 +376,7 @@ class ConfigEntryManager(EntityManager):
             self.log(self.DEBUG, "Tracing start")
             epoch = time()
             # assert not self.trace_file
-            tracedir = ApiProfile.hass.config.path(
+            tracedir = self.hass.config.path(
                 "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
             )
             os.makedirs(tracedir, exist_ok=True)
@@ -401,7 +401,7 @@ class ConfigEntryManager(EntityManager):
                 self.trace_close()
 
             self._unsub_trace_endtime = schedule_callback(
-                ApiProfile.hass, trace_timeout, _trace_close_callback
+                self.hass, trace_timeout, _trace_close_callback
             )
             self._trace_opened(epoch)
         except Exception as exception:
@@ -511,11 +511,6 @@ class ApiProfile(ConfigEntryManager):
         SENSOR_DOMAIN: None,
     }
 
-    # hass, api: set when initializing MerossApi
-    hass: ClassVar[HomeAssistant] = None  # type: ignore
-    """Cached HomeAssistant instance (Boom!)"""
-    api: ClassVar[MerossApi] = None  # type: ignore
-    """Cached MerossApi instance (Boom!)"""
     devices: ClassVar[dict[str, MerossDevice | None]] = {}
     """
     dict of configured devices. Every device config_entry in the system is mapped here and
@@ -583,7 +578,7 @@ class ApiProfile(ConfigEntryManager):
         config = config_entry.data
         # the ApiProfile always enable (independent of config) mqtt publish so far
         allow_mqtt_publish = config.get(CONF_ALLOW_MQTT_PUBLISH) or (
-            self is ApiProfile.api
+            self is self.api
         )
         if allow_mqtt_publish != self.allow_mqtt_publish:
             # device._mqtt_publish is rather 'passive' so
@@ -686,7 +681,7 @@ class CloudApiClient(cloudapi.CloudApiClient, Loggable):
         cloudapi.CloudApiClient.__init__(
             self,
             credentials=credentials,
-            session=async_get_clientsession(ApiProfile.hass),
+            session=async_get_clientsession(Loggable.hass),
             logger=self,  # type: ignore (Loggable almost duck-compatible with logging.Logger)
             obfuscate_func=manager.loggable_any,
         )

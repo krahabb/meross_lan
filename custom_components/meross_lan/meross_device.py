@@ -162,7 +162,7 @@ class MerossDeviceBase(EntityManager):
         self._device_registry_entry = None
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             self._device_registry_entry = weakref.ref(
-                device_registry.async_get(ApiProfile.hass).async_get_or_create(
+                device_registry.async_get(self.hass).async_get_or_create(
                     config_entry_id=self.config_entry_id,
                     connections=connections,
                     manufacturer=mc.MANUFACTURER,
@@ -206,7 +206,7 @@ class MerossDeviceBase(EntityManager):
         )
         if _device_registry_entry is None:
             _device_registry_entry = device_registry.async_get(
-                ApiProfile.hass
+                self.hass
             ).async_get_device(**self.deviceentry_id)
             if _device_registry_entry:
                 self._device_registry_entry = weakref.ref(_device_registry_entry)
@@ -220,7 +220,7 @@ class MerossDeviceBase(EntityManager):
                 or self._get_internal_name()
             )
             if name != _device_registry_entry.name:
-                device_registry.async_get(ApiProfile.hass).async_update_device(
+                device_registry.async_get(self.hass).async_update_device(
                     _device_registry_entry.id, name=name
                 )
 
@@ -260,7 +260,7 @@ class MerossDeviceBase(EntityManager):
         )
 
     def request(self, request_tuple: MerossRequestType):
-        return ApiProfile.hass.async_create_task(self.async_request(*request_tuple))
+        return self.hass.async_create_task(self.async_request(*request_tuple))
 
     @property
     @abc.abstractmethod
@@ -740,7 +740,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # the states have been eventually restored (some entities need this)
         self._check_mqtt_connection_attach()
         self._unsub_polling_callback = schedule_async_callback(
-            ApiProfile.hass, 0, self._async_polling_callback, None
+            self.hass, 0, self._async_polling_callback, None
         )
 
     def entry_option_setup(self, config_schema: dict):
@@ -870,7 +870,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         request: MerossRequest,
     ):
-        return ApiProfile.hass.async_create_task(self.async_mqtt_request_raw(request))
+        return self.hass.async_create_task(self.async_mqtt_request_raw(request))
 
     def mqtt_request(
         self,
@@ -878,7 +878,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         method: str,
         payload: MerossPayloadType,
     ):
-        return ApiProfile.hass.async_create_task(
+        return self.hass.async_create_task(
             self.async_mqtt_request(namespace, method, payload)
         )
 
@@ -899,7 +899,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 http = MerossHttpClient(
                     self.host,  # type: ignore
                     self.key,
-                    async_get_clientsession(ApiProfile.hass),
+                    async_get_clientsession(self.hass),
                 )
                 self._http = http
 
@@ -1298,7 +1298,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         self._polling_delay = PARAM_HEARTBEAT_PERIOD
         finally:
             self._unsub_polling_callback = schedule_async_callback(
-                ApiProfile.hass, self._polling_delay, self._async_polling_callback, None
+                self.hass, self._polling_delay, self._async_polling_callback, None
             )
             self.log(self.DEBUG, "Polling end")
 
@@ -1352,7 +1352,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # reschedule immediately
                 self._unsub_polling_callback.cancel()
                 self._unsub_polling_callback = schedule_async_callback(
-                    ApiProfile.hass, 0, self._async_polling_callback, None
+                    self.hass, 0, self._async_polling_callback, None
                 )
 
         elif self.conf_protocol is CONF_PROTOCOL_MQTT:
@@ -1460,7 +1460,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # rest without an ApiProfile. This is still to be fixed but at least,
                 # whenever we refresh the device config, this kind of 'failover' will
                 # definitely bind the device to the local broker in case it got orphaned
-                ApiProfile.api.try_link(self)
+                self.api.try_link(self)
 
     def _receive(self, epoch: float, message: MerossResponse):
         """
@@ -1514,7 +1514,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if self._unsub_polling_callback:
                 self._unsub_polling_callback.cancel()
                 self._unsub_polling_callback = schedule_async_callback(
-                    ApiProfile.hass,
+                    self.hass,
                     0,
                     self._async_polling_callback,
                     header[mc.KEY_NAMESPACE],
@@ -1604,7 +1604,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if self.needsave:
             self.needsave = False
             with self.exception_warning("ConfigEntry update"):
-                entries = ApiProfile.hass.config_entries
+                entries = self.hass.config_entries
                 if entry := entries.async_get_entry(self.config_entry_id):
                     data = dict(entry.data)
                     data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
@@ -1959,7 +1959,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         self.request(get_default_arguments(ability))
                         break
             self._unsub_trace_ability_callback = schedule_callback(
-                ApiProfile.hass,
+                self.hass,
                 PARAM_TRACING_ABILITY_POLL_TIMEOUT,
                 self._trace_ability,
                 abilities_iterator,

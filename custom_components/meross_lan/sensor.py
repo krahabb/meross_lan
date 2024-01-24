@@ -20,7 +20,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers import EntityManager
+    from .helpers.manager import EntityManager
     from .meross_device import MerossDevice
 
 

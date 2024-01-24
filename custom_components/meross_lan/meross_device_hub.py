@@ -9,7 +9,6 @@ from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
 from .const import DOMAIN
-from .helpers.manager import ApiProfile
 from .helpers.namespaces import NamespaceHandler, PollingStrategy, SmartPollingStrategy
 from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (
@@ -317,7 +316,7 @@ class MerossDeviceHub(MerossDevice):
             # we'll check our device registry for luck
             try:
                 hassdevice = device_registry.async_get(
-                    ApiProfile.hass
+                    self.hass
                 ).async_get_device(identifiers={(DOMAIN, p_subdevice[mc.KEY_ID])})
                 if not hassdevice:
                     return None

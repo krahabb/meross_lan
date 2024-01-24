@@ -25,6 +25,8 @@ if typing.TYPE_CHECKING:
 
     from homeassistant.core import HomeAssistant, State
 
+    from .. import MerossApi
+
 
 def clamp(_value, _min, _max):
     """
@@ -262,6 +264,12 @@ class Loggable(abc.ABC):
     INFO = mlc.CONF_LOGGING_INFO
     WARNING = mlc.CONF_LOGGING_WARNING
     CRITICAL = mlc.CONF_LOGGING_CRITICAL
+
+    # hass, api: set when initializing MerossApi
+    hass: typing.ClassVar[HomeAssistant] = None  # type: ignore
+    """Cached HomeAssistant instance (Boom!)"""
+    api: typing.ClassVar[MerossApi] = None  # type: ignore
+    """Cached MerossApi instance (Boom!)"""
 
     __slots__ = (
         "id",

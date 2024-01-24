@@ -19,7 +19,7 @@ import voluptuous as vol
 
 from . import MerossApi, const as mlc
 from .helpers import ConfigEntriesHelper, reverse_lookup
-from .helpers.manager import ApiProfile, CloudApiClient
+from .helpers.manager import CloudApiClient
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
@@ -340,7 +340,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         config_schema = self.get_schema_with_errors()
         if self._profile_entry:
             # this is a profile OptionsFlow
-            profile = ApiProfile.profiles.get(profile_config[mc.KEY_USERID_])
+            profile = MerossApi.profiles.get(profile_config[mc.KEY_USERID_])
             require_login = not (profile and profile.token_is_valid)
         else:
             # this is not a profile OptionsFlow so we'd need to login for sure
@@ -584,7 +584,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                 except MerossKeyError:
                     return await self.async_step_keyerror()
             else:
-                if profile := next(iter(ApiProfile.active_profiles()), None):
+                if profile := next(iter(MerossApi.active_profiles()), None):
                     device_config[mlc.CONF_KEY] = profile.key
 
         return self.async_show_form_with_errors(
@@ -691,7 +691,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         try:
             # try device identification so the user/UI has a good context to start with
             _device_config = _descriptor = None
-            for profile in ApiProfile.active_profiles():
+            for profile in MerossApi.active_profiles():
                 try:
                     _device_config, _descriptor = await self._async_http_discovery(
                         host, profile.key
@@ -704,7 +704,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                     pass
                 _device_config = _descriptor = None
 
-            if (not _device_config) and (key := ApiProfile.api.key):
+            if (not _device_config) and (key := api.key):
                 try:
                     _device_config, _descriptor = await self._async_http_discovery(
                         host, key
@@ -770,8 +770,8 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         self._descriptor = descriptor
         device_id = descriptor.uuid
         if (
-            ((profile_id := descriptor.userId) in ApiProfile.profiles)
-            and (profile := ApiProfile.profiles.get(profile_id))
+            ((profile_id := descriptor.userId) in MerossApi.profiles)
+            and (profile := MerossApi.profiles.get(profile_id))
             and (device_info := profile.get_device_info(device_id))
         ):
             devname = device_info.get(mc.KEY_DEVNAME, device_id)
@@ -863,7 +863,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             self.device_config.pop(mlc.CONF_TRACE)  # totally removed in v5.0
         self._device_id = unique_id[0]
         assert self._device_id == self.device_config.get(mlc.CONF_DEVICE_ID)
-        device = ApiProfile.devices[self._device_id]
+        device = MerossApi.devices[self._device_id]
         # if config not loaded the device is None
         self.device_descriptor = (
             device.descriptor
@@ -918,7 +918,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         general (common) device configuration allowing key set and
         general parameters to be entered/modified
         """
-        device = ApiProfile.devices[self._device_id]
+        device = MerossApi.devices[self._device_id]
         device_config = self.device_config
 
         with self.show_form_errorcontext():
@@ -1077,7 +1077,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         # reload the entry so we trace also the full initialization process
         # for a more complete insight on the EntityManager context.
         # The info to trigger the trace_open on entry setup is carried through
-        # the global ApiProfile.managers_transient_state
+        # the global MerossApi.managers_transient_state
         config = self.config
         if user_input:
             config[mlc.CONF_LOGGING_LEVEL] = (
@@ -1090,7 +1090,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             config[mlc.CONF_TRACE_TIMEOUT] = user_input.get(mlc.CONF_TRACE_TIMEOUT)
             if user_input[mlc.CONF_TRACE]:
                 # only reload and start tracing if the user wish so
-                state = ApiProfile.managers_transient_state.setdefault(
+                state = MerossApi.managers_transient_state.setdefault(
                     self.config_entry_id, {}
                 )
                 state[mlc.CONF_TRACE] = user_input[mlc.CONF_TRACE]
@@ -1185,7 +1185,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                         bind_config[mc.KEY_DOMAIN] = domain = str(broker_address)
                         break
 
-                device = ApiProfile.devices[self._device_id]
+                device = MerossApi.devices[self._device_id]
                 if not (device and device.online):
                     raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 
@@ -1280,7 +1280,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
 
         with self.show_form_errorcontext():
             if user_input:
-                device = ApiProfile.devices[self._device_id]
+                device = MerossApi.devices[self._device_id]
                 if not (device and device.online):
                     raise FlowError(FlowErrorKey.CANNOT_CONNECT)
 

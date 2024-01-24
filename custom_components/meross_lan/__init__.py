@@ -14,7 +14,7 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const as mlc
-from .helpers import LOGGER, ConfigEntriesHelper, schedule_async_callback
+from .helpers import LOGGER, ConfigEntriesHelper, Loggable, schedule_async_callback
 from .helpers.manager import ApiProfile, ConfigEntryManager
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
@@ -72,7 +72,7 @@ class HAMQTTConnection(MQTTConnection):
 
             async def _async_random_disconnect():
                 self._unsub_random_disconnect = schedule_async_callback(
-                    ApiProfile.hass, 60, _async_random_disconnect
+                    MerossApi.hass, 60, _async_random_disconnect
                 )
                 if self._mqtt_subscribing:
                     return
@@ -86,7 +86,7 @@ class HAMQTTConnection(MQTTConnection):
                         await self.async_mqtt_unsubscribe()
 
             self._unsub_random_disconnect = schedule_async_callback(
-                ApiProfile.hass, 60, _async_random_disconnect
+                MerossApi.hass, 60, _async_random_disconnect
             )
         else:
             self._unsub_random_disconnect = None
@@ -109,7 +109,7 @@ class HAMQTTConnection(MQTTConnection):
         request: MerossMessage,
     ) -> tuple[str, int]:
         await mqtt_async_publish(
-            ApiProfile.hass, mc.TOPIC_REQUEST.format(device_id), request.json()
+            MerossApi.hass, mc.TOPIC_REQUEST.format(device_id), request.json()
         )
         self._mqtt_published()
         return self._MQTT_PUBLISH, self.DEFAULT_RESPONSE_TIMEOUT
@@ -128,7 +128,7 @@ class HAMQTTConnection(MQTTConnection):
 
                 global mqtt_async_publish
                 mqtt_async_publish = mqtt.async_publish
-                hass = ApiProfile.hass
+                hass = MerossApi.hass
                 self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
                     hass, mc.TOPIC_DISCOVERY, self.async_mqtt_message
                 )
@@ -164,7 +164,7 @@ class HAMQTTConnection(MQTTConnection):
         with self.exception_warning("async_mqtt_subscribe: recovering broker conf"):
             from homeassistant.components import mqtt
 
-            mqtt_data = mqtt.get_mqtt_data(ApiProfile.hass)
+            mqtt_data = mqtt.get_mqtt_data(MerossApi.hass)
             if mqtt_data and mqtt_data.client:
                 conf = mqtt_data.client.conf
                 self.broker.host = conf[mqtt.CONF_BROKER]
@@ -197,11 +197,11 @@ class HAMQTTConnection(MQTTConnection):
         # At any rate I don't have a clue on how to properly
         # replicate this and the "from" field is set as ususal
 
-        if device_id in ApiProfile.devices:
-            if device := ApiProfile.devices[device_id]:
+        if device_id in MerossApi.devices:
+            if device := MerossApi.devices[device_id]:
                 key = device.key
             else:  # device not loaded...
-                helper = ConfigEntriesHelper(ApiProfile.hass)
+                helper = ConfigEntriesHelper(MerossApi.hass)
                 device_entry = helper.get_config_entry(device_id)
                 if device_entry:
                     key = device_entry.data.get(mlc.CONF_KEY) or ""
@@ -286,26 +286,26 @@ class MerossApi(ApiProfile):
         """
         Set up the MerossApi component.
         'Our' truth singleton is saved in hass.data[DOMAIN] and
-        ApiProfile.api is just a cache to speed access
+        MerossApi.api is just a cache to speed access
         """
-        if not MerossApi.api:
-            ApiProfile.api = hass.data[mlc.DOMAIN] = MerossApi(hass)
-            ApiProfile.hass = hass
+        if not (api := Loggable.api):
+            Loggable.api = hass.data[mlc.DOMAIN] = api = MerossApi(hass)
+            Loggable.hass = hass
 
             async def _async_unload_merossapi(_event) -> None:
-                for device in ApiProfile.active_devices():
+                for device in MerossApi.active_devices():
                     await device.async_shutdown()
-                for profile in ApiProfile.active_profiles():
+                for profile in MerossApi.active_profiles():
                     await profile.async_shutdown()
-                await ApiProfile.api.async_shutdown()
-                ApiProfile.api = None  # type: ignore
-                ApiProfile.hass.data.pop(mlc.DOMAIN)
-                ApiProfile.hass = None  # type: ignore
+                await api.async_shutdown()
+                Loggable.api = None  # type: ignore
+                Loggable.hass = None  # type: ignore
+                hass.data.pop(mlc.DOMAIN)
 
             hass.bus.async_listen_once(
                 EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi
             )
-        return MerossApi.api
+        return api
 
     def __init__(self, hass: HomeAssistant):
         super().__init__(mlc.CONF_PROFILE_ID_LOCAL, None)
@@ -642,7 +642,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     LOGGER.debug("async_unload_entry { entry_id: %s }", config_entry.entry_id)
 
-    manager = ApiProfile.managers[config_entry.entry_id]
+    manager = MerossApi.managers[config_entry.entry_id]
     return await manager.async_unload_entry(hass, config_entry)
 
 
@@ -658,7 +658,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     if unique_id[0] == "profile":
         profile_id = unique_id[1]
-        ApiProfile.profiles.pop(profile_id)
+        MerossApi.profiles.pop(profile_id)
         await MerossCloudProfileStore(profile_id).async_remove()
         credentials: MerossCloudCredentials = entry.data  # type: ignore
         await cloudapi.CloudApiClient(
@@ -666,4 +666,4 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
         ).async_logout_safe()
         return
 
-    ApiProfile.devices.pop(unique_id[0])
+    MerossApi.devices.pop(unique_id[0])

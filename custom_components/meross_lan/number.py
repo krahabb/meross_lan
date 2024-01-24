@@ -14,7 +14,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .climate import MtsClimate
-    from .helpers import EntityManager
+    from .helpers.manager import EntityManager
     from .meross_device import MerossDevice
 
 

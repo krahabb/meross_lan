@@ -9,7 +9,6 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
 from ..helpers import get_entity_last_state_available
-from ..helpers.manager import ApiProfile
 from ..helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
 from ..merossclient import const as mc
 from ..sensor import MLSensor
@@ -169,7 +168,7 @@ class ElectricityMixin(
                 tzinfo=dt_util.DEFAULT_TIME_ZONE,
             )
             self._cancel_energy_reset = async_track_point_in_time(
-                ApiProfile.hass, self._energy_reset, next_reset
+                self.hass, self._energy_reset, next_reset
             )
             self.log(self.DEBUG, "_schedule_next_reset at %s", next_reset.isoformat())
 

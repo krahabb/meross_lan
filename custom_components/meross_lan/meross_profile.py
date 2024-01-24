@@ -12,7 +12,6 @@ import typing
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
 from homeassistant.helpers import storage
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const as mlc
 from .const import (
@@ -367,7 +366,7 @@ class MQTTConnection(Loggable):
         device_id: str,
         request: MerossMessage,
     ):
-        return ApiProfile.hass.async_create_task(
+        return self.hass.async_create_task(
             self.async_mqtt_publish(device_id, request)
         )
 
@@ -503,15 +502,15 @@ class MQTTConnection(Loggable):
                 return
 
             # lookout for any disabled/ignored entry
-            config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
+            config_entries_helper = ConfigEntriesHelper(self.hass)
             if (
-                (profile is ApiProfile.api)
+                (profile is self.api)
                 and (not config_entries_helper.get_config_entry(DOMAIN))
                 and (not config_entries_helper.get_config_flow(DOMAIN))
             ):
                 # not really needed but we would like to always have the
                 # MQTT hub entry in case so if the user removed that..retrigger
-                await ApiProfile.hass.config_entries.flow.async_init(
+                await self.hass.config_entries.flow.async_init(
                     DOMAIN,
                     context={"source": "hub"},
                     data=None,
@@ -669,7 +668,7 @@ class MQTTConnection(Loggable):
             self.profile.loggable_device_id(device_id),
             timeout=14400,
         ):
-            result = await ApiProfile.hass.config_entries.flow.async_init(
+            result = await self.hass.config_entries.flow.async_init(
                 DOMAIN,
                 context={"source": SOURCE_INTEGRATION_DISCOVERY},
                 data=await self.async_identify_device(device_id, self.profile.key),
@@ -775,7 +774,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     )
 
     def __init__(self, profile: MerossCloudProfile, broker: HostAddress):
-        hass = ApiProfile.hass
+        hass = self.hass
         MerossMQTTAppClient.__init__(
             self, profile.key, profile.userid, app_id=profile.app_id, loop=hass.loop
         )
@@ -829,7 +828,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         device_id: str,
         request: MerossMessage,
     ) -> tuple[str, int]:
-        return await ApiProfile.hass.async_add_executor_job(
+        return await self.hass.async_add_executor_job(
             self._publish, device_id, request
         )
 
@@ -878,7 +877,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         )
         if ret is False:
             if sensor_connection := self.sensor_connection:
-                ApiProfile.hass.loop.call_soon_threadsafe(
+                self.hass.loop.call_soon_threadsafe(
                     sensor_connection.inc_counter_with_state,
                     ConnectionSensor.ATTR_DROPPED,
                     ConnectionSensor.STATE_DROPPING,
@@ -894,7 +893,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             return (self._MQTT_DROP, 0)
         if ret is True:
             if sensor_connection := self.sensor_connection:
-                ApiProfile.hass.loop.call_soon_threadsafe(
+                self.hass.loop.call_soon_threadsafe(
                     sensor_connection.inc_queued,
                     self.rl_queue_length,
                 )
@@ -1061,7 +1060,7 @@ class MerossCloudProfile(ApiProfile):
         """
         assert self._unsub_polling_query_device_info is None
         self._unsub_polling_query_device_info = schedule_async_callback(
-            ApiProfile.hass,
+            self.hass,
             next_query_delay,
             self._async_polling_query_device_info,
         )
@@ -1259,7 +1258,7 @@ class MerossCloudProfile(ApiProfile):
             if self._unsub_polling_query_device_info:
                 self._unsub_polling_query_device_info.cancel()
             self._unsub_polling_query_device_info = schedule_async_callback(
-                ApiProfile.hass,
+                self.hass,
                 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
                 self._async_polling_query_device_info,
             )
@@ -1429,7 +1428,7 @@ class MerossCloudProfile(ApiProfile):
                 # this happens when 'async_query_devices' is unable to
                 # retrieve fresh cloud data for whatever reason
                 self._unsub_polling_query_device_info = schedule_async_callback(
-                    ApiProfile.hass,
+                    self.hass,
                     PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
                     self._async_polling_query_device_info,
                 )
@@ -1549,7 +1548,7 @@ class MerossCloudProfile(ApiProfile):
             )
             return
 
-        config_entries_helper = ConfigEntriesHelper(ApiProfile.hass)
+        config_entries_helper = ConfigEntriesHelper(self.hass)
         for device_info in device_info_unknown:
             with self.exception_warning("_process_device_info_unknown"):
                 device_id = device_info[mc.KEY_UUID]
