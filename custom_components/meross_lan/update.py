@@ -27,16 +27,5 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
     def available(self):
         return True
 
-    @property
-    def supported_features(self):
-        """Flag supported features."""
-        return update.UpdateEntityFeature.INSTALL
-
-    async def async_install(self, version: str | None, backup: bool, **kwargs) -> None:
-        self.log(
-            self.WARNING,
-            "The firmware update feature is not (yet) available: use the Meross app to carry the process"
-        )
-
     def set_unavailable(self):
         pass
