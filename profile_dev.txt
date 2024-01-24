@@ -1,0 +1,230 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.4, pytest-7.4.0, pluggy-1.2.0
+rootdir: /workspaces/meross_lan
+configfile: pyproject.toml
+plugins: xdist-3.2.1, homeassistant-custom-component-0.13.42, cov-3.0.0, picked-0.4.6, aiohttp-1.0.4, requests-mock-1.11.0, syrupy-4.0.2, unordered-0.5.2, test-groups-1.0.3, anyio-4.1.0, sugar-0.9.6, socket-0.5.1, pytest_freezer-0.4.6, asyncio-0.20.3, respx-0.20.1, timeout-2.1.0
+asyncio: mode=Mode.AUTO
+collected 1 item
+
+tests/profile_meross_device.py cProfile sorted stats:
+         1268628 function calls (1261650 primitive calls) in 1.406 seconds
+
+   Ordered by: internal time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+     3000    0.128    0.000    0.128    0.000 /usr/local/lib/python3.11/json/encoder.py:205(iterencode)
+    26623    0.127    0.000    0.207    0.000 /usr/local/lib/python3.11/site-packages/freezegun/api.py:144(_should_use_real_time)
+     2000    0.068    0.000    0.068    0.000 /usr/local/lib/python3.11/json/decoder.py:343(raw_decode)
+    26623    0.045    0.000    0.049    0.000 /usr/local/lib/python3.11/calendar.py:653(timegm)
+     2889    0.044    0.000    0.325    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity.py:779(_async_write_ha_state)
+    11956    0.042    0.000    0.294    0.000 /workspaces/meross_lan/custom_components/meross_lan/merossclient/__init__.py:155(build_message)
+    18845    0.041    0.000    0.258    0.000 /usr/local/lib/python3.11/site-packages/freezegun/api.py:173(fake_time)
+   135115    0.038    0.000    0.038    0.000 {method 'startswith' of 'str' objects}
+    26623    0.034    0.000    0.034    0.000 {method 'timetuple' of 'datetime.datetime' objects}
+    17934    0.033    0.000    0.063    0.000 /workspaces/meross_lan/custom_components/meross_lan/merossclient/__init__.py:218(get_message_signature)
+     2889    0.029    0.000    0.094    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/core.py:1592(async_set)
+5978/1000    0.025    0.000    0.215    0.000 /workspaces/meross_lan/emulator/__init__.py:231(_handle_message)
+   171427    0.023    0.000    0.023    0.000 {method 'get' of 'dict' objects}
+     2889    0.023    0.000    0.044    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/components/sensor/__init__.py:472(state)
+     5978    0.022    0.000    0.026    0.000 /usr/local/lib/python3.11/uuid.py:139(__init__)
+     1981    0.018    0.000    1.363    0.001 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:780(async_request_flush)
+    26623    0.018    0.000    0.028    0.000 /usr/local/lib/python3.11/inspect.py:1749(currentframe)
+     1000    0.017    0.000    0.018    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/json.py:115(json_dumps)
+    26623    0.015    0.000    0.021    0.000 /usr/local/lib/python3.11/site-packages/freezegun/api.py:169(get_current_time)
+     4978    0.015    0.000    1.339    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:742(async_request_poll)
+     7778    0.014    0.000    0.046    0.000 /usr/local/lib/python3.11/site-packages/freezegun/api.py:203(_get_fake_monotonic)
+     2000    0.013    0.000    0.017    0.000 {built-in method builtins.print}
+     1000    0.012    0.000    0.630    0.001 /workspaces/meross_lan/custom_components/meross_lan/merossclient/httpclient.py:79(async_request_raw)
+     1000    0.012    0.000    0.020    0.000 /workspaces/meross_lan/custom_components/meross_lan/merossclient/__init__.py:363(update)
+    17934    0.012    0.000    0.012    0.000 {method 'hexdigest' of '_hashlib.HASH' objects}
+     1000    0.011    0.000    0.049    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:1057(_handle_Appliance_System_All)
+     1000    0.011    0.000    0.763    0.001 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:1240(async_http_request)
+     1000    0.010    0.000    0.026    0.000 /usr/local/lib/python3.11/unittest/mock.py:1130(_increment_mock_call)
+    17934    0.010    0.000    0.010    0.000 {built-in method _hashlib.openssl_md5}
+     2889    0.010    0.000    0.019    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity.py:756(_friendly_name_internal)
+     5978    0.010    0.000    0.409    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:932(_handle)
+     5978    0.010    0.000    0.041    0.000 /usr/local/lib/python3.11/uuid.py:721(uuid4)
+     2889    0.010    0.000    0.011    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/core.py:1241(__init__)
+     1000    0.009    0.000    0.389    0.000 /workspaces/meross_lan/emulator/__init__.py:175(handle)
+    54861    0.009    0.000    0.009    0.000 {built-in method builtins.isinstance}
+     5778    0.009    0.000    0.012    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/components/sensor/__init__.py:443(unit_of_measurement)
+    46846    0.009    0.000    0.009    0.000 {built-in method builtins.hasattr}
+     2889    0.009    0.000    0.053    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity.py:744(_stringify_state)
+     1000    0.008    0.000    1.406    0.001 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:853(async_request_updates)
+     1000    0.008    0.000    0.026    0.000 /usr/local/lib/python3.11/site-packages/pytest_homeassistant_custom_component/test_util/aiohttp.py:197(match_request)
+    16000    0.008    0.000    0.008    0.000 {built-in method builtins.delattr}
+     3000    0.008    0.000    0.138    0.000 /usr/local/lib/python3.11/json/encoder.py:183(encode)
+     5978    0.008    0.000    0.028    0.000 /workspaces/meross_lan/custom_components/meross_lan/merossclient/__init__.py:224(get_replykey)
+    14978    0.008    0.000    0.008    0.000 {built-in method builtins.getattr}
+     1000    0.008    0.000    0.454    0.000 /usr/local/lib/python3.11/site-packages/pytest_homeassistant_custom_component/test_util/aiohttp.py:124(match_request)
+     1000    0.007    0.000    0.183    0.000 /workspaces/meross_lan/emulator/__init__.py:311(_SET_Appliance_Control_Multiple)
+     1000    0.007    0.000    0.336    0.000 /workspaces/meross_lan/custom_components/meross_lan/devices/mss.py:141(_handle_Appliance_Control_Electricity)
+     1000    0.007    0.000    0.155    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:793(<listcomp>)
+     1000    0.006    0.000    0.419    0.000 /workspaces/meross_lan/tests/helpers.py:352(_handle_http_request)
+     2000    0.006    0.000    0.078    0.000 /usr/local/lib/python3.11/json/decoder.py:332(decode)
+    26623    0.006    0.000    0.006    0.000 /usr/local/lib/python3.11/site-packages/freezegun/api.py:501(__call__)
+     5778    0.006    0.000    0.087    0.000 /usr/local/lib/python3.11/site-packages/freezegun/api.py:228(fake_perf_counter)
+     1981    0.005    0.000    0.010    0.000 /workspaces/meross_lan/emulator/__init__.py:263(_handler_default)
+     1000    0.005    0.000    0.024    0.000 /usr/local/lib/python3.11/site-packages/pytest_homeassistant_custom_component/test_util/aiohttp.py:160(__init__)
+     1000    0.005    0.000    0.006    0.000 /usr/local/lib/python3.11/contextlib.py:104(__init__)
+     3000    0.005    0.000    0.011    0.000 /usr/local/lib/python3.11/random.py:284(randrange)
+     5978    0.005    0.000    0.005    0.000 {built-in method posix.urandom}
+     3000    0.005    0.000    0.019    0.000 /workspaces/meross_lan/custom_components/meross_lan/helpers.py:565(async_poll)
+     1000    0.005    0.000    0.664    0.001 /workspaces/meross_lan/custom_components/meross_lan/merossclient/httpclient.py:129(async_request)
+     5981    0.005    0.000    0.330    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:212(update_state)
+     4000    0.005    0.000    1.345    0.000 /workspaces/meross_lan/custom_components/meross_lan/helpers.py:542(async_poll)
+    26623    0.005    0.000    0.005    0.000 {method 'toordinal' of 'datetime.date' objects}
+     5978    0.005    0.000    0.005    0.000 /usr/local/lib/python3.11/uuid.py:334(hex)
+     1000    0.005    0.000    0.018    0.000 /workspaces/meross_lan/emulator/mixins/electricity.py:35(_GET_Appliance_Control_Electricity)
+     2000    0.005    0.000    0.009    0.000 /usr/local/lib/python3.11/urllib/parse.py:729(parse_qsl)
+     1000    0.004    0.000    0.047    0.000 /usr/local/lib/python3.11/unittest/mock.py:1119(__call__)
+    20934    0.004    0.000    0.004    0.000 {method 'join' of 'str' objects}
+     1000    0.004    0.000    0.022    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:878(receive)
+    26623    0.004    0.000    0.004    0.000 {built-in method sys._getframe}
+2000/1000    0.004    0.000    0.008    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:968(_parse__generic)
+      997    0.004    0.000    0.004    0.000 /workspaces/meross_lan/custom_components/meross_lan/devices/mss.py:342(<listcomp>)
+     4000    0.004    0.000    0.005    0.000 /usr/local/lib/python3.11/urllib/parse.py:119(_coerce_args)
+    18934    0.004    0.000    0.004    0.000 {method 'encode' of 'str' objects}
+     1981    0.004    0.000    0.005    0.000 /workspaces/meross_lan/emulator/__init__.py:201(_get_key_state)
+     3978    0.004    0.000    1.340    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:763(async_request_smartpoll)
+     3000    0.004    0.000    0.006    0.000 /usr/local/lib/python3.11/unittest/mock.py:762(__setattr__)
+     6000    0.004    0.000    0.005    0.000 /usr/local/lib/python3.11/site-packages/yarl/_url.py:41(__get__)
+     2889    0.004    0.000    0.005    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/core.py:1386(expire)
+     2889    0.004    0.000    0.005    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/core.py:1010(async_fire)
+     2000    0.004    0.000    0.082    0.000 /usr/local/lib/python3.11/json/__init__.py:299(loads)
+     2000    0.004    0.000    0.005    0.000 /usr/local/lib/python3.11/unittest/mock.py:2483(__new__)
+     2889    0.004    0.000    0.004    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/components/sensor/__init__.py:276(_numeric_state_expected)
+     1000    0.003    0.000    0.015    0.000 /usr/local/lib/python3.11/unittest/mock.py:1176(_execute_mock_call)
+     3000    0.003    0.000    0.141    0.000 /usr/local/lib/python3.11/json/__init__.py:183(dumps)
+    19734    0.003    0.000    0.003    0.000 {built-in method builtins.len}
+      997    0.003    0.000    0.008    0.000 /workspaces/meross_lan/custom_components/meross_lan/devices/mss.py:299(_handle_Appliance_Control_ConsumptionX)
+     1000    0.003    0.000    0.004    0.000 /usr/local/lib/python3.11/site-packages/aiohttp/client.py:945(post)
+     3000    0.003    0.000    0.005    0.000 /usr/local/lib/python3.11/random.py:235(_randbelow_with_getrandbits)
+     1000    0.003    0.000    0.030    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:187(_reschedule)
+     4000    0.003    0.000    0.004    0.000 <frozen codecs>:327(reset)
+     5778    0.003    0.000    0.003    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/core.py:871(__init__)
+     2889    0.003    0.000    0.003    0.000 {ulid_transform._ulid_impl._ulid_at_time}
+     1000    0.003    0.000    0.011    0.000 /usr/local/lib/python3.11/asyncio/base_events.py:733(call_at)
+     2889    0.003    0.000    0.006    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/backports/enum.py:19(__str__)
+     4000    0.003    0.000    0.003    0.000 {method 'match' of 're.Pattern' objects}
+     2889    0.003    0.000    0.003    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/device_registry.py:744(async_get)
+     1000    0.003    0.000    0.005    0.000 /usr/local/lib/python3.11/asyncio/events.py:147(cancel)
+     2889    0.003    0.000    0.003    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/components/sensor/__init__.py:322(capability_attributes)
+     1000    0.003    0.000    0.779    0.001 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:578(async_request)
+      997    0.003    0.000    0.003    0.000 /workspaces/meross_lan/emulator/mixins/electricity.py:106(_GET_Appliance_Control_ConsumptionX)
+     2000    0.002    0.000    0.012    0.000 /usr/local/lib/python3.11/urllib/parse.py:687(parse_qs)
+     2889    0.002    0.000    0.003    0.000 /usr/local/lib/python3.11/enum.py:192(__get__)
+     3000    0.002    0.000    0.003    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity.py:662(enabled)
+     1000    0.002    0.000    0.023    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:21(timeout)
+     3000    0.002    0.000    0.013    0.000 /usr/local/lib/python3.11/random.py:358(randint)
+    14445    0.002    0.000    0.002    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:156(device_class)
+     1000    0.002    0.000    0.003    0.000 /usr/local/lib/python3.11/asyncio/events.py:31(__init__)
+     1000    0.002    0.000    0.017    0.000 /workspaces/meross_lan/emulator/__init__.py:192(update_epoch)
+2000/1000    0.002    0.000    0.006    0.000 /workspaces/meross_lan/custom_components/meross_lan/merossclient/__init__.py:358(__getattr__)
+     2889    0.002    0.000    0.003    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/components/sensor/__init__.py:401(suggested_display_precision)
+    12956    0.002    0.000    0.002    0.000 {method 'append' of 'list' objects}
+     3000    0.002    0.000    0.002    0.000 /usr/local/lib/python3.11/unittest/mock.py:337(_set)
+     2889    0.002    0.000    0.003    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/components/sensor/__init__.py:295(options)
+     2000    0.002    0.000    0.028    0.000 /usr/local/lib/python3.11/site-packages/freezegun/api.py:221(fake_monotonic)
+     1000    0.002    0.000    0.005    0.000 /usr/local/lib/python3.11/asyncio/events.py:103(__init__)
+     1000    0.002    0.000    0.004    0.000 /workspaces/meross_lan/custom_components/meross_lan/merossclient/__init__.py:330(<lambda>)
+     7778    0.002    0.000    0.002    0.000 {method 'lower' of 'str' objects}
+     2889    0.002    0.000    0.002    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/components/sensor/__init__.py:366(state_attributes)
+     1000    0.002    0.000    0.781    0.001 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:261(async_request_ack)
+     1000    0.002    0.000    0.008    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:209(_do_exit)
+     2889    0.002    0.000    0.003    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity.py:563(icon)
+     1000    0.002    0.000    0.003    0.000 /usr/local/lib/python3.11/contextlib.py:141(__exit__)
+     2000    0.002    0.000    0.002    0.000 {built-in method builtins.next}
+     1000    0.002    0.000    0.003    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:89(__init__)
+     5978    0.002    0.000    0.002    0.000 {method 'replace' of 'str' objects}
+     8667    0.002    0.000    0.002    0.000 /workspaces/meross_lan/custom_components/meross_lan/sensor.py:116(state_class)
+     2889    0.002    0.000    0.002    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/device_registry.py:308(async_get)
+     2889    0.002    0.000    0.002    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity.py:345(use_device_name)
+     1000    0.002    0.000    0.007    0.000 /usr/local/lib/python3.11/contextlib.py:287(helper)
+     1000    0.002    0.000    0.002    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:166(update)
+     3000    0.002    0.000    0.003    0.000 /usr/local/lib/python3.11/unittest/mock.py:332(_get)
+     1000    0.002    0.000    0.002    0.000 /usr/local/lib/python3.11/unittest/mock.py:150(_callable)
+     1000    0.002    0.000    0.032    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:203(_do_enter)
+     8667    0.002    0.000    0.002    0.000 /workspaces/meross_lan/custom_components/meross_lan/sensor.py:108(native_unit_of_measurement)
+     2000    0.002    0.000    0.029    0.000 /usr/local/lib/python3.11/asyncio/base_events.py:700(time)
+     1000    0.002    0.000    0.016    0.000 /usr/local/lib/python3.11/unittest/mock.py:1127(_mock_call)
+     5978    0.001    0.000    0.001    0.000 {built-in method from_bytes}
+     1000    0.001    0.000    0.004    0.000 /workspaces/meross_lan/custom_components/meross_lan/helpers.py:519(async_poll)
+     1000    0.001    0.000    0.002    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:1122(_handle_Appliance_System_DNDMode)
+     2000    0.001    0.000    0.001    0.000 {method 'decode' of 'bytes' objects}
+     5978    0.001    0.000    0.001    0.000 {method 'count' of 'list' objects}
+      981    0.001    0.000    0.002    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:1125(_handle_Appliance_System_Runtime)
+     5778    0.001    0.000    0.001    0.000 {method 'update' of 'dict' objects}
+     1000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/asyncio/events.py:64(cancel)
+     2000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/unittest/mock.py:2515(__init__)
+     1000    0.001    0.000    0.003    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:293(_parse_togglex)
+     1000    0.001    0.000    0.009    0.000 /workspaces/meross_lan/custom_components/meross_lan/switch.py:75(_parse_togglex)
+     9000    0.001    0.000    0.001    0.000 {built-in method _operator.index}
+     1000    0.001    0.000    0.002    0.000 {built-in method _heapq.heappush}
+     5778    0.001    0.000    0.001    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:198(unique_id)
+     1000    0.001    0.000    0.001    0.000 /workspaces/meross_lan/custom_components/meross_lan/devices/mss.py:76(update_estimate)
+     1000    0.001    0.000    0.006    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:149(_reject)
+     2889    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/enum.py:1243(value)
+     1000    0.001    0.000    0.001    0.000 {built-in method _asyncio.get_running_loop}
+     2889    0.001    0.000    0.001    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:168(extra_state_attributes)
+     1000    0.001    0.000    0.002    0.000 /usr/local/lib/python3.11/contextlib.py:132(__enter__)
+     1000    0.001    0.000    0.009    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:123(__aexit__)
+     1000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/unittest/mock.py:74(_is_exception)
+     2889    0.001    0.000    0.001    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:180(name)
+     1000    0.001    0.000    0.002    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:227(_current_task)
+     2000    0.001    0.000    0.001    0.000 {built-in method __new__ of type object at 0x7fd1df981da0}
+     1171    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/asyncio/events.py:119(__lt__)
+     1000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/asyncio/base_events.py:1840(_timer_handle_cancelled)
+     2000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/site-packages/yarl/_url.py:418(scheme)
+     1000    0.001    0.000    0.001    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:235(update_onoff)
+     1000    0.001    0.000    0.001    0.000 /workspaces/meross_lan/custom_components/meross_lan/merossclient/__init__.py:328(<lambda>)
+     1981    0.001    0.000    0.001    0.000 {method 'split' of 'str' objects}
+     1000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/site-packages/aiohttp/client.py:1133(__await__)
+     3931    0.001    0.000    0.001    0.000 {method 'getrandbits' of '_random.Random' objects}
+     1000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/asyncio/tasks.py:35(current_task)
+     1000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/site-packages/pytest_homeassistant_custom_component/test_util/aiohttp.py:254(text)
+     2889    0.001    0.000    0.001    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:152(available)
+     1000    0.001    0.000    0.002    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:238(_get_running_loop)
+     3000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity_registry.py:176(disabled)
+     1000    0.001    0.000    0.001    0.000 /workspaces/meross_lan/custom_components/meross_lan/light.py:408(update_onoff)
+     1000    0.001    0.000    0.001    0.000 {built-in method _contextvars.copy_context}
+     4000    0.001    0.000    0.001    0.000 {method 'end' of 're.Match' objects}
+     2889    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity.py:634(attribution)
+     2889    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity.py:572(entity_picture)
+     1000    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/site-packages/yarl/_url.py:166(__new__)
+     1000    0.001    0.000    0.032    0.000 /usr/local/lib/python3.11/site-packages/async_timeout/__init__.py:119(__aenter__)
+     2889    0.001    0.000    0.001    0.000 /usr/local/lib/python3.11/site-packages/homeassistant/helpers/entity.py:600(supported_features)
+     4000    0.001    0.000    0.001    0.000 <frozen codecs>:276(reset)
+     1000    0.001    0.000    0.001    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:1739(_check_uuid_mismatch)
+     1000    0.000    0.000    0.000    0.000 /workspaces/meross_lan/emulator/__init__.py:319(_GET_Appliance_System_DNDMode)
+     1000    0.000    0.000    0.000    0.000 /usr/local/lib/python3.11/unittest/mock.py:574(__get_side_effect)
+     1000    0.000    0.000    0.000    0.000 /usr/local/lib/python3.11/site-packages/pytest_homeassistant_custom_component/test_util/aiohttp.py:265(raise_for_status)
+     1981    0.000    0.000    0.000    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_device.py:205(online)
+     2889    0.000    0.000    0.000    0.000 /workspaces/meross_lan/custom_components/meross_lan/sensor.py:112(native_value)
+     2000    0.000    0.000    0.000    0.000 /workspaces/meross_lan/tests/helpers.py:408(_patch_exception_warning)
+     2889    0.000    0.000    0.000    0.000 /usr/local/lib/python3.11/typing.py:2246(cast)
+     2889    0.000    0.000    0.000    0.000 /workspaces/meross_lan/custom_components/meross_lan/sensor.py:104(last_reset)
+     3000    0.000    0.000    0.000    0.000 {method 'bit_length' of 'int' objects}
+     2889    0.000    0.000    0.000    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:172(force_update)
+     2889    0.000    0.000    0.000    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:148(assumed_state)
+     2889    0.000    0.000    0.000    0.000 /workspaces/meross_lan/custom_components/meross_lan/meross_entity.py:176(has_entity_name)
+     2000    0.000    0.000    0.000    0.000 /usr/local/lib/python3.11/asyncio/base_events.py:1940(get_debug)
+     1000    0.000    0.000    0.000    0.000 /usr/local/lib/python3.11/site-packages/aiohttp/client.py:1121(__init__)
+      997    0.000    0.000    0.000    0.000 /workspaces/meross_lan/custom_components/meross_lan/devices/mss.py:255(reset_consumption)
+     2000    0.000    0.000    0.000    0.000 {built-in method builtins.setattr}
+     2000    0.000    0.000    0.000    0.000 {method 'items' of 'dict' objects}
+     1000    0.000    0.000    0.000    0.000 /usr/local/lib/python3.11/asyncio/base_events.py:517(_check_closed)
+     1000    0.000    0.000    0.000    0.000 {method 'search' of 're.Pattern' objects}
+     1000    0.000    0.000    0.000    0.000 {method 'keys' of 'dict' objects}
+     1000    0.000    0.000    0.000    0.000 /usr/local/lib/python3.11/unittest/mock.py:1114(_mock_check_sig)
+     1000    0.000    0.000    0.000    0.000 {method 'values' of 'dict' objects}
+     1000    0.000    0.000    0.000    0.000 {built-in method builtins.abs}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+
+
+
+.                                         [100%]
+
+--------------------------- snapshot report summary ----------------------------
+
+============================== 1 passed in 2.21s ===============================

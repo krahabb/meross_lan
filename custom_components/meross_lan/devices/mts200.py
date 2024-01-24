@@ -145,6 +145,7 @@ class Mts200Climate(MtsClimate):
         key = self.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or self.PRESET_CUSTOM
         ]
+        mode = mc.MTS200_MODE_CUSTOM if key is mc.KEY_MANUALTEMP else self._mts_mode
         if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,
@@ -152,6 +153,8 @@ class Mts200Climate(MtsClimate):
                 mc.KEY_MODE: [
                     {
                         mc.KEY_CHANNEL: self.channel,
+                        mc.KEY_MODE: mode,
+                        mc.KEY_ONOFF: 1,
                         key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale),
                     }
                 ]
@@ -163,6 +166,8 @@ class Mts200Climate(MtsClimate):
             else:
                 # optimistic update
                 self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
+                self._mts_mode = mode
+                self._mts_onoff = 1
                 self.flush_state()
 
     async def async_request_onoff(self, onoff: int):
