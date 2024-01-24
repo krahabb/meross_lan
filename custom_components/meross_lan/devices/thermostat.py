@@ -5,7 +5,7 @@ import typing
 from ..binary_sensor import MLBinarySensor
 from ..climate import MtsClimate
 from ..helpers import PollingStrategy, SmartPollingStrategy
-from ..merossclient import KEY_TO_NAMESPACE, NAMESPACE_TO_KEY, const as mc
+from ..merossclient import KEY_TO_NAMESPACE, const as mc
 from ..number import MtsRichTemperatureNumber
 from ..sensor import MLSensor
 from .mts200 import Mts200Climate
@@ -201,7 +201,7 @@ class ThermostatMixin(
                 polling_strategy_class(
                     self,
                     ns,
-                    payload={NAMESPACE_TO_KEY[ns]: self._polling_payload},
+                    payload=self._polling_payload,
                     item_count=channel_count,
                 )
 

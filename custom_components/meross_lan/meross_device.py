@@ -309,8 +309,9 @@ class SystemDebugPollingStrategy(PollingStrategy):
     but we should
     """
 
-    async def async_poll(self, epoch: float, namespace: str | None):
-        device = self.device
+    async def async_poll(
+        self, device: MerossDevice, epoch: float, namespace: str | None
+    ):
         if not device._mqtt_active:
             await device.async_request_poll(self)
 
@@ -734,7 +735,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         parse_func: typing.Callable[[dict], None] | None = None,
     ):
         if not (handler := self.namespace_handlers.get(namespace)):
-            handler = NamespaceHandler(self, namespace)
+            handler = self._create_handler(namespace)
         handler.register(entity, parse_func)
 
     def unregister_parser(self, namespace: str, entity: MerossEntity):
@@ -1201,7 +1202,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if not self._online:
                 break  # do not return: do the flush first!
             if namespace != _strategy.namespace:
-                await _strategy.async_poll(epoch, namespace)
+                await _strategy.async_poll(self, epoch, namespace)
         # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_request_flush()
 
@@ -1559,10 +1560,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             return
 
         if not (handler := self.namespace_handlers.get(namespace)):
-            handler = NamespaceHandler(self, namespace)
+            handler = self._create_handler(namespace)
 
         handler.lastrequest = self.lastresponse  # type: ignore
         handler.handler(header, payload)  # type: ignore
+
+    def _create_handler(self, namespace: str):
+        """Called by the base device message parsing chain when a new
+        NamespaceHandler need to be defined (This happens the first time
+        the namespace enters the message handling flow)"""
+        return NamespaceHandler(self, namespace)
 
     def _handle_undefined(self, header: MerossHeaderType, payload: MerossPayloadType):
         self.log(

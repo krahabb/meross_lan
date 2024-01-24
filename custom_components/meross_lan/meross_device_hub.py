@@ -9,7 +9,7 @@ from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
 from .const import DOMAIN
-from .helpers import ApiProfile, PollingStrategy, SmartPollingStrategy
+from .helpers import ApiProfile, NamespaceHandler, PollingStrategy, SmartPollingStrategy
 from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (
     const as mc,
@@ -82,14 +82,43 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
         return await super().async_request(device_value - self.device_value)
 
 
-class SubDevicePollingStrategy(PollingStrategy):
+class HubNamespaceHandler(NamespaceHandler):
+    """
+    This namespace handler must be used to handle all of the Appliance.Hub.xxx namespaces
+    since the payload parsing would just be the same where the data are just forwarded to the
+    relevant subdevice instance.
+    """
+
+    device: typing.Final[MerossDeviceHub]  # type: ignore
+
+    def __init__(self, device: MerossDeviceHub, namespace: str):
+        # watchout since this class is used as a mixin style too in HubPollingStrategy
+        # to provide the same _handle_subdevice dispatching. Having no instance data here
+        # the HubPollingStrategy can (or should) safely skip the initializer
+        NamespaceHandler.__init__(
+            self, device, namespace, handler=self._handle_subdevice
+        )
+
+    def _handle_subdevice(self, header, payload):
+        """Generalized Hub namespace dispatcher to subdevices"""
+        subdevices = self.device.subdevices
+        for p_subdevice in payload[self.key_namespace]:
+            try:
+                subdevices[p_subdevice[mc.KEY_ID]]._parse(self.key_namespace, p_subdevice)
+            except KeyError:
+                # force a rescan since we discovered a new subdevice
+                # only if it appears this device is online else it
+                # would be a waste since we wouldnt have enough info
+                # to correctly build that
+                if is_device_online(p_subdevice):
+                    self.device.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
+
+class HubChunkedPollingStrategy(PollingStrategy):
     """
     This is a strategy for polling (general) subdevices state with special care for messages
     possibly generating huge payloads (see #244). We should avoid this
     poll when the device is MQTT pushing its state
     """
-
-    device: typing.Final[MerossDeviceHub]  # type: ignore
 
     __slots__ = (
         "_types",
@@ -105,21 +134,20 @@ class SubDevicePollingStrategy(PollingStrategy):
         included: bool,
         count: int,
     ):
-        super().__init__(device, namespace)
+        PollingStrategy.__init__(self, device, namespace)
         self._types = types
         self._included = included
         self._count = count
 
-    async def async_poll(self, epoch: float, namespace: str | None):
-        device = self.device
+    async def async_poll(
+        self, device: MerossDeviceHub, epoch: float, namespace: str | None
+    ):
         if namespace or (not device._mqtt_active) or (self.lastrequest == 0):
             max_queuable = 1
             # for hubs, this payload request might be splitted
             # in order to query a small amount of devices per iteration
             # see #244 for insights
-            for p in device._build_subdevices_payload(
-                self._types, self._included, self._count
-            ):
+            for p in self._build_subdevices_payload(device.subdevices.values()):
                 # in case we're going through cloud mqtt
                 # async_request_smartpoll would check how many
                 # polls are standing in queue in order to
@@ -143,6 +171,27 @@ class SubDevicePollingStrategy(PollingStrategy):
                     cloud_queue_max=max_queuable,
                 ):
                     max_queuable += 1
+
+    def _build_subdevices_payload(self, subdevices: typing.Collection[MerossSubDevice]
+    ):
+        """
+        This generator helps dealing with hubs hosting an high number
+        of subdevices: when queried, the response payload might became huge
+        with overflow issues likely on the device side (see #244).
+        If this is the case, we'll split the request for fewer
+        devices at a time. The count param allows some flexibility depending
+        on expected payload size but we might have no clue especially for
+        bigger payloads like NS_APPLIANCE_HUB_MTS100_SCHEDULEB
+        """
+        payload = []
+        for subdevice in subdevices:
+            if (subdevice.type in self._types) == self._included:
+                payload.append({mc.KEY_ID: subdevice.id})
+                if len(payload) == self._count:
+                    yield payload
+                    payload = []
+        if payload:
+            yield payload
 
 
 class MerossDeviceHub(MerossDevice):
@@ -180,6 +229,16 @@ class MerossDeviceHub(MerossDevice):
         for subdevice in self.subdevices.values():
             subdevice._set_offline()
         super()._set_offline()
+
+    def _create_handler(self, namespace: str):
+        match namespace.split("."):
+            case (_, "Hub", "SubdeviceList"):
+                return NamespaceHandler(
+                    self, namespace, handler=self._handle_Appliance_Hub_SubdeviceList
+                )
+            case (_, "Hub", *args):
+                return HubNamespaceHandler(self, namespace)
+        return super()._create_handler(namespace)
 
     def _init_hub(self, digest: dict):
         self.subdevices: dict[object, MerossSubDevice] = {}
@@ -219,52 +278,6 @@ class MerossDeviceHub(MerossDevice):
     def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
         self._parse_hub(payload[mc.KEY_HUB])
 
-    def _handle_Appliance_Hub_Exception(self, header: dict, payload: dict):
-        """
-        method:PUSH
-        payload:{'exception': [{'id': '01008C11', 'code': 5061}]}
-        """
-        self._subdevice_parse(mc.KEY_EXCEPTION, payload)
-
-    def _handle_Appliance_Hub_Sensor_Adjust(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_ADJUST, payload)
-
-    def _handle_Appliance_Hub_Sensor_All(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_ALL, payload)
-
-    def _handle_Appliance_Hub_Sensor_DoorWindow(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_DOORWINDOW, payload)
-
-    def _handle_Appliance_Hub_Sensor_Smoke(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_SMOKEALARM, payload)
-
-    def _handle_Appliance_Hub_Sensor_TempHum(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_TEMPHUM, payload)
-
-    def _handle_Appliance_Hub_Sensor_WaterLeak(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_WATERLEAK, payload)
-
-    def _handle_Appliance_Hub_Mts100_Adjust(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_ADJUST, payload)
-
-    def _handle_Appliance_Hub_Mts100_All(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_ALL, payload)
-
-    def _handle_Appliance_Hub_Mts100_Mode(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_MODE, payload)
-
-    def _handle_Appliance_Hub_Mts100_ScheduleB(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_SCHEDULE, payload)
-
-    def _handle_Appliance_Hub_Mts100_Temperature(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_TEMPERATURE, payload)
-
-    def _handle_Appliance_Hub_Battery(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_BATTERY, payload)
-
-    def _handle_Appliance_Hub_Online(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_ONLINE, payload)
-
     def _handle_Appliance_Hub_SubdeviceList(self, header: dict, payload: dict):
         """
         {
@@ -284,9 +297,6 @@ class MerossDeviceHub(MerossDevice):
             # actually, the sample payload is reporting status=1 for a device which appears to be offline
             # is it likely unpaired?
             pass
-
-    def _handle_Appliance_Hub_ToggleX(self, header: dict, payload: dict):
-        self._subdevice_parse(mc.KEY_TOGGLEX, payload)
 
     def _subdevice_build(self, p_subdevice: dict):
         # parses the subdevice payload in 'digest' to look for a well-known type
@@ -316,13 +326,13 @@ class MerossDeviceHub(MerossDevice):
             if (mc.NS_APPLIANCE_HUB_MTS100_ALL not in polling_strategies) and (
                 mc.NS_APPLIANCE_HUB_MTS100_ALL in abilities
             ):
-                SubDevicePollingStrategy(
+                HubChunkedPollingStrategy(
                     self, mc.NS_APPLIANCE_HUB_MTS100_ALL, MTS100_ALL_TYPESET, True, 8
                 )
             if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB not in polling_strategies) and (
                 mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in abilities
             ):
-                SubDevicePollingStrategy(
+                HubChunkedPollingStrategy(
                     self,
                     mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
                     MTS100_ALL_TYPESET,
@@ -339,7 +349,7 @@ class MerossDeviceHub(MerossDevice):
             if (mc.NS_APPLIANCE_HUB_SENSOR_ALL not in polling_strategies) and (
                 mc.NS_APPLIANCE_HUB_SENSOR_ALL in abilities
             ):
-                SubDevicePollingStrategy(
+                HubChunkedPollingStrategy(
                     self, mc.NS_APPLIANCE_HUB_SENSOR_ALL, MTS100_ALL_TYPESET, False, 8
                 )
             if mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in polling_strategies:
@@ -367,40 +377,6 @@ class MerossDeviceHub(MerossDevice):
             return deviceclass(self, p_subdevice)
         # build something anyway...
         return MerossSubDevice(self, p_subdevice, _type)  # type: ignore
-
-    def _subdevice_parse(self, key: str, payload: MerossPayloadType):
-        for p_subdevice in payload[key]:
-            if subdevice := self.subdevices.get(p_subdevice[mc.KEY_ID]):
-                subdevice._parse(key, p_subdevice)
-            else:
-                # force a rescan since we discovered a new subdevice
-                # only if it appears this device is online else it
-                # would be a waste since we wouldnt have enough info
-                # to correctly build that
-                if is_device_online(p_subdevice):
-                    self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
-
-    def _build_subdevices_payload(
-        self, subdevice_types: typing.Collection, included: bool, count: int
-    ):
-        """
-        This generator helps dealing with hubs hosting an high number
-        of subdevices: when queried, the response payload might became huge
-        with overflow issues likely on the device side (see #244).
-        If this is the case, we'll split the request for fewer
-        devices at a time. The count param allows some flexibility depending
-        on expected payload size but we might have no clue especially for
-        bigger payloads like NS_APPLIANCE_HUB_MTS100_SCHEDULEB
-        """
-        payload = []
-        for subdevice in self.subdevices.values():
-            if (subdevice.type in subdevice_types) == included:
-                payload.append({mc.KEY_ID: subdevice.id})
-                if len(payload) == count:
-                    yield payload
-                    payload = []
-        if payload:
-            yield payload
 
 
 class MerossSubDevice(MerossDeviceBase):
@@ -640,6 +616,7 @@ class MerossSubDevice(MerossDeviceBase):
             self.sensor_battery.update_state(p_battery.get(mc.KEY_VALUE))
 
     def _parse_exception(self, p_exception: dict):
+        """{'id': '01008C11', 'code': 5061}"""
         self.log(self.WARNING, "Received exception payload: %s", str(p_exception))
 
     def _parse_online(self, p_online: dict):

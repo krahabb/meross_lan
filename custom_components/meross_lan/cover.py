@@ -604,7 +604,7 @@ class GarageMixin(
             SmartPollingStrategy(
                 self,
                 mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
-                payload={mc.KEY_CONFIG: self._polling_payload},
+                payload=self._polling_payload,
                 item_count=channel_count,
             )
         for channel_digest in digest:

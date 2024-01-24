@@ -652,7 +652,7 @@ class NamespaceHandler:
             )
 
 
-class PollingStrategy(NamespaceHandler):
+class PollingStrategy:
     """
     These helper class(es) is used to implement 'smart' polling
     based on current state of device, especially regarding MQTT availability.
@@ -664,6 +664,9 @@ class PollingStrategy(NamespaceHandler):
     """
 
     __slots__ = (
+        "namespace",
+        "key_namespace",
+        "lastrequest",
         "polling_period",
         "polling_period_cloud",
         "response_size",
@@ -675,12 +678,13 @@ class PollingStrategy(NamespaceHandler):
         device: MerossDevice,
         namespace: str,
         *,
-        payload: MerossPayloadType | None = None,
-        handler: Callable[[dict, dict], None] | None = None,
+        payload = None,
         item_count: int = 0,
     ):
         assert namespace not in device.polling_strategies
-        super().__init__(device, namespace, handler=handler)
+        self.namespace: Final = namespace
+        self.key_namespace = NAMESPACE_TO_KEY[namespace]
+        self.lastrequest = 0
         _conf = POLLING_STRATEGY_CONF[namespace]
         self.polling_period = _conf[0]
         self.polling_period_cloud = _conf[1]
@@ -691,7 +695,7 @@ class PollingStrategy(NamespaceHandler):
             else (
                 namespace,
                 mc.METHOD_GET,
-                payload,
+                {self.key_namespace: payload},
             )
         )
         device.polling_strategies[namespace] = self
@@ -703,7 +707,9 @@ class PollingStrategy(NamespaceHandler):
     def increment_size(self):
         self.response_size += POLLING_STRATEGY_CONF[self.namespace][3]
 
-    async def async_poll(self, epoch: float, namespace: str | None):
+    async def async_poll(
+        self, device: MerossDevice, epoch: float, namespace: str | None
+    ):
         """
         This is a basic 'default' policy:
         - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
@@ -713,9 +719,9 @@ class PollingStrategy(NamespaceHandler):
         - as an optimization, when onlining (namespace == None), we'll skip the request if it's for
         the same namespace by not calling this strategy (see MerossDevice.async_request_updates)
         """
-        if namespace or (not self.device._mqtt_active):
+        if namespace or (not device._mqtt_active):
             self.lastrequest = epoch
-            await self.device.async_request_poll(self)
+            await device.async_request_poll(self)
 
 
 class SmartPollingStrategy(PollingStrategy):
@@ -726,9 +732,11 @@ class SmartPollingStrategy(PollingStrategy):
     conservative on traffic so we delay the request even more
     """
 
-    async def async_poll(self, epoch: float, namespace: str | None):
+    async def async_poll(
+        self, device: MerossDevice, epoch: float, namespace: str | None
+    ):
         if (epoch - self.lastrequest) >= self.polling_period:
-            await self.device.async_request_smartpoll(self, epoch)
+            await device.async_request_smartpoll(self, epoch)
 
 
 class EntityPollingStrategy(SmartPollingStrategy):
@@ -740,22 +748,20 @@ class EntityPollingStrategy(SmartPollingStrategy):
         namespace: str,
         entity: MerossEntity,
         *,
-        payload: MerossPayloadType | None = None,
-        handler: Callable[[dict, dict], None] | None = None,
         item_count: int = 0,
     ):
         self.entity = entity
-        super().__init__(
-            device, namespace, payload=payload, handler=handler, item_count=item_count
-        )
+        super().__init__(device, namespace, item_count=item_count)
 
-    async def async_poll(self, epoch: float, namespace: str | None):
+    async def async_poll(
+        self, device: MerossDevice, epoch: float, namespace: str | None
+    ):
         """
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
         the state of this paylod so we'll skip the smartpoll should the entity be disabled
         """
         if self.entity.enabled:
-            await super().async_poll(epoch, namespace)
+            await super().async_poll(device, epoch, namespace)
 
 
 class ConfigEntriesHelper:
