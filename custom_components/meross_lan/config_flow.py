@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import contextmanager
+from enum import StrEnum
 import json
 import logging
 from time import time
@@ -21,7 +22,6 @@ from .helpers import (
     ApiProfile,
     CloudApiClient,
     ConfigEntriesHelper,
-    StrEnum,
     reverse_lookup,
 )
 from .merossclient import (
