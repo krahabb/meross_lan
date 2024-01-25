@@ -523,34 +523,42 @@ class MerossSubDevice(MerossDeviceBase):
             if method:
                 method(payload)
                 return
+
             # This happens when we still haven't 'normalized' the device structure
             # so we'll euristically generate sensors for device properties
             # This is the case for when we see newer devices and we don't know
             # their payloads and features.
             # as for now we've seen "smokeAlarm" and "doorWindow" subdevices
             # carrying similar payloads structures. We'll be conservative
-            # and generate generic sensors for any key carrying a non structured
-            # type (dict or list), except "lmTime" and few others known one
-            for subkey, subvalue in payload.items():
-                if (
-                    subkey
-                    in {
+            # by not 'exploiting' lists in payloads since they usually carry
+            # historic data or so
+            def _parse_dict(parent_key: str, parent_dict: dict):
+                for subkey, subvalue in parent_dict.items():
+                    if isinstance(subvalue, dict):
+                        _parse_dict(f"{parent_key}_{subkey}", subvalue)
+                        continue
+                    if isinstance(subvalue, list):
+                        _parse_list()
+                        continue
+                    if subkey in {
                         mc.KEY_ID,
                         mc.KEY_LMTIME,
                         mc.KEY_LMTIME_,
                         mc.KEY_SYNCEDTIME,
                         mc.KEY_LATESTSAMPLETIME,
-                    }
-                    or isinstance(subvalue, list)
-                    or isinstance(subvalue, dict)
-                ):
-                    continue
-                entitykey = f"{key}_{subkey}"
-                sensor = self.entities.get(f"{self.id}_{entitykey}")
-                if not sensor:
-                    sensor = self.build_sensor(entitykey)
-                    sensor._attr_entity_category = me.EntityCategory.DIAGNOSTIC
-                sensor.update_state(subvalue)
+                    }:
+                        continue
+                    entitykey = f"{parent_key}_{subkey}"
+                    sensor = self.entities.get(f"{self.id}_{entitykey}")
+                    if not sensor:
+                        sensor = self.build_sensor(entitykey)
+                        sensor._attr_entity_category = me.EntityCategory.DIAGNOSTIC
+                    sensor.update_state(subvalue)
+
+            def _parse_list():
+                pass
+
+            _parse_dict(key, payload)
 
     def parse_digest(self, p_digest: dict):
         """
@@ -842,7 +850,7 @@ class MTS150SubDevice(MTS100SubDevice):
 
     def _parse_mts150(self, p_mts150: dict):
         """{"mode": 3,"currentSet": 60,"updateMode": 3,"updateTemp": 175,
-            "motorCurLocation": 0,"motorStartCtr": 883,"motorTotalPath": 69852}"""
+        "motorCurLocation": 0,"motorStartCtr": 883,"motorTotalPath": 69852}"""
         # typically called by MerossSubDevice.parse_digest
         # when parsing Appliance.System.All
         pass
