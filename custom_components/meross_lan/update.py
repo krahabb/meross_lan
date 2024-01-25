@@ -27,5 +27,10 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
     def available(self):
         return True
 
+    @property
+    def unique_id(self):
+        # this is a 'transient' entity and we don't want it to persist.
+        return None
+
     def set_unavailable(self):
         pass

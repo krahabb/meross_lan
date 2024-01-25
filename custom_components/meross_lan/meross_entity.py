@@ -126,6 +126,8 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self._attr_name = attr_name
         self._attr_state = None
         self._hass_connected = False
+        # by default all of our entities have unique_id so they're registered
+        # there could be some exceptions though (MLUpdate)
         self._attr_unique_id = manager.generate_unique_id(self)
         manager.entities[id] = self
         async_add_devices = manager.platforms.setdefault(self.PLATFORM)
