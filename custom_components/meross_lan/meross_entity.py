@@ -190,12 +190,12 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         return self._attr_unique_id
 
     async def async_added_to_hass(self):
-        self.log(self.DEBUG, "Added to HomeAssistant")
+        self.log(self.VERBOSE, "Added to HomeAssistant")
         self._hass_connected = True
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
-        self.log(self.DEBUG, "Removed from HomeAssistant")
+        self.log(self.VERBOSE, "Removed from HomeAssistant")
         self._hass_connected = False
         return await super().async_will_remove_from_hass()
 
