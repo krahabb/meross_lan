@@ -266,7 +266,7 @@ class MerossDeviceHub(MerossDevice):
                 else:  # this shouldnt but happened in a trace (#331)
                     self.log(
                         self.CRITICAL,
-                        "Subdevice %s(%s) appears twice in received payload. Shouldn't happen",
+                        "Subdevice %s (id:%s) appears twice in received payload. Shouldn't happen",
                         subdevice.name,
                         p_id,
                         timeout=604800,  # 1 week
@@ -284,7 +284,7 @@ class MerossDeviceHub(MerossDevice):
                 subdevice = self.subdevices[p_id]
                 self.log(
                     self.WARNING,
-                    "Removing subdevice %s(%s) - configuration will be reloaded in few sec",
+                    "Removing subdevice %s (id:%s) - configuration will be reloaded in few sec",
                     subdevice.name,
                     p_id,
                 )
@@ -549,6 +549,7 @@ class MerossSubDevice(MerossDeviceBase):
                 sensor = self.entities.get(f"{self.id}_{entitykey}")
                 if not sensor:
                     sensor = self.build_sensor(entitykey)
+                    sensor._attr_entity_category = me.EntityCategory.DIAGNOSTIC
                 sensor.update_state(subvalue)
 
     def parse_digest(self, p_digest: dict):
@@ -589,6 +590,8 @@ class MerossSubDevice(MerossDeviceBase):
                 and isinstance(value, dict)
             ):
                 pass
+            if mc.KEY_ONOFF in p_digest:
+                self._parse_togglex(p_digest)
 
     def _parse_all(self, p_all: dict):
         # typically parses NS_APPLIANCE_HUB_SENSOR_ALL:
@@ -637,7 +640,7 @@ class MerossSubDevice(MerossDeviceBase):
             self.sensor_battery.update_state(p_battery.get(mc.KEY_VALUE))
 
     def _parse_exception(self, p_exception: dict):
-        """{'id': '01008C11', 'code': 5061}"""
+        """{"id": "00000000", "code": 5061}"""
         self.log(self.WARNING, "Received exception payload: %s", str(p_exception))
 
     def _parse_online(self, p_online: dict):
@@ -650,6 +653,9 @@ class MerossSubDevice(MerossDeviceBase):
                     self._set_offline()
 
     def _parse_togglex(self, p_togglex: dict):
+        """{"id": "00000000", "onoff": 0, ...}"""
+        # might come from parse_digest or from Appliance.Hub.ToggleX
+        # in any case we're just interested to the "onoff" key
         if not (switch_togglex := self.switch_togglex):
             self.switch_togglex = switch_togglex = MLSwitch(
                 self,
@@ -658,9 +664,9 @@ class MerossSubDevice(MerossDeviceBase):
                 MLSwitch.DeviceClass.SWITCH,
                 mc.NS_APPLIANCE_HUB_TOGGLEX,
             )
-            switch_togglex._attr_entity_category = me.EntityCategory.DIAGNOSTIC
+            switch_togglex._attr_entity_category = me.EntityCategory.CONFIG
             switch_togglex.key_channel = mc.KEY_ID
-        switch_togglex._parse_togglex(p_togglex)
+        switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])
 
     def _parse_version(self, p_version: dict):
         """{"id": "00000000", "hardware": "1.1.5", "firmware": "5.1.8"}"""
@@ -721,6 +727,8 @@ class MS100SubDevice(MerossSubDevice):
             self.sensor_humidity.update_state(p_latest / 10)
 
     def _parse_ms100(self, p_ms100: dict):
+        # typically called by MerossSubDevice.parse_digest
+        # when parsing Appliance.System.All
         self._parse_tempHum(p_ms100)
 
     def _parse_temperature(self, p_temperature: dict):
@@ -775,10 +783,10 @@ class MTS100SubDevice(MerossSubDevice):
         climate.scheduleBMode = p_all.get(mc.KEY_SCHEDULEBMODE)
 
         if isinstance(p_mode := p_all.get(mc.KEY_MODE), dict):
-            climate._mts_mode = p_mode.get(mc.KEY_STATE)
+            climate._mts_mode = p_mode[mc.KEY_STATE]
 
         if isinstance(p_togglex := p_all.get(mc.KEY_TOGGLEX), dict):
-            climate._mts_onoff = p_togglex.get(mc.KEY_ONOFF)
+            climate._mts_onoff = p_togglex[mc.KEY_ONOFF]
 
         if isinstance(p_temperature := p_all.get(mc.KEY_TEMPERATURE), dict):
             climate._parse(p_temperature)
@@ -792,10 +800,12 @@ class MTS100SubDevice(MerossSubDevice):
 
     def _parse_mode(self, p_mode: dict):
         climate = self.climate
-        climate._mts_mode = p_mode.get(mc.KEY_STATE)
+        climate._mts_mode = p_mode[mc.KEY_STATE]
         climate.flush_state()
 
     def _parse_mts100(self, p_mts100: dict):
+        # typically called by MerossSubDevice.parse_digest
+        # when parsing Appliance.System.All
         pass
 
     def _parse_schedule(self, p_schedule: dict):
@@ -806,7 +816,7 @@ class MTS100SubDevice(MerossSubDevice):
 
     def _parse_togglex(self, p_togglex: dict):
         climate = self.climate
-        climate._mts_onoff = p_togglex.get(mc.KEY_ONOFF)
+        climate._mts_onoff = p_togglex[mc.KEY_ONOFF]
         climate.flush_state()
 
 
@@ -818,6 +828,8 @@ class MTS100V3SubDevice(MTS100SubDevice):
         super().__init__(hub, p_digest, mc.TYPE_MTS100V3)
 
     def _parse_mts100v3(self, p_mts100v3: dict):
+        # typically called by MerossSubDevice.parse_digest
+        # when parsing Appliance.System.All
         pass
 
 
@@ -829,6 +841,10 @@ class MTS150SubDevice(MTS100SubDevice):
         super().__init__(hub, p_digest, mc.TYPE_MTS150)
 
     def _parse_mts150(self, p_mts150: dict):
+        """{"mode": 3,"currentSet": 60,"updateMode": 3,"updateTemp": 175,
+            "motorCurLocation": 0,"motorStartCtr": 883,"motorTotalPath": 69852}"""
+        # typically called by MerossSubDevice.parse_digest
+        # when parsing Appliance.System.All
         pass
 
 
