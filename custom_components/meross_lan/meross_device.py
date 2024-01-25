@@ -113,6 +113,8 @@ TRACE_ABILITY_EXCLUDE = (
     mc.NS_APPLIANCE_HUB_REPORT,  # disconnects
     mc.NS_APPLIANCE_HUB_SUBDEVICELIST,  # disconnects
     mc.NS_APPLIANCE_HUB_PAIRSUBDEV,  # disconnects
+    mc.NS_APPLIANCE_HUB_SUBDEVICE_BEEP,  # protocol replies with error code: 5000
+    mc.NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST,  # protocol replies with error code: 5000
     mc.NS_APPLIANCE_MCU_UPGRADE,  # disconnects
     mc.NS_APPLIANCE_MCU_HP110_PREVIEW,  # disconnects
     mc.NS_APPLIANCE_MCU_FIRMWARE,  # disconnects
