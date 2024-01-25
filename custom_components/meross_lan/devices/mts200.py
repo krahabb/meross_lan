@@ -4,7 +4,6 @@ import typing
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..helpers import reverse_lookup
 from ..merossclient import const as mc
 from ..number import MtsCalibrationNumber, MtsSetPointNumber
 from ..switch import MtsConfigSwitch
@@ -122,25 +121,6 @@ class Mts200Climate(MtsClimate):
 
         await self.async_request_onoff(1)
 
-    async def async_set_preset_mode(self, preset_mode: str):
-        mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
-        if (mode is not None) and await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
-            mc.METHOD_SET,
-            {
-                mc.KEY_MODE: [
-                    {
-                        mc.KEY_CHANNEL: self.channel,
-                        mc.KEY_MODE: mode,
-                        mc.KEY_ONOFF: 1,
-                    }
-                ]
-            },
-        ):
-            self._mts_mode = mode
-            self._mts_onoff = 1
-            self.flush_state()
-
     async def async_set_temperature(self, **kwargs):
         key = self.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or self.PRESET_CUSTOM
@@ -170,6 +150,24 @@ class Mts200Climate(MtsClimate):
                 self._mts_onoff = 1
                 self.flush_state()
 
+    async def async_request_mode(self, mode: int):
+        if await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
+            mc.METHOD_SET,
+            {
+                mc.KEY_MODE: [
+                    {
+                        mc.KEY_CHANNEL: self.channel,
+                        mc.KEY_MODE: mode,
+                        mc.KEY_ONOFF: 1,
+                    }
+                ]
+            },
+        ):
+            self._mts_mode = mode
+            self._mts_onoff = 1
+            self.flush_state()
+
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
@@ -179,6 +177,18 @@ class Mts200Climate(MtsClimate):
             self._mts_onoff = onoff
             self.flush_state()
 
+    def is_mts_scheduled(self):
+        return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
+
+    @property
+    def namespace(self):
+        return mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
+
+    @property
+    def key_namespace(self):
+        mc.KEY_MODE
+
+    # interface: self
     async def async_request_summermode(self, summermode: int):
         if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
@@ -193,17 +203,6 @@ class Mts200Climate(MtsClimate):
             # if acknowledged the mts doesnt really update it
             self._mts_summermode = summermode
             self.flush_state()
-
-    def is_mts_scheduled(self):
-        return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
-
-    @property
-    def namespace(self):
-        return mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
-
-    @property
-    def key_namespace(self):
-        mc.KEY_MODE
 
     # message handlers
     def _parse_holdAction(self, payload: dict):

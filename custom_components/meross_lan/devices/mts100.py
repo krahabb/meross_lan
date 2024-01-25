@@ -111,30 +111,16 @@ class Mts100Climate(MtsClimate):
             self._attr_hvac_action = MtsClimate.HVACAction.OFF
         super().flush_state()
 
-    async def async_set_preset_mode(self, preset_mode: str):
-        mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
-        if mode is not None:
-            if await self.manager.async_request_ack(
-                mc.NS_APPLIANCE_HUB_MTS100_MODE,
-                mc.METHOD_SET,
-                {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
-            ):
-                self._mts_mode = mode
-                self.flush_state()
-            if not self._mts_onoff:
-                await self.async_request_onoff(1)
+    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
+        if hvac_mode == MtsClimate.HVACMode.OFF:
+            await self.async_request_onoff(0)
+            return
+        await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        # since the device only accepts values multiple of 5
-        # and offsets them by the current temp adjust
-        # we'll add 4 so it will eventually round down to the correct
-        # internal setpoint
         key = self.PRESET_TO_TEMPERATUREKEY_MAP[
             self._attr_preset_mode or self.PRESET_CUSTOM
         ]
-        # when sending a temp this way the device will automatically
-        # exit auto mode if needed. Also it will round-down the value
-        # to the nearest multiple of 5
         if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
@@ -150,6 +136,28 @@ class Mts100Climate(MtsClimate):
             },
         ):
             self._parse(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
+            # when sending a temp this way the device should automatically
+            # exit auto mode if needed. We're anyway forcing going
+            # to manual mode when the device is set to schedule
+            if self._mts_mode == mc.MTS100_MODE_AUTO:
+                await self.async_request_mode(mc.MTS100_MODE_CUSTOM)
+
+    async def async_request_mode(self, mode: int):
+        """Requests an mts mode and (ensure) turn-on"""
+        if await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_HUB_MTS100_MODE,
+            mc.METHOD_SET,
+            {mc.KEY_MODE: [{mc.KEY_ID: self.id, mc.KEY_STATE: mode}]},
+        ):
+            self._mts_mode = mode
+            if not self._mts_onoff:
+                if await self.manager.async_request_ack(
+                    mc.NS_APPLIANCE_HUB_TOGGLEX,
+                    mc.METHOD_SET,
+                    {mc.KEY_TOGGLEX: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: 1}]},
+                ):
+                    self._mts_onoff = 1
+            self.flush_state()
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(

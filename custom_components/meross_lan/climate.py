@@ -5,7 +5,8 @@ import typing
 from homeassistant.components import climate
 
 from . import meross_entity as me
-from .merossclient import const as mc  # mEROSS cONST
+from .helpers import reverse_lookup
+from .merossclient import const as mc
 from .select import MtsTrackedSensor
 from .sensor import UnitOfTemperature
 
@@ -216,19 +217,23 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         await self.async_request_onoff(0)
 
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
-        if hvac_mode == MtsClimate.HVACMode.OFF:
-            await self.async_request_onoff(0)
-            return
-        await self.async_request_onoff(1)
+        raise NotImplementedError()
 
     async def async_set_preset_mode(self, preset_mode: str):
-        raise NotImplementedError()
+        mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
+        if mode is not None:
+            await self.async_request_mode(mode)
 
     async def async_set_temperature(self, **kwargs):
         raise NotImplementedError()
 
     # interface: self
+    async def async_request_mode(self, mode: int):
+        """Implements the protocol to set the Meross thermostat mode"""
+        raise NotImplementedError()
+
     async def async_request_onoff(self, onoff: int):
+        """Implements the protocol to turn on the thermostat"""
         raise NotImplementedError()
 
     def is_mts_scheduled(self):

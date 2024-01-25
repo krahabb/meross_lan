@@ -35,6 +35,10 @@ class Mts960DiagnosticSensor(MLSensor):
 class Mts960Climate(MtsClimate):
     """Climate entity for MTS960 devices"""
 
+    # default choice to map when any 'non thermostat' mode swapping
+    # needs an heating/cooling final choice
+    MTS_MODE_DEFAULT = mc.MTS960_MODE_HEAT
+
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS960_MODE_HEAT: "heat",
         mc.MTS960_MODE_COOL: "cool",
@@ -62,6 +66,8 @@ class Mts960Climate(MtsClimate):
         if mts_mode == mc.MTS960_MODE_HEAT
         else mc.MTS960_MODE_SCHEDULE_COOL
         if mts_mode == mc.MTS960_MODE_COOL
+        else Mts960Climate.MTS_MODE_DEFAULT
+        if mts_mode is None
         else mts_mode,
     }
 
@@ -73,6 +79,19 @@ class Mts960Climate(MtsClimate):
         mc.MTS960_MODE_COUNTDOWN_OFF: MtsClimate.HVACAction.FAN,
         mc.MTS960_MODE_SCHEDULE_HEAT: MtsClimate.HVACAction.HEATING,
         mc.MTS960_MODE_SCHEDULE_COOL: MtsClimate.HVACAction.COOLING,
+    }
+
+    # used to eventually bump out of any AUTO modes when manually setting
+    # the setpoint temp
+    MTS_MODE_TO_MTS_MODE_NOAUTO = {
+        None: MTS_MODE_DEFAULT,
+        mc.MTS960_MODE_HEAT: mc.MTS960_MODE_HEAT,
+        mc.MTS960_MODE_COOL: mc.MTS960_MODE_COOL,
+        mc.MTS960_MODE_CYCLE: MTS_MODE_DEFAULT,
+        mc.MTS960_MODE_COUNTDOWN_ON: MTS_MODE_DEFAULT,
+        mc.MTS960_MODE_COUNTDOWN_OFF: MTS_MODE_DEFAULT,
+        mc.MTS960_MODE_SCHEDULE_HEAT: mc.MTS960_MODE_HEAT,
+        mc.MTS960_MODE_SCHEDULE_COOL: mc.MTS960_MODE_COOL,
     }
 
     DIAGNOSTIC_SENSOR_KEYS = (
@@ -125,18 +144,44 @@ class Mts960Climate(MtsClimate):
         if hvac_mode == MtsClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
             return
-
         # here special handling is applied to hvac_mode == AUTO,
         # trying to preserve the previous mts_mode if it was already
         # among the AUTO(s) else mapping to a 'closest' one (see the lambdas
         # in HVAC_MODE_TO_MTS_MODE)
         mode = self.HVAC_MODE_TO_MTS_MODE[hvac_mode](self._mts_mode)
-        if mode is None:
-            # could (rarely?) return None if self._mts_mode is None and hvac_mode is AUTO
-            mode = (
-                mc.MTS960_MODE_SCHEDULE_HEAT
-            )  # guess we want heating as a baseline...
+        await self.async_request_mode(mode)
 
+    async def async_set_temperature(self, **kwargs):
+        mode = self.MTS_MODE_TO_MTS_MODE_NOAUTO.get(
+            self._mts_mode, self.MTS_MODE_DEFAULT
+        )
+        if response := await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
+            mc.METHOD_SET,
+            {
+                mc.KEY_MODEB: [
+                    {
+                        mc.KEY_CHANNEL: self.channel,
+                        mc.KEY_MODE: mode,
+                        mc.KEY_ONOFF: 1,
+                        mc.KEY_TARGETTEMP: round(
+                            kwargs[self.ATTR_TEMPERATURE] * self.device_scale
+                        ),
+                    }
+                ]
+            },
+        ):
+            payload = response[mc.KEY_PAYLOAD]
+            if mc.KEY_MODEB in payload:
+                self._parse(payload[mc.KEY_MODEB][0])
+            else:
+                # optimistic update
+                self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
+                self._mts_mode = mode
+                self._mts_onoff = 1
+                self.flush_state()
+
+    async def async_request_mode(self, mode: int):
         if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
             mc.METHOD_SET,
@@ -153,48 +198,6 @@ class Mts960Climate(MtsClimate):
             self._mts_mode = mode
             self._mts_onoff = 1
             self.flush_state()
-
-    async def async_set_preset_mode(self, preset_mode: str):
-        mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
-        if (mode is not None) and await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
-            mc.METHOD_SET,
-            {
-                mc.KEY_MODEB: [
-                    {
-                        mc.KEY_CHANNEL: self.channel,
-                        mc.KEY_MODE: mode,
-                        mc.KEY_ONOFF: 1,
-                    }
-                ]
-            },
-        ):
-            self._mts_mode = mode
-            self._mts_onoff = 1
-            self.flush_state()
-
-    async def async_set_temperature(self, **kwargs):
-        if response := await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
-            mc.METHOD_SET,
-            {
-                mc.KEY_MODEB: [
-                    {
-                        mc.KEY_CHANNEL: self.channel,
-                        mc.KEY_TARGETTEMP: round(
-                            kwargs[self.ATTR_TEMPERATURE] * self.device_scale
-                        ),
-                    }
-                ]
-            },
-        ):
-            payload = response[mc.KEY_PAYLOAD]
-            if mc.KEY_MODEB in payload:
-                self._parse(payload[mc.KEY_MODEB][0])
-            else:
-                # optimistic update
-                self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
-                self.flush_state()
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(
