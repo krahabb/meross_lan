@@ -89,6 +89,7 @@ NS_APPLIANCE_HUB_SENSITIVITY = "Appliance.Hub.Sensitivity"
 # miscellaneous
 NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST = "Appliance.Hub.SubDevice.MotorAdjust"
 NS_APPLIANCE_HUB_SUBDEVICE_BEEP = "Appliance.Hub.SubDevice.Beep"
+NS_APPLIANCE_HUB_SUBDEVICE_VERSION = "Appliance.Hub.SubDevice.Version"
 # MS100 and other sensors
 NS_APPLIANCE_HUB_SENSOR_ALL = "Appliance.Hub.Sensor.All"
 NS_APPLIANCE_HUB_SENSOR_TEMPHUM = "Appliance.Hub.Sensor.TempHum"

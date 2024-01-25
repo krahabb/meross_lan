@@ -9,7 +9,12 @@ from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
 from .const import DOMAIN
-from .helpers.namespaces import NamespaceHandler, PollingStrategy, SmartPollingStrategy
+from .helpers.namespaces import (
+    NamespaceHandler,
+    OncePollingStrategy,
+    PollingStrategy,
+    SmartPollingStrategy,
+)
 from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (
     const as mc,
@@ -144,10 +149,8 @@ class HubChunkedPollingStrategy(PollingStrategy):
         self._included = included
         self._count = count
 
-    async def async_poll(
-        self, device: MerossDeviceHub, epoch: float, namespace: str | None
-    ):
-        if namespace or (not device._mqtt_active) or (self.lastrequest == 0):
+    async def async_poll(self, device: MerossDeviceHub, epoch: float):
+        if not (device._mqtt_active and self.lastrequest):
             max_queuable = 1
             # for hubs, this payload request might be splitted
             # in order to query a small amount of devices per iteration
@@ -258,7 +261,16 @@ class MerossDeviceHub(MerossDevice):
         for p_digest in p_hub[mc.KEY_SUBDEVICE]:
             p_id = p_digest.get(mc.KEY_ID)
             if subdevice := self.subdevices.get(p_id):
-                subdevices_actual.remove(p_id)
+                if p_id in subdevices_actual:
+                    subdevices_actual.remove(p_id)
+                else:  # this shouldnt but happened in a trace (#331)
+                    self.log(
+                        self.CRITICAL,
+                        "Subdevice %s(%s) appears twice in received payload. Shouldn't happen",
+                        subdevice.name,
+                        p_id,
+                        timeout=604800,  # 1 week
+                    )
             elif subdevice := self._subdevice_build(p_digest):
                 self.needsave = True
             else:
@@ -315,9 +327,9 @@ class MerossDeviceHub(MerossDevice):
             # this is true when subdevice is offline and hub has no recent info
             # we'll check our device registry for luck
             try:
-                hassdevice = device_registry.async_get(
-                    self.hass
-                ).async_get_device(identifiers={(DOMAIN, p_subdevice[mc.KEY_ID])})
+                hassdevice = device_registry.async_get(self.hass).async_get_device(
+                    identifiers={(DOMAIN, p_subdevice[mc.KEY_ID])}
+                )
                 if not hassdevice:
                     return None
                 _type = hassdevice.model
@@ -376,6 +388,12 @@ class MerossDeviceHub(MerossDevice):
             polling_strategies[mc.NS_APPLIANCE_HUB_BATTERY].increment_size()
         elif mc.NS_APPLIANCE_HUB_BATTERY in abilities:
             SmartPollingStrategy(self, mc.NS_APPLIANCE_HUB_BATTERY, item_count=1)
+        """
+        if mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in polling_strategies:
+            polling_strategies[mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION].increment_size()
+        elif mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in abilities:
+            OncePollingStrategy(self, mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION, item_count=1)
+        """
 
         if deviceclass := WELL_KNOWN_TYPE_MAP.get(_type):  # type: ignore
             return deviceclass(self, p_subdevice)
@@ -468,12 +486,11 @@ class MerossSubDevice(MerossDeviceBase):
     def _set_online(self):
         super()._set_online()
         # force a re-poll even on MQTT
-        if _strategy := self.hub.polling_strategies.get(
+        self.hub.polling_strategies[
             mc.NS_APPLIANCE_HUB_MTS100_ALL
             if self.type in MTS100_ALL_TYPESET
             else mc.NS_APPLIANCE_HUB_SENSOR_ALL
-        ):
-            _strategy.lastrequest = 0
+        ].lastrequest = 0
 
     # interface: self
     def build_sensor(
@@ -644,6 +661,23 @@ class MerossSubDevice(MerossDeviceBase):
             switch_togglex._attr_entity_category = me.EntityCategory.DIAGNOSTIC
             switch_togglex.key_channel = mc.KEY_ID
         switch_togglex._parse_togglex(p_togglex)
+
+    def _parse_version(self, p_version: dict):
+        """{"id": "00000000", "hardware": "1.1.5", "firmware": "5.1.8"}"""
+        if device_registry_entry := self.device_registry_entry:
+            kwargs = {}
+            if mc.KEY_HARDWARE in p_version:
+                hw_version = p_version[mc.KEY_HARDWARE]
+                if hw_version != device_registry_entry.hw_version:
+                    kwargs["hw_version"] = hw_version
+            if mc.KEY_FIRMWARE in p_version:
+                sw_version = p_version[mc.KEY_FIRMWARE]
+                if sw_version != device_registry_entry.sw_version:
+                    kwargs["sw_version"] = sw_version
+            if kwargs:
+                device_registry.async_get(self.hass).async_update_device(
+                    device_registry_entry.id, **kwargs
+                )
 
 
 class MS100SubDevice(MerossSubDevice):

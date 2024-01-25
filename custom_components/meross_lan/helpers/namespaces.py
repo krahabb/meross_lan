@@ -243,19 +243,17 @@ class PollingStrategy:
     def increment_size(self):
         self.response_size += mlc.POLLING_STRATEGY_CONF[self.namespace][3]
 
-    async def async_poll(
-        self, device: MerossDevice, epoch: float, namespace: str | None
-    ):
+    async def async_poll(self, device: MerossDevice, epoch: float):
         """
         This is a basic 'default' policy:
         - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
         we expect this namespace to be updated by PUSH(es)
-        - unless the passed in 'namespace' is not None which means we're re-onlining the device and so
+        - unless the 'lastrequest' is 0 which means we're re-onlining the device and so
         we like to re-query the full state (even on MQTT)
-        - as an optimization, when onlining (namespace == None), we'll skip the request if it's for
+        - as an optimization, when onlining we'll skip the request if it's for
         the same namespace by not calling this strategy (see MerossDevice.async_request_updates)
         """
-        if namespace or (not device._mqtt_active):
+        if not (device._mqtt_active and self.lastrequest):
             self.lastrequest = epoch
             await device.async_request_poll(self)
 
@@ -265,12 +263,11 @@ class SmartPollingStrategy(PollingStrategy):
     This is a strategy for polling states which are not actively pushed so we should
     always query them (eventually with a variable timeout depending on the relevant
     time dynamics of the sensor/state). When using cloud MQTT though we have to be very
-    conservative on traffic so we delay the request even more
+    conservative on traffic so we eventually delay the request onto the next cycle
+    if this 'pass' is already crowded (see device.async_request_smartpoll)
     """
 
-    async def async_poll(
-        self, device: MerossDevice, epoch: float, namespace: str | None
-    ):
+    async def async_poll(self, device: MerossDevice, epoch: float):
         if (epoch - self.lastrequest) >= self.polling_period:
             await device.async_request_smartpoll(self, epoch)
 
@@ -289,12 +286,24 @@ class EntityPollingStrategy(SmartPollingStrategy):
         self.entity = entity
         super().__init__(device, namespace, item_count=item_count)
 
-    async def async_poll(
-        self, device: MerossDevice, epoch: float, namespace: str | None
-    ):
+    async def async_poll(self, device: MerossDevice, epoch: float):
         """
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
         the state of this paylod so we'll skip the smartpoll should the entity be disabled
         """
         if self.entity.enabled:
-            await super().async_poll(device, epoch, namespace)
+            await super().async_poll(device, epoch)
+
+
+class OncePollingStrategy(SmartPollingStrategy):
+    """
+    This strategy is for 'constant' namespace data which do not change and only
+    need to be requested once (after onlining that is).
+    """
+
+    async def async_poll(self, device: MerossDevice, epoch: float):
+        """
+        Same as SmartPollingStrategy (don't overwhelm the cloud mqtt)
+        """
+        if not self.lastrequest:
+            await device.async_request_smartpoll(self, epoch)

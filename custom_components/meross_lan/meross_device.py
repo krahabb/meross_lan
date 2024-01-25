@@ -301,9 +301,7 @@ class SystemDebugPollingStrategy(PollingStrategy):
     but we should
     """
 
-    async def async_poll(
-        self, device: MerossDevice, epoch: float, namespace: str | None
-    ):
+    async def async_poll(self, device: MerossDevice, epoch: float):
         if not device._mqtt_active:
             await device.async_request_poll(self)
 
@@ -490,8 +488,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # when previous version polluted it
         ent_reg = entity_registry.async_get(self.hass)
         update_firmware_entity_id = ent_reg.async_get_entity_id(
-                MLUpdate.PLATFORM, mlc.DOMAIN, f"{self.id}_update_firmware"
-            )
+            MLUpdate.PLATFORM, mlc.DOMAIN, f"{self.id}_update_firmware"
+        )
         if update_firmware_entity_id:
             ent_reg.async_remove(update_firmware_entity_id)
         self.update_firmware = None
@@ -1202,7 +1200,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if not self._online:
                 break  # do not return: do the flush first!
             if namespace != _strategy.namespace:
-                await _strategy.async_poll(self, epoch, namespace)
+                await _strategy.async_poll(self, epoch)
         # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_request_flush()
 
