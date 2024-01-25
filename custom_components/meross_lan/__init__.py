@@ -69,7 +69,7 @@ class HAMQTTConnection(MQTTConnection):
         self._unsub_mqtt_connected: Callable | None = None
         self._mqtt_subscribing = False  # guard for asynchronous mqtt sub registration
         if MEROSSDEBUG:
-
+            # TODO : check bug in hass shutdown
             async def _async_random_disconnect():
                 self._unsub_random_disconnect = schedule_async_callback(
                     MerossApi.hass, 60, _async_random_disconnect
@@ -297,7 +297,7 @@ class MerossApi(ApiProfile):
                     await device.async_shutdown()
                 for profile in MerossApi.active_profiles():
                     await profile.async_shutdown()
-                await api.async_shutdown()
+                await api.async_terminate()
                 Loggable.api = None  # type: ignore
                 Loggable.hass = None  # type: ignore
                 hass.data.pop(mlc.DOMAIN)
@@ -429,11 +429,14 @@ class MerossApi(ApiProfile):
 
     # interface: ConfigEntryManager
     async def async_shutdown(self):
-        # when unloading the config entry (either unload-remove-reload) we
-        # want to cleanup our entities for sure even though the MerossApi
-        # object is able to survive the unloading (it is a persistent singleton)
-        # We're then trying to preserve our mqtt_connection and device linking.
+        # This is the base entry point when the config entry (MQTT Hub) is unloaded
+        # but we want to actually preserve some of our state since MerossApi provides
+        # static services to the whole component and we want to preserve them even
+        # when unloading the entry.
+        # We're so trying to just destroy the config related state (entities for instance)
+        # while preserving our mqtt_connection and device linking.
         # That's a risky mess
+        # for real shutdown there's self.async_terminate
         await ConfigEntryManager.async_shutdown(self)
         if mqtt_connection := self._mqtt_connection:
             await mqtt_connection.async_destroy_diagnostic_entities()
@@ -450,6 +453,12 @@ class MerossApi(ApiProfile):
         self.mqtt_connection.attach(device)
 
     # interface: self
+    async def async_terminate(self):
+        """complete shutdown when HA exits. See self.async_shutdown for differences"""
+        self.hass.services.async_remove(mlc.DOMAIN, mlc.SERVICE_REQUEST)
+        await super().async_shutdown()
+        self._mqtt_connection = None
+
     def build_device(self, device_id: str, config_entry: ConfigEntry) -> MerossDevice:
         """
         scans device descriptor to build a 'slightly' specialized MerossDevice
