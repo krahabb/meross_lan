@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import ServerDisconnectedError
 from homeassistant.core import callback
-from homeassistant.helpers import device_registry
+from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
@@ -486,6 +486,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         # the update entity will only be instantiated 'on demand' since
         # we might not have this for devices not related to a cloud profile
+        # This cleanup code is to ease the transition out of the registry
+        # when previous version polluted it
+        ent_reg = entity_registry.async_get(self.hass)
+        update_firmware_entity_id = ent_reg.async_get_entity_id(
+                MLUpdate.PLATFORM, mlc.DOMAIN, f"{self.id}_update_firmware"
+            )
+        if update_firmware_entity_id:
+            ent_reg.async_remove(update_firmware_entity_id)
         self.update_firmware = None
 
         for _key, _digest in descriptor.digest.items():
