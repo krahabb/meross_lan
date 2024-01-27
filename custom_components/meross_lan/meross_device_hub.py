@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import typing
 
-from homeassistant.helpers import device_registry
-
 from . import meross_entity as me
 from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
@@ -344,7 +342,7 @@ class MerossDeviceHub(MerossDevice):
             # this is true when subdevice is offline and hub has no recent info
             # we'll check our device registry for luck
             try:
-                hassdevice = device_registry.async_get(self.hass).async_get_device(
+                hassdevice = self.get_device_registry().async_get_device(
                     identifiers={(DOMAIN, p_subdevice[mc.KEY_ID])}
                 )
                 if not hassdevice:
@@ -708,7 +706,7 @@ class MerossSubDevice(MerossDeviceBase):
                 if sw_version != device_registry_entry.sw_version:
                     kwargs["sw_version"] = sw_version
             if kwargs:
-                device_registry.async_get(self.hass).async_update_device(
+                self.get_device_registry().async_update_device(
                     device_registry_entry.id, **kwargs
                 )
 

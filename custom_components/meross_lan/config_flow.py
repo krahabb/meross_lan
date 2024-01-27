@@ -967,9 +967,9 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     ):
                         api = self.api
                         try:  # to fix the device registry in case it was corrupted by #341
-                            device_registry = dr.async_get(hass)
+                            dev_reg = MerossApi.get_device_registry()
                             device_identifiers = {(str(mlc.DOMAIN), self._device_id)}
-                            device_entry = device_registry.async_get_device(
+                            device_entry = dev_reg.async_get_device(
                                 identifiers=device_identifiers
                             )
                             if device_entry and (
@@ -978,8 +978,8 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                             ):
                                 _area_id = device_entry.area_id
                                 _name_by_user = device_entry.name_by_user
-                                device_registry.async_remove_device(device_entry.id)
-                                device_registry.async_get_or_create(
+                                dev_reg.async_remove_device(device_entry.id)
+                                dev_reg.async_get_or_create(
                                     config_entry_id=self.config_entry.entry_id,
                                     suggested_area=_area_id,
                                     name=descriptor_update.productname,

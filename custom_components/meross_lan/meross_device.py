@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import ServerDisconnectedError
 from homeassistant.core import callback
-from homeassistant.helpers import device_registry, entity_registry
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
@@ -164,7 +164,7 @@ class MerossDeviceBase(EntityManager):
         self._device_registry_entry = None
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             self._device_registry_entry = weakref.ref(
-                device_registry.async_get(self.hass).async_get_or_create(
+                self.get_device_registry().async_get_or_create(
                     config_entry_id=self.config_entry_id,
                     connections=connections,
                     manufacturer=mc.MANUFACTURER,
@@ -207,9 +207,9 @@ class MerossDeviceBase(EntityManager):
             self._device_registry_entry and self._device_registry_entry()
         )
         if _device_registry_entry is None:
-            _device_registry_entry = device_registry.async_get(
-                self.hass
-            ).async_get_device(**self.deviceentry_id)
+            _device_registry_entry = self.get_device_registry().async_get_device(
+                **self.deviceentry_id
+            )
             if _device_registry_entry:
                 self._device_registry_entry = weakref.ref(_device_registry_entry)
         return _device_registry_entry
@@ -222,7 +222,7 @@ class MerossDeviceBase(EntityManager):
                 or self._get_internal_name()
             )
             if name != _device_registry_entry.name:
-                device_registry.async_get(self.hass).async_update_device(
+                self.get_device_registry().async_update_device(
                     _device_registry_entry.id, name=name
                 )
 
@@ -452,9 +452,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             model=descriptor.productmodel,
             hw_version=descriptor.hardwareVersion,
             sw_version=descriptor.firmwareVersion,
-            connections={
-                (device_registry.CONNECTION_NETWORK_MAC, descriptor.macAddress)
-            },
+            connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
         )
 
         self._update_config()
@@ -488,7 +486,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # we might not have this for devices not related to a cloud profile
         # This cleanup code is to ease the transition out of the registry
         # when previous version polluted it
-        ent_reg = entity_registry.async_get(self.hass)
+        ent_reg = self.get_entity_registry()
         update_firmware_entity_id = ent_reg.async_get_entity_id(
             MLUpdate.PLATFORM, mlc.DOMAIN, f"{self.id}_update_firmware"
         )
