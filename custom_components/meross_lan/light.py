@@ -94,7 +94,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
 
     def __init__(self, manager: MerossDevice, payload: dict):
         self._light = {}
-        super().__init__(manager, payload.get(mc.KEY_CHANNEL, 0), None, None, None)
+        super().__init__(manager, payload.get(mc.KEY_CHANNEL, 0))
 
     def update_onoff(self, onoff):
         if mc.KEY_ONOFF in self._light:

@@ -75,11 +75,14 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
     _attr_entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, cover: MLGarage):
-        super().__init__(
-            cover.manager, cover.channel, "problem", self.DeviceClass.PROBLEM
-        )
         self._attr_extra_state_attributes = {}
-        self._attr_state = self.STATE_OFF
+        super().__init__(
+            cover.manager,
+            cover.channel,
+            "problem",
+            self.DeviceClass.PROBLEM,
+            self.STATE_OFF,
+        )
 
     @property
     def available(self):
@@ -111,10 +114,25 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
 
     _attr_entity_category = MLSwitch.EntityCategory.CONFIG
 
-    def __init__(self, manager: GarageMixin, channel, key: str):
+    def __init__(
+        self,
+        manager: GarageMixin,
+        channel,
+        key: str,
+        state=None,
+        *,
+        namespace=mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
+    ):
         self.key_onoff = key
         self._attr_name = key
-        super().__init__(manager, channel, f"config_{key}", None)
+        super().__init__(
+            manager,
+            channel,
+            f"config_{key}",
+            self.DeviceClass.SWITCH,
+            state,
+            namespace=namespace,
+        )
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(
@@ -161,9 +179,14 @@ class MLGarageConfigSwitch(MLGarageMultipleConfigSwitch):
     'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
     """
 
-    def __init__(self, manager: GarageMixin, key: str, init_payload: dict):
-        super().__init__(manager, None, key)
-        self._attr_state = self.STATE_ON if init_payload[key] else self.STATE_OFF
+    def __init__(self, manager: GarageMixin, key: str, payload: dict):
+        super().__init__(
+            manager,
+            None,
+            key,
+            self.STATE_ON if payload[key] else self.STATE_OFF,
+            namespace=mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
+        )
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(

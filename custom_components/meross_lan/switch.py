@@ -45,7 +45,7 @@ class MtsConfigSwitch(MLSwitch):
             climate.channel,
             entitykey,
             MLSwitch.DeviceClass.SWITCH,
-            namespace,
+            namespace=namespace,
         )
 
     async def async_request_onoff(self, onoff: int):

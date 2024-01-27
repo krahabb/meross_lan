@@ -85,6 +85,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         channel: object | None,
         entitykey: str | None = None,
         device_class: object | str | None = None,
+        state: StateType = None,
     ):
         """
         - channel: historically used to create an unique id for this entity inside the device
@@ -124,7 +125,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             # so we skip adding the subdevice.id to the entity name
             attr_name = f"{attr_name} {channel}" if attr_name else str(channel)
         self._attr_name = attr_name
-        self._attr_state = None
+        self._attr_state = state
         self._hass_connected = False
         # by default all of our entities have unique_id so they're registered
         # there could be some exceptions though (MLUpdate)
@@ -269,11 +270,13 @@ class MerossToggle(MerossEntity):
         self,
         manager: MerossDeviceBase,
         channel: object,
-        entitykey: str | None,
-        device_class: object | None,
+        entitykey: str | None = None,
+        device_class: object | None = None,
+        state: StateType = None,
+        *,
         namespace: str | None = None,
     ):
-        super().__init__(manager, channel, entitykey, device_class)
+        super().__init__(manager, channel, entitykey, device_class, state)
         if namespace:
             self.namespace = namespace
             self.key_namespace = NAMESPACE_TO_KEY[namespace]
