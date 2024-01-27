@@ -103,6 +103,11 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
 class MLDiagnosticSensor(MLSensor):
     _attr_entity_category = MLSensor.EntityCategory.DIAGNOSTIC
 
+    @property
+    def is_diagnostic(self):
+        """Means this entity has been created as part of the 'create_diagnostic_entities' config"""
+        return True
+
 
 class ProtocolSensor(MLSensor):
     STATE_DISCONNECTED = "disconnected"

@@ -52,7 +52,7 @@ from .merossclient import (
 from .merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
 from .merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
 from .repairs import IssueSeverity, create_issue, remove_issue
-from .sensor import MLSensor
+from .sensor import MLDiagnosticSensor
 
 if typing.TYPE_CHECKING:
     from typing import Final
@@ -83,7 +83,7 @@ if typing.TYPE_CHECKING:
     DeviceInfoDictType = dict[UuidType, DeviceInfoType]
 
 
-class ConnectionSensor(MLSensor):
+class ConnectionSensor(MLDiagnosticSensor):
     STATE_DISCONNECTED: Final = "disconnected"
     STATE_CONNECTED: Final = "connected"
     STATE_QUEUING: Final = "queuing"
@@ -106,7 +106,6 @@ class ConnectionSensor(MLSensor):
 
     manager: ApiProfile
 
-    _attr_entity_category = MLSensor.EntityCategory.DIAGNOSTIC
     _attr_extra_state_attributes: AttrDictType
     _attr_state: str
     _attr_options = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_QUEUING, STATE_DROPPING]
@@ -129,7 +128,7 @@ class ConnectionSensor(MLSensor):
             connection.profile,
             None,
             connection.id,
-            MLSensor.DeviceClass.ENUM,
+            MLDiagnosticSensor.DeviceClass.ENUM,
             self.STATE_CONNECTED
             if connection.mqtt_is_connected
             else self.STATE_DISCONNECTED,
@@ -142,9 +141,10 @@ class ConnectionSensor(MLSensor):
             f"{self.__class__.__name__}({self.manager.loggable_broker(self.id)})"
         )
 
-    # interface: MLSensor
+    # interface: MLDiagnosticSensor
     async def async_shutdown(self):
         await super().async_shutdown()
+        self.connection.sensor_connection = None
         self.connection: MQTTConnection = None  # type: ignore
 
     @property
@@ -292,6 +292,8 @@ class MQTTConnection(Loggable):
             logger=profile,
         )
         profile.mqttconnections[self.id] = self
+        if profile.create_diagnostic_entities:
+            ConnectionSensor(self)
 
     # interface: Loggable
     def configure_logger(self):
@@ -307,23 +309,11 @@ class MQTTConnection(Loggable):
         for device in self.mqttdevices.values():
             device.mqtt_detached()
         self.mqttdevices.clear()
-        await self.async_destroy_diagnostic_entities()
+        self.sensor_connection = None
 
     async def async_create_diagnostic_entities(self):
         if not self.sensor_connection:
             ConnectionSensor(self)
-
-    async def async_destroy_diagnostic_entities(self):
-        if sensor_connection := self.sensor_connection:
-            self.sensor_connection = None
-            if sensor_connection.manager.entities.pop(sensor_connection.id, None):
-                if sensor_connection._hass_connected:
-                    await sensor_connection.async_remove()
-                await sensor_connection.async_shutdown()
-
-    async def async_remove_diagnostic_entities(self):
-        # TODO: remove from entity registry
-        await self.async_destroy_diagnostic_entities()
 
     async def entry_update_listener(self, profile: ApiProfile):
         """Called by the ApiProfile to propagate config changes"""

@@ -306,20 +306,25 @@ class ConfigEntryManager(EntityManager):
         if config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
             await self.async_create_diagnostic_entities()
         else:
-            await self.async_remove_diagnostic_entities()
+            await self.async_destroy_diagnostic_entities(True)
 
     async def async_create_diagnostic_entities(self):
         """Dynamically create some diagnostic entities depending on configuration"""
         pass
 
-    async def async_destroy_diagnostic_entities(self):
-        """Cleanup diagnostic entities, when the entry is unloaded. The entity registry is untouched so
-        they'll be there when next loading."""
-        pass
-
-    async def async_remove_diagnostic_entities(self):
-        """Cleanup diagnostic entities, also removing them from entity registry (in case)"""
-        pass
+    async def async_destroy_diagnostic_entities(self, remove: bool = False):
+        """Cleanup diagnostic entities, when the entry is unloaded. If 'remove' is True
+        it will be removed from the entity registry as well."""
+        entities = self.entities
+        ent_reg = self.get_entity_registry() if remove else None
+        for entity in set(entities.values()):
+            if entity.is_diagnostic:
+                if entity._hass_connected:
+                    await entity.async_remove()
+                await entity.async_shutdown()
+                entities.pop(entity.id)
+                if ent_reg:
+                    ent_reg.async_remove(entity.entity_id)
 
     @abc.abstractmethod
     def get_logger_name(self) -> str:
@@ -600,16 +605,9 @@ class ApiProfile(ConfigEntryManager):
             await mqttconnection.entry_update_listener(self)
 
     async def async_create_diagnostic_entities(self):
+        await super().async_create_diagnostic_entities()
         for mqttconnection in self.mqttconnections.values():
             await mqttconnection.async_create_diagnostic_entities()
-
-    async def async_destroy_diagnostic_entities(self):
-        for mqttconnection in self.mqttconnections.values():
-            await mqttconnection.async_destroy_diagnostic_entities()
-
-    async def async_remove_diagnostic_entities(self):
-        for mqttconnection in self.mqttconnections.values():
-            await mqttconnection.async_remove_diagnostic_entities()
 
     # interface: self
     @property

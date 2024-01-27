@@ -201,6 +201,11 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         return await super().async_will_remove_from_hass()
 
     # interface: self
+    @property
+    def is_diagnostic(self):
+        """Means this entity has been created as part of the 'create_diagnostic_entities' config"""
+        return False
+
     async def async_shutdown(self):
         pass
 
