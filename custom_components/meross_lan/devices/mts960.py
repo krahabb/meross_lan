@@ -258,7 +258,7 @@ class Mts960Climate(MtsClimate):
                     try:
                         entities[f"{channel}_{key}"].update_state(payload[key])
                     except KeyError:
-                        MLDiagnosticSensor(manager, channel, f"{channel}_{key}", None, payload[key])
+                        MLDiagnosticSensor(manager, channel, key, None, payload[key])
 
         self.flush_state()
 
