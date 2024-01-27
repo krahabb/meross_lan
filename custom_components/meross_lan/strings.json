@@ -106,7 +106,6 @@
                     "save_password": "Save password",
                     "allow_mqtt_publish": "Allow cloud MQTT publish",
                     "check_firmware_updates": "Check firmware updates",
-                    "create_diagnostic_entities": "Create diagnostic entities",
                     "error": "[%key:config::step::hub::data::error%]",
                     "cloud_region": "Account region"
                 }
@@ -135,8 +134,7 @@
                 "data": {
                     "key": "[%key:config::step::hub::data::key%]",
                     "error": "[%key:config::step::hub::data::error%]",
-                    "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]",
-                    "create_diagnostic_entities": "[%key:config::step::profile::data::create_diagnostic_entities%]"
+                    "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]"
                 }
             },
             "device": {
@@ -169,7 +167,6 @@
                     "save_password": "[%key:config::step::profile::data::save_password%]",
                     "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]",
                     "check_firmware_updates": "[%key:config::step::profile::data::check_firmware_updates%]",
-                    "create_diagnostic_entities": "[%key:config::step::profile::data::create_diagnostic_entities%]",
                     "error": "[%key:config::step::profile::data::error%]"
                 }
             },
@@ -188,6 +185,7 @@
                 "title": "[%key:options::step::menu::menu_options::diagnostics%]",
                 "description": "Set the logging level for this device\/profile and optionally start a diagnostic trace for the configured period",
                 "data": {
+                    "create_diagnostic_entities": "Create diagnostic entities",
                     "logging_level": "Logging level",
                     "obfuscate": "Obfuscate sensitive data in logs",
                     "trace": "Start diagnostics trace",
@@ -239,7 +237,6 @@
                             "save_password": "[%key:options::step::profile::data::save_password%]",
                             "allow_mqtt_publish": "[%key:options::step::profile::data::allow_mqtt_publish%]",
                             "check_firmware_updates": "[%key:options::step::profile::data::check_firmware_updates%]",
-                            "create_diagnostic_entities": "[%key:options::step::profile::data::create_diagnostic_entities%]",
                             "error": "[%key:options::step::profile::data::error%]"
                         }
                     }

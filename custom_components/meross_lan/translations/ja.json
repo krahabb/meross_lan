@@ -106,7 +106,6 @@
                     "save_password": "パスワードを保存する",
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
-                    "create_diagnostic_entities": "診断エンティティの作成",
                     "error": "エラーメッセージ",
                     "cloud_region": "アカウントの地域",
                     "mfa_code": "認証コード"
@@ -119,25 +118,26 @@
         }
     },
     "options": {
-        "error": {
-            "already_configured_device": "可能なデバイスは1つだけ",
-            "cannot_connect": "接続できません",
-            "cloud_profile_mismatch": "クラウドプロファイルが構成と一致しません",
-            "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません",
-            "invalid_auth": "認証エラー",
-            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
-            "habroker_not_connected": "HomeAssistant MQTTブローカーが接続されていない"
-        },
         "step": {
+            "diagnostics": {
+                "data": {
+                    "create_diagnostic_entities": "診断エンティティの作成",
+                    "trace_timeout": "デバグトレース時間 [秒]",
+                    "error": "エラーメッセージ",
+                    "logging_level": "ログレベル",
+                    "trace": "診断トレースの開始",
+                    "obfuscate": "ログ内の機密データを難読化する"
+                },
+                "title": "診断",
+                "description": "このデバイス\/プロファイルのロギングレベルを設定し、オプションで設定された期間の診断トレースを開始します"
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Meross LAN のグローバル設定",
                 "data": {
                     "key": "デバイスキー",
                     "error": "エラーメッセージ",
-                    "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
-                    "create_diagnostic_entities": "診断エンティティの作成"
+                    "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する"
                 }
             },
             "device": {
@@ -170,7 +170,6 @@
                     "save_password": "パスワードを保存する",
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
-                    "create_diagnostic_entities": "診断エンティティの作成",
                     "error": "エラーメッセージ",
                     "mfa_code": "認証コード"
                 }
@@ -184,17 +183,6 @@
                     "diagnostics": "診断",
                     "bind": "MQTTの再設定（ローカルバインディング）",
                     "unbind": "ハードウェア・リセット"
-                }
-            },
-            "diagnostics": {
-                "title": "診断",
-                "description": "このデバイス\/プロファイルのロギングレベルを設定し、オプションで設定された期間の診断トレースを開始します",
-                "data": {
-                    "trace_timeout": "デバグトレース時間 [秒]",
-                    "error": "エラーメッセージ",
-                    "logging_level": "ログレベル",
-                    "trace": "診断トレースの開始",
-                    "obfuscate": "ログ内の機密データを難読化する"
                 }
             },
             "bind": {
@@ -225,6 +213,16 @@
                 "title": "MQTTの再設定（ローカルバインディング）",
                 "description": "デバイスは新しいMQTTブローカーに成功的に設定されました{domain}。\n設定は更新され、再読み込みされましたが、新しいブローカーに接続するためにはデバイスを再起動（電源を切る）する必要があるかもしれません。"
             }
+        },
+        "error": {
+            "already_configured_device": "可能なデバイスは1つだけ",
+            "cannot_connect": "接続できません",
+            "cloud_profile_mismatch": "クラウドプロファイルが構成と一致しません",
+            "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません",
+            "invalid_auth": "認証エラー",
+            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
+            "habroker_not_connected": "HomeAssistant MQTTブローカーが接続されていない"
         }
     },
     "issues": {
@@ -241,7 +239,6 @@
                             "save_password": "パスワードを保存する",
                             "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                             "check_firmware_updates": "ファームウェアのアップデートを確認する",
-                            "create_diagnostic_entities": "診断エンティティの作成",
                             "error": "エラーメッセージ"
                         }
                     }

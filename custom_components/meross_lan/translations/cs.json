@@ -106,7 +106,6 @@
                     "save_password": "Uložit heslo",
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
-                    "create_diagnostic_entities": "Vytvářejte diagnostické entity",
                     "error": "Chybová zpráva",
                     "cloud_region": "Region účtu",
                     "mfa_code": "Autentizační kód"
@@ -119,25 +118,26 @@
         }
     },
     "options": {
-        "error": {
-            "already_configured_device": "Zařízení již bylo konfigurováno",
-            "cannot_connect": "Pokus o připojení se nezdařil",
-            "cloud_profile_mismatch": "Cloudový profil neodpovídá konfiguraci",
-            "device_id_mismatch": "Neshoda UUID zařízení: zařízení není stejné",
-            "invalid_auth": "Ověření selhalo",
-            "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
-            "habroker_not_connected": "Zprostředkovatel HomeAssistant MQTT není připojen"
-        },
         "step": {
+            "diagnostics": {
+                "data": {
+                    "create_diagnostic_entities": "Vytvářejte diagnostické entity",
+                    "trace_timeout": "Doba trvání trasování ladění (sec)",
+                    "error": "Chybová zpráva",
+                    "logging_level": "Úroveň protokolování",
+                    "trace": "Spusťte trasování diagnostiky",
+                    "obfuscate": "Zamaskujte citlivá data v protokolech"
+                },
+                "title": "Diagnostika",
+                "description": "Nastavení úrovně protokolování pro toto zařízení\/profil a volitelné spuštění diagnostického sledování po nastavenou dobu"
+            },
             "hub": {
                 "title": "Centrum Meross LAN MQTT",
                 "description": "Globální konfigurace nastavení Meross LAN",
                 "data": {
                     "key": "Klíč zařízení",
                     "error": "Chybová zpráva",
-                    "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
-                    "create_diagnostic_entities": "Vytvářejte diagnostické entity"
+                    "allow_mqtt_publish": "Povolit cloudové publikování MQTT"
                 }
             },
             "device": {
@@ -170,7 +170,6 @@
                     "save_password": "Uložit heslo",
                     "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                     "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
-                    "create_diagnostic_entities": "Vytvářejte diagnostické entity",
                     "error": "Chybová zpráva",
                     "mfa_code": "Autentizační kód"
                 }
@@ -184,17 +183,6 @@
                     "diagnostics": "Diagnostika",
                     "bind": "Překonfigurovat MQTT (místní vazba)",
                     "unbind": "Hardwarový reset"
-                }
-            },
-            "diagnostics": {
-                "title": "Diagnostika",
-                "description": "Nastavení úrovně protokolování pro toto zařízení\/profil a volitelné spuštění diagnostického sledování po nastavenou dobu",
-                "data": {
-                    "trace_timeout": "Doba trvání trasování ladění (sec)",
-                    "error": "Chybová zpráva",
-                    "logging_level": "Úroveň protokolování",
-                    "trace": "Spusťte trasování diagnostiky",
-                    "obfuscate": "Zamaskujte citlivá data v protokolech"
                 }
             },
             "bind": {
@@ -225,6 +213,16 @@
                 "title": "Překonfigurovat MQTT (místní vazba)",
                 "description": "Zařízení bylo úspěšně nakonfigurováno s novým MQTT brokerem na {domain}.\nKonfigurace byla aktualizována a znovu načtena, ale může být nutné zařízení restartovat (vypnout a zapnout), aby se mohlo připojit k novému brokerovi."
             }
+        },
+        "error": {
+            "already_configured_device": "Zařízení již bylo konfigurováno",
+            "cannot_connect": "Pokus o připojení se nezdařil",
+            "cloud_profile_mismatch": "Cloudový profil neodpovídá konfiguraci",
+            "device_id_mismatch": "Neshoda UUID zařízení: zařízení není stejné",
+            "invalid_auth": "Ověření selhalo",
+            "invalid_key": "Neplatný klíč: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "Neplatný klíč: select 'Hack mode' to allow empty key",
+            "habroker_not_connected": "Zprostředkovatel HomeAssistant MQTT není připojen"
         }
     },
     "issues": {
@@ -241,7 +239,6 @@
                             "save_password": "Uložit heslo",
                             "allow_mqtt_publish": "Povolit cloudové publikování MQTT",
                             "check_firmware_updates": "Zkontrolujte aktualizace firmwaru",
-                            "create_diagnostic_entities": "Vytvářejte diagnostické entity",
                             "error": "Chybová zpráva"
                         }
                     }

@@ -106,7 +106,6 @@
                     "save_password": "Passwort speichern",
                     "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
                     "check_firmware_updates": "Überprüfen Sie Firmware-Updates",
-                    "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten",
                     "error": "Fehlermeldung",
                     "cloud_region": "Kontoregion",
                     "mfa_code": "Authenticator-Code"
@@ -119,25 +118,26 @@
         }
     },
     "options": {
-        "error": {
-            "already_configured_device": "Das Gerät ist bereits vorhanden",
-            "cannot_connect": "Verbindung nicht möglich",
-            "cloud_profile_mismatch": "Das Cloud-Profil stimmt nicht mit der Konfiguration überein",
-            "device_id_mismatch": "Nicht übereinstimmende Geräte-UUID: Das Gerät ist nicht dasselbe",
-            "invalid_auth": "Fehlerhafte Zugangsdaten",
-            "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
-            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
-            "habroker_not_connected": "Der HomeAssistant MQTT-Broker ist nicht verbunden"
-        },
         "step": {
+            "diagnostics": {
+                "data": {
+                    "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten",
+                    "trace_timeout": "Dauer der Debug-Ablaufverfolgung (sec)",
+                    "error": "Fehlermeldung",
+                    "logging_level": "Protokollierungsgrad",
+                    "trace": "Diagnosetrace starten",
+                    "obfuscate": "Sensible Daten in Protokollen verschleiern"
+                },
+                "title": "Diagnostik",
+                "description": "Legen Sie die Protokollierungsstufe für dieses Gerät\/Profil fest und starten Sie optional einen Diagnose-Trace für den konfigurierten Zeitraum"
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Allgemeine Meross LAN Einstellungen",
                 "data": {
                     "key": "Geräteschlüssel",
                     "error": "Fehlermeldung",
-                    "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
-                    "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten"
+                    "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen"
                 }
             },
             "device": {
@@ -170,7 +170,6 @@
                     "save_password": "Passwort speichern",
                     "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
                     "check_firmware_updates": "Überprüfen Sie Firmware-Updates",
-                    "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten",
                     "error": "Fehlermeldung",
                     "mfa_code": "Authenticator-Code"
                 }
@@ -184,17 +183,6 @@
                     "diagnostics": "Diagnostik",
                     "bind": "MQTT neu konfigurieren (lokale Bindung)",
                     "unbind": "Hardware-Reset"
-                }
-            },
-            "diagnostics": {
-                "title": "Diagnostik",
-                "description": "Legen Sie die Protokollierungsstufe für dieses Gerät\/Profil fest und starten Sie optional einen Diagnose-Trace für den konfigurierten Zeitraum",
-                "data": {
-                    "trace_timeout": "Dauer der Debug-Ablaufverfolgung (sec)",
-                    "error": "Fehlermeldung",
-                    "logging_level": "Protokollierungsgrad",
-                    "trace": "Diagnosetrace starten",
-                    "obfuscate": "Sensible Daten in Protokollen verschleiern"
                 }
             },
             "bind": {
@@ -225,6 +213,16 @@
                 "title": "MQTT neu konfigurieren (lokale Bindung)",
                 "description": "Das Gerät wurde erfolgreich mit dem neuen MQTT-Broker unter {domain} konfiguriert.\nDie Konfiguration wurde aktualisiert und neu geladen, aber es könnte notwendig sein, das Gerät neu zu starten (Stromkreislauf), damit es sich mit dem neuen Broker verbinden kann."
             }
+        },
+        "error": {
+            "already_configured_device": "Das Gerät ist bereits vorhanden",
+            "cannot_connect": "Verbindung nicht möglich",
+            "cloud_profile_mismatch": "Das Cloud-Profil stimmt nicht mit der Konfiguration überein",
+            "device_id_mismatch": "Nicht übereinstimmende Geräte-UUID: Das Gerät ist nicht dasselbe",
+            "invalid_auth": "Fehlerhafte Zugangsdaten",
+            "invalid_key": "Geräteschlüssel fehlerhaft: Wählen Sie 'Cloud retrieve' um von Meross zu kommen",
+            "invalid_nullkey": "Geräteschlüssel fehlerhaft: Wählen Sie 'Hack mode' um einen leeren Schlüssel zuzulassen",
+            "habroker_not_connected": "Der HomeAssistant MQTT-Broker ist nicht verbunden"
         }
     },
     "issues": {
@@ -241,7 +239,6 @@
                             "save_password": "Passwort speichern",
                             "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen",
                             "check_firmware_updates": "Überprüfen Sie Firmware-Updates",
-                            "create_diagnostic_entities": "Erstellen Sie Diagnoseeinheiten",
                             "error": "Fehlermeldung"
                         }
                     }

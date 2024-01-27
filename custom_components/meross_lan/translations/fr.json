@@ -106,7 +106,6 @@
                     "save_password": "Enregistrer le mot de passe",
                     "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                     "check_firmware_updates": "Vérifier les mises à jour du firmware",
-                    "create_diagnostic_entities": "Créer des entités de diagnostic",
                     "error": "Message d'erreur",
                     "cloud_region": "Région du compte",
                     "mfa_code": "Code d'authentification"
@@ -119,25 +118,26 @@
         }
     },
     "options": {
-        "error": {
-            "already_configured_device": "Déjà configuré. Un seul appareil possible.",
-            "cannot_connect": "Pas de connect",
-            "cloud_profile_mismatch": "Le profil cloud ne correspond pas à la configuration",
-            "device_id_mismatch": "Non-concordance de l'UUID: l'appareil n'est pas le même",
-            "invalid_auth": "Authentication",
-            "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
-            "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
-            "habroker_not_connected": "Le courtier HomeAssistant MQTT n'est pas connecté"
-        },
         "step": {
+            "diagnostics": {
+                "data": {
+                    "create_diagnostic_entities": "Créer des entités de diagnostic",
+                    "trace_timeout": "Durée du suivi du débogage (sec)",
+                    "error": "Message d'erreur",
+                    "logging_level": "Niveau d'enregistrement",
+                    "trace": "Démarrer la trace de diagnostic",
+                    "obfuscate": "Obscurcir les données sensibles dans les journaux"
+                },
+                "title": "Diagnostique",
+                "description": "Définir le niveau de journalisation pour cet appareil\/profil et, éventuellement, lancer une trace de diagnostic pour la période configurée"
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configurer les paramètres LAN globaux de Meross",
                 "data": {
                     "key": "Clé",
                     "error": "Message d'erreur",
-                    "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
-                    "create_diagnostic_entities": "Créer des entités de diagnostic"
+                    "allow_mqtt_publish": "Autoriser la publication cloud MQTT"
                 }
             },
             "device": {
@@ -170,7 +170,6 @@
                     "save_password": "Enregistrer le mot de passe",
                     "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                     "check_firmware_updates": "Vérifier les mises à jour du firmware",
-                    "create_diagnostic_entities": "Créer des entités de diagnostic",
                     "error": "Message d'erreur",
                     "mfa_code": "Code d'authentification"
                 }
@@ -184,17 +183,6 @@
                     "diagnostics": "Diagnostique",
                     "bind": "Reconfigurer MQTT (liaison locale)",
                     "unbind": "Réinitialisation du matériel"
-                }
-            },
-            "diagnostics": {
-                "title": "Diagnostique",
-                "description": "Définir le niveau de journalisation pour cet appareil\/profil et, éventuellement, lancer une trace de diagnostic pour la période configurée",
-                "data": {
-                    "trace_timeout": "Durée du suivi du débogage (sec)",
-                    "error": "Message d'erreur",
-                    "logging_level": "Niveau d'enregistrement",
-                    "trace": "Démarrer la trace de diagnostic",
-                    "obfuscate": "Obscurcir les données sensibles dans les journaux"
                 }
             },
             "bind": {
@@ -225,6 +213,16 @@
                 "title": "Reconfigurer MQTT (liaison locale)",
                 "description": "L'appareil a été configuré avec succès avec le nouveau courtier MQTT à {domain}.\nLa configuration a été mise à jour et rechargée, mais vous devrez peut-être redémarrer (cycle d'alimentation) l'appareil pour qu'il se connecte au nouveau courtier."
             }
+        },
+        "error": {
+            "already_configured_device": "Déjà configuré. Un seul appareil possible.",
+            "cannot_connect": "Pas de connect",
+            "cloud_profile_mismatch": "Le profil cloud ne correspond pas à la configuration",
+            "device_id_mismatch": "Non-concordance de l'UUID: l'appareil n'est pas le même",
+            "invalid_auth": "Authentication",
+            "invalid_key": "Erreur de clé: sélectionnez 'Cloud retrieve' pour obtenir de Meross",
+            "invalid_nullkey": "Erreur de clé: sélectionnez 'Hack mode' pour autoriser la clé vide",
+            "habroker_not_connected": "Le courtier HomeAssistant MQTT n'est pas connecté"
         }
     },
     "issues": {
@@ -241,7 +239,6 @@
                             "save_password": "Enregistrer le mot de passe",
                             "allow_mqtt_publish": "Autoriser la publication cloud MQTT",
                             "check_firmware_updates": "Vérifier les mises à jour du firmware",
-                            "create_diagnostic_entities": "Créer des entités de diagnostic",
                             "error": "Message d'erreur"
                         }
                     }
