@@ -322,6 +322,12 @@ POLLING_STRATEGY_CONF: dict[str, tuple[int, int, int, int]] = {
         PARAM_HEADER_SIZE,
         250,
     ),
+    mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        55,
+    ),
     mc.NS_APPLIANCE_HUB_TOGGLEX: (0, 0, PARAM_HEADER_SIZE, 35),
     mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: (
         0,

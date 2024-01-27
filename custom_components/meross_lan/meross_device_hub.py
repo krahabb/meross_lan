@@ -388,12 +388,10 @@ class MerossDeviceHub(MerossDevice):
             polling_strategies[mc.NS_APPLIANCE_HUB_BATTERY].increment_size()
         elif mc.NS_APPLIANCE_HUB_BATTERY in abilities:
             SmartPollingStrategy(self, mc.NS_APPLIANCE_HUB_BATTERY, item_count=1)
-        """
         if mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in polling_strategies:
             polling_strategies[mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION].increment_size()
         elif mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in abilities:
             OncePollingStrategy(self, mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION, item_count=1)
-        """
 
         if deviceclass := WELL_KNOWN_TYPE_MAP.get(_type):  # type: ignore
             return deviceclass(self, p_subdevice)
