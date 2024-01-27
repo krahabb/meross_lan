@@ -7,7 +7,7 @@ from ..climate import MtsClimate
 from ..helpers import reverse_lookup
 from ..merossclient import const as mc
 from ..number import MtsCalibrationNumber, MtsSetPointNumber
-from ..sensor import MLSensor
+from ..sensor import MLDiagnosticSensor
 
 if typing.TYPE_CHECKING:
     from .thermostat import ThermostatMixin
@@ -21,15 +21,6 @@ class Mts960FakeSetPointNumber(MtsSetPointNumber):
 
     def __new__(cls, *args):
         return cls
-
-
-class Mts960DiagnosticSensor(MLSensor):
-    _attr_entity_category = MLSensor.EntityCategory.DIAGNOSTIC
-
-    def __init__(self, climate: Mts960Climate, entitykey: str | None):
-        super().__init__(
-            climate.manager, climate.channel, entitykey, MLSensor.DeviceClass.ENUM
-        )
 
 
 class Mts960Climate(MtsClimate):
@@ -122,8 +113,6 @@ class Mts960Climate(MtsClimate):
             Mts960FakeSetPointNumber,
             Mts960Schedule,
         )
-        for key in self.DIAGNOSTIC_SENSOR_KEYS:
-            Mts960DiagnosticSensor(self, key)
 
     # interface: MtsClimate
     def flush_state(self):
@@ -260,10 +249,16 @@ class Mts960Climate(MtsClimate):
                 payload[mc.KEY_TARGETTEMP] / self.device_scale
             )
 
-        entities = self.manager.entities
-        for key in self.DIAGNOSTIC_SENSOR_KEYS:
-            if key in payload:
-                entities[f"{self.channel}_{key}"].update_state(payload[key])
+        manager = self.manager
+        if manager.create_diagnostic_entities:
+            entities = manager.entities
+            channel = self.channel
+            for key in self.DIAGNOSTIC_SENSOR_KEYS:
+                if key in payload:
+                    try:
+                        entities[f"{channel}_{key}"].update_state(payload[key])
+                    except KeyError:
+                        MLDiagnosticSensor(manager, channel, f"{channel}_{key}", None, payload[key])
 
         self.flush_state()
 

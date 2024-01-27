@@ -24,7 +24,7 @@ from .merossclient import (
 )
 from .number import MLConfigNumber
 from .select import MtsTrackedSensor
-from .sensor import MLSensor
+from .sensor import MLDiagnosticSensor, MLSensor
 from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
@@ -542,13 +542,16 @@ class MerossSubDevice(MerossDeviceBase):
                 return
 
             # This happens when we still haven't 'normalized' the device structure
-            # so we'll euristically generate sensors for device properties
+            # so we'll (entually) euristically generate sensors for device properties
             # This is the case for when we see newer devices and we don't know
             # their payloads and features.
             # as for now we've seen "smokeAlarm" and "doorWindow" subdevices
             # carrying similar payloads structures. We'll be conservative
             # by not 'exploiting' lists in payloads since they usually carry
             # historic data or so
+            if not self.hub.create_diagnostic_entities:
+                return
+
             def _parse_dict(parent_key: str, parent_dict: dict):
                 for subkey, subvalue in parent_dict.items():
                     if isinstance(subvalue, dict):
@@ -566,11 +569,10 @@ class MerossSubDevice(MerossDeviceBase):
                     }:
                         continue
                     entitykey = f"{parent_key}_{subkey}"
-                    sensor = self.entities.get(f"{self.id}_{entitykey}")
-                    if not sensor:
-                        sensor = self.build_sensor(entitykey)
-                        sensor._attr_entity_category = me.EntityCategory.DIAGNOSTIC
-                    sensor.update_state(subvalue)
+                    try:
+                        self.entities[f"{self.id}_{entitykey}"].update_state(subvalue)
+                    except KeyError:
+                        MLDiagnosticSensor(self, self.id, entitykey, None, subvalue)
 
             def _parse_list():
                 pass
