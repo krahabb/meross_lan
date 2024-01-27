@@ -15,6 +15,7 @@ from typing import Callable
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
@@ -270,6 +271,14 @@ class Loggable(abc.ABC):
     """Cached HomeAssistant instance (Boom!)"""
     api: typing.ClassVar[MerossApi] = None  # type: ignore
     """Cached MerossApi instance (Boom!)"""
+
+    @staticmethod
+    def get_device_registry():
+        return device_registry.async_get(Loggable.hass)
+
+    @staticmethod
+    def get_entity_registry():
+        return entity_registry.async_get(Loggable.hass)
 
     __slots__ = (
         "id",
