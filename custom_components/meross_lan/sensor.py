@@ -56,7 +56,6 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
     }
 
     _attr_native_unit_of_measurement: str | None
-    _attr_state: int | float | None
     _attr_state_class: StateClass | None
 
     __slots__ = (
@@ -69,15 +68,16 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         manager: EntityManager,
         channel: object | None,
         entitykey: str | None,
-        device_class: DeviceClass | None,
+        device_class: DeviceClass | None = None,
+        state: me.StateType = None,
     ):
-        super().__init__(manager, channel, entitykey, device_class)
         self._attr_native_unit_of_measurement = self.DEVICECLASS_TO_UNIT_MAP.get(
             device_class
         )
         self._attr_state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
             device_class, MLSensor.StateClass.MEASUREMENT
         )
+        super().__init__(manager, channel, entitykey, device_class, state)
 
     @staticmethod
     def build_for_device(device: MerossDevice, device_class: MLSensor.DeviceClass):
@@ -98,6 +98,10 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
     @property
     def state_class(self):
         return self._attr_state_class
+
+
+class MLDiagnosticSensor(MLSensor):
+    _attr_entity_category = MLSensor.EntityCategory.DIAGNOSTIC
 
 
 class ProtocolSensor(MLSensor):
@@ -123,8 +127,13 @@ class ProtocolSensor(MLSensor):
         manager: MerossDevice,
     ):
         self._attr_extra_state_attributes = {}
-        super().__init__(manager, None, "sensor_protocol", self.DeviceClass.ENUM)
-        self._attr_state = ProtocolSensor.STATE_DISCONNECTED
+        super().__init__(
+            manager,
+            None,
+            "sensor_protocol",
+            self.DeviceClass.ENUM,
+            ProtocolSensor.STATE_DISCONNECTED,
+        )
 
     @property
     def available(self):

@@ -126,14 +126,15 @@ class ConnectionSensor(MLSensor):
             ConnectionSensor.ATTR_QUEUE_LENGTH: 0,
         }
         super().__init__(
-            connection.profile, None, connection.id, MLSensor.DeviceClass.ENUM
-        )
-        connection.sensor_connection = self
-        self.update_state(
+            connection.profile,
+            None,
+            connection.id,
+            MLSensor.DeviceClass.ENUM,
             self.STATE_CONNECTED
             if connection.mqtt_is_connected
-            else self.STATE_DISCONNECTED
+            else self.STATE_DISCONNECTED,
         )
+        connection.sensor_connection = self
 
     # interface: Loggable
     def configure_logger(self):

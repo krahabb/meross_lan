@@ -20,11 +20,12 @@ if typing.TYPE_CHECKING:
 
 class EnergyEstimateSensor(MLSensor):
     _attr_state: int
-    _attr_state_float: float = 0.0
+
+    __slots__ = ("_attr_state_float",)
 
     def __init__(self, manager: ElectricityMixin):
-        super().__init__(manager, None, "energy_estimate", self.DeviceClass.ENERGY)
-        self._attr_state = 0
+        self._attr_state_float = 0.0
+        super().__init__(manager, None, "energy_estimate", self.DeviceClass.ENERGY, 0)
 
     @property
     def entity_registry_enabled_default(self):
@@ -138,7 +139,7 @@ class ElectricityMixin(
             # dt = self.lastupdate - self._electricity_lastupdate
             # de = (((last_power + power) / 2) * dt) / 3600
             de = (
-                (last_power + power)
+                (last_power + power)  # type: ignore
                 * (self.lastresponse - self._electricity_lastupdate)
             ) / 7200
             self._consumption_estimate += de

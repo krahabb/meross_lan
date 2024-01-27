@@ -219,8 +219,10 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         manager = self.manager
         # preset entity platforms since these might be instantiated later
         from .switch import MtsConfigSwitch
+
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
         from .sensor import MLSensor
+
         manager.platforms.setdefault(MLSensor.PLATFORM)
         self.sensor_warning = None
         self.switch = None
@@ -231,9 +233,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         )
 
     async def async_shutdown(self):
-        self.manager.unregister_parser(
-            self.namespace, self
-        )
+        self.manager.unregister_parser(self.namespace, self)
         self.switch = None
         self.sensor_warning = None
         await super().async_shutdown()
@@ -253,6 +253,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
                 self.switch.update_onoff(payload[mc.KEY_ONOFF])  # type: ignore
             except Exception as exception:
                 from .switch import MtsConfigSwitch
+
                 self.switch = MtsConfigSwitch(
                     self.climate, f"{self.entitykey}_switch", self.namespace
                 )
@@ -269,9 +270,9 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
                     self.channel,
                     f"{self.entitykey}_warning",
                     MLSensor.DeviceClass.ENUM,
+                    payload[mc.KEY_WARNING],
                 )
                 sensor_warning._attr_translation_key = f"mts_{sensor_warning.entitykey}"
-                sensor_warning.update_state(payload[mc.KEY_WARNING])
 
 
 class MtsCalibrationNumber(MtsRichTemperatureNumber):
