@@ -180,6 +180,23 @@ class HubChunkedPollingStrategy(PollingStrategy):
                 ):
                     max_queuable += 1
 
+    async def async_trace(self, device: MerossDeviceHub):
+        """
+        Used while tracing abilities. In general, we use an euristic 'default'
+        query but for some 'well known namespaces' we might be better off querying with
+        a better structured payload.
+        """
+        for p in self._build_subdevices_payload(device.subdevices.values()):
+            self.request = (
+                self.namespace,
+                mc.METHOD_GET,
+                {self.key_namespace: p},
+            )
+            self.adjust_size(len(p))
+            await device.async_request_poll(self)
+            # this is to not 'pack' abilities tracing into ns_multiple
+            await device.async_request_flush()
+
     def _build_subdevices_payload(self, subdevices: typing.Collection[MerossSubDevice]):
         """
         This generator helps dealing with hubs hosting an high number
@@ -391,7 +408,9 @@ class MerossDeviceHub(MerossDevice):
         if mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in polling_strategies:
             polling_strategies[mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION].increment_size()
         elif mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in abilities:
-            OncePollingStrategy(self, mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION, item_count=1)
+            OncePollingStrategy(
+                self, mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION, item_count=1
+            )
 
         if deviceclass := WELL_KNOWN_TYPE_MAP.get(_type):  # type: ignore
             return deviceclass(self, p_subdevice)

@@ -534,11 +534,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def _trace_opened(self, epoch: float):
         descr = self.descriptor
-        # at this stage, _trace_ability will just (re)schedule itself so
-        # the first data in trace will anyway be the ns_all and ns_ability
-        # calling it first is needed so that any failure writing leading to
-        # a trace_closed will rightly cancel the callback
-        self._trace_ability(iter(descr.ability))
+        # set the scheduled callback first so it gets (eventually) cleaned
+        # should the following self.trace close the file due to an error
+        self._unsub_trace_ability_callback = schedule_async_callback(
+            self.hass,
+            PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+            self._async_trace_ability,
+            iter(descr.ability),
+        )
         self.trace(epoch, descr.all, mc.NS_APPLIANCE_SYSTEM_ALL)
         self.trace(epoch, descr.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY)
 
@@ -1952,28 +1955,35 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         update_firmware._attr_release_summary = latest_version.get(mc.KEY_DESCRIPTION)
         update_firmware.flush_state()
 
-    @callback
-    def _trace_ability(self, abilities_iterator: typing.Iterator[str]):
+    async def _async_trace_ability(self, abilities_iterator: typing.Iterator[str]):
+        self._unsub_trace_ability_callback = None
         try:
             # avoid interleave tracing ability with polling loop
             # also, since we could trigger this at early stages
             # in device init, this check will prevent iterating
             # at least until the device fully initialize through
             # self.start()
-            if self._unsub_polling_callback:
-                while self.online:
-                    ability = next(abilities_iterator)
-                    if ability not in TRACE_ABILITY_EXCLUDE:
-                        self.request(get_default_arguments(ability))
-                        break
-            self._unsub_trace_ability_callback = schedule_callback(
-                self.hass,
-                PARAM_TRACING_ABILITY_POLL_TIMEOUT,
-                self._trace_ability,
-                abilities_iterator,
-            )
-        except Exception:  # finished ?!
-            self._unsub_trace_ability_callback = None
+            if self._unsub_polling_callback and self.online:
+                while (ability := next(abilities_iterator)) in TRACE_ABILITY_EXCLUDE:
+                    continue
+                self.log(self.DEBUG, "Tracing %s ability", ability)
+                if ability in self.polling_strategies:
+                    strategy = self.polling_strategies[ability]
+                    await strategy.async_trace(self)
+                else:
+                    await self.async_request(*get_default_arguments(ability))
+        except StopIteration:
+            self.log(self.DEBUG, "Tracing abilities end")
+            return
+        except Exception as exception:
+            self.log_exception(self.DEBUG, exception, "_async_trace_ability")
+
+        self._unsub_trace_ability_callback = schedule_async_callback(
+            self.hass,
+            PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+            self._async_trace_ability,
+            abilities_iterator,
+        )
 
     def _trace_or_log(
         self,

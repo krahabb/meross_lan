@@ -257,6 +257,16 @@ class PollingStrategy:
             self.lastrequest = epoch
             await device.async_request_poll(self)
 
+    async def async_trace(self, device: MerossDevice):
+        """
+        Used while tracing abilities. In general, we use an euristic 'default'
+        query but for some 'well known namespaces' we might be better off querying with
+        a better structured payload.
+        """
+        await device.async_request_poll(self)
+        # this is to not 'pack' abilities tracing into ns_multiple
+        await device.async_request_flush()
+
 
 class SmartPollingStrategy(PollingStrategy):
     """
