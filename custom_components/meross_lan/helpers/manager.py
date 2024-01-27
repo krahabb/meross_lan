@@ -15,20 +15,11 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from . import LOGGER, Loggable, getLogger, schedule_async_callback, schedule_callback
 from ..const import (
     CONF_ALLOW_MQTT_PUBLISH,
-    CONF_CLOUD_KEY,
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
-    CONF_DEVICE_ID,
-    CONF_HOST,
     CONF_KEY,
-    CONF_LOGGING_CRITICAL,
-    CONF_LOGGING_DEBUG,
-    CONF_LOGGING_INFO,
     CONF_LOGGING_LEVEL,
     CONF_LOGGING_LEVEL_OPTIONS,
-    CONF_LOGGING_VERBOSE,
-    CONF_LOGGING_WARNING,
     CONF_OBFUSCATE,
-    CONF_PASSWORD,
     CONF_PROTOCOL_AUTO,
     CONF_PROTOCOL_MQTT,
     CONF_TRACE,
@@ -38,23 +29,14 @@ from ..const import (
     CONF_TRACE_TIMEOUT,
     CONF_TRACE_TIMEOUT_DEFAULT,
     DOMAIN,
-    POLLING_STRATEGY_CONF,
 )
-from ..merossclient import (
-    KEY_TO_NAMESPACE,
-    NAMESPACE_TO_KEY,
-    cloudapi,
-    const as mc,
-    get_default_arguments,
-    json_dumps,
-)
+from ..merossclient import cloudapi, const as mc, json_dumps
 from .obfuscate import (
     OBFUSCATE_DEVICE_ID_MAP,
     OBFUSCATE_SERVER_MAP,
     OBFUSCATE_USERID_MAP,
     obfuscated_any,
     obfuscated_dict,
-    obfuscated_list,
 )
 
 if typing.TYPE_CHECKING:
@@ -70,6 +52,7 @@ if typing.TYPE_CHECKING:
     from ..meross_entity import MerossEntity
     from ..meross_profile import MerossCloudProfile, MQTTConnection
     from ..merossclient import HostAddress, MerossMessage, MerossPayloadType
+
 
 class EntityManager(Loggable):
     """
@@ -219,6 +202,7 @@ class ConfigEntryManager(EntityManager):
         self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
         self.unschedule_entry_reload()
         await super().async_shutdown()
+        await self.async_destroy_diagnostic_entities()
         if self.trace_file:
             self.trace_close()
 
@@ -251,6 +235,10 @@ class ConfigEntryManager(EntityManager):
             )
 
     # interface: self
+    @property
+    def create_diagnostic_entities(self):
+        return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
+
     async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
         assert not self._unsub_entry_update_listener
         assert config_entry.entry_id not in ApiProfile.managers
@@ -262,6 +250,9 @@ class ConfigEntryManager(EntityManager):
         state = ApiProfile.managers_transient_state.setdefault(self.config_entry_id, {})
         if state.pop(CONF_TRACE, None):
             self._trace_open()
+
+        if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
+            await self.async_create_diagnostic_entities()
 
         await hass.config_entries.async_forward_entry_setups(
             config_entry, self.platforms.keys()
@@ -312,6 +303,23 @@ class ConfigEntryManager(EntityManager):
         self.key = config.get(CONF_KEY) or ""
         self.obfuscate = config.get(CONF_OBFUSCATE, True)
         self.configure_logger()
+        if config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
+            await self.async_create_diagnostic_entities()
+        else:
+            await self.async_remove_diagnostic_entities()
+
+    async def async_create_diagnostic_entities(self):
+        """Dynamically create some diagnostic entities depending on configuration"""
+        pass
+
+    async def async_destroy_diagnostic_entities(self):
+        """Cleanup diagnostic entities, when the entry is unloaded. The entity registry is untouched so
+        they'll be there when next loading."""
+        pass
+
+    async def async_remove_diagnostic_entities(self):
+        """Cleanup diagnostic entities, also removing them from entity registry (in case)"""
+        pass
 
     @abc.abstractmethod
     def get_logger_name(self) -> str:
@@ -576,10 +584,8 @@ class ApiProfile(ConfigEntryManager):
 
     async def entry_update_listener(self, hass, config_entry: ConfigEntry):
         config = config_entry.data
-        # the ApiProfile always enable (independent of config) mqtt publish so far
-        allow_mqtt_publish = config.get(CONF_ALLOW_MQTT_PUBLISH) or (
-            self is self.api
-        )
+        # the MerossApi always enable (independent of config) mqtt publish
+        allow_mqtt_publish = config.get(CONF_ALLOW_MQTT_PUBLISH) or (self is self.api)
         if allow_mqtt_publish != self.allow_mqtt_publish:
             # device._mqtt_publish is rather 'passive' so
             # we do some fast 'smart' updates:
@@ -593,14 +599,22 @@ class ApiProfile(ConfigEntryManager):
         for mqttconnection in self.mqttconnections.values():
             await mqttconnection.entry_update_listener(self)
 
+    async def async_create_diagnostic_entities(self):
+        for mqttconnection in self.mqttconnections.values():
+            await mqttconnection.async_create_diagnostic_entities()
+
+    async def async_destroy_diagnostic_entities(self):
+        for mqttconnection in self.mqttconnections.values():
+            await mqttconnection.async_destroy_diagnostic_entities()
+
+    async def async_remove_diagnostic_entities(self):
+        for mqttconnection in self.mqttconnections.values():
+            await mqttconnection.async_remove_diagnostic_entities()
+
     # interface: self
     @property
     def allow_mqtt_publish(self):
         return self.config.get(CONF_ALLOW_MQTT_PUBLISH)
-
-    @property
-    def create_diagnostic_entities(self):
-        return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
 
     def try_link(self, device: MerossDevice):
         device_id = device.id

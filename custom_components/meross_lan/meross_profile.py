@@ -291,8 +291,6 @@ class MQTTConnection(Loggable):
             logger=profile,
         )
         profile.mqttconnections[self.id] = self
-        if profile.create_diagnostic_entities:
-            ConnectionSensor(self)
 
     # interface: Loggable
     def configure_logger(self):
@@ -310,6 +308,10 @@ class MQTTConnection(Loggable):
         self.mqttdevices.clear()
         await self.async_destroy_diagnostic_entities()
 
+    async def async_create_diagnostic_entities(self):
+        if not self.sensor_connection:
+            ConnectionSensor(self)
+
     async def async_destroy_diagnostic_entities(self):
         if sensor_connection := self.sensor_connection:
             self.sensor_connection = None
@@ -318,16 +320,15 @@ class MQTTConnection(Loggable):
                     await sensor_connection.async_remove()
                 await sensor_connection.async_shutdown()
 
+    async def async_remove_diagnostic_entities(self):
+        # TODO: remove from entity registry
+        await self.async_destroy_diagnostic_entities()
+
     async def entry_update_listener(self, profile: ApiProfile):
         """Called by the ApiProfile to propagate config changes"""
-        if profile.create_diagnostic_entities:
-            if self.sensor_connection:
-                self.sensor_connection.configure_logger()
-            else:
-                ConnectionSensor(self)
-        else:
-            await self.async_destroy_diagnostic_entities()
         self.configure_logger()
+        if self.sensor_connection:
+            self.sensor_connection.configure_logger()
 
     @property
     @abc.abstractmethod
@@ -366,9 +367,7 @@ class MQTTConnection(Loggable):
         device_id: str,
         request: MerossMessage,
     ):
-        return self.hass.async_create_task(
-            self.async_mqtt_publish(device_id, request)
-        )
+        return self.hass.async_create_task(self.async_mqtt_publish(device_id, request))
 
     @typing.final
     async def async_mqtt_publish(
@@ -828,9 +827,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         device_id: str,
         request: MerossMessage,
     ) -> tuple[str, int]:
-        return await self.hass.async_add_executor_job(
-            self._publish, device_id, request
-        )
+        return await self.hass.async_add_executor_job(self._publish, device_id, request)
 
     @callback
     def _mqtt_connected(self):

@@ -438,8 +438,6 @@ class MerossApi(ApiProfile):
         # That's a risky mess
         # for real shutdown there's self.async_terminate
         await ConfigEntryManager.async_shutdown(self)
-        if mqtt_connection := self._mqtt_connection:
-            await mqtt_connection.async_destroy_diagnostic_entities()
 
     def get_logger_name(self) -> str:
         return "api"

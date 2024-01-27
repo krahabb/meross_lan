@@ -402,16 +402,6 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 },
             )
         ] = bool
-        config_schema[
-            vol.Required(
-                mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES,
-                description={
-                    DESCR: profile_config.get(
-                        mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES, False
-                    )
-                },
-            )
-        ] = bool
         if self._profile_entry:
             self._setup_entitymanager_schema(config_schema, profile_config)
         return self.async_show_form_with_errors(
@@ -901,12 +891,6 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                 mlc.CONF_ALLOW_MQTT_PUBLISH,
                 description={DESCR: hub_config.get(mlc.CONF_ALLOW_MQTT_PUBLISH, True)},
             ): bool,
-            vol.Required(
-                mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES,
-                description={
-                    DESCR: hub_config.get(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES, False)
-                },
-            ): bool,
         }
         self._setup_entitymanager_schema(config_schema, hub_config)
         return self.async_show_form(
@@ -1080,6 +1064,9 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
         # the global MerossApi.managers_transient_state
         config = self.config
         if user_input:
+            config[mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES] = user_input[
+                mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES
+            ]
             config[mlc.CONF_LOGGING_LEVEL] = (
                 reverse_lookup(
                     mlc.CONF_LOGGING_LEVEL_OPTIONS, user_input[mlc.CONF_LOGGING_LEVEL]
@@ -1101,6 +1088,12 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
             return self.finish_options_flow(config)
 
         config_schema = {
+            vol.Required(
+                mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES,
+                description={
+                    DESCR: config.get(mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES, False)
+                },
+            ): bool,
             vol.Required(
                 mlc.CONF_LOGGING_LEVEL,
                 description={

@@ -97,7 +97,6 @@ async def test_profile_config_flow(
             mlc.CONF_SAVE_PASSWORD: False,
             mlc.CONF_ALLOW_MQTT_PUBLISH: False,
             mlc.CONF_CHECK_FIRMWARE_UPDATES: False,
-            mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES: False,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 1
@@ -113,7 +112,6 @@ async def test_profile_config_flow(
             mlc.CONF_SAVE_PASSWORD: False,
             mlc.CONF_ALLOW_MQTT_PUBLISH: False,
             mlc.CONF_CHECK_FIRMWARE_UPDATES: False,
-            mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES: False,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 2
@@ -129,7 +127,6 @@ async def test_profile_config_flow(
             mlc.CONF_SAVE_PASSWORD: False,
             mlc.CONF_ALLOW_MQTT_PUBLISH: True,
             mlc.CONF_CHECK_FIRMWARE_UPDATES: True,
-            mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES: True,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 3

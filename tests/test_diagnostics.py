@@ -28,6 +28,7 @@ async def _async_configure_options_tracing(entry_mock: helpers.ConfigEntryMocker
     result = await options_flow.async_configure(
         result["flow_id"],
         user_input={
+            mlc.CONF_CREATE_DIAGNOSTIC_ENTITIES: False,
             mlc.CONF_LOGGING_LEVEL: "default",
             mlc.CONF_OBFUSCATE: True,
             mlc.CONF_TRACE: True,

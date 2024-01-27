@@ -9,32 +9,11 @@ from .merossclient import cloudapi, const as mc
 DOMAIN: Final = "meross_lan"
 # entity (sub)id for the switch representing DNDMode
 DND_ID: Final = "dnd"
-# ConfigEntry keys
-CONF_DEVICE_ID: Final = hac.CONF_DEVICE_ID
-# actual device key used to sign messages
+#########################
+# common ConfigEntry keys
+#########################
+CONF_CREATE_DIAGNOSTIC_ENTITIES: Final = "create_diagnostic_entities"
 CONF_KEY: Final = "key"
-# device key eventually retrieved from Meross account
-# This has been superseded by cloud_profile and will be
-# removed from configentries as soon as the users
-# update/repair/fix their configuration (no automatic migration)
-CONF_CLOUD_KEY: Final = "cloud_key"
-CONF_PAYLOAD: Final = hac.CONF_PAYLOAD
-CONF_HOST: Final = hac.CONF_HOST
-# protocol used to communicate with device
-CONF_PROTOCOL: Final = hac.CONF_PROTOCOL
-CONF_PROTOCOL_AUTO: Final = "auto"
-CONF_PROTOCOL_MQTT: Final = "mqtt"
-CONF_PROTOCOL_HTTP: Final = "http"
-CONF_PROTOCOL_OPTIONS: dict[str | None, str] = {
-    CONF_PROTOCOL_AUTO: CONF_PROTOCOL_AUTO,
-    CONF_PROTOCOL_MQTT: CONF_PROTOCOL_MQTT,
-    CONF_PROTOCOL_HTTP: CONF_PROTOCOL_HTTP,
-}
-
-# general device state polling or whatever
-CONF_POLLING_PERIOD: Final = "polling_period"
-CONF_POLLING_PERIOD_MIN: Final = 5
-CONF_POLLING_PERIOD_DEFAULT: Final = 30
 # sets the logging level x ConfigEntry
 CONF_LOGGING_LEVEL: Final = "logging_level"
 CONF_LOGGING_VERBOSE: Final = 5
@@ -60,17 +39,13 @@ CONF_TRACE_MAXSIZE: Final = 262144  # or when MAXSIZE exceeded
 # folder where to store traces
 CONF_TRACE_DIRECTORY: Final = "traces"
 CONF_TRACE_FILENAME: Final = "{}_{}.csv"
-# this is a 'fake' conf used to force-flush
-CONF_TIMESTAMP: Final = mc.KEY_TIMESTAMP
 
 
-class HubConfigType(TypedDict):
-    """MQTT Hub config_entry keys"""
+class ManagerConfigType(TypedDict):
+    """Common config_entry keys for any ConfigEntryManager type"""
 
     key: str
-    """device key used to discover devices over local MQTT"""
-    allow_mqtt_publish: NotRequired[bool]
-    """allow meross_lan to publish over local MQTT: actually ignored since it is True in code"""
+    """device key unique to this ConfigEntryManager type"""
     create_diagnostic_entities: NotRequired[bool]
     """create various diagnostic entities for debugging/diagnostics purposes"""
     logging_level: NotRequired[int]
@@ -81,7 +56,62 @@ class HubConfigType(TypedDict):
     """duration of the tracing feature when activated"""
 
 
-class DeviceConfigTypeMinimal(TypedDict):
+#####################################################
+# ApiProfile (Hub and MerossProfile) ConfigEntry keys
+#####################################################
+CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
+
+
+class ApiProfileConfigType(ManagerConfigType):
+    """Common config_entry keys for ApiProfile type"""
+
+    allow_mqtt_publish: NotRequired[bool]
+    """allow meross_lan to publish over local MQTT: actually ignored since it is True in code"""
+
+
+class HubConfigType(ApiProfileConfigType):
+    """MQTT Hub config_entry keys"""
+
+    """
+    key: str
+    allow_mqtt_publish: NotRequired[bool]
+    create_diagnostic_entities: NotRequired[bool]
+    logging_level: NotRequired[int]
+    obfuscate: NotRequired[bool]
+    trace_timeout: NotRequired[int | None]
+    """
+
+
+###############################
+# MerossDevice ConfigEntry keys
+###############################
+CONF_DEVICE_ID: Final = hac.CONF_DEVICE_ID
+# device key eventually retrieved from Meross account
+# This has been superseded by cloud_profile and will be
+# removed from configentries as soon as the users
+# update/repair/fix their configuration (no automatic migration)
+CONF_CLOUD_KEY: Final = "cloud_key"
+CONF_PAYLOAD: Final = hac.CONF_PAYLOAD
+CONF_HOST: Final = hac.CONF_HOST
+# protocol used to communicate with device
+CONF_PROTOCOL: Final = hac.CONF_PROTOCOL
+CONF_PROTOCOL_AUTO: Final = "auto"
+CONF_PROTOCOL_MQTT: Final = "mqtt"
+CONF_PROTOCOL_HTTP: Final = "http"
+CONF_PROTOCOL_OPTIONS: dict[str | None, str] = {
+    CONF_PROTOCOL_AUTO: CONF_PROTOCOL_AUTO,
+    CONF_PROTOCOL_MQTT: CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_HTTP: CONF_PROTOCOL_HTTP,
+}
+# general device state polling or whatever
+CONF_POLLING_PERIOD: Final = "polling_period"
+CONF_POLLING_PERIOD_MIN: Final = 5
+CONF_POLLING_PERIOD_DEFAULT: Final = 30
+# this is a 'fake' conf used to force-flush
+CONF_TIMESTAMP: Final = mc.KEY_TIMESTAMP
+
+
+class DeviceConfigTypeMinimal(ManagerConfigType):
     """Device config_entry required keys"""
 
     device_id: str
@@ -95,7 +125,7 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     and defined though DeviceConfigTypeMinimal
     """
 
-    key: NotRequired[str | None]
+    # key: NotRequired[str | None]
     """device key: needed to sign data for the device"""
     cloud_key: NotRequired[str | None]
     """deprecated field: used to store the device key as recovered from the cloud account"""
@@ -109,11 +139,11 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     """IANA timezone set in the device"""
     timestamp: NotRequired[float]
     """special (hidden from UI) field used to force entry save"""
-    logging_level: NotRequired[int]
+    # logging_level: NotRequired[int]
     """override the default log level set in HA configuration"""
-    obfuscate: NotRequired[bool]
+    # obfuscate: NotRequired[bool]
     """obfuscate sensitive data when logging/tracing"""
-    trace_timeout: NotRequired[int | None]
+    # trace_timeout: NotRequired[int | None]
     """duration of the tracing feature when activated"""
 
 
@@ -122,15 +152,16 @@ CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
 CONF_MFA_CODE: Final = "mfa_code"
 CONF_SAVE_PASSWORD: Final = "save_password"
-CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
 CONF_CHECK_FIRMWARE_UPDATES: Final = "check_firmware_updates"
-CONF_CREATE_DIAGNOSTIC_ENTITIES: Final = "create_diagnostic_entities"
 
 
-class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
+class ProfileConfigType(
+    ApiProfileConfigType, cloudapi.MerossCloudCredentials, total=False
+):
     """
     Meross cloud profile config_entry keys
     """
+
     cloud_region: NotRequired[str]
     mfa_code: NotRequired[bool]
     """logged in with MFA"""
@@ -140,15 +171,15 @@ class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
     """saves the account password in HA storage"""
     check_firmware_updates: NotRequired[bool]
     """activate a periodical query to the cloud api to look for fw updates """
-    allow_mqtt_publish: NotRequired[bool]
+    # allow_mqtt_publish: NotRequired[bool]
     """allow meross_lan to publish over local MQTT: actually ignored since it is True in code"""
-    create_diagnostic_entities: NotRequired[bool]
+    # create_diagnostic_entities: NotRequired[bool]
     """create various diagnostic entities for debugging/diagnostics purposes"""
-    logging_level: NotRequired[int]
+    # logging_level: NotRequired[int]
     """override the default log level set in HA configuration"""
-    obfuscate: NotRequired[bool]
+    # obfuscate: NotRequired[bool]
     """obfuscate sensitive data when logging/tracing"""
-    trace_timeout: NotRequired[int | None]
+    # trace_timeout: NotRequired[int | None]
     """duration of the tracing feature when activated"""
 
 
