@@ -114,6 +114,9 @@ OBFUSCATE_KEYS: dict[str, ObfuscateRule] = {
     mc.KEY_MAINSERVER: OBFUSCATE_SERVER_MAP,
     mc.KEY_MAINPORT: OBFUSCATE_PORT_MAP,
     mc.KEY_USERID: OBFUSCATE_USERID_MAP,
+    mc.KEY_SN: ObfuscateMap({}),
+    mc.KEY_SETUPID: ObfuscateMap({}),
+    mc.KEY_SETUPCODE: ObfuscateMap({}),
     mc.KEY_TOKEN: ObfuscateMap({}),
     mc.KEY_KEY: OBFUSCATE_KEY_MAP,
     #

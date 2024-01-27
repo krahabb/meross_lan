@@ -1583,6 +1583,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             str(self.loggable_dict(payload)),
         )
 
+    def _handle_Appliance_Config_info(self, header: dict, payload: dict):
+        """{"info":{"homekit":{"model":"MSH300HK","sn":"#","category":2,"setupId":"#","setupCode":"#","uuid":"#","token":"#"}}}"""
+        pass
+
     def _handle_Appliance_Control_Bind(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager
         pass
