@@ -109,9 +109,9 @@ class EntityManager(Loggable):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-        for entity in self.entities.values():
+        for entity in set(self.entities.values()):
+            # async_shutdown will pop out of self.entities
             await entity.async_shutdown()
-        self.entities.clear()
 
     @property
     def name(self) -> str:
@@ -315,14 +315,12 @@ class ConfigEntryManager(EntityManager):
     async def async_destroy_diagnostic_entities(self, remove: bool = False):
         """Cleanup diagnostic entities, when the entry is unloaded. If 'remove' is True
         it will be removed from the entity registry as well."""
-        entities = self.entities
         ent_reg = self.get_entity_registry() if remove else None
-        for entity in set(entities.values()):
+        for entity in self.managed_entities(SENSOR_DOMAIN):
             if entity.is_diagnostic:
                 if entity._hass_connected:
                     await entity.async_remove()
                 await entity.async_shutdown()
-                entities.pop(entity.id)
                 if ent_reg:
                     ent_reg.async_remove(entity.entity_id)
 

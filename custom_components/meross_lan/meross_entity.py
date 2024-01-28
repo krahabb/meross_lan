@@ -207,7 +207,8 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         return False
 
     async def async_shutdown(self):
-        pass
+        self.manager.entities.pop(self.id)
+        self.manager: EntityManager = None  # type: ignore
 
     def update_state(self, state: StateType):
         """

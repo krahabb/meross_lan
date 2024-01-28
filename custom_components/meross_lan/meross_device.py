@@ -373,6 +373,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_tzinfo",
         "_timezone_next_check",
         "_unsub_trace_ability_callback",
+        "_diagnostics_build",
         "entity_dnd",
         "sensor_protocol",
         "sensor_signal_strength",
@@ -423,18 +424,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._multiple_len_max: typing.Final = self._multiple_len
         self._multiple_requests: list[MerossRequestType] = []
         self._multiple_response_size = PARAM_HEADER_SIZE
-        # Message handling is actually very hybrid:
-        # when a message (device reply or originated) is received it gets routed to the
-        # device instance in 'receive'. Here, it was traditionally parsed with a
-        # switch structure against the different expected namespaces.
-        # Now the architecture, while still in place, is being moved to handler methods
-        # which are looked up by inspecting self for a proper '_handler_{namespace}' signature
-        # This signature could be added at runtime or (better I guess) could be added by
-        # dedicated mixin classes used to build the actual device class when the device is setup
-        # (see __init__.MerossApi.build_device)
-        # The handlers dictionary is anyway parsed first and could override a build-time handler.
-        # The dicionary keys are Meross namespaces matched against when the message enters the handling
-        # self.handlers: Dict[str, Callable] = {} actually disabled!
 
         self._tzinfo = None
         self._timezone_next_check = (
@@ -443,8 +432,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         """Indicates the (next) time we should perform a check (only when localmqtt)
         in order to see if the device has correct timezone/dst configuration"""
         self._unsub_trace_ability_callback = None
+        self._diagnostics_build = False
 
-        # base init after setting some key properties needed for logging
         super().__init__(
             config_entry.data[CONF_DEVICE_ID],
             config_entry,
@@ -502,7 +491,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     _init(_digest)
 
     # interface: ConfigEntryManager
-    @callback
     async def entry_update_listener(
         self, hass: HomeAssistant, config_entry: ConfigEntry
     ):
@@ -526,6 +514,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # so we'll eventually retry querying the device
         if not self._online:
             self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
+
+    async def async_create_diagnostic_entities(self):
+        self._diagnostics_build = True  # set a flag cause we'll lazy scan/build
+        await super().async_create_diagnostic_entities()
+
+    async def async_destroy_diagnostic_entities(self, remove: bool = False):
+        self._diagnostics_build = False
+        await super().async_destroy_diagnostic_entities(remove)
 
     def get_logger_name(self) -> str:
         return f"{self.descriptor.type}_{self.loggable_device_id(self.id)}"
@@ -1207,9 +1203,34 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_request_flush()
 
+        # when create_diagnostic_entities is True, after onlining we'll dynamically
+        # scan the abilities to look for 'unknown' namespaces (kind of like tracing)
+        # and try to build diagnostic entitities out of that
+        if self._diagnostics_build and self._online:
+            self.log(self.DEBUG, "Diagnostic scan begin")
+            try:
+                abilities = iter(self.descriptor.ability)
+                while self._online:
+                    ability = next(abilities)
+                    if ability in TRACE_ABILITY_EXCLUDE:
+                        continue
+                    if ability in self.polling_strategies:
+                        # actually we should skip any already 'seen' namespace
+                        # as in self.namespace_handlers (which is built at runtime
+                        # on incoming data) but that cache will not be invalidated
+                        # when device offlines and might become stale
+                        continue
+                    await self.async_request(*get_default_arguments(ability))
+            except StopIteration:
+                self._diagnostics_build = False
+                self.log(self.DEBUG, "Diagnostic scan end")
+            except Exception as exception:
+                self._diagnostics_build = False
+                self.log_exception(self.WARNING, exception, "diagnostic scan")
+
     @callback
     async def _async_polling_callback(self, namespace: str):
-        self.log(self.DEBUG, "Polling start")
+        self.log(self.DEBUG, "Polling begin")
         try:
             self._unsub_polling_callback = None
             epoch = time()
@@ -1978,7 +1999,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self.log(self.DEBUG, "Tracing abilities end")
             return
         except Exception as exception:
-            self.log_exception(self.DEBUG, exception, "_async_trace_ability")
+            self.log_exception(self.WARNING, exception, "_async_trace_ability")
 
         self._unsub_trace_ability_callback = schedule_async_callback(
             self.hass,
