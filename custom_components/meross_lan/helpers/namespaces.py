@@ -4,6 +4,7 @@ import typing
 
 from .. import const as mlc
 from ..merossclient import NAMESPACE_TO_KEY, const as mc, get_default_arguments
+from ..sensor import MLDiagnosticSensor
 
 if typing.TYPE_CHECKING:
     from typing import Callable, Final
@@ -50,7 +51,7 @@ class NamespaceHandler:
         # as soon as we move our handlers to the entity register/unregister
         # metaphore. As for now it is no harm
         self.handler = handler or getattr(
-            device, f"_handle_{namespace.replace('.', '_')}", device._handle_undefined
+            device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
         )
         self.lastrequest = 0
         self.entities: dict[object, Callable[[dict], None]] = {}
@@ -92,15 +93,6 @@ class NamespaceHandler:
             # this might be expected: the payload is not a list
             self.handler = self._handle_dict
             self._handle_dict(header, payload)
-        except Exception as exception:
-            device = self.device
-            device.log_exception(
-                device.WARNING,
-                exception,
-                "NamespaceHandler(%s)._handle_list: payload=%s",
-                self.namespace,
-                device.loggable_dict(payload),
-            )
 
     def _handle_dict(self, header, payload):
         """
@@ -117,15 +109,6 @@ class NamespaceHandler:
             # final fallback to the safe _handle_generic
             self.handler = self._handle_generic
             self._handle_generic(header, payload)
-        except Exception as exception:
-            device = self.device
-            device.log_exception(
-                device.WARNING,
-                exception,
-                "NamespaceHandler(%s)._handle_dict: payload=%s",
-                self.namespace,
-                device.loggable_dict(payload),
-            )
 
     def _handle_generic(self, header, payload):
         """
@@ -135,22 +118,34 @@ class NamespaceHandler:
         payloads without the "channel" key (see namespace Toggle)
         which will default forwarding to channel == 0
         """
-        try:
-            p_channel = payload[self.key_namespace]
-            if isinstance(p_channel, dict):
-                self.entities[p_channel.get(mc.KEY_CHANNEL, 0)](p_channel)
+        p_channel = payload[self.key_namespace]
+        if isinstance(p_channel, dict):
+            self.entities[p_channel.get(mc.KEY_CHANNEL, 0)](p_channel)
+        else:
+            for p_channel in p_channel:
+                self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+
+    def _handle_undefined(self, header, payload):
+        device = self.device
+        device.log(
+            device.DEBUG,
+            "Handler undefined for method:%s namespace:%s payload:%s",
+            header[mc.KEY_METHOD],
+            header[mc.KEY_NAMESPACE],
+            str(device.loggable_dict(payload)),
+        )
+        if device.create_diagnostic_entities:
+            payload = payload[self.key_namespace]
+            if isinstance(payload, dict):
+                self._parse_undefined_dict(
+                    self.key_namespace, payload, payload.get(mc.KEY_CHANNEL)
+                )
             else:
-                for p_channel in p_channel:
-                    self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
-        except Exception as exception:
-            device = self.device
-            device.log_exception(
-                device.WARNING,
-                exception,
-                "NamespaceHandler(%s)._handle_generic: payload=%s",
-                self.namespace,
-                device.loggable_dict(payload),
-            )
+                for payload in payload:
+                    # not having a "channel" in the list payloads is unexpected so far
+                    self._parse_undefined_dict(
+                        self.key_namespace, payload, payload[mc.KEY_CHANNEL]
+                    )
 
     def _parse_list(self, digest: list):
         """twin method for _handle (same job - different context).
@@ -187,6 +182,46 @@ class NamespaceHandler:
                 device.loggable_any(digest),
             )
 
+    def _parse_undefined_dict(self, key: str, payload: dict, channel: object | None):
+        device_entities = self.device.entities
+        for subkey, subvalue in payload.items():
+            if isinstance(subvalue, dict):
+                self._parse_undefined_dict(f"{key}_{subkey}", subvalue, channel)
+                continue
+            if isinstance(subvalue, list):
+                self._parse_undefined_list(f"{key}_{subkey}", subvalue, channel)
+                continue
+            if subkey in {
+                mc.KEY_ID,
+                mc.KEY_CHANNEL,
+                mc.KEY_LMTIME,
+                mc.KEY_LMTIME_,
+                mc.KEY_SYNCEDTIME,
+                mc.KEY_LATESTSAMPLETIME,
+            }:
+                continue
+            entitykey = f"{key}_{subkey}"
+            try:
+                device_entities[
+                    f"{channel}_{entitykey}" if channel is not None else entitykey
+                ].update_state(subvalue)
+            except KeyError:
+                device = self.device
+                MLDiagnosticSensor(
+                    device,
+                    channel,
+                    entitykey,
+                    MLDiagnosticSensor.DeviceClass.ENUM,
+                    subvalue,
+                )
+                # we'll also create a polling strategy on the fly so that
+                # the diagnostic sensors get updated
+                if self.namespace not in device.polling_strategies:
+                    SmartPollingStrategy(device, self.namespace)
+
+    def _parse_undefined_list(self, key: str, payload: list, channel):
+        pass
+
 
 class PollingStrategy:
     """
@@ -205,6 +240,8 @@ class PollingStrategy:
         "lastrequest",
         "polling_period",
         "polling_period_cloud",
+        "response_base_size",
+        "response_item_size",
         "response_size",
         "request",
     )
@@ -221,10 +258,22 @@ class PollingStrategy:
         self.namespace: Final = namespace
         self.key_namespace = NAMESPACE_TO_KEY[namespace]
         self.lastrequest = 0
-        _conf = mlc.POLLING_STRATEGY_CONF[namespace]
-        self.polling_period = _conf[0]
-        self.polling_period_cloud = _conf[1]
-        self.response_size = _conf[2] + item_count * _conf[3]
+        if _conf := mlc.POLLING_STRATEGY_CONF.get(namespace):
+            self.polling_period = _conf[0]
+            self.polling_period_cloud = _conf[1]
+            self.response_base_size = _conf[2]
+            self.response_item_size = _conf[3]
+        else:
+            # these in turn are defaults for dynamically parsed
+            # namespaces managed when using create_diagnostic_entities
+            self.polling_period = mlc.PARAM_SIGNAL_UPDATE_PERIOD
+            self.polling_period_cloud = mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD
+            self.response_base_size = mlc.PARAM_HEADER_SIZE
+            self.response_item_size = 0
+        self.response_size = (
+            self.response_base_size + item_count * self.response_item_size
+        )
+
         self.request = (
             get_default_arguments(namespace)
             if payload is None
@@ -237,11 +286,12 @@ class PollingStrategy:
         device.polling_strategies[namespace] = self
 
     def adjust_size(self, item_count: int):
-        _conf = mlc.POLLING_STRATEGY_CONF[self.namespace]
-        self.response_size = _conf[2] + item_count * _conf[3]
+        self.response_size = (
+            self.response_base_size + item_count * self.response_item_size
+        )
 
     def increment_size(self):
-        self.response_size += mlc.POLLING_STRATEGY_CONF[self.namespace][3]
+        self.response_size += self.response_item_size
 
     async def async_poll(self, device: MerossDevice, epoch: float):
         """

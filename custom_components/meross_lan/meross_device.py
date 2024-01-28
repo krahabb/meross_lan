@@ -1585,7 +1585,18 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             handler = self._create_handler(namespace)
 
         handler.lastrequest = self.lastresponse  # type: ignore
-        handler.handler(header, payload)  # type: ignore
+        try:
+            handler.handler(header, payload)  # type: ignore
+        except Exception as exception:
+            self.log_exception(
+                self.WARNING,
+                exception,
+                "NamespaceHandler(%s).%s: payload=%s",
+                namespace,
+                handler.handler.__name__,
+                self.loggable_dict(payload),
+            )
+
 
     def _create_handler(self, namespace: str):
         """Called by the base device message parsing chain when a new
@@ -1593,16 +1604,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         the namespace enters the message handling flow)"""
         return NamespaceHandler(self, namespace)
 
-    def _handle_undefined(self, header: MerossHeaderType, payload: MerossPayloadType):
-        self.log(
-            self.DEBUG,
-            "Handler undefined for method:%s namespace:%s payload:%s",
-            header[mc.KEY_METHOD],
-            header[mc.KEY_NAMESPACE],
-            str(self.loggable_dict(payload)),
-        )
-
-    def _handle_Appliance_Config_info(self, header: dict, payload: dict):
+    def _handle_Appliance_Config_Info(self, header: dict, payload: dict):
         """{"info":{"homekit":{"model":"MSH300HK","sn":"#","category":2,"setupId":"#","setupCode":"#","uuid":"#","token":"#"}}}"""
         pass
 

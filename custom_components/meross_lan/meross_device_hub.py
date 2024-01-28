@@ -95,9 +95,6 @@ class HubNamespaceHandler(NamespaceHandler):
     device: typing.Final[MerossDeviceHub]  # type: ignore
 
     def __init__(self, device: MerossDeviceHub, namespace: str):
-        # watchout since this class is used as a mixin style too in HubPollingStrategy
-        # to provide the same _handle_subdevice dispatching. Having no instance data here
-        # the HubPollingStrategy can (or should) safely skip the initializer
         NamespaceHandler.__init__(
             self, device, namespace, handler=self._handle_subdevice
         )
@@ -570,7 +567,13 @@ class MerossSubDevice(MerossDeviceBase):
                     try:
                         self.entities[f"{self.id}_{entitykey}"].update_state(subvalue)
                     except KeyError:
-                        MLDiagnosticSensor(self, self.id, entitykey, None, subvalue)
+                        MLDiagnosticSensor(
+                            self,
+                            self.id,
+                            entitykey,
+                            MLDiagnosticSensor.DeviceClass.ENUM,
+                            subvalue,
+                        )
 
             def _parse_list():
                 pass
