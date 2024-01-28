@@ -1071,14 +1071,6 @@ class MerossCloudProfile(ApiProfile):
 
     # interface: ApiProfile
     def attach_mqtt(self, device: MerossDevice):
-        if device.id not in self._data[self.KEY_DEVICE_INFO]:
-            self.log(
-                self.WARNING,
-                "Cannot connect MQTT for Device(%s): it does not belong to the current profile",
-                device.name,
-            )
-            return
-
         with self.exception_warning("attach_mqtt"):
             mqttconnection = self._get_mqttconnection(device.mqtt_broker)
             mqttconnection.attach(device)
@@ -1156,21 +1148,9 @@ class MerossCloudProfile(ApiProfile):
         """
         if (device.key != self.key) or (device.descriptor.userId != self.userid):
             return False
-        device_id = device.id
-        device_info = self._data[self.KEY_DEVICE_INFO].get(device_id)
-        if not device_info:
-            # does not belong here.
-            # we previously used the device.descriptor.userId to 'index'
-            # into the cloud profiles but that info has always been too
-            # flaky to be reliable (since when we rebind the devices people
-            # could use any value for the device conf and so use a 'valid'
-            # userid from a cloud account even if the device is not binded
-            # anymore)
-            return False
-        # TODO: maybe add a check for device.mqtt_broker against device_info["domain"]
-        # and/or device_info["reservedDomain"]
         if super().try_link(device):
-            device.update_device_info(device_info)
+            if device_info := self._data[self.KEY_DEVICE_INFO].get(device.id):
+                device.update_device_info(device_info)
             if latest_version := self.get_latest_version(device.descriptor):
                 device.update_latest_version(latest_version)
             return True
