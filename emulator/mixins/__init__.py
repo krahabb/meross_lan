@@ -79,16 +79,20 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         namespace = values[-2]
         data = values[-1]
         if method == mc.METHOD_GETACK:
+            if not isinstance(data, dict):
+                data = json_loads(data)
             if protocol == "auto":
-                self.namespaces[namespace] = {
-                    NAMESPACE_TO_KEY[namespace]: data
-                    if isinstance(data, dict)
-                    else json_loads(data)
-                }
-            else:
-                self.namespaces[namespace] = (
-                    data if isinstance(data, dict) else json_loads(data)
-                )
+                data = {NAMESPACE_TO_KEY[namespace]: data}
+            self.namespaces[namespace] = data
+        elif (
+            method == mc.METHOD_SETACK and namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE
+        ):
+            if not isinstance(data, dict):
+                data = json_loads(data)
+            for message in data[mc.KEY_MULTIPLE]:
+                header = message[mc.KEY_HEADER]
+                if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
+                    self.namespaces[header[mc.KEY_NAMESPACE]] = message[mc.KEY_PAYLOAD]
 
 
 class MerossEmulator:
