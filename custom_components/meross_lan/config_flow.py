@@ -9,7 +9,7 @@ import logging
 from time import time
 import typing
 
-from homeassistant import config_entries, const as hac
+from homeassistant import config_entries as ce, const as hac
 from homeassistant.const import CONF_ERROR
 from homeassistant.data_entry_flow import AbortFlow, FlowHandler, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
@@ -77,7 +77,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     VERSION = 1
     MINOR_VERSION = 1
 
-    _profile_entry: config_entries.ConfigEntry | None = None
+    _profile_entry: ce.ConfigEntry | None = None
     """
     This is set when processing a 'profile' OptionsFlow. It is needed
     to discriminate the context in the general purpose 'async_step_profile' since
@@ -305,22 +305,22 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                             # previous core versions used positional args in ConfigEntry
                             # while core 2024.X moves to full kwargs with required minor_version
                             # this patch is the best I can think of
-                            config_entries.ConfigEntry(
+                            ce.ConfigEntry(
                                 version=self.VERSION,
                                 minor_version=self.MINOR_VERSION,  # type: ignore
                                 domain=mlc.DOMAIN,
                                 title=profile_config[mc.KEY_EMAIL],
                                 data=profile_config,
-                                source=config_entries.SOURCE_USER,
+                                source=ce.SOURCE_USER,
                                 unique_id=unique_id,
                             )
                             if hac.MAJOR_VERSION >= 2024
-                            else config_entries.ConfigEntry(  # type: ignore
+                            else ce.ConfigEntry(  # type: ignore
                                 version=self.VERSION,
                                 domain=mlc.DOMAIN,
                                 title=profile_config[mc.KEY_EMAIL],
                                 data=profile_config,
-                                source=config_entries.SOURCE_USER,
+                                source=ce.SOURCE_USER,
                                 unique_id=unique_id,
                             )
                         )
@@ -529,7 +529,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         """
 
 
-class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.DOMAIN):
+class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
 
     @staticmethod
@@ -548,8 +548,8 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         """configure the MQTT discovery device key"""
         if user_input is not None:
             return self.async_create_entry(title="MQTT Hub", data=user_input)
-        await self.async_set_unique_id(mlc.DOMAIN)
-        self._abort_if_unique_id_configured()
+        if await self.async_set_unique_id(mlc.DOMAIN):
+            return self.async_abort()
         return self.async_show_form(
             step_id="hub",
             data_schema=vol.Schema(
@@ -567,9 +567,10 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                 self.merge_userinput(device_config, user_input, (mlc.CONF_KEY))
                 try:
                     return await self._async_set_device_config(
+                        False,
                         *await self._async_http_discovery(
                             user_input[mlc.CONF_HOST], user_input.get(mlc.CONF_KEY)
-                        )
+                        ),
                     )
                 except MerossKeyError:
                     return await self.async_step_keyerror()
@@ -599,7 +600,9 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         this is actually the entry point for devices discovered through our MQTTConnection(s)
         """
         return await self._async_set_device_config(
-            discovery_info, MerossDeviceDescriptor(discovery_info[mlc.CONF_PAYLOAD])
+            True,
+            discovery_info,
+            MerossDeviceDescriptor(discovery_info[mlc.CONF_PAYLOAD]),
         )
 
     async def async_step_dhcp(self, discovery_info: DhcpServiceInfo):
@@ -675,7 +678,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
 
         try:
             # try device identification so the user/UI has a good context to start with
-            _device_config = _descriptor = None
+            _device_config = None
             for profile in MerossApi.active_profiles():
                 try:
                     _device_config, _descriptor = await self._async_http_discovery(
@@ -687,7 +690,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                         break
                 except Exception:
                     pass
-                _device_config = _descriptor = None
+                _device_config = None
 
             if (not _device_config) and (key := api.key):
                 try:
@@ -698,8 +701,12 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                     pass
 
             if _device_config:
-                return await self._async_set_device_config(_device_config, _descriptor)  # type: ignore
+                return await self._async_set_device_config(True, _device_config, _descriptor)  # type: ignore
 
+        except AbortFlow:
+            # we might have 'correctly' identified an already configured entry or
+            # pending flow
+            return self.async_abort()
         except Exception as exception:
             api.log(
                 api.DEBUG,
@@ -708,9 +715,6 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
                 str(exception),
                 host,
             )
-            if isinstance(exception, AbortFlow):
-                # we might have 'correctly' identified an already configured entry
-                return self.async_abort()
             # forgive and continue if we cant discover the device...let the user work it out
 
         self.device_config = {  # type: ignore
@@ -749,7 +753,10 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         )
 
     async def _async_set_device_config(
-        self, device_config: mlc.DeviceConfigType, descriptor: MerossDeviceDescriptor
+        self,
+        is_discovery_step: bool,
+        device_config: mlc.DeviceConfigType,
+        descriptor: MerossDeviceDescriptor,
     ):
         self.device_config = device_config
         self._descriptor = descriptor
@@ -768,8 +775,13 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
             "device_type": descriptor.productnametype,
             "device_id": device_id,
         }
-        if await self.async_set_unique_id(device_id):
-            raise AbortFlow("already_configured")
+        assert self.cur_step
+        if await self.async_set_unique_id(
+            device_id, raise_on_progress=is_discovery_step
+        ):
+            # entry already configured
+            if is_discovery_step:
+                return self.async_abort()
 
         self.clone_api_diagnostic_config(device_config)
 
@@ -780,7 +792,7 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         )
 
 
-class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
+class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
     """
     Manage device options configuration
     """
@@ -814,7 +826,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
 
     def __init__(
         self,
-        config_entry: config_entries.ConfigEntry,
+        config_entry: ce.ConfigEntry,
         repair_issue_id: str | None = None,
     ):
         self.config_entry: Final = config_entry
@@ -956,10 +968,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     hass.config_entries.async_update_entry(
                         self.config_entry, data=device_config
                     )
-                    if (
-                        self.config_entry.state
-                        == config_entries.ConfigEntryState.SETUP_ERROR
-                    ):
+                    if self.config_entry.state == ce.ConfigEntryState.SETUP_ERROR:
                         api = self.api
                         try:  # to fix the device registry in case it was corrupted by #341
                             dev_reg = MerossApi.get_device_registry()
@@ -1279,7 +1288,7 @@ class OptionsFlow(MerossFlowHandlerMixin, config_entries.OptionsFlow):
                     hass.async_create_task(
                         hass.config_entries.async_set_disabled_by(
                             self.config_entry_id,
-                            config_entries.ConfigEntryDisabler.USER,
+                            ce.ConfigEntryDisabler.USER,
                         )
                     )
                 elif action == KEY_ACTION_DELETE:
