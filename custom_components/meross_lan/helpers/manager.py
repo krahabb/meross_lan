@@ -76,7 +76,7 @@ class EntityManager(Loggable):
         "config",
         "key",
         "obfuscate",
-        "trace_file",
+        "_trace_file",
         "_trace_future",
         "_trace_data",
         "_unsub_trace_endtime",
@@ -182,7 +182,7 @@ class ConfigEntryManager(EntityManager):
         # during the corresponding platform async_setup_entry so to be able
         # to dynamically add more entities should they 'pop-up' (Hub only?)
         self.platforms = self.DEFAULT_PLATFORMS.copy()
-        self.trace_file: typing.Final[TextIOWrapper | None] = None
+        self._trace_file: TextIOWrapper | None = None
         self._trace_future: asyncio.Future | None = None
         self._trace_data: list | None = None
         self._unsub_trace_endtime: asyncio.TimerHandle | None = None
@@ -203,7 +203,7 @@ class ConfigEntryManager(EntityManager):
         self.unschedule_entry_reload()
         await super().async_shutdown()
         await self.async_destroy_diagnostic_entities()
-        if self.trace_file:
+        if self.is_tracing:
             self.trace_close()
 
     # interface: Loggable
@@ -228,7 +228,7 @@ class ConfigEntryManager(EntityManager):
     def log(self, level: int, msg: str, *args, **kwargs):
         if (logger := self.logger).isEnabledFor(level):
             logger._log(level, msg, args, **kwargs)
-        if self.trace_file:
+        if self.is_tracing:
             self.trace_log(
                 level,
                 msg % args,
@@ -249,7 +249,7 @@ class ConfigEntryManager(EntityManager):
         # so we could catch logs in this phase too
         state = ApiProfile.managers_transient_state.setdefault(self.config_entry_id, {})
         if state.pop(CONF_TRACE, None):
-            self._trace_open()
+            self.trace_open()
 
         if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
             await self.async_create_diagnostic_entities()
@@ -328,27 +328,6 @@ class ConfigEntryManager(EntityManager):
     def get_logger_name(self) -> str:
         raise NotImplementedError()
 
-    # tracing capabilities
-    def get_diagnostics_trace(self) -> asyncio.Future:
-        """
-        invoked by the diagnostics callback:
-        here we set the device to start tracing the classical way (in file)
-        but we also fill in a dict which will set back as the result of the
-        Future we're returning to dignostics
-        """
-        if self._trace_future:
-            # avoid re-entry..keep going the running trace
-            return self._trace_future
-        if self.trace_file:
-            self.trace_close()
-        self._trace_future = asyncio.get_running_loop().create_future()
-        self._trace_data = []
-        self._trace_data.append(
-            ["time", "rxtx", "protocol", "method", "namespace", "data"]
-        )
-        self._trace_open()
-        return self._trace_future
-
     def loggable_any(self, value):
         """
         Conditionally obfuscate any type to send to logging/tracing.
@@ -382,16 +361,19 @@ class ConfigEntryManager(EntityManager):
             OBFUSCATE_USERID_MAP.obfuscate(profile_id) if self.obfuscate else profile_id
         )
 
-    def _trace_open(self):
+    @property
+    def is_tracing(self):
+        return self._trace_file or self._trace_data
+
+    def trace_open(self):
         try:
             self.log(self.DEBUG, "Tracing start")
             epoch = time()
-            # assert not self.trace_file
             tracedir = self.hass.config.path(
                 "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
             )
             os.makedirs(tracedir, exist_ok=True)
-            self.trace_file = open(  # type: ignore
+            self._trace_file = open(
                 os.path.join(
                     tracedir,
                     CONF_TRACE_FILENAME.format(
@@ -416,8 +398,7 @@ class ConfigEntryManager(EntityManager):
             )
             self._trace_opened(epoch)
         except Exception as exception:
-            if self.trace_file:
-                self.trace_close()
+            self.trace_close()
             self.log_exception(self.WARNING, exception, "creating trace file")
 
     def _trace_opened(self, epoch: float):
@@ -428,29 +409,20 @@ class ConfigEntryManager(EntityManager):
         pass
 
     def trace_close(self):
-        # assert self.trace_file
-        try:
-            self.trace_file.close()  # type: ignore
-            self.trace_file = None  # type: ignore
-        except Exception as exception:
-            self.trace_file = None  # type: ignore
-            self.log_exception(self.WARNING, exception, "closing trace file")
+        if self._trace_file:
+            try:
+                self._trace_file.close()  # type: ignore
+            except Exception as exception:
+                self.log_exception(self.WARNING, exception, "closing trace file")
+            self._trace_file = None
+            self.log(self.DEBUG, "Tracing end")
         if self._unsub_trace_endtime:
             self._unsub_trace_endtime.cancel()
             self._unsub_trace_endtime = None
-        self._trace_closed()
         if self._trace_future:
             self._trace_future.set_result(self._trace_data)
             self._trace_future = None
-            self._trace_data = None
-        self.log(self.DEBUG, "Tracing end")
-
-    def _trace_closed(self):
-        """
-        Virtual placeholder called when a new trace is closed.
-        Allows derived EntityManagers to cleanup.
-        """
-        pass
+        self._trace_data = None
 
     def trace(
         self,
@@ -462,7 +434,6 @@ class ConfigEntryManager(EntityManager):
         rxtx: str = "",
     ):
         try:
-            assert self.trace_file
             data = self.loggable_dict(payload)
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(epoch)),
@@ -470,20 +441,20 @@ class ConfigEntryManager(EntityManager):
                 protocol,
                 method,
                 namespace,
-                json_dumps(data),
+                data,
             ]
-            self.trace_file.write("\t".join(columns) + "\r\n")
-            if self._trace_data is not None:
-                # better have json for dignostic trace
-                columns[5] = data  # type: ignore
+            if self._trace_data:
                 self._trace_data.append(columns)
-
-            if self.trace_file.tell() > CONF_TRACE_MAXSIZE:
-                self.trace_close()
+            if self._trace_file:
+                columns[5] = json_dumps(data)
+                self._trace_file.write("\t".join(columns) + "\r\n")
+                columns[5] = data  # restore the (eventual) _trace_data ref
+                if self._trace_file.tell() > CONF_TRACE_MAXSIZE:
+                    self.trace_close()
 
         except Exception as exception:
             self.trace_close()
-            self.log_exception(self.WARNING, exception, "writing to trace file")
+            self.log_exception(self.WARNING, exception, "appending trace data")
 
     def trace_log(
         self,
@@ -491,7 +462,6 @@ class ConfigEntryManager(EntityManager):
         msg: str,
     ):
         try:
-            assert self.trace_file
             columns = [
                 strftime("%Y/%m/%d - %H:%M:%S", localtime(time())),
                 "",
@@ -500,16 +470,16 @@ class ConfigEntryManager(EntityManager):
                 CONF_LOGGING_LEVEL_OPTIONS.get(level) or logging.getLevelName(level),
                 msg,
             ]
-            self.trace_file.write("\t".join(columns) + "\r\n")
-            if self._trace_data is not None:
+            if self._trace_data:
                 self._trace_data.append(columns)
-
-            if self.trace_file.tell() > CONF_TRACE_MAXSIZE:
-                self.trace_close()
+            if self._trace_file:
+                self._trace_file.write("\t".join(columns) + "\r\n")
+                if self._trace_file.tell() > CONF_TRACE_MAXSIZE:
+                    self.trace_close()
 
         except Exception as exception:
             self.trace_close()
-            self.log_exception(self.WARNING, exception, "writing to trace file")
+            self.log_exception(self.WARNING, exception, "appending trace log")
 
 
 class ApiProfile(ConfigEntryManager):
@@ -637,7 +607,7 @@ class ApiProfile(ConfigEntryManager):
         message: MerossMessage,
         rxtx: str,
     ):
-        if self.trace_file:
+        if self.is_tracing:
             header = message[mc.KEY_HEADER]
             self.trace(
                 time(),

@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import typing
 
-from . import meross_entity as me
+from . import const as mlc, meross_entity as me
 from .binary_sensor import MLBinarySensor
 from .calendar import MLCalendar
 from .climate import MtsClimate
-from .const import DOMAIN
 from .helpers.namespaces import (
     NamespaceHandler,
     OncePollingStrategy,
@@ -175,7 +174,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
                 ):
                     max_queuable += 1
 
-    async def async_trace(self, device: MerossDeviceHub):
+    async def async_trace(self, device: MerossDeviceHub, protocol: str | None):
         """
         Used while tracing abilities. In general, we use an euristic 'default'
         query but for some 'well known namespaces' we might be better off querying with
@@ -188,9 +187,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
                 {self.key_namespace: p},
             )
             self.adjust_size(len(p))
-            await device.async_request_poll(self)
-            # this is to not 'pack' abilities tracing into ns_multiple
-            await device.async_request_flush()
+            await super().async_trace(device, protocol)
 
     def _build_subdevices_payload(self, subdevices: typing.Collection[MerossSubDevice]):
         """
@@ -340,7 +337,7 @@ class MerossDeviceHub(MerossDevice):
             # we'll check our device registry for luck
             try:
                 hassdevice = self.get_device_registry().async_get_device(
-                    identifiers={(DOMAIN, p_subdevice[mc.KEY_ID])}
+                    identifiers={(mlc.DOMAIN, p_subdevice[mc.KEY_ID])}
                 )
                 if not hassdevice:
                     return None

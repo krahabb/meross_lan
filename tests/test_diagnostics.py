@@ -40,7 +40,7 @@ async def _async_configure_options_tracing(entry_mock: helpers.ConfigEntryMocker
     # should set to be tracing.
     await hass.async_block_till_done()  # reload was 'taskerized'
     assert (manager := entry_mock.manager)
-    assert manager.trace_file
+    assert manager._trace_file
 
 
 async def _async_run_tracing(
@@ -51,7 +51,7 @@ async def _async_run_tracing(
         tc.MOCK_TRACE_TIMEOUT,
         tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
     )
-    assert not manager.trace_file
+    assert not manager._trace_file
 
 
 async def test_mqtthub_diagnostics(

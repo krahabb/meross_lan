@@ -83,5 +83,5 @@ async def async_get_config_entry_diagnostics(
             "device_response_size_min": device.device_response_size_min,
             "device_response_size_max": device.device_response_size_max,
         }
-        data["trace"] = await device.get_diagnostics_trace()
+        data["trace"] = await device.async_get_diagnostics_trace()
     return data

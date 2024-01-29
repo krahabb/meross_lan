@@ -539,10 +539,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.trace(epoch, descr.all, mc.NS_APPLIANCE_SYSTEM_ALL)
         self.trace(epoch, descr.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY)
 
-    def _trace_closed(self):
+    def trace_close(self):
         if self._unsub_trace_ability_callback:
             self._unsub_trace_ability_callback.cancel()
             self._unsub_trace_ability_callback = None
+        super().trace_close()
 
     # interface: MerossDeviceBase
     async def async_shutdown(self):
@@ -651,6 +652,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         schedules (calendar entities) in order to align device local time to
         what is expected in HA.
         """
+        # TODO: check why the emulator keeps raising the issue (at boot) when the TZ is ok
         tz_name = self.descriptor.timezone
         if tz_name:
             ha_now = dt_util.now()
@@ -1597,7 +1599,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self.loggable_dict(payload),
             )
 
-
     def _create_handler(self, namespace: str):
         """Called by the base device message parsing chain when a new
         NamespaceHandler need to be defined (This happens the first time
@@ -1980,6 +1981,54 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         update_firmware._attr_release_summary = latest_version.get(mc.KEY_DESCRIPTION)
         update_firmware.flush_state()
 
+    async def async_get_diagnostics_trace(self) -> list:
+        """
+        invoked by the diagnostics callback:
+        here we set the device to start tracing the classical way (in file)
+        but we also fill in a dict which will set back as the result of the
+        Future we're returning to diagnostics.
+        """
+        if self._trace_future:
+            # avoid re-entry..keep going the running trace
+            return await self._trace_future
+        if self.is_tracing:
+            self.trace_close()
+
+        if self._http_active and self.conf_protocol is not CONF_PROTOCOL_MQTT:
+            # shortcut with fast HTTP querying
+            epoch = time()
+            descr = self.descriptor
+            # setting _trace_data will already activate tracing (kind of)
+            self._trace_data = trace_data = [
+                ["time", "rxtx", "protocol", "method", "namespace", "data"]
+            ]
+            self.trace(epoch, descr.all, mc.NS_APPLIANCE_SYSTEM_ALL)
+            self.trace(epoch, descr.ability, mc.NS_APPLIANCE_SYSTEM_ABILITY)
+            try:
+                abilities = iter(descr.ability)
+                while self._online and self.is_tracing:
+                    ability = next(abilities)
+                    if ability in TRACE_ABILITY_EXCLUDE:
+                        continue
+                    if ability in self.polling_strategies:
+                        strategy = self.polling_strategies[ability]
+                        await strategy.async_trace(self, CONF_PROTOCOL_HTTP)
+                    else:
+                        await self.async_http_request(*get_default_arguments(ability))
+                return trace_data  # might be truncated because offlining or async shutting trace
+            except StopIteration:
+                return trace_data
+            except Exception as exception:
+                self.log_exception(self.DEBUG, exception, "async_get_diagnostics_trace")
+                # in case of error we're going to try the legacy approach
+            finally:
+                self._trace_data = None
+
+        self._trace_data = [["time", "rxtx", "protocol", "method", "namespace", "data"]]
+        self._trace_future = future = asyncio.get_running_loop().create_future()
+        self.trace_open()
+        return await future
+
     async def _async_trace_ability(self, abilities_iterator: typing.Iterator[str]):
         self._unsub_trace_ability_callback = None
         try:
@@ -1988,13 +2037,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # in device init, this check will prevent iterating
             # at least until the device fully initialize through
             # self.start()
-            if self._unsub_polling_callback and self.online:
+            if self._unsub_polling_callback and self._online:
                 while (ability := next(abilities_iterator)) in TRACE_ABILITY_EXCLUDE:
                     continue
                 self.log(self.DEBUG, "Tracing %s ability", ability)
                 if ability in self.polling_strategies:
                     strategy = self.polling_strategies[ability]
-                    await strategy.async_trace(self)
+                    await strategy.async_trace(self, None)
                 else:
                     await self.async_request(*get_default_arguments(ability))
         except StopIteration:
@@ -2017,7 +2066,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         protocol: str,
         rxtx: str,
     ):
-        if self.trace_file:
+        if self.is_tracing:
             header = message[mc.KEY_HEADER]
             self.trace(
                 epoch,
