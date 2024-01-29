@@ -24,6 +24,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .helpers.manager import EntityManager
+    from .helpers.namespaces import NamespaceHandler
     from .meross_device import MerossDeviceBase
 
 
@@ -73,6 +74,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         "manager",
         "channel",
         "entitykey",
+        "namespace_handlers",
         "_attr_device_class",
         "_attr_state",
         "_attr_unique_id",
@@ -113,6 +115,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.manager = manager
         self.channel = channel
         self.entitykey = entitykey
+        self.namespace_handlers: set[NamespaceHandler] = set()
         self._attr_device_class = device_class
         Loggable.__init__(self, id, logger=manager)
         attr_name = self._attr_name
@@ -207,6 +210,8 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         return False
 
     async def async_shutdown(self):
+        for handler in set(self.namespace_handlers):
+            handler.unregister(self)
         self.manager.entities.pop(self.id)
         self.manager: EntityManager = None  # type: ignore
 

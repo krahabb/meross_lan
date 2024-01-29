@@ -75,9 +75,11 @@ class NamespaceHandler:
         self.entities[entity.channel] = parse_func or getattr(
             entity, f"_parse_{self.key_namespace}", entity._parse_undefined
         )
+        entity.namespace_handlers.add(self)
 
     def unregister(self, entity: MerossEntity):
-        self.entities.pop(entity.channel, None)
+        if self.entities.pop(entity.channel, None):
+            entity.namespace_handlers.remove(self)
 
     def _handle_list(self, header, payload):
         """

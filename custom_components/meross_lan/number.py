@@ -233,7 +233,6 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         )
 
     async def async_shutdown(self):
-        self.manager.unregister_parser(self.namespace, self)
         self.switch = None
         self.sensor_warning = None
         await super().async_shutdown()

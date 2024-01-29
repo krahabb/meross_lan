@@ -120,12 +120,6 @@ class MtsWindowOpened(MLBinarySensor):
             self._parse_windowOpened,
         )
 
-    async def async_shutdown(self):
-        self.manager.unregister_parser(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED, self
-        )
-        await super().async_shutdown()
-
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "detect": 1, "lmTime": 1642425303 }"""
         self.update_onoff(payload[mc.KEY_STATUS])
