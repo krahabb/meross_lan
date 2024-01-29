@@ -2,16 +2,12 @@ from __future__ import annotations
 
 import typing
 
-from homeassistant.components.media_player import (
-    DOMAIN as PLATFORM_MEDIA_PLAYER,
-    MediaPlayerDeviceClass,
-    MediaPlayerEntity,
-)
+from homeassistant.components import media_player
 from homeassistant.components.media_player.const import (
     MEDIA_TYPE_MUSIC,
     MediaPlayerEntityFeature,
+    MediaPlayerState,
 )
-from homeassistant.const import STATE_IDLE, STATE_PLAYING
 
 from . import meross_entity as me
 from .helpers import clamp
@@ -29,29 +25,32 @@ if typing.TYPE_CHECKING:
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
-    me.platform_setup_entry(
-        hass, config_entry, async_add_devices, PLATFORM_MEDIA_PLAYER
-    )
+    me.platform_setup_entry(hass, config_entry, async_add_devices, media_player.DOMAIN)
 
 
-class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
-    PLATFORM = PLATFORM_MEDIA_PLAYER
+class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
+    PLATFORM = media_player.DOMAIN
 
     manager: Mp3Mixin
+
+    _attr_state: media_player.MediaPlayerState | None
+    _attr_supported_features = (
+        MediaPlayerEntityFeature.VOLUME_MUTE
+        | MediaPlayerEntityFeature.VOLUME_SET
+        | MediaPlayerEntityFeature.VOLUME_STEP
+        | MediaPlayerEntityFeature.NEXT_TRACK
+        | MediaPlayerEntityFeature.PREVIOUS_TRACK
+        | MediaPlayerEntityFeature.PLAY
+        | MediaPlayerEntityFeature.STOP
+    )
+
     __slots__ = ("_mp3",)
 
     def __init__(self, manager: Mp3Mixin, channel: object):
-        super().__init__(manager, channel, mc.KEY_MP3, MediaPlayerDeviceClass.SPEAKER)
         self._mp3 = {}
-        self._attr_supported_features = (
-            MediaPlayerEntityFeature.VOLUME_MUTE
-            | MediaPlayerEntityFeature.VOLUME_SET
-            | MediaPlayerEntityFeature.VOLUME_STEP
-            | MediaPlayerEntityFeature.NEXT_TRACK
-            | MediaPlayerEntityFeature.PREVIOUS_TRACK
-            | MediaPlayerEntityFeature.PLAY
-            | MediaPlayerEntityFeature.STOP
-        )  # type: ignore
+        super().__init__(
+            manager, channel, mc.KEY_MP3, media_player.MediaPlayerDeviceClass.SPEAKER
+        )
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_MP3, self)
 
     @property
@@ -79,6 +78,10 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
     @property
     def media_track(self) -> int | None:
         return self._mp3.get(mc.KEY_SONG)
+
+    @property
+    def state(self):
+        return self._attr_state
 
     async def async_mute_volume(self, mute):
         await self.async_request_mp3(mc.KEY_MUTE, 1 if mute else 0)
@@ -120,7 +123,9 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
         ):
             self._mp3[key] = value
             self._attr_state = (
-                STATE_IDLE if self._mp3.get(mc.KEY_MUTE) else STATE_PLAYING
+                MediaPlayerState.IDLE
+                if self._mp3.get(mc.KEY_MUTE)
+                else MediaPlayerState.PLAYING
             )
             self.flush_state()
 
@@ -131,7 +136,11 @@ class MLMp3Player(me.MerossEntity, MediaPlayerEntity):
         if payload and ((self._mp3 != payload) or not self.available):
             self._mp3 = payload
             if mc.KEY_MUTE in payload:
-                self._attr_state = STATE_IDLE if payload[mc.KEY_MUTE] else STATE_PLAYING
+                self._attr_state = (
+                    MediaPlayerState.IDLE
+                    if payload[mc.KEY_MUTE]
+                    else MediaPlayerState.PLAYING
+                )
             self.flush_state()
 
 
