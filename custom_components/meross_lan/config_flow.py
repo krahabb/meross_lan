@@ -593,16 +593,11 @@ class ConfigFlow(MerossFlowHandlerMixin, config_entries.ConfigFlow, domain=mlc.D
         )
 
     async def async_step_integration_discovery(
-        self, discovery_info: mlc.DeviceConfigType | mlc.ProfileConfigType
+        self, discovery_info: mlc.DeviceConfigType
     ):
         """
         this is actually the entry point for devices discovered through our MQTTConnection(s)
-        or to trigger a cloud profile configuration when migrating older config entries
         """
-        if mc.KEY_USERID_ in discovery_info:
-            self.profile_config = discovery_info  # type: ignore
-            return await self.async_step_profile()
-
         return await self._async_set_device_config(
             discovery_info, MerossDeviceDescriptor(discovery_info[mlc.CONF_PAYLOAD])
         )
