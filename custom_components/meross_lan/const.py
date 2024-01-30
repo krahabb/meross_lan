@@ -72,15 +72,6 @@ class ApiProfileConfigType(ManagerConfigType):
 class HubConfigType(ApiProfileConfigType):
     """MQTT Hub config_entry keys"""
 
-    """
-    key: str
-    allow_mqtt_publish: NotRequired[bool]
-    create_diagnostic_entities: NotRequired[bool]
-    logging_level: NotRequired[int]
-    obfuscate: NotRequired[bool]
-    trace_timeout: NotRequired[int | None]
-    """
-
 
 ###############################
 # MerossDevice ConfigEntry keys
@@ -125,8 +116,6 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     and defined though DeviceConfigTypeMinimal
     """
 
-    # key: NotRequired[str | None]
-    """device key: needed to sign data for the device"""
     cloud_key: NotRequired[str | None]
     """deprecated field: used to store the device key as recovered from the cloud account"""
     host: NotRequired[str]
@@ -139,12 +128,6 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     """IANA timezone set in the device"""
     timestamp: NotRequired[float]
     """special (hidden from UI) field used to force entry save"""
-    # logging_level: NotRequired[int]
-    """override the default log level set in HA configuration"""
-    # obfuscate: NotRequired[bool]
-    """obfuscate sensitive data when logging/tracing"""
-    # trace_timeout: NotRequired[int | None]
-    """duration of the tracing feature when activated"""
 
 
 CONF_CLOUD_REGION: Final = "cloud_region"
@@ -171,16 +154,6 @@ class ProfileConfigType(
     """saves the account password in HA storage"""
     check_firmware_updates: NotRequired[bool]
     """activate a periodical query to the cloud api to look for fw updates """
-    # allow_mqtt_publish: NotRequired[bool]
-    """allow meross_lan to publish over local MQTT: actually ignored since it is True in code"""
-    # create_diagnostic_entities: NotRequired[bool]
-    """create various diagnostic entities for debugging/diagnostics purposes"""
-    # logging_level: NotRequired[int]
-    """override the default log level set in HA configuration"""
-    # obfuscate: NotRequired[bool]
-    """obfuscate sensitive data when logging/tracing"""
-    # trace_timeout: NotRequired[int | None]
-    """duration of the tracing feature when activated"""
 
 
 SERVICE_REQUEST = "request"

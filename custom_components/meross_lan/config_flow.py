@@ -120,6 +120,10 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 
     @contextmanager
     def show_form_errorcontext(self):
+        """Context manager to catch and show exceptions errors in the user form.
+        The CONF_ERROR key will be added as a string label to the UI schema
+        containing the exception message so to provide better (untranslated)
+        error context."""
         try:
             self._config_schema = {}
             self._errors = None
@@ -178,7 +182,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     def merge_userinput(
         config,
         user_input: dict,
-        nullable_keys: typing.Iterable[str],
+        *nullable_keys,
     ):
         """
         (dict) merge user_input into the current configuration taking care of
@@ -189,10 +193,11 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         but I've found no way to tell HA UI to accempt an empty string unless
         I set the key declaration as vol.Optional() = str
         """
+        user_input.pop(CONF_ERROR, None)  # just in case it was added to the schema
         config.update(user_input)
         for key in nullable_keys:
-            if key not in user_input and key in config:
-                config.pop(key)
+            if key not in user_input:
+                config.pop(key, None)
 
     async def async_step_profile(self, user_input=None):
         """configure a Meross cloud profile"""
@@ -216,7 +221,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                 self.merge_userinput(
                     profile_config,
                     user_input,
-                    (mlc.CONF_CLOUD_REGION, mlc.CONF_MFA_CODE),
+                    mlc.CONF_CLOUD_REGION,
+                    mlc.CONF_MFA_CODE,
                 )
                 if (mlc.CONF_PASSWORD in user_input) or (
                     mlc.CONF_MFA_CODE in user_input
@@ -232,7 +238,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
                     try:
                         credentials = await cloudapiclient.async_signin(
                             profile_config[mlc.CONF_EMAIL],
-                            user_input[mlc.CONF_PASSWORD],
+                            profile_config[mlc.CONF_PASSWORD],
                             region=user_input.get(mlc.CONF_CLOUD_REGION),
                             domain=profile_config.get(mc.KEY_DOMAIN),
                             mfa_code=user_input.get(mlc.CONF_MFA_CODE),
@@ -537,7 +543,11 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         return OptionsFlow(config_entry)
 
     async def async_step_user(self, user_input=None):
-        self.device_config = {}  # type: ignore[assignment]
+        """initial step (menu) for user initiated flows"""
+        if profile := next(iter(MerossApi.active_profiles()), None):
+            self.device_config = {mlc.CONF_KEY: profile.key}  # type: ignore[assignment]
+        else:
+            self.device_config = {mlc.CONF_KEY: self.api.key}  # type: ignore[assignment]
         self.profile_config = {}  # type: ignore[assignment]
         return self.async_show_menu(
             step_id="user",
@@ -564,7 +574,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         device_config = self.device_config
         with self.show_form_errorcontext():
             if user_input:
-                self.merge_userinput(device_config, user_input, (mlc.CONF_KEY))
+                self.merge_userinput(device_config, user_input, mlc.CONF_KEY)
                 try:
                     return await self._async_set_device_config(
                         False,
@@ -574,9 +584,6 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
                     )
                 except MerossKeyError:
                     return await self.async_step_keyerror()
-            else:
-                if profile := next(iter(MerossApi.active_profiles()), None):
-                    device_config[mlc.CONF_KEY] = profile.key
 
         return self.async_show_form_with_errors(
             "device",
@@ -775,7 +782,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
             "device_type": descriptor.productnametype,
             "device_id": device_id,
         }
-        assert self.cur_step
+
         if await self.async_set_unique_id(
             device_id, raise_on_progress=is_discovery_step
         ):
@@ -885,7 +892,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
     async def async_step_hub(self, user_input=None):
         hub_config = self.config
         if user_input is not None:
-            self.merge_userinput(hub_config, user_input, (mlc.CONF_KEY))
+            self.merge_userinput(hub_config, user_input, mlc.CONF_KEY)
             return self.finish_options_flow(hub_config)
 
         config_schema = {
@@ -915,7 +922,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         with self.show_form_errorcontext():
             if user_input is not None:
                 self.merge_userinput(
-                    device_config, user_input, (mlc.CONF_KEY, mlc.CONF_HOST)
+                    device_config, user_input, mlc.CONF_KEY, mlc.CONF_HOST
                 )
                 try:
                     inner_exception = None
