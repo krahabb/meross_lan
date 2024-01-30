@@ -609,7 +609,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
             api.profiles[profile_id] = None
         profile = MerossCloudProfile(profile_id, config_entry)
         try:
-            await profile.async_start()
+            await profile.async_init()
             await profile.async_setup_entry(hass, config_entry)
             api.profiles[profile_id] = profile
             # 'link' the devices already initialized

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import asyncio
+from enum import StrEnum
 import logging
 import os
 from time import localtime, strftime, time
@@ -54,6 +55,14 @@ if typing.TYPE_CHECKING:
     from ..merossclient import HostAddress, MerossMessage, MerossPayloadType
 
 
+class ManagerState(StrEnum):
+    INIT = "init"
+    LOADING = "loading"
+    LOADED = "loaded"
+    STARTED = "started"
+    SHUTDOWN = "shutdown"
+
+
 class EntityManager(Loggable):
     """
     This is an abstraction of an actual (device or other) container
@@ -76,6 +85,7 @@ class EntityManager(Loggable):
         "config",
         "key",
         "obfuscate",
+        "state",
         "_trace_file",
         "_trace_future",
         "_trace_data",
@@ -98,6 +108,7 @@ class EntityManager(Loggable):
         # they're generally built here during inherited __init__ and will be registered
         # in platforms(s) async_setup_entry with their corresponding platform
         self.entities: Final[dict[object, MerossEntity]] = {}
+        self.state = ManagerState.INIT
         super().__init__(id, **kwargs)
 
     async def async_shutdown(self):
@@ -240,11 +251,11 @@ class ConfigEntryManager(EntityManager):
         return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
 
     async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
-        assert not self._unsub_entry_update_listener
+        assert self.state is ManagerState.INIT
         assert config_entry.entry_id not in ApiProfile.managers
         assert self.config_entry_id == config_entry.entry_id
         ApiProfile.managers[self.config_entry_id] = self
-
+        self.state = ManagerState.LOADING
         # open the trace before adding the entities
         # so we could catch logs in this phase too
         state = ApiProfile.managers_transient_state.setdefault(self.config_entry_id, {})
@@ -260,6 +271,7 @@ class ConfigEntryManager(EntityManager):
         self._unsub_entry_update_listener = config_entry.add_update_listener(
             self.entry_update_listener
         )
+        self.state = ManagerState.LOADED
 
     async def async_unload_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
         if not await hass.config_entries.async_unload_platforms(
@@ -272,6 +284,7 @@ class ConfigEntryManager(EntityManager):
         self.platforms = {}
         self.config = {}
         await self.async_shutdown()
+        self.state = ManagerState.INIT
         return True
 
     def unlisten_entry_update(self):

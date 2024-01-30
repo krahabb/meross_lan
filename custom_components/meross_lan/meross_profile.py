@@ -336,8 +336,8 @@ class MQTTConnection(Loggable):
 
     def attach(self, device: MerossDevice):
         assert device.id not in self.mqttdevices
-        self.mqttdevices[device.id] = device
         device.mqtt_attached(self)
+        self.mqttdevices[device.id] = device
         if sensor_connection := self.sensor_connection:
             sensor_connection.update_devices()
 
@@ -966,7 +966,7 @@ class MerossCloudProfile(ApiProfile):
         self._store = MerossCloudProfileStore(profile_id)
         self._unsub_polling_query_device_info: asyncio.TimerHandle | None = None
 
-    async def async_start(self):
+    async def async_init(self):
         """
         Performs 'cold' initialization of the profile by checking
         if we need to update the device_info and eventually start the
@@ -1046,7 +1046,6 @@ class MerossCloudProfile(ApiProfile):
                         json_dumps(_data),
                     )
         """
-        assert self._unsub_polling_query_device_info is None
         self._unsub_polling_query_device_info = schedule_async_callback(
             self.hass,
             next_query_delay,

@@ -88,10 +88,16 @@ class MerossHttpClient:
         if self._terminate:
             raise TerminatedException
 
-    async def async_terminate(self):
+    def terminate(self):
         """
         Marks the client as 'terminating' so that any pending request will abort
-        and raise TerminateException
+        and raise TerminateException. The client need to be rebuilt after this.
+        """
+        self._terminate = True
+
+    async def async_terminate(self):
+        """
+        Marks the client as 'terminating' and awaits for any pending request to finish
         """
         self._terminate = True
         while self._terminate_guard:
@@ -137,11 +143,11 @@ class MerossHttpClient:
             self._check_terminated()
             response.raise_for_status()
             response_json = await response.text()
-            self._check_terminated()
             if logger:
                 logger.log(
                     self._log_level_dump, "%s: HTTP Response (%s)", logid, response_json
                 )
+            self._check_terminated()
             return MerossResponse(response_json)
         except TerminatedException as e:
             raise e
@@ -201,11 +207,11 @@ class MerossHttpClient:
             self._check_terminated()
             response.raise_for_status()
             response_json = await response.text()
-            self._check_terminated()
             if logger:
                 logger.log(
                     self._log_level_dump, "%s: HTTP Response (%s)", logid, response_json
                 )
+            self._check_terminated()
             return MerossResponse(response_json)
         except TerminatedException as e:
             raise e

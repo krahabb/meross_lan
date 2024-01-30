@@ -42,7 +42,7 @@ from .const import (
     DeviceConfigType,
 )
 from .helpers import datetime_from_epoch, schedule_async_callback, schedule_callback
-from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager
+from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import EntityPollingStrategy, NamespaceHandler, PollingStrategy
 from .meross_entity import MerossFakeEntity
 from .merossclient import (
@@ -194,11 +194,6 @@ class MerossDeviceBase(EntityManager):
     @property
     def online(self):
         return self._online
-
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self._device_registry_entry = None
-        self.device_info = None
 
     # interface: self
     @property
@@ -365,6 +360,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "namespace_handlers",
         "polling_strategies",
         "_unsub_polling_callback",
+        "_polling_callback_shutdown",
         "_queued_smartpoll_requests",
         "_multiple_len",
         "_multiple_len_max",
@@ -416,6 +412,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             len(json_dumps(descriptor.all)) + PARAM_HEADER_SIZE
         )
         self._unsub_polling_callback = None
+        self._polling_callback_shutdown = None
         self._queued_smartpoll_requests = 0
         ability: typing.Final = descriptor.ability
         self._multiple_len = ability.get(mc.NS_APPLIANCE_CONTROL_MULTIPLE, {}).get(
@@ -496,19 +493,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     ):
         await super().entry_update_listener(hass, config_entry)
         self._update_config()
-        self._check_mqtt_connection_attach()
-
-        if self.conf_protocol is not CONF_PROTOCOL_AUTO:
-            if self.curr_protocol is not self.conf_protocol:
-                self._switch_protocol(self.conf_protocol)
-
-        if http := self._http:
-            if self.conf_protocol is CONF_PROTOCOL_MQTT:
-                self._http = self._http_active = None
-                self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
-            else:
-                if host := self.host:
-                    http.host = host
+        self._check_protocol()
 
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
@@ -548,25 +533,34 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     # interface: MerossDeviceBase
     async def async_shutdown(self):
         remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
+        # disconnect transports first so that any pending request
+        # is invalidated and this shortens the eventual polling loop
         if self._mqtt_connection:
             self._mqtt_connection.detach(self)
         if self._profile:
             self._profile.unlink(self)
         if self._http:
             await self._http.async_terminate()
-        while self._unsub_polling_callback is None:
-            # wait for the polling loop to finish in case
-            await asyncio.sleep(1)
-        self._unsub_polling_callback.cancel()
-        self._unsub_polling_callback = None
+            self._http = None
+
+        if self.state is ManagerState.STARTED:
+            if self._unsub_polling_callback:
+                self._unsub_polling_callback.cancel()
+                self._unsub_polling_callback = None
+            else:
+                self._polling_callback_shutdown = (
+                    asyncio.get_running_loop().create_future()
+                )
+                await self._polling_callback_shutdown
+
+        await super().async_shutdown()
         self.polling_strategies.clear()
         self.namespace_handlers.clear()
-        await super().async_shutdown()
-        ApiProfile.devices[self.id] = None
         self.entity_dnd = None  # type: ignore
         self.sensor_signal_strength = None  # type: ignore
         self.sensor_protocol = None  # type: ignore
         self.update_firmware = None
+        ApiProfile.devices[self.id] = None
 
     def build_request(
         self,
@@ -606,10 +600,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             return response
 
         if (
-            self._mqtt_active
-            and self._mqtt_publish
-            and (self.conf_protocol is CONF_PROTOCOL_AUTO)
-            and not mqttfailed
+            self._mqtt_active  # device is connected to broker
+            and self._mqtt_publish  # profile allows publishing
+            and not mqttfailed  # we've already tried mqtt
         ):
             return await self.async_mqtt_request_raw(request)
 
@@ -745,10 +738,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # called by async_setup_entry after the entities have been registered
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
-        self._check_mqtt_connection_attach()
+        self._check_protocol()
         self._unsub_polling_callback = schedule_async_callback(
             self.hass, 0, self._async_polling_callback, None
         )
+        self.state = ManagerState.STARTED
 
     def entry_option_setup(self, config_schema: dict):
         """
@@ -894,6 +888,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         request: MerossRequest,
         attempts: int = 1,
     ) -> MerossResponse | None:
+        if not (http := self._http):
+            # even if we're smart enough to not call async_http_request_raw when no http
+            # available, it could happen we loose that when asynchronously coming here
+            self.log(
+                self.DEBUG,
+                "Attempting to use async_http_request_raw with no http connection",
+            )
+            return None
+
         method = request.method
         namespace = request.namespace
         with self.exception_warning(
@@ -902,14 +905,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             namespace,
             timeout=14400,
         ):
-            if not (http := self._http):
-                http = MerossHttpClient(
-                    self.host,  # type: ignore
-                    self.key,
-                    async_get_clientsession(self.hass),
-                )
-                self._http = http
-
             for attempt in range(attempts):
                 # since we get 'random' connection errors, this is a retry attempts loop
                 # until we get it done. We'd want to break out early on specific events tho (Timeouts)
@@ -1232,9 +1227,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     @callback
     async def _async_polling_callback(self, namespace: str):
-        self.log(self.DEBUG, "Polling begin")
+        self._unsub_polling_callback = None
         try:
-            self._unsub_polling_callback = None
+            self.log(self.DEBUG, "Polling begin")
             epoch = time()
 
             if self._online:
@@ -1311,7 +1306,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             else:  # offline
                 ns_all = get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
-                    if self.host:
+                    if self._http:
                         await self.async_http_request(*ns_all)
                     if self._mqtt_publish and not self._online:
                         await self.async_mqtt_request(*ns_all)
@@ -1319,7 +1314,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if self._mqtt_publish:
                         await self.async_mqtt_request(*ns_all)
                 else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
-                    await self.async_http_request(*ns_all)
+                    if self._http:
+                        await self.async_http_request(*ns_all)
 
                 if self._online:
                     await self._async_request_updates(epoch, mc.NS_APPLIANCE_SYSTEM_ALL)
@@ -1329,13 +1325,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     else:
                         self._polling_delay = PARAM_HEARTBEAT_PERIOD
         finally:
-            self._unsub_polling_callback = schedule_async_callback(
-                self.hass, self._polling_delay, self._async_polling_callback, None
-            )
+            if self._polling_callback_shutdown:
+                self._polling_callback_shutdown.set_result(True)
+                self._polling_callback_shutdown = None
+            else:
+                self._unsub_polling_callback = schedule_async_callback(
+                    self.hass, self._polling_delay, self._async_polling_callback, None
+                )
             self.log(self.DEBUG, "Polling end")
 
     def mqtt_receive(self, message: MerossResponse):
-        assert self._mqtt_connected and (self.conf_protocol is not CONF_PROTOCOL_HTTP)
+        assert self._mqtt_connected
         self._mqtt_lastresponse = epoch = time()
         self._trace_or_log(epoch, message, CONF_PROTOCOL_MQTT, self.TRACE_RX)
         if not self._mqtt_active:
@@ -1348,6 +1348,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._receive(epoch, message)
 
     def mqtt_attached(self, mqtt_connection: MQTTConnection):
+        assert self.conf_protocol is not CONF_PROTOCOL_HTTP
         self.log(
             self.DEBUG,
             "mqtt_attached to %s",
@@ -1428,7 +1429,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if self._profile:
                 self._profile.unlink(self)
             self._profile = profile
-            self._check_mqtt_connection_attach()
+            self._check_protocol()
 
     def profile_unlinked(self):
         assert self._profile
@@ -1441,11 +1442,35 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._mqtt_connection.detach(self)
         self._profile = None
 
-    def _check_mqtt_connection_attach(self):
+    def _check_protocol(self):
+        """called whenever the configuration or the profile linking changes to fix protocol transports"""
+        conf_protocol = self.conf_protocol
         _profile = self._profile
         _mqtt_connection = self._mqtt_connection
+        _http = self._http
 
-        if self.conf_protocol is CONF_PROTOCOL_AUTO:
+        if conf_protocol is CONF_PROTOCOL_MQTT:
+            if _http:
+                # TODO: should we async_terminate the http client ? (guess so)
+                self._http = self._http_active = None
+                self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
+        elif _http:
+            if host := self.host:
+                _http.host = host
+                _http.key = self.key
+            else:
+                # log that the host is unknown ?
+                self._http = self._http_active = None
+                self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
+        else:
+            if host := self.host:
+                self._http = MerossHttpClient(
+                    host,
+                    self.key,
+                    async_get_clientsession(self.hass),
+                )
+
+        if conf_protocol is CONF_PROTOCOL_AUTO:
             # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
             # and eventually fallback (curr_protocol) until some good news allow us
             # to retry pref_protocol. When binded to a cloud_profile always prefer
@@ -1459,9 +1484,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 if self.curr_protocol is not CONF_PROTOCOL_MQTT and self._mqtt_active:
                     self._switch_protocol(CONF_PROTOCOL_MQTT)
         else:
-            self.pref_protocol = self.conf_protocol
-            if self.curr_protocol is not self.pref_protocol:
-                self._switch_protocol(self.pref_protocol)
+            self.pref_protocol = conf_protocol
+            if self.curr_protocol is not conf_protocol:
+                self._switch_protocol(conf_protocol)
 
         if self.conf_protocol is CONF_PROTOCOL_HTTP:
             # strictly HTTP so detach MQTT in case
@@ -1483,7 +1508,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if _profile:
                 _profile.attach_mqtt(self)
             else:
-                # this will cause 1 level recursion by
+                # this could cause 1 level recursion by
                 # calling profile_linked. In general, devices
                 # are attached right when loaded (by default they're attached to MerossApi
                 # if no CloudProfile matches). Whenever a Cloud profile appears, it can
@@ -1491,7 +1516,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # but when a cloud profile is unloaded, it unlinks its devices which will
                 # rest without an ApiProfile. This is still to be fixed but at least,
                 # whenever we refresh the device config, this kind of 'failover' will
-                # definitely bind the device to the local broker in case it got orphaned
+                # definitely bind the device to the local broker if no better option
                 self.api.try_link(self)
 
     def _receive(self, epoch: float, message: MerossResponse):

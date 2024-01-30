@@ -206,14 +206,3 @@ Content-Type: application/json
     "payload":{
     }
 }
-
-###
-POST https://iot.meross.com/v1/Device/devInfo HTTP/1.1
-Authorization: Basic 63071a81df6ca21335cf75988a625b7606440dc12e44bb10f4d4d474af454b61
-Content-Type: application/json
-vender: Meross
-AppVersion: 1.3.0
-AppLanguage: EN
-User-Agent: okhttp/3.6.0
-
-{"params": "e30=", "sign": "d414ebfcc3f89091a503dc3e394b368c", "timestamp": 1665432130, "nonce": "0123456789ABCDEF"}
