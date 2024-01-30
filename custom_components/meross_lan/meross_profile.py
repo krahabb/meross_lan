@@ -129,7 +129,7 @@ class ConnectionSensor(MLDiagnosticSensor):
             None,
             connection.id,
             MLDiagnosticSensor.DeviceClass.ENUM,
-            self.STATE_CONNECTED
+            state=self.STATE_CONNECTED
             if connection.mqtt_is_connected
             else self.STATE_DISCONNECTED,
         )

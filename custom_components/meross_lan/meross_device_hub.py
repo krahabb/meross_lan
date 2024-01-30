@@ -569,7 +569,7 @@ class MerossSubDevice(MerossDeviceBase):
                             self.id,
                             entitykey,
                             MLDiagnosticSensor.DeviceClass.ENUM,
-                            subvalue,
+                            state=subvalue,
                         )
 
             def _parse_list():
@@ -687,7 +687,7 @@ class MerossSubDevice(MerossDeviceBase):
                 self.id,
                 None,
                 MLSwitch.DeviceClass.SWITCH,
-                mc.NS_APPLIANCE_HUB_TOGGLEX,
+                namespace=mc.NS_APPLIANCE_HUB_TOGGLEX,
             )
             switch_togglex._attr_entity_category = me.EntityCategory.CONFIG
             switch_togglex.key_channel = mc.KEY_ID

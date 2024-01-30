@@ -25,7 +25,7 @@ class EnergyEstimateSensor(MLSensor):
 
     def __init__(self, manager: ElectricityMixin):
         self._attr_state_float = 0.0
-        super().__init__(manager, None, "energy_estimate", self.DeviceClass.ENERGY, 0)
+        super().__init__(manager, None, "energy_estimate", self.DeviceClass.ENERGY, state=0)
 
     @property
     def entity_registry_enabled_default(self):

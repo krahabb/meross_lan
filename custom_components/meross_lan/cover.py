@@ -81,7 +81,7 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
             cover.channel,
             "problem",
             self.DeviceClass.PROBLEM,
-            self.STATE_OFF,
+            state=self.STATE_OFF,
         )
 
     @property
@@ -130,7 +130,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
             channel,
             f"config_{key}",
             self.DeviceClass.SWITCH,
-            state,
+            state=state,
             namespace=namespace,
         )
 

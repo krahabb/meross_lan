@@ -87,6 +87,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         channel: object | None,
         entitykey: str | None = None,
         device_class: object | str | None = None,
+        *,
         state: StateType = None,
     ):
         """
@@ -283,11 +284,11 @@ class MerossToggle(MerossEntity):
         channel: object,
         entitykey: str | None = None,
         device_class: object | None = None,
-        state: StateType = None,
         *,
+        state: StateType = None,
         namespace: str | None = None,
     ):
-        super().__init__(manager, channel, entitykey, device_class, state)
+        super().__init__(manager, channel, entitykey, device_class, state=state)
         if namespace:
             self.namespace = namespace
             self.key_namespace = NAMESPACE_TO_KEY[namespace]

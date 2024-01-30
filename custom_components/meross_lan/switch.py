@@ -106,7 +106,7 @@ class ToggleXMixin(MerossDevice if typing.TYPE_CHECKING else object):
             channel,
             None,
             MLSwitch.DeviceClass.OUTLET,
-            mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+            namespace=mc.NS_APPLIANCE_CONTROL_TOGGLEX,
         )
 
 
@@ -136,6 +136,6 @@ class ToggleMixin(MerossDevice if typing.TYPE_CHECKING else object):
             channel,
             None,
             MLSwitch.DeviceClass.OUTLET,
-            mc.NS_APPLIANCE_CONTROL_TOGGLE,
+            namespace=mc.NS_APPLIANCE_CONTROL_TOGGLE,
         )
         self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLE, switch)

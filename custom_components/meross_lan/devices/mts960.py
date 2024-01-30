@@ -263,7 +263,7 @@ class Mts960Climate(MtsClimate):
                             channel,
                             key,
                             MLDiagnosticSensor.DeviceClass.ENUM,
-                            payload[key],
+                            state=payload[key],
                         )
 
         self.flush_state()

@@ -172,13 +172,13 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         self._tracked_state = None
         self._unsub_track_state = None
         self._unsub_tracking_delayed = None
-        super().__init__(climate.manager, climate.channel, "tracked_sensor", None)
+        super().__init__(climate.manager, climate.channel, "tracked_sensor")
 
     # interface: MerossEntity
     async def async_shutdown(self):
         self._tracking_stop()
-        self.climate = None  # type: ignore
         await super().async_shutdown()
+        self.climate = None  # type: ignore
 
     @property
     def available(self):

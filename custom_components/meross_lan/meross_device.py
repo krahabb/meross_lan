@@ -455,7 +455,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         if mc.NS_APPLIANCE_SYSTEM_RUNTIME in ability:
             self.sensor_signal_strength = sensor_signal_strength = MLSensor(
-                self, None, "signal_strength", None
+                self, None, "signal_strength"
             )
             sensor_signal_strength._attr_entity_category = (
                 MLSensor.EntityCategory.DIAGNOSTIC

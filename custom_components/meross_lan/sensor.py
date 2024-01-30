@@ -69,6 +69,7 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         channel: object | None,
         entitykey: str | None,
         device_class: DeviceClass | None = None,
+        *,
         state: me.StateType = None,
     ):
         self._attr_native_unit_of_measurement = self.DEVICECLASS_TO_UNIT_MAP.get(
@@ -77,7 +78,7 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         self._attr_state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
             device_class, MLSensor.StateClass.MEASUREMENT
         )
-        super().__init__(manager, channel, entitykey, device_class, state)
+        super().__init__(manager, channel, entitykey, device_class, state=state)
 
     @staticmethod
     def build_for_device(device: MerossDevice, device_class: MLSensor.DeviceClass):
@@ -137,7 +138,7 @@ class ProtocolSensor(MLSensor):
             None,
             "sensor_protocol",
             self.DeviceClass.ENUM,
-            ProtocolSensor.STATE_DISCONNECTED,
+            state=ProtocolSensor.STATE_DISCONNECTED,
         )
 
     @property

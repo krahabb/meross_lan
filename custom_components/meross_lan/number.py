@@ -76,8 +76,8 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         entitykey: str | None = None,
         device_class: DeviceClass | None = None,
     ):
-        super().__init__(manager, channel, entitykey, device_class)
         self._unsub_request = None
+        super().__init__(manager, channel, entitykey, device_class)
 
     async def async_shutdown(self):
         self._cancel_request()
@@ -269,7 +269,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
                     self.channel,
                     f"{self.entitykey}_warning",
                     MLSensor.DeviceClass.ENUM,
-                    payload[mc.KEY_WARNING],
+                    state=payload[mc.KEY_WARNING],
                 )
                 sensor_warning._attr_translation_key = f"mts_{sensor_warning.entitykey}"
 

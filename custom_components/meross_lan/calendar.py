@@ -143,7 +143,7 @@ class MtsSchedule(MLCalendar):
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
         self._attr_extra_state_attributes = {}
-        super().__init__(climate.manager, climate.channel, self.key_namespace, None)
+        super().__init__(climate.manager, climate.channel, self.key_namespace)
 
     # interface: MerossEntity
     async def async_shutdown(self):

@@ -116,7 +116,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_onoff: int | None = None
         self._mts_adjust_offset = 0
         self._mts_adjusted_temperature = {}
-        super().__init__(manager, channel, None, None)
+        super().__init__(manager, channel)
         self.number_adjust_temperature = adjust_number_class(self)  # type: ignore
         self.number_away_temperature = preset_number_class(self, MtsClimate.PRESET_AWAY)
         self.number_comfort_temperature = preset_number_class(
