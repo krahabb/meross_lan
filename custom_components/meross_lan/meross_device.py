@@ -43,7 +43,12 @@ from .const import (
 )
 from .helpers import datetime_from_epoch, schedule_async_callback, schedule_callback
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
-from .helpers.namespaces import DiagnosticPollingStrategy, EntityPollingStrategy, NamespaceHandler, PollingStrategy
+from .helpers.namespaces import (
+    DiagnosticPollingStrategy,
+    EntityPollingStrategy,
+    NamespaceHandler,
+    PollingStrategy,
+)
 from .meross_entity import MerossFakeEntity
 from .merossclient import (
     HostAddress,
@@ -506,7 +511,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     async def async_destroy_diagnostic_entities(self, remove: bool = False):
         self._diagnostics_build = False
-        diagnostic_namespaces = [namespace for namespace, strategy in self.polling_strategies.items() if isinstance(strategy, DiagnosticPollingStrategy)]
+        diagnostic_namespaces = [
+            namespace
+            for namespace, strategy in self.polling_strategies.items()
+            if isinstance(strategy, DiagnosticPollingStrategy)
+        ]
         for namespace in diagnostic_namespaces:
             self.polling_strategies.pop(namespace)
         await super().async_destroy_diagnostic_entities(remove)
@@ -1454,7 +1463,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         if conf_protocol is CONF_PROTOCOL_MQTT:
             if _http:
-                # TODO: should we async_terminate the http client ? (guess so)
+                _http.terminate()
                 self._http = self._http_active = None
                 self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
         elif _http:
@@ -1462,7 +1471,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 _http.host = host
                 _http.key = self.key
             else:
-                # log that the host is unknown ?
+                _http.terminate()
                 self._http = self._http_active = None
                 self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
         else:
@@ -1706,6 +1715,21 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # reports a newer fw
                 update_firmware._attr_installed_version = descr.firmwareVersion
                 update_firmware.flush_state()
+            if (
+                self.conf_protocol is not CONF_PROTOCOL_MQTT
+                and not self.config.get(CONF_HOST)
+                and (host := descr.innerIp)
+            ):
+                # dynamically adjust the http host in case our config misses it and
+                # we're so depending on MQTT updates of descriptor.firmware to innerIp
+                if _http := self._http:
+                    _http.host = host
+                else:
+                    self._http = MerossHttpClient(
+                        host,
+                        self.key,
+                        async_get_clientsession(self.hass),
+                    )
 
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             if self._mqtt_active:
