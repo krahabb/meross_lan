@@ -43,7 +43,7 @@ from .const import (
 )
 from .helpers import datetime_from_epoch, schedule_async_callback, schedule_callback
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
-from .helpers.namespaces import EntityPollingStrategy, NamespaceHandler, PollingStrategy
+from .helpers.namespaces import DiagnosticPollingStrategy, EntityPollingStrategy, NamespaceHandler, PollingStrategy
 from .meross_entity import MerossFakeEntity
 from .merossclient import (
     HostAddress,
@@ -506,6 +506,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     async def async_destroy_diagnostic_entities(self, remove: bool = False):
         self._diagnostics_build = False
+        diagnostic_namespaces = [namespace for namespace, strategy in self.polling_strategies.items() if isinstance(strategy, DiagnosticPollingStrategy)]
+        for namespace in diagnostic_namespaces:
+            self.polling_strategies.pop(namespace)
         await super().async_destroy_diagnostic_entities(remove)
 
     def get_logger_name(self) -> str:

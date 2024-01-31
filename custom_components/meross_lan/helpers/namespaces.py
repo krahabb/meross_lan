@@ -135,6 +135,7 @@ class NamespaceHandler:
             header[mc.KEY_METHOD],
             header[mc.KEY_NAMESPACE],
             str(device.loggable_dict(payload)),
+            timeout=14400,
         )
         if device.create_diagnostic_entities:
             payload = payload[self.key_namespace]
@@ -219,7 +220,7 @@ class NamespaceHandler:
                 # we'll also create a polling strategy on the fly so that
                 # the diagnostic sensors get updated
                 if self.namespace not in device.polling_strategies:
-                    SmartPollingStrategy(device, self.namespace)
+                    DiagnosticPollingStrategy(device, self.namespace)
 
     def _parse_undefined_list(self, key: str, payload: list, channel):
         pass
@@ -372,3 +373,11 @@ class OncePollingStrategy(SmartPollingStrategy):
         """
         if not self.lastrequest:
             await device.async_request_smartpoll(self, epoch)
+
+
+class DiagnosticPollingStrategy(SmartPollingStrategy):
+    """
+    This strategy is for namespace polling when diagnostics sensors are
+    detected and installed due to any unknown namespace parsing.
+    This in turn needs to be removed from polling when diagnostic sensors is disabled
+    """
