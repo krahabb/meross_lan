@@ -35,7 +35,7 @@ class MLSwitch(me.MerossToggle, switch.SwitchEntity):
 
 
 class MtsConfigSwitch(MLSwitch):
-    _attr_entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = MLSwitch.EntityCategory.CONFIG
 
     namespace: str
 

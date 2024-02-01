@@ -106,15 +106,17 @@ class ConnectionSensor(MLDiagnosticSensor):
 
     manager: ApiProfile
 
-    _attr_extra_state_attributes: AttrDictType
+    # HA core entity attributes:
+    available: Final[bool] = True
+    extra_state_attributes: AttrDictType
     _attr_state: str
-    _attr_options = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_QUEUING, STATE_DROPPING]
+    options: list[str] = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_QUEUING, STATE_DROPPING]
 
     __slots__ = ("connection",)
 
     def __init__(self, connection: MQTTConnection):
         self.connection = connection
-        self._attr_extra_state_attributes = {
+        self.extra_state_attributes = {
             ConnectionSensor.ATTR_DEVICES: {
                 device.id: device.name for device in connection.mqttdevices.values()
             },
@@ -147,13 +149,16 @@ class ConnectionSensor(MLDiagnosticSensor):
         self.connection.sensor_connection = None
         self.connection: MQTTConnection = None  # type: ignore
 
+    """REMOVE
     @property
     def available(self):
         return True
-
+    """
+    """REMOVE
     @property
     def options(self) -> list[str] | None:
         return self._attr_options
+    """
 
     def set_unavailable(self):
         raise NotImplementedError
@@ -162,23 +167,23 @@ class ConnectionSensor(MLDiagnosticSensor):
     def update_devices(self):
         # rebuild the attr (sub)dict else we were keeping a reference
         # to the underlying hass.state and updates were missing
-        self._attr_extra_state_attributes[ConnectionSensor.ATTR_DEVICES] = {
+        self.extra_state_attributes[ConnectionSensor.ATTR_DEVICES] = {
             device.id: device.name for device in self.connection.mqttdevices.values()
         }
         self.flush_state()
 
     def inc_counter(self, attr_name: str):
-        self._attr_extra_state_attributes[attr_name] += 1
+        self.extra_state_attributes[attr_name] += 1
         self.flush_state()
 
     def inc_counter_with_state(self, attr_name: str, state: str):
-        self._attr_extra_state_attributes[attr_name] += 1
+        self.extra_state_attributes[attr_name] += 1
         self._attr_state = state
         self.flush_state()
 
     def inc_queued(self, queue_length: int):
-        self._attr_extra_state_attributes[ConnectionSensor.ATTR_QUEUED] += 1
-        self._attr_extra_state_attributes[
+        self.extra_state_attributes[ConnectionSensor.ATTR_QUEUED] += 1
+        self.extra_state_attributes[
             ConnectionSensor.ATTR_QUEUE_LENGTH
         ] = queue_length
         self._attr_state = ConnectionSensor.STATE_QUEUING
@@ -835,13 +840,13 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             # this is especially true for 'dropped' since
             # the client itself could drop packets at any time
             # from its (de)queue
-            sensor_connection._attr_extra_state_attributes[
+            sensor_connection.extra_state_attributes[
                 ConnectionSensor.ATTR_QUEUE_LENGTH
             ] = queue_length
-            sensor_connection._attr_extra_state_attributes[
+            sensor_connection.extra_state_attributes[
                 ConnectionSensor.ATTR_DROPPED
             ] = self.rl_dropped
-            sensor_connection._attr_extra_state_attributes[
+            sensor_connection.extra_state_attributes[
                 ConnectionSensor.ATTR_PUBLISHED
             ] += 1
             if self.mqtt_is_connected and not queue_length:

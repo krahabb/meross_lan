@@ -104,9 +104,10 @@ class MtsSchedule(MLCalendar):
     key_namespace: str
     key_channel: str
 
-    _attr_entity_category = me.EntityCategory.CONFIG
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.CONFIG
     _attr_state: MtsScheduleNativeType | None
-    _attr_supported_features = (
+    supported_features: calendar.CalendarEntityFeature = (
         calendar.CalendarEntityFeature.CREATE_EVENT
         | calendar.CalendarEntityFeature.DELETE_EVENT
         | calendar.CalendarEntityFeature.UPDATE_EVENT
@@ -142,7 +143,7 @@ class MtsSchedule(MLCalendar):
         # but we're recovering the value by inspecting the device scheduleB payload.
         # Also, this should be the same as scheduleBMode in Mts100Climate
         self._schedule_entry_count = 0
-        self._attr_extra_state_attributes = {}
+        self.extra_state_attributes = {}
         super().__init__(climate.manager, climate.channel, self.key_namespace)
 
     # interface: MerossEntity
@@ -654,7 +655,7 @@ class MtsSchedule(MLCalendar):
             self._attr_state.update(payload)
         else:
             self._attr_state = payload
-        self._attr_extra_state_attributes[self.key_namespace] = str(self._attr_state)
+        self.extra_state_attributes[self.key_namespace] = str(self._attr_state)
         # invalidate our internal representation and flush
         self._schedule = None
         self._schedule_entry_count = 0

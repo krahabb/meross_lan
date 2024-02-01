@@ -70,7 +70,8 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         PRESET_AWAY,
         PRESET_AUTO,
     ]
-    _attr_supported_features = (
+    # HA core entity attributes:
+    supported_features: climate.ClimateEntityFeature = (
         climate.ClimateEntityFeature.PRESET_MODE
         | climate.ClimateEntityFeature.TARGET_TEMPERATURE
     )
@@ -150,7 +151,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._attr_preset_mode = None
         self._attr_hvac_action = None
         self._attr_hvac_mode = None
-        super().flush_state()
+        super().set_unavailable()
 
     def flush_state(self):
         self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
@@ -158,10 +159,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.schedule.flush_state()
 
     # interface: ClimateEntity
-    @property
-    def supported_features(self):
-        return self._attr_supported_features
-
     @property
     def temperature_unit(self):
         return MtsClimate.TEMP_CELSIUS

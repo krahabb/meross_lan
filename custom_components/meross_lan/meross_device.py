@@ -462,7 +462,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self.sensor_signal_strength = sensor_signal_strength = MLSensor(
                 self, None, "signal_strength"
             )
-            sensor_signal_strength._attr_entity_category = (
+            sensor_signal_strength.entity_category = (
                 MLSensor.EntityCategory.DIAGNOSTIC
             )
             sensor_signal_strength._attr_native_unit_of_measurement = PERCENTAGE

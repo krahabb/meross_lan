@@ -24,7 +24,7 @@ class MLButton(me.MerossEntity, button.ButtonEntity):
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
 
-    _attr_entity_category = me.EntityCategory.CONFIG
+    entity_category = me.EntityCategory.CONFIG
     _attr_state: None  # remember buttons don't have state!
 
     __slots__ = ()

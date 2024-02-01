@@ -72,7 +72,7 @@ class Mts100Climate(MtsClimate):
     __slots__ = ("binary_sensor_window",)
 
     def __init__(self, manager: MTS100SubDevice):
-        self._attr_extra_state_attributes = {}
+        self.extra_state_attributes = {}
         super().__init__(
             manager,
             manager.id,
@@ -84,14 +84,14 @@ class Mts100Climate(MtsClimate):
 
     @property
     def scheduleBMode(self):
-        return self._attr_extra_state_attributes.get(mc.KEY_SCHEDULEBMODE)
+        return self.extra_state_attributes.get(mc.KEY_SCHEDULEBMODE)
 
     @scheduleBMode.setter
     def scheduleBMode(self, value):
         if value:
-            self._attr_extra_state_attributes[mc.KEY_SCHEDULEBMODE] = value
+            self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = value
         else:
-            self._attr_extra_state_attributes.pop(mc.KEY_SCHEDULEBMODE)
+            self.extra_state_attributes.pop(mc.KEY_SCHEDULEBMODE)
 
     # interface: MtsClimate
     async def async_shutdown(self):

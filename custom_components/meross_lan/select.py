@@ -55,20 +55,22 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
     a dict containing mappings between meross modes <-> HA select options
     like { mc.SPRAY_MODE_OFF: OPTION_SPRAY_MODE_OFF }
     """
+    # HA core entity attributes:
+    options: list[str]
 
     __slots__ = (
-        "_attr_options",
+        "options",
         "_spray_mode_map",
     )
 
     def __init__(
         self, manager: SprayMixin | DiffuserMixin, channel: object, spraymode_map: dict
     ):
-        super().__init__(manager, channel, mc.KEY_SPRAY, mc.KEY_SPRAY)
+        super().__init__(manager, channel, mc.KEY_SPRAY)
         # we could use the shared instance but different device firmwares
         # could bring in unwanted global options...
         self._spray_mode_map = dict(spraymode_map)
-        self._attr_options = list(self._spray_mode_map.values())
+        self.options = list(self._spray_mode_map.values())
 
     @property
     def current_option(self):
@@ -102,7 +104,7 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
             # unknown mode value -> auto-learning
             option = "mode_" + str(mode)
             self._spray_mode_map[mode] = option
-            self._attr_options = list(self._spray_mode_map.values())
+            self.options = list(self._spray_mode_map.values())
         # we actually don't care if this is a SwitchEntity
         # this is a bug since state would be wrongly reported
         # when mode != on/off
@@ -150,12 +152,15 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     """minimum delay (dead-time) between trying to adjust the climate entity"""
 
     climate: MtsClimate
-    _attr_entity_category = me.EntityCategory.CONFIG
+
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.CONFIG
+    options: list[str]
     _attr_state: str | None
 
     __slots__ = (
         "climate",
-        "_attr_options",
+        "options",
         "_delayed_tracking_timestamp",
         "_tracked_state",
         "_unsub_track_state",
@@ -167,7 +172,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         climate: MtsClimate,
     ):
         self.climate = climate
-        self._attr_options = []
+        self.options = []
         self._delayed_tracking_timestamp = 0
         self._tracked_state = None
         self._unsub_track_state = None
@@ -212,7 +217,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             # when persisting the state and we could loose the
             # current restored state if we don't setup the tracking
             # list soon enough
-            self._attr_options = [self._attr_state]
+            self.options = [self._attr_state]
             hass.bus.async_listen_once(
                 hac.EVENT_HOMEASSISTANT_STARTED,
                 self._setup_tracking_entities,
@@ -227,9 +232,11 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         await super().async_will_remove_from_hass()
 
     # interface: SelectEntity
+    """REMOVE
     @property
     def options(self) -> list[str]:
         return self._attr_options
+    """
 
     @property
     def current_option(self):
@@ -332,14 +339,14 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
 
     @callback
     def _setup_tracking_entities(self, *_):
-        self._attr_options = [hac.STATE_OFF]
+        self.options = [hac.STATE_OFF]
         component: EntityComponent[SensorEntity] = self.hass.data["sensor"]
         for entity in component.entities:
             um = entity.native_unit_of_measurement
             if um in (hac.UnitOfTemperature.CELSIUS, hac.UnitOfTemperature.FAHRENHEIT):
-                self._attr_options.append(entity.entity_id)
+                self.options.append(entity.entity_id)
 
-        if self._attr_state not in self._attr_options:
+        if self._attr_state not in self.options:
             # this might happen when restoring a not anymore valid entity
             self._attr_state = self.STATE_OFF
 

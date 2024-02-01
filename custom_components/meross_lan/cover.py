@@ -72,10 +72,10 @@ async def async_setup_entry(
 
 
 class MLGarageTimeoutBinarySensor(MLBinarySensor):
-    _attr_entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
+    entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, cover: MLGarage):
-        self._attr_extra_state_attributes = {}
+        self.extra_state_attributes = {}
         super().__init__(
             cover.manager,
             cover.channel,
@@ -92,13 +92,13 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
         pass
 
     def update_ok(self):
-        self._attr_extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TIMEOUT, None)
-        self._attr_extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TARGET, None)
+        self.extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TIMEOUT, None)
+        self.extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TARGET, None)
         self.update_onoff(0)
 
     def update_timeout(self, target_state):
-        self._attr_extra_state_attributes[EXTRA_ATTR_TRANSITION_TARGET] = target_state
-        self._attr_extra_state_attributes[
+        self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TARGET] = target_state
+        self.extra_state_attributes[
             EXTRA_ATTR_TRANSITION_TIMEOUT
         ] = now().isoformat()
         self.update_onoff(1)
@@ -112,7 +112,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
 
     manager: GarageMixin
 
-    _attr_entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = MLSwitch.EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -312,7 +312,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         self._open = None
         # cache issued request since device reply doesnt report it
         self._open_request = None
-        self._attr_extra_state_attributes = {
+        self.extra_state_attributes = {
             EXTRA_ATTR_TRANSITION_DURATION: self._transition_duration
         }
         manager.register_parser(mc.NS_APPLIANCE_GARAGEDOOR_STATE, self)
@@ -362,7 +362,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                     # since this is no harm and unlikely to change
                     # better than defaulting to a pseudo-random value
                     self._transition_duration = _attr[EXTRA_ATTR_TRANSITION_DURATION]
-                    self._attr_extra_state_attributes[
+                    self.extra_state_attributes[
                         EXTRA_ATTR_TRANSITION_DURATION
                     ] = self._transition_duration
 
@@ -594,7 +594,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
             PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
         )
-        self._attr_extra_state_attributes[
+        self.extra_state_attributes[
             EXTRA_ATTR_TRANSITION_DURATION
         ] = self._transition_duration
 
@@ -733,6 +733,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     manager: RollerShutterMixin
 
+    assumed_state = True
+    
     __slots__ = (
         "number_signalOpen",
         "number_signalClose",
@@ -747,6 +749,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
     )
 
     def __init__(self, manager: RollerShutterMixin, channel: object):
+        self._attr_current_cover_position: int | None = None
+        self.extra_state_attributes = {}
         super().__init__(manager, channel, None, CoverDeviceClass.SHUTTER)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
@@ -758,8 +762,6 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         self._position_endtime = None  # epoch of 'target position reached'
         self._transition_unsub = None
         self._transition_end_unsub = None
-        self._attr_current_cover_position: int | None = None
-        self._attr_extra_state_attributes = {}
         # flag indicating the device position is reliable (#227)
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
@@ -772,10 +774,12 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, self)
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, self)
 
+    """REMOVE
     @property
     def assumed_state(self):
-        """RollerShutter position is unreliable"""
+        # RollerShutter position is unreliable
         return True
+    """
 
     @property
     def supported_features(self):
@@ -811,12 +815,12 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 _attr = last_state.attributes  # type: ignore
                 if EXTRA_ATTR_DURATION_OPEN in _attr:
                     self._signalOpen = _attr[EXTRA_ATTR_DURATION_OPEN]
-                    self._attr_extra_state_attributes[
+                    self.extra_state_attributes[
                         EXTRA_ATTR_DURATION_OPEN
                     ] = self._signalOpen
                 if EXTRA_ATTR_DURATION_CLOSE in _attr:
                     self._signalClose = _attr[EXTRA_ATTR_DURATION_CLOSE]
-                    self._attr_extra_state_attributes[
+                    self.extra_state_attributes[
                         EXTRA_ATTR_DURATION_CLOSE
                     ] = self._signalClose
                 if ATTR_CURRENT_POSITION in _attr:
@@ -922,11 +926,11 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             # detecting a device reporting 'good' positions
             self._position_native_isgood = True
             self._position_native = None
-            self._attr_extra_state_attributes.pop(EXTRA_ATTR_POSITION_NATIVE, None)
+            self.extra_state_attributes.pop(EXTRA_ATTR_POSITION_NATIVE, None)
             self._attr_current_cover_position = position
         else:
             self._position_native = position
-            self._attr_extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
+            self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
 
         self.flush_state()
 
@@ -1003,7 +1007,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 mc.KEY_SIGNALOPEN
             ]  # time to fully open cover in msec
             self.number_signalOpen.update_native_value(self._signalOpen)
-            self._attr_extra_state_attributes[
+            self.extra_state_attributes[
                 EXTRA_ATTR_DURATION_OPEN
             ] = self._signalOpen
         if mc.KEY_SIGNALCLOSE in payload:
@@ -1011,7 +1015,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 mc.KEY_SIGNALCLOSE
             ]  # time to fully close cover in msec
             self.number_signalClose.update_native_value(self._signalClose)
-            self._attr_extra_state_attributes[
+            self.extra_state_attributes[
                 EXTRA_ATTR_DURATION_CLOSE
             ] = self._signalClose
 

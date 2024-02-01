@@ -35,9 +35,10 @@ class MLDiffuserLight(MLLightBase):
     manager: DiffuserMixin
 
     _light_effect_map = mc.DIFFUSER_LIGHT_EFFECT_MAP
-    _attr_effect_list = list(_light_effect_map.values())
-    _attr_supported_color_modes = {ColorMode.RGB}
-    _attr_supported_features = LightEntityFeature.EFFECT
+    # HA core entity attributes:
+    effect_list = list(_light_effect_map.values())
+    supported_color_modes = {ColorMode.RGB}
+    supported_features: LightEntityFeature = LightEntityFeature.EFFECT
 
     async def async_turn_on(self, **kwargs):
         light = dict(self._light)
@@ -77,15 +78,15 @@ class MLDiffuserLight(MLLightBase):
         if mc.KEY_MODE in payload:
             # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
             mode = payload[mc.KEY_MODE]
-            self._attr_effect = self._light_effect_map.get(mode)
-            if self._attr_effect is None:
+            self.effect = self._light_effect_map.get(mode)
+            if self.effect is None:
                 # we're missing the effect for this mode so the device firmware
                 # is newer than our knowledge. Lets make a copy of our _light_effect_map
                 # which is by design a class instance
-                self._attr_effect = "mode_" + str(mode)
+                self.effect = "mode_" + str(mode)
                 self._light_effect_map = dict(self._light_effect_map)
-                self._light_effect_map[mode] = self._attr_effect
-                self._attr_effect_list = list(self._light_effect_map.values())
+                self._light_effect_map[mode] = self.effect
+                self.effect_list = list(self._light_effect_map.values())
 
 
 class DiffuserMixin(

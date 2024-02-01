@@ -46,7 +46,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
 
     manager: MerossDevice
 
-    _attr_entity_category = me.EntityCategory.CONFIG
+    entity_category = me.EntityCategory.CONFIG
     _attr_native_max_value: float
     _attr_native_min_value: float
     _attr_native_step: float
@@ -271,7 +271,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
                     MLSensor.DeviceClass.ENUM,
                     state=payload[mc.KEY_WARNING],
                 )
-                sensor_warning._attr_translation_key = f"mts_{sensor_warning.entitykey}"
+                sensor_warning.translation_key = f"mts_{sensor_warning.entitykey}"
 
 
 class MtsCalibrationNumber(MtsRichTemperatureNumber):

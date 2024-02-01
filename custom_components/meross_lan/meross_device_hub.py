@@ -689,7 +689,7 @@ class MerossSubDevice(MerossDeviceBase):
                 MLSwitch.DeviceClass.SWITCH,
                 namespace=mc.NS_APPLIANCE_HUB_TOGGLEX,
             )
-            switch_togglex._attr_entity_category = me.EntityCategory.CONFIG
+            switch_togglex.entity_category = me.EntityCategory.CONFIG
             switch_togglex.key_channel = mc.KEY_ID
         switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])
 
@@ -907,7 +907,7 @@ class GS559SubDevice(MerossSubDevice):
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
         self.sensor_status = self.build_sensor(mc.KEY_STATUS, MLSensor.DeviceClass.ENUM)
-        self.sensor_status._attr_translation_key = "smoke_alarm_status"
+        self.sensor_status.translation_key = "smoke_alarm_status"
         self.sensor_interConn = self.build_sensor(
             mc.KEY_INTERCONN, MLSensor.DeviceClass.ENUM
         )

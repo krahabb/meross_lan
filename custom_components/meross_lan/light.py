@@ -79,6 +79,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
 
     PLATFORM = light.DOMAIN
     manager: MerossDevice
+
     """
     internal copy of the actual meross light state
     """
@@ -90,10 +91,33 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     """
     _light_effect_map = {}
 
-    __slots__ = ("_light",)
+    # HA core entity attributes:
+    brightness: int | None
+    color_mode: ColorMode
+    color_temp: int | None
+    effect: str | None = None
+    effect_list: list[str] | None = None
+    max_mireds: int = MSLANY_MIRED_MAX
+    min_mireds: int = MSLANY_MIRED_MIN
+    rgb_color: tuple[int, int, int] | None
+    supported_color_modes: set[ColorMode] | None = None
+    supported_features: LightEntityFeature = LightEntityFeature(0)
+    # TODO: add implementation for temp_kelvin and min-max_kelvin
+
+    __slots__ = (
+        "_light",
+        "brightness",
+        "color_mode",
+        "color_temp",
+        "rgb_color",
+    )
 
     def __init__(self, manager: MerossDevice, payload: dict):
         self._light = {}
+        self.brightness = None
+        self.color_mode = ColorMode.UNKNOWN
+        self.color_temp = None
+        self.rgb_color = None
         super().__init__(manager, payload.get(mc.KEY_CHANNEL, 0))
 
     def update_onoff(self, onoff):
@@ -118,27 +142,27 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
                     self.STATE_ON if payload[mc.KEY_ONOFF] else self.STATE_OFF
                 )
 
-            self._attr_color_mode = ColorMode.UNKNOWN
+            self.color_mode = ColorMode.UNKNOWN
 
             if mc.KEY_LUMINANCE in payload:
-                self._attr_color_mode = ColorMode.BRIGHTNESS
-                self._attr_brightness = payload[mc.KEY_LUMINANCE] * 255 // 100
+                self.color_mode = ColorMode.BRIGHTNESS
+                self.brightness = payload[mc.KEY_LUMINANCE] * 255 // 100
             else:
-                self._attr_brightness = None
+                self.brightness = None
 
             if mc.KEY_TEMPERATURE in payload:
-                self._attr_color_mode = ColorMode.COLOR_TEMP
-                self._attr_color_temp = ((100 - payload[mc.KEY_TEMPERATURE]) / 99) * (
+                self.color_mode = ColorMode.COLOR_TEMP
+                self.color_temp = ((100 - payload[mc.KEY_TEMPERATURE]) / 99) * (
                     self.max_mireds - self.min_mireds
                 ) + self.min_mireds
             else:
-                self._attr_color_temp = None
+                self.color_temp = None
 
             if mc.KEY_RGB in payload:
-                self._attr_color_mode = ColorMode.RGB
-                self._attr_rgb_color = _int_to_rgb(payload[mc.KEY_RGB])
+                self.color_mode = ColorMode.RGB
+                self.rgb_color = _int_to_rgb(payload[mc.KEY_RGB])
             else:
-                self._attr_rgb_color = None
+                self.rgb_color = None
 
             self._inherited_parse_light(payload)
             self.flush_state()
@@ -151,9 +175,6 @@ class MLLight(MLLightBase):
     """
 
     manager: LightMixin
-
-    _attr_max_mireds = MSLANY_MIRED_MAX
-    _attr_min_mireds = MSLANY_MIRED_MIN
 
     _unrecorded_attributes = frozenset({ATTR_TOGGLEX_MODE})
 
@@ -173,6 +194,7 @@ class MLLight(MLLightBase):
         "_capacity",
         "_togglex_switch",
         "_togglex_mode",
+        "supported_color_modes",
     )
 
     def __init__(self, manager: LightMixin, payload: dict):
@@ -187,8 +209,6 @@ class MLLight(MLLightBase):
         # also (issue #218) the newer mss560-570 dimmer switches are implemented as 'light' devices with ToggleX
         # api and show a glitch when used this way (ToggleX + Light)
         # State-of-the-art is now to auto-detect (when booting the entity) what is the behavior
-        super().__init__(manager, payload)
-        manager.register_parser(mc.NS_APPLIANCE_CONTROL_LIGHT, self)
         descr = manager.descriptor
         if get_element_by_key_safe(
             descr.digest.get(mc.KEY_TOGGLEX),
@@ -197,7 +217,7 @@ class MLLight(MLLightBase):
         ):
             self._togglex_switch = True
             self._togglex_mode = None
-            self._attr_extra_state_attributes = {ATTR_TOGGLEX_MODE: None}
+            self.extra_state_attributes = {ATTR_TOGGLEX_MODE: None}
             self.namespace = mc.NS_APPLIANCE_CONTROL_TOGGLEX
             self.key_namespace = mc.KEY_TOGGLEX
         else:
@@ -211,17 +231,19 @@ class MLLight(MLLightBase):
             mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE
         )
 
-        # new color_mode support from 2021.4.0
-        self._attr_supported_color_modes = set()
+        self.supported_color_modes = supported_color_modes = set()
         if self._capacity & mc.LIGHT_CAPACITY_RGB:
-            self._attr_supported_color_modes.add(ColorMode.RGB)  # type: ignore
+            supported_color_modes.add(ColorMode.RGB)  # type: ignore
         if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
-            self._attr_supported_color_modes.add(ColorMode.COLOR_TEMP)  # type: ignore
-        if not self._attr_supported_color_modes:
+            supported_color_modes.add(ColorMode.COLOR_TEMP)  # type: ignore
+        if not supported_color_modes:
             if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
-                self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)  # type: ignore
+                supported_color_modes.add(ColorMode.BRIGHTNESS)  # type: ignore
             else:
-                self._attr_supported_color_modes.add(ColorMode.ONOFF)  # type: ignore
+                supported_color_modes.add(ColorMode.ONOFF)  # type: ignore
+
+        super().__init__(manager, payload)
+        manager.register_parser(mc.NS_APPLIANCE_CONTROL_LIGHT, self)
 
     async def async_turn_on(self, **kwargs):
         if not kwargs:
@@ -292,7 +314,7 @@ class MLLight(MLLightBase):
                         # the device message pipe has already processed the response with
                         # all its (working) euristics after returning from async_request_ack
                         self._togglex_mode = not self.is_on
-                        self._attr_extra_state_attributes = {
+                        self.extra_state_attributes = {
                             ATTR_TOGGLEX_MODE: self._togglex_mode
                         }
                 if self._togglex_mode:
@@ -320,11 +342,11 @@ class MLLight(MLLightBase):
         """
         self._light_effect_map = light_effect_map
         if light_effect_map:
-            self._attr_supported_features |= LightEntityFeature.EFFECT
-            self._attr_effect_list = list(light_effect_map.values())
+            self.supported_features |= LightEntityFeature.EFFECT
+            self.effect_list = list(light_effect_map.values())
         else:
-            self._attr_supported_features &= ~LightEntityFeature.EFFECT
-            self._attr_effect_list = None
+            self.supported_features &= ~LightEntityFeature.EFFECT
+            self.effect_list = None
         self.flush_state()
 
     def _inherited_parse_light(self, payload: dict):
@@ -334,31 +356,31 @@ class MLLight(MLLightBase):
             # this key is not present for instance in mod100 lights
             capacity = payload[mc.KEY_CAPACITY]
             if capacity & mc.LIGHT_CAPACITY_RGB:
-                self._attr_color_mode = ColorMode.RGB
+                self.color_mode = ColorMode.RGB
             elif capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
-                self._attr_color_mode = ColorMode.COLOR_TEMP
+                self.color_mode = ColorMode.COLOR_TEMP
             elif capacity & mc.LIGHT_CAPACITY_LUMINANCE:
-                self._attr_color_mode = ColorMode.BRIGHTNESS
+                self.color_mode = ColorMode.BRIGHTNESS
 
-        self._attr_effect = None
+        self.effect = None
         if mc.KEY_EFFECT in payload:
             # here effect might be an int while our map keys might be 'str formatted'
             # so we'll use a flexible (robust? dumb?) approach here in mapping
             effect = payload[mc.KEY_EFFECT]
             if effect in self._light_effect_map:
-                self._attr_effect = self._light_effect_map.get(effect)
+                self.effect = self._light_effect_map.get(effect)
             elif isinstance(effect, int):
                 for key, value in self._light_effect_map.items():
                     if isinstance(key, str) and key.isdigit():
                         if int(key) == effect:
-                            self._attr_effect = value
+                            self.effect = value
                             break
                 else:
                     # we didnt find the effect even with effectId int casting
                     # so we hope it's positional....
                     effects = self._light_effect_map.values()
                     if effect < len(effects):
-                        self._attr_effect = effects[effect]  # type: ignore
+                        self.effect = effects[effect]  # type: ignore
 
 
 class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
@@ -371,12 +393,14 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
 
     PLATFORM = light.DOMAIN
 
-    _attr_entity_category = me.EntityCategory.CONFIG
-    _attr_supported_color_modes = {ColorMode.ONOFF}
+    color_mode: ColorMode = ColorMode.ONOFF
+    entity_category = me.EntityCategory.CONFIG
+    supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
 
     def __init__(self, manager: MerossDevice):
         super().__init__(manager, None, DND_ID, mc.KEY_DNDMODE)
 
+    """REMOVE(attr)
     @property
     def supported_color_modes(self):
         return self._attr_supported_color_modes
@@ -384,6 +408,7 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
     @property
     def color_mode(self):
         return ColorMode.ONOFF
+    """
 
     async def async_turn_on(self, **kwargs):
         if await self.manager.async_request_ack(

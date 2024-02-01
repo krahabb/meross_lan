@@ -191,7 +191,7 @@ class ConsumptionXSensor(MLSensor):
     _attr_state: int | None
 
     def __init__(self, manager: ConsumptionXMixin):
-        self._attr_extra_state_attributes = {}
+        self.extra_state_attributes = {}
         super().__init__(
             manager, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY
         )
@@ -207,7 +207,7 @@ class ConsumptionXSensor(MLSensor):
         # device reading data). If an entity is disabled on startup of course our state
         # will start resetted and our sums will restart (disabled means not interesting
         # anyway)
-        if (self._attr_state is not None) or self._attr_extra_state_attributes:
+        if (self._attr_state is not None) or self.extra_state_attributes:
             return
 
         with self.exception_warning("restoring previous state"):
@@ -230,7 +230,7 @@ class ConsumptionXSensor(MLSensor):
             for _attr_name in (self.ATTR_OFFSET, self.ATTR_RESET_TS):
                 if _attr_name in state.attributes:
                     _attr_value = state.attributes[_attr_name]
-                    self._attr_extra_state_attributes[_attr_name] = _attr_value
+                    self.extra_state_attributes[_attr_name] = _attr_value
                     # we also set the value as an instance attr for faster access
                     setattr(self, _attr_name, _attr_value)
             # HA adds decimals when the display precision is set for the entity
@@ -244,7 +244,7 @@ class ConsumptionXSensor(MLSensor):
     def reset_consumption(self):
         if self._attr_state != 0:
             self._attr_state = 0
-            self._attr_extra_state_attributes = {}
+            self.extra_state_attributes = {}
             self.offset = 0
             self.reset_ts = 0
             self.flush_state()
@@ -382,7 +382,7 @@ class ConsumptionXMixin(
             # first off we consider the device readings good
             _sensor_consumption.reset_ts = day_yesterday_time
             _sensor_consumption.offset = 0
-            _sensor_consumption._attr_extra_state_attributes = {
+            _sensor_consumption.extra_state_attributes = {
                 _sensor_consumption.ATTR_RESET_TS: day_yesterday_time
             }
             if (self._consumption_last_time is not None) and (
@@ -401,7 +401,7 @@ class ConsumptionXMixin(
                 # midnight on this sensor
                 energy_estimate = int(self._consumption_estimate) + 1
                 if day_last_value > energy_estimate:
-                    _sensor_consumption._attr_extra_state_attributes[
+                    _sensor_consumption.extra_state_attributes[
                         _sensor_consumption.ATTR_OFFSET
                     ] = _sensor_consumption.offset = (day_last_value - energy_estimate)
             self.log(
@@ -434,7 +434,7 @@ class ConsumptionXMixin(
 
 
 class OverTempEnableSwitch(MLSwitch):
-    _attr_entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = MLSwitch.EntityCategory.CONFIG
 
     def __init__(self, manager: OverTempMixin):
         super().__init__(

@@ -18,7 +18,7 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
     PLATFORM = update.DOMAIN
     DeviceClass = update.UpdateDeviceClass
 
-    _attr_entity_category = me.EntityCategory.DIAGNOSTIC
+    entity_category = me.EntityCategory.DIAGNOSTIC
 
     def __init__(self, manager: MerossDevice):
         super().__init__(manager, None, "update_firmware", self.DeviceClass.FIRMWARE)

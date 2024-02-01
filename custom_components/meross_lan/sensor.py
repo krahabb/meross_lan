@@ -102,7 +102,7 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
 
 
 class MLDiagnosticSensor(MLSensor):
-    _attr_entity_category = MLSensor.EntityCategory.DIAGNOSTIC
+    entity_category = MLSensor.EntityCategory.DIAGNOSTIC
 
     @property
     def is_diagnostic(self):
@@ -120,9 +120,10 @@ class ProtocolSensor(MLSensor):
 
     manager: MerossDevice
 
-    _attr_entity_category = me.EntityCategory.DIAGNOSTIC
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.DIAGNOSTIC
     _attr_state: str
-    _attr_options = [STATE_DISCONNECTED, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP]
+    options: list[str] = [STATE_DISCONNECTED, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP]
 
     @staticmethod
     def _get_attr_state(value):
@@ -132,7 +133,7 @@ class ProtocolSensor(MLSensor):
         self,
         manager: MerossDevice,
     ):
-        self._attr_extra_state_attributes = {}
+        self.extra_state_attributes = {}
         super().__init__(
             manager,
             None,
@@ -149,37 +150,35 @@ class ProtocolSensor(MLSensor):
     def entity_registry_enabled_default(self):
         return False
 
+    """REMOVE
     @property
     def options(self) -> list[str] | None:
         return self._attr_options
+    """
 
     def set_unavailable(self):
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED
         if self.manager._mqtt_connection:
-            self._attr_extra_state_attributes = {
+            self.extra_state_attributes = {
                 self.ATTR_MQTT_BROKER: self._get_attr_state(
                     self.manager._mqtt_connected
                 )
             }
         else:
-            self._attr_extra_state_attributes = {}
+            self.extra_state_attributes = {}
         self.flush_state()
 
     def update_connected(self):
         manager = self.manager
         self._attr_state = manager.curr_protocol
+        attrs = self.extra_state_attributes
+        _get_attr_state = self._get_attr_state
         if manager.conf_protocol is not manager.curr_protocol:
             # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
             # if conf_protocol is fixed we'll not set these attrs (redundant)
-            self._attr_extra_state_attributes[self.ATTR_HTTP] = self._get_attr_state(
-                manager._http_active
-            )
-            self._attr_extra_state_attributes[self.ATTR_MQTT] = self._get_attr_state(
-                manager._mqtt_active
-            )
-            self._attr_extra_state_attributes[
-                self.ATTR_MQTT_BROKER
-            ] = self._get_attr_state(manager._mqtt_connected)
+            attrs[self.ATTR_HTTP] = _get_attr_state(manager._http_active)
+            attrs[self.ATTR_MQTT] = _get_attr_state(manager._mqtt_active)
+            attrs[self.ATTR_MQTT_BROKER] = _get_attr_state(manager._mqtt_connected)
         self.flush_state()
 
     # these smart updates are meant to only flush attrs
@@ -190,27 +189,29 @@ class ProtocolSensor(MLSensor):
     # and call them 'after' any eventual disconnection for the same reason
 
     def update_attr(self, attrname: str, attr_state):
-        if attrname in self._attr_extra_state_attributes:
-            self._attr_extra_state_attributes[attrname] = self._get_attr_state(
-                attr_state
-            )
+        attrs = self.extra_state_attributes
+        if attrname in attrs:
+            attrs[attrname] = self._get_attr_state(attr_state)
             self.flush_state()
 
     def update_attr_active(self, attrname: str):
-        if attrname in self._attr_extra_state_attributes:
-            self._attr_extra_state_attributes[attrname] = self.STATE_ACTIVE
+        attrs = self.extra_state_attributes
+        if attrname in attrs:
+            attrs[attrname] = self.STATE_ACTIVE
             self.flush_state()
 
     def update_attr_inactive(self, attrname: str):
-        if attrname in self._attr_extra_state_attributes:
-            self._attr_extra_state_attributes[attrname] = self.STATE_INACTIVE
+        attrs = self.extra_state_attributes
+        if attrname in attrs:
+            attrs[attrname] = self.STATE_INACTIVE
             self.flush_state()
 
     def update_attrs_inactive(self, *attrnames):
         flush = False
+        attrs = self.extra_state_attributes
         for attrname in attrnames:
-            if self._attr_extra_state_attributes.get(attrname) is self.STATE_ACTIVE:
-                self._attr_extra_state_attributes[attrname] = self.STATE_INACTIVE
+            if attrs.get(attrname) is self.STATE_ACTIVE:
+                attrs[attrname] = self.STATE_INACTIVE
                 flush = True
         if flush:
             self.flush_state()

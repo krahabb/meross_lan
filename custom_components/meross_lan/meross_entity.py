@@ -20,6 +20,7 @@ from .helpers.manager import ApiProfile
 from .merossclient import NAMESPACE_TO_KEY, const as mc
 
 if typing.TYPE_CHECKING:
+    from typing import ClassVar, Final
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -57,15 +58,21 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     EntityCategory = EntityCategory
 
-    _attr_device_class: object | str | None
-    _attr_entity_category: EntityCategory | str | None = None
-    # provides a class empty default since the state writing api
-    # would create an empty anyway....
-    _attr_extra_state_attributes: dict[str, object] = {}
+    # HA core entity attributes:
+    # These are constants throughout our model
+    force_update: Final[bool] = False
+    has_entity_name: Final[bool] = True
+    should_poll: Final[bool] = False
+    # These may be customized here and there per class or instance
+    assumed_state: bool = False
+    entity_category: EntityCategory | None = None
+    extra_state_attributes: dict[str, object] = {}
     _attr_name: str | None = None
+    translation_key: str | None = None
+    # These are actually per instance
+    device_class: Final[object | str | None]
     _attr_state: StateType
-    _attr_translation_key: str | None = None
-    _attr_unique_id: str
+    unique_id: str
 
     # used to speed-up checks if entity is enabled and loaded
     _hass_connected: bool
@@ -75,9 +82,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         "channel",
         "entitykey",
         "namespace_handlers",
-        "_attr_device_class",
+        "device_class",
         "_attr_state",
-        "_attr_unique_id",
+        "unique_id",
         "_hass_connected",
     )
 
@@ -117,7 +124,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.channel = channel
         self.entitykey = entitykey
         self.namespace_handlers: set[NamespaceHandler] = set()
-        self._attr_device_class = device_class
+        self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
         attr_name = self._attr_name
         if attr_name is None and (entitykey or device_class):
@@ -133,47 +140,60 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self._hass_connected = False
         # by default all of our entities have unique_id so they're registered
         # there could be some exceptions though (MLUpdate)
-        self._attr_unique_id = manager.generate_unique_id(self)
+        self.unique_id = manager.generate_unique_id(self)
         manager.entities[id] = self
         async_add_devices = manager.platforms.setdefault(self.PLATFORM)
         if async_add_devices:
             async_add_devices([self])
 
     # interface: Entity
+    """REMOVE(attr)
     @property
     def assumed_state(self):
         return False
+    """
 
     @property
     def available(self):
+        # TODO: refactor available property to slotted attribute
+        # by also adding a set_available method
         return self._attr_state is not None
 
+    """REMOVE(attr)
     @property
     def device_class(self):
         return self._attr_device_class
+    """
 
     @property
     def device_info(self):
         return self.manager.deviceentry_id
 
+    """REMOVE(attr)
     @property
     def entity_category(self):
         return self._attr_entity_category
+    """
 
+    """REMOVE(attr)
     @property
     def extra_state_attributes(self):
         return self._attr_extra_state_attributes
-
+    """
+    """REMOVE(attr)
     @property
     def force_update(self):
         return False
-
+    """
+    """REMOVE(attr)
     @property
     def has_entity_name(self):
         return True
+    """
 
     @property
     def name(self):
+        # TODO: remove compatibility
         if CORE_HAS_ENTITY_NAME:
             # newer api...return just the 'local' name
             return self._attr_name
@@ -182,17 +202,21 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             return f"{self.manager.name} - {self._attr_name}"
         return self.manager.name
 
+    """REMOVE(attr)
     @property
     def should_poll(self):
         return False
-
+    """
+    """REMOVE(attr)
     @property
     def translation_key(self) -> str | None:
         return self._attr_translation_key
-
+    """
+    """REMOVE(attr)
     @property
     def unique_id(self):
         return self._attr_unique_id
+    """
 
     async def async_added_to_hass(self):
         self.log(self.VERBOSE, "Added to HomeAssistant")
@@ -253,6 +277,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     # even though these are toggle/binary_sensor properties
     # we provide a base-implement-all
+    # TODO: move these to the specialized MerossToggle and BianrySensor
     STATE_ON: typing.Final = hac.STATE_ON
     STATE_OFF: typing.Final = hac.STATE_OFF
 

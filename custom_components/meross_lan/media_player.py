@@ -33,8 +33,9 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
 
     manager: Mp3Mixin
 
+    # HA core entity attributes:
     _attr_state: media_player.MediaPlayerState | None
-    _attr_supported_features = (
+    supported_features: MediaPlayerEntityFeature = (
         MediaPlayerEntityFeature.VOLUME_MUTE
         | MediaPlayerEntityFeature.VOLUME_SET
         | MediaPlayerEntityFeature.VOLUME_STEP
