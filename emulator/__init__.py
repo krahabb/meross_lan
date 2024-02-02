@@ -50,7 +50,11 @@ from aiohttp import web
 # so I've changed a bit the import sequence in meross_lan
 # to have the homeassistant.core imported (initialized) before
 # homeassistant.helpers.storage
-from custom_components.meross_lan.merossclient import const as mc, json_dumps
+from custom_components.meross_lan.merossclient import (
+    const as mc,
+    json_dumps,
+    MerossMessage,
+)
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
 
@@ -197,8 +201,11 @@ def run(argv):
         def _mqttc_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
             if msg_uuid := mc.RE_PATTERN_TOPIC_UUID.match(msg.topic):
                 if emulator := emulators.get(msg_uuid.group(1)):
-                    if response := emulator.handle(msg.payload.decode("utf-8")):
-                        client.publish(emulator.topic_response, json_dumps(response))
+                    request = MerossMessage.decode(msg.payload.decode("utf-8"))
+                    if response := emulator.handle(request):
+                        client.publish(
+                            request[mc.KEY_HEADER][mc.KEY_FROM], json_dumps(response)
+                        )
 
         mqtt_client = mqtt.Client("MerossEmulator", protocol=mqtt.MQTTv311)
         mqtt_client.username_pw_set("emulator")

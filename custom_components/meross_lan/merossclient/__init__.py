@@ -433,8 +433,8 @@ def check_message_strict(message: MerossResponse | None):
 
 class MerossMessage(dict):
     """
-    Base abstract class for different source of messages that
-    need to be sent to the device.
+    Base (almost) abstract class for different source of messages that
+    need to be sent to the device (or received from).
     The actual implementation will setup the slots
     """
 
@@ -451,19 +451,30 @@ class MerossMessage(dict):
         "_json_str",
     )
 
+    def __init__(self, message: dict, json_str: str | None = None):
+        self._json_str = json_str
+        super().__init__(message)
+
     def json(self):
         if not self._json_str:
             self._json_str = _json_encoder.encode(self)
         return self._json_str
 
+    @staticmethod
+    def decode(json_str: str):
+        return MerossMessage(_json_decoder.decode(json_str), json_str)
+
 
 class MerossResponse(MerossMessage):
+    """Helper for messages received from a device"""
+
     def __init__(self, json_str: str):
-        self._json_str = json_str
-        super().__init__(_json_decoder.decode(json_str))
+        super().__init__(_json_decoder.decode(json_str), json_str)
 
 
 class MerossRequest(MerossMessage):
+    """Helper for messages to be sent"""
+
     def __init__(
         self,
         key: str,
@@ -472,7 +483,6 @@ class MerossRequest(MerossMessage):
         payload: MerossPayloadType | None = None,
         from_: str = mc.MANUFACTURER,
     ):
-        self._json_str = None
         self.namespace = namespace
         self.method = method
         self.messageid = uuid4().hex
@@ -505,7 +515,6 @@ class MerossPushReply(MerossMessage):
     """
 
     def __init__(self, header: MerossHeaderType, payload: MerossPayloadType):
-        self._json_str = None
         self.namespace = header[mc.KEY_NAMESPACE]
         self.method = header[mc.KEY_METHOD]
         self.messageid = header[mc.KEY_MESSAGEID]
@@ -529,7 +538,6 @@ class MerossAckReply(MerossMessage):
     def __init__(
         self, key: str, header: MerossHeaderType, payload: MerossPayloadType, from_: str
     ):
-        self._json_str = None
         self.namespace = header[mc.KEY_NAMESPACE]
         self.method = mc.METHOD_ACK_MAP[header[mc.KEY_METHOD]]
         self.messageid = header[mc.KEY_MESSAGEID]

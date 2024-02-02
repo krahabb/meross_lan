@@ -9,6 +9,7 @@ from custom_components.meross_lan.merossclient import (
     NAMESPACE_TO_KEY,
     MerossDeviceDescriptor,
     MerossHeaderType,
+    MerossMessage,
     MerossMessageType,
     MerossPayloadType,
     build_message,
@@ -149,7 +150,7 @@ class MerossEmulator:
         """
         self.descriptor.time[mc.KEY_TIMESTAMP] = self.epoch = int(time())
 
-    def handle(self, s_request: str) -> MerossMessageType | None:
+    def handle(self, request: MerossMessage | str) -> MerossMessageType | None:
         """
         main message handler entry point: this is called either from web.Request
         for request routed from the web.Application or from the mqtt.Client.
@@ -157,7 +158,8 @@ class MerossEmulator:
         scenario like for testing (where the web/mqtt environments are likely mocked)
         This method is thread-safe
         """
-        request: MerossMessageType = json_loads(s_request)
+        if isinstance(request, str):
+            request = MerossMessage.decode(request)
         request_header = request[mc.KEY_HEADER]
         request_payload = request[mc.KEY_PAYLOAD]
         print(
