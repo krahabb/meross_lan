@@ -1,6 +1,7 @@
 """
     meross_lan module interface to access Meross Cloud services
 """
+
 from __future__ import annotations
 
 import abc
@@ -110,7 +111,12 @@ class ConnectionSensor(MLDiagnosticSensor):
     available: Final[bool] = True
     extra_state_attributes: AttrDictType
     _attr_state: str
-    options: list[str] = [STATE_DISCONNECTED, STATE_CONNECTED, STATE_QUEUING, STATE_DROPPING]
+    options: list[str] = [
+        STATE_DISCONNECTED,
+        STATE_CONNECTED,
+        STATE_QUEUING,
+        STATE_DROPPING,
+    ]
 
     __slots__ = ("connection",)
 
@@ -131,9 +137,11 @@ class ConnectionSensor(MLDiagnosticSensor):
             None,
             connection.id,
             MLDiagnosticSensor.DeviceClass.ENUM,
-            state=self.STATE_CONNECTED
-            if connection.mqtt_is_connected
-            else self.STATE_DISCONNECTED,
+            state=(
+                self.STATE_CONNECTED
+                if connection.mqtt_is_connected
+                else self.STATE_DISCONNECTED
+            ),
         )
         connection.sensor_connection = self
 
@@ -182,10 +190,9 @@ class ConnectionSensor(MLDiagnosticSensor):
         self.flush_state()
 
     def inc_queued(self, queue_length: int):
-        self.extra_state_attributes[ConnectionSensor.ATTR_QUEUED] += 1
-        self.extra_state_attributes[
-            ConnectionSensor.ATTR_QUEUE_LENGTH
-        ] = queue_length
+        attrs = self.extra_state_attributes
+        attrs[ConnectionSensor.ATTR_QUEUED] += 1
+        attrs[ConnectionSensor.ATTR_QUEUE_LENGTH] = queue_length
         self._attr_state = ConnectionSensor.STATE_QUEUING
         self.flush_state()
 
@@ -217,9 +224,9 @@ class _MQTTTransaction:
         self.messageid = request.messageid
         self.method = request.method
         self.request_time = time()
-        self.response_future: asyncio.Future[
-            MerossResponse
-        ] = asyncio.get_running_loop().create_future()
+        self.response_future: asyncio.Future[MerossResponse] = (
+            asyncio.get_running_loop().create_future()
+        )
         mqtt_connection._mqtt_transactions[request.messageid] = self
 
     def cancel(self):
@@ -517,11 +524,11 @@ class MQTTConnection(Loggable):
                     self.INFO,
                     "Ignoring MQTT discovery for already configured uuid:%s (ConfigEntry is %s)",
                     profile.loggable_device_id(device_id),
-                    "disabled"
-                    if config_entry.disabled_by
-                    else "ignored"
-                    if config_entry.source == "ignore"
-                    else "unknown",
+                    (
+                        "disabled"
+                        if config_entry.disabled_by
+                        else "ignored" if config_entry.source == "ignore" else "unknown"
+                    ),
                     timeout=14400,  # type: ignore
                 )
                 return
@@ -840,15 +847,10 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             # this is especially true for 'dropped' since
             # the client itself could drop packets at any time
             # from its (de)queue
-            sensor_connection.extra_state_attributes[
-                ConnectionSensor.ATTR_QUEUE_LENGTH
-            ] = queue_length
-            sensor_connection.extra_state_attributes[
-                ConnectionSensor.ATTR_DROPPED
-            ] = self.rl_dropped
-            sensor_connection.extra_state_attributes[
-                ConnectionSensor.ATTR_PUBLISHED
-            ] += 1
+            attrs = sensor_connection.extra_state_attributes
+            attrs[ConnectionSensor.ATTR_QUEUE_LENGTH] = queue_length
+            attrs[ConnectionSensor.ATTR_DROPPED] = self.rl_dropped
+            attrs[ConnectionSensor.ATTR_PUBLISHED] += 1
             if self.mqtt_is_connected and not queue_length:
                 # enforce the state eventually cancelling queued, dropped...
                 sensor_connection._attr_state = ConnectionSensor.STATE_CONNECTED
@@ -1260,9 +1262,9 @@ class MerossCloudProfile(ApiProfile):
             ) as credentials:
                 if not credentials:
                     return
-                self._data[
-                    self.KEY_LATEST_VERSION
-                ] = await self.apiclient.async_device_latestversion()
+                self._data[self.KEY_LATEST_VERSION] = (
+                    await self.apiclient.async_device_latestversion()
+                )
                 self._schedule_save_store()
                 for device in ApiProfile.active_devices():
                     if latest_version := self.get_latest_version(device.descriptor):
