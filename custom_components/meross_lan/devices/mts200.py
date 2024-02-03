@@ -5,8 +5,7 @@ import typing
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..merossclient import const as mc
-from ..number import MtsCalibrationNumber, MtsSetPointNumber
-from ..switch import MtsConfigSwitch
+from ..number import MtsSetPointNumber
 
 if typing.TYPE_CHECKING:
     from .thermostat import ThermostatMixin
@@ -64,25 +63,17 @@ class Mts200Climate(MtsClimate):
 
     manager: ThermostatMixin
 
-    __slots__ = (
-        "_mts_summermode",
-        "switch_sensor_mode",
-    )
+    __slots__ = ("_mts_summermode",)
 
     def __init__(self, manager: ThermostatMixin, channel: object):
         super().__init__(
             manager,
             channel,
-            MtsCalibrationNumber,
+            manager.AdjustNumberClass,
             Mts200SetPointNumber,
             Mts200Schedule,
         )
         self._mts_summermode = None
-        # sensor mode: use internal(0) vs external(1) sensor as temperature loopback
-        self.switch_sensor_mode = MtsConfigSwitch(
-            self, "external sensor mode", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
-        )
-        self.switch_sensor_mode.key_onoff = mc.KEY_MODE
         if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in manager.descriptor.ability:
             self.hvac_modes = [
                 MtsClimate.HVACMode.OFF,
@@ -91,10 +82,6 @@ class Mts200Climate(MtsClimate):
             ]
 
     # interface: MtsClimate
-    async def async_shutdown(self):
-        self.switch_sensor_mode: MtsConfigSwitch = None  # type: ignore
-        await super().async_shutdown()
-
     def flush_state(self):
         if self._mts_onoff:
             self.hvac_mode = self.MTS_SUMMERMODE_TO_HVAC_MODE.get(self._mts_summermode)
@@ -196,17 +183,6 @@ class Mts200Climate(MtsClimate):
             self.flush_state()
 
     # message handlers
-    def _parse_holdAction(self, payload: dict):
-        """{"channel": 0, "mode": 0, "expire": 1697010767}"""
-        # TODO: it looks like this message is related to #369.
-        # The trace shows the log about the missing handler in 4.5.2
-        # and it looks like when we receive this, it is a notification
-        # the mts is not really changing its setpoint (as per the issue).
-        # We need more info about how to process this. This handler however
-        # will be fully implemented in next major (5.x) since the new Mts200
-        # architecture is too different from current version one and
-        # it would be a mess to merge branches afterway
-
     def _parse(self, payload: dict):
         """{
             "channel": 0,
@@ -249,9 +225,16 @@ class Mts200Climate(MtsClimate):
             self.number_away_temperature.update_native_value(payload[mc.KEY_ECOTEMP])
         self.flush_state()
 
-    def _parse_sensor(self, payload: dict):
-        """{ "channel": 0, "mode": 0 }"""
-        self.switch_sensor_mode.update_onoff(payload[mc.KEY_MODE])
+    def _parse_holdAction(self, payload: dict):
+        """{"channel": 0, "mode": 0, "expire": 1697010767}"""
+        # TODO: it looks like this message is related to #369.
+        # The trace shows the log about the missing handler in 4.5.2
+        # and it looks like when we receive this, it is a notification
+        # the mts is not really changing its setpoint (as per the issue).
+        # We need more info about how to process this. This handler however
+        # will be fully implemented in next major (5.x) since the new Mts200
+        # architecture is too different from current version one and
+        # it would be a mess to merge branches afterway
 
     def _parse_summerMode(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""

@@ -4,9 +4,8 @@ import typing
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..helpers import reverse_lookup
 from ..merossclient import const as mc
-from ..number import MtsCalibrationNumber, MtsSetPointNumber
+from ..number import MtsSetPointNumber
 from ..sensor import MLDiagnosticSensor
 
 if typing.TYPE_CHECKING:
@@ -116,7 +115,7 @@ class Mts960Climate(MtsClimate):
         super().__init__(
             manager,
             channel,
-            MtsCalibrationNumber,
+            manager.AdjustNumberClass,
             Mts960FakeSetPointNumber,
             Mts960Schedule,
         )

@@ -3,16 +3,120 @@ from __future__ import annotations
 import typing
 
 from ..binary_sensor import MLBinarySensor
-from ..climate import MtsClimate
 from ..helpers.namespaces import PollingStrategy, SmartPollingStrategy
 from ..merossclient import KEY_TO_NAMESPACE, const as mc
-from ..number import MtsRichTemperatureNumber
+from ..number import MtsTemperatureNumber
 from ..sensor import MLSensor
+from ..switch import MtsConfigSwitch
 from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
 
 if typing.TYPE_CHECKING:
+    from typing import ClassVar, Final
+
     from ..meross_device import MerossDevice
+
+    MtsThermostatClimate = Mts200Climate | Mts960Climate
+
+
+class MtsRichTemperatureNumber(MtsTemperatureNumber):
+    """
+    Slightly enriched MtsTemperatureNumber to generalize  a lot of Thermostat namespaces
+    which usually carry a temperature value together with some added entities (typically a switch
+    to enable the feature and a 'warning sensor')
+    typical examples are :
+    "calibration": {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
+    "deadZone":
+    "frost": {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
+    "overheat": {"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,
+        "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
+    """
+
+    entitykey: str
+    key_value: Final = mc.KEY_VALUE
+
+    __slots__ = (
+        "sensor_warning",
+        "switch",
+        "native_max_value",
+        "native_min_value",
+        "native_step",
+    )
+
+    def __init__(self, climate: MtsThermostatClimate, entitykey: str):
+        super().__init__(climate, entitykey)
+        manager = self.manager
+        # preset entity platforms since these might be instantiated later
+        manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
+        manager.platforms.setdefault(MLSensor.PLATFORM)
+        self.sensor_warning = None
+        self.switch = None
+        manager.register_parser(
+            self.namespace,
+            self,
+            self._parse,
+        )
+
+    async def async_shutdown(self):
+        self.switch = None
+        self.sensor_warning = None
+        await super().async_shutdown()
+
+    def _parse(self, payload: dict):
+        """
+        {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
+        """
+        if mc.KEY_MIN in payload:
+            self.native_min_value = payload[mc.KEY_MIN] / self.device_scale
+        if mc.KEY_MAX in payload:
+            self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
+        self.update_native_value(payload[self.key_value])
+        if mc.KEY_ONOFF in payload:
+            # on demand instance
+            try:
+                self.switch.update_onoff(payload[mc.KEY_ONOFF])  # type: ignore
+            except AttributeError:
+                self.switch = MtsConfigSwitch(
+                    self.climate, f"{self.entitykey}_switch", self.namespace
+                )
+                self.switch.update_onoff(payload[mc.KEY_ONOFF])
+        if mc.KEY_WARNING in payload:
+            # on demand instance
+            try:
+                self.sensor_warning.update_state(payload[mc.KEY_WARNING])  # type: ignore
+            except AttributeError:
+                self.sensor_warning = sensor_warning = MLSensor(
+                    self.manager,
+                    self.channel,
+                    f"{self.entitykey}_warning",
+                    MLSensor.DeviceClass.ENUM,
+                    state=payload[mc.KEY_WARNING],
+                )
+                sensor_warning.translation_key = f"mts_{sensor_warning.entitykey}"
+
+
+class MtsCalibrationNumber(MtsRichTemperatureNumber):
+    """
+    Adjust temperature readings for mts200 and mts960.
+    Manages Appliance.Control.Thermostat.Calibration:
+    {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
+    """
+
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
+    key_namespace = mc.KEY_CALIBRATION
+
+    def __init__(self, climate: MtsThermostatClimate):
+        self.name = "Calibration"
+        self.native_max_value = 8
+        self.native_min_value = -8
+        self.native_step = 0.1
+        super().__init__(climate, mc.KEY_CALIBRATION)
+
+    """REMOVE(attr)
+    @property
+    def native_step(self):
+        return 0.1
+    """
 
 
 class MtsDeadZoneNumber(MtsRichTemperatureNumber):
@@ -25,9 +129,8 @@ class MtsDeadZoneNumber(MtsRichTemperatureNumber):
 
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE
     key_namespace = mc.KEY_DEADZONE
-    key_value = mc.KEY_VALUE
 
-    def __init__(self, climate: MtsClimate):
+    def __init__(self, climate: MtsThermostatClimate):
         self.native_max_value = 3.5
         self.native_min_value = 0.5
         self.native_step = 0.1
@@ -48,9 +151,8 @@ class MtsFrostNumber(MtsRichTemperatureNumber):
 
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST
     key_namespace = mc.KEY_FROST
-    key_value = mc.KEY_VALUE
 
-    def __init__(self, climate: MtsClimate):
+    def __init__(self, climate: MtsThermostatClimate):
         self.native_max_value = 15
         self.native_min_value = 5
         self.native_step = climate.target_temperature_step
@@ -73,11 +175,10 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
 
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
     key_namespace = mc.KEY_OVERHEAT
-    key_value = mc.KEY_VALUE
 
     __slots__ = ("sensor_external_temperature",)
 
-    def __init__(self, climate: MtsClimate):
+    def __init__(self, climate: MtsThermostatClimate):
         self.name = "Overheat threshold"
         self.native_max_value = 70
         self.native_min_value = 20
@@ -113,16 +214,14 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
 class MtsWindowOpened(MLBinarySensor):
     """specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe)."""
 
-    manager: ThermostatMixin
-
-    def __init__(self, climate: MtsClimate):
+    def __init__(self, climate: MtsThermostatClimate):
         super().__init__(
             climate.manager,
             climate.channel,
             mc.KEY_WINDOWOPENED,
             MLBinarySensor.DeviceClass.WINDOW,
         )
-        self.manager.register_parser(
+        climate.manager.register_parser(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED,
             self,
             self._parse_windowOpened,
@@ -131,6 +230,22 @@ class MtsWindowOpened(MLBinarySensor):
     def _parse_windowOpened(self, payload: dict):
         """{ "channel": 0, "status": 0, "detect": 1, "lmTime": 1642425303 }"""
         self.update_onoff(payload[mc.KEY_STATUS])
+
+
+class MtsExternalSensorSwitch(MtsConfigSwitch):
+    """sensor mode: use internal(0) vs external(1) sensor as temperature loopback."""
+
+    key_onoff = mc.KEY_MODE
+
+    def __init__(self, climate: MtsThermostatClimate):
+        super().__init__(
+            climate, "external sensor mode", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
+        )
+        climate.manager.register_parser(
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED,
+            self,
+            self._parse_toggle,
+        )
 
 
 class ThermostatMixin(
@@ -146,7 +261,9 @@ class ThermostatMixin(
     breaking the mts200
     """
 
-    CLIMATE_INITIALIZERS: dict[str, type[Mts200Climate | Mts960Climate]] = {
+    AdjustNumberClass = MtsCalibrationNumber
+
+    CLIMATE_INITIALIZERS: ClassVar[dict[str, type[MtsThermostatClimate]]] = {
         mc.KEY_MODE: Mts200Climate,
         mc.KEY_MODEB: Mts960Climate,
     }
@@ -154,17 +271,17 @@ class ThermostatMixin(
 
     OPTIONAL_NAMESPACES_INITIALIZERS = {
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
     }
     """These namespaces handlers will forward message parsing to the climate entity"""
 
     OPTIONAL_ENTITIES_INITIALIZERS: dict[
-        str, typing.Callable[[MtsClimate], typing.Any]
+        str, typing.Callable[[MtsThermostatClimate], typing.Any]
     ] = {
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: MtsDeadZoneNumber,
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: MtsFrostNumber,
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: MtsOverheatNumber,
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: MtsExternalSensorSwitch,
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED: MtsWindowOpened,
     }
     """Additional entities (linked to the climate one) in case their ns is supported/available"""
