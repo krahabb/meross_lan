@@ -43,6 +43,10 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PRESET_AWAY: Final = "away"
     PRESET_AUTO: Final = "auto"
 
+    namespace: ClassVar[str]
+    key_namespace: ClassVar[str]
+    device_scale: ClassVar[float] = mc.MTS_TEMP_SCALE
+
     MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
     """maps device 'mode' value to the HA climate.preset_mode"""
     PRESET_TO_TEMPERATUREKEY_MAP: ClassVar[dict[str, str]]
@@ -62,28 +66,38 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     schedule: Final[MtsSchedule]
     select_tracked_sensor: Final[MtsTrackedSensor]
 
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT]
-    _attr_preset_modes = [
+    # HA core entity attributes:
+    current_temperature: float | None
+    hvac_action: HVACAction | None
+    hvac_mode: HVACMode | None
+    hvac_modes: list[HVACMode] = [HVACMode.OFF, HVACMode.HEAT]
+    max_temp: float
+    min_temp: float
+    preset_mode: str | None
+    preset_modes: list[str] = [
         PRESET_CUSTOM,
         PRESET_COMFORT,
         PRESET_SLEEP,
         PRESET_AWAY,
         PRESET_AUTO,
     ]
-    # HA core entity attributes:
     supported_features: climate.ClimateEntityFeature = (
         climate.ClimateEntityFeature.PRESET_MODE
         | climate.ClimateEntityFeature.TARGET_TEMPERATURE
     )
+    target_temperature: float | None
+    target_temperature_step: float = 0.5
+    temperature_unit: str = TEMP_CELSIUS
+    translation_key = "mts_climate"
 
     __slots__ = (
-        "_attr_current_temperature",
-        "_attr_hvac_action",
-        "_attr_hvac_mode",
-        "_attr_max_temp",
-        "_attr_min_temp",
-        "_attr_preset_mode",
-        "_attr_target_temperature",
+        "current_temperature",
+        "hvac_action",
+        "hvac_mode",
+        "max_temp",
+        "min_temp",
+        "preset_mode",
+        "target_temperature",
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
@@ -105,13 +119,13 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         preset_number_class: typing.Type[MtsSetPointNumber],
         calendar_class: typing.Type[MtsSchedule],
     ):
-        self._attr_current_temperature = None
-        self._attr_hvac_action = None
-        self._attr_hvac_mode = None
-        self._attr_max_temp = 35
-        self._attr_min_temp = 5
-        self._attr_preset_mode = None
-        self._attr_target_temperature = None
+        self.current_temperature = None
+        self.hvac_action = None
+        self.hvac_mode = None
+        self.max_temp = 35
+        self.min_temp = 5
+        self.preset_mode = None
+        self.target_temperature = None
         self._mts_active = None
         self._mts_mode: int | None = None
         self._mts_onoff: int | None = None
@@ -148,17 +162,18 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_mode = None
         self._mts_onoff = None
         self._mts_adjusted_temperature = {}
-        self._attr_preset_mode = None
-        self._attr_hvac_action = None
-        self._attr_hvac_mode = None
+        self.preset_mode = None
+        self.hvac_action = None
+        self.hvac_mode = None
         super().set_unavailable()
 
     def flush_state(self):
-        self._attr_preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
+        self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         super().flush_state()
         self.schedule.flush_state()
 
     # interface: ClimateEntity
+    """REMOVE(attr)
     @property
     def temperature_unit(self):
         return MtsClimate.TEMP_CELSIUS
@@ -202,10 +217,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     @property
     def preset_mode(self):
         return self._attr_preset_mode
-
-    @property
-    def translation_key(self):
-        return "mts_climate"
+    """
 
     async def async_turn_on(self):
         await self.async_request_onoff(1)
@@ -235,19 +247,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     def is_mts_scheduled(self):
         raise NotImplementedError()
-
-    @property
-    def namespace(self):
-        raise NotImplementedError()
-
-    @property
-    def key_namespace(self):
-        raise NotImplementedError()
-
-    @property
-    def device_scale(self):
-        """historically set at 10. Overriden in mts960 to 100"""
-        return mc.MTS_TEMP_SCALE
 
     def _parse(self, p_temperature: dict):
         """

@@ -24,6 +24,9 @@ class Mts200SetPointNumber(MtsSetPointNumber):
 class Mts200Climate(MtsClimate):
     """Climate entity for MTS200 devices"""
 
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
+    key_namespace = mc.KEY_MODE
+
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
         mc.MTS200_MODE_HEAT: MtsClimate.PRESET_COMFORT,
@@ -81,7 +84,7 @@ class Mts200Climate(MtsClimate):
         )
         self.switch_sensor_mode.key_onoff = mc.KEY_MODE
         if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in manager.descriptor.ability:
-            self._attr_hvac_modes = [
+            self.hvac_modes = [
                 MtsClimate.HVACMode.OFF,
                 MtsClimate.HVACMode.HEAT,
                 MtsClimate.HVACMode.COOL,
@@ -94,17 +97,15 @@ class Mts200Climate(MtsClimate):
 
     def flush_state(self):
         if self._mts_onoff:
-            self._attr_hvac_mode = self.MTS_SUMMERMODE_TO_HVAC_MODE.get(
-                self._mts_summermode
-            )
-            self._attr_hvac_action = (
+            self.hvac_mode = self.MTS_SUMMERMODE_TO_HVAC_MODE.get(self._mts_summermode)
+            self.hvac_action = (
                 self.MTS_SUMMERMODE_TO_HVAC_ACTION.get(self._mts_summermode)
                 if self._mts_active
                 else MtsClimate.HVACAction.IDLE
             )
         else:
-            self._attr_hvac_mode = MtsClimate.HVACMode.OFF
-            self._attr_hvac_action = MtsClimate.HVACAction.OFF
+            self.hvac_mode = MtsClimate.HVACMode.OFF
+            self.hvac_action = MtsClimate.HVACAction.OFF
 
         super().flush_state()
 
@@ -122,9 +123,7 @@ class Mts200Climate(MtsClimate):
         await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        key = self.PRESET_TO_TEMPERATUREKEY_MAP[
-            self._attr_preset_mode or self.PRESET_CUSTOM
-        ]
+        key = self.PRESET_TO_TEMPERATUREKEY_MAP[self.preset_mode or self.PRESET_CUSTOM]
         mode = mc.MTS200_MODE_CUSTOM if key is mc.KEY_MANUALTEMP else self._mts_mode
         if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
@@ -145,7 +144,7 @@ class Mts200Climate(MtsClimate):
                 self._parse(payload[mc.KEY_MODE][0])
             else:
                 # optimistic update
-                self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
+                self.target_temperature = kwargs[self.ATTR_TEMPERATURE]
                 self._mts_mode = mode
                 self._mts_onoff = 1
                 self.flush_state()
@@ -179,14 +178,6 @@ class Mts200Climate(MtsClimate):
 
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
-
-    @property
-    def namespace(self):
-        return mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
-
-    @property
-    def key_namespace(self):
-        mc.KEY_MODE
 
     # interface: self
     async def async_request_summermode(self, summermode: int):
@@ -240,18 +231,14 @@ class Mts200Climate(MtsClimate):
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE]
         if mc.KEY_CURRENTTEMP in payload:
-            self._attr_current_temperature = (
-                payload[mc.KEY_CURRENTTEMP] / self.device_scale
-            )
+            self.current_temperature = payload[mc.KEY_CURRENTTEMP] / self.device_scale
             self.select_tracked_sensor.check_tracking()
         if mc.KEY_TARGETTEMP in payload:
-            self._attr_target_temperature = (
-                payload[mc.KEY_TARGETTEMP] / self.device_scale
-            )
+            self.target_temperature = payload[mc.KEY_TARGETTEMP] / self.device_scale
         if mc.KEY_MIN in payload:
-            self._attr_min_temp = payload[mc.KEY_MIN] / self.device_scale
+            self.min_temp = payload[mc.KEY_MIN] / self.device_scale
         if mc.KEY_MAX in payload:
-            self._attr_max_temp = payload[mc.KEY_MAX] / self.device_scale
+            self.max_temp = payload[mc.KEY_MAX] / self.device_scale
         if mc.KEY_HEATTEMP in payload:
             self.number_comfort_temperature.update_native_value(
                 payload[mc.KEY_HEATTEMP]

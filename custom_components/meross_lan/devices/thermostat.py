@@ -28,13 +28,16 @@ class MtsDeadZoneNumber(MtsRichTemperatureNumber):
     key_value = mc.KEY_VALUE
 
     def __init__(self, climate: MtsClimate):
-        self._attr_native_max_value = 3.5
-        self._attr_native_min_value = 0.5
+        self.native_max_value = 3.5
+        self.native_min_value = 0.5
+        self.native_step = 0.1
         super().__init__(climate, self.key_namespace)
 
+    """REMOVE(attr)
     @property
     def native_step(self):
         return 0.1
+    """
 
 
 class MtsFrostNumber(MtsRichTemperatureNumber):
@@ -48,13 +51,16 @@ class MtsFrostNumber(MtsRichTemperatureNumber):
     key_value = mc.KEY_VALUE
 
     def __init__(self, climate: MtsClimate):
-        self._attr_native_max_value = 15
-        self._attr_native_min_value = 5
+        self.native_max_value = 15
+        self.native_min_value = 5
+        self.native_step = climate.target_temperature_step
         super().__init__(climate, self.key_namespace)
 
+    """REMOVE(attr)
     @property
     def native_step(self):
         return self.climate.target_temperature_step
+    """
 
 
 class MtsOverheatNumber(MtsRichTemperatureNumber):
@@ -65,8 +71,6 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
     """
 
-    _attr_name = "Overheat threshold"
-
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
     key_namespace = mc.KEY_OVERHEAT
     key_value = mc.KEY_VALUE
@@ -74,8 +78,10 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
     __slots__ = ("sensor_external_temperature",)
 
     def __init__(self, climate: MtsClimate):
-        self._attr_native_max_value = 70
-        self._attr_native_min_value = 20
+        self.name = "Overheat threshold"
+        self.native_max_value = 70
+        self.native_min_value = 20
+        self.native_step = climate.target_temperature_step
         super().__init__(climate, self.key_namespace)
         self.sensor_external_temperature = MLSensor(
             self.manager,
@@ -88,9 +94,11 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
         self.sensor_external_temperature: MLSensor = None  # type: ignore
         return await super().async_shutdown()
 
+    """REMOVE(attr)
     @property
     def native_step(self):
         return 0.5
+    """
 
     def _parse(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,

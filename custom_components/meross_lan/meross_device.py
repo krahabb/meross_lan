@@ -462,11 +462,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self.sensor_signal_strength = sensor_signal_strength = MLSensor(
                 self, None, "signal_strength"
             )
-            sensor_signal_strength.entity_category = (
-                MLSensor.EntityCategory.DIAGNOSTIC
-            )
-            sensor_signal_strength._attr_native_unit_of_measurement = PERCENTAGE
-            sensor_signal_strength._attr_icon = "mdi:wifi"
+            sensor_signal_strength.entity_category = MLSensor.EntityCategory.DIAGNOSTIC
+            sensor_signal_strength.native_unit_of_measurement = PERCENTAGE
+            sensor_signal_strength.icon = "mdi:wifi"
             EntityPollingStrategy(
                 self, mc.NS_APPLIANCE_SYSTEM_RUNTIME, sensor_signal_strength
             )
@@ -1713,7 +1711,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if update_firmware := self.update_firmware:
                 # self.update_firmware is dynamically created only when the cloud api
                 # reports a newer fw
-                update_firmware._attr_installed_version = descr.firmwareVersion
+                update_firmware.installed_version = descr.firmwareVersion
                 update_firmware.flush_state()
             if (
                 self.conf_protocol is not CONF_PROTOCOL_MQTT
@@ -2028,9 +2026,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def update_latest_version(self, latest_version: LatestVersionType):
         if not (update_firmware := self.update_firmware):
             self.update_firmware = update_firmware = MLUpdate(self)
-        update_firmware._attr_installed_version = self.descriptor.firmwareVersion
-        update_firmware._attr_latest_version = latest_version.get(mc.KEY_VERSION)
-        update_firmware._attr_release_summary = latest_version.get(mc.KEY_DESCRIPTION)
+        update_firmware.installed_version = self.descriptor.firmwareVersion
+        update_firmware.latest_version = latest_version.get(mc.KEY_VERSION)
+        update_firmware.release_summary = latest_version.get(mc.KEY_DESCRIPTION)
         update_firmware.flush_state()
 
     async def async_get_diagnostics_trace(self) -> list:

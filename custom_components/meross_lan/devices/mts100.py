@@ -14,19 +14,27 @@ if typing.TYPE_CHECKING:
 
 
 class Mts100AdjustNumber(MtsTemperatureNumber):
-    _attr_name = "Adjust temperature"
 
     namespace = mc.NS_APPLIANCE_HUB_MTS100_ADJUST
     key_namespace = mc.KEY_ADJUST
     key_channel = mc.KEY_ID
     key_value = mc.KEY_TEMPERATURE
 
+    # HA core entity attributes:
+    native_max_value = 5
+    native_min_value = -5
+    native_step = 0.5
+
     def __init__(self, climate: Mts100Climate):
+        self.name = "Adjust temperature"
         super().__init__(
             climate,
             f"config_{self.key_namespace}_{self.key_value}",
         )
+        # override the default climate.device_scale set in base cls
+        self.device_scale = 100
 
+    """REMOVE(attr)
     @property
     def native_max_value(self):
         return 5
@@ -42,10 +50,14 @@ class Mts100AdjustNumber(MtsTemperatureNumber):
     @property
     def device_scale(self):
         return 100
+    """
 
 
 class Mts100Climate(MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
+
+    namespace = mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE
+    key_namespace = mc.KEY_TEMPERATURE
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS100_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
@@ -100,15 +112,15 @@ class Mts100Climate(MtsClimate):
 
     def flush_state(self):
         if self._mts_onoff:
-            self._attr_hvac_mode = MtsClimate.HVACMode.HEAT
-            self._attr_hvac_action = (
+            self.hvac_mode = MtsClimate.HVACMode.HEAT
+            self.hvac_action = (
                 MtsClimate.HVACAction.HEATING
                 if self._mts_active
                 else MtsClimate.HVACAction.IDLE
             )
         else:
-            self._attr_hvac_mode = MtsClimate.HVACMode.OFF
-            self._attr_hvac_action = MtsClimate.HVACAction.OFF
+            self.hvac_mode = MtsClimate.HVACMode.OFF
+            self.hvac_action = MtsClimate.HVACAction.OFF
         super().flush_state()
 
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
@@ -118,9 +130,7 @@ class Mts100Climate(MtsClimate):
         await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        key = self.PRESET_TO_TEMPERATUREKEY_MAP[
-            self._attr_preset_mode or self.PRESET_CUSTOM
-        ]
+        key = self.PRESET_TO_TEMPERATUREKEY_MAP[self.preset_mode or self.PRESET_CUSTOM]
         if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
@@ -171,22 +181,12 @@ class Mts100Climate(MtsClimate):
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
-    @property
-    def namespace(self):
-        return mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE
-
-    @property
-    def key_namespace(self):
-        mc.KEY_TEMPERATURE
-
     # message handlers
     def _parse(self, p_temperature: dict):
         if mc.KEY_ROOM in p_temperature:
-            self._attr_current_temperature = (
-                p_temperature[mc.KEY_ROOM] / self.device_scale
-            )
+            self.current_temperature = p_temperature[mc.KEY_ROOM] / self.device_scale
             self.select_tracked_sensor.check_tracking()
-            self.manager.sensor_temperature.update_state(self._attr_current_temperature)
+            self.manager.sensor_temperature.update_state(self.current_temperature)
 
         p_temperature_patch = {}
         _mts_adjusted_temperature = self._mts_adjusted_temperature
@@ -228,7 +228,7 @@ class Mts100Climate(MtsClimate):
             _mts_adjusted_temperature[key] = _t
 
             if key is mc.KEY_CURRENTSET:
-                self._attr_target_temperature = _t / self.device_scale
+                self.target_temperature = _t / self.device_scale
             elif key is mc.KEY_COMFORT:
                 self.number_comfort_temperature.update_native_value(_t)
             elif key is mc.KEY_ECONOMY:
@@ -254,9 +254,9 @@ class Mts100Climate(MtsClimate):
             )
 
         if mc.KEY_MIN in p_temperature:
-            self._attr_min_temp = p_temperature[mc.KEY_MIN] / self.device_scale
+            self.min_temp = p_temperature[mc.KEY_MIN] / self.device_scale
         if mc.KEY_MAX in p_temperature:
-            self._attr_max_temp = p_temperature[mc.KEY_MAX] / self.device_scale
+            self.max_temp = p_temperature[mc.KEY_MAX] / self.device_scale
         if mc.KEY_HEATING in p_temperature:
             self._mts_active = p_temperature[mc.KEY_HEATING]
         if mc.KEY_OPENWINDOW in p_temperature:

@@ -15,25 +15,35 @@ from ..sensor import MLSensor
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
+    from typing import Final
+
     from ..meross_device import MerossDevice, MerossDeviceDescriptor
 
 
 class EnergyEstimateSensor(MLSensor):
+
+    # HA core entity attributes:
+    available: Final[bool] = True
+    entity_registry_enabled_default = False
     _attr_state: int
 
     __slots__ = ("_attr_state_float",)
 
     def __init__(self, manager: ElectricityMixin):
         self._attr_state_float = 0.0
-        super().__init__(manager, None, "energy_estimate", self.DeviceClass.ENERGY, state=0)
+        super().__init__(
+            manager, None, "energy_estimate", self.DeviceClass.ENERGY, state=0
+        )
+
+    """REMOVE(attr)
+    @property
+    def available(self):
+        return True
 
     @property
     def entity_registry_enabled_default(self):
         return False
-
-    @property
-    def available(self):
-        return True
+    """
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

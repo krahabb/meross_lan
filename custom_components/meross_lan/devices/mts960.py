@@ -26,6 +26,10 @@ class Mts960FakeSetPointNumber(MtsSetPointNumber):
 class Mts960Climate(MtsClimate):
     """Climate entity for MTS960 devices"""
 
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB
+    key_namespace = mc.KEY_MODEB
+    device_scale = mc.MTS960_TEMP_SCALE
+
     # default choice to map when any 'non thermostat' mode swapping
     # needs an heating/cooling final choice
     MTS_MODE_DEFAULT = mc.MTS960_MODE_HEAT
@@ -53,13 +57,15 @@ class Mts960Climate(MtsClimate):
     HVAC_MODE_TO_MTS_MODE = {
         MtsClimate.HVACMode.HEAT: lambda mts_mode: mc.MTS960_MODE_HEAT,
         MtsClimate.HVACMode.COOL: lambda mts_mode: mc.MTS960_MODE_COOL,
-        MtsClimate.HVACMode.AUTO: lambda mts_mode: mc.MTS960_MODE_SCHEDULE_HEAT
-        if mts_mode == mc.MTS960_MODE_HEAT
-        else mc.MTS960_MODE_SCHEDULE_COOL
-        if mts_mode == mc.MTS960_MODE_COOL
-        else Mts960Climate.MTS_MODE_DEFAULT
-        if mts_mode is None
-        else mts_mode,
+        MtsClimate.HVACMode.AUTO: lambda mts_mode: (
+            mc.MTS960_MODE_SCHEDULE_HEAT
+            if mts_mode == mc.MTS960_MODE_HEAT
+            else (
+                mc.MTS960_MODE_SCHEDULE_COOL
+                if mts_mode == mc.MTS960_MODE_COOL
+                else Mts960Climate.MTS_MODE_DEFAULT if mts_mode is None else mts_mode
+            )
+        ),
     }
 
     MTS_MODE_TO_HVAC_ACTION: dict[int | None, MtsClimate.HVACAction] = {
@@ -95,13 +101,14 @@ class Mts960Climate(MtsClimate):
 
     manager: ThermostatMixin
 
-    _attr_hvac_modes = [
+    # HA core entity attributes:
+    hvac_modes = [
         MtsClimate.HVACMode.OFF,
         MtsClimate.HVACMode.HEAT,
         MtsClimate.HVACMode.COOL,
         MtsClimate.HVACMode.AUTO,
     ]
-    _attr_preset_modes = [value for value in MTS_MODE_TO_PRESET_MAP.values()]
+    preset_modes = [value for value in MTS_MODE_TO_PRESET_MAP.values()]
 
     __slots__ = ()
 
@@ -117,16 +124,14 @@ class Mts960Climate(MtsClimate):
     # interface: MtsClimate
     def flush_state(self):
         if self._mts_onoff:
-            self._attr_hvac_mode = self.MTS_MODE_TO_HVAC_MODE.get(self._mts_mode)
+            self.hvac_mode = self.MTS_MODE_TO_HVAC_MODE.get(self._mts_mode)
             if self._mts_active:
-                self._attr_hvac_action = self.MTS_MODE_TO_HVAC_ACTION.get(
-                    self._mts_mode
-                )
+                self.hvac_action = self.MTS_MODE_TO_HVAC_ACTION.get(self._mts_mode)
             else:
-                self._attr_hvac_action = MtsClimate.HVACAction.IDLE
+                self.hvac_action = MtsClimate.HVACAction.IDLE
         else:
-            self._attr_hvac_mode = MtsClimate.HVACMode.OFF
-            self._attr_hvac_action = MtsClimate.HVACAction.OFF
+            self.hvac_mode = MtsClimate.HVACMode.OFF
+            self.hvac_action = MtsClimate.HVACAction.OFF
         super().flush_state()
 
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
@@ -165,7 +170,7 @@ class Mts960Climate(MtsClimate):
                 self._parse(payload[mc.KEY_MODEB][0])
             else:
                 # optimistic update
-                self._attr_target_temperature = kwargs[self.ATTR_TEMPERATURE]
+                self.target_temperature = kwargs[self.ATTR_TEMPERATURE]
                 self._mts_mode = mode
                 self._mts_onoff = 1
                 self.flush_state()
@@ -203,19 +208,6 @@ class Mts960Climate(MtsClimate):
             in (mc.MTS960_MODE_SCHEDULE_HEAT, mc.MTS960_MODE_SCHEDULE_COOL)
         )
 
-    @property
-    def namespace(self):
-        return mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB
-
-    @property
-    def key_namespace(self):
-        mc.KEY_MODEB
-
-    @property
-    def device_scale(self):
-        """historically set at 10. Overriden in mts960 to 100"""
-        return mc.MTS960_TEMP_SCALE
-
     # message handlers
     def _parse(self, payload: dict):
         """
@@ -240,14 +232,10 @@ class Mts960Climate(MtsClimate):
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE] == mc.MTS960_STATE_ON
         if mc.KEY_CURRENTTEMP in payload:
-            self._attr_current_temperature = (
-                payload[mc.KEY_CURRENTTEMP] / self.device_scale
-            )
+            self.current_temperature = payload[mc.KEY_CURRENTTEMP] / self.device_scale
             self.select_tracked_sensor.check_tracking()
         if mc.KEY_TARGETTEMP in payload:
-            self._attr_target_temperature = (
-                payload[mc.KEY_TARGETTEMP] / self.device_scale
-            )
+            self.target_temperature = payload[mc.KEY_TARGETTEMP] / self.device_scale
 
         manager = self.manager
         if manager.create_diagnostic_entities:

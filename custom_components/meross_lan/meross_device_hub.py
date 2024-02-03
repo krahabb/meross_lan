@@ -46,6 +46,8 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
     key_namespace = mc.KEY_ADJUST
     key_channel = mc.KEY_ID
 
+    device_scale = 10
+
     def __init__(
         self,
         manager: MerossSubDevice,
@@ -56,13 +58,13 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
         step: float,
     ):
         self.key_value = key
-        self._attr_native_min_value = min_value
-        self._attr_native_max_value = max_value
-        self._attr_native_step = step
-        self._attr_native_unit_of_measurement = (
+        self.name = f"Adjust {device_class}"
+        self.native_min_value = min_value
+        self.native_max_value = max_value
+        self.native_step = step
+        self.native_unit_of_measurement = (
             MLConfigNumber.DEVICECLASS_TO_UNIT_MAP.get(device_class)
         )
-        self._attr_name = f"Adjust {device_class}"
         super().__init__(
             manager,
             manager.id,
@@ -70,9 +72,11 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
             device_class,
         )
 
+    """REMOVE(attr)
     @property
     def device_scale(self):
         return 10
+    """
 
     async def async_request(self, device_value):
         # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
@@ -793,7 +797,7 @@ class MTS100SubDevice(MerossSubDevice):
 
         self.climate = Mts100Climate(self)
         self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
-        self.sensor_temperature._attr_entity_registry_enabled_default = False
+        self.sensor_temperature.entity_registry_enabled_default = False
 
     async def async_shutdown(self):
         await super().async_shutdown()

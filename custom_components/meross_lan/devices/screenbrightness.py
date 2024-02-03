@@ -13,13 +13,19 @@ if typing.TYPE_CHECKING:
 class MLScreenBrightnessNumber(MLConfigNumber):
     manager: ScreenBrightnessMixin
 
-    _attr_icon = "mdi:brightness-percent"
+    # HA core entity attributes:
+    icon: str = "mdi:brightness-percent"
+    native_max_value = 100
+    native_min_value = 0
+    native_step = 12.5
+    native_unit_of_measurement = PERCENTAGE
 
     def __init__(self, manager: ScreenBrightnessMixin, channel: object, key: str):
         self.key_value = key
-        self._attr_name = f"Screen brightness ({key})"
+        self.name = f"Screen brightness ({key})"
         super().__init__(manager, channel, f"screenbrightness_{key}")
 
+    """REMOVE(attr)
     @property
     def native_max_value(self):
         return 100
@@ -35,6 +41,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     @property
     def native_unit_of_measurement(self):
         return PERCENTAGE
+    """
 
     async def async_set_native_value(self, value: float):
         brightness = {

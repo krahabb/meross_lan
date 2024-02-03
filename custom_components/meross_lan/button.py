@@ -24,6 +24,7 @@ class MLButton(me.MerossEntity, button.ButtonEntity):
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
 
+    # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
     _attr_state: None  # remember buttons don't have state!
 
@@ -69,6 +70,7 @@ class _MLUnbindButton(MLButton):
     This code is left for reference...buttons might prove to be useful in
     other contexts
     """
+
     manager: MerossDevice
 
     def __init__(

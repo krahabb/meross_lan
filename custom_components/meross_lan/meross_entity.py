@@ -7,6 +7,7 @@
  we also try to 'commonize' HA core symbols import in order to better manage
  versioning
 """
+
 from __future__ import annotations
 
 import typing
@@ -20,16 +21,14 @@ from .helpers.manager import ApiProfile
 from .merossclient import NAMESPACE_TO_KEY, const as mc
 
 if typing.TYPE_CHECKING:
-    from typing import ClassVar, Final
+    from typing import Final
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .helpers.manager import EntityManager
     from .helpers.namespaces import NamespaceHandler
     from .meross_device import MerossDeviceBase
-
-
-CORE_HAS_ENTITY_NAME = hasattr(Entity, "has_entity_name")
 
 
 class MerossFakeEntity:
@@ -66,11 +65,13 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     # These may be customized here and there per class or instance
     assumed_state: bool = False
     entity_category: EntityCategory | None = None
+    entity_registry_enabled_default: bool = True
     extra_state_attributes: dict[str, object] = {}
-    _attr_name: str | None = None
+    icon: str | None = None
     translation_key: str | None = None
     # These are actually per instance
     device_class: Final[object | str | None]
+    name: str | None
     _attr_state: StateType
     unique_id: str
 
@@ -83,6 +84,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         "entitykey",
         "namespace_handlers",
         "device_class",
+        "name",
         "_attr_state",
         "unique_id",
         "_hass_connected",
@@ -113,9 +115,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         id = (
             channel
             if entitykey is None
-            else entitykey
-            if channel is None
-            else f"{channel}_{entitykey}"
+            else entitykey if channel is None else f"{channel}_{entitykey}"
         )
         assert (
             manager.entities.get(id) is None
@@ -126,16 +126,19 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.namespace_handlers: set[NamespaceHandler] = set()
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
-        attr_name = self._attr_name
-        if attr_name is None and (entitykey or device_class):
-            attr_name = f"{entitykey or device_class}".capitalize()
+        if hasattr(self, "name"):
+            name = self.name
+        else:
+            name = entitykey or device_class
+            name = str(name).capitalize() if name else None
         # when channel == 0 it might be the only one so skip it
         # when channel is already in device name it also may be skipped
         if channel and (channel is not manager.id):
             # (channel is manager.id) means this is the 'main' entity of an hub subdevice
             # so we skip adding the subdevice.id to the entity name
-            attr_name = f"{attr_name} {channel}" if attr_name else str(channel)
-        self._attr_name = attr_name
+            self.name = f"{name} {channel}" if name else str(channel)
+        else:
+            self.name = name
         self._attr_state = state
         self._hass_connected = False
         # by default all of our entities have unique_id so they're registered
@@ -184,12 +187,10 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     @property
     def force_update(self):
         return False
-    """
-    """REMOVE(attr)
+
     @property
     def has_entity_name(self):
         return True
-    """
 
     @property
     def name(self):
@@ -202,7 +203,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             return f"{self.manager.name} - {self._attr_name}"
         return self.manager.name
 
-    """REMOVE(attr)
     @property
     def should_poll(self):
         return False

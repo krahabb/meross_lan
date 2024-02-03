@@ -18,16 +18,6 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
 
 
-try:
-    NUMBERMODE_AUTO = number.NumberMode.AUTO
-    NUMBERMODE_BOX = number.NumberMode.BOX
-    NUMBERMODE_SLIDER = number.NumberMode.SLIDER
-except Exception:
-    NUMBERMODE_AUTO = "auto"
-    NUMBERMODE_BOX = "box"
-    NUMBERMODE_SLIDER = "slider"
-
-
 async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
@@ -46,13 +36,6 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
 
     manager: MerossDevice
 
-    entity_category = me.EntityCategory.CONFIG
-    _attr_native_max_value: float
-    _attr_native_min_value: float
-    _attr_native_step: float
-    _attr_native_unit_of_measurement: str | None
-    _attr_state: int | float | None
-
     # customize the request payload for different
     # devices api. see 'async_set_native_value' to see how
     namespace: str
@@ -60,12 +43,22 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     key_channel: str = mc.KEY_CHANNEL
     key_value: str
 
+    device_scale: float = 1
+    """used to scale the device value when converting to/from native value"""
+    device_value: float | None
+    """the 'native' device value carried in protocol messages"""
+
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.CONFIG
+    mode: number.NumberMode = number.NumberMode.BOX
+    native_max_value: float
+    native_min_value: float
+    native_step: float
+    native_unit_of_measurement: str | None = None
+    _attr_state: int | float | None
+
     __slots__ = (
-        "_attr_native_max_value",
-        "_attr_native_min_value",
-        "_attr_native_step",
-        "_attr_native_unit_of_measurement",
-        "_device_value",
+        "device_value",
         "_unsub_request",
     )
 
@@ -76,6 +69,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         entitykey: str | None = None,
         device_class: DeviceClass | None = None,
     ):
+        self.device_value = None
         self._unsub_request = None
         super().__init__(manager, channel, entitykey, device_class)
 
@@ -84,13 +78,14 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         await super().async_shutdown()
 
     def set_unavailable(self):
+        self.device_value = None
         self._cancel_request()
         super().set_unavailable()
 
     # interface: number.NumberEntity
+    """REMOVE(attr)
     @property
     def mode(self) -> number.NumberMode:
-        """Return the mode of the entity."""
         return NUMBERMODE_BOX  # type: ignore
 
     @property
@@ -108,6 +103,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     @property
     def native_unit_of_measurement(self):
         return self._attr_native_unit_of_measurement
+    """
 
     @property
     def native_value(self):
@@ -128,18 +124,8 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         )
 
     # interface: self
-    @property
-    def device_scale(self):
-        """used to scale the device value when converting to/from native value"""
-        return 1
-
-    @property
-    def device_value(self):
-        """the 'native' device value carried in protocol messages"""
-        return self._device_value
-
     def update_native_value(self, device_value):
-        self._device_value = device_value
+        self.device_value = device_value
         self.update_state(device_value / self.device_scale)
 
     async def async_request(self, device_value):
@@ -160,8 +146,9 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
             self.update_native_value(device_value)
         else:
             # restore the last good known device value
-            if self.manager.online:
-                self.update_state(self._device_value / self.device_scale)
+            device_value = self.device_value
+            if device_value is not None:
+                self.update_state(device_value / self.device_scale)
 
     def _cancel_request(self):
         if self._unsub_request:
@@ -174,10 +161,14 @@ class MtsTemperatureNumber(MLConfigNumber):
     Common number entity for representing MTS temperatures configuration
     """
 
-    __slots__ = ("climate",)
+    __slots__ = (
+        "climate",
+        "device_scale",
+    )
 
     def __init__(self, climate: MtsClimate, entitykey: str):
         self.climate = climate
+        self.device_scale = climate.device_scale
         super().__init__(
             climate.manager,
             climate.channel,
@@ -187,11 +178,16 @@ class MtsTemperatureNumber(MLConfigNumber):
 
     @property
     def native_unit_of_measurement(self):
+        # the climate.temperature_unit is actually fixed to CELSIUS
+        # but I see a probable change in device features (change of device unit)
+        # so we're using a property here to be more future-proof
         return self.climate.temperature_unit
 
+    """REMOVE(attr)
     @property
     def device_scale(self):
         return self.climate.device_scale
+    """
 
 
 class MtsRichTemperatureNumber(MtsTemperatureNumber):
@@ -212,6 +208,9 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
     __slots__ = (
         "sensor_warning",
         "switch",
+        "native_max_value",
+        "native_min_value",
+        "native_step",
     )
 
     def __init__(self, climate: MtsClimate, entitykey: str):
@@ -242,9 +241,9 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
         """
         if mc.KEY_MIN in payload:
-            self._attr_native_min_value = payload[mc.KEY_MIN] / self.device_scale
+            self.native_min_value = payload[mc.KEY_MIN] / self.device_scale
         if mc.KEY_MAX in payload:
-            self._attr_native_max_value = payload[mc.KEY_MAX] / self.device_scale
+            self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
         self.update_native_value(payload[self.key_value])
         if mc.KEY_ONOFF in payload:
             # on demand instance
@@ -281,20 +280,22 @@ class MtsCalibrationNumber(MtsRichTemperatureNumber):
     {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
     """
 
-    _attr_name = "Calibration"
-
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
     key_namespace = mc.KEY_CALIBRATION
     key_value = mc.KEY_VALUE
 
     def __init__(self, climate: MtsClimate):
-        self._attr_native_max_value = 8
-        self._attr_native_min_value = -8
+        self.name = "Calibration"
+        self.native_max_value = 8
+        self.native_min_value = -8
+        self.native_step = 0.1
         super().__init__(climate, mc.KEY_CALIBRATION)
 
+    """REMOVE(attr)
     @property
     def native_step(self):
         return 0.1
+    """
 
 
 class MtsSetPointNumber(MtsTemperatureNumber):
@@ -303,11 +304,16 @@ class MtsSetPointNumber(MtsTemperatureNumber):
     AKA: Heat(comfort) - Cool(sleep) - Eco(away)
     """
 
+    # HA core entity attributes:
+    icon: str
+
+    __slots__ = ("icon",)
+
     def __init__(self, climate: MtsClimate, preset_mode: str):
         self._preset_mode = preset_mode
         self.key_value = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
-        self._attr_icon = climate.PRESET_TO_ICON_MAP[preset_mode]
-        self._attr_name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
+        self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
+        self.name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
         super().__init__(
             climate,
             f"config_{mc.KEY_TEMPERATURE}_{self.key_value}",
@@ -315,11 +321,11 @@ class MtsSetPointNumber(MtsTemperatureNumber):
 
     @property
     def native_max_value(self):
-        return self.climate._attr_max_temp
+        return self.climate.max_temp
 
     @property
     def native_min_value(self):
-        return self.climate._attr_min_temp
+        return self.climate.min_temp
 
     @property
     def native_step(self):

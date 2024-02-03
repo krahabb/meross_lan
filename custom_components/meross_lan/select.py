@@ -14,6 +14,8 @@ from .helpers import get_entity_last_state_available, schedule_callback
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
+    from typing import Final
+
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import Event, HomeAssistant, State
@@ -138,7 +140,6 @@ class SprayMixin(
 
 
 class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
-
     """
     A select entity used to select among all temperature sensors in HA
     an entity to track so that the thermostat regulates T against
@@ -154,7 +155,9 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     climate: MtsClimate
 
     # HA core entity attributes:
+    available: Final[bool] = True
     entity_category = me.EntityCategory.CONFIG
+    entity_registry_enabled_default = False
     options: list[str]
     _attr_state: str | None
 
@@ -185,13 +188,15 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         await super().async_shutdown()
         self.climate = None  # type: ignore
 
+    """REMOVE(attr)
     @property
     def available(self):
         return True
-
+        
     @property
     def entity_registry_enabled_default(self):
         return False
+    """
 
     def set_unavailable(self):
         # reset the timeout and the eventual callback when the device

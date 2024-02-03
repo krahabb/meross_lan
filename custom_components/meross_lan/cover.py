@@ -39,6 +39,8 @@ from .number import MLConfigNumber
 from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
+    from typing import Final
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -72,6 +74,9 @@ async def async_setup_entry(
 
 
 class MLGarageTimeoutBinarySensor(MLBinarySensor):
+
+    # HA core entity attributes:
+    available: Final[bool] = True
     entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, cover: MLGarage):
@@ -84,9 +89,11 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
             state=self.STATE_OFF,
         )
 
+    """REMOVE(attr)
     @property
     def available(self):
         return True
+    """
 
     def set_unavailable(self):
         pass
@@ -98,9 +105,7 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
 
     def update_timeout(self, target_state):
         self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TARGET] = target_state
-        self.extra_state_attributes[
-            EXTRA_ATTR_TRANSITION_TIMEOUT
-        ] = now().isoformat()
+        self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TIMEOUT] = now().isoformat()
         self.update_onoff(1)
 
 
@@ -124,7 +129,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
         namespace=mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
     ):
         self.key_onoff = key
-        self._attr_name = key
+        self.name = key
         super().__init__(
             manager,
             channel,
@@ -208,23 +213,28 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
     namespace = mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
     key_namespace = mc.KEY_CONFIG
 
+    device_scale = 1000
+    # HA core entity attributes:
+    # these are ok for open/close durations
+    # customize those when needed...
+    native_max_value = 60
+    native_min_value = 1
+    native_step = 1
+    native_unit_of_measurement = UnitOfTime.SECONDS
+
     def __init__(self, manager: GarageMixin, channel, key: str):
         self.key_value = key
-        self._attr_name = key
-        # these are ok for open/close durations
-        # customize those when needed...
-        self._attr_native_max_value = 60
-        self._attr_native_min_value = 1
-        self._attr_native_step = 1
+        self.name = key
         super().__init__(manager, channel, f"config_{key}")
 
+    """REMOVE(attr)
     @property
     def native_unit_of_measurement(self):
         return UnitOfTime.SECONDS
-
     @property
     def device_scale(self):
         return 1000
+    """
 
 
 class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
@@ -254,9 +264,14 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
     This entity will just provide an 'HA only' storage for these parameters
     """
 
+    # HA core entity attributes:
+    available: Final[bool] = True
+
+    """REMOVE(attr)
     @property
     def available(self):
         return True
+    """
 
     def set_unavailable(self):
         pass
@@ -362,9 +377,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                     # since this is no harm and unlikely to change
                     # better than defaulting to a pseudo-random value
                     self._transition_duration = _attr[EXTRA_ATTR_TRANSITION_DURATION]
-                    self.extra_state_attributes[
-                        EXTRA_ATTR_TRANSITION_DURATION
-                    ] = self._transition_duration
+                    self.extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = (
+                        self._transition_duration
+                    )
 
     async def async_will_remove_from_hass(self):
         self._transition_cancel()
@@ -594,9 +609,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
             PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
         )
-        self.extra_state_attributes[
-            EXTRA_ATTR_TRANSITION_DURATION
-        ] = self._transition_duration
+        self.extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = (
+            self._transition_duration
+        )
 
 
 class GarageMixin(
@@ -651,8 +666,8 @@ class GarageMixin(
                     mc.KEY_SIGNALDURATION,
                     payload,
                 )
-                self.number_signalDuration._attr_native_step = 0.1
-                self.number_signalDuration._attr_native_min_value = 0.1
+                self.number_signalDuration.native_step = 0.1
+                self.number_signalDuration.native_min_value = 0.1
 
         if mc.KEY_BUZZERENABLE in payload:
             try:
@@ -733,9 +748,12 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     manager: RollerShutterMixin
 
+    # HA core entity attributes:
     assumed_state = True
-    
+    current_cover_position: int | None
+
     __slots__ = (
+        "current_cover_position",
         "number_signalOpen",
         "number_signalClose",
         "_signalOpen",
@@ -749,7 +767,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
     )
 
     def __init__(self, manager: RollerShutterMixin, channel: object):
-        self._attr_current_cover_position: int | None = None
+        self.current_cover_position = None
         self.extra_state_attributes = {}
         super().__init__(manager, channel, None, CoverDeviceClass.SHUTTER)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
@@ -815,16 +833,16 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 _attr = last_state.attributes  # type: ignore
                 if EXTRA_ATTR_DURATION_OPEN in _attr:
                     self._signalOpen = _attr[EXTRA_ATTR_DURATION_OPEN]
-                    self.extra_state_attributes[
-                        EXTRA_ATTR_DURATION_OPEN
-                    ] = self._signalOpen
+                    self.extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = (
+                        self._signalOpen
+                    )
                 if EXTRA_ATTR_DURATION_CLOSE in _attr:
                     self._signalClose = _attr[EXTRA_ATTR_DURATION_CLOSE]
-                    self.extra_state_attributes[
-                        EXTRA_ATTR_DURATION_CLOSE
-                    ] = self._signalClose
+                    self.extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = (
+                        self._signalClose
+                    )
                 if ATTR_CURRENT_POSITION in _attr:
-                    self._attr_current_cover_position = _attr[ATTR_CURRENT_POSITION]
+                    self.current_cover_position = _attr[ATTR_CURRENT_POSITION]
 
     async def async_will_remove_from_hass(self):
         self._transition_cancel()
@@ -848,22 +866,16 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 # fully opened/closed (#170)
                 await self.async_request_position(position)
             else:
-                if position > self._attr_current_cover_position:
+                if position > self.current_cover_position:
                     await self.async_request_position(
                         POSITION_FULLY_OPENED,
-                        (
-                            (position - self._attr_current_cover_position)
-                            * self._signalOpen
-                        )
+                        ((position - self.current_cover_position) * self._signalOpen)
                         / 100000,
                     )
-                elif position < self._attr_current_cover_position:
+                elif position < self.current_cover_position:
                     await self.async_request_position(
                         POSITION_FULLY_CLOSED,
-                        (
-                            (self._attr_current_cover_position - position)
-                            * self._signalClose
-                        )
+                        ((self.current_cover_position - position) * self._signalClose)
                         / 100000,
                     )
 
@@ -913,8 +925,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             return
 
         if self._position_native_isgood:
-            if position != self._attr_current_cover_position:
-                self._attr_current_cover_position = position
+            if position != self.current_cover_position:
+                self.current_cover_position = position
                 self.flush_state()
             return
 
@@ -927,7 +939,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._position_native_isgood = True
             self._position_native = None
             self.extra_state_attributes.pop(EXTRA_ATTR_POSITION_NATIVE, None)
-            self._attr_current_cover_position = position
+            self.current_cover_position = position
         else:
             self._position_native = position
             self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
@@ -945,28 +957,28 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             else:  # state == mc.ROLLERSHUTTER_STATE_IDLE:
                 self._transition_cancel()
                 self.update_state(
-                    STATE_OPEN if self._attr_current_cover_position else STATE_CLOSED
+                    STATE_OPEN if self.current_cover_position else STATE_CLOSED
                 )
                 return
         else:
             if self._attr_state == STATE_OPENING:
-                self._attr_current_cover_position = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)  # type: ignore
-                if self._attr_current_cover_position > POSITION_FULLY_OPENED:
-                    self._attr_current_cover_position = POSITION_FULLY_OPENED
+                self.current_cover_position = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)  # type: ignore
+                if self.current_cover_position > POSITION_FULLY_OPENED:
+                    self.current_cover_position = POSITION_FULLY_OPENED
                 if state == mc.ROLLERSHUTTER_STATE_OPENING:
                     self.flush_state()
             elif self._attr_state == STATE_CLOSING:
-                self._attr_current_cover_position = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)  # type: ignore
-                if self._attr_current_cover_position < POSITION_FULLY_CLOSED:
-                    self._attr_current_cover_position = POSITION_FULLY_CLOSED
+                self.current_cover_position = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)  # type: ignore
+                if self.current_cover_position < POSITION_FULLY_CLOSED:
+                    self.current_cover_position = POSITION_FULLY_CLOSED
                 if state == mc.ROLLERSHUTTER_STATE_CLOSING:
                     self.flush_state()
 
             if state == mc.ROLLERSHUTTER_STATE_OPENING:
                 if self._attr_state != STATE_OPENING:
                     self._position_start = (
-                        self._attr_current_cover_position
-                        if self._attr_current_cover_position is not None
+                        self.current_cover_position
+                        if self.current_cover_position is not None
                         else POSITION_FULLY_CLOSED
                     )
                     self._position_starttime = epoch
@@ -974,8 +986,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             elif state == mc.ROLLERSHUTTER_STATE_CLOSING:
                 if self._attr_state != STATE_CLOSING:
                     self._position_start = (
-                        self._attr_current_cover_position
-                        if self._attr_current_cover_position is not None
+                        self.current_cover_position
+                        if self.current_cover_position is not None
                         else POSITION_FULLY_OPENED
                     )
                     self._position_starttime = epoch
@@ -1007,17 +1019,13 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 mc.KEY_SIGNALOPEN
             ]  # time to fully open cover in msec
             self.number_signalOpen.update_native_value(self._signalOpen)
-            self.extra_state_attributes[
-                EXTRA_ATTR_DURATION_OPEN
-            ] = self._signalOpen
+            self.extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
         if mc.KEY_SIGNALCLOSE in payload:
             self._signalClose = payload[
                 mc.KEY_SIGNALCLOSE
             ]  # time to fully close cover in msec
             self.number_signalClose.update_native_value(self._signalClose)
-            self.extra_state_attributes[
-                EXTRA_ATTR_DURATION_CLOSE
-            ] = self._signalClose
+            self.extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
 
     async def _async_transition_callback(self):
         self._transition_unsub = schedule_async_callback(
@@ -1054,24 +1062,32 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     Helper entity to configure MRS open/close duration
     """
 
+    device_scale = 1000
+
+    # HA core entity attributes:
+    # these are ok for open/close durations
+    # customize those when needed...
+    native_max_value = 60
+    native_min_value = 1
+    native_step = 1
+    native_unit_of_measurement = UnitOfTime.SECONDS
+
     __slots__ = ("_cover",)
 
     def __init__(self, cover: MLRollerShutter, key: str):
         self._cover = cover
         self.key_value = key
-        self._attr_name = key
-        self._attr_native_max_value = 60
-        self._attr_native_min_value = 1
-        self._attr_native_step = 1
+        self.name = key
         super().__init__(cover.manager, cover.channel, f"config_{key}")
 
+    """REMOVE(attr)
     @property
     def native_unit_of_measurement(self):
         return UnitOfTime.SECONDS
-
     @property
     def device_scale(self):
         return 1000
+    """
 
     async def async_request(self, device_value):
         config = {
@@ -1103,4 +1119,4 @@ class RollerShutterMixin(
             )
             PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, item_count=1)
             PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, item_count=1)
-            roller_shutter = MLRollerShutter(self, 0)
+            MLRollerShutter(self, 0)

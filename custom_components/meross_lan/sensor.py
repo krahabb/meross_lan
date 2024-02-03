@@ -17,6 +17,8 @@ from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT
 
 if typing.TYPE_CHECKING:
+    from typing import Final
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -55,12 +57,13 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         DeviceClass.BATTERY: PERCENTAGE,
     }
 
-    _attr_native_unit_of_measurement: str | None
-    _attr_state_class: StateClass | None
+    # HA core entity attributes:
+    native_unit_of_measurement: str | None
+    state_class: StateClass | None
 
     __slots__ = (
-        "_attr_native_unit_of_measurement",
-        "_attr_state_class",
+        "native_unit_of_measurement",
+        "state_class",
     )
 
     def __init__(
@@ -72,10 +75,8 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         *,
         state: me.StateType = None,
     ):
-        self._attr_native_unit_of_measurement = self.DEVICECLASS_TO_UNIT_MAP.get(
-            device_class
-        )
-        self._attr_state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
+        self.native_unit_of_measurement = self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+        self.state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
             device_class, MLSensor.StateClass.MEASUREMENT
         )
         super().__init__(manager, channel, entitykey, device_class, state=state)
@@ -88,17 +89,21 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
     def last_reset(self) -> datetime | None:
         return None
 
+    """REMOVE(attr)
     @property
     def native_unit_of_measurement(self):
         return self._attr_native_unit_of_measurement
+    """
 
     @property
     def native_value(self):
         return self._attr_state
 
+    """REMOVE(attr)
     @property
     def state_class(self):
         return self._attr_state_class
+    """
 
 
 class MLDiagnosticSensor(MLSensor):
@@ -121,7 +126,9 @@ class ProtocolSensor(MLSensor):
     manager: MerossDevice
 
     # HA core entity attributes:
+    available: Final[bool] = True
     entity_category = me.EntityCategory.DIAGNOSTIC
+    entity_registry_enabled_default = False
     _attr_state: str
     options: list[str] = [STATE_DISCONNECTED, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP]
 
@@ -142,6 +149,7 @@ class ProtocolSensor(MLSensor):
             state=ProtocolSensor.STATE_DISCONNECTED,
         )
 
+    """REMOVE(attr)
     @property
     def available(self):
         return True
@@ -150,7 +158,6 @@ class ProtocolSensor(MLSensor):
     def entity_registry_enabled_default(self):
         return False
 
-    """REMOVE
     @property
     def options(self) -> list[str] | None:
         return self._attr_options
