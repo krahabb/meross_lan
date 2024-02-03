@@ -286,6 +286,17 @@ class MerossEmulator:
 
         return mc.METHOD_SETACK, {}
 
+    def _SET_Appliance_Config_OverTemp(self, header, payload):
+        if mc.NS_APPLIANCE_CONFIG_OVERTEMP not in self.descriptor.namespaces:
+            raise Exception(
+                f"{mc.NS_APPLIANCE_CONFIG_OVERTEMP} not supported in namespaces"
+            )
+        config_overtemp = self.descriptor.namespaces[mc.NS_APPLIANCE_CONFIG_OVERTEMP]
+        config_overtemp[mc.KEY_OVERTEMP][mc.KEY_ENABLE] = payload[mc.KEY_OVERTEMP][
+            mc.KEY_ENABLE
+        ]
+        return mc.METHOD_SETACK, {}
+
     def _SETACK_Appliance_Control_Bind(self, header, payload):
         return None, None
 
