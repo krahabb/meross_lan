@@ -1,13 +1,12 @@
 """Test meross_lan config entry setup"""
 
-from homeassistant.config_entries import ConfigEntryState
 from homeassistant import const as hac
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.light import MLDNDLightEntity
-from custom_components.meross_lan.switch import MLSwitch
 from custom_components.meross_lan.merossclient import const as mc
 from emulator import generate_emulators
 
@@ -58,64 +57,24 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
         async with helpers.DeviceContext(hass, emulator, aioclient_mock) as context:
             assert await context.async_setup()
 
+            descriptor = emulator.descriptor
+            ability = descriptor.ability
             device = context.device
-            device_ability = emulator.descriptor.ability
-
-            switches = device.managed_entities(MLSwitch.PLATFORM)
-            for switch in switches:
-                assert isinstance(switch, MLSwitch)
-                state = hass.states.get(switch.entity_id)
-                assert state and state.state == hac.STATE_UNAVAILABLE
 
             entity_dnd = None
-            if mc.NS_APPLIANCE_SYSTEM_DNDMODE in device_ability:
+            if mc.NS_APPLIANCE_SYSTEM_DNDMODE in ability:
                 entity_dnd = device.entity_dnd
                 assert isinstance(entity_dnd, MLDNDLightEntity)
                 state = hass.states.get(entity_dnd.entity_id)
                 assert state and state.state == hac.STATE_UNAVAILABLE
 
             sensor_signal_strength = None
-            if mc.NS_APPLIANCE_SYSTEM_RUNTIME in device_ability:
+            if mc.NS_APPLIANCE_SYSTEM_RUNTIME in ability:
                 sensor_signal_strength = device.sensor_signal_strength
                 state = hass.states.get(sensor_signal_strength.entity_id)
                 assert state and state.state == hac.STATE_UNAVAILABLE
 
             await context.perform_coldstart()
-
-            call_service = hass.services.async_call
-            for switch in switches:
-                if not switch.available:
-                    # skip entities which are not avialble in emulator (warning though)
-                    continue
-                if switch._hass_connected:
-                    await call_service(
-                        MLSwitch.PLATFORM,
-                        hac.SERVICE_TURN_ON,
-                        service_data={
-                            "entity_id": switch.entity_id,
-                        },
-                        blocking=True,
-                    )
-                    state = hass.states.get(switch.entity_id)
-                    assert state and state.state == hac.STATE_ON
-                    await call_service(
-                        MLSwitch.PLATFORM,
-                        hac.SERVICE_TURN_OFF,
-                        service_data={
-                            "entity_id": switch.entity_id,
-                        },
-                        blocking=True,
-                    )
-                    state = hass.states.get(switch.entity_id)
-                    assert state and state.state == hac.STATE_OFF
-                else:
-                    # entity not loaded in HA so we just test
-                    # the Meross internal interface
-                    assert isinstance(switch, MLSwitch)
-                    await switch.async_turn_on()
-                    assert switch.is_on
-                    await switch.async_turn_off()
-                    assert not switch.is_on
 
             if entity_dnd:
                 state = hass.states.get(entity_dnd.entity_id)

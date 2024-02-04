@@ -288,10 +288,10 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
             assert await self.async_setup()
         return self
 
-    async def __aexit__(self, __exc_type, __exc_value, __traceback):
+    async def __aexit__(self, exc_type, exc_value, traceback):
         if self.config_entry.state.recoverable:
             assert await self.async_unload()
-        return await super().__aexit__(__exc_type, __exc_value, __traceback)
+        return await super().__aexit__(exc_type, exc_value, traceback)
 
 
 class MQTTHubEntryMocker(ConfigEntryMocker):
@@ -559,7 +559,7 @@ class DeviceContext(ConfigEntryMocker):
         self.exception_warning_mock = self._exception_warning_patcher.start()
         return await super().__aenter__()
 
-    async def __aexit__(self, exc_type, exc_value, traceback):
+    async def __aexit__(self, exc_type, exc_value: BaseException | None, traceback):
         try:
             return await super().__aexit__(exc_type, exc_value, traceback)
         finally:
@@ -567,6 +567,8 @@ class DeviceContext(ConfigEntryMocker):
             self.emulator_context.__exit__(exc_type, exc_value, traceback)
             if self._time_mock_owned:
                 self._time_mock.__exit__(exc_type, exc_value, traceback)
+            if exc_value:
+                exc_value.args = (*exc_value.args, self.emulator.uuid)
 
     async def perform_coldstart(self):
         """
