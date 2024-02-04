@@ -386,6 +386,18 @@ def get_element_by_key_safe(payload, key: str, value) -> dict | None:
         return None
 
 
+def extract_dict_payloads(payload):
+    """
+    Helper generator to manage payloads which might carry list of payloads:
+    payload = { "channel": 0, "onoff": 1}
+    or
+    payload = [{ "channel": 0, "onoff": 1}]
+    """
+    if isinstance(payload, list):
+        return (payload for payload in payload)
+    yield payload
+
+
 def get_productname(producttype: str) -> str:
     for _type, _name in mc.TYPE_NAME_MAP.items():
         if producttype.startswith(_type):
