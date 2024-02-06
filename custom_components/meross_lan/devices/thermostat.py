@@ -269,6 +269,14 @@ class ThermostatMixin(
     }
     """Core (climate) entities to initialize in _init_thermostat"""
 
+    DIGEST_KEY_TO_NAMESPACE: ClassVar[dict[str, str]] = {
+        mc.KEY_MODE: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
+        mc.KEY_MODEB: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
+        mc.KEY_SUMMERMODE: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+        mc.KEY_WINDOWOPENED: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED,
+    }
+    """Maps the digest key to the associated namespace handler (used in _parse_thermostat)"""
+
     OPTIONAL_NAMESPACES_INITIALIZERS = {
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION,
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
@@ -304,25 +312,7 @@ class ThermostatMixin(
     # interface: MerossDevice
     def _init_thermostat(self, digest: dict):
         ability = self.descriptor.ability
-        # we (might) have an issue here since the entities need to be initialized after
-        # the (eventual) namespace polling strategy has been set in order for
-        # those entities to correctly register the _parse callback.
-        # So we're initializing the polling without knowing the actual channel number
-        # Anyway, since we're passing in the ref to self._polling_payload it will
-        # correctly be updated while creating the entities for the channel. At the
-        # moment the only 'bug' could be the wrong item_count (and so the estimated
-        # response payload size used to actually determine how to pack requests)
-        # It shouldn't really be criticcal anyway since there are a lot of protections
-        channel_count = 1  # TODO: update item_count in polling strategy
         self._polling_payload = []
-        for ns, polling_strategy_class in self.POLLING_STRATEGY_INITIALIZERS.items():
-            if ns in ability:
-                polling_strategy_class(
-                    self,
-                    ns,
-                    payload=self._polling_payload,
-                    item_count=channel_count,
-                )
 
         for ns_key, ns_digest in digest.items():
             if climate_class := self.CLIMATE_INITIALIZERS.get(ns_key):
@@ -354,6 +344,15 @@ class ThermostatMixin(
 
                     self._polling_payload.append({mc.KEY_CHANNEL: channel})
 
+        for ns, polling_strategy_class in self.POLLING_STRATEGY_INITIALIZERS.items():
+            if ns in ability:
+                polling_strategy_class(
+                    self,
+                    ns,
+                    payload=self._polling_payload,
+                    item_count=len(self._polling_payload),
+                )
+
     def _parse_thermostat(self, digest: dict):
         """
         Parser for thermostat digest in NS_ALL
@@ -369,4 +368,6 @@ class ThermostatMixin(
         }
         """
         for ns_key, ns_digest in digest.items():
-            self.namespace_handlers[KEY_TO_NAMESPACE[ns_key]]._parse_list(ns_digest)
+            self.namespace_handlers[self.DIGEST_KEY_TO_NAMESPACE[ns_key]]._parse_list(
+                ns_digest
+            )
