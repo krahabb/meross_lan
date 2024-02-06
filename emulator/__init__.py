@@ -13,6 +13,7 @@
     'generate_emulators' is an helper (python generator) to build a whole
     set of emulators from all the traces stored in a path.
 """
+
 from __future__ import annotations
 
 import os
@@ -67,34 +68,40 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
     as this appears to be consistent with real devices config
     """
     descriptor = MerossEmulatorDescriptor(tracefile, uuid)
-
+    ability = descriptor.ability
+    digest = descriptor.digest
     mixin_classes = []
 
-    if mc.KEY_HUB in descriptor.digest:
+    if mc.KEY_HUB in digest:
         from .mixins.hub import HubMixin
 
         mixin_classes.append(HubMixin)
-    if mc.KEY_THERMOSTAT in descriptor.digest:
+    if mc.KEY_THERMOSTAT in digest:
         from .mixins.thermostat import ThermostatMixin
 
         mixin_classes.append(ThermostatMixin)
-    if mc.KEY_GARAGEDOOR in descriptor.digest:
+    if mc.KEY_GARAGEDOOR in digest:
         from .mixins.garagedoor import GarageDoorMixin
 
         mixin_classes.append(GarageDoorMixin)
-    if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in descriptor.ability:
+    if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
         from .mixins.electricity import ElectricityMixin
 
         mixin_classes.append(ElectricityMixin)
-    if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in descriptor.ability:
+    if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
         from .mixins.electricity import ConsumptionXMixin
 
         mixin_classes.append(ConsumptionXMixin)
 
-    if mc.NS_APPLIANCE_CONTROL_LIGHT in descriptor.ability:
+    if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
         from .mixins.light import LightMixin
 
         mixin_classes.append(LightMixin)
+
+    if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
+        from .mixins.rollershutter import RollerShutterMixin
+
+        mixin_classes.append(RollerShutterMixin)
 
     mixin_classes.append(MerossEmulator)
     # build a label to cache the set

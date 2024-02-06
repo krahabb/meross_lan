@@ -14,6 +14,8 @@ from custom_components.meross_lan.merossclient import (
     MerossPayloadType,
     build_message,
     const as mc,
+    extract_dict_payloads,
+    get_element_by_key,
     get_macaddress_from_uuid,
     get_replykey,
     json_dumps,
@@ -246,12 +248,14 @@ class MerossEmulator:
         """
         try:
             key, p_state = self._get_key_state(namespace)
-        except Exception as error:
+        except Exception as exception:
             # when the 'looking for state' euristic fails
             # we might fallback to a static reply should it fit...
             if (method == mc.METHOD_GET) and (namespace in self.descriptor.namespaces):
                 return mc.METHOD_GETACK, self.descriptor.namespaces[namespace]
-            raise error
+            raise Exception(
+                f"{namespace} not supported in emulator ({exception})"
+            ) from exception
 
         if method == mc.METHOD_GET:
             return mc.METHOD_GETACK, {key: p_state}
@@ -260,22 +264,12 @@ class MerossEmulator:
             # TODO.....
             raise Exception(f"{method} not supported in emulator")
 
-        def _update(payload: dict):
-            channel = payload[mc.KEY_CHANNEL]
-            for p in p_state:
-                if p[mc.KEY_CHANNEL] == channel:
-                    p.update(payload)
-                    break
-            else:
-                raise Exception(f"{channel} not present in digest.{key}")
-
         p_payload = payload[key]
         if isinstance(p_state, list):
-            if isinstance(p_payload, list):
-                for p_p in p_payload:
-                    _update(p_p)
-            else:
-                _update(p_payload)
+
+            for p in extract_dict_payloads(p_payload):
+                get_element_by_key(p_state, mc.KEY_CHANNEL, p[mc.KEY_CHANNEL]).update(p)
+
         else:
             if p_state[mc.KEY_CHANNEL] == p_payload[mc.KEY_CHANNEL]:
                 p_state.update(p_payload)
@@ -351,33 +345,31 @@ class MerossEmulator:
         For some devices not all state is carried there tho, so we'll inspect the
         GETACK payload for the relevant namespace looking for state there too
         """
-        n = namespace.split(".")
-        if n[1] != "Control":
-            raise Exception(f"{namespace} not supported in emulator")
-
         key = NAMESPACE_TO_KEY[namespace]
-        p_digest = self.descriptor.digest
-        if len(n) == 4:
-            # 4 parts namespaces usually access a subkey in digest
-            subkey = n[2].lower()
-            if subkey in p_digest:
-                p_digest = p_digest[subkey]
 
-        if key not in p_digest:
-            if namespace in self.descriptor.namespaces:
-                p_digest = self.descriptor.namespaces[namespace]
-                if key not in p_digest:
-                    raise Exception(f"{key} not present in digest and {namespace}")
-            else:
-                raise Exception(f"{key} not present in digest")
+        match namespace.split("."):
+            case (_, "RollerShutter", _):
+                return key, self.descriptor.namespaces[namespace][key]
+            case (_, "Control", _):
+                p_digest = self.descriptor.digest
+            case (_, "Control", ns_2, _):
+                p_digest = self.descriptor.digest
+                subkey = "".join([ns_2[0].lower(), ns_2[1:]])
+                if subkey in p_digest:
+                    p_digest = p_digest[subkey]
+            case _:
+                raise Exception(f"{namespace} not supported in emulator")
 
-        return key, p_digest[key]
+        if key in p_digest:
+            return key, p_digest[key]
+
+        return key, self.descriptor.namespaces[namespace][key]
 
     def _get_control_key(self, key):
         """Extracts the legacy 'control' key from NS_ALL (previous to 'digest' introduction)."""
         p_control = self.descriptor.all.get(mc.KEY_CONTROL)
         if p_control is None:
-            raise Exception(f"{mc.KEY_CONTROL} not present")
+            raise Exception(f"'control' key not present")
         if key not in p_control:
-            raise Exception(f"{key} not present in control")
+            raise Exception(f"'{key}' not present in 'control' key")
         return p_control[key]
