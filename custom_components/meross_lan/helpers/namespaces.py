@@ -81,6 +81,18 @@ class NamespaceHandler:
         if self.entities.pop(entity.channel, None):
             entity.namespace_handlers.remove(self)
 
+    def log_exception(self, exception: Exception, function_name: str, payload):
+        device = self.device
+        device.log_exception(
+            device.WARNING,
+            exception,
+            "%s(%s).%s: payload=%s",
+            self.__class__.__name__,
+            self.namespace,
+            function_name,
+            device.loggable_any(payload),
+        )
+
     def _handle_list(self, header, payload):
         """
         splits and forwards the received NS payload to
@@ -157,14 +169,7 @@ class NamespaceHandler:
             for channel_digest in digest:
                 self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
         except Exception as exception:
-            device = self.device
-            device.log_exception(
-                device.WARNING,
-                exception,
-                "NamespaceHandler(%s)._parse_list: digest=%s",
-                self.namespace,
-                device.loggable_any(digest),
-            )
+            self.log_exception(exception, "_parse_list", digest)
 
     def _parse_generic(self, digest):
         """twin method for _handle (same job - different context).
@@ -176,14 +181,7 @@ class NamespaceHandler:
                 for channel_digest in digest:
                     self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
         except Exception as exception:
-            device = self.device
-            device.log_exception(
-                device.WARNING,
-                exception,
-                "NamespaceHandler(%s)._parse_generic: digest=%s",
-                self.namespace,
-                device.loggable_any(digest),
-            )
+            self.log_exception(exception, "_parse_generic", digest)
 
     def _parse_undefined_dict(self, key: str, payload: dict, channel: object | None):
         device_entities = self.device.entities

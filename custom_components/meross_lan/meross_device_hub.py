@@ -102,21 +102,29 @@ class HubNamespaceHandler(NamespaceHandler):
 
     def _handle_subdevice(self, header, payload):
         """Generalized Hub namespace dispatcher to subdevices"""
-        subdevices = self.device.subdevices
+        hub = self.device
+        subdevices = hub.subdevices
+        subdevices_parsed = set()
         for p_subdevice in payload[self.key_namespace]:
             try:
-                subdevices[p_subdevice[mc.KEY_ID]]._parse(
-                    self.key_namespace, p_subdevice
-                )
-            except KeyError:
-                # force a rescan since we discovered a new subdevice
-                # only if it appears this device is online else it
-                # would be a waste since we wouldnt have enough info
-                # to correctly build that
-                if is_device_online(p_subdevice):
-                    self.device.request(
-                        get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
-                    )
+                subdevice_id = p_subdevice[mc.KEY_ID]
+                if subdevice_id in subdevices_parsed:
+                    hub.log_duplicated_subdevice(subdevice_id)
+                else:
+                    try:
+                        subdevices[subdevice_id]._parse(self.key_namespace, p_subdevice)
+                    except KeyError:
+                        # force a rescan since we discovered a new subdevice
+                        # only if it appears this device is online else it
+                        # would be a waste since we wouldnt have enough info
+                        # to correctly build that
+                        if is_device_online(p_subdevice):
+                            self.device.request(
+                                get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                            )
+                    subdevices_parsed.add(subdevice_id)
+            except Exception as exception:
+                self.log_exception(exception, "_handle_subdevice", p_subdevice)
 
 
 class HubChunkedPollingStrategy(PollingStrategy):
@@ -260,8 +268,15 @@ class MerossDeviceHub(MerossDevice):
 
     def _init_hub(self, digest: dict):
         self.subdevices: dict[object, MerossSubDevice] = {}
-        for p_subdevice in digest[mc.KEY_SUBDEVICE]:
-            self._subdevice_build(p_subdevice)
+        for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
+            try:
+                subdevice_id = p_subdevice_digest[mc.KEY_ID]
+                if subdevice_id in self.subdevices:
+                    self.log_duplicated_subdevice(subdevice_id)
+                else:
+                    self._subdevice_build(p_subdevice_digest)
+            except Exception as exception:
+                self.log_exception(self.WARNING, exception, "_init_hub")
 
     def _parse_hub(self, p_hub: dict):
         # This is usually called inside _parse_all as part of the digest parsing
@@ -269,39 +284,46 @@ class MerossDeviceHub(MerossDevice):
         # eventually manage newly added subdevices or removed ones #119
         # telling the caller to persist the changed configuration (self.needsave)
         subdevices_actual = set(self.subdevices.keys())
-        for p_digest in p_hub[mc.KEY_SUBDEVICE]:
-            p_id = p_digest.get(mc.KEY_ID)
-            if subdevice := self.subdevices.get(p_id):
-                if p_id in subdevices_actual:
-                    subdevices_actual.remove(p_id)
-                else:  # this shouldnt but happened in a trace (#331)
-                    self.log(
-                        self.CRITICAL,
-                        "Subdevice %s (id:%s) appears twice in received payload. Shouldn't happen",
-                        subdevice.name,
-                        p_id,
-                        timeout=604800,  # 1 week
-                    )
-            elif subdevice := self._subdevice_build(p_digest):
-                self.needsave = True
-            else:
-                continue
-            subdevice.parse_digest(p_digest)
+        for p_subdevice_digest in p_hub[mc.KEY_SUBDEVICE]:
+            try:
+                subdevice_id = p_subdevice_digest[mc.KEY_ID]
+                if subdevice_id in self.subdevices:
+                    subdevice = self.subdevices[subdevice_id]
+                    if subdevice_id in subdevices_actual:
+                        subdevices_actual.remove(subdevice_id)
+                    else:  # this shouldnt but happened in a trace (#331)
+                        self.log_duplicated_subdevice(subdevice_id)
+                elif subdevice := self._subdevice_build(p_subdevice_digest):
+                    self.needsave = True
+                else:
+                    continue
+                subdevice.parse_digest(p_subdevice_digest)
+            except Exception as exception:
+                self.log_exception(self.WARNING, exception, "_parse_hub")
 
         if subdevices_actual:
             # now we're left with non-existent (removed) subdevices
             self.needsave = True
-            for p_id in subdevices_actual:
-                subdevice = self.subdevices[p_id]
+            for subdevice_id in subdevices_actual:
+                subdevice = self.subdevices[subdevice_id]
                 self.log(
                     self.WARNING,
                     "Removing subdevice %s (id:%s) - configuration will be reloaded in few sec",
                     subdevice.name,
-                    p_id,
+                    subdevice_id,
                 )
             self.schedule_entry_reload()
 
     # interface: self
+    def log_duplicated_subdevice(self, subdevice_id: str):
+        self.log(
+            self.CRITICAL,
+            "Subdevice %s (id:%s) appears twice in device data. Shouldn't happen",
+            self.subdevices[subdevice_id].name,
+            subdevice_id,
+            timeout=604800,  # 1 week
+        )
+
     def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
         self._parse_hub(payload[mc.KEY_HUB])
 
