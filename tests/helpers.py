@@ -616,7 +616,7 @@ class DeviceContext(ConfigEntryMocker):
         # (re)online the device
         await self.perform_coldstart()
 
-    async def async_tick(self, tick: timedelta):
+    async def async_tick(self, tick: timedelta | float | int):
         await self._time_mock.async_tick(tick)
 
     async def async_move_to(self, target_datetime: datetime):
