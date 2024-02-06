@@ -562,6 +562,13 @@ TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"
 TYPE_MS400 = "ms400"
 TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
 
+#
+# HUB helpers symbols
+#
+MTS100_ALL_TYPESET = {TYPE_MTS150, TYPE_MTS100V3, TYPE_MTS100}
+"""subdevices types listed in NS_APPLIANCE_HUB_MTS100_ALL"""
+
+
 """
     GP constants
 """

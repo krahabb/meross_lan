@@ -37,8 +37,6 @@ WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
         # mc.TYPE_MTS100: MTS100SubDevice,
     }
 )
-# subdevices types listed in NS_APPLIANCE_HUB_MTS100_ALL
-MTS100_ALL_TYPESET = {mc.TYPE_MTS100, mc.TYPE_MTS100V3, mc.TYPE_MTS150}
 
 
 class MLHubSensorAdjustNumber(MLConfigNumber):
@@ -62,8 +60,8 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
         self.native_min_value = min_value
         self.native_max_value = max_value
         self.native_step = step
-        self.native_unit_of_measurement = (
-            MLConfigNumber.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+        self.native_unit_of_measurement = MLConfigNumber.DEVICECLASS_TO_UNIT_MAP.get(
+            device_class
         )
         super().__init__(
             manager,
@@ -351,12 +349,12 @@ class MerossDeviceHub(MerossDevice):
 
         polling_strategies = self.polling_strategies
         abilities = self.descriptor.ability
-        if _type in MTS100_ALL_TYPESET:
+        if _type in mc.MTS100_ALL_TYPESET:
             if (mc.NS_APPLIANCE_HUB_MTS100_ALL not in polling_strategies) and (
                 mc.NS_APPLIANCE_HUB_MTS100_ALL in abilities
             ):
                 HubChunkedPollingStrategy(
-                    self, mc.NS_APPLIANCE_HUB_MTS100_ALL, MTS100_ALL_TYPESET, True, 8
+                    self, mc.NS_APPLIANCE_HUB_MTS100_ALL, mc.MTS100_ALL_TYPESET, True, 8
                 )
             if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB not in polling_strategies) and (
                 mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in abilities
@@ -364,7 +362,7 @@ class MerossDeviceHub(MerossDevice):
                 HubChunkedPollingStrategy(
                     self,
                     mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
-                    MTS100_ALL_TYPESET,
+                    mc.MTS100_ALL_TYPESET,
                     True,
                     4,
                 )
@@ -379,7 +377,11 @@ class MerossDeviceHub(MerossDevice):
                 mc.NS_APPLIANCE_HUB_SENSOR_ALL in abilities
             ):
                 HubChunkedPollingStrategy(
-                    self, mc.NS_APPLIANCE_HUB_SENSOR_ALL, MTS100_ALL_TYPESET, False, 8
+                    self,
+                    mc.NS_APPLIANCE_HUB_SENSOR_ALL,
+                    mc.MTS100_ALL_TYPESET,
+                    False,
+                    8,
                 )
             if mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in polling_strategies:
                 polling_strategies[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST].increment_size()
@@ -500,9 +502,11 @@ class MerossSubDevice(MerossDeviceBase):
         super()._set_online()
         # force a re-poll even on MQTT
         self.hub.polling_strategies[
-            mc.NS_APPLIANCE_HUB_MTS100_ALL
-            if self.type in MTS100_ALL_TYPESET
-            else mc.NS_APPLIANCE_HUB_SENSOR_ALL
+            (
+                mc.NS_APPLIANCE_HUB_MTS100_ALL
+                if self.type in mc.MTS100_ALL_TYPESET
+                else mc.NS_APPLIANCE_HUB_SENSOR_ALL
+            )
         ].lastrequest = 0
 
     # interface: self

@@ -421,6 +421,25 @@ def is_device_online(payload: dict) -> bool:
         return False
 
 
+def get_subdevice_type(p_subdevice_digest: dict):
+    """Parses the subdevice dict from the hub digest to extract the
+    specific dict carrying the specialized subdevice info."""
+    for p_key, p_value in p_subdevice_digest.items():
+        if isinstance(p_value, dict):
+            return p_key, p_value
+    return None, None
+
+
+def get_mts_digest(p_subdevice_digest: dict) -> dict | None:
+    """Parses the subdevice dict from the hub digest to identify if it's
+    an mts-like (and so queried through 'Hub.Mts100.All')."""
+    for digest_mts_key in mc.MTS100_ALL_TYPESET:
+        # digest for mts valves has the usual fields plus a (sub)dict
+        # named according to the model. Here we should find the mode
+        if digest_mts_key in p_subdevice_digest:
+            return p_subdevice_digest[digest_mts_key]
+    return None
+
 def check_message_strict(message: MerossResponse | None):
     """
     Does a formal check of the message structure also raising a
