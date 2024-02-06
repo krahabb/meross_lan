@@ -394,8 +394,10 @@ def extract_dict_payloads(payload):
     payload = [{ "channel": 0, "onoff": 1}]
     """
     if isinstance(payload, list):
-        return (payload for payload in payload)
-    yield payload
+        for p in payload:
+            yield p
+    else:
+        yield payload
 
 
 def get_productname(producttype: str) -> str:
@@ -439,6 +441,7 @@ def get_mts_digest(p_subdevice_digest: dict) -> dict | None:
         if digest_mts_key in p_subdevice_digest:
             return p_subdevice_digest[digest_mts_key]
     return None
+
 
 def check_message_strict(message: MerossResponse | None):
     """
