@@ -242,9 +242,9 @@ class MtsExternalSensorSwitch(MtsConfigSwitch):
             climate, "external sensor mode", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
         )
         climate.manager.register_parser(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED,
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
             self,
-            self._parse_toggle,
+            self._parse_togglex,
         )
 
 
