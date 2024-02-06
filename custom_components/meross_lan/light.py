@@ -100,7 +100,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     max_mireds: int = MSLANY_MIRED_MAX
     min_mireds: int = MSLANY_MIRED_MIN
     rgb_color: tuple[int, int, int] | None
-    supported_color_modes: set[ColorMode] | None = None
+    supported_color_modes: set[ColorMode]
     supported_features: LightEntityFeature = LightEntityFeature(0)
     # TODO: add implementation for temp_kelvin and min-max_kelvin
 
