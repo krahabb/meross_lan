@@ -27,7 +27,7 @@ class Mts200Climate(MtsClimate):
     key_namespace = mc.KEY_MODE
 
     MTS_MODE_TO_PRESET_MAP = {
-        mc.MTS200_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
+        mc.MTS200_MODE_MANUAL: MtsClimate.PRESET_CUSTOM,
         mc.MTS200_MODE_HEAT: MtsClimate.PRESET_COMFORT,
         mc.MTS200_MODE_COOL: MtsClimate.PRESET_SLEEP,
         mc.MTS200_MODE_ECO: MtsClimate.PRESET_AWAY,
@@ -53,13 +53,7 @@ class Mts200Climate(MtsClimate):
     # if mts200 is in any of 'off', 'auto' we just set the 'custom'
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
-    PRESET_TO_TEMPERATUREKEY_MAP = {
-        MtsClimate.PRESET_CUSTOM: mc.KEY_MANUALTEMP,
-        MtsClimate.PRESET_COMFORT: mc.KEY_HEATTEMP,
-        MtsClimate.PRESET_SLEEP: mc.KEY_COOLTEMP,
-        MtsClimate.PRESET_AWAY: mc.KEY_ECOTEMP,
-        MtsClimate.PRESET_AUTO: mc.KEY_MANUALTEMP,
-    }
+    MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS200_MODE_TO_TARGETTEMP_MAP
 
     manager: ThermostatMixin
 
@@ -110,8 +104,10 @@ class Mts200Climate(MtsClimate):
         await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        key = self.PRESET_TO_TEMPERATUREKEY_MAP[self.preset_mode or self.PRESET_CUSTOM]
-        mode = mc.MTS200_MODE_CUSTOM if key is mc.KEY_MANUALTEMP else self._mts_mode
+        key = (
+            self.MTS_MODE_TO_TEMPERATUREKEY_MAP.get(self._mts_mode) or mc.KEY_MANUALTEMP
+        )
+        mode = mc.MTS200_MODE_MANUAL if key is mc.KEY_MANUALTEMP else self._mts_mode
         if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
             mc.METHOD_SET,

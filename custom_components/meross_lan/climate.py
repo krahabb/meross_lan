@@ -49,8 +49,8 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
     """maps device 'mode' value to the HA climate.preset_mode"""
-    PRESET_TO_TEMPERATUREKEY_MAP: ClassVar[dict[str, str]]
-    """maps the current HA preset mode to the name of temperature setpoint key"""
+    MTS_MODE_TO_TEMPERATUREKEY_MAP: ClassVar[dict[int | None, str]]
+    """maps the current mts mode to the name of temperature setpoint key"""
     PRESET_TO_ICON_MAP: Final = {
         PRESET_COMFORT: "mdi:sun-thermometer",
         PRESET_SLEEP: "mdi:power-sleep",

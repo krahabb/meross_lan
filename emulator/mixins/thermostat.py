@@ -1,4 +1,5 @@
 """"""
+
 from __future__ import annotations
 
 from random import randint
@@ -65,14 +66,10 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             )
             p_digest_mode.update(p_mode)
             mode = p_digest_mode[mc.KEY_MODE]
-            MODE_KEY_MAP = {
-                mc.MTS200_MODE_HEAT: mc.KEY_HEATTEMP,
-                mc.MTS200_MODE_COOL: mc.KEY_COOLTEMP,
-                mc.MTS200_MODE_ECO: mc.KEY_ECOTEMP,
-                mc.MTS200_MODE_CUSTOM: mc.KEY_MANUALTEMP,
-            }
-            if mode in MODE_KEY_MAP:
-                p_digest_mode[mc.KEY_TARGETTEMP] = p_digest_mode[MODE_KEY_MAP[mode]]
+            if mode in mc.MTS200_MODE_TO_TARGETTEMP_MAP:
+                p_digest_mode[mc.KEY_TARGETTEMP] = p_digest_mode[
+                    mc.MTS200_MODE_TO_TARGETTEMP_MAP[mode]
+                ]
             else:  # we use this to trigger a windowOpened later in code
                 p_digest_windowopened_list = p_digest[mc.KEY_THERMOSTAT].get(
                     mc.KEY_WINDOWOPENED, []

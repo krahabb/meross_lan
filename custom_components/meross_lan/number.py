@@ -6,7 +6,7 @@ from homeassistant.components import number
 from homeassistant.const import PERCENTAGE, UnitOfTemperature
 
 from . import meross_entity as me
-from .helpers import schedule_async_callback
+from .helpers import reverse_lookup, schedule_async_callback
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
@@ -202,8 +202,9 @@ class MtsSetPointNumber(MtsTemperatureNumber):
     __slots__ = ("icon",)
 
     def __init__(self, climate: MtsClimate, preset_mode: str):
-        self._preset_mode = preset_mode
-        self.key_value = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
+        self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
+            reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
+        ]
         self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
         self.name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
         super().__init__(

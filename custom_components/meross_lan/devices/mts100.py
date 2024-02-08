@@ -71,13 +71,7 @@ class Mts100Climate(MtsClimate):
     # if mts100 is in any of 'off', 'auto' we just set the 'custom'
     # target temp but of course the valve will not follow
     # this temp since it's mode is not set to follow a manual set
-    PRESET_TO_TEMPERATUREKEY_MAP = {
-        MtsClimate.PRESET_CUSTOM: mc.KEY_CUSTOM,
-        MtsClimate.PRESET_COMFORT: mc.KEY_COMFORT,
-        MtsClimate.PRESET_SLEEP: mc.KEY_ECONOMY,
-        MtsClimate.PRESET_AWAY: mc.KEY_AWAY,
-        MtsClimate.PRESET_AUTO: mc.KEY_CUSTOM,
-    }
+    MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS100_MODE_TO_CURRENTSET_MAP
 
     manager: MTS100SubDevice
 
@@ -130,7 +124,12 @@ class Mts100Climate(MtsClimate):
         await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        key = self.PRESET_TO_TEMPERATUREKEY_MAP[self.preset_mode or self.PRESET_CUSTOM]
+        if self._mts_mode == mc.MTS100_MODE_AUTO:
+            # when sending a temp this way the device should automatically
+            # exit auto mode if needed. We're anyway forcing going
+            # to manual mode when the device is set to schedule
+            await self.async_request_mode(mc.MTS100_MODE_CUSTOM)
+        key = self.MTS_MODE_TO_TEMPERATUREKEY_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
         if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
             mc.METHOD_SET,
@@ -146,11 +145,6 @@ class Mts100Climate(MtsClimate):
             },
         ):
             self._parse(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
-            # when sending a temp this way the device should automatically
-            # exit auto mode if needed. We're anyway forcing going
-            # to manual mode when the device is set to schedule
-            if self._mts_mode == mc.MTS100_MODE_AUTO:
-                await self.async_request_mode(mc.MTS100_MODE_CUSTOM)
 
     async def async_request_mode(self, mode: int):
         """Requests an mts mode and (ensure) turn-on"""
