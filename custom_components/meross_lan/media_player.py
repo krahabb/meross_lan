@@ -88,7 +88,7 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         await self.async_request_mp3(mc.KEY_MUTE, 1 if mute else 0)
 
     async def async_set_volume_level(self, volume):
-        await self.async_request_mp3(mc.KEY_VOLUME, clamp(int(volume * 16), 0, 16))
+        await self.async_request_mp3(mc.KEY_VOLUME, clamp(round(volume * 16), 0, 16))
 
     async def async_media_play(self):
         await self.async_request_mp3(mc.KEY_MUTE, 0)
