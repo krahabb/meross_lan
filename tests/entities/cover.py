@@ -11,7 +11,7 @@ from homeassistant.components.cover import (
 from custom_components.meross_lan.cover import MLGarage, MLRollerShutter
 from custom_components.meross_lan.merossclient import const as mc
 
-from tests.entities import EntityComponentTest, EntityTestContext
+from tests.entities import EntityComponentTest
 
 
 class EntityTest(EntityComponentTest):
@@ -26,19 +26,11 @@ class EntityTest(EntityComponentTest):
         mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: {MLRollerShutter},
     }
 
-    async def async_test_each_callback(
-        self, context: EntityTestContext, entity: CoverEntity
-    ):
+    async def async_test_each_callback(self, entity: CoverEntity):
         pass
 
-    async def async_test_enabled_callback(
-        self, context: EntityTestContext, entity: CoverEntity, entity_id: str
-    ):
-        hass = context.hass
-        call_service = hass.services.async_call
-        states = hass.states
+    async def async_test_enabled_callback(self, entity: CoverEntity):
+        pass
 
-    async def async_test_disabled_callback(
-        self, context: EntityTestContext, entity: CoverEntity
-    ):
+    async def async_test_disabled_callback(self, entity: CoverEntity):
         pass

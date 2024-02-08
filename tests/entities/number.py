@@ -18,7 +18,7 @@ from custom_components.meross_lan.meross_device_hub import MLHubSensorAdjustNumb
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.number import MLConfigNumber
 
-from tests.entities import EntityComponentTest, EntityTestContext
+from tests.entities import EntityComponentTest
 
 
 class EntityTest(EntityComponentTest):
@@ -37,46 +37,24 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS150: {Mts100AdjustNumber},
     }
 
-    async def async_test_each_callback(
-        self, context: EntityTestContext, entity: MLConfigNumber
-    ):
+    async def async_test_each_callback(self, entity: MLConfigNumber):
         pass
 
-    async def async_test_enabled_callback(
-        self, context: EntityTestContext, entity: MLConfigNumber, entity_id: str
-    ):
-        hass = context.hass
-        call_service = hass.services.async_call
-        states = hass.states
-        await call_service(
-            DOMAIN,
-            SERVICE_SET_VALUE,
-            service_data={
-                ATTR_VALUE: entity.max_value,
-                "entity_id": entity_id,
-            },
-            blocking=True,
-        )
-        await context.device_context.async_tick(entity.DEBOUNCE_DELAY)
-        assert (state := states.get(entity_id))
+    async def async_test_enabled_callback(self, entity: MLConfigNumber):
+        states = self.hass.states
+        await self.async_service_call(SERVICE_SET_VALUE, {ATTR_VALUE: entity.max_value})
+        await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
+        assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.max_value, "max_value"
-        await call_service(
-            DOMAIN,
-            SERVICE_SET_VALUE,
-            service_data={
-                ATTR_VALUE: entity.min_value,
-                "entity_id": entity_id,
-            },
-            blocking=True,
-        )
-        await context.device_context.async_tick(entity.DEBOUNCE_DELAY)
-        assert (state := states.get(entity_id))
+        await self.async_service_call(SERVICE_SET_VALUE, {ATTR_VALUE: entity.min_value})
+        await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
+        assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.min_value, "min_value"
 
-    async def async_test_disabled_callback(
-        self, context: EntityTestContext, entity: MLConfigNumber
-    ):
+    async def async_test_disabled_callback(self, entity: MLConfigNumber):
         await entity.async_set_native_value(entity.max_value)
+        await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
         assert entity.native_value == entity.max_value
         await entity.async_set_native_value(entity.min_value)
+        await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
         assert entity.native_value == entity.min_value

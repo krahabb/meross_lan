@@ -21,7 +21,7 @@ from custom_components.meross_lan.light import (
 )
 from custom_components.meross_lan.merossclient import const as mc
 
-from tests.entities import EntityComponentTest, EntityTestContext
+from tests.entities import EntityComponentTest
 
 
 class EntityTest(EntityComponentTest):
@@ -38,7 +38,6 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_each_callback(
         self,
-        context: EntityTestContext,
         entity: MLLight | MLDiffuserLight | MLDNDLightEntity,
     ):
         supported_color_modes = entity.supported_color_modes
@@ -50,7 +49,7 @@ class EntityTest(EntityComponentTest):
             assert entity is entity.manager.entity_dnd
             assert supported_color_modes == {ColorMode.ONOFF}
         else:
-            ability = context.ability
+            ability = self.ability
             # check the other specialized implementations
             if mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT in ability:
                 assert isinstance(entity, MLDiffuserLight)
@@ -69,33 +68,11 @@ class EntityTest(EntityComponentTest):
                 assert supported_features == LightEntityFeature.EFFECT
 
     async def async_test_enabled_callback(
-        self,
-        context: EntityTestContext,
-        entity: MLLight | MLDiffuserLight | MLDNDLightEntity,
-        entity_id: str,
+        self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity
     ):
-        hass = context.hass
-        call_service = hass.services.async_call
-        states = hass.states
-        await call_service(
-            DOMAIN,
-            SERVICE_TURN_OFF,
-            service_data={
-                "entity_id": entity_id,
-            },
-            blocking=True,
-        )
-        assert (state := states.get(entity_id))
+        state = await self.async_service_call(SERVICE_TURN_OFF)
         assert state.state == hac.STATE_OFF
-        await call_service(
-            DOMAIN,
-            SERVICE_TURN_ON,
-            service_data={
-                "entity_id": entity_id,
-            },
-            blocking=True,
-        )
-        assert (state := states.get(entity_id))
+        state = await self.async_service_call(SERVICE_TURN_ON)
         assert state.state == hac.STATE_ON
 
         if entity is entity.manager.entity_dnd:
@@ -104,31 +81,15 @@ class EntityTest(EntityComponentTest):
         supported_color_modes = entity.supported_color_modes
 
         if ColorMode.BRIGHTNESS in supported_color_modes:
-            await call_service(
-                DOMAIN,
-                SERVICE_TURN_ON,
-                service_data={
-                    ATTR_BRIGHTNESS: 1,
-                    "entity_id": entity_id,
-                },
-                blocking=True,
-            )
-            assert (state := states.get(entity_id))
+            state = await self.async_service_call(SERVICE_TURN_ON, {ATTR_BRIGHTNESS: 1})
             assert (
                 state.state == hac.STATE_ON
                 and state.attributes[ATTR_BRIGHTNESS] == (255 // 100)
                 and entity._light[mc.KEY_LUMINANCE] == 1
             )
-            await call_service(
-                DOMAIN,
-                SERVICE_TURN_ON,
-                service_data={
-                    ATTR_BRIGHTNESS: 255,
-                    "entity_id": entity_id,
-                },
-                blocking=True,
+            state = await self.async_service_call(
+                SERVICE_TURN_ON, {ATTR_BRIGHTNESS: 255}
             )
-            assert (state := states.get(entity_id))
             assert (
                 state.state == hac.STATE_ON
                 and state.attributes[ATTR_BRIGHTNESS] == 255
@@ -138,16 +99,9 @@ class EntityTest(EntityComponentTest):
         if ColorMode.RGB in supported_color_modes:
             rgb_tuple = (255, 0, 0)
             rgb_meross = _rgb_to_int(rgb_tuple)
-            await call_service(
-                DOMAIN,
-                SERVICE_TURN_ON,
-                service_data={
-                    ATTR_RGB_COLOR: rgb_tuple,
-                    "entity_id": entity_id,
-                },
-                blocking=True,
+            state = await self.async_service_call(
+                SERVICE_TURN_ON, {ATTR_RGB_COLOR: rgb_tuple}
             )
-            assert (state := states.get(entity_id))
             assert (
                 state.state == hac.STATE_ON
                 and state.attributes[ATTR_RGB_COLOR] == _int_to_rgb(rgb_meross)
@@ -160,16 +114,9 @@ class EntityTest(EntityComponentTest):
                 entity.max_mireds: 1,
             }
             for temp_mired, temp_meross in MIREDS_TO_MEROSS_TEMP.items():
-                await call_service(
-                    DOMAIN,
-                    SERVICE_TURN_ON,
-                    service_data={
-                        ATTR_COLOR_TEMP: temp_mired,
-                        "entity_id": entity_id,
-                    },
-                    blocking=True,
+                state = await self.async_service_call(
+                    SERVICE_TURN_ON, {ATTR_COLOR_TEMP: temp_mired}
                 )
-                assert (state := states.get(entity_id))
                 assert (
                     state.state == hac.STATE_ON
                     and state.attributes[ATTR_COLOR_TEMP] == temp_mired
@@ -178,7 +125,6 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_disabled_callback(
         self,
-        context: EntityTestContext,
         entity: MLLight | MLDiffuserLight | MLDNDLightEntity,
     ):
         await entity.async_turn_on()
