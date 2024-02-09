@@ -899,14 +899,12 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         ):
             # re-ensure current transitions are clean after await
             self._transition_cancel()
-            self._transition_unsub = schedule_async_callback(
-                self.hass, 0, self._async_transition_callback
-            )
             if timeout is not None:
                 self._position_endtime = time() + timeout
                 self._transition_end_unsub = schedule_callback(
                     self.hass, timeout, self._transition_end_callback
                 )
+            await self._async_transition_callback()
 
     def set_unavailable(self):
         self._transition_cancel()
@@ -921,8 +919,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         positioning and switch entity behaviour to trust this value
         bypassing all of the 'time based' emulation
         """
-        if not isinstance(position := payload.get(mc.KEY_POSITION), int):
-            return
+        position = payload[mc.KEY_POSITION]
 
         if self._position_native_isgood:
             if position != self.current_cover_position:
@@ -948,7 +945,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     def _parse_state(self, payload: dict):
         epoch = self.manager.lastresponse
-        state = payload.get(mc.KEY_STATE)
+        state = payload[mc.KEY_STATE]
         if self._position_native_isgood:
             if state == mc.ROLLERSHUTTER_STATE_OPENING:
                 self.update_state(STATE_OPENING)

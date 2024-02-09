@@ -467,6 +467,7 @@ class EmulatorContext(contextlib.AbstractContextManager):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.aioclient_mock.clear_requests()
+        self.emulator.shutdown()
         return None
 
     async def _handle_http_request(self, method, url, data):

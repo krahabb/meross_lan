@@ -122,6 +122,10 @@ class MerossEmulator:
         self.mqtt = None
         print(f"Initialized {descriptor.productname} (model:{descriptor.productmodel})")
 
+    def shutdown(self):
+        """cleanup when the emulator is stopped/destroyed"""
+        pass
+
     def set_timezone(self, timezone: str):
         # beware when using TZ names: here we expect a IANA zoneinfo key
         # as "US/Pacific" or so. Using tzname(s) like "PDT" or "PST"
@@ -373,3 +377,7 @@ class MerossEmulator:
         if key not in p_control:
             raise Exception(f"'{key}' not present in 'control' key")
         return p_control[key]
+
+    def _get_namespace_state(self, namespace: str, channel, key_channel: str = mc.KEY_CHANNEL) -> dict:
+        p_namespace_state = self.descriptor.namespaces[namespace][NAMESPACE_TO_KEY[namespace]]
+        return get_element_by_key(p_namespace_state, key_channel, channel)
