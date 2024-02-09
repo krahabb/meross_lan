@@ -1,11 +1,6 @@
 from homeassistant import const as hac
+from homeassistant.components import light as haec
 from homeassistant.components.light import (
-    ATTR_BRIGHTNESS,
-    ATTR_COLOR_TEMP,
-    ATTR_RGB_COLOR,
-    DOMAIN,
-    SERVICE_TURN_OFF,
-    SERVICE_TURN_ON,
     ColorMode,
     LightEntity,
     LightEntityFeature,
@@ -20,6 +15,7 @@ from custom_components.meross_lan.light import (
     _rgb_to_int,
 )
 from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.switch import MLSwitch
 
 from tests.entities import EntityComponentTest
 
@@ -50,12 +46,14 @@ class EntityTest(EntityComponentTest):
             assert supported_color_modes == {ColorMode.ONOFF}
         else:
             ability = self.ability
+            if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
+                if MLSwitch in EntityComponentTest.expected_entity_types:
+                    EntityComponentTest.expected_entity_types.remove(MLSwitch)
             # check the other specialized implementations
             if mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT in ability:
                 assert isinstance(entity, MLDiffuserLight)
                 assert supported_color_modes == {ColorMode.RGB}
                 assert supported_features == LightEntityFeature.EFFECT
-
             if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
                 assert isinstance(entity, MLLight)
                 capacity = ability[mc.NS_APPLIANCE_CONTROL_LIGHT][mc.KEY_CAPACITY]
@@ -63,16 +61,15 @@ class EntityTest(EntityComponentTest):
                     assert ColorMode.RGB in supported_color_modes
                 if capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
                     assert ColorMode.COLOR_TEMP in supported_color_modes
-
             if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
                 assert supported_features == LightEntityFeature.EFFECT
 
     async def async_test_enabled_callback(
         self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity
     ):
-        state = await self.async_service_call(SERVICE_TURN_OFF)
+        state = await self.async_service_call(haec.SERVICE_TURN_OFF)
         assert state.state == hac.STATE_OFF
-        state = await self.async_service_call(SERVICE_TURN_ON)
+        state = await self.async_service_call(haec.SERVICE_TURN_ON)
         assert state.state == hac.STATE_ON
 
         if entity is entity.manager.entity_dnd:
@@ -81,18 +78,18 @@ class EntityTest(EntityComponentTest):
         supported_color_modes = entity.supported_color_modes
 
         if ColorMode.BRIGHTNESS in supported_color_modes:
-            state = await self.async_service_call(SERVICE_TURN_ON, {ATTR_BRIGHTNESS: 1})
+            state = await self.async_service_call(haec.SERVICE_TURN_ON, {haec.ATTR_BRIGHTNESS: 1})
             assert (
                 state.state == hac.STATE_ON
-                and state.attributes[ATTR_BRIGHTNESS] == (255 // 100)
+                and state.attributes[haec.ATTR_BRIGHTNESS] == (255 // 100)
                 and entity._light[mc.KEY_LUMINANCE] == 1
             )
             state = await self.async_service_call(
-                SERVICE_TURN_ON, {ATTR_BRIGHTNESS: 255}
+                haec.SERVICE_TURN_ON, {haec.ATTR_BRIGHTNESS: 255}
             )
             assert (
                 state.state == hac.STATE_ON
-                and state.attributes[ATTR_BRIGHTNESS] == 255
+                and state.attributes[haec.ATTR_BRIGHTNESS] == 255
                 and entity._light[mc.KEY_LUMINANCE] == 100
             )
 
@@ -100,11 +97,11 @@ class EntityTest(EntityComponentTest):
             rgb_tuple = (255, 0, 0)
             rgb_meross = _rgb_to_int(rgb_tuple)
             state = await self.async_service_call(
-                SERVICE_TURN_ON, {ATTR_RGB_COLOR: rgb_tuple}
+                haec.SERVICE_TURN_ON, {haec.ATTR_RGB_COLOR: rgb_tuple}
             )
             assert (
                 state.state == hac.STATE_ON
-                and state.attributes[ATTR_RGB_COLOR] == _int_to_rgb(rgb_meross)
+                and state.attributes[haec.ATTR_RGB_COLOR] == _int_to_rgb(rgb_meross)
                 and entity._light[mc.KEY_RGB] == rgb_meross
             )
 
@@ -115,11 +112,11 @@ class EntityTest(EntityComponentTest):
             }
             for temp_mired, temp_meross in MIREDS_TO_MEROSS_TEMP.items():
                 state = await self.async_service_call(
-                    SERVICE_TURN_ON, {ATTR_COLOR_TEMP: temp_mired}
+                    haec.SERVICE_TURN_ON, {haec.ATTR_COLOR_TEMP: temp_mired}
                 )
                 assert (
                     state.state == hac.STATE_ON
-                    and state.attributes[ATTR_COLOR_TEMP] == temp_mired
+                    and state.attributes[haec.ATTR_COLOR_TEMP] == temp_mired
                     and entity._light[mc.KEY_TEMPERATURE] == temp_meross
                 )
 

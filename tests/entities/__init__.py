@@ -23,6 +23,7 @@ class EntityComponentTest:
     hass: ClassVar[HomeAssistant]
     service_call: ClassVar
     ability: ClassVar[dict[str, Any]]
+    digest: ClassVar[dict[str, Any]]
     expected_entity_types: ClassVar[MerossEntityTypeSet]
     device_context: ClassVar[DeviceContext]
     entity_id: ClassVar[str]

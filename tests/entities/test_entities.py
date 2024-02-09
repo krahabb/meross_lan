@@ -64,7 +64,7 @@ async def test_entities(hass: HomeAssistant, aioclient_mock):
     ):
         descriptor = emulator.descriptor
         EntityComponentTest.ability = ability = descriptor.ability
-        digest = descriptor.digest
+        EntityComponentTest.digest = digest = descriptor.digest
         ishub = mc.KEY_HUB in digest
 
         EntityComponentTest.expected_entity_types = expected_entity_types = set()
