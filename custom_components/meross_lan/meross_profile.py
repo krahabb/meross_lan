@@ -169,7 +169,7 @@ class ConnectionSensor(MLDiagnosticSensor):
     """
 
     def set_unavailable(self):
-        raise NotImplementedError
+        raise NotImplementedError("set_unavailable")
 
     # interface: self
     def update_devices(self):

@@ -16,6 +16,7 @@ from homeassistant.components.cover import (
 )
 from homeassistant.const import UnitOfTime
 from homeassistant.core import callback
+from homeassistant.exceptions import InvalidStateError
 from homeassistant.helpers import entity_registry
 from homeassistant.util.dt import now
 
@@ -47,9 +48,6 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
 
 STATE_MAP = {0: STATE_CLOSED, 1: STATE_OPEN}
-
-POSITION_FULLY_CLOSED = 0
-POSITION_FULLY_OPENED = 100
 
 # garagedoor extra attributes
 NOTIFICATION_ID_TIMEOUT = "garagedoor_timeout"
@@ -300,6 +298,11 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
     switch_buzzerEnable: MLGarageMultipleConfigSwitch | None
     switch_doorEnable: MLGarageDoorEnableSwitch | None
 
+    # HA core entity attributes:
+    supported_features: CoverEntityFeature = (
+        CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
+    )
+
     __slots__ = (
         "_transition_duration",
         "_transition_start",
@@ -392,20 +395,16 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
 
     # interface: cover.CoverEntity
     @property
-    def supported_features(self):
-        return CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
-
-    @property
     def is_opening(self):
-        return self._attr_state == STATE_OPENING
+        return self._attr_state is STATE_OPENING
 
     @property
     def is_closing(self):
-        return self._attr_state == STATE_CLOSING
+        return self._attr_state is STATE_CLOSING
 
     @property
     def is_closed(self):
-        return self._attr_state == STATE_CLOSED
+        return self._attr_state is STATE_CLOSED
 
     async def async_open_cover(self, **kwargs):
         await self.async_request_position(1)
@@ -751,9 +750,17 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
     # HA core entity attributes:
     assumed_state = True
     current_cover_position: int | None
+    is_closed: bool | None
+    is_closing: bool | None
+    is_opening: bool | None
+    supported_features: CoverEntityFeature
 
     __slots__ = (
         "current_cover_position",
+        "is_closed",
+        "is_closing",
+        "is_opening",
+        "supported_features",
         "number_signalOpen",
         "number_signalClose",
         "_signalOpen",
@@ -761,23 +768,24 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         "_position_native",
         "_position_start",
         "_position_starttime",
-        "_position_endtime",
         "_transition_unsub",
         "_transition_end_unsub",
     )
 
     def __init__(self, manager: RollerShutterMixin, channel: object):
         self.current_cover_position = None
+        self.is_closed = None
+        self.is_closing = None
+        self.is_opening = None
+        self.supported_features = (
+            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
+        )
         self.extra_state_attributes = {}
-        super().__init__(manager, channel, None, CoverDeviceClass.SHUTTER)
-        self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
-        self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         self._signalOpen: int = 30000  # msec to fully open (config'd on device)
         self._signalClose: int = 30000  # msec to fully close (config'd on device)
         self._position_native = None  # as reported by the device
         self._position_start = None  # set when when we're controlling a timed position
         self._position_starttime = None  # epoch of transition start
-        self._position_endtime = None  # epoch of 'target position reached'
         self._transition_unsub = None
         self._transition_end_unsub = None
         # flag indicating the device position is reliable (#227)
@@ -786,39 +794,16 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._position_native_isgood = versiontuple(
                 manager.descriptor.firmwareVersion
             ) >= versiontuple("6.6.6")
+            if self._position_native_isgood:
+                self.supported_features |= CoverEntityFeature.SET_POSITION
         except Exception:
             self._position_native_isgood = None
+        super().__init__(manager, channel, None, CoverDeviceClass.SHUTTER)
+        self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
+        self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, self)
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, self)
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, self)
-
-    """REMOVE
-    @property
-    def assumed_state(self):
-        # RollerShutter position is unreliable
-        return True
-    """
-
-    @property
-    def supported_features(self):
-        return (
-            CoverEntityFeature.OPEN
-            | CoverEntityFeature.CLOSE
-            | CoverEntityFeature.STOP
-            | CoverEntityFeature.SET_POSITION
-        )
-
-    @property
-    def is_opening(self):
-        return self._attr_state == STATE_OPENING
-
-    @property
-    def is_closing(self):
-        return self._attr_state == STATE_CLOSING
-
-    @property
-    def is_closed(self):
-        return self._attr_state == STATE_CLOSED
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -841,72 +826,130 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     self.extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = (
                         self._signalClose
                     )
-                if ATTR_CURRENT_POSITION in _attr:
-                    self.current_cover_position = _attr[ATTR_CURRENT_POSITION]
+                if not self._position_native_isgood:
+                    # at this stage, the euristic on fw version doesn't say anything
+                    if EXTRA_ATTR_POSITION_NATIVE in _attr:
+                        # this means we haven't detected (so far) a reliable 'native_position'
+                        # so we restore the cover position (which was emulated)
+                        self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = _attr[
+                            EXTRA_ATTR_POSITION_NATIVE
+                        ]
+                        if ATTR_CURRENT_POSITION in _attr:
+                            self.current_cover_position = _attr[ATTR_CURRENT_POSITION]
+                            self.supported_features |= CoverEntityFeature.SET_POSITION
 
     async def async_will_remove_from_hass(self):
         self._transition_cancel()
         await super().async_will_remove_from_hass()
 
     async def async_open_cover(self, **kwargs):
-        await self.async_request_position(POSITION_FULLY_OPENED)
+        await self.async_request_position(mc.ROLLERSHUTTER_POSITION_OPENED)
 
     async def async_close_cover(self, **kwargs):
-        await self.async_request_position(POSITION_FULLY_CLOSED)
+        await self.async_request_position(mc.ROLLERSHUTTER_POSITION_CLOSED)
 
     async def async_set_cover_position(self, **kwargs):
-        if ATTR_POSITION in kwargs:
-            position = kwargs[ATTR_POSITION]
-            if (
-                self._position_native_isgood
-                or (position == POSITION_FULLY_OPENED)
-                or (position == POSITION_FULLY_CLOSED)
-            ):
-                # ensure a full 'untimed' run when asked for
-                # fully opened/closed (#170)
-                await self.async_request_position(position)
+        position = kwargs[ATTR_POSITION]
+        if (
+            self._position_native_isgood
+            or (position == mc.ROLLERSHUTTER_POSITION_OPENED)
+            or (position == mc.ROLLERSHUTTER_POSITION_CLOSED)
+        ):
+            # ensure a full 'untimed' run when asked for
+            # fully opened/closed (#170)
+            await self.async_request_position(position)
+        else:
+            # this is the estimate: could be None on very first run
+            # or when the entity state is not properly restored anyway
+            current_position = self.current_cover_position
+            if current_position is None:
+                raise InvalidStateError(
+                    "Cannot estimate command direction. Please use open_cover or close_cover"
+                )
+            if position > current_position:
+                position = mc.ROLLERSHUTTER_POSITION_OPENED
+                timeout = ((position - current_position) * self._signalOpen) / 100000
+            elif position < current_position:
+                position = mc.ROLLERSHUTTER_POSITION_CLOSED
+                timeout = ((current_position - position) * self._signalClose) / 100000
             else:
-                if position > self.current_cover_position:
-                    await self.async_request_position(
-                        POSITION_FULLY_OPENED,
-                        ((position - self.current_cover_position) * self._signalOpen)
-                        / 100000,
-                    )
-                elif position < self.current_cover_position:
-                    await self.async_request_position(
-                        POSITION_FULLY_CLOSED,
-                        ((self.current_cover_position - position) * self._signalClose)
-                        / 100000,
-                    )
+                return  # No-Op
+            if await self.async_request_position(position):
+                self._transition_end_unsub = schedule_async_callback(
+                    self.hass, timeout, self._async_transition_end_callback
+                )
 
     async def async_stop_cover(self, **kwargs):
         await self.async_request_position(-1)
 
-    def request_position(self, position: int, timeout: float | None = None):
-        self.hass.async_create_task(self.async_request_position(position, timeout))
-
-    async def async_request_position(self, position: int, timeout: float | None = None):
+    async def async_request_position(self, position: int):
         self._transition_cancel()
-        if await self.manager.async_request_ack(
+        manager = self.manager
+        channel = self.channel
+        if (manager.multiple_max >= 3) and (
+            responses := await manager.async_multiple_requests_ack(
+                (
+                    (
+                        mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                        mc.METHOD_SET,
+                        {
+                            mc.KEY_POSITION: [
+                                {
+                                    mc.KEY_CHANNEL: channel,
+                                    mc.KEY_POSITION: position,
+                                }
+                            ]
+                        },
+                    ),
+                    (
+                        mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+                        mc.METHOD_GET,
+                        {mc.KEY_STATE: [{mc.KEY_CHANNEL: channel}]},
+                    ),
+                    (
+                        mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                        mc.METHOD_GET,
+                        {mc.KEY_POSITION: [{mc.KEY_CHANNEL: channel}]},
+                    ),
+                )
+            )
+        ):
+            # we expect a full success (3 responses) 99% of the times
+            # since the only reason for failing is the device not supporting
+            # ns_multiple (unlikely) or the response being truncated due to
+            # overflow (unlikely too)
+            # At this stage the responses are already processed by the MerossDevice
+            # interface and we should already be 'in transition'
+            if responses[0][mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK:
+                if not self._transition_unsub:
+                    # this could happen if the shutter was already 'at position'
+                    # so that it didn't start an internal transition (guessing)
+                    # or if the 2nd message in our requests failed somehow
+                    # at any rate, we'll monitor the state
+                    await self._async_transition_callback()
+                return True
+
+        # in case the ns_multiple didn't succesfully kick-in we'll
+        # fallback to the legacy procedure
+        if await manager.async_request_ack(
             mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
             mc.METHOD_SET,
             {
                 mc.KEY_POSITION: {
-                    mc.KEY_CHANNEL: self.channel,
+                    mc.KEY_CHANNEL: channel,
                     mc.KEY_POSITION: position,
                 }
             },
         ):
             # re-ensure current transitions are clean after await
             self._transition_cancel()
-            if timeout is not None:
-                self._position_endtime = time() + timeout
-                self._transition_end_unsub = schedule_callback(
-                    self.hass, timeout, self._transition_end_callback
-                )
             await self._async_transition_callback()
+            return True
 
     def set_unavailable(self):
+        self.is_closed = None
+        self.is_closing = None
+        self.is_opening = None
         self._transition_cancel()
         super().set_unavailable()
 
@@ -924,6 +967,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         if self._position_native_isgood:
             if position != self.current_cover_position:
                 self.current_cover_position = position
+                self.is_closed = position == mc.ROLLERSHUTTER_POSITION_CLOSED
                 self.flush_state()
             return
 
@@ -936,116 +980,136 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._position_native_isgood = True
             self._position_native = None
             self.extra_state_attributes.pop(EXTRA_ATTR_POSITION_NATIVE, None)
+            self.supported_features |= CoverEntityFeature.SET_POSITION
             self.current_cover_position = position
+            self.is_closed = False
         else:
             self._position_native = position
             self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
+            if self.current_cover_position is None:
+                # only happening when we didn't restore state on devices
+                # which are likely not supporting native positioning
+                # at this stage we'll enable set_position anyway and
+                # trusting the device position as the better guess
+                # If current_cover_position is already set, it represents the
+                # emulated state and so we don't touch it
+                self.supported_features |= CoverEntityFeature.SET_POSITION
+                self.current_cover_position = position
+                self.is_closed = position == mc.ROLLERSHUTTER_POSITION_CLOSED
 
         self.flush_state()
 
     def _parse_state(self, payload: dict):
-        epoch = self.manager.lastresponse
         state = payload[mc.KEY_STATE]
-        if self._position_native_isgood:
-            if state == mc.ROLLERSHUTTER_STATE_OPENING:
-                self.update_state(STATE_OPENING)
-            elif state == mc.ROLLERSHUTTER_STATE_CLOSING:
-                self.update_state(STATE_CLOSING)
-            else:  # state == mc.ROLLERSHUTTER_STATE_IDLE:
-                self._transition_cancel()
-                self.update_state(
-                    STATE_OPEN if self.current_cover_position else STATE_CLOSED
-                )
-                return
-        else:
-            if self._attr_state == STATE_OPENING:
+        if not self._position_native_isgood:
+            epoch = self.manager.lastresponse
+            if self.is_opening:
                 self.current_cover_position = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)  # type: ignore
-                if self.current_cover_position > POSITION_FULLY_OPENED:
-                    self.current_cover_position = POSITION_FULLY_OPENED
-                if state == mc.ROLLERSHUTTER_STATE_OPENING:
-                    self.flush_state()
-            elif self._attr_state == STATE_CLOSING:
+                if self.current_cover_position > mc.ROLLERSHUTTER_POSITION_OPENED:
+                    self.current_cover_position = mc.ROLLERSHUTTER_POSITION_OPENED
+                self._attr_state = None  # ensure flush when update_state
+            elif self.is_closing:
                 self.current_cover_position = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)  # type: ignore
-                if self.current_cover_position < POSITION_FULLY_CLOSED:
-                    self.current_cover_position = POSITION_FULLY_CLOSED
-                if state == mc.ROLLERSHUTTER_STATE_CLOSING:
-                    self.flush_state()
+                if self.current_cover_position < mc.ROLLERSHUTTER_POSITION_CLOSED:
+                    self.current_cover_position = mc.ROLLERSHUTTER_POSITION_CLOSED
+                self._attr_state = None  # ensure flush when update_state
 
             if state == mc.ROLLERSHUTTER_STATE_OPENING:
-                if self._attr_state != STATE_OPENING:
-                    self._position_start = (
-                        self.current_cover_position
-                        if self.current_cover_position is not None
-                        else POSITION_FULLY_CLOSED
-                    )
+                if not self.is_opening:
+                    if self.current_cover_position is None:
+                        # this should never really happen since we've
+                        # already set current_cover_position in _parse_position
+                        self.current_cover_position = mc.ROLLERSHUTTER_POSITION_CLOSED
+                        self.supported_features |= CoverEntityFeature.SET_POSITION
+                    self._position_start = self.current_cover_position
                     self._position_starttime = epoch
-                    self.update_state(STATE_OPENING)
             elif state == mc.ROLLERSHUTTER_STATE_CLOSING:
-                if self._attr_state != STATE_CLOSING:
-                    self._position_start = (
-                        self.current_cover_position
-                        if self.current_cover_position is not None
-                        else POSITION_FULLY_OPENED
-                    )
+                if not self.is_closing:
+                    if self.current_cover_position is None:
+                        self.current_cover_position = mc.ROLLERSHUTTER_POSITION_OPENED
+                        self.supported_features |= CoverEntityFeature.SET_POSITION
+                    self._position_start = self.current_cover_position
                     self._position_starttime = epoch
-                    self.update_state(STATE_CLOSING)
-            else:  # state == mc.ROLLERSHUTTER_STATE_IDLE:
-                self._transition_cancel()
-                self.update_state(
-                    STATE_OPEN if self.current_cover_position else STATE_CLOSED
-                )
-                return
 
-        # here the cover is moving
-        if self._position_endtime is not None:
-            # in case our _close_calback has not yet been called or failed
-            if epoch >= self._position_endtime:
-                self.request_position(-1)
-                return
-
-        if not self._transition_unsub:
-            # ensure we 'follow' cover movement
-            self._transition_unsub = schedule_async_callback(
-                self.hass, 2, self._async_transition_callback
+        if self._attr_state != state:
+            self._attr_state = state
+            self.is_closed = (
+                self.current_cover_position == mc.ROLLERSHUTTER_POSITION_CLOSED
             )
+            if state == mc.ROLLERSHUTTER_STATE_IDLE:
+                self.is_closing = False
+                self.is_opening = False
+            else:
+                self.is_closing = state == mc.ROLLERSHUTTER_STATE_CLOSING
+                self.is_opening = not self.is_closing
+                if not self._transition_unsub:
+                    # ensure we 'follow' cover movement
+                    self._transition_unsub = schedule_async_callback(
+                        self.hass, 2, self._async_transition_callback
+                    )
+            self.flush_state()
+
+        if self._transition_unsub and (state == mc.ROLLERSHUTTER_STATE_IDLE):
+            self._transition_cancel()
 
     def _parse_config(self, payload: dict):
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
         if mc.KEY_SIGNALOPEN in payload:
-            self._signalOpen = payload[
-                mc.KEY_SIGNALOPEN
-            ]  # time to fully open cover in msec
+            self._signalOpen = payload[mc.KEY_SIGNALOPEN]
             self.number_signalOpen.update_native_value(self._signalOpen)
             self.extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
         if mc.KEY_SIGNALCLOSE in payload:
-            self._signalClose = payload[
-                mc.KEY_SIGNALCLOSE
-            ]  # time to fully close cover in msec
+            self._signalClose = payload[mc.KEY_SIGNALCLOSE]
             self.number_signalClose.update_native_value(self._signalClose)
             self.extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
 
     async def _async_transition_callback(self):
+        """Schedule a repetitive callback when we detect or suspect shutter movement.
+        It will be invalidated only when a successful state message is parsed stating
+        there's no movement.
+        This is a very 'gentle' polling happening only on HTTP when we're sure we're
+        not receiving MQTT updates. If device was configured for MQTT only we could
+        not setup this at all."""
         self._transition_unsub = schedule_async_callback(
             self.hass, 2, self._async_transition_callback
         )
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
-            await manager.async_http_request(
-                *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE)
-            )
-            if self._position_native_isgood:
-                await manager.async_http_request(
-                    *get_default_arguments(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION)
+            p_channel_payload = [{mc.KEY_CHANNEL: self.channel}]
+            if manager.multiple_max >= 2:
+                await manager.async_multiple_requests_ack(
+                    (
+                        (
+                            mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+                            mc.METHOD_GET,
+                            {mc.KEY_STATE: p_channel_payload},
+                        ),
+                        (
+                            mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                            mc.METHOD_GET,
+                            {mc.KEY_POSITION: p_channel_payload},
+                        ),
+                    )
                 )
+            else:
+                await manager.async_http_request(
+                    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+                    mc.METHOD_GET,
+                    {mc.KEY_STATE: p_channel_payload},
+                )
+                if self._position_native_isgood:
+                    await manager.async_http_request(
+                        mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                        mc.METHOD_GET,
+                        {mc.KEY_POSITION: p_channel_payload},
+                    )
 
-    @callback
-    def _transition_end_callback(self):
-        self.log(self.DEBUG, "_transition_end_callback")
+    async def _async_transition_end_callback(self):
         self._transition_end_unsub = None
-        self.request_position(-1)
+        self.log(self.DEBUG, "_async_transition_end_callback")
+        await self.async_stop_cover()
 
     def _transition_cancel(self):
-        self._position_endtime = None
         if self._transition_end_unsub:
             self._transition_end_unsub.cancel()
             self._transition_end_unsub = None

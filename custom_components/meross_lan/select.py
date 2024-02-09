@@ -85,7 +85,7 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
             if _option == option:
                 break
         else:
-            raise NotImplementedError()
+            raise NotImplementedError("async_select_option")
 
         if await self.manager.async_request_spray_ack(
             {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}
@@ -192,7 +192,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     @property
     def available(self):
         return True
-        
+
     @property
     def entity_registry_enabled_default(self):
         return False

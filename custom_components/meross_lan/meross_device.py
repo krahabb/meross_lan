@@ -232,13 +232,13 @@ class MerossDeviceBase(EntityManager):
         method: str,
         payload: MerossPayloadType,
     ) -> MerossRequest:
-        raise NotImplementedError
+        raise NotImplementedError("build_request")
 
     async def async_request_raw(
         self,
         request: MerossRequest,
     ) -> MerossResponse | None:
-        raise NotImplementedError
+        raise NotImplementedError("async_request_raw")
 
     async def async_request(
         self,
@@ -246,7 +246,7 @@ class MerossDeviceBase(EntityManager):
         method: str,
         payload: MerossPayloadType,
     ) -> MerossResponse | None:
-        raise NotImplementedError
+        raise NotImplementedError("async_request")
 
     async def async_request_ack(
         self,
@@ -270,7 +270,7 @@ class MerossDeviceBase(EntityManager):
         return None
 
     def check_device_timezone(self):
-        raise NotImplementedError
+        raise NotImplementedError("check_device_timezone")
 
     @abc.abstractmethod
     def _get_device_info_name_key(self) -> str:
@@ -367,8 +367,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_unsub_polling_callback",
         "_polling_callback_shutdown",
         "_queued_smartpoll_requests",
+        "multiple_max",
         "_multiple_len",
-        "_multiple_len_max",
         "_multiple_requests",
         "_multiple_response_size",
         "_tzinfo",
@@ -420,10 +420,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._polling_callback_shutdown = None
         self._queued_smartpoll_requests = 0
         ability: typing.Final = descriptor.ability
-        self._multiple_len = ability.get(mc.NS_APPLIANCE_CONTROL_MULTIPLE, {}).get(
+        self.multiple_max: typing.Final[int] = ability.get(mc.NS_APPLIANCE_CONTROL_MULTIPLE, {}).get(
             "maxCmdNum", 0
         )
-        self._multiple_len_max: typing.Final = self._multiple_len
+        self._multiple_len = self.multiple_max
         self._multiple_requests: list[MerossRequestType] = []
         self._multiple_response_size = PARAM_HEADER_SIZE
 
@@ -845,6 +845,123 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # else go with whatever transport: the device will reset it's configuration
         return await self.async_request(*unbind)
 
+    async def async_multiple_requests_ack(
+        self, requests: typing.Collection[MerossRequestType], auto_handle: bool = True
+    ) -> list[MerossMessageType] | None:
+        """Send requests in a single NS_APPLIANCE_CONTROL_MULTIPLE message.
+        If the whole request is succesful (might be partial if the device response
+        overflown somehow (see JSON patching in HTTP request api)
+        returns the unpacked reponses in a list.
+        auto_handle will instruct this api to forward the responses to the
+        namespace handling before returning.
+        Contrary to async_multiple_requests_flush this doesn't recover from
+        partial message responses so it doesn't resend missed requests/responses
+        """
+        if multiple_response := await self.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_MULTIPLE,
+            mc.METHOD_SET,
+            {
+                mc.KEY_MULTIPLE: [
+                    MerossRequest(self.key, *request, self._topic_response)
+                    for request in requests
+                ]
+            },
+        ):
+            if auto_handle:
+                multiple_responses = multiple_response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
+                for message in multiple_responses:
+                    self._handle(
+                        message[mc.KEY_HEADER],
+                        message[mc.KEY_PAYLOAD],
+                    )
+                return multiple_responses
+            return multiple_response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
+
+    async def async_multiple_requests_flush(self):
+        multiple_requests = self._multiple_requests
+        multiple_response_size = self._multiple_response_size
+        self._multiple_len = self.multiple_max
+        self._multiple_requests = []
+        self._multiple_response_size = PARAM_HEADER_SIZE
+
+        requests_len = len(multiple_requests)
+        while self.online and requests_len:
+            if requests_len == 1:
+                await self.async_request(*multiple_requests[0])
+                return
+
+            if not (
+                response := await self.async_request_ack(
+                    mc.NS_APPLIANCE_CONTROL_MULTIPLE,
+                    mc.METHOD_SET,
+                    {
+                        mc.KEY_MULTIPLE: [
+                            MerossRequest(self.key, *request, self._topic_response)
+                            for request in multiple_requests
+                        ]
+                    },
+                )
+            ):
+                # the ns_multiple failed but the reason could be the device
+                # did overflow somehow. I've seen 2 kind of errors so far on the
+                # HTTP client: typically the device returns an incomplete json
+                # and this is partly recovered in our http interface. One(old)
+                # bulb (msl120) instead completely disconnects (ServerDisconnectedException
+                # in http client) and so we get here with no response. The same
+                # msl bulb timeouts completely on MQTT, so the response to our mqtt requests
+                # is None again. At this point, if the device is still online we're
+                # trying a last resort issue of single requests
+                if self._online:
+                    self.log(
+                        self.WARNING,
+                        "Appliance.Control.Multiple failed with no response: requests=%d expected size=%d",
+                        requests_len,
+                        multiple_response_size,
+                    )
+                    for request in multiple_requests:
+                        await self.async_request(*request)
+                        if not self._online:
+                            break
+                return
+
+            multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
+            responses_len = len(multiple_responses)
+            if self.isEnabledFor(self.DEBUG):
+                self.log(
+                    self.DEBUG,
+                    "Appliance.Control.Multiple requests=%d (responses=%d) expected size=%d (actual=%d)",
+                    requests_len,
+                    responses_len,
+                    multiple_response_size,
+                    len(response.json()),
+                )
+            message: MerossMessageType
+            if responses_len == requests_len:
+                # faster shortcut
+                for message in multiple_responses:
+                    self._handle(
+                        message[mc.KEY_HEADER],
+                        message[mc.KEY_PAYLOAD],
+                    )
+                return
+            # the requests payload was too big and the response was
+            # truncated. the http client tried to 'recover' by discarding
+            # the incomplete payloads so we'll check what's missing
+            for message in multiple_responses:
+                m_header = message[mc.KEY_HEADER]
+                self._handle(
+                    m_header,
+                    message[mc.KEY_PAYLOAD],
+                )
+                namespace = m_header[mc.KEY_NAMESPACE]
+                for request in multiple_requests:
+                    if request[0] == namespace:
+                        multiple_requests.remove(request)
+                        break
+            # and re-issue the missing ones
+            requests_len = len(multiple_requests)
+            multiple_response_size = -1  # logging purpose
+
     async def async_mqtt_request_raw(
         self,
         request: MerossMessage,
@@ -1070,7 +1187,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self._multiple_response_size + strategy.response_size
             )
             if multiple_response_size > self.device_response_size_max:
-                await self.async_request_flush()
+                await self.async_multiple_requests_flush()
                 multiple_response_size = (
                     self._multiple_response_size + strategy.response_size
                 )
@@ -1079,7 +1196,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._multiple_len -= 1
             if self._multiple_len:
                 return
-            await self.async_request_flush()
+            await self.async_multiple_requests_flush()
         else:
             await self.async_request(*strategy.request)
 
@@ -1099,91 +1216,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         strategy.lastrequest = epoch
         await self.async_request_poll(strategy)
         return True
-
-    async def async_request_flush(self):
-        multiple_requests = self._multiple_requests
-        multiple_response_size = self._multiple_response_size
-        self._multiple_len = self._multiple_len_max
-        self._multiple_requests = []
-        self._multiple_response_size = PARAM_HEADER_SIZE
-
-        requests_len = len(multiple_requests)
-        while self.online and requests_len:
-            if requests_len == 1:
-                await self.async_request(*multiple_requests[0])
-                return
-
-            if not (
-                response := await self.async_request_ack(
-                    mc.NS_APPLIANCE_CONTROL_MULTIPLE,
-                    mc.METHOD_SET,
-                    {
-                        mc.KEY_MULTIPLE: [
-                            MerossRequest(self.key, *request, self._topic_response)
-                            for request in multiple_requests
-                        ]
-                    },
-                )
-            ):
-                # the ns_multiple failed but the reason could be the device
-                # did overflow somehow. I've seen 2 kind of errors so far on the
-                # HTTP client: typically the device returns an incomplete json
-                # and this is partly recovered in our http interface. One(old)
-                # bulb (msl120) instead completely disconnects (ServerDisconnectedException
-                # in http client) and so we get here with no response. The same
-                # msl bulb timeouts completely on MQTT, so the response to our mqtt requests
-                # is None again. At this point, if the device is still online we're
-                # trying a last resort issue of single requests
-                if self._online:
-                    self.log(
-                        self.WARNING,
-                        "Appliance.Control.Multiple failed with no response: requests=%d expected size=%d",
-                        requests_len,
-                        multiple_response_size,
-                    )
-                    for request in multiple_requests:
-                        await self.async_request(*request)
-                        if not self._online:
-                            break
-                return
-
-            multiple_responses = response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
-            responses_len = len(multiple_responses)
-            if self.isEnabledFor(self.DEBUG):
-                self.log(
-                    self.DEBUG,
-                    "Appliance.Control.Multiple requests=%d (responses=%d) expected size=%d (actual=%d)",
-                    requests_len,
-                    responses_len,
-                    multiple_response_size,
-                    len(response.json()),
-                )
-            message: MerossMessageType
-            if responses_len == requests_len:
-                # faster shortcut
-                for message in multiple_responses:
-                    self._handle(
-                        message[mc.KEY_HEADER],
-                        message[mc.KEY_PAYLOAD],
-                    )
-                return
-            # the requests payload was too big and the response was
-            # truncated. the http client tried to 'recover' by discarding
-            # the incomplete payloads so we'll check what's missing
-            for message in multiple_responses:
-                m_header = message[mc.KEY_HEADER]
-                self._handle(
-                    m_header,
-                    message[mc.KEY_PAYLOAD],
-                )
-                namespace = m_header[mc.KEY_NAMESPACE]
-                for request in multiple_requests:
-                    if request[0] == namespace:
-                        multiple_requests.remove(request)
-                        break
-            # and re-issue the missing ones
-            requests_len = len(multiple_requests)
-            multiple_response_size = -1  # logging purpose
 
     async def _async_request_updates(self, epoch: float, namespace: str | None):
         """
@@ -1208,7 +1240,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if namespace != _strategy.namespace:
                 await _strategy.async_poll(self, epoch)
         # needed even if offline: it takes care of resetting the ns_multiple state
-        await self.async_request_flush()
+        await self.async_multiple_requests_flush()
 
         # when create_diagnostic_entities is True, after onlining we'll dynamically
         # scan the abilities to look for 'unknown' namespaces (kind of like tracing)

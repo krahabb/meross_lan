@@ -1,13 +1,9 @@
 from homeassistant.components import cover as haec
-from homeassistant.components.cover import (
-    CoverEntity,
-    CoverEntityFeature,
-)
+from homeassistant.components.cover import CoverEntity, CoverEntityFeature
 
 from custom_components.meross_lan.cover import MLGarage, MLRollerShutter
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.switch import MLSwitch
-
 from emulator.mixins.garagedoor import GarageDoorMixin
 from emulator.mixins.rollershutter import RollerShutterMixin
 
@@ -54,10 +50,9 @@ class EntityTest(EntityComponentTest):
         elif isinstance(entity, MLRollerShutter):
             assert (
                 entity.supported_features
-                == CoverEntityFeature.OPEN
+                >= CoverEntityFeature.OPEN
                 | CoverEntityFeature.CLOSE
                 | CoverEntityFeature.STOP
-                | CoverEntityFeature.SET_POSITION
             )
 
     async def async_test_enabled_callback(self, entity: CoverEntity):
