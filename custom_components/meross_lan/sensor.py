@@ -132,7 +132,17 @@ class ProtocolSensor(MLSensor):
         )
 
     def set_available(self):
-        pass # TODO: invoke self.update_connected() ?
+        manager = self.manager
+        self._attr_state = manager.curr_protocol
+        attrs = self.extra_state_attributes
+        _get_attr_state = self._get_attr_state
+        if manager.conf_protocol is not manager.curr_protocol:
+            # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
+            # if conf_protocol is fixed we'll not set these attrs (redundant)
+            attrs[self.ATTR_HTTP] = _get_attr_state(manager._http_active)
+            attrs[self.ATTR_MQTT] = _get_attr_state(manager._mqtt_active)
+            attrs[self.ATTR_MQTT_BROKER] = _get_attr_state(manager._mqtt_connected)
+        self.flush_state()
 
     def set_unavailable(self):
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED
@@ -144,19 +154,6 @@ class ProtocolSensor(MLSensor):
             }
         else:
             self.extra_state_attributes = {}
-        self.flush_state()
-
-    def update_connected(self):
-        manager = self.manager
-        self._attr_state = manager.curr_protocol
-        attrs = self.extra_state_attributes
-        _get_attr_state = self._get_attr_state
-        if manager.conf_protocol is not manager.curr_protocol:
-            # this is to identify when conf_protocol is CONF_PROTOCOL_AUTO
-            # if conf_protocol is fixed we'll not set these attrs (redundant)
-            attrs[self.ATTR_HTTP] = _get_attr_state(manager._http_active)
-            attrs[self.ATTR_MQTT] = _get_attr_state(manager._mqtt_active)
-            attrs[self.ATTR_MQTT_BROKER] = _get_attr_state(manager._mqtt_connected)
         self.flush_state()
 
     # these smart updates are meant to only flush attrs

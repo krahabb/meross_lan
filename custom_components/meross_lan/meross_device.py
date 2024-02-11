@@ -1609,7 +1609,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if not self._online:
             self._set_online()
             self._polling_delay = self.polling_period
-            self.sensor_protocol.update_connected()
             # retrigger the polling loop in case it is scheduled/pending.
             # This could happen when we receive an MQTT message
             if self._unsub_polling_callback:
@@ -2018,7 +2017,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         )
         self.curr_protocol = protocol
         if self._online:
-            self.sensor_protocol.update_connected()
+            self.sensor_protocol.set_available()
 
     def _update_config(self):
         """
