@@ -119,8 +119,8 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
         manager: GarageMixin,
         channel,
         key: str,
-        state=None,
         *,
+        onoff = None,
         namespace=mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
     ):
         self.key_onoff = key
@@ -130,7 +130,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
             channel,
             f"config_{key}",
             self.DeviceClass.SWITCH,
-            state=state,
+            onoff=onoff,
             namespace=namespace,
         )
 
@@ -191,7 +191,7 @@ class MLGarageConfigSwitch(MLGarageMultipleConfigSwitch):
             manager,
             None,
             key,
-            self.STATE_ON if payload[key] else self.STATE_OFF,
+            onoff=payload[key],
             namespace=mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
         )
 

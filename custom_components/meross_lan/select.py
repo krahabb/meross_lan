@@ -158,7 +158,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     entity_category = me.EntityCategory.CONFIG
     entity_registry_enabled_default = False
     options: list[str]
-    _attr_state: str | None
+    _attr_state: str
 
     __slots__ = (
         "climate",
@@ -179,7 +179,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         self._tracked_state = None
         self._unsub_track_state = None
         self._unsub_tracking_delayed = None
-        super().__init__(climate.manager, climate.channel, "tracked_sensor")
+        super().__init__(climate.manager, climate.channel, "tracked_sensor", state = hac.STATE_OFF)
 
     # interface: MerossEntity
     async def async_shutdown(self):
@@ -198,9 +198,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     async def async_added_to_hass(self):
         hass = self.hass
 
-        if self._attr_state is None:
-            self.available = True
-            self._attr_state = hac.STATE_OFF
+        if self._attr_state is hac.STATE_OFF:
             with self.exception_warning("restoring previous state"):
                 if last_state := await get_entity_last_state_available(
                     hass, self.entity_id

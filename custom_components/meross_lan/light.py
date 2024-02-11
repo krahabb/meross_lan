@@ -120,10 +120,14 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         self.rgb_color = None
         super().__init__(manager, payload.get(mc.KEY_CHANNEL, 0))
 
+    def set_unavailable(self):
+        self._light = {}
+        super().set_unavailable()
+
     def update_onoff(self, onoff):
         if mc.KEY_ONOFF in self._light:
             self._light[mc.KEY_ONOFF] = onoff
-        self.update_state(self.STATE_ON if onoff else self.STATE_OFF)
+        super().update_onoff(onoff)
 
     def _inherited_parse_light(self, payload: dict):
         """
@@ -132,9 +136,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         pass
 
     def _parse_light(self, payload: dict):
-        if not payload:
-            return
-        if (self._light != payload) or not self.available:
+        if self._light != payload:
             self._light = payload
 
             if mc.KEY_ONOFF in payload:

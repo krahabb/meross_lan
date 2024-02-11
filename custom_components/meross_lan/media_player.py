@@ -54,6 +54,12 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         )
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_MP3, self)
 
+    # interface: MerossEntity
+    def set_unavailable(self):
+        self._mp3 = {}
+        super().set_unavailable()
+
+    # interface: MediaPlayerEntity
     @property
     def volume_level(self):
         volume = self._mp3.get(mc.KEY_VOLUME)
@@ -116,6 +122,7 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
             song = song + 1
         await self.async_request_mp3(mc.KEY_SONG, song)
 
+    # interface: self
     async def async_request_mp3(self, key: str, value: int):
         if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_MP3,
@@ -134,7 +141,7 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         """
         {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}
         """
-        if payload and ((self._mp3 != payload) or not self.available):
+        if (self._mp3 != payload):
             self._mp3 = payload
             if mc.KEY_MUTE in payload:
                 self._attr_state = (

@@ -39,12 +39,20 @@ class MtsConfigSwitch(MLSwitch):
 
     namespace: str
 
-    def __init__(self, climate: MtsClimate, entitykey: str, namespace: str):
+    def __init__(
+        self,
+        climate: MtsClimate,
+        entitykey: str,
+        *,
+        onoff=None,
+        namespace: str,
+    ):
         super().__init__(
             climate.manager,
             climate.channel,
             entitykey,
             MLSwitch.DeviceClass.SWITCH,
+            onoff=onoff,
             namespace=namespace,
         )
 

@@ -254,10 +254,16 @@ class MerossToggle(MerossEntity):
         entitykey: str | None = None,
         device_class: object | None = None,
         *,
-        state: StateType = None,
+        onoff=None,
         namespace: str | None = None,
     ):
-        super().__init__(manager, channel, entitykey, device_class, state=state)
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            device_class,
+            state=None if onoff is None else self.STATE_ON if onoff else self.STATE_OFF,
+        )
         if namespace:
             self.namespace = namespace
             self.key_namespace = NAMESPACE_TO_KEY[namespace]

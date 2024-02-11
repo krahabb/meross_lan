@@ -77,9 +77,11 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
                 self.switch.update_onoff(payload[mc.KEY_ONOFF])  # type: ignore
             except AttributeError:
                 self.switch = MtsConfigSwitch(
-                    self.climate, f"{self.entitykey}_switch", self.namespace
+                    self.climate,
+                    f"{self.entitykey}_switch",
+                    onoff=payload[mc.KEY_ONOFF],
+                    namespace=self.namespace,
                 )
-                self.switch.update_onoff(payload[mc.KEY_ONOFF])
         if mc.KEY_WARNING in payload:
             # on demand instance
             try:
@@ -215,7 +217,9 @@ class MtsExternalSensorSwitch(MtsConfigSwitch):
 
     def __init__(self, climate: MtsThermostatClimate):
         super().__init__(
-            climate, "external sensor mode", mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
+            climate,
+            "external sensor mode",
+            namespace=mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
         )
         climate.manager.register_parser(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,

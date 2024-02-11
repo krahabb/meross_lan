@@ -713,6 +713,7 @@ class MerossSubDevice(MerossDeviceBase):
                 self.id,
                 None,
                 MLSwitch.DeviceClass.SWITCH,
+                onoff=p_togglex[mc.KEY_ONOFF],
                 namespace=mc.NS_APPLIANCE_HUB_TOGGLEX,
             )
             switch_togglex.entity_category = me.EntityCategory.CONFIG
