@@ -185,8 +185,34 @@ class TimeMocker(contextlib.AbstractContextManager):
         if not isinstance(tick, timedelta):
             tick = timedelta(seconds=tick)
 
+        """
+        This basic time ticking doesn't produce fixed time steps increase
+        since the time mocker might also be externally manipulated
+        (for example our HTTP mocker introduces a delay)
+        This introduces a sort of 'drift' in our time sampling
+        while we'd better prefer having stable fixed time steps
+
         while self.time() < timeout:
             await self.async_tick(tick)
+
+        The following solution instead creates it's own time ramp
+        and forces the time mocker to follow our prefixed sampling
+        even if it was 'ticked' in other parts of the code
+
+        beware though that the additional ticks don't overflow
+        our sampling step tick...as the time could then jump back
+        according to this algorithm and might be undesirable
+        (to say the least - dunno if freezegun allows this)
+        """
+        time_current = self.time()
+        time_next = time_current + tick
+        tick_next = tick
+        while time_current < timeout:
+            await self.async_tick(tick_next)
+            # here self.time() might have been advanced more than tick
+            time_current = time_next
+            time_next = time_current + tick
+            tick_next = time_next - self.time()
 
     def warp(self, tick: float | int | timedelta = 0.5):
         """
@@ -635,6 +661,27 @@ class DeviceContext(ConfigEntryMocker):
 
     async def async_stopwarp(self):
         await self._time_mock.async_stopwarp()
+
+    async def async_poll_single(self):
+        """Advances the time mocker up to the next polling cycle and executes it."""
+        await self._time_mock.async_tick(
+            self.device._unsub_polling_callback.when() - self.hass.loop.time()  # type: ignore
+        )
+
+    async def async_poll_timeout(
+        self,
+        timeout: float | int | timedelta | datetime,
+    ):
+        """Advances the time mocker up to the timeout (delta or absolute)
+        stepping exactly through each single polling loop."""
+        if not isinstance(timeout, datetime):
+            if isinstance(timeout, timedelta):
+                timeout = self.time() + timeout
+            else:
+                timeout = self.time() + timedelta(seconds=timeout)
+
+        while self.time() < timeout:
+            await self.async_poll_single()
 
 
 class CloudApiMocker(contextlib.AbstractContextManager):

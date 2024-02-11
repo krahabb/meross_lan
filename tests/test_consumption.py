@@ -1,6 +1,7 @@
 """
     Test the ConsumptionxMixin works, especially on reset bugs (#264,#268)
 """
+
 import datetime as dt
 import typing
 from zoneinfo import ZoneInfo
@@ -143,7 +144,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
                 energy_low <= sensor_estimate.native_value <= energy_high  # type: ignore
             ), f"estimate in {msg}"
 
-        await context.async_warp(TEST_DURATION, tick=polling_tick)
+        await context.async_poll_timeout(TEST_DURATION)
         _check_energy_states(TEST_POWER, TEST_DURATION, "boot measures")
 
         # since the device polling callback checks for timeouts in communication,
@@ -160,7 +161,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
         # now the device polling state is good. We'll tick the states across
         # midnight and check the ongoing updates
         while True:
-            await context.async_tick(polling_tick)
+            await context.async_poll_single()
             if context.time() + polling_tick >= tomorrow:
                 # the next poll will be after midnight
                 # so we're checking last values before the trip
@@ -174,7 +175,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
                 assert sensor_estimate.native_value == 0
                 break
 
-        await context.async_warp(TEST_DURATION, tick=polling_tick)
+        await context.async_poll_timeout(TEST_DURATION)
         _check_energy_states(TEST_POWER, TEST_DURATION, "begin of the day measures")
 
         # our emulator 'BUG' doesnt reset consumption so the new day offset
@@ -226,7 +227,7 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
                 energy_low <= int(consumptionstate.state) <= energy_high + 1
             ), f"consumption in {msg}"
 
-        await context.async_warp(TEST_DURATION, tick=polling_tick)
+        await context.async_poll_timeout(TEST_DURATION)
         _check_energy_states(TEST_POWER, TEST_DURATION, "boot measures")
 
         # since the device polling callback checks for timeouts in communication,
@@ -243,7 +244,7 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
         # now the device polling state is good. We'll tick the states across
         # midnight and check the ongoing updates
         while True:
-            await context.async_tick(polling_tick)
+            await context.async_poll_single()
             if context.time() + polling_tick >= tomorrow:
                 # the next poll will be after midnight
                 # so we're checking last values before the trip
@@ -254,7 +255,7 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
                 assert yesterday_consumption is not None
                 break
 
-        await context.async_warp(TEST_DURATION, tick=polling_tick)
+        await context.async_poll_timeout(TEST_DURATION)
         _check_energy_states(TEST_POWER, TEST_DURATION, "begin of the day measures")
 
         # our emulator 'BUG' doesnt reset consumption so the new day offset
@@ -346,7 +347,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
             # check the real consumption
             _check_energy_states(TEST_POWER, 3 * TEST_DURATION, msg)
 
-        await context.async_warp(TEST_DURATION, tick=polling_tick)
+        await context.async_poll_timeout(TEST_DURATION)
         _check_energy_states(TEST_POWER, TEST_DURATION, "boot measures")
 
         await _async_unload_reload("reboot no offset", 0)
@@ -365,7 +366,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
         # now the device polling state is good. We'll tick the states across
         # midnight and check the ongoing updates
         while True:
-            await context.async_tick(polling_tick)
+            await context.async_poll_single()
             if context.time() + polling_tick >= tomorrow:
                 # the next poll will be after midnight
                 # so we're checking last values before the trip
@@ -379,7 +380,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
                 assert context.device._sensor_energy_estimate.native_value == 0  # type: ignore
                 break
 
-        await context.async_warp(TEST_DURATION, tick=polling_tick)
+        await context.async_poll_timeout(TEST_DURATION)
         _check_energy_states(TEST_POWER, TEST_DURATION, "begin of the day measures")
 
         # our emulator 'BUG' doesnt reset consumption so the new day offset
