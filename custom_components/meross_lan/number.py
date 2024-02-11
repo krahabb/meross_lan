@@ -45,7 +45,7 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
 
     device_scale: float = 1
     """used to scale the device value when converting to/from native value"""
-    device_value: float | None
+    device_value: int | None
     """the 'native' device value carried in protocol messages"""
 
     # HA core entity attributes:
@@ -68,10 +68,18 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         channel: object | None,
         entitykey: str | None = None,
         device_class: DeviceClass | None = None,
+        *,
+        device_value: int | None = None,
     ):
-        self.device_value = None
+        self.device_value = device_value
         self._unsub_request = None
-        super().__init__(manager, channel, entitykey, device_class)
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            device_class,
+            state=None if device_value is None else device_value / self.device_scale,
+        )
 
     async def async_shutdown(self):
         self._cancel_request()

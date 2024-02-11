@@ -120,7 +120,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
         channel,
         key: str,
         *,
-        onoff = None,
+        onoff=None,
         namespace=mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
     ):
         self.key_onoff = key
@@ -224,10 +224,10 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
     native_step = 1
     native_unit_of_measurement = UnitOfTime.SECONDS
 
-    def __init__(self, manager: GarageMixin, channel, key: str):
+    def __init__(self, manager: GarageMixin, channel, key: str, *, device_value=None):
         self.key_value = key
         self.name = key
-        super().__init__(manager, channel, f"config_{key}")
+        super().__init__(manager, channel, f"config_{key}", device_value=device_value)
 
 
 class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
@@ -236,10 +236,8 @@ class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
     'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
     """
 
-    def __init__(self, manager: GarageMixin, key: str, init_payload: dict):
-        super().__init__(manager, None, key)
-        self._attr_state = init_payload[key] / self.device_scale
-        self.available = True
+    def __init__(self, manager: GarageMixin, key: str, payload: dict):
+        super().__init__(manager, None, key, device_value=payload[key])
 
     async def async_request(self, device_value):
         return await self.manager.async_request_ack(
@@ -258,6 +256,14 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
     This entity will just provide an 'HA only' storage for these parameters
     """
 
+    def __init__(self, garage: MLGarage, key: str):
+        super().__init__(
+            garage.manager,
+            garage.channel,
+            key,
+            device_value=garage._transition_duration * self.device_scale,
+        )
+
     def set_available(self):
         pass
 
@@ -266,14 +272,11 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
-        if self._attr_state is None:
-            self.available = True
-            self._attr_state = self.manager.entities[self.channel]._transition_duration  # type: ignore
-            with self.exception_warning("restoring previous state"):
-                if last_state := await get_entity_last_state_available(
-                    self.hass, self.entity_id
-                ):
-                    self._attr_state = float(last_state.state)  # type: ignore
+        with self.exception_warning("restoring previous state"):
+            if last_state := await get_entity_last_state_available(
+                self.hass, self.entity_id
+            ):
+                self._attr_state = float(last_state.state)  # type: ignore
 
     async def async_set_native_value(self, value: float):
         self.update_state(value)
@@ -444,7 +447,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                             self.number_signalOpen = (
                                 self.manager.number_doorOpenDuration
                                 or MLGarageEmulatedConfigNumber(
-                                    self.manager, self.channel, mc.KEY_DOOROPENDURATION
+                                    self, mc.KEY_DOOROPENDURATION
                                 )
                             )
                             timeout = self.number_signalOpen.native_value
@@ -458,7 +461,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                             self.number_signalClose = (
                                 self.manager.number_doorCloseDuration
                                 or MLGarageEmulatedConfigNumber(
-                                    self.manager, self.channel, mc.KEY_DOORCLOSEDURATION
+                                    self, mc.KEY_DOORCLOSEDURATION
                                 )
                             )
                             timeout = self.number_signalClose.native_value
@@ -692,7 +695,7 @@ class GarageMixin(
                     garage.number_signalOpen = (
                         garage.number_signalOpen
                         or MLGarageEmulatedConfigNumber(
-                            self, channel, mc.KEY_DOOROPENDURATION
+                            garage, mc.KEY_DOOROPENDURATION
                         )
                     )
                     # set guard so we don't repeat this 'late conditional init'
@@ -722,7 +725,7 @@ class GarageMixin(
                     garage.number_signalClose = (
                         garage.number_signalClose
                         or MLGarageEmulatedConfigNumber(
-                            self, channel, mc.KEY_DOORCLOSEDURATION
+                            garage, mc.KEY_DOORCLOSEDURATION
                         )
                     )
                     # set guard so we don't repeat this 'late conditional init'
