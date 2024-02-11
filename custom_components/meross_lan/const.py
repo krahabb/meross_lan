@@ -190,6 +190,8 @@ PARAM_TIMESTAMP_TOLERANCE = 5
 """max device timestamp diff against our and trigger warning and (eventually) fix it"""
 PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
 """used to delay the iteration of abilities while tracing"""
+PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT = 2
+"""used when polling the cover state to monitor an ongoing transition"""
 PARAM_CLOUDMQTT_UPDATE_PERIOD = 1795
 """for polled entities over cloud MQTT use 'at least' this"""
 PARAM_RESTORESTATE_TIMEOUT = 300

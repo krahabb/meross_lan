@@ -26,6 +26,7 @@ from .const import (
     CONF_PROTOCOL_HTTP,
     PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
+    PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
 )
 from .helpers import (
     clamp,
@@ -784,8 +785,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         self._signalOpen: int = 30000  # msec to fully open (config'd on device)
         self._signalClose: int = 30000  # msec to fully close (config'd on device)
         self._position_native = None  # as reported by the device
-        self._position_start = None  # set when when we're controlling a timed position
-        self._position_starttime = None  # epoch of transition start
+        self._position_start = 0  # set when when we're controlling a timed position
+        self._position_starttime = 0  # epoch of transition start
         self._transition_unsub = None
         self._transition_end_unsub = None
         # flag indicating the device position is reliable (#227)
@@ -867,11 +868,11 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     "Cannot estimate command direction. Please use open_cover or close_cover"
                 )
             if position > current_position:
-                position = mc.ROLLERSHUTTER_POSITION_OPENED
                 timeout = ((position - current_position) * self._signalOpen) / 100000
+                position = mc.ROLLERSHUTTER_POSITION_OPENED
             elif position < current_position:
-                position = mc.ROLLERSHUTTER_POSITION_CLOSED
                 timeout = ((current_position - position) * self._signalClose) / 100000
+                position = mc.ROLLERSHUTTER_POSITION_CLOSED
             else:
                 return  # No-Op
             if await self.async_request_position(position):
@@ -880,7 +881,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 )
 
     async def async_stop_cover(self, **kwargs):
-        await self.async_request_position(-1)
+        await self.async_request_position(mc.ROLLERSHUTTER_POSITION_STOP)
 
     async def async_request_position(self, position: int):
         self._transition_cancel()
@@ -921,7 +922,19 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             # At this stage the responses are already processed by the MerossDevice
             # interface and we should already be 'in transition'
             if responses[0][mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK:
-                if not self._transition_unsub:
+                if (
+                    (len(responses) == 3)
+                    and (responses[1][mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK)
+                    and (responses[2][mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK)
+                ):
+                    # our state machine is already updated since the STATE and POSITION
+                    # messages were correctly processed
+                    return True
+
+                if (
+                    not self._transition_unsub
+                    and position != mc.ROLLERSHUTTER_POSITION_STOP
+                ):
                     # this could happen if the shutter was already 'at position'
                     # so that it didn't start an internal transition (guessing)
                     # or if the 2nd message in our requests failed somehow
@@ -1004,12 +1017,18 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         if not self._position_native_isgood:
             epoch = self.manager.lastresponse
             if self.is_opening:
-                self.current_cover_position = int(self._position_start + ((epoch - self._position_starttime) * 100000) / self._signalOpen)  # type: ignore
+                self.current_cover_position = round(
+                    self._position_start
+                    + ((epoch - self._position_starttime) * 100000) / self._signalOpen
+                )
                 if self.current_cover_position > mc.ROLLERSHUTTER_POSITION_OPENED:
                     self.current_cover_position = mc.ROLLERSHUTTER_POSITION_OPENED
                 self._attr_state = None  # ensure flush when update_state
             elif self.is_closing:
-                self.current_cover_position = int(self._position_start - ((epoch - self._position_starttime) * 100000) / self._signalClose)  # type: ignore
+                self.current_cover_position = round(
+                    self._position_start
+                    - ((epoch - self._position_starttime) * 100000) / self._signalClose
+                )
                 if self.current_cover_position < mc.ROLLERSHUTTER_POSITION_CLOSED:
                     self.current_cover_position = mc.ROLLERSHUTTER_POSITION_CLOSED
                 self._attr_state = None  # ensure flush when update_state
@@ -1045,7 +1064,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 if not self._transition_unsub:
                     # ensure we 'follow' cover movement
                     self._transition_unsub = schedule_async_callback(
-                        self.hass, 2, self._async_transition_callback
+                        self.hass, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT, self._async_transition_callback
                     )
             self.flush_state()
 
@@ -1071,7 +1090,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         not receiving MQTT updates. If device was configured for MQTT only we could
         not setup this at all."""
         self._transition_unsub = schedule_async_callback(
-            self.hass, 2, self._async_transition_callback
+            self.hass, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT, self._async_transition_callback
         )
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
