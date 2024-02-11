@@ -23,7 +23,6 @@ if typing.TYPE_CHECKING:
 class EnergyEstimateSensor(MLSensor):
 
     # HA core entity attributes:
-    available: Final[bool] = True
     entity_registry_enabled_default = False
     _attr_state: int
 
@@ -62,6 +61,9 @@ class EnergyEstimateSensor(MLSensor):
             self._attr_state_float = float(state.state)
             self._attr_state = int(self._attr_state_float)
 
+    def set_available(self):
+        pass
+    
     def set_unavailable(self):
         # we need to preserve our sum so we don't reset
         # it on disconnection. Also, it's nice to have it

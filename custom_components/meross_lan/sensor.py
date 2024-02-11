@@ -109,7 +109,6 @@ class ProtocolSensor(MLSensor):
     manager: MerossDevice
 
     # HA core entity attributes:
-    available: Final[bool] = True
     entity_category = me.EntityCategory.DIAGNOSTIC
     entity_registry_enabled_default = False
     _attr_state: str
@@ -131,6 +130,9 @@ class ProtocolSensor(MLSensor):
             self.DeviceClass.ENUM,
             state=ProtocolSensor.STATE_DISCONNECTED,
         )
+
+    def set_available(self):
+        pass # TODO: invoke self.update_connected() ?
 
     def set_unavailable(self):
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED

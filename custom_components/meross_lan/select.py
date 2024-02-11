@@ -155,7 +155,6 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     climate: MtsClimate
 
     # HA core entity attributes:
-    available: Final[bool] = True
     entity_category = me.EntityCategory.CONFIG
     entity_registry_enabled_default = False
     options: list[str]
@@ -188,6 +187,9 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         await super().async_shutdown()
         self.climate = None  # type: ignore
 
+    def set_available(self):
+        pass
+
     def set_unavailable(self):
         # reset the timeout and the eventual callback when the device
         # offlines so we promptly re-track when the device onlines again
@@ -197,6 +199,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         hass = self.hass
 
         if self._attr_state is None:
+            self.available = True
             self._attr_state = hac.STATE_OFF
             with self.exception_warning("restoring previous state"):
                 if last_state := await get_entity_last_state_available(

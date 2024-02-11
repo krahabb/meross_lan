@@ -153,10 +153,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.number_away_temperature = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
 
-    @property
-    def available(self):
-        return self._mts_mode is not None
-
     def set_unavailable(self):
         self._mts_active = None
         self._mts_mode = None

@@ -21,19 +21,24 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
     DeviceClass = update.UpdateDeviceClass
 
     # HA core entity attributes:
-    available: Final[bool] = True
     entity_category = me.EntityCategory.DIAGNOSTIC
     installed_version: str | None = None
     latest_version: str | None = None
     release_summary: str | None = None
 
     def __init__(self, manager: MerossDevice):
+        # TODO: invoke construction with actual state values so it gets added in 1-step to the
+        # HA state machine
         super().__init__(manager, None, "update_firmware", self.DeviceClass.FIRMWARE)
+        self.available = True
 
     @property
     def unique_id(self):
         # this is a 'transient' entity and we don't want it to persist.
         return None
+
+    def set_available(self):
+        pass
 
     def set_unavailable(self):
         pass

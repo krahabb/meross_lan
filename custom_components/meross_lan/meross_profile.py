@@ -108,7 +108,6 @@ class ConnectionSensor(MLDiagnosticSensor):
     manager: ApiProfile
 
     # HA core entity attributes:
-    available: Final[bool] = True
     extra_state_attributes: AttrDictType
     _attr_state: str
     options: list[str] = [
@@ -156,9 +155,6 @@ class ConnectionSensor(MLDiagnosticSensor):
         await super().async_shutdown()
         self.connection.sensor_connection = None
         self.connection: MQTTConnection = None  # type: ignore
-
-    def set_unavailable(self):
-        raise NotImplementedError("set_unavailable")
 
     # interface: self
     def update_devices(self):

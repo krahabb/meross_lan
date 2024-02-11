@@ -705,7 +705,9 @@ class MerossSubDevice(MerossDeviceBase):
         """{"id": "00000000", "onoff": 0, ...}"""
         # might come from parse_digest or from Appliance.Hub.ToggleX
         # in any case we're just interested to the "onoff" key
-        if not (switch_togglex := self.switch_togglex):
+        if switch_togglex := self.switch_togglex:
+            switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])
+        else:
             self.switch_togglex = switch_togglex = MLSwitch(
                 self,
                 self.id,
@@ -715,7 +717,7 @@ class MerossSubDevice(MerossDeviceBase):
             )
             switch_togglex.entity_category = me.EntityCategory.CONFIG
             switch_togglex.key_channel = mc.KEY_ID
-        switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])
+
 
     def _parse_version(self, p_version: dict):
         """{"id": "00000000", "hardware": "1.1.5", "firmware": "5.1.8"}"""

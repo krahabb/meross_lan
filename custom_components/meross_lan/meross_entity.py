@@ -73,6 +73,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     icon: str | None = None
     translation_key: str | None = None
     # These are actually per instance
+    available: bool
     device_class: Final[object | str | None]
     name: str | None
     _attr_state: StateType
@@ -86,6 +87,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         "channel",
         "entitykey",
         "namespace_handlers",
+        "available",
         "device_class",
         "name",
         "_attr_state",
@@ -127,6 +129,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.channel = channel
         self.entitykey = entitykey
         self.namespace_handlers: set[NamespaceHandler] = set()
+        self.available = state is not None
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
         if hasattr(self, "name"):
@@ -154,12 +157,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     # interface: Entity
     @property
-    def available(self):
-        # TODO: refactor available property to slotted attribute
-        # by also adding a set_available method
-        return self._attr_state is not None
-
-    @property
     def device_info(self):
         return self.manager.deviceentry_id
 
@@ -179,6 +176,16 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             handler.unregister(self)
         self.manager.entities.pop(self.id)
         self.manager: EntityManager = None  # type: ignore
+
+    def set_available(self):
+        self.available = True
+        # we don't flush here since we'll wait for update_state
+
+    def set_unavailable(self):
+        self._attr_state = None
+        if self.available:
+            self.available = False
+            self.flush_state()
 
     def update_state(self, state: StateType):
         """
@@ -201,9 +208,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         """
         if self._hass_connected:
             self.async_write_ha_state()
-
-    def set_unavailable(self):
-        self.update_state(None)
 
     def _parse_undefined(self, payload):
         # this is a default handler for any message (in protocol routing)

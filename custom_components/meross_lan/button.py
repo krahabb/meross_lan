@@ -39,13 +39,6 @@ class MLButton(me.MerossEntity, button.ButtonEntity):
     ):
         super().__init__(manager, channel, entitykey, device_class)
 
-    @property
-    def available(self):
-        return self.manager.online
-
-    def set_unavailable(self):
-        self.flush_state()
-
     # interface: button.buttonEntity
     async def async_press(self) -> None:
         """Press the button.(BOOM!)"""

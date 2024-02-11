@@ -283,6 +283,8 @@ class MerossDeviceBase(EntityManager):
     def _set_online(self):
         self.log(self.DEBUG, "Back online!")
         self._online = True
+        for entity in self.entities.values():
+            entity.set_available()
 
     def _set_offline(self):
         self.log(self.DEBUG, "Going offline!")

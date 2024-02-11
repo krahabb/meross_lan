@@ -75,7 +75,6 @@ async def async_setup_entry(
 class MLGarageTimeoutBinarySensor(MLBinarySensor):
 
     # HA core entity attributes:
-    available: Final[bool] = True
     entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, cover: MLGarage):
@@ -87,6 +86,9 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
             self.DeviceClass.PROBLEM,
             state=self.STATE_OFF,
         )
+
+    def set_available(self):
+        pass
 
     def set_unavailable(self):
         pass
@@ -237,6 +239,7 @@ class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
     def __init__(self, manager: GarageMixin, key: str, init_payload: dict):
         super().__init__(manager, None, key)
         self._attr_state = init_payload[key] / self.device_scale
+        self.available = True
 
     async def async_request(self, device_value):
         return await self.manager.async_request_ack(
@@ -255,8 +258,8 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
     This entity will just provide an 'HA only' storage for these parameters
     """
 
-    # HA core entity attributes:
-    available: Final[bool] = True
+    def set_available(self):
+        pass
 
     def set_unavailable(self):
         pass
@@ -264,6 +267,7 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         if self._attr_state is None:
+            self.available = True
             self._attr_state = self.manager.entities[self.channel]._transition_duration  # type: ignore
             with self.exception_warning("restoring previous state"):
                 if last_state := await get_entity_last_state_available(
