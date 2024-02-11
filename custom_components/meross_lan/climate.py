@@ -173,52 +173,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.schedule.flush_state()
 
     # interface: ClimateEntity
-    """REMOVE(attr)
-    @property
-    def temperature_unit(self):
-        return MtsClimate.TEMP_CELSIUS
-
-    @property
-    def min_temp(self):
-        return self._attr_min_temp
-
-    @property
-    def max_temp(self):
-        return self._attr_max_temp
-
-    @property
-    def hvac_modes(self):
-        return self._attr_hvac_modes
-
-    @property
-    def hvac_mode(self):
-        return self._attr_hvac_mode
-
-    @property
-    def hvac_action(self):
-        return self._attr_hvac_action
-
-    @property
-    def current_temperature(self):
-        return self._attr_current_temperature
-
-    @property
-    def target_temperature(self):
-        return self._attr_target_temperature
-
-    @property
-    def target_temperature_step(self):
-        return 0.5
-
-    @property
-    def preset_modes(self):
-        return self._attr_preset_modes
-
-    @property
-    def preset_mode(self):
-        return self._attr_preset_mode
-    """
-
     async def async_turn_on(self):
         await self.async_request_onoff(1)
 

@@ -188,16 +188,6 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         await super().async_shutdown()
         self.climate = None  # type: ignore
 
-    """REMOVE(attr)
-    @property
-    def available(self):
-        return True
-
-    @property
-    def entity_registry_enabled_default(self):
-        return False
-    """
-
     def set_unavailable(self):
         # reset the timeout and the eventual callback when the device
         # offlines so we promptly re-track when the device onlines again
@@ -237,12 +227,6 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         await super().async_will_remove_from_hass()
 
     # interface: SelectEntity
-    """REMOVE
-    @property
-    def options(self) -> list[str]:
-        return self._attr_options
-    """
-
     @property
     def current_option(self):
         return self._attr_state

@@ -25,24 +25,6 @@ class MLScreenBrightnessNumber(MLConfigNumber):
         self.name = f"Screen brightness ({key})"
         super().__init__(manager, channel, f"screenbrightness_{key}")
 
-    """REMOVE(attr)
-    @property
-    def native_max_value(self):
-        return 100
-
-    @property
-    def native_min_value(self):
-        return 0
-
-    @property
-    def native_step(self):
-        return 12.5
-
-    @property
-    def native_unit_of_measurement(self):
-        return PERCENTAGE
-    """
-
     async def async_set_native_value(self, value: float):
         brightness = {
             mc.KEY_CHANNEL: self.channel,

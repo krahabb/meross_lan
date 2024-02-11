@@ -35,16 +35,6 @@ class EnergyEstimateSensor(MLSensor):
             manager, None, "energy_estimate", self.DeviceClass.ENERGY, state=0
         )
 
-    """REMOVE(attr)
-    @property
-    def available(self):
-        return True
-
-    @property
-    def entity_registry_enabled_default(self):
-        return False
-    """
-
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         # state restoration is only needed on cold-start and we have to discriminate

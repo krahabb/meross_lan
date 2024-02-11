@@ -83,28 +83,6 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         super().set_unavailable()
 
     # interface: number.NumberEntity
-    """REMOVE(attr)
-    @property
-    def mode(self) -> number.NumberMode:
-        return NUMBERMODE_BOX  # type: ignore
-
-    @property
-    def native_max_value(self):
-        return self._attr_native_max_value
-
-    @property
-    def native_min_value(self):
-        return self._attr_native_min_value
-
-    @property
-    def native_step(self):
-        return self._attr_native_step
-
-    @property
-    def native_unit_of_measurement(self):
-        return self._attr_native_unit_of_measurement
-    """
-
     @property
     def native_value(self):
         return self._attr_state
@@ -182,12 +160,6 @@ class MtsTemperatureNumber(MLConfigNumber):
         # but I see a probable change in device features (change of device unit)
         # so we're using a property here to be more future-proof
         return self.climate.temperature_unit
-
-    """REMOVE(attr)
-    @property
-    def device_scale(self):
-        return self.climate.device_scale
-    """
 
 
 class MtsSetPointNumber(MtsTemperatureNumber):

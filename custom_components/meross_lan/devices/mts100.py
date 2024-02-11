@@ -34,24 +34,6 @@ class Mts100AdjustNumber(MtsTemperatureNumber):
         # override the default climate.device_scale set in base cls
         self.device_scale = 100
 
-    """REMOVE(attr)
-    @property
-    def native_max_value(self):
-        return 5
-
-    @property
-    def native_min_value(self):
-        return -5
-
-    @property
-    def native_step(self):
-        return 0.5
-
-    @property
-    def device_scale(self):
-        return 100
-    """
-
 
 class Mts100Climate(MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""

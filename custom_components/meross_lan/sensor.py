@@ -86,33 +86,16 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         return MLSensor(device, None, str(device_class), device_class)
 
     @property
-    def last_reset(self) -> datetime | None:
-        return None
-
-    """REMOVE(attr)
-    @property
-    def native_unit_of_measurement(self):
-        return self._attr_native_unit_of_measurement
-    """
-
-    @property
     def native_value(self):
         return self._attr_state
 
-    """REMOVE(attr)
-    @property
-    def state_class(self):
-        return self._attr_state_class
-    """
-
 
 class MLDiagnosticSensor(MLSensor):
-    entity_category = MLSensor.EntityCategory.DIAGNOSTIC
 
-    @property
-    def is_diagnostic(self):
-        """Means this entity has been created as part of the 'create_diagnostic_entities' config"""
-        return True
+    is_diagnostic: Final = True
+
+    # HA core entity attributes:
+    entity_category = MLSensor.EntityCategory.DIAGNOSTIC
 
 
 class ProtocolSensor(MLSensor):
@@ -148,20 +131,6 @@ class ProtocolSensor(MLSensor):
             self.DeviceClass.ENUM,
             state=ProtocolSensor.STATE_DISCONNECTED,
         )
-
-    """REMOVE(attr)
-    @property
-    def available(self):
-        return True
-
-    @property
-    def entity_registry_enabled_default(self):
-        return False
-
-    @property
-    def options(self) -> list[str] | None:
-        return self._attr_options
-    """
 
     def set_unavailable(self):
         self._attr_state = ProtocolSensor.STATE_DISCONNECTED

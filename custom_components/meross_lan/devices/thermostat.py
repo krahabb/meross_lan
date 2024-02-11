@@ -112,12 +112,6 @@ class MtsCalibrationNumber(MtsRichTemperatureNumber):
         self.native_step = 0.1
         super().__init__(climate, mc.KEY_CALIBRATION)
 
-    """REMOVE(attr)
-    @property
-    def native_step(self):
-        return 0.1
-    """
-
 
 class MtsDeadZoneNumber(MtsRichTemperatureNumber):
     """
@@ -136,12 +130,6 @@ class MtsDeadZoneNumber(MtsRichTemperatureNumber):
         self.native_step = 0.1
         super().__init__(climate, self.key_namespace)
 
-    """REMOVE(attr)
-    @property
-    def native_step(self):
-        return 0.1
-    """
-
 
 class MtsFrostNumber(MtsRichTemperatureNumber):
     """
@@ -157,12 +145,6 @@ class MtsFrostNumber(MtsRichTemperatureNumber):
         self.native_min_value = 5
         self.native_step = climate.target_temperature_step
         super().__init__(climate, self.key_namespace)
-
-    """REMOVE(attr)
-    @property
-    def native_step(self):
-        return self.climate.target_temperature_step
-    """
 
 
 class MtsOverheatNumber(MtsRichTemperatureNumber):
@@ -194,12 +176,6 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
     async def async_shutdown(self):
         self.sensor_external_temperature: MLSensor = None  # type: ignore
         return await super().async_shutdown()
-
-    """REMOVE(attr)
-    @property
-    def native_step(self):
-        return 0.5
-    """
 
     def _parse(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,

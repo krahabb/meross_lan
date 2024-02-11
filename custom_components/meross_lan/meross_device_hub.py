@@ -70,12 +70,6 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
             device_class,
         )
 
-    """REMOVE(attr)
-    @property
-    def device_scale(self):
-        return 10
-    """
-
     async def async_request(self, device_value):
         # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
         # the issued value as a 'delta' to the current configured value i.e.

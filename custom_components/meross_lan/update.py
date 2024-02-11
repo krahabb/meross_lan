@@ -30,12 +30,6 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
     def __init__(self, manager: MerossDevice):
         super().__init__(manager, None, "update_firmware", self.DeviceClass.FIRMWARE)
 
-    """REMOVE(attr)
-    @property
-    def available(self):
-        return True
-    """
-
     @property
     def unique_id(self):
         # this is a 'transient' entity and we don't want it to persist.

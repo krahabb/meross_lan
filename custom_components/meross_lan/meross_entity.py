@@ -21,7 +21,7 @@ from .helpers.manager import ApiProfile
 from .merossclient import NAMESPACE_TO_KEY, const as mc
 
 if typing.TYPE_CHECKING:
-    from typing import Final
+    from typing import ClassVar, Final
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -56,6 +56,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     PLATFORM: str
 
     EntityCategory = EntityCategory
+
+    is_diagnostic: ClassVar[bool] = False
+    """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
     # HA core entity attributes:
     # These are constants throughout our model
@@ -150,73 +153,15 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             async_add_devices([self])
 
     # interface: Entity
-    """REMOVE(attr)
-    @property
-    def assumed_state(self):
-        return False
-    """
-
     @property
     def available(self):
         # TODO: refactor available property to slotted attribute
         # by also adding a set_available method
         return self._attr_state is not None
 
-    """REMOVE(attr)
-    @property
-    def device_class(self):
-        return self._attr_device_class
-    """
-
     @property
     def device_info(self):
         return self.manager.deviceentry_id
-
-    """REMOVE(attr)
-    @property
-    def entity_category(self):
-        return self._attr_entity_category
-    """
-
-    """REMOVE(attr)
-    @property
-    def extra_state_attributes(self):
-        return self._attr_extra_state_attributes
-    """
-    """REMOVE(attr)
-    @property
-    def force_update(self):
-        return False
-
-    @property
-    def has_entity_name(self):
-        return True
-
-    @property
-    def name(self):
-        # TODO: remove compatibility
-        if CORE_HAS_ENTITY_NAME:
-            # newer api...return just the 'local' name
-            return self._attr_name
-        # compatibility layer....
-        if self._attr_name is not None:
-            return f"{self.manager.name} - {self._attr_name}"
-        return self.manager.name
-
-    @property
-    def should_poll(self):
-        return False
-    """
-    """REMOVE(attr)
-    @property
-    def translation_key(self) -> str | None:
-        return self._attr_translation_key
-    """
-    """REMOVE(attr)
-    @property
-    def unique_id(self):
-        return self._attr_unique_id
-    """
 
     async def async_added_to_hass(self):
         self.log(self.VERBOSE, "Added to HomeAssistant")
@@ -229,11 +174,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         return await super().async_will_remove_from_hass()
 
     # interface: self
-    @property
-    def is_diagnostic(self):
-        """Means this entity has been created as part of the 'create_diagnostic_entities' config"""
-        return False
-
     async def async_shutdown(self):
         for handler in set(self.namespace_handlers):
             handler.unregister(self)

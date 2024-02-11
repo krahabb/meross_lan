@@ -157,17 +157,6 @@ class ConnectionSensor(MLDiagnosticSensor):
         self.connection.sensor_connection = None
         self.connection: MQTTConnection = None  # type: ignore
 
-    """REMOVE
-    @property
-    def available(self):
-        return True
-    """
-    """REMOVE
-    @property
-    def options(self) -> list[str] | None:
-        return self._attr_options
-    """
-
     def set_unavailable(self):
         raise NotImplementedError("set_unavailable")
 

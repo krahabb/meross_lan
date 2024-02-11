@@ -400,16 +400,6 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
     def __init__(self, manager: MerossDevice):
         super().__init__(manager, None, DND_ID, mc.KEY_DNDMODE)
 
-    """REMOVE(attr)
-    @property
-    def supported_color_modes(self):
-        return self._attr_supported_color_modes
-
-    @property
-    def color_mode(self):
-        return ColorMode.ONOFF
-    """
-
     async def async_turn_on(self, **kwargs):
         if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
