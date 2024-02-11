@@ -57,7 +57,8 @@ async def test_entities(hass: HomeAssistant, aioclient_mock):
     matching the digest key or namespace ability else (all empty) process all of the device entities
     """
     EntityComponentTest.hass = hass
-    EntityComponentTest.service_call = hass.services.async_call
+    EntityComponentTest.hass_states = hass.states
+    EntityComponentTest.hass_service_call = hass.services.async_call
 
     for emulator in generate_emulators(
         tc.EMULATOR_TRACES_PATH, tc.MOCK_DEVICE_UUID, tc.MOCK_KEY
@@ -129,7 +130,7 @@ async def _async_test_entities(
         else:
             assert entity.available, f"entity {entity_id} not available"
 
-        state = EntityComponentTest.hass.states.get(entity_id)
+        state = EntityComponentTest.hass_states.get(entity_id)
         if state:
             assert entity._hass_connected
             if not entity.available:

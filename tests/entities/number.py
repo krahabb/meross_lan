@@ -41,7 +41,7 @@ class EntityTest(EntityComponentTest):
         pass
 
     async def async_test_enabled_callback(self, entity: MLConfigNumber):
-        states = self.hass.states
+        states = self.hass_states
         await self.async_service_call(SERVICE_SET_VALUE, {ATTR_VALUE: entity.max_value})
         await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
         assert (state := states.get(self.entity_id))

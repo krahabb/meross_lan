@@ -1,6 +1,6 @@
 from typing import Any, ClassVar
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, StateMachine
 from homeassistant.helpers.entity import Entity
 
 from custom_components.meross_lan.meross_device import MerossDevice
@@ -21,7 +21,8 @@ class EntityComponentTest:
 
     # static test context
     hass: ClassVar[HomeAssistant]
-    service_call: ClassVar
+    hass_service_call: ClassVar
+    hass_states: ClassVar[StateMachine]
     ability: ClassVar[dict[str, Any]]
     digest: ClassVar[dict[str, Any]]
     expected_entity_types: ClassVar[MerossEntityTypeSet]
@@ -38,14 +39,13 @@ class EntityComponentTest:
     async def async_service_call(
         self, service: str, service_data: dict = {}
     ):
-        hass = self.hass
-        await hass.services.async_call(
+        await self.hass_service_call(
             self.DOMAIN,
             service,
             service_data=service_data | {"entity_id": self.entity_id},
             blocking=True,
         )
-        assert (state := hass.states.get(self.entity_id))
+        assert (state := self.hass_states.get(self.entity_id))
         return state
 
     async def async_test_each_callback(self, entity: MerossEntity):

@@ -112,7 +112,7 @@ MOCK_DEVICE_CONFIG: mlc.DeviceConfigType = {
 
 MOCK_POLLING_PERIOD = 15.0
 MOCK_TRACE_TIMEOUT = 120
-MOCK_HTTP_RESPONSE_DELAY = 0.1
+MOCK_HTTP_RESPONSE_DELAY = 0.05
 
 # cloud profiles
 # setting mocks for a 'default' nicely working cloud profile
