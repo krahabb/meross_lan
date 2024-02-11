@@ -2057,12 +2057,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         return False
 
     def update_latest_version(self, latest_version: LatestVersionType):
-        if not (update_firmware := self.update_firmware):
-            self.update_firmware = update_firmware = MLUpdate(self)
-        update_firmware.installed_version = self.descriptor.firmwareVersion
-        update_firmware.latest_version = latest_version.get(mc.KEY_VERSION)
-        update_firmware.release_summary = latest_version.get(mc.KEY_DESCRIPTION)
-        update_firmware.flush_state()
+        if update_firmware := self.update_firmware:
+            update_firmware.installed_version = self.descriptor.firmwareVersion
+            update_firmware.latest_version = latest_version.get(mc.KEY_VERSION)
+            update_firmware.release_summary = latest_version.get(mc.KEY_DESCRIPTION)
+            update_firmware.flush_state()
+        else:
+            self.update_firmware = MLUpdate(self, latest_version)
 
     async def async_get_diagnostics_trace(self) -> list:
         """

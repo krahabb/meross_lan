@@ -5,6 +5,8 @@ import typing
 from homeassistant.components import update
 
 from . import meross_entity as me
+from .merossclient import const as mc
+from .merossclient.cloudapi import LatestVersionType
 
 if typing.TYPE_CHECKING:
     from typing import Final
@@ -19,18 +21,30 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
 class MLUpdate(me.MerossEntity, update.UpdateEntity):
     PLATFORM = update.DOMAIN
     DeviceClass = update.UpdateDeviceClass
-
+    manager: MerossDevice
     # HA core entity attributes:
     entity_category = me.EntityCategory.DIAGNOSTIC
-    installed_version: str | None = None
-    latest_version: str | None = None
-    release_summary: str | None = None
+    installed_version: str | None
+    latest_version: str | None
+    release_summary: str | None
 
-    def __init__(self, manager: MerossDevice):
-        # TODO: invoke construction with actual state values so it gets added in 1-step to the
-        # HA state machine
-        super().__init__(manager, None, "update_firmware", self.DeviceClass.FIRMWARE)
-        self.available = True
+    __slots__ = (
+        "installed_version",
+        "latest_version",
+        "release_summary",
+    )
+
+    def __init__(self, manager: MerossDevice, latest_version: LatestVersionType):
+        self.installed_version = manager.descriptor.firmwareVersion
+        self.latest_version = latest_version.get(mc.KEY_VERSION)
+        self.release_summary = latest_version.get(mc.KEY_DESCRIPTION)
+        super().__init__(
+            manager,
+            None,
+            "update_firmware",
+            self.DeviceClass.FIRMWARE,
+            state=self.STATE_ON,  # just a dummy value to set the base.available
+        )
 
     @property
     def unique_id(self):
