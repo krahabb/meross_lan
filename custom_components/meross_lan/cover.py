@@ -88,12 +88,6 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
             state=self.STATE_OFF,
         )
 
-    """REMOVE(attr)
-    @property
-    def available(self):
-        return True
-    """
-
     def set_unavailable(self):
         pass
 
@@ -162,19 +156,26 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
     """
 
     def update_onoff(self, onoff):
-        MLGarageMultipleConfigSwitch.update_onoff(self, onoff)
-        registry = entity_registry.async_get(self.hass)
-        disabler = entity_registry.RegistryEntryDisabler.INTEGRATION
-        for entity in self.manager.entities.values():
-            if (
-                (entity.channel == self.channel)
-                and (entity is not self)
-                and (entry := entity.registry_entry)
-            ):
-                if onoff and entry.disabled_by is disabler:
-                    registry.async_update_entity(entry.entity_id, disabled_by=None)
-                elif not onoff and not entry.disabled_by:
-                    registry.async_update_entity(entry.entity_id, disabled_by=disabler)
+        state = self.STATE_ON if onoff else self.STATE_OFF
+        if state != self._attr_state:
+            self._attr_state = state
+            self.flush_state()
+            registry_update_entity = self.get_entity_registry().async_update_entity
+            disabler = entity_registry.RegistryEntryDisabler.INTEGRATION
+            for entity in self.manager.entities.values():
+                if (
+                    (entity.channel == self.channel)
+                    and (entity is not self)
+                    and (entry := entity.registry_entry)
+                ):
+                    if onoff:
+                        if entry.disabled_by == disabler:
+                            registry_update_entity(entry.entity_id, disabled_by=None)
+                    else:
+                        if not entry.disabled_by:
+                            registry_update_entity(
+                                entry.entity_id, disabled_by=disabler
+                            )
 
 
 class MLGarageConfigSwitch(MLGarageMultipleConfigSwitch):
@@ -226,15 +227,6 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
         self.name = key
         super().__init__(manager, channel, f"config_{key}")
 
-    """REMOVE(attr)
-    @property
-    def native_unit_of_measurement(self):
-        return UnitOfTime.SECONDS
-    @property
-    def device_scale(self):
-        return 1000
-    """
-
 
 class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
     """
@@ -265,12 +257,6 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
 
     # HA core entity attributes:
     available: Final[bool] = True
-
-    """REMOVE(attr)
-    @property
-    def available(self):
-        return True
-    """
 
     def set_unavailable(self):
         pass
@@ -1064,7 +1050,9 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 if not self._transition_unsub:
                     # ensure we 'follow' cover movement
                     self._transition_unsub = schedule_async_callback(
-                        self.hass, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT, self._async_transition_callback
+                        self.hass,
+                        PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
+                        self._async_transition_callback,
                     )
             self.flush_state()
 
@@ -1090,7 +1078,9 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         not receiving MQTT updates. If device was configured for MQTT only we could
         not setup this at all."""
         self._transition_unsub = schedule_async_callback(
-            self.hass, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT, self._async_transition_callback
+            self.hass,
+            PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
+            self._async_transition_callback,
         )
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
@@ -1159,15 +1149,6 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
         self.key_value = key
         self.name = key
         super().__init__(cover.manager, cover.channel, f"config_{key}")
-
-    """REMOVE(attr)
-    @property
-    def native_unit_of_measurement(self):
-        return UnitOfTime.SECONDS
-    @property
-    def device_scale(self):
-        return 1000
-    """
 
     async def async_request(self, device_value):
         config = {
