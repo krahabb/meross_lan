@@ -1,4 +1,5 @@
 """Constants for the Meross IoT local LAN integration."""
+
 import logging
 from typing import Final, NotRequired, TypedDict
 
@@ -205,6 +206,8 @@ PARAM_HUBBATTERY_UPDATE_PERIOD = 3595
 PARAM_HUBSENSOR_UPDATE_PERIOD = 55
 PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
+PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT = 5
+"""(mimimum) timeout before querying cloud api after loading the profile"""
 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day
 """timeout for querying cloud api deviceInfo endpoint"""
 PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT = 604800  # 1 week

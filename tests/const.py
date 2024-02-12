@@ -1,4 +1,5 @@
 """Constants for integration_blueprint tests."""
+
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.meross_profile import MerossCloudProfileStoreType
 from custom_components.meross_lan.merossclient import cloudapi, const as mc
@@ -152,7 +153,8 @@ MOCK_PROFILE_MSH300_UUID = "00000000000000000000000000000002"
 MOCK_PROFILE_MSH300_DEVNAME = "Cloud smart hub"
 MOCK_PROFILE_MSH300_DOMAIN = "mqtt-2.meross_lan.local"
 MOCK_PROFILE_MSH300_RESERVEDDOMAIN = "mqtt-1.meross_lan.local"
-MOCK_PROFILE_CLOUDAPI_DEVLIST: list[cloudapi.DeviceInfoType] = [
+# cloudapi mocked responses
+MOCK_CLOUDAPI_DEVICE_DEVLIST: list[cloudapi.DeviceInfoType] = [
     {
         "uuid": MOCK_PROFILE_MSS310_UUID,
         "onlineStatus": 1,
@@ -190,7 +192,20 @@ MOCK_PROFILE_CLOUDAPI_DEVLIST: list[cloudapi.DeviceInfoType] = [
         "hardwareCapabilities": [],
     },
 ]
-MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT: dict[str, list[cloudapi.SubDeviceInfoType]] = {
+MOCK_CLOUDAPI_DEVICE_LATESTVERSION: list[cloudapi.LatestVersionType] = [
+    {
+        "type": "mss310r",
+        "subType": "it",
+        "md5": "1708a3fa2163716da05f18c99160c6e7",
+        "url": "http:\/\/bucket-meross-static.meross.com\/production\/upload\/2019\/11\/28\/17\/22\/38\/201911281722388922034.bin",
+        "version": "2.1.4",
+        "alias": "",
+        "mcu": [],
+        "upgradeType": "01",
+        "description": "Release Notes:\n1. Enhanced the stability of connection;\n2. Fixed the issue that devices are often offline.",
+    },
+]
+MOCK_CLOUDAPI_HUB_GETSUBDEVICES: dict[str, list[cloudapi.SubDeviceInfoType]] = {
     MOCK_PROFILE_MSH300_UUID: [
         {
             "subDeviceId": "00001234",
@@ -208,6 +223,7 @@ MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT: dict[str, list[cloudapi.SubDeviceInfoType]
         },
     ]
 }
+# MerossCloudProfile storage
 MOCK_PROFILE_STORE_KEY = f"{mlc.DOMAIN}.profile.{MOCK_PROFILE_ID}"
 MOCK_PROFILE_STORE_DEVICEINFO_DICT: dict[str, cloudapi.DeviceInfoType] = {
     MOCK_PROFILE_MSS310_UUID: {

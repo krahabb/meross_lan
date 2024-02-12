@@ -23,9 +23,6 @@ from .const import (
     CONF_PASSWORD,
     CONF_PAYLOAD,
     DOMAIN,
-    PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT,
-    PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
-    PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT,
     DeviceConfigType,
 )
 from .helpers import (
@@ -1004,12 +1001,12 @@ class MerossCloudProfile(ApiProfile):
 
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
-            self._device_info_time + PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
+            self._device_info_time + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
         )
         next_query_delay = next_query_epoch - time()
-        if next_query_delay < 5:
+        if next_query_delay < mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT:
             # we'll give some breath to the init process
-            next_query_delay = 5
+            next_query_delay = mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT
         """REMOVE
         # the device_info refresh did not kick in or failed
         # for whatever reason. We just scan the device_info
@@ -1218,7 +1215,7 @@ class MerossCloudProfile(ApiProfile):
                 self._unsub_polling_query_device_info.cancel()
             self._unsub_polling_query_device_info = schedule_async_callback(
                 self.hass,
-                PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
+                mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
                 self._async_polling_query_device_info,
             )
             # this is a 'low relevance task' as a new feature (in 4.3.0) to just provide hints
@@ -1233,13 +1230,13 @@ class MerossCloudProfile(ApiProfile):
     def need_query_device_info(self):
         return (
             time() - self._device_info_time
-        ) > PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
+        ) > mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
 
     async def async_check_query_latest_version(self, epoch: float):
         if (
             self.config.get(CONF_CHECK_FIRMWARE_UPDATES)
             and (epoch - self._data[self.KEY_LATEST_VERSION_TIME])
-            > PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
+            > mlc.PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
         ):
             self._data[self.KEY_LATEST_VERSION_TIME] = epoch
             async with self._async_credentials_manager(
@@ -1330,7 +1327,7 @@ class MerossCloudProfile(ApiProfile):
             data = self._data
             if (_time := time()) < data[
                 self.KEY_TOKEN_REQUEST_TIME
-            ] + PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT:
+            ] + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT:
                 return None
             data[self.KEY_TOKEN_REQUEST_TIME] = _time
             self._schedule_save_store()
@@ -1388,7 +1385,7 @@ class MerossCloudProfile(ApiProfile):
                 # retrieve fresh cloud data for whatever reason
                 self._unsub_polling_query_device_info = schedule_async_callback(
                     self.hass,
-                    PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
+                    mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
                     self._async_polling_query_device_info,
                 )
 
@@ -1542,5 +1539,5 @@ class MerossCloudProfile(ApiProfile):
             return self._data
 
         self._store.async_delay_save(
-            _data_func, PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT
+            _data_func, mlc.PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT
         )

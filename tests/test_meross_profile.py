@@ -1,7 +1,10 @@
 """Test for meross cloud profiles"""
+
+from datetime import timedelta
 from unittest import mock
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pytest_homeassistant_custom_component.common import flush_store
 
@@ -20,12 +23,13 @@ async def test_cloudapi(hass, cloudapi_mock: helpers.CloudApiMocker):
     assert credentials == tc.MOCK_PROFILE_CREDENTIALS_SIGNIN
 
     result = await cloudapiclient.async_device_devlist()
-    assert result == tc.MOCK_PROFILE_CLOUDAPI_DEVLIST
+    assert result == tc.MOCK_CLOUDAPI_DEVICE_DEVLIST
+
+    result = await cloudapiclient.async_device_latestversion()
+    assert result == tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION
 
     result = await cloudapiclient.async_hub_getsubdevices(tc.MOCK_PROFILE_MSH300_UUID)
-    assert (
-        result == tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT[tc.MOCK_PROFILE_MSH300_UUID]
-    )
+    assert result == tc.MOCK_CLOUDAPI_HUB_GETSUBDEVICES[tc.MOCK_PROFILE_MSH300_UUID]
 
     await cloudapiclient.async_logout()
 
@@ -57,13 +61,14 @@ async def test_meross_profile(
         await time_mock.async_tick(5)
         await hass.async_block_till_done()
 
-        assert len(cloudapi_mock.api_calls) >= 1
+        assert len(cloudapi_mock.api_calls) >= 2
         assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_DEVLIST_PATH] == 1
+        assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_LATESTVERSION_PATH] == 1
         # check the cloud profile connected the mqtt server(s)
         # for discovery of devices. Our truth comes from
         # the cloudapi recovered device list
         expected_connections = set()
-        for device_info in tc.MOCK_PROFILE_CLOUDAPI_DEVLIST:
+        for device_info in tc.MOCK_CLOUDAPI_DEVICE_DEVLIST:
             expected_connections.add(device_info[mc.KEY_DOMAIN])
             expected_connections.add(device_info[mc.KEY_RESERVEDDOMAIN])
         # check our profile built the expected number of connections
@@ -82,17 +87,23 @@ async def test_meross_profile(
             safe_start_calls,
             any_order=True,
         )
-        # check the store has been persisted with cloudapi fresh device list
         await flush_store(profile._store)
+        # check the store has been persisted with cloudapi fresh device list
+        profile_storage_data = hass_storage[tc.MOCK_PROFILE_STORE_KEY]["data"]
         expected_storage_device_info_data = {
             device_info[mc.KEY_UUID]: device_info
-            for device_info in tc.MOCK_PROFILE_CLOUDAPI_DEVLIST
+            for device_info in tc.MOCK_CLOUDAPI_DEVICE_DEVLIST
         }
-        profile_storage_data = hass_storage[tc.MOCK_PROFILE_STORE_KEY]["data"]
         assert (
             profile_storage_data[MerossCloudProfile.KEY_DEVICE_INFO]
             == expected_storage_device_info_data
         )
+        # check the update firmware versions was stored
+        assert (
+            profile_storage_data[MerossCloudProfile.KEY_LATEST_VERSION]
+            == tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION
+        )
+
         # check cleanup
         assert await profile_entry_mock.async_unload()
         assert MerossApi.profiles[tc.MOCK_PROFILE_ID] is None
@@ -117,8 +128,8 @@ async def test_meross_profile_cloudapi_offline(
     hass_storage.update(tc.MOCK_PROFILE_STORAGE)
     async with helpers.ProfileEntryMocker(hass) as profile_entry_mock:
         assert (profile := MerossApi.profiles.get(tc.MOCK_PROFILE_ID))
-        time_mock.tick(5)
-        time_mock.tick(5)
+        time_mock.tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
+        time_mock.tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
         await hass.async_block_till_done()
 
         # check we have tried to refresh our device list
@@ -158,7 +169,7 @@ async def test_meross_profile_cloudapi_offline(
 
 
 async def test_meross_profile_with_device(
-    hass,
+    hass: HomeAssistant,
     hass_storage,
     aioclient_mock,
     cloudapi_mock: helpers.CloudApiMocker,
@@ -173,18 +184,19 @@ async def test_meross_profile_with_device(
     """
     hass_storage.update(tc.MOCK_PROFILE_STORAGE)
 
-    async with helpers.DeviceContext(
-        hass,
-        helpers.build_emulator_for_profile(
-            tc.MOCK_PROFILE_CONFIG, model=mc.TYPE_MSS310
-        ),
-        aioclient_mock,
-        config_data={
-            mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_AUTO,
-        },
-    ) as devicecontext, helpers.ProfileEntryMocker(
-        hass, auto_setup=False
-    ) as profile_entry_mock:
+    async with (
+        helpers.DeviceContext(
+            hass,
+            helpers.build_emulator_for_profile(
+                tc.MOCK_PROFILE_CONFIG, model=mc.TYPE_MSS310
+            ),
+            aioclient_mock,
+            config_data={
+                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_AUTO,
+            },
+        ) as devicecontext,
+        helpers.ProfileEntryMocker(hass, auto_setup=False) as profile_entry_mock,
+    ):
         # the loading order of the config entries might
         # have side-effects because of device<->profile binding
         # beware: we cannot selectively load config_entries here
@@ -199,9 +211,10 @@ async def test_meross_profile_with_device(
         assert device._mqtt_connection in profile.mqttconnections.values()
         assert device._mqtt_connected is device._mqtt_connection
 
-        await devicecontext.perform_coldstart()
+        device = await devicecontext.perform_coldstart()
 
-        """
+        assert device.update_firmware is None
+
         # check the device registry has the device name from the cloud (stored)
         assert (
             device_registry_entry := device_registry.async_get(hass).async_get_device(
@@ -210,24 +223,28 @@ async def test_meross_profile_with_device(
         ) and device_registry_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME_STORED
         # now the profile should query the cloudapi and get an updated device_info list
         await devicecontext.async_tick(
-            dt.timedelta(seconds=mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
+            timedelta(seconds=mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
         )
         mqttconnections = list(profile.mqttconnections.values())
-        merossmqtt_mock.safe_connect_mock.assert_has_calls(
+        merossmqtt_mock.safe_start_mock.assert_has_calls(
             [
-                call(mqttconnections[0], tc.MOCK_PROFILE_MSS310_DOMAIN, 443),
-                call(mqttconnections[1], tc.MOCK_PROFILE_MSH300_DOMAIN, 443),
+                mock.call(
+                    mqttconnections[0], HostAddress(tc.MOCK_PROFILE_MSS310_DOMAIN, 443)
+                ),
+                mock.call(
+                    mqttconnections[1], HostAddress(tc.MOCK_PROFILE_MSH300_DOMAIN, 443)
+                ),
             ],
             any_order=True,
         )
-
+        # check the device name was update from cloudapi query
         assert (
             device_registry_entry := device_registry.async_get(hass).async_get_device(
                 **device.deviceentry_id
             )
         ) and device_registry_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME
-        assert cloudapi_mock.devlist_calls == 1
-        """
+        assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_DEVLIST_PATH] == 1
+
         # remove the cloud profile
         assert await profile_entry_mock.async_unload()
         assert api.profiles[tc.MOCK_PROFILE_ID] is None

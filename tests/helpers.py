@@ -786,7 +786,14 @@ class CloudApiMocker(contextlib.AbstractContextManager):
         assert len(request) == 0
         return {
             mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
-            mc.KEY_DATA: tc.MOCK_PROFILE_CLOUDAPI_DEVLIST,
+            mc.KEY_DATA: tc.MOCK_CLOUDAPI_DEVICE_DEVLIST,
+        }
+
+    def _v1_device_latestversion(self, request: dict):
+        assert len(request) == 0
+        return {
+            mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
+            mc.KEY_DATA: tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION,
         }
 
     def _v1_hub_getsubdevices(self, request: dict):
@@ -794,12 +801,12 @@ class CloudApiMocker(contextlib.AbstractContextManager):
             return {mc.KEY_APISTATUS: -1, mc.KEY_INFO: "Missing uuid in request"}
         else:
             uuid = request[mc.KEY_UUID]
-            if uuid not in tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT:
+            if uuid not in tc.MOCK_CLOUDAPI_HUB_GETSUBDEVICES:
                 return {mc.KEY_APISTATUS: -1, mc.KEY_INFO: "uuid not registered"}
             else:
                 return {
                     mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
-                    mc.KEY_DATA: tc.MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT[uuid],
+                    mc.KEY_DATA: tc.MOCK_CLOUDAPI_HUB_GETSUBDEVICES[uuid],
                 }
 
     def _v1_profile_logout(self, request: dict):
