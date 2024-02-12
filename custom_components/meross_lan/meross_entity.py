@@ -149,7 +149,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self._hass_connected = False
         # by default all of our entities have unique_id so they're registered
         # there could be some exceptions though (MLUpdate)
-        self.unique_id = manager.generate_unique_id(self)
+        self.unique_id = self._generate_unique_id()
         manager.entities[id] = self
         async_add_devices = manager.platforms.setdefault(self.PLATFORM)
         if async_add_devices:
@@ -208,6 +208,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         """
         if self._hass_connected:
             self.async_write_ha_state()
+
+    def _generate_unique_id(self):
+        return self.manager.generate_unique_id(self)
 
     def _parse_undefined(self, payload):
         # this is a default handler for any message (in protocol routing)
