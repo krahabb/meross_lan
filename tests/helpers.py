@@ -765,35 +765,39 @@ class CloudApiMocker(contextlib.AbstractContextManager):
         return response
 
     def _v1_auth_signin(self, request: dict):
-        response = {}
+
         if mc.KEY_EMAIL not in request:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_INVALID_EMAIL
+            return {mc.KEY_APISTATUS: cloudapi.APISTATUS_INVALID_EMAIL}
         elif request[mc.KEY_EMAIL] != tc.MOCK_PROFILE_EMAIL:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_UNEXISTING_ACCOUNT
+            return {mc.KEY_APISTATUS: cloudapi.APISTATUS_UNEXISTING_ACCOUNT}
         elif mc.KEY_PASSWORD not in request:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_MISSING_PASSWORD
+            return {mc.KEY_APISTATUS: cloudapi.APISTATUS_MISSING_PASSWORD}
         elif (
             request[mc.KEY_PASSWORD]
             != hashlib.md5(tc.MOCK_PROFILE_PASSWORD.encode("utf8")).hexdigest()
         ):
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_WRONG_CREDENTIALS
+            return {mc.KEY_APISTATUS: cloudapi.APISTATUS_WRONG_CREDENTIALS}
         else:
-            response[mc.KEY_APISTATUS] = cloudapi.APISTATUS_NO_ERROR
-            response[mc.KEY_DATA] = tc.MOCK_PROFILE_CREDENTIALS_SIGNIN
+            return {
+                mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
+                mc.KEY_DATA: tc.MOCK_PROFILE_CREDENTIALS_SIGNIN.copy(),
+            }
         return response
 
     def _v1_device_devlist(self, request: dict):
         assert len(request) == 0
         return {
             mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
-            mc.KEY_DATA: tc.MOCK_CLOUDAPI_DEVICE_DEVLIST,
+            mc.KEY_DATA: [item.copy() for item in tc.MOCK_CLOUDAPI_DEVICE_DEVLIST],
         }
 
     def _v1_device_latestversion(self, request: dict):
         assert len(request) == 0
         return {
             mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
-            mc.KEY_DATA: tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION,
+            mc.KEY_DATA: [
+                item.copy() for item in tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION
+            ],
         }
 
     def _v1_hub_getsubdevices(self, request: dict):
@@ -806,7 +810,9 @@ class CloudApiMocker(contextlib.AbstractContextManager):
             else:
                 return {
                     mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
-                    mc.KEY_DATA: tc.MOCK_CLOUDAPI_HUB_GETSUBDEVICES[uuid],
+                    mc.KEY_DATA: [
+                        item.copy() for item in tc.MOCK_CLOUDAPI_HUB_GETSUBDEVICES[uuid]
+                    ],
                 }
 
     def _v1_profile_logout(self, request: dict):
