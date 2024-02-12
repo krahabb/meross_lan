@@ -213,8 +213,6 @@ async def test_meross_profile_with_device(
 
         device = await devicecontext.perform_coldstart()
 
-        assert device.update_firmware is None
-
         # check the device registry has the device name from the cloud (stored)
         assert (
             device_registry_entry := device_registry.async_get(hass).async_get_device(
@@ -222,9 +220,7 @@ async def test_meross_profile_with_device(
             )
         ) and device_registry_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME_STORED
         # now the profile should query the cloudapi and get an updated device_info list
-        await devicecontext.async_tick(
-            timedelta(seconds=mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
-        )
+        await devicecontext.async_tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
         mqttconnections = list(profile.mqttconnections.values())
         merossmqtt_mock.safe_start_mock.assert_has_calls(
             [
@@ -244,6 +240,17 @@ async def test_meross_profile_with_device(
             )
         ) and device_registry_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME
         assert cloudapi_mock.api_calls[cloudapi.API_DEVICE_DEVLIST_PATH] == 1
+
+        # now check if a new fw is correctly managed in update entity
+        assert device.update_firmware is None
+        tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION[0][mc.KEY_VERSION] = "2.1.5"
+        await devicecontext.async_tick(
+            mlc.PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
+        )
+        update_firmware = device.update_firmware
+        assert update_firmware
+        update_firmware_state = hass.states.get(update_firmware.entity_id)
+        assert update_firmware_state and update_firmware_state.state == "on"
 
         # remove the cloud profile
         assert await profile_entry_mock.async_unload()
