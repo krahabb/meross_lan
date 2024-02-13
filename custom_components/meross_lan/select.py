@@ -25,6 +25,7 @@ if typing.TYPE_CHECKING:
 
     from .climate import MtsClimate
     from .devices.mod100 import DiffuserMixin
+    from .helpers.manager import EntityManager
     from .meross_device import MerossDevice
 
 
@@ -38,17 +39,30 @@ OPTION_SPRAY_MODE_OFF = "off"
 OPTION_SPRAY_MODE_CONTINUOUS = "on"
 OPTION_SPRAY_MODE_ECO = "eco"
 
-"""
-    This code is an alternative implementation for SPRAY/humidifier
-    since the meross SPRAY doesnt support target humidity and
-    the 'semantics' for HA humidifier are a bit odd for this device
-    Also, bear in mind that, if select is not supported in HA core
-    we're basically implementing a SwitchEntity
-"""
 
-
-class MLSpray(me.MerossEntity, select.SelectEntity):
+class MLSelect(me.MerossEntity, select.SelectEntity):
     PLATFORM = select.DOMAIN
+
+    # HA core entity attributes:
+    current_option: str | None
+    options: list[str]
+
+    __slots__ = (
+        "current_option",
+        "options",
+    )
+
+    def set_unavailable(self):
+        self.current_option = None
+        super().set_unavailable()
+
+    def update_option(self, option: str):
+        if self.current_option != option:
+            self.current_option = option
+            self.flush_state()
+
+
+class MLSpray(MLSelect):
 
     manager: SprayMixin | DiffuserMixin
 
@@ -58,10 +72,8 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
     like { mc.SPRAY_MODE_OFF: OPTION_SPRAY_MODE_OFF }
     """
     # HA core entity attributes:
-    options: list[str]
 
     __slots__ = (
-        "options",
         "_spray_mode_map",
     )
 
@@ -71,15 +83,11 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
         # we could use the shared instance but different device firmwares
         # could bring in unwanted global options...
         self._spray_mode_map = dict(spraymode_map)
+        self.current_option = None
         self.options = list(self._spray_mode_map.values())
         super().__init__(manager, channel, mc.KEY_SPRAY)
 
     # interface: select.SelectEntity
-    @property
-    def current_option(self):
-        """Return the selected entity option to represent the entity state."""
-        return self._attr_state
-
     async def async_select_option(self, option: str):
         # reverse lookup the dict
         for mode, _option in self._spray_mode_map.items():
@@ -91,7 +99,7 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
         if await self.manager.async_request_spray_ack(
             {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}
         ):
-            self.update_state(option)
+            self.update_option(option)
 
     def _parse_spray(self, payload: dict):
         """
@@ -108,10 +116,7 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
             option = "mode_" + str(mode)
             self._spray_mode_map[mode] = option
             self.options = list(self._spray_mode_map.values())
-        # we actually don't care if this is a SwitchEntity
-        # this is a bug since state would be wrongly reported
-        # when mode != on/off
-        self.update_state(option)
+        self.update_option(option)
 
 
 class SprayMixin(
@@ -140,15 +145,13 @@ class SprayMixin(
         )
 
 
-class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
+class MtsTrackedSensor(MLSelect):
     """
     A select entity used to select among all temperature sensors in HA
     an entity to track so that the thermostat regulates T against
     that other sensor. The idea is to track changes in
     the tracked entitites and adjust the MTS temp correction on the fly
     """
-
-    PLATFORM = select.DOMAIN
 
     TRACKING_DEADTIME = 60
     """minimum delay (dead-time) between trying to adjust the climate entity"""
@@ -157,31 +160,30 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
 
     # HA core entity attributes:
     _attr_available = True
+    current_option: str
     entity_category = me.EntityCategory.CONFIG
     entity_registry_enabled_default = False
-    options: list[str]
-    _attr_state: str
 
     __slots__ = (
         "climate",
-        "options",
         "_delayed_tracking_timestamp",
-        "_tracked_state",
-        "_unsub_track_state",
-        "_unsub_tracking_delayed",
+        "_delayed_tracking_unsub",
+        "_tracking_state",
+        "_tracking_unsub",
     )
 
     def __init__(
         self,
         climate: MtsClimate,
     ):
-        self.climate = climate
+        self.current_option = hac.STATE_OFF
         self.options = []
+        self.climate = climate
         self._delayed_tracking_timestamp = 0
-        self._tracked_state = None
-        self._unsub_track_state = None
-        self._unsub_tracking_delayed = None
-        super().__init__(climate.manager, climate.channel, "tracked_sensor", state = hac.STATE_OFF)
+        self._delayed_tracking_unsub = None
+        self._tracking_state = None
+        self._tracking_unsub = None
+        super().__init__(climate.manager, climate.channel, "tracked_sensor")
 
     # interface: MerossEntity
     async def async_shutdown(self):
@@ -200,12 +202,12 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     async def async_added_to_hass(self):
         hass = self.hass
 
-        if self._attr_state is hac.STATE_OFF:
+        if self.current_option is hac.STATE_OFF:
             with self.exception_warning("restoring previous state"):
                 if last_state := await get_entity_last_state_available(
                     hass, self.entity_id
                 ):
-                    self._attr_state = last_state.state
+                    self.current_option = last_state.state
 
         if hass.state == CoreState.running:
             self._setup_tracking_entities()
@@ -215,7 +217,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             # when persisting the state and we could loose the
             # current restored state if we don't setup the tracking
             # list soon enough
-            self.options = [self._attr_state]
+            self.options = [self.current_option]
             hass.bus.async_listen_once(
                 hac.EVENT_HOMEASSISTANT_STARTED,
                 self._setup_tracking_entities,
@@ -230,12 +232,8 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         await super().async_will_remove_from_hass()
 
     # interface: SelectEntity
-    @property
-    def current_option(self):
-        return self._attr_state
-
     async def async_select_option(self, option: str):
-        self.update_state(option)
+        self.update_option(option)
         self._tracking_start()
 
     # interface: self
@@ -244,9 +242,9 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         called when either the climate or the tracked_entity has a new
         temperature reading in order to see if the climate needs to be adjusted
         """
-        if not self.manager.online or not self._unsub_track_state:
+        if not self.manager.online or not self._tracking_unsub:
             return
-        tracked_state = self._tracked_state
+        tracked_state = self._tracking_state
         if not tracked_state:
             # we've setup tracking but the entity doesn't exist in the
             # state machine...was it removed from HA ?
@@ -266,8 +264,8 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         delay = self._delayed_tracking_timestamp - epoch
         if delay > 0:
             # last tracking was too recent so we delay this a bit
-            if not self._unsub_tracking_delayed:
-                self._unsub_tracking_delayed = schedule_callback(
+            if not self._delayed_tracking_unsub:
+                self._delayed_tracking_unsub = schedule_callback(
                     self.hass, delay, self._delayed_tracking_callback
                 )
             return
@@ -338,16 +336,16 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
             if um in (hac.UnitOfTemperature.CELSIUS, hac.UnitOfTemperature.FAHRENHEIT):
                 self.options.append(entity.entity_id)
 
-        if self._attr_state not in self.options:
+        if self.current_option not in self.options:
             # this might happen when restoring a not anymore valid entity
-            self._attr_state = hac.STATE_OFF
+            self.current_option = hac.STATE_OFF
 
         self.flush_state()
         self._tracking_start()
 
     def _tracking_start(self):
         self._tracking_stop()
-        entity_id = self._attr_state
+        entity_id = self.current_option
         if entity_id and entity_id not in (
             hac.STATE_OFF,
             hac.STATE_UNKNOWN,
@@ -355,29 +353,29 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         ):
 
             @callback
-            def _track_state_callback(event: EventType[EventStateChangedData]):
+            def _tracking_callback(event: EventType[EventStateChangedData]):
                 with self.exception_warning("processing state update event"):
-                    self._tracking_update_state(event.data.get("new_state"))
+                    self._tracking_update(event.data.get("new_state"))
 
-            self._unsub_track_state = async_track_state_change_event(
-                self.hass, entity_id, _track_state_callback
+            self._tracking_unsub = async_track_state_change_event(
+                self.hass, entity_id, _tracking_callback
             )
-            self._tracking_update_state(self.hass.states.get(entity_id))
+            self._tracking_update(self.hass.states.get(entity_id))
 
     def _tracking_stop(self):
-        if self._unsub_track_state:
-            self._unsub_track_state()
-            self._unsub_track_state = None
-            self._tracked_state = None
+        if self._tracking_unsub:
+            self._tracking_unsub()
+            self._tracking_unsub = None
+            self._tracking_state = None
             self._delayed_tracking_reset(0)
 
-    def _tracking_update_state(self, tracked_state: State | None):
-        self._tracked_state = tracked_state
+    def _tracking_update(self, tracked_state: State | None):
+        self._tracking_state = tracked_state
         self.check_tracking()
 
     @callback
     def _delayed_tracking_callback(self):
-        self._unsub_tracking_delayed = None
+        self._delayed_tracking_unsub = None
         self.check_tracking()
 
     def _delayed_tracking_reset(self, delayed_tracking_timestamp):
@@ -388,6 +386,6 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
         and prepares the state for eventually rescheduling the callback
         """
         self._delayed_tracking_timestamp = delayed_tracking_timestamp
-        if self._unsub_tracking_delayed:
-            self._unsub_tracking_delayed.cancel()
-            self._unsub_tracking_delayed = None
+        if self._delayed_tracking_unsub:
+            self._delayed_tracking_unsub.cancel()
+            self._delayed_tracking_unsub = None
