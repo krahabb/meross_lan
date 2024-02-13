@@ -69,6 +69,8 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     force_update: Final[bool] = False
     has_entity_name: Final[bool] = True
     should_poll: Final[bool] = False
+    # These may be customized here and there per class
+    _attr_available: ClassVar[bool] = False
     # These may be customized here and there per class or instance
     assumed_state: bool = False
     entity_category: EntityCategory | None = None
@@ -107,6 +109,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         device_class: object | str | None = None,
         *,
         state: StateType = None,
+        available: bool = False,
     ):
         """
         - channel: historically used to create an unique id for this entity inside the device
@@ -133,7 +136,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.channel = channel
         self.entitykey = entitykey
         self.namespace_handlers: set[NamespaceHandler] = set()
-        self.available = state is not None
+        self.available = available or self._attr_available or (state is not None)
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
         if hasattr(self, "name"):
@@ -231,9 +234,6 @@ class MerossBinaryEntity(MerossEntity):
     """Partially abstract common base class for ToggleEntity and BinarySensor.
     The initializer is skipped"""
 
-    STATE_ON: typing.Final = hac.STATE_ON
-    STATE_OFF: typing.Final = hac.STATE_OFF
-
     # HA core entity attributes:
     is_on: bool | None
 
@@ -254,12 +254,17 @@ class MerossBinaryEntity(MerossEntity):
             channel,
             entitykey,
             device_class,
-            state=None if onoff is None else self.STATE_ON if onoff else self.STATE_OFF,
+            available=onoff is not None,
         )
 
+    def set_unavailable(self):
+        self.is_on = None
+        super().set_unavailable()
+
     def update_onoff(self, onoff):
-        self.is_on = onoff
-        self.update_state(self.STATE_ON if onoff else self.STATE_OFF)
+        if self.is_on != onoff:
+            self.is_on = onoff
+            self.flush_state()
 
 
 class MerossToggle(MerossBinaryEntity):

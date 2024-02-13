@@ -140,6 +140,7 @@ class ProtocolSensor(MLEnumSensor):
     manager: MerossDevice
 
     # HA core entity attributes:
+    _attr_available = True
     entity_category = me.EntityCategory.DIAGNOSTIC
     entity_registry_enabled_default = False
     _attr_state: str

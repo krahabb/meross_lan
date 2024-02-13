@@ -75,6 +75,7 @@ async def async_setup_entry(
 class MLGarageTimeoutBinarySensor(MLBinarySensor):
 
     # HA core entity attributes:
+    _attr_available = True
     entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, cover: MLGarage):
@@ -158,10 +159,8 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
     """
 
     def update_onoff(self, onoff):
-        state = self.STATE_ON if onoff else self.STATE_OFF
-        if state != self._attr_state:
+        if self.is_on != onoff:
             self.is_on = onoff
-            self._attr_state = state
             self.flush_state()
             registry_update_entity = self.get_entity_registry().async_update_entity
             disabler = entity_registry.RegistryEntryDisabler.INTEGRATION
@@ -256,6 +255,9 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
     timeouts (this happens particularly on fw 3.2.7 as per #338).
     This entity will just provide an 'HA only' storage for these parameters
     """
+
+    # HA core entity attributes:
+    _attr_available = True
 
     def __init__(self, garage: MLGarage, key: str):
         super().__init__(

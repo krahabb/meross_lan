@@ -67,9 +67,9 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     # HA core entity attributes:
     current_temperature: float | None
-    hvac_action: HVACAction | None
-    hvac_mode: HVACMode | None
-    hvac_modes: list[HVACMode] = [HVACMode.OFF, HVACMode.HEAT]
+    hvac_action: climate.HVACAction | None
+    hvac_mode: climate.HVACMode | None
+    hvac_modes: list[climate.HVACMode] = [HVACMode.OFF, HVACMode.HEAT]
     max_temp: float
     min_temp: float
     preset_mode: str | None

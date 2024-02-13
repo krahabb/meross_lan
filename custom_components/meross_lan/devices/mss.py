@@ -23,6 +23,7 @@ if typing.TYPE_CHECKING:
 class EnergyEstimateSensor(MLSensor):
 
     # HA core entity attributes:
+    _attr_available = True
     entity_registry_enabled_default = False
     _attr_state: int
 

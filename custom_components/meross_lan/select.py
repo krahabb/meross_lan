@@ -156,6 +156,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
     climate: MtsClimate
 
     # HA core entity attributes:
+    _attr_available = True
     entity_category = me.EntityCategory.CONFIG
     entity_registry_enabled_default = False
     options: list[str]

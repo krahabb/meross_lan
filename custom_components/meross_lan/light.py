@@ -140,12 +140,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
             self._light = payload
 
             if mc.KEY_ONOFF in payload:
-                if payload[mc.KEY_ONOFF]:
-                    self.is_on = True
-                    self._attr_state = self.STATE_ON
-                else:
-                    self.is_on = False
-                    self._attr_state = self.STATE_OFF
+                self.is_on = payload[mc.KEY_ONOFF]
 
             self.color_mode = ColorMode.UNKNOWN
 

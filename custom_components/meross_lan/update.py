@@ -22,6 +22,7 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
     DeviceClass = update.UpdateDeviceClass
     manager: MerossDevice
     # HA core entity attributes:
+    _attr_available = True
     entity_category = me.EntityCategory.DIAGNOSTIC
     installed_version: str | None
     latest_version: str | None
@@ -42,7 +43,6 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
             None,
             "update_firmware",
             self.DeviceClass.FIRMWARE,
-            state=update.STATE_ON,  # just a dummy value to set the base.available
         )
 
     def set_available(self):
