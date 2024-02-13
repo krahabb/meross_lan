@@ -11,7 +11,7 @@ from homeassistant.util import dt as dt_util
 from ..helpers import get_entity_last_state_available
 from ..helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
 from ..merossclient import const as mc
-from ..sensor import MLSensor
+from ..sensor import MLEnumSensor, MLSensor
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
@@ -63,7 +63,7 @@ class EnergyEstimateSensor(MLSensor):
 
     def set_available(self):
         pass
-    
+
     def set_unavailable(self):
         # we need to preserve our sum so we don't reset
         # it on disconnection. Also, it's nice to have it
@@ -148,9 +148,9 @@ class ElectricityMixin(
             self._sensor_energy_estimate.update_estimate(de)
 
         self._electricity_lastupdate = self.lastresponse
-        self._sensor_power.update_state(power)
-        self._sensor_current.update_state(electricity[mc.KEY_CURRENT] / 1000)  # type: ignore
-        self._sensor_voltage.update_state(electricity[mc.KEY_VOLTAGE] / 10)  # type: ignore
+        self._sensor_power.update_native_value(power)
+        self._sensor_current.update_native_value(electricity[mc.KEY_CURRENT] / 1000)  # type: ignore
+        self._sensor_voltage.update_native_value(electricity[mc.KEY_VOLTAGE] / 10)  # type: ignore
         if not power:
             # might be an indication of issue #367 where the problem lies in missing
             # device timezone configuration
@@ -458,8 +458,8 @@ class OverTempMixin(
     def __init__(self, descriptor: MerossDeviceDescriptor, entry):
         super().__init__(descriptor, entry)
         self._switch_overtemp_enable: OverTempEnableSwitch = OverTempEnableSwitch(self)
-        self._sensor_overtemp_type: MLSensor = MLSensor(
-            self, None, "config_overtemp_type", MLSensor.DeviceClass.ENUM
+        self._sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
+            self, None, "config_overtemp_type"
         )
         EntityPollingStrategy(
             self,

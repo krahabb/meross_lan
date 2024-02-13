@@ -249,7 +249,6 @@ class Mts960Climate(MtsClimate):
                             manager,
                             channel,
                             key,
-                            MLDiagnosticSensor.DeviceClass.ENUM,
                             state=payload[key],
                         )
 

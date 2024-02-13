@@ -6,7 +6,7 @@ from ..binary_sensor import MLBinarySensor
 from ..helpers.namespaces import PollingStrategy, SmartPollingStrategy
 from ..merossclient import KEY_TO_NAMESPACE, const as mc
 from ..number import MtsTemperatureNumber
-from ..sensor import MLSensor
+from ..sensor import MLEnumSensor, MLSensor
 from ..switch import MtsConfigSwitch
 from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
@@ -87,11 +87,10 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
             try:
                 self.sensor_warning.update_state(payload[mc.KEY_WARNING])  # type: ignore
             except AttributeError:
-                self.sensor_warning = sensor_warning = MLSensor(
+                self.sensor_warning = sensor_warning = MLEnumSensor(
                     self.manager,
                     self.channel,
                     f"{self.entitykey}_warning",
-                    MLSensor.DeviceClass.ENUM,
                     state=payload[mc.KEY_WARNING],
                 )
                 sensor_warning.translation_key = f"mts_{sensor_warning.entitykey}"
@@ -184,7 +183,7 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}"""
         super()._parse(payload)
         if mc.KEY_CURRENTTEMP in payload:
-            self.sensor_external_temperature.update_state(
+            self.sensor_external_temperature.update_native_value(
                 payload[mc.KEY_CURRENTTEMP] / self.device_scale
             )
 

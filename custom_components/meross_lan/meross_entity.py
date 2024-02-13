@@ -43,6 +43,10 @@ class MerossFakeEntity:
     def update_state(state):
         pass
 
+    @staticmethod
+    def update_native_value(native_value):
+        pass
+
 
 class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     """

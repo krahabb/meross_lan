@@ -35,6 +35,31 @@ async def async_setup_entry(
 NativeValueCallbackType = typing.Callable[[], me.StateType]
 
 
+class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
+    """Specialization for sensor with ENUM device_class which allows to store
+    anything as opposed to numeric sensor types which have units and so."""
+    PLATFORM = sensor.DOMAIN
+
+    # HA core entity attributes:
+
+    __slots__ = (
+    )
+
+    def __init__(
+        self,
+        manager: EntityManager,
+        channel: object | None,
+        entitykey: str | None,
+        *,
+        state: me.StateType = None,
+    ):
+        super().__init__(manager, channel, entitykey, sensor.SensorDeviceClass.ENUM, state=state)
+
+    @property
+    def native_value(self):
+        return self._attr_state
+
+
 class MLSensor(me.MerossEntity, sensor.SensorEntity):
     PLATFORM = sensor.DOMAIN
     DeviceClass = sensor.SensorDeviceClass
@@ -42,12 +67,11 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
     # except these device classes
-    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass | None, StateClass | None] = {
-        DeviceClass.ENUM: None,
+    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass, StateClass] = {
         DeviceClass.ENERGY: StateClass.TOTAL_INCREASING,
     }
 
-    DEVICECLASS_TO_UNIT_MAP: dict[DeviceClass | None, str] = {
+    DEVICECLASS_TO_UNIT_MAP: dict[DeviceClass, str] = {
         DeviceClass.POWER: UnitOfPower.WATT,
         DeviceClass.CURRENT: UnitOfElectricCurrent.AMPERE,
         DeviceClass.VOLTAGE: UnitOfElectricPotential.VOLT,
@@ -55,11 +79,12 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
         DeviceClass.HUMIDITY: PERCENTAGE,
         DeviceClass.BATTERY: PERCENTAGE,
+        DeviceClass.POWER_FACTOR: PERCENTAGE,
     }
 
     # HA core entity attributes:
-    native_unit_of_measurement: str | None
-    state_class: StateClass | None
+    native_unit_of_measurement: str
+    state_class: StateClass
 
     __slots__ = (
         "native_unit_of_measurement",
@@ -75,7 +100,8 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         *,
         state: me.StateType = None,
     ):
-        self.native_unit_of_measurement = self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+        assert device_class and device_class is not sensor.SensorDeviceClass.ENUM
+        self.native_unit_of_measurement = self.DEVICECLASS_TO_UNIT_MAP[device_class]
         self.state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
             device_class, MLSensor.StateClass.MEASUREMENT
         )
@@ -89,8 +115,13 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
     def native_value(self):
         return self._attr_state
 
+    def update_native_value(self, native_value):
+        if self._attr_state != native_value:
+            self._attr_state = native_value
+            self.flush_state()
 
-class MLDiagnosticSensor(MLSensor):
+
+class MLDiagnosticSensor(MLEnumSensor):
 
     is_diagnostic: Final = True
 
@@ -98,7 +129,7 @@ class MLDiagnosticSensor(MLSensor):
     entity_category = MLSensor.EntityCategory.DIAGNOSTIC
 
 
-class ProtocolSensor(MLSensor):
+class ProtocolSensor(MLEnumSensor):
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
@@ -127,7 +158,6 @@ class ProtocolSensor(MLSensor):
             manager,
             None,
             "sensor_protocol",
-            self.DeviceClass.ENUM,
             state=ProtocolSensor.STATE_DISCONNECTED,
         )
 

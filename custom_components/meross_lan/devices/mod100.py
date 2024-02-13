@@ -160,9 +160,9 @@ class DiffuserMixin(
         }
         """
         if isinstance(humidity := payload.get(mc.KEY_HUMIDITY), dict):
-            self._sensor_humidity.update_state(humidity.get(mc.KEY_VALUE) / 10)  # type: ignore
+            self._sensor_humidity.update_native_value(humidity.get(mc.KEY_VALUE) / 10)  # type: ignore
         if isinstance(temperature := payload.get(mc.KEY_TEMPERATURE), dict):
-            self._sensor_temperature.update_state(temperature.get(mc.KEY_VALUE) / 10)  # type: ignore
+            self._sensor_temperature.update_native_value(temperature.get(mc.KEY_VALUE) / 10)  # type: ignore
 
     async def async_request_light_ack(self, payload):
         return await self.async_request_ack(

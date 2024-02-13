@@ -212,7 +212,6 @@ class NamespaceHandler:
                     device,
                     channel,
                     entitykey,
-                    MLDiagnosticSensor.DeviceClass.ENUM,
                     state=subvalue,
                 )
                 # we'll also create a polling strategy on the fly so that

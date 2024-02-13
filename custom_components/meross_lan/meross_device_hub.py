@@ -21,7 +21,7 @@ from .merossclient import (
 )
 from .number import MLConfigNumber
 from .select import MtsTrackedSensor
-from .sensor import MLDiagnosticSensor, MLSensor
+from .sensor import MLDiagnosticSensor, MLEnumSensor, MLSensor
 from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
@@ -526,6 +526,9 @@ class MerossSubDevice(MerossDeviceBase):
         ].lastrequest = 0
 
     # interface: self
+    def build_enum_sensor(self, entitykey: str):
+        return MLEnumSensor(self, self.id, entitykey)
+
     def build_sensor(
         self, entitykey: str, device_class: MLSensor.DeviceClass | None = None
     ):
@@ -592,7 +595,6 @@ class MerossSubDevice(MerossDeviceBase):
                             self,
                             self.id,
                             entitykey,
-                            MLDiagnosticSensor.DeviceClass.ENUM,
                             state=subvalue,
                         )
 
@@ -686,7 +688,7 @@ class MerossSubDevice(MerossDeviceBase):
 
     def _parse_battery(self, p_battery: dict):
         if self._online:
-            self.sensor_battery.update_state(p_battery.get(mc.KEY_VALUE))
+            self.sensor_battery.update_native_value(p_battery.get(mc.KEY_VALUE))
 
     def _parse_exception(self, p_exception: dict):
         """{"id": "00000000", "code": 5061}"""
@@ -718,7 +720,6 @@ class MerossSubDevice(MerossDeviceBase):
             )
             switch_togglex.entity_category = me.EntityCategory.CONFIG
             switch_togglex.key_channel = mc.KEY_ID
-
 
     def _parse_version(self, p_version: dict):
         """{"id": "00000000", "hardware": "1.1.5", "firmware": "5.1.8"}"""
@@ -776,7 +777,7 @@ class MS100SubDevice(MerossSubDevice):
 
     def _parse_humidity(self, p_humidity: dict):
         if isinstance(p_latest := p_humidity.get(mc.KEY_LATEST), int):
-            self.sensor_humidity.update_state(p_latest / 10)
+            self.sensor_humidity.update_native_value(p_latest / 10)
 
     def _parse_ms100(self, p_ms100: dict):
         # typically called by MerossSubDevice.parse_digest
@@ -785,13 +786,13 @@ class MS100SubDevice(MerossSubDevice):
 
     def _parse_temperature(self, p_temperature: dict):
         if isinstance(p_latest := p_temperature.get(mc.KEY_LATEST), int):
-            self.sensor_temperature.update_state(p_latest / 10)
+            self.sensor_temperature.update_native_value(p_latest / 10)
 
     def _parse_tempHum(self, p_temphum: dict):
         if isinstance(value := p_temphum.get(mc.KEY_LATESTTEMPERATURE), int):
-            self.sensor_temperature.update_state(value / 10)
+            self.sensor_temperature.update_native_value(value / 10)
         if isinstance(value := p_temphum.get(mc.KEY_LATESTHUMIDITY), int):
-            self.sensor_humidity.update_state(value / 10)
+            self.sensor_humidity.update_native_value(value / 10)
 
     def _parse_togglex(self, p_togglex: dict):
         # avoid the base class creating a toggle entity
@@ -933,26 +934,24 @@ class GS559SubDevice(MerossSubDevice):
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
-        self.sensor_status = self.build_sensor(mc.KEY_STATUS, MLSensor.DeviceClass.ENUM)
+        self.sensor_status: MLEnumSensor = self.build_enum_sensor(mc.KEY_STATUS)
         self.sensor_status.translation_key = "smoke_alarm_status"
-        self.sensor_interConn = self.build_sensor(
-            mc.KEY_INTERCONN, MLSensor.DeviceClass.ENUM
-        )
-        self.binary_sensor_alarm = self.build_binary_sensor(
+        self.sensor_interConn: MLEnumSensor = self.build_enum_sensor(mc.KEY_INTERCONN)
+        self.binary_sensor_alarm: MLBinarySensor = self.build_binary_sensor(
             "alarm", MLBinarySensor.DeviceClass.SAFETY
         )
-        self.binary_sensor_error = self.build_binary_sensor(
+        self.binary_sensor_error: MLBinarySensor = self.build_binary_sensor(
             "error", MLBinarySensor.DeviceClass.PROBLEM
         )
-        self.binary_sensor_muted = self.build_binary_sensor("muted")
+        self.binary_sensor_muted: MLBinarySensor = self.build_binary_sensor("muted")
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.binary_sensor_muted: MLBinarySensor = None  # type: ignore
-        self.binary_sensor_error: MLBinarySensor = None  # type: ignore
-        self.binary_sensor_alarm: MLBinarySensor = None  # type: ignore
-        self.sensor_status: MLSensor = None  # type: ignore
-        self.sensor_interConn: MLSensor = None  # type: ignore
+        self.binary_sensor_muted = None  # type: ignore
+        self.binary_sensor_error = None  # type: ignore
+        self.binary_sensor_alarm = None  # type: ignore
+        self.sensor_status = None  # type: ignore
+        self.sensor_interConn = None  # type: ignore
 
     def _parse_smokeAlarm(self, p_smokealarm: dict):
         if isinstance(value := p_smokealarm.get(mc.KEY_STATUS), int):

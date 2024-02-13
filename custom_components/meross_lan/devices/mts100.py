@@ -162,7 +162,7 @@ class Mts100Climate(MtsClimate):
         if mc.KEY_ROOM in p_temperature:
             self.current_temperature = p_temperature[mc.KEY_ROOM] / self.device_scale
             self.select_tracked_sensor.check_tracking()
-            self.manager.sensor_temperature.update_state(self.current_temperature)
+            self.manager.sensor_temperature.update_native_value(self.current_temperature)
 
         p_temperature_patch = {}
         _mts_adjusted_temperature = self._mts_adjusted_temperature
