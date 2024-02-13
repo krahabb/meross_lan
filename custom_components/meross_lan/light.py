@@ -140,9 +140,12 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
             self._light = payload
 
             if mc.KEY_ONOFF in payload:
-                self._attr_state = (
-                    self.STATE_ON if payload[mc.KEY_ONOFF] else self.STATE_OFF
-                )
+                if payload[mc.KEY_ONOFF]:
+                    self.is_on = True
+                    self._attr_state = self.STATE_ON
+                else:
+                    self.is_on = False
+                    self._attr_state = self.STATE_OFF
 
             self.color_mode = ColorMode.UNKNOWN
 
@@ -385,7 +388,7 @@ class MLLight(MLLightBase):
                         self.effect = effects[effect]  # type: ignore
 
 
-class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
+class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)
@@ -408,7 +411,7 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},
         ):
-            self.update_state(self.STATE_ON)
+            self.update_onoff(1)
 
     async def async_turn_off(self, **kwargs):
         if await self.manager.async_request_ack(
@@ -416,10 +419,7 @@ class MLDNDLightEntity(me.MerossEntity, light.LightEntity):
             mc.METHOD_SET,
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},
         ):
-            self.update_state(self.STATE_OFF)
-
-    def update_onoff(self, onoff):
-        self.update_state(self.STATE_OFF if onoff else self.STATE_ON)
+            self.update_onoff(0)
 
 
 class LightMixin(

@@ -16,7 +16,6 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .binary_sensor import MLBinarySensor
     from .calendar import MtsSchedule
     from .meross_device import MerossDeviceBase
     from .number import MtsSetPointNumber, MtsTemperatureNumber

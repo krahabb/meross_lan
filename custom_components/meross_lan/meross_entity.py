@@ -222,21 +222,43 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             timeout=14400,
         )
 
-    # even though these are toggle/binary_sensor properties
-    # we provide a base-implement-all
-    # TODO: move these to the specialized MerossToggle and BianrySensor
+
+class MerossBinaryEntity(MerossEntity):
+    """Partially abstract common base class for ToggleEntity and BinarySensor.
+    The initializer is skipped"""
+
     STATE_ON: typing.Final = hac.STATE_ON
     STATE_OFF: typing.Final = hac.STATE_OFF
 
-    @property
-    def is_on(self):
-        return self._attr_state == self.STATE_ON
+    # HA core entity attributes:
+    is_on: bool | None
+
+    __slots__ = ("is_on",)
+
+    def __init__(
+        self,
+        manager: MerossDeviceBase,
+        channel: object,
+        entitykey: str | None = None,
+        device_class: object | None = None,
+        *,
+        onoff=None,
+    ):
+        self.is_on = onoff
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            device_class,
+            state=None if onoff is None else self.STATE_ON if onoff else self.STATE_OFF,
+        )
 
     def update_onoff(self, onoff):
+        self.is_on = onoff
         self.update_state(self.STATE_ON if onoff else self.STATE_OFF)
 
 
-class MerossToggle(MerossEntity):
+class MerossToggle(MerossBinaryEntity):
     """
     Base toggle-like behavior used as a base class for
     effective switches or the likes (light for example)
@@ -265,7 +287,7 @@ class MerossToggle(MerossEntity):
             channel,
             entitykey,
             device_class,
-            state=None if onoff is None else self.STATE_ON if onoff else self.STATE_OFF,
+            onoff=onoff,
         )
         if namespace:
             self.namespace = namespace

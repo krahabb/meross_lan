@@ -84,7 +84,7 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
             cover.channel,
             "problem",
             self.DeviceClass.PROBLEM,
-            state=self.STATE_OFF,
+            onoff=0,
         )
 
     def set_available(self):
@@ -160,6 +160,7 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
     def update_onoff(self, onoff):
         state = self.STATE_ON if onoff else self.STATE_OFF
         if state != self._attr_state:
+            self.is_on = onoff
             self._attr_state = state
             self.flush_state()
             registry_update_entity = self.get_entity_registry().async_update_entity
@@ -694,9 +695,7 @@ class GarageMixin(
                     # since everything is already in place
                     garage.number_signalOpen = (
                         garage.number_signalOpen
-                        or MLGarageEmulatedConfigNumber(
-                            garage, mc.KEY_DOOROPENDURATION
-                        )
+                        or MLGarageEmulatedConfigNumber(garage, mc.KEY_DOOROPENDURATION)
                     )
                     # set guard so we don't repeat this 'late conditional init'
                     self.number_doorOpenDuration = garage.number_signalOpen

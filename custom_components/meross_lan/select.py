@@ -68,12 +68,13 @@ class MLSpray(me.MerossEntity, select.SelectEntity):
     def __init__(
         self, manager: SprayMixin | DiffuserMixin, channel: object, spraymode_map: dict
     ):
-        super().__init__(manager, channel, mc.KEY_SPRAY)
         # we could use the shared instance but different device firmwares
         # could bring in unwanted global options...
         self._spray_mode_map = dict(spraymode_map)
         self.options = list(self._spray_mode_map.values())
+        super().__init__(manager, channel, mc.KEY_SPRAY)
 
+    # interface: select.SelectEntity
     @property
     def current_option(self):
         """Return the selected entity option to represent the entity state."""
@@ -338,7 +339,7 @@ class MtsTrackedSensor(me.MerossEntity, select.SelectEntity):
 
         if self._attr_state not in self.options:
             # this might happen when restoring a not anymore valid entity
-            self._attr_state = self.STATE_OFF
+            self._attr_state = hac.STATE_OFF
 
         self.flush_state()
         self._tracking_start()

@@ -9,7 +9,6 @@ from .merossclient import const as mc
 from .merossclient.cloudapi import LatestVersionType
 
 if typing.TYPE_CHECKING:
-    from typing import Final
 
     from .meross_device import MerossDevice
 
@@ -43,7 +42,7 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
             None,
             "update_firmware",
             self.DeviceClass.FIRMWARE,
-            state=self.STATE_ON,  # just a dummy value to set the base.available
+            state=update.STATE_ON,  # just a dummy value to set the base.available
         )
 
     def set_available(self):

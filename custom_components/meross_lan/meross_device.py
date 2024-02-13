@@ -49,6 +49,7 @@ from .helpers.namespaces import (
     NamespaceHandler,
     PollingStrategy,
 )
+from .light import MLDNDLightEntity
 from .meross_entity import MerossFakeEntity
 from .merossclient import (
     HostAddress,
@@ -330,7 +331,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     device_timestamp: int
     _tzinfo: ZoneInfo | None  # smart cache of device tzinfo
     _unsub_polling_callback: asyncio.TimerHandle | None
-    entity_dnd: MerossEntity
+    entity_dnd: MLDNDLightEntity
     sensor_protocol: ProtocolSensor
     sensor_signal_strength: MLSensor
     update_firmware: MLUpdate | None
@@ -422,9 +423,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._polling_callback_shutdown = None
         self._queued_smartpoll_requests = 0
         ability: typing.Final = descriptor.ability
-        self.multiple_max: typing.Final[int] = ability.get(mc.NS_APPLIANCE_CONTROL_MULTIPLE, {}).get(
-            "maxCmdNum", 0
-        )
+        self.multiple_max: typing.Final[int] = ability.get(
+            mc.NS_APPLIANCE_CONTROL_MULTIPLE, {}
+        ).get("maxCmdNum", 0)
         self._multiple_len = self.multiple_max
         self._multiple_requests: list[MerossRequestType] = []
         self._multiple_response_size = PARAM_HEADER_SIZE
@@ -451,8 +452,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._update_config()
 
         if mc.NS_APPLIANCE_SYSTEM_DNDMODE in ability:
-            from .light import MLDNDLightEntity
-
             self.entity_dnd = MLDNDLightEntity(self)
             EntityPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DNDMODE, self.entity_dnd)
         else:
@@ -1802,7 +1801,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.sensor_signal_strength.update_state(p_debug[mc.KEY_NETWORK][mc.KEY_SIGNAL])
 
     def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
-        self.entity_dnd.update_onoff(payload[mc.KEY_DNDMODE][mc.KEY_MODE])
+        self.entity_dnd.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
 
     def _handle_Appliance_System_Online(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager

@@ -17,6 +17,6 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, binary_sensor.DOMAIN)
 
 
-class MLBinarySensor(me.MerossEntity, binary_sensor.BinarySensorEntity):
+class MLBinarySensor(me.MerossBinaryEntity, binary_sensor.BinarySensorEntity):
     PLATFORM = binary_sensor.DOMAIN
     DeviceClass = binary_sensor.BinarySensorDeviceClass
