@@ -689,7 +689,7 @@ class MQTTConnection(Loggable):
             device.mqtt_connected()
         self._mqtt_is_connected = True
         if sensor_connection := self.sensor_connection:
-            sensor_connection.update_state(ConnectionSensor.STATE_CONNECTED)
+            sensor_connection.update_native_value(ConnectionSensor.STATE_CONNECTED)
 
     @callback
     def _mqtt_disconnected(self):
@@ -698,7 +698,7 @@ class MQTTConnection(Loggable):
             device.mqtt_disconnected()
         self._mqtt_is_connected = False
         if sensor_connection := self.sensor_connection:
-            sensor_connection.update_state(ConnectionSensor.STATE_DISCONNECTED)
+            sensor_connection.update_native_value(ConnectionSensor.STATE_DISCONNECTED)
 
     @callback
     def _mqtt_published(self):
