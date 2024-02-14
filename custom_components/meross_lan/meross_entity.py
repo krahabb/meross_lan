@@ -37,10 +37,8 @@ class MerossFakeEntity:
     disabled entities access overhead
     """
 
-    enabled = False
-
     @staticmethod
-    def update_state(state):
+    def update_onoff(onoff):
         pass
 
     @staticmethod
@@ -82,7 +80,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     available: bool
     device_class: Final[object | str | None]
     name: str | None
-    _attr_state: StateType
     unique_id: str
 
     # used to speed-up checks if entity is enabled and loaded
@@ -96,7 +93,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         "available",
         "device_class",
         "name",
-        "_attr_state",
         "unique_id",
         "_hass_connected",
     )
@@ -108,7 +104,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         entitykey: str | None = None,
         device_class: object | str | None = None,
         *,
-        state: StateType = None,
         available: bool = False,
     ):
         """
@@ -136,7 +131,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.channel = channel
         self.entitykey = entitykey
         self.namespace_handlers: set[NamespaceHandler] = set()
-        self.available = available or self._attr_available or (state is not None)
+        self.available = available or self._attr_available
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
         if hasattr(self, "name"):
@@ -152,7 +147,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             self.name = f"{name} {channel}" if name else str(channel)
         else:
             self.name = name
-        self._attr_state = state
         self._hass_connected = False
         # by default all of our entities have unique_id so they're registered
         # there could be some exceptions though (MLUpdate)
@@ -185,35 +179,17 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.manager: EntityManager = None  # type: ignore
 
     def flush_state(self):
-        """
-        actually commits a state change to HA. This is more
-        hard-core than update_state since some entities (say climates)
-        have multi-dimensional state with HA core attributes that
-        need to be updated. For these use-cases update_state is too simple
-        to catch so we just let HA process it
-        """
+        """Actually commits a state change to HA."""
         if self._hass_connected:
             self.async_write_ha_state()
 
     def set_available(self):
         self.available = True
-        # we don't flush here since we'll wait for update_state
+        # we don't flush here since we'll wait for actual device readings
 
     def set_unavailable(self):
-        self._attr_state = None
         if self.available:
             self.available = False
-            self.flush_state()
-
-    def update_state(self, state: StateType):
-        """
-        update the entity state and flush it if changed
-        HA already has a system to catch non-changing state updates
-        but we'd prefer avoid all of the overhead if we're already
-        sure it didn't change
-        """
-        if self._attr_state != state:
-            self._attr_state = state
             self.flush_state()
 
     def update_native_value(self, native_value):

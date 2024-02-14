@@ -47,7 +47,6 @@ if typing.TYPE_CHECKING:
 
     from .meross_device import MerossDevice
 
-STATE_MAP = {0: STATE_CLOSED, 1: STATE_OPEN}
 
 # garagedoor extra attributes
 NOTIFICATION_ID_TIMEOUT = "garagedoor_timeout"
@@ -84,7 +83,7 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
             cover.channel,
             "problem",
             self.DeviceClass.PROBLEM,
-            onoff=0,
+            onoff=False,
         )
 
     def set_available(self):
@@ -96,12 +95,13 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
     def update_ok(self):
         self.extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TIMEOUT, None)
         self.extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TARGET, None)
-        self.update_onoff(0)
+        self.update_onoff(False)
 
     def update_timeout(self, target_state):
         self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TARGET] = target_state
         self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TIMEOUT] = now().isoformat()
-        self.update_onoff(1)
+        self.is_on = True
+        self.flush_state()
 
 
 class MLGarageMultipleConfigSwitch(MLSwitch):
@@ -300,17 +300,21 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
     switch_doorEnable: MLGarageDoorEnableSwitch | None
 
     # HA core entity attributes:
+    is_closed: bool | None
+    is_closing: bool
+    is_opening: bool
     supported_features: CoverEntityFeature = (
         CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
     )
 
     __slots__ = (
+        "is_closed",
+        "is_closing",
+        "is_opening",
         "_transition_duration",
         "_transition_start",
         "_transition_unsub",
         "_transition_end_unsub",
-        "_open",
-        "_open_request",
         "binary_sensor_timeout",
         "number_signalClose",
         "number_signalOpen",
@@ -320,6 +324,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
 
     def __init__(self, manager: GarageMixin, channel: object):
         super().__init__(manager, channel, None, CoverDeviceClass.GARAGE)
+        self.is_closed = None
+        self.is_closing = False
+        self.is_opening = False
         self._transition_duration = (
             PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
             + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
@@ -327,10 +334,6 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         self._transition_start = None
         self._transition_unsub = None
         self._transition_end_unsub = None
-        # this is the last known (or actual) physical state from device state
-        self._open = None
-        # cache issued request since device reply doesnt report it
-        self._open_request = None
         self.extra_state_attributes = {
             EXTRA_ATTR_TRANSITION_DURATION: self._transition_duration
         }
@@ -390,23 +393,11 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         await super().async_will_remove_from_hass()
 
     def set_unavailable(self):
-        self._open = None
         self._transition_cancel()
+        self.is_closed = None
         super().set_unavailable()
 
     # interface: cover.CoverEntity
-    @property
-    def is_opening(self):
-        return self._attr_state is STATE_OPENING
-
-    @property
-    def is_closing(self):
-        return self._attr_state is STATE_CLOSING
-
-    @property
-    def is_closed(self):
-        return self._attr_state is STATE_CLOSED
-
     async def async_open_cover(self, **kwargs):
         await self.async_request_position(1)
 
@@ -439,12 +430,13 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                 if isinstance(p_state, list):
                     # we eventually expect a 1 item list with our channel of course
                     p_state = p_state[0]
-                self._open = p_state[mc.KEY_OPEN]
-                if p_state.get(mc.KEY_EXECUTE) and open_request != self._open:
-                    self._open_request = open_request
+                _open = p_state[mc.KEY_OPEN]
+                self.is_closed = not _open
+                if p_state.get(mc.KEY_EXECUTE) and open_request != _open:
                     self._transition_start = time()
-                    self.update_state(STATE_OPENING if open_request else STATE_CLOSING)
                     if open_request:
+                        self.is_closing = False
+                        self.is_opening = True
                         try:
                             timeout = self.number_signalOpen.native_value  # type: ignore
                         except AttributeError:
@@ -459,6 +451,8 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                             )
                             timeout = self.number_signalOpen.native_value
                     else:
+                        self.is_closing = True
+                        self.is_opening = False
                         try:
                             timeout = self.number_signalClose.native_value  # type: ignore
                         except AttributeError:
@@ -483,8 +477,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
                         (timeout or self._transition_duration) + 1,  # type: ignore
                         self._transition_end_callback,
                     )
-                else:
-                    self.update_state(STATE_MAP.get(self._open))
+
+                self.flush_state()
+
             except Exception as exception:
                 self.log_exception(
                     self.WARNING,
@@ -495,43 +490,35 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
 
     def _parse_state(self, payload: dict):
         # {"channel": 0, "open": 1, "lmTime": 0}
-        self._open = _open = payload[mc.KEY_OPEN]
-        if not self._transition_start:
-            # our state machine is idle and we could be receiving a
-            # state change triggered by any external means (app, remote)
-            self.update_state(STATE_MAP.get(_open))
-            return
-
-        # state will be updated on _transition_end_callback
-        # but we monitor the contact switch in order to
-        # update our estimates for transition duration
-        if self._open_request != _open:
-            # keep monitoring the transition in less than 1 sec
-            if not self._transition_unsub:
-                self._transition_unsub = schedule_async_callback(
-                    self.hass, 0.9, self._async_transition_callback
+        is_closed = not payload[mc.KEY_OPEN]
+        if self._transition_start:
+            if self.is_closed == is_closed:
+                # keep monitoring the transition in less than 1 sec
+                if not self._transition_unsub:
+                    self._transition_unsub = schedule_async_callback(
+                        self.hass, 0.9, self._async_transition_callback
+                    )
+                return
+            # We're "in transition" and the physical contact has reached the target.
+            # we can monitor the (sampled) exact time when the garage closes to
+            # estimate the transition_duration and dynamically update it since
+            # during the transition the state will be closed only at the end
+            # while during opening the garagedoor contact will open right at the beginning
+            # and so will be unuseful
+            # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
+            # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
+            if is_closed:
+                transition_duration = self.manager.lastresponse - self._transition_start
+                # autoregression filtering applying 20% of last updated sample
+                self._update_transition_duration(
+                    int((4 * self._transition_duration + transition_duration) / 5)
                 )
-            return
+                self._transition_cancel()
 
-        # We're "in transition" and the physical contact has reached the target.
-        # we can monitor the (sampled) exact time when the garage closes to
-        # estimate the transition_duration and dynamically update it since
-        # during the transition the state will be closed only at the end
-        # while during opening the garagedoor contact will open right at the beginning
-        # and so will be unuseful
-        # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
-        # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
-        if not _open:
-            transition_duration = self.manager.lastresponse - self._transition_start
-            # autoregression filtering applying 20% of last updated sample
-            self._update_transition_duration(
-                int((4 * self._transition_duration + transition_duration) / 5)
-            )
-            self._transition_cancel()
-            self.update_state(STATE_CLOSED)
+        if self.is_closed != is_closed:
+            self.is_closed = is_closed
+            self.flush_state()
 
-        # garage contact is opened but since it opens way sooner than the transition
-        # ending we'll wait our transition_end in order to update the state
 
     def _parse_config(self, payload):
         if mc.KEY_SIGNALCLOSE in payload:
@@ -549,25 +536,19 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         Here we'll intercept that behaviour and right now the guess is:
         The toggle state represents the contact of the garagedoor which is likely a short
         pulse so we'll use it to guess state transitions in our cover (disabled this until further knowledge)
-
-        if onoff:
-            if self._attr_state == STATE_CLOSED:
-                self._start_transition(STATE_OPEN)
-            elif self._attr_state == STATE_OPEN:
-                self._start_transition(STATE_CLOSED)
-        #else: RIP!
         """
         pass
 
     def _transition_cancel(self):
+        self.is_closing = False
+        self.is_opening = False
+        self._transition_start = None
         if self._transition_unsub:
             self._transition_unsub.cancel()
             self._transition_unsub = None
         if self._transition_end_unsub:
             self._transition_end_unsub.cancel()
             self._transition_end_unsub = None
-        self._open_request = None
-        self._transition_start = None
 
     async def _async_transition_callback(self):
         self._transition_unsub = None
@@ -583,24 +564,25 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         checks the transition did finish as per the timeout(s)
         """
         self._transition_end_unsub = None
-        if not self._open_request:
+        if self.is_closing:
             # when closing we expect this callback not to be called since
             # the transition should be terminated by '_set_open' provided it gets
             # called on time (on polling this is not guaranteed).
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
             # or the garage didnt close at all
-            transition_duration = time() - self._transition_start  # type: ignore
-            if self._transition_duration < transition_duration:
+            if self._transition_duration < (time() - self._transition_start):  # type: ignore
                 self._update_transition_duration(self._transition_duration + 1)
 
-        self.update_state(STATE_MAP.get(self._open))  # type: ignore
-        if self._open_request == self._open:
+        if self.is_closing == self.is_closed:
             self.binary_sensor_timeout.update_ok()
         else:
-            self.binary_sensor_timeout.update_timeout(STATE_MAP.get(self._open_request))  # type: ignore
+            self.binary_sensor_timeout.update_timeout(STATE_CLOSED if self.is_closing else STATE_OPEN)
 
-        self._open_request = None
+        self.is_closing = False
+        self.is_opening = False
+        self.flush_state()
+
         self._transition_start = None
 
     def _update_transition_duration(self, transition_duration):
@@ -762,6 +744,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         "supported_features",
         "number_signalOpen",
         "number_signalClose",
+        "_mrs_state",
         "_signalOpen",
         "_signalClose",
         "_position_native",
@@ -780,6 +763,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
         )
         self.extra_state_attributes = {}
+        self._mrs_state = None
         self._signalOpen: int = 30000  # msec to fully open (config'd on device)
         self._signalClose: int = 30000  # msec to fully close (config'd on device)
         self._position_native = None  # as reported by the device
@@ -961,6 +945,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         self.is_closed = None
         self.is_closing = None
         self.is_opening = None
+        self._mrs_state = None
         self._transition_cancel()
         super().set_unavailable()
 
@@ -1021,7 +1006,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 )
                 if self.current_cover_position > mc.ROLLERSHUTTER_POSITION_OPENED:
                     self.current_cover_position = mc.ROLLERSHUTTER_POSITION_OPENED
-                self._attr_state = None  # ensure flush when update_state
+                self._mrs_state = None  # ensure flushing state
             elif self.is_closing:
                 self.current_cover_position = round(
                     self._position_start
@@ -1029,7 +1014,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 )
                 if self.current_cover_position < mc.ROLLERSHUTTER_POSITION_CLOSED:
                     self.current_cover_position = mc.ROLLERSHUTTER_POSITION_CLOSED
-                self._attr_state = None  # ensure flush when update_state
+                self._mrs_state = None  # ensure flushing state
 
             if state == mc.ROLLERSHUTTER_STATE_OPENING:
                 if not self.is_opening:
@@ -1048,8 +1033,8 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     self._position_start = self.current_cover_position
                     self._position_starttime = epoch
 
-        if self._attr_state != state:
-            self._attr_state = state
+        if self._mrs_state != state:
+            self._mrs_state = state
             self.is_closed = (
                 self.current_cover_position == mc.ROLLERSHUTTER_POSITION_CLOSED
             )
