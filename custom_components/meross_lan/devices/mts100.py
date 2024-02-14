@@ -206,11 +206,11 @@ class Mts100Climate(MtsClimate):
             if key is mc.KEY_CURRENTSET:
                 self.target_temperature = _t / self.device_scale
             elif key is mc.KEY_COMFORT:
-                self.number_comfort_temperature.update_native_value(_t)
+                self.number_comfort_temperature.update_device_value(_t)
             elif key is mc.KEY_ECONOMY:
-                self.number_sleep_temperature.update_native_value(_t)
+                self.number_sleep_temperature.update_device_value(_t)
             elif key is mc.KEY_AWAY:
-                self.number_away_temperature.update_native_value(_t)
+                self.number_away_temperature.update_device_value(_t)
 
         if p_temperature_patch:
             p_temperature_patch[mc.KEY_ID] = self.id

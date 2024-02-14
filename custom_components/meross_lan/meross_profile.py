@@ -105,8 +105,9 @@ class ConnectionSensor(MLDiagnosticSensor):
     manager: ApiProfile
 
     # HA core entity attributes:
+    _attr_available = True
     extra_state_attributes: AttrDictType
-    _attr_state: str
+    native_value: str
     options: list[str] = [
         STATE_DISCONNECTED,
         STATE_CONNECTED,
@@ -132,7 +133,7 @@ class ConnectionSensor(MLDiagnosticSensor):
             connection.profile,
             None,
             connection.id,
-            state=(
+            native_value=(
                 self.STATE_CONNECTED
                 if connection.mqtt_is_connected
                 else self.STATE_DISCONNECTED
@@ -167,14 +168,14 @@ class ConnectionSensor(MLDiagnosticSensor):
 
     def inc_counter_with_state(self, attr_name: str, state: str):
         self.extra_state_attributes[attr_name] += 1
-        self._attr_state = state
+        self.native_value = state
         self.flush_state()
 
     def inc_queued(self, queue_length: int):
         attrs = self.extra_state_attributes
         attrs[ConnectionSensor.ATTR_QUEUED] += 1
         attrs[ConnectionSensor.ATTR_QUEUE_LENGTH] = queue_length
-        self._attr_state = ConnectionSensor.STATE_QUEUING
+        self.native_value = ConnectionSensor.STATE_QUEUING
         self.flush_state()
 
 
@@ -834,7 +835,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             attrs[ConnectionSensor.ATTR_PUBLISHED] += 1
             if self.mqtt_is_connected and not queue_length:
                 # enforce the state eventually cancelling queued, dropped...
-                sensor_connection._attr_state = ConnectionSensor.STATE_CONNECTED
+                sensor_connection.native_value = ConnectionSensor.STATE_CONNECTED
             sensor_connection.flush_state()
 
     # interface: self

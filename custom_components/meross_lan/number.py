@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from homeassistant.components import number
-from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfTemperature, UnitOfTime
 
 from . import meross_entity as me
 from .helpers import reverse_lookup, schedule_async_callback
@@ -24,10 +24,11 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
 
-class MLConfigNumber(me.MerossEntity, number.NumberEntity):
+class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
     PLATFORM = number.DOMAIN
     DeviceClass = number.NumberDeviceClass
     DEVICECLASS_TO_UNIT_MAP = {
+        DeviceClass.DURATION: UnitOfTime.SECONDS,
         DeviceClass.HUMIDITY: PERCENTAGE,
         DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
     }
@@ -43,24 +44,14 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
     key_channel: str = mc.KEY_CHANNEL
     key_value: str
 
-    device_scale: float = 1
-    """used to scale the device value when converting to/from native value"""
-    device_value: int | None
-    """the 'native' device value carried in protocol messages"""
-
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
     mode: number.NumberMode = number.NumberMode.BOX
     native_max_value: float
     native_min_value: float
     native_step: float
-    native_unit_of_measurement: str | None = None
-    _attr_state: int | float | None
 
-    __slots__ = (
-        "device_value",
-        "_unsub_request",
-    )
+    __slots__ = ("_async_request_debounce_unsub",)
 
     def __init__(
         self,
@@ -71,14 +62,13 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         *,
         device_value: int | None = None,
     ):
-        self.device_value = device_value
-        self._unsub_request = None
+        self._async_request_debounce_unsub = None
         super().__init__(
             manager,
             channel,
             entitykey,
             device_class,
-            state=None if device_value is None else device_value / self.device_scale,
+            device_value=device_value,
         )
 
     async def async_shutdown(self):
@@ -86,15 +76,10 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         await super().async_shutdown()
 
     def set_unavailable(self):
-        self.device_value = None
         self._cancel_request()
         super().set_unavailable()
 
     # interface: number.NumberEntity
-    @property
-    def native_value(self):
-        return self._attr_state
-
     async def async_set_native_value(self, value: float):
         device_value = round(value * self.device_scale)
         device_step = round(self.native_step * self.device_scale)
@@ -102,18 +87,14 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         # since the async_set_native_value might be triggered back-to-back
         # especially when using the BOXED UI we're debouncing the device
         # request and provide 'temporaneous' optimistic updates
-        self.update_state(device_value / self.device_scale)
-        if self._unsub_request:
-            self._unsub_request.cancel()
-        self._unsub_request = schedule_async_callback(
+        self.update_native_value(device_value / self.device_scale)
+        if self._async_request_debounce_unsub:
+            self._async_request_debounce_unsub.cancel()
+        self._async_request_debounce_unsub = schedule_async_callback(
             self.hass, self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
         )
 
     # interface: self
-    def update_native_value(self, device_value):
-        self.device_value = device_value
-        self.update_state(device_value / self.device_scale)
-
     async def async_request(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
         return await self.manager.async_request_ack(
@@ -127,19 +108,19 @@ class MLConfigNumber(me.MerossEntity, number.NumberEntity):
         )
 
     async def _async_request_debounce(self, device_value):
-        self._unsub_request = None
+        self._async_request_debounce_unsub = None
         if await self.async_request(device_value):
-            self.update_native_value(device_value)
+            self.update_device_value(device_value)
         else:
             # restore the last good known device value
             device_value = self.device_value
             if device_value is not None:
-                self.update_state(device_value / self.device_scale)
+                self.update_native_value(device_value / self.device_scale)
 
     def _cancel_request(self):
-        if self._unsub_request:
-            self._unsub_request.cancel()
-            self._unsub_request = None
+        if self._async_request_debounce_unsub:
+            self._async_request_debounce_unsub.cancel()
+            self._async_request_debounce_unsub = None
 
 
 class MtsTemperatureNumber(MLConfigNumber):
@@ -161,13 +142,6 @@ class MtsTemperatureNumber(MLConfigNumber):
             entitykey,
             MLConfigNumber.DeviceClass.TEMPERATURE,
         )
-
-    @property
-    def native_unit_of_measurement(self):
-        # the climate.temperature_unit is actually fixed to CELSIUS
-        # but I see a probable change in device features (change of device unit)
-        # so we're using a property here to be more future-proof
-        return self.climate.temperature_unit
 
 
 class MtsSetPointNumber(MtsTemperatureNumber):

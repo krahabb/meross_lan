@@ -243,13 +243,13 @@ class Mts960Climate(MtsClimate):
             for key in self.DIAGNOSTIC_SENSOR_KEYS:
                 if key in payload:
                     try:
-                        entities[f"{channel}_{key}"].update_state(payload[key])
+                        entities[f"{channel}_{key}"].update_native_value(payload[key])
                     except KeyError:
                         MLDiagnosticSensor(
                             manager,
                             channel,
                             key,
-                            state=payload[key],
+                            native_value=payload[key],
                         )
 
         self.flush_state()

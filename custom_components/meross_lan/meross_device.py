@@ -65,7 +65,7 @@ from .merossclient import (
 )
 from .merossclient.httpclient import MerossHttpClient, TerminatedException
 from .repairs import IssueSeverity, create_issue, remove_issue
-from .sensor import PERCENTAGE, MLSensor, ProtocolSensor
+from .sensor import MLNumericSensor, ProtocolSensor
 from .update import MLUpdate
 
 if typing.TYPE_CHECKING:
@@ -333,7 +333,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     _unsub_polling_callback: asyncio.TimerHandle | None
     entity_dnd: MLDNDLightEntity
     sensor_protocol: ProtocolSensor
-    sensor_signal_strength: MLSensor
+    sensor_signal_strength: MLNumericSensor
     update_firmware: MLUpdate | None
 
     __slots__ = (
@@ -460,10 +460,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.sensor_protocol = ProtocolSensor(self)
 
         if mc.NS_APPLIANCE_SYSTEM_RUNTIME in ability:
-            self.sensor_signal_strength = sensor_signal_strength = MLSensor(
-                self, None, "signal_strength", MLSensor.DeviceClass.POWER_FACTOR
+            self.sensor_signal_strength = sensor_signal_strength = MLNumericSensor(
+                self, None, "signal_strength", MLNumericSensor.DeviceClass.POWER_FACTOR
             )
-            sensor_signal_strength.entity_category = MLSensor.EntityCategory.DIAGNOSTIC
+            sensor_signal_strength.entity_category = (
+                MLNumericSensor.EntityCategory.DIAGNOSTIC
+            )
             sensor_signal_strength.icon = "mdi:wifi"
             EntityPollingStrategy(
                 self, mc.NS_APPLIANCE_SYSTEM_RUNTIME, sensor_signal_strength
@@ -1797,7 +1799,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def _handle_Appliance_System_Debug(self, header: dict, payload: dict):
         self.device_debug = p_debug = payload[mc.KEY_DEBUG]
-        self.sensor_signal_strength.update_native_value(p_debug[mc.KEY_NETWORK][mc.KEY_SIGNAL])
+        self.sensor_signal_strength.update_native_value(
+            p_debug[mc.KEY_NETWORK][mc.KEY_SIGNAL]
+        )
 
     def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
         self.entity_dnd.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
@@ -1811,7 +1815,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         pass
 
     def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
-        self.sensor_signal_strength.update_native_value(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])
+        self.sensor_signal_strength.update_native_value(
+            payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL]
+        )
 
     def _handle_Appliance_System_Time(self, header: dict, payload: dict):
         if header[mc.KEY_METHOD] == mc.METHOD_PUSH:

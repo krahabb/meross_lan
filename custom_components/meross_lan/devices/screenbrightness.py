@@ -28,8 +28,8 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     async def async_set_native_value(self, value: float):
         brightness = {
             mc.KEY_CHANNEL: self.channel,
-            mc.KEY_OPERATION: self.manager._number_brightness_operation.native_value,
-            mc.KEY_STANDBY: self.manager._number_brightness_standby.native_value,
+            mc.KEY_OPERATION: self.manager._number_brightness_operation.device_value,
+            mc.KEY_STANDBY: self.manager._number_brightness_standby.device_value,
         }
         brightness[self.key_value] = value
         if await self.manager.async_request_ack(
@@ -37,7 +37,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
             mc.METHOD_SET,
             {mc.KEY_BRIGHTNESS: [brightness]},
         ):
-            self.update_native_value(value)
+            self.update_device_value(value)
 
 
 class ScreenBrightnessMixin(
@@ -77,10 +77,10 @@ class ScreenBrightnessMixin(
     def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
         for p_channel in payload[mc.KEY_BRIGHTNESS]:
             if p_channel.get(mc.KEY_CHANNEL) == 0:
-                self._number_brightness_operation.update_native_value(
+                self._number_brightness_operation.update_device_value(
                     p_channel[mc.KEY_OPERATION]
                 )
-                self._number_brightness_standby.update_native_value(
+                self._number_brightness_standby.update_device_value(
                     p_channel[mc.KEY_STANDBY]
                 )
                 break

@@ -14,7 +14,6 @@ from homeassistant.components.cover import (
     CoverDeviceClass,
     CoverEntityFeature,
 )
-from homeassistant.const import UnitOfTime
 from homeassistant.core import callback
 from homeassistant.exceptions import InvalidStateError
 from homeassistant.helpers import entity_registry
@@ -222,12 +221,17 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
     native_max_value = 60
     native_min_value = 1
     native_step = 1
-    native_unit_of_measurement = UnitOfTime.SECONDS
 
     def __init__(self, manager: GarageMixin, channel, key: str, *, device_value=None):
         self.key_value = key
         self.name = key
-        super().__init__(manager, channel, f"config_{key}", device_value=device_value)
+        super().__init__(
+            manager,
+            channel,
+            f"config_{key}",
+            self.DeviceClass.DURATION,
+            device_value=device_value,
+        )
 
 
 class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
@@ -279,10 +283,10 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
             if last_state := await get_entity_last_state_available(
                 self.hass, self.entity_id
             ):
-                self._attr_state = float(last_state.state)  # type: ignore
+                self.native_value = float(last_state.state)  # type: ignore
 
     async def async_set_native_value(self, value: float):
-        self.update_state(value)
+        self.update_native_value(value)
 
 
 class MLGarage(me.MerossEntity, cover.CoverEntity):
@@ -531,9 +535,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
 
     def _parse_config(self, payload):
         if mc.KEY_SIGNALCLOSE in payload:
-            self.number_signalClose.update_native_value(payload[mc.KEY_SIGNALCLOSE])  # type: ignore
+            self.number_signalClose.update_device_value(payload[mc.KEY_SIGNALCLOSE])  # type: ignore
         if mc.KEY_SIGNALOPEN in payload:
-            self.number_signalOpen.update_native_value(payload[mc.KEY_SIGNALOPEN])  # type: ignore
+            self.number_signalOpen.update_device_value(payload[mc.KEY_SIGNALOPEN])  # type: ignore
         if mc.KEY_BUZZERENABLE in payload:
             self.switch_buzzerEnable.update_onoff(payload[mc.KEY_BUZZERENABLE])  # type: ignore
         if mc.KEY_DOORENABLE in payload:
@@ -653,7 +657,7 @@ class GarageMixin(
         payload = payload[mc.KEY_CONFIG]
         if mc.KEY_SIGNALDURATION in payload:
             try:
-                self.number_signalDuration.update_native_value(
+                self.number_signalDuration.update_device_value(
                     payload[mc.KEY_SIGNALDURATION]
                 )
             except AttributeError:
@@ -678,7 +682,7 @@ class GarageMixin(
             # now we have door open/close duration set per channel (#82)
             # but legacy ones still manage this
             try:
-                self.number_doorOpenDuration.update_native_value(  # type: ignore
+                self.number_doorOpenDuration.update_device_value(  # type: ignore
                     payload[mc.KEY_DOOROPENDURATION]
                 )
             except AttributeError:
@@ -706,7 +710,7 @@ class GarageMixin(
             # this config key has been removed in recent firmwares
             # now we have door open/close duration set per channel (#82)
             try:
-                self.number_doorCloseDuration.update_native_value(  # type: ignore
+                self.number_doorCloseDuration.update_device_value(  # type: ignore
                     payload[mc.KEY_DOORCLOSEDURATION]
                 )
             except AttributeError:
@@ -1071,11 +1075,11 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
         if mc.KEY_SIGNALOPEN in payload:
             self._signalOpen = payload[mc.KEY_SIGNALOPEN]
-            self.number_signalOpen.update_native_value(self._signalOpen)
+            self.number_signalOpen.update_device_value(self._signalOpen)
             self.extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
         if mc.KEY_SIGNALCLOSE in payload:
             self._signalClose = payload[mc.KEY_SIGNALCLOSE]
-            self.number_signalClose.update_native_value(self._signalClose)
+            self.number_signalClose.update_device_value(self._signalClose)
             self.extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
 
     async def _async_transition_callback(self):
@@ -1148,7 +1152,6 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     native_max_value = 60
     native_min_value = 1
     native_step = 1
-    native_unit_of_measurement = UnitOfTime.SECONDS
 
     __slots__ = ("_cover",)
 
@@ -1156,7 +1159,9 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
         self._cover = cover
         self.key_value = key
         self.name = key
-        super().__init__(cover.manager, cover.channel, f"config_{key}")
+        super().__init__(
+            cover.manager, cover.channel, f"config_{key}", self.DeviceClass.DURATION
+        )
 
     async def async_request(self, device_value):
         config = {

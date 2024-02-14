@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 import typing
 
 from homeassistant.components import sensor
@@ -32,18 +31,17 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
 
 
-NativeValueCallbackType = typing.Callable[[], me.StateType]
-
-
 class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
     """Specialization for sensor with ENUM device_class which allows to store
     anything as opposed to numeric sensor types which have units and so."""
+
     PLATFORM = sensor.DOMAIN
 
     # HA core entity attributes:
+    native_value: me.StateType | None
+    native_unit_of_measurement: None = None
 
-    __slots__ = (
-    )
+    __slots__ = ("native_value",)
 
     def __init__(
         self,
@@ -51,25 +49,31 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
         channel: object | None,
         entitykey: str | None,
         *,
-        state: me.StateType = None,
+        native_value: me.StateType = None,
     ):
-        super().__init__(manager, channel, entitykey, sensor.SensorDeviceClass.ENUM, state=state)
+        self.native_value = native_value
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            sensor.SensorDeviceClass.ENUM,
+            available=native_value is not None,
+        )
 
-    @property
-    def native_value(self):
-        return self._attr_state
+    def set_unavailable(self):
+        self.native_value = None
+        super().set_unavailable()
+
+    def update_native_value(self, native_value: me.StateType):
+        if self.native_value != native_value:
+            self.native_value = native_value
+            self.flush_state()
 
 
-class MLSensor(me.MerossEntity, sensor.SensorEntity):
+class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
     PLATFORM = sensor.DOMAIN
     DeviceClass = sensor.SensorDeviceClass
     StateClass = sensor.SensorStateClass
-
-    # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
-    # except these device classes
-    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass, StateClass] = {
-        DeviceClass.ENERGY: StateClass.TOTAL_INCREASING,
-    }
 
     DEVICECLASS_TO_UNIT_MAP: dict[DeviceClass, str] = {
         DeviceClass.POWER: UnitOfPower.WATT,
@@ -82,14 +86,16 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         DeviceClass.POWER_FACTOR: PERCENTAGE,
     }
 
+    # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
+    # except these device classes
+    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass, StateClass] = {
+        DeviceClass.ENERGY: StateClass.TOTAL_INCREASING,
+    }
+
     # HA core entity attributes:
-    native_unit_of_measurement: str
     state_class: StateClass
 
-    __slots__ = (
-        "native_unit_of_measurement",
-        "state_class",
-    )
+    __slots__ = ("state_class",)
 
     def __init__(
         self,
@@ -98,27 +104,21 @@ class MLSensor(me.MerossEntity, sensor.SensorEntity):
         entitykey: str | None,
         device_class: DeviceClass | None = None,
         *,
-        state: me.StateType = None,
+        device_value: int | None = None,
     ):
         assert device_class and device_class is not sensor.SensorDeviceClass.ENUM
-        self.native_unit_of_measurement = self.DEVICECLASS_TO_UNIT_MAP[device_class]
         self.state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
-            device_class, MLSensor.StateClass.MEASUREMENT
+            device_class, MLNumericSensor.StateClass.MEASUREMENT
         )
-        super().__init__(manager, channel, entitykey, device_class, state=state)
+        super().__init__(
+            manager, channel, entitykey, device_class, device_value=device_value
+        )
 
     @staticmethod
-    def build_for_device(device: MerossDevice, device_class: MLSensor.DeviceClass):
-        return MLSensor(device, None, str(device_class), device_class)
-
-    @property
-    def native_value(self):
-        return self._attr_state
-
-    def update_native_value(self, native_value):
-        if self._attr_state != native_value:
-            self._attr_state = native_value
-            self.flush_state()
+    def build_for_device(
+        device: MerossDevice, device_class: MLNumericSensor.DeviceClass
+    ):
+        return MLNumericSensor(device, None, str(device_class), device_class)
 
 
 class MLDiagnosticSensor(MLEnumSensor):
@@ -126,7 +126,7 @@ class MLDiagnosticSensor(MLEnumSensor):
     is_diagnostic: Final = True
 
     # HA core entity attributes:
-    entity_category = MLSensor.EntityCategory.DIAGNOSTIC
+    entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
 
 class ProtocolSensor(MLEnumSensor):
@@ -143,7 +143,7 @@ class ProtocolSensor(MLEnumSensor):
     _attr_available = True
     entity_category = me.EntityCategory.DIAGNOSTIC
     entity_registry_enabled_default = False
-    _attr_state: str
+    native_value: str
     options: list[str] = [STATE_DISCONNECTED, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP]
 
     @staticmethod
@@ -159,12 +159,12 @@ class ProtocolSensor(MLEnumSensor):
             manager,
             None,
             "sensor_protocol",
-            state=ProtocolSensor.STATE_DISCONNECTED,
+            native_value=ProtocolSensor.STATE_DISCONNECTED,
         )
 
     def set_available(self):
         manager = self.manager
-        self._attr_state = manager.curr_protocol
+        self.native_value = manager.curr_protocol
         attrs = self.extra_state_attributes
         _get_attr_state = self._get_attr_state
         if manager.conf_protocol is not manager.curr_protocol:
@@ -176,7 +176,7 @@ class ProtocolSensor(MLEnumSensor):
         self.flush_state()
 
     def set_unavailable(self):
-        self._attr_state = ProtocolSensor.STATE_DISCONNECTED
+        self.native_value = ProtocolSensor.STATE_DISCONNECTED
         if self.manager._mqtt_connection:
             self.extra_state_attributes = {
                 self.ATTR_MQTT_BROKER: self._get_attr_state(

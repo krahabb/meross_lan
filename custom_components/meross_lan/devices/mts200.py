@@ -212,13 +212,13 @@ class Mts200Climate(MtsClimate):
         if mc.KEY_MAX in payload:
             self.max_temp = payload[mc.KEY_MAX] / self.device_scale
         if mc.KEY_HEATTEMP in payload:
-            self.number_comfort_temperature.update_native_value(
+            self.number_comfort_temperature.update_device_value(
                 payload[mc.KEY_HEATTEMP]
             )
         if mc.KEY_COOLTEMP in payload:
-            self.number_sleep_temperature.update_native_value(payload[mc.KEY_COOLTEMP])
+            self.number_sleep_temperature.update_device_value(payload[mc.KEY_COOLTEMP])
         if mc.KEY_ECOTEMP in payload:
-            self.number_away_temperature.update_native_value(payload[mc.KEY_ECOTEMP])
+            self.number_away_temperature.update_device_value(payload[mc.KEY_ECOTEMP])
         self.flush_state()
 
     def _parse_holdAction(self, payload: dict):

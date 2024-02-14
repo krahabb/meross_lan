@@ -205,14 +205,14 @@ class NamespaceHandler:
             try:
                 device_entities[
                     f"{channel}_{entitykey}" if channel is not None else entitykey
-                ].update_state(subvalue)
+                ].update_native_value(subvalue)
             except KeyError:
                 device = self.device
                 MLDiagnosticSensor(
                     device,
                     channel,
                     entitykey,
-                    state=subvalue,
+                    native_value=subvalue,
                 )
                 # we'll also create a polling strategy on the fly so that
                 # the diagnostic sensors get updated

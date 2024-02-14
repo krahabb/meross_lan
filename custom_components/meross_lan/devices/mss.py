@@ -11,7 +11,7 @@ from homeassistant.util import dt as dt_util
 from ..helpers import get_entity_last_state_available
 from ..helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
 from ..merossclient import const as mc
-from ..sensor import MLEnumSensor, MLSensor
+from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
@@ -20,19 +20,19 @@ if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice, MerossDeviceDescriptor
 
 
-class EnergyEstimateSensor(MLSensor):
+class EnergyEstimateSensor(MLNumericSensor):
 
     # HA core entity attributes:
     _attr_available = True
     entity_registry_enabled_default = False
-    _attr_state: int
+    native_value: int
 
-    __slots__ = ("_attr_state_float",)
+    __slots__ = ("_energy_estimate",)
 
     def __init__(self, manager: ElectricityMixin):
-        self._attr_state_float = 0.0
+        self._energy_estimate = 0.0
         super().__init__(
-            manager, None, "energy_estimate", self.DeviceClass.ENERGY, state=0
+            manager, None, "energy_estimate", self.DeviceClass.ENERGY, device_value=0
         )
 
     async def async_added_to_hass(self):
@@ -41,12 +41,12 @@ class EnergyEstimateSensor(MLSensor):
         # from when this happens while the device is already working. In general
         # the sensor state is always kept in the instance even when it's disabled
         # so we don't want to overwrite that should we enable an entity after
-        # it has been initialized. Checking _attr_state here should be enough
+        # it has been initialized. Checking native_value here should be enough
         # since it's surely 0 on boot/initial setup (entities are added before
         # device reading data). If an entity is disabled on startup of course our state
         # will start resetted and our sums will restart (disabled means not interesting
         # anyway)
-        if self._attr_state != 0:
+        if self.native_value:
             return
 
         with self.exception_warning("restoring previous state"):
@@ -59,8 +59,8 @@ class EnergyEstimateSensor(MLSensor):
             # state should be an int though but in case we decide some
             # tweaks here or there this conversion is safer (allowing for a float state)
             # and more consistent
-            self._attr_state_float = float(state.state)
-            self._attr_state = int(self._attr_state_float)
+            self._energy_estimate = float(state.state)
+            self.native_value = int(self._energy_estimate)
 
     def set_available(self):
         pass
@@ -75,25 +75,21 @@ class EnergyEstimateSensor(MLSensor):
     def update_estimate(self, de: float):
         # this is the 'estimated' sensor update api
         # based off ElectricityMixin power readings
-        self._attr_state_float += de
-        state = int(self._attr_state_float)
-        if self._attr_state != state:
-            self._attr_state = state
-            self.flush_state()
+        self._energy_estimate += de
+        super().update_native_value(int(self._energy_estimate))
 
     def reset_estimate(self):
-        self._attr_state_float -= self._attr_state  # preserve fraction
-        self._attr_state = 0
-        self.flush_state()
+        self._energy_estimate -= self.native_value  # preserve fraction
+        super().update_native_value(0)
 
 
 class ElectricityMixin(
     MerossDevice if typing.TYPE_CHECKING else object
 ):  # pylint: disable=used-before-assignment
     _electricity_lastupdate = 0.0
-    _sensor_power: MLSensor
-    _sensor_current: MLSensor
-    _sensor_voltage: MLSensor
+    _sensor_power: MLNumericSensor
+    _sensor_current: MLNumericSensor
+    _sensor_voltage: MLNumericSensor
     # implement an estimated energy measure from _sensor_power.
     # Estimate is a trapezoidal integral sum on power. Using class
     # initializers to ease instance sharing (and type-checks)
@@ -111,12 +107,14 @@ class ElectricityMixin(
 
     def __init__(self, descriptor, entry):
         super().__init__(descriptor, entry)
-        self._sensor_power = MLSensor.build_for_device(self, MLSensor.DeviceClass.POWER)
-        self._sensor_current = MLSensor.build_for_device(
-            self, MLSensor.DeviceClass.CURRENT
+        self._sensor_power = MLNumericSensor.build_for_device(
+            self, MLNumericSensor.DeviceClass.POWER
         )
-        self._sensor_voltage = MLSensor.build_for_device(
-            self, MLSensor.DeviceClass.VOLTAGE
+        self._sensor_current = MLNumericSensor.build_for_device(
+            self, MLNumericSensor.DeviceClass.CURRENT
+        )
+        self._sensor_voltage = MLNumericSensor.build_for_device(
+            self, MLNumericSensor.DeviceClass.VOLTAGE
         )
         self._sensor_energy_estimate = EnergyEstimateSensor(self)
         SmartPollingStrategy(self, mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
@@ -138,7 +136,7 @@ class ElectricityMixin(
     def _handle_Appliance_Control_Electricity(self, header: dict, payload: dict):
         electricity = payload[mc.KEY_ELECTRICITY]
         power = float(electricity[mc.KEY_POWER]) / 1000
-        if (last_power := self._sensor_power._attr_state) is not None:
+        if (last_power := self._sensor_power.native_value) is not None:
             # dt = self.lastupdate - self._electricity_lastupdate
             # de = (((last_power + power) / 2) * dt) / 3600
             de = (
@@ -184,14 +182,13 @@ class ElectricityMixin(
         self._schedule_next_reset(_now)
 
 
-class ConsumptionXSensor(MLSensor):
+class ConsumptionXSensor(MLNumericSensor):
     ATTR_OFFSET = "offset"
     offset: int = 0
     ATTR_RESET_TS = "reset_ts"
     reset_ts: int = 0
 
     manager: ConsumptionXMixin
-    _attr_state: int | None
 
     def __init__(self, manager: ConsumptionXMixin):
         self.extra_state_attributes = {}
@@ -205,12 +202,12 @@ class ConsumptionXSensor(MLSensor):
         # from when this happens while the device is already working. In general
         # the sensor state is always kept in the instance even when it's disabled
         # so we don't want to overwrite that should we enable an entity after
-        # it has been initialized. Checking _attr_state here should be enough
-        # since it's surely 0 on boot/initial setup (entities are added before
+        # it has been initialized. Checking native_value here should be enough
+        # since it's surely None on boot/initial setup (entities are added before
         # device reading data). If an entity is disabled on startup of course our state
         # will start resetted and our sums will restart (disabled means not interesting
         # anyway)
-        if (self._attr_state is not None) or self.extra_state_attributes:
+        if (self.native_value is not None) or self.extra_state_attributes:
             return
 
         with self.exception_warning("restoring previous state"):
@@ -245,8 +242,8 @@ class ConsumptionXSensor(MLSensor):
             # instead keep patching the 'consumption reset bug'
 
     def reset_consumption(self):
-        if self._attr_state != 0:
-            self._attr_state = 0
+        if self.native_value != 0:
+            self.native_value = 0
             self.extra_state_attributes = {}
             self.offset = 0
             self.reset_ts = 0
@@ -415,8 +412,8 @@ class ConsumptionXMixin(
 
         elif day_last_value == self._consumption_last_value:
             # no change in consumption..skip updating unless sensor was disconnected
-            if _sensor_consumption._attr_state is None:
-                _sensor_consumption._attr_state = (
+            if _sensor_consumption.native_value is None:
+                _sensor_consumption.native_value = (
                     day_last_value - _sensor_consumption.offset
                 )
                 _sensor_consumption.flush_state()
@@ -425,7 +422,7 @@ class ConsumptionXMixin(
         self._consumption_last_time = day_last_time
         self._consumption_last_value = day_last_value
         self._consumption_estimate = 0.0  # reset ElecticityMixin estimate cycle
-        _sensor_consumption._attr_state = day_last_value - _sensor_consumption.offset
+        _sensor_consumption.native_value = day_last_value - _sensor_consumption.offset
         _sensor_consumption.flush_state()
         self.log(self.DEBUG, "updating consumption=%d", day_last_value)
 
@@ -479,7 +476,7 @@ class OverTempMixin(
         if mc.KEY_ENABLE in overtemp:
             self._switch_overtemp_enable.update_onoff(overtemp[mc.KEY_ENABLE])
         if mc.KEY_TYPE in overtemp:
-            self._sensor_overtemp_type.update_state(overtemp[mc.KEY_TYPE])
+            self._sensor_overtemp_type.update_native_value(overtemp[mc.KEY_TYPE])
 
     def _handle_Appliance_Control_OverTemp(self, header: dict, payload: dict):
         pass

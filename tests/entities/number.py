@@ -52,9 +52,9 @@ class EntityTest(EntityComponentTest):
         assert float(state.state) == entity.min_value, "min_value"
 
     async def async_test_disabled_callback(self, entity: MLConfigNumber):
-        await entity.async_set_native_value(entity.max_value)
+        await entity.async_set_native_value(entity.native_max_value)
         await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
-        assert entity.native_value == entity.max_value
-        await entity.async_set_native_value(entity.min_value)
+        assert entity.state == entity.max_value
+        await entity.async_set_native_value(entity.native_min_value)
         await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
-        assert entity.native_value == entity.min_value
+        assert entity.state == entity.min_value

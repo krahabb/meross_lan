@@ -6,7 +6,7 @@ from ..binary_sensor import MLBinarySensor
 from ..helpers.namespaces import PollingStrategy, SmartPollingStrategy
 from ..merossclient import KEY_TO_NAMESPACE, const as mc
 from ..number import MtsTemperatureNumber
-from ..sensor import MLEnumSensor, MLSensor
+from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MtsConfigSwitch
 from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
@@ -48,7 +48,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         manager = self.manager
         # preset entity platforms since these might be instantiated later
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
-        manager.platforms.setdefault(MLSensor.PLATFORM)
+        manager.platforms.setdefault(MLNumericSensor.PLATFORM)
         self.sensor_warning = None
         self.switch = None
         manager.register_parser(
@@ -70,7 +70,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
             self.native_min_value = payload[mc.KEY_MIN] / self.device_scale
         if mc.KEY_MAX in payload:
             self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
-        self.update_native_value(payload[self.key_value])
+        self.update_device_value(payload[self.key_value])
         if mc.KEY_ONOFF in payload:
             # on demand instance
             try:
@@ -85,13 +85,13 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         if mc.KEY_WARNING in payload:
             # on demand instance
             try:
-                self.sensor_warning.update_state(payload[mc.KEY_WARNING])  # type: ignore
+                self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])  # type: ignore
             except AttributeError:
                 self.sensor_warning = sensor_warning = MLEnumSensor(
                     self.manager,
                     self.channel,
                     f"{self.entitykey}_warning",
-                    state=payload[mc.KEY_WARNING],
+                    native_value=payload[mc.KEY_WARNING],
                 )
                 sensor_warning.translation_key = f"mts_{sensor_warning.entitykey}"
 
@@ -167,16 +167,17 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
         self.native_min_value = 20
         self.native_step = climate.target_temperature_step
         super().__init__(climate, self.key_namespace)
-        self.sensor_external_temperature = MLSensor(
+        self.sensor_external_temperature = MLNumericSensor(
             self.manager,
             self.channel,
             "external sensor",
-            MLSensor.DeviceClass.TEMPERATURE,
+            MLNumericSensor.DeviceClass.TEMPERATURE,
         )
 
     async def async_shutdown(self):
-        self.sensor_external_temperature: MLSensor = None  # type: ignore
+        self.sensor_external_temperature: MLNumericSensor = None  # type: ignore
         return await super().async_shutdown()
+
 
     def _parse(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,

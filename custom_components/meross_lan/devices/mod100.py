@@ -21,7 +21,7 @@ from ..select import (
     OPTION_SPRAY_MODE_OFF,
     MLSpray,
 )
-from ..sensor import MLSensor
+from ..sensor import MLNumericSensor
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
@@ -99,11 +99,6 @@ class DiffuserMixin(
     }
 
     # interface: MerossDevice
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self._sensor_humidity = None
-        self._sensor_temperature = None
-
     def _init_diffuser(self, digest: dict):
         """
         "diffuser":
@@ -126,12 +121,10 @@ class DiffuserMixin(
         if mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR in self.descriptor.ability:
             # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
             # are supporting correct values so we implement them (#243)
-            self._sensor_temperature = MLSensor.build_for_device(
-                self, MLSensor.DeviceClass.TEMPERATURE
+            MLNumericSensor.build_for_device(
+                self, MLNumericSensor.DeviceClass.TEMPERATURE
             )
-            self._sensor_humidity = MLSensor.build_for_device(
-                self, MLSensor.DeviceClass.HUMIDITY
-            )
+            MLNumericSensor.build_for_device(self, MLNumericSensor.DeviceClass.HUMIDITY)
             PollingStrategy(self, mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR, item_count=1)
 
     def _parse_diffuser(self, digest: dict):
@@ -159,10 +152,10 @@ class DiffuserMixin(
             "temperature": {"value": 0, "lmTime": 0}
         }
         """
-        if isinstance(humidity := payload.get(mc.KEY_HUMIDITY), dict):
-            self._sensor_humidity.update_native_value(humidity.get(mc.KEY_VALUE) / 10)  # type: ignore
-        if isinstance(temperature := payload.get(mc.KEY_TEMPERATURE), dict):
-            self._sensor_temperature.update_native_value(temperature.get(mc.KEY_VALUE) / 10)  # type: ignore
+        entities = self.entities
+        for key in (mc.KEY_HUMIDITY, mc.KEY_TEMPERATURE):
+            if key in payload:
+                entities[key].update_native_value(payload[key][mc.KEY_VALUE] / 10)
 
     async def async_request_light_ack(self, payload):
         return await self.async_request_ack(

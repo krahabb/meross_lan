@@ -21,7 +21,7 @@ from .merossclient import (
 )
 from .number import MLConfigNumber
 from .select import MtsTrackedSensor
-from .sensor import MLDiagnosticSensor, MLEnumSensor, MLSensor
+from .sensor import MLDiagnosticSensor, MLEnumSensor, MLNumericSensor
 from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
@@ -223,7 +223,7 @@ class MerossDeviceHub(MerossDevice):
         MLBinarySensor.PLATFORM: None,
         MLCalendar.PLATFORM: None,
         MLConfigNumber.PLATFORM: None,
-        MLSensor.PLATFORM: None,
+        MLNumericSensor.PLATFORM: None,
         MLSwitch.PLATFORM: None,
         MtsClimate.PLATFORM: None,
         MtsTrackedSensor.PLATFORM: None,
@@ -477,7 +477,7 @@ class MerossSubDevice(MerossDeviceBase):
         )
         self.platforms = hub.platforms
         hub.subdevices[id] = self
-        self.sensor_battery = self.build_sensor_c(MLSensor.DeviceClass.BATTERY)
+        self.sensor_battery = self.build_sensor_c(MLNumericSensor.DeviceClass.BATTERY)
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
         self.switch_togglex: MLSwitch | None = None
@@ -501,7 +501,7 @@ class MerossSubDevice(MerossDeviceBase):
         self.async_request_raw = None  # type: ignore
         self.build_request = None  # type: ignore
         self.hub: MerossDeviceHub = None  # type: ignore
-        self.sensor_battery: MLSensor = None  # type: ignore
+        self.sensor_battery: MLNumericSensor = None  # type: ignore
         self.switch_togglex = None
 
     @property
@@ -530,12 +530,12 @@ class MerossSubDevice(MerossDeviceBase):
         return MLEnumSensor(self, self.id, entitykey)
 
     def build_sensor(
-        self, entitykey: str, device_class: MLSensor.DeviceClass | None = None
+        self, entitykey: str, device_class: MLNumericSensor.DeviceClass | None = None
     ):
-        return MLSensor(self, self.id, entitykey, device_class)
+        return MLNumericSensor(self, self.id, entitykey, device_class)
 
-    def build_sensor_c(self, device_class: MLSensor.DeviceClass):
-        return MLSensor(self, self.id, str(device_class), device_class)
+    def build_sensor_c(self, device_class: MLNumericSensor.DeviceClass):
+        return MLNumericSensor(self, self.id, str(device_class), device_class)
 
     def build_binary_sensor(
         self, entitykey: str, device_class: MLBinarySensor.DeviceClass | None = None
@@ -589,13 +589,15 @@ class MerossSubDevice(MerossDeviceBase):
                         continue
                     entitykey = f"{parent_key}_{subkey}"
                     try:
-                        self.entities[f"{self.id}_{entitykey}"].update_state(subvalue)
+                        self.entities[f"{self.id}_{entitykey}"].update_native_value(
+                            subvalue
+                        )
                     except KeyError:
                         MLDiagnosticSensor(
                             self,
                             self.id,
                             entitykey,
-                            state=subvalue,
+                            native_value=subvalue,
                         )
 
             def _parse_list():
@@ -682,13 +684,13 @@ class MerossSubDevice(MerossDeviceBase):
         for p_key, p_value in p_adjust.items():
             if p_key == mc.KEY_ID:
                 continue
-            number: MLHubSensorAdjustNumber
-            if number := getattr(self, f"number_adjust_{p_key}", None):  # type: ignore
-                number.update_native_value(p_value)
+            number: MLHubSensorAdjustNumber | None
+            if number := getattr(self, f"number_adjust_{p_key}", None):
+                number.update_device_value(p_value)
 
     def _parse_battery(self, p_battery: dict):
         if self._online:
-            self.sensor_battery.update_native_value(p_battery.get(mc.KEY_VALUE))
+            self.sensor_battery.update_native_value(p_battery[mc.KEY_VALUE])
 
     def _parse_exception(self, p_exception: dict):
         """{"id": "00000000", "code": 5061}"""
@@ -749,8 +751,10 @@ class MS100SubDevice(MerossSubDevice):
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
-        self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
-        self.sensor_humidity = self.build_sensor_c(MLSensor.DeviceClass.HUMIDITY)
+        self.sensor_temperature = self.build_sensor_c(
+            MLNumericSensor.DeviceClass.TEMPERATURE
+        )
+        self.sensor_humidity = self.build_sensor_c(MLNumericSensor.DeviceClass.HUMIDITY)
         self.number_adjust_temperature = MLHubSensorAdjustNumber(
             self,
             mc.KEY_TEMPERATURE,
@@ -770,8 +774,8 @@ class MS100SubDevice(MerossSubDevice):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.sensor_temperature: MLSensor = None  # type: ignore
-        self.sensor_humidity: MLSensor = None  # type: ignore
+        self.sensor_temperature: MLNumericSensor = None  # type: ignore
+        self.sensor_humidity: MLNumericSensor = None  # type: ignore
         self.number_adjust_temperature: MLHubSensorAdjustNumber = None  # type: ignore
         self.number_adjust_humidity: MLHubSensorAdjustNumber = None  # type: ignore
 
@@ -785,14 +789,20 @@ class MS100SubDevice(MerossSubDevice):
         self._parse_tempHum(p_ms100)
 
     def _parse_temperature(self, p_temperature: dict):
-        if isinstance(p_latest := p_temperature.get(mc.KEY_LATEST), int):
-            self.sensor_temperature.update_native_value(p_latest / 10)
+        if mc.KEY_LATEST in p_temperature:
+            self.sensor_temperature.update_native_value(
+                p_temperature[mc.KEY_LATEST] / 10
+            )
 
     def _parse_tempHum(self, p_temphum: dict):
-        if isinstance(value := p_temphum.get(mc.KEY_LATESTTEMPERATURE), int):
-            self.sensor_temperature.update_native_value(value / 10)
-        if isinstance(value := p_temphum.get(mc.KEY_LATESTHUMIDITY), int):
-            self.sensor_humidity.update_native_value(value / 10)
+        if mc.KEY_LATESTTEMPERATURE in p_temphum:
+            self.sensor_temperature.update_native_value(
+                p_temphum[mc.KEY_LATESTTEMPERATURE] / 10
+            )
+        if mc.KEY_LATESTHUMIDITY in p_temphum:
+            self.sensor_humidity.update_native_value(
+                p_temphum[mc.KEY_LATESTHUMIDITY] / 10
+            )
 
     def _parse_togglex(self, p_togglex: dict):
         # avoid the base class creating a toggle entity
@@ -820,13 +830,15 @@ class MTS100SubDevice(MerossSubDevice):
         from .devices.mts100 import Mts100Climate
 
         self.climate = Mts100Climate(self)
-        self.sensor_temperature = self.build_sensor_c(MLSensor.DeviceClass.TEMPERATURE)
+        self.sensor_temperature = self.build_sensor_c(
+            MLNumericSensor.DeviceClass.TEMPERATURE
+        )
         self.sensor_temperature.entity_registry_enabled_default = False
 
     async def async_shutdown(self):
         await super().async_shutdown()
         self.climate: Mts100Climate = None  # type: ignore
-        self.sensor_temperature: MLSensor = None  # type: ignore
+        self.sensor_temperature: MLNumericSensor = None  # type: ignore
 
     def _parse_all(self, p_all: dict):
         self._parse_online(p_all.get(mc.KEY_ONLINE, {}))
@@ -847,7 +859,7 @@ class MTS100SubDevice(MerossSubDevice):
             climate.flush_state()
 
     def _parse_adjust(self, p_adjust: dict):
-        self.climate.number_adjust_temperature.update_native_value(
+        self.climate.number_adjust_temperature.update_device_value(
             p_adjust[mc.KEY_TEMPERATURE]
         )
 
@@ -958,9 +970,11 @@ class GS559SubDevice(MerossSubDevice):
             self.binary_sensor_alarm.update_onoff(value in GS559SubDevice.STATUS_ALARM)
             self.binary_sensor_error.update_onoff(value in GS559SubDevice.STATUS_ERROR)
             self.binary_sensor_muted.update_onoff(value in GS559SubDevice.STATUS_MUTED)
-            self.sensor_status.update_state(GS559SubDevice.STATUS_MAP.get(value, value))
+            self.sensor_status.update_native_value(
+                GS559SubDevice.STATUS_MAP.get(value, value)
+            )
         if isinstance(value := p_smokealarm.get(mc.KEY_INTERCONN), int):
-            self.sensor_interConn.update_state(value)
+            self.sensor_interConn.update_native_value(value)
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
