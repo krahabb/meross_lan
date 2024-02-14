@@ -4,7 +4,7 @@ import typing
 
 from . import const as mlc, meross_entity as me
 from .binary_sensor import MLBinarySensor
-from .calendar import MLCalendar
+from .calendar import MtsSchedule
 from .climate import MtsClimate
 from .helpers.namespaces import (
     NamespaceHandler,
@@ -221,7 +221,7 @@ class MerossDeviceHub(MerossDevice):
 
     DEFAULT_PLATFORMS = MerossDevice.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
-        MLCalendar.PLATFORM: None,
+        MtsSchedule.PLATFORM: None,
         MLConfigNumber.PLATFORM: None,
         MLNumericSensor.PLATFORM: None,
         MLSwitch.PLATFORM: None,

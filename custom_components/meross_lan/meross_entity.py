@@ -55,7 +55,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     class MyCustomSwitch(MerossEntity, Switch)
     """
 
-    PLATFORM: str
+    PLATFORM: ClassVar[str]
 
     EntityCategory = EntityCategory
 
