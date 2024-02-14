@@ -4,7 +4,7 @@ import typing
 
 from homeassistant.components import media_player
 from homeassistant.components.media_player.const import (
-    MEDIA_TYPE_MUSIC,
+    MediaType,
     MediaPlayerEntityFeature,
     MediaPlayerState,
 )
@@ -34,7 +34,11 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
     manager: Mp3Mixin
 
     # HA core entity attributes:
-    _attr_state: media_player.MediaPlayerState | None
+    is_volume_muted: bool | None
+    media_content_type: MediaType = MediaType.MUSIC
+    media_title: str | None
+    media_track: int | None
+    state: media_player.MediaPlayerState | None
     supported_features: MediaPlayerEntityFeature = (
         MediaPlayerEntityFeature.VOLUME_MUTE
         | MediaPlayerEntityFeature.VOLUME_SET
@@ -44,11 +48,25 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         | MediaPlayerEntityFeature.PLAY
         | MediaPlayerEntityFeature.STOP
     )
+    volume_level: float | None
+    volume_step: float = 1 / mc.HP110A_MP3_VOLUME_MAX
 
-    __slots__ = ("_mp3",)
+    __slots__ = (
+        "is_volume_muted",
+        "media_title",
+        "media_track",
+        "state",
+        "volume_level",
+        "_mp3",
+    )
 
     def __init__(self, manager: Mp3Mixin, channel: object):
         self._mp3 = {}
+        self.is_volume_muted = None
+        self.media_title = None
+        self.media_track = None
+        self.state = None
+        self.volume_level = None
         super().__init__(
             manager, channel, mc.KEY_MP3, media_player.MediaPlayerDeviceClass.SPEAKER
         )
@@ -57,44 +75,19 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
     # interface: MerossEntity
     def set_unavailable(self):
         self._mp3 = {}
+        self.is_volume_muted = None
+        self.media_title = None
+        self.media_track = None
+        self.state = None
+        self.volume_level = None
         super().set_unavailable()
 
     # interface: MediaPlayerEntity
-    @property
-    def volume_level(self):
-        volume = self._mp3.get(mc.KEY_VOLUME)
-        if volume is None:
-            return None
-        return clamp(volume / 16, 0.0, 1.0)
-
-    @property
-    def is_volume_muted(self) -> bool | None:
-        return self._mp3.get(mc.KEY_MUTE)
-
-    @property
-    def media_content_type(self):
-        return MEDIA_TYPE_MUSIC
-
-    @property
-    def media_title(self):
-        track = self.media_track
-        if track is None:
-            return None
-        return mc.HP110A_MP3_SONG_MAP.get(track)
-
-    @property
-    def media_track(self) -> int | None:
-        return self._mp3.get(mc.KEY_SONG)
-
-    @property
-    def state(self):
-        return self._attr_state
-
     async def async_mute_volume(self, mute):
         await self.async_request_mp3(mc.KEY_MUTE, 1 if mute else 0)
 
     async def async_set_volume_level(self, volume):
-        await self.async_request_mp3(mc.KEY_VOLUME, clamp(round(volume * 16), 0, 16))
+        await self.async_request_mp3(mc.KEY_VOLUME, clamp(round(volume * mc.HP110A_MP3_VOLUME_MAX), 0, mc.HP110A_MP3_VOLUME_MAX))
 
     async def async_media_play(self):
         await self.async_request_mp3(mc.KEY_MUTE, 0)
@@ -124,31 +117,28 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
 
     # interface: self
     async def async_request_mp3(self, key: str, value: int):
+        payload = {mc.KEY_CHANNEL: self.channel, key: value}
         if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_CONTROL_MP3,
             mc.METHOD_SET,
-            {mc.KEY_MP3: {mc.KEY_CHANNEL: self.channel, key: value}},
+            {mc.KEY_MP3: payload},
         ):
-            self._mp3[key] = value
-            self._attr_state = (
-                MediaPlayerState.IDLE
-                if self._mp3.get(mc.KEY_MUTE)
-                else MediaPlayerState.PLAYING
-            )
-            self.flush_state()
+            self._parse_mp3(payload)
 
     def _parse_mp3(self, payload: dict):
         """
         {"channel": 0, "lmTime": 1630691532, "song": 9, "mute": 1, "volume": 11}
         """
-        if (self._mp3 != payload):
-            self._mp3 = payload
+        if self._mp3 != payload:
+            self._mp3.update(payload)
             if mc.KEY_MUTE in payload:
-                self._attr_state = (
-                    MediaPlayerState.IDLE
-                    if payload[mc.KEY_MUTE]
-                    else MediaPlayerState.PLAYING
-                )
+                self.is_volume_muted = mute = payload[mc.KEY_MUTE]
+                self.state = MediaPlayerState.IDLE if mute else MediaPlayerState.PLAYING
+            if mc.KEY_SONG in payload:
+                self.media_track = song = payload[mc.KEY_SONG]
+                self.media_title = mc.HP110A_MP3_SONG_MAP.get(song)
+            if mc.KEY_VOLUME in payload:
+                self.volume_level = clamp(payload[mc.KEY_VOLUME] / mc.HP110A_MP3_VOLUME_MAX, 0.0, 1.0)
             self.flush_state()
 
 

@@ -512,6 +512,7 @@ HP110A_MP3_SONG_MAP = {
     10: "Thunder",
     11: "Ocean Wave",
 }
+HP110A_MP3_VOLUME_MAX = 16
 
 # well known device types and classes
 # when registering type names put the CLASS name
