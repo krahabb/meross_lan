@@ -209,7 +209,12 @@ async def test_meross_profile_with_device(
 
         assert device._profile is profile
         assert device._mqtt_connection in profile.mqttconnections.values()
+        """
+        The cloud MQTT connection is (or might be) done in an executor
+        so we cannot reliably validate this condition. Later on it should
+        be connected for sure
         assert device._mqtt_connected is device._mqtt_connection
+        """
 
         device = await devicecontext.perform_coldstart()
 
@@ -233,7 +238,7 @@ async def test_meross_profile_with_device(
             ],
             any_order=True,
         )
-        # check the device name was update from cloudapi query
+        # check the device name was updated from cloudapi query
         assert (
             device_registry_entry := device_registry.async_get(hass).async_get_device(
                 **device.deviceentry_id
@@ -251,6 +256,12 @@ async def test_meross_profile_with_device(
         assert update_firmware
         update_firmware_state = hass.states.get(update_firmware.entity_id)
         assert update_firmware_state and update_firmware_state.state == "on"
+
+        # this condition needs testing after the mqtt client schedule_connect
+        # executor code has been done. No effort to reliably assert that
+        # but at this point in time it should have run
+        assert device._mqtt_connected is device._mqtt_connection
+        # TODO: check the protocol switching?
 
         # remove the cloud profile
         assert await profile_entry_mock.async_unload()
