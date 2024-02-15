@@ -4,9 +4,9 @@ import typing
 
 from homeassistant.components import media_player
 from homeassistant.components.media_player.const import (
-    MediaType,
     MediaPlayerEntityFeature,
     MediaPlayerState,
+    MediaType,
 )
 
 from . import meross_entity as me

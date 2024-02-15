@@ -1,10 +1,6 @@
 from homeassistant import const as hac
 from homeassistant.components import light as haec
-from homeassistant.components.light import (
-    ColorMode,
-    LightEntity,
-    LightEntityFeature,
-)
+from homeassistant.components.light import ColorMode, LightEntity, LightEntityFeature
 
 from custom_components.meross_lan.devices.mod100 import MLDiffuserLight
 from custom_components.meross_lan.light import (
