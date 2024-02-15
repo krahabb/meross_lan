@@ -16,14 +16,18 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = SelectEntity
 
     DIGEST_ENTITIES = {
-        mc.KEY_THERMOSTAT: {MtsTrackedSensor},
-        mc.KEY_SPRAY: {MLSpray},
-        mc.KEY_DIFFUSER: {MLSpray},
+        mc.KEY_THERMOSTAT: {
+            mc.KEY_MODE: [MtsTrackedSensor],
+            mc.KEY_MODEB: [MtsTrackedSensor],
+        },
+        mc.KEY_SPRAY: [MLSpray],
+        mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [MLSpray]},
     }
 
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: {MtsTrackedSensor},
-        mc.TYPE_MTS150: {MtsTrackedSensor},
+        mc.TYPE_MTS100: [MtsTrackedSensor],
+        mc.TYPE_MTS100V3: [MtsTrackedSensor],
+        mc.TYPE_MTS150: [MtsTrackedSensor],
     }
 
     async def async_test_each_callback(self, entity: SelectEntity):

@@ -4,9 +4,9 @@ import typing
 
 from ..binary_sensor import MLBinarySensor
 from ..helpers.namespaces import PollingStrategy, SmartPollingStrategy
-from ..merossclient import KEY_TO_NAMESPACE, const as mc
+from ..merossclient import const as mc
 from ..number import MtsTemperatureNumber
-from ..sensor import MLEnumSensor, MLNumericSensor
+from ..sensor import MLEnumSensor, MLNumericSensor, MLTemperatureSensor
 from ..switch import MtsConfigSwitch
 from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
@@ -167,17 +167,13 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
         self.native_min_value = 20
         self.native_step = climate.target_temperature_step
         super().__init__(climate, self.key_namespace)
-        self.sensor_external_temperature = MLNumericSensor(
-            self.manager,
-            self.channel,
-            "external sensor",
-            MLNumericSensor.DeviceClass.TEMPERATURE,
+        self.sensor_external_temperature = MLTemperatureSensor(
+            self.manager, self.channel, "external sensor"
         )
 
     async def async_shutdown(self):
         self.sensor_external_temperature: MLNumericSensor = None  # type: ignore
         return await super().async_shutdown()
-
 
     def _parse(self, payload: dict):
         """{"warning": 0, "value": 335, "onoff": 1, "min": 200, "max": 700,

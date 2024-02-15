@@ -26,15 +26,22 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = NumberEntity
 
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: {MLGarageConfigNumber},
-        mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: {MLGarageMultipleConfigNumber},
-        mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: {MLRollerShutterConfigNumber},
-        mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: {MLScreenBrightnessNumber},
+        mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: [MLGarageConfigNumber],
+        mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: [MLGarageMultipleConfigNumber],
+        mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: [
+            MLRollerShutterConfigNumber,
+            MLRollerShutterConfigNumber,
+        ],
+        mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: [
+            MLScreenBrightnessNumber,
+            MLScreenBrightnessNumber,
+        ],
     }
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MS100: {MLHubSensorAdjustNumber},
-        mc.TYPE_MTS100: {Mts100AdjustNumber},
-        mc.TYPE_MTS150: {Mts100AdjustNumber},
+        mc.TYPE_MS100: [MLHubSensorAdjustNumber, MLHubSensorAdjustNumber],
+        mc.TYPE_MTS100: [Mts100AdjustNumber],
+        mc.TYPE_MTS100V3: [Mts100AdjustNumber],
+        mc.TYPE_MTS150: [Mts100AdjustNumber],
     }
 
     async def async_test_each_callback(self, entity: MLConfigNumber):

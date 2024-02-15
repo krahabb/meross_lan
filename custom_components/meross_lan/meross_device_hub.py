@@ -21,7 +21,13 @@ from .merossclient import (
 )
 from .number import MLConfigNumber
 from .select import MtsTrackedSensor
-from .sensor import MLDiagnosticSensor, MLEnumSensor, MLNumericSensor
+from .sensor import (
+    MLDiagnosticSensor,
+    MLEnumSensor,
+    MLHumiditySensor,
+    MLNumericSensor,
+    MLTemperatureSensor,
+)
 from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
@@ -751,10 +757,8 @@ class MS100SubDevice(MerossSubDevice):
 
     def __init__(self, hub: MerossDeviceHub, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
-        self.sensor_temperature = self.build_sensor_c(
-            MLNumericSensor.DeviceClass.TEMPERATURE
-        )
-        self.sensor_humidity = self.build_sensor_c(MLNumericSensor.DeviceClass.HUMIDITY)
+        self.sensor_temperature = MLTemperatureSensor(self, self.id)
+        self.sensor_humidity = MLHumiditySensor(self, self.id)
         self.number_adjust_temperature = MLHubSensorAdjustNumber(
             self,
             mc.KEY_TEMPERATURE,
@@ -830,9 +834,7 @@ class MTS100SubDevice(MerossSubDevice):
         from .devices.mts100 import Mts100Climate
 
         self.climate = Mts100Climate(self)
-        self.sensor_temperature = self.build_sensor_c(
-            MLNumericSensor.DeviceClass.TEMPERATURE
-        )
+        self.sensor_temperature = MLTemperatureSensor(self, self.id)
         self.sensor_temperature.entity_registry_enabled_default = False
 
     async def async_shutdown(self):

@@ -21,11 +21,11 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = LightEntity
 
     DIGEST_ENTITIES = {
-        mc.KEY_LIGHT: {MLLight},
-        mc.KEY_DIFFUSER: {MLDiffuserLight},
+        mc.KEY_LIGHT: [MLLight],
+        mc.KEY_DIFFUSER: {mc.KEY_LIGHT: [MLDiffuserLight]},
     }
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_SYSTEM_DNDMODE: {MLDNDLightEntity},
+        mc.NS_APPLIANCE_SYSTEM_DNDMODE: [MLDNDLightEntity],
     }
 
     async def async_test_each_callback(
@@ -74,7 +74,9 @@ class EntityTest(EntityComponentTest):
         supported_color_modes = entity.supported_color_modes
 
         if ColorMode.BRIGHTNESS in supported_color_modes:
-            state = await self.async_service_call(haec.SERVICE_TURN_ON, {haec.ATTR_BRIGHTNESS: 1})
+            state = await self.async_service_call(
+                haec.SERVICE_TURN_ON, {haec.ATTR_BRIGHTNESS: 1}
+            )
             assert (
                 state.state == hac.STATE_ON
                 and state.attributes[haec.ATTR_BRIGHTNESS] == (255 // 100)

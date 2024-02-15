@@ -51,15 +51,17 @@ class EntityTest(EntityComponentTest):
 
     ENTITY_TYPE = ClimateEntity
 
-    NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE: {Mts200Climate},
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB: {Mts960Climate},
+    DIGEST_ENTITIES = {
+        mc.KEY_THERMOSTAT: {
+            mc.KEY_MODE: [Mts200Climate],
+            mc.KEY_MODEB: [Mts960Climate],
+        },
     }
 
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: {Mts100Climate},
-        mc.TYPE_MTS100V3: {Mts100Climate},
-        mc.TYPE_MTS150: {Mts100Climate},
+        mc.TYPE_MTS100: [Mts100Climate],
+        mc.TYPE_MTS100V3: [Mts100Climate],
+        mc.TYPE_MTS150: [Mts100Climate],
     }
 
     async def async_test_each_callback(self, entity: MtsClimate):

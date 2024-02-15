@@ -14,7 +14,7 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_CONTROL_MP3: {MLMp3Player},
+        mc.NS_APPLIANCE_CONTROL_MP3: [MLMp3Player],
     }
 
     SERVICE_STATE_MAP = {

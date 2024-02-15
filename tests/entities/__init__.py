@@ -10,7 +10,10 @@ from custom_components.meross_lan.meross_entity import MerossEntity
 from tests.helpers import DeviceContext
 
 EntityType = type[Entity]
-MerossEntityTypeSet = set[type[MerossEntity]]
+MerossEntityTypesList = list[type[MerossEntity]]
+MerossEntityTypesDigestContainer = (
+    MerossEntityTypesList | dict[str, MerossEntityTypesList]
+)
 
 
 class EntityComponentTest:
@@ -25,20 +28,23 @@ class EntityComponentTest:
     hass_states: ClassVar[StateMachine]
     ability: ClassVar[dict[str, Any]]
     digest: ClassVar[dict[str, Any]]
-    expected_entity_types: ClassVar[MerossEntityTypeSet]
+    expected_entity_types: ClassVar[MerossEntityTypesList]
     device_context: ClassVar[DeviceContext]
     entity_id: ClassVar[str]
 
     # class members: configure the entity component testing
     DOMAIN: str
     ENTITY_TYPE: ClassVar[EntityType]
-    DIGEST_ENTITIES: ClassVar[dict[str, MerossEntityTypeSet]] = {}
-    NAMESPACES_ENTITIES: ClassVar[dict[str, MerossEntityTypeSet]] = {}
-    HUB_SUBDEVICES_ENTITIES: ClassVar[dict[str, MerossEntityTypeSet]] = {}
+    DEVICE_ENTITIES: ClassVar[MerossEntityTypesList] = []
+    """Types of entities which are instanced on every device."""
+    DIGEST_ENTITIES: ClassVar[dict[str, MerossEntityTypesDigestContainer]] = {}
+    """Types of entities which are instanced based off the digest structure."""
+    NAMESPACES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]] = {}
+    """Types of entities which are instanced based off namespace ability presence."""
+    HUB_SUBDEVICES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]] = {}
+    """Types of entities which are instanced based off subdevice definition in Hub digest."""
 
-    async def async_service_call(
-        self, service: str, service_data: dict = {}
-    ):
+    async def async_service_call(self, service: str, service_data: dict = {}):
         await self.hass_service_call(
             self.DOMAIN,
             service,

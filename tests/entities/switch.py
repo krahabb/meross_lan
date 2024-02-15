@@ -15,12 +15,11 @@ class EntityTest(EntityComponentTest):
     # special care here since light and cover entity could manage the togglex
     # namespace
     DIGEST_ENTITIES = {
-        mc.KEY_TOGGLEX: {MLSwitch},
+        mc.KEY_TOGGLEX: [MLSwitch],
     }
 
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_CONTROL_TOGGLE: {MLSwitch},
-        mc.NS_APPLIANCE_CONTROL_TOGGLEX: {MLSwitch},
+        mc.NS_APPLIANCE_CONTROL_TOGGLE: [MLSwitch],
     }
 
     async def async_test_each_callback(self, entity: haec.SwitchEntity):

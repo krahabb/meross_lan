@@ -121,6 +121,36 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         return MLNumericSensor(device, None, str(device_class), device_class)
 
 
+class MLHumiditySensor(MLNumericSensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+
+    def __init__(
+        self,
+        manager: me.EntityManager,
+        channel: object | None,
+        entitykey: str | None = "humidity",
+    ):
+        super().__init__(manager, channel, entitykey, sensor.SensorDeviceClass.HUMIDITY)
+
+
+class MLTemperatureSensor(MLNumericSensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+
+    def __init__(
+        self,
+        manager: me.EntityManager,
+        channel: object | None,
+        entitykey: str | None = "temperature",
+    ):
+        super().__init__(
+            manager, channel, entitykey, sensor.SensorDeviceClass.TEMPERATURE
+        )
+
+
 class MLDiagnosticSensor(MLEnumSensor):
 
     is_diagnostic: Final = True

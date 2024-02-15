@@ -13,14 +13,14 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = CalendarEntity
 
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: {Mts200Schedule},
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: {Mts960Schedule},
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: [Mts200Schedule],
+        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: [Mts960Schedule],
     }
 
     HUB_SUBDEVICES_ENTITIES = {
-        mc.TYPE_MTS100: {Mts100Schedule},
-        mc.TYPE_MTS100V3: {Mts100Schedule},
-        mc.TYPE_MTS150: {Mts100Schedule},
+        mc.TYPE_MTS100: [Mts100Schedule],
+        mc.TYPE_MTS100V3: [Mts100Schedule],
+        mc.TYPE_MTS150: [Mts100Schedule],
     }
 
     async def async_test_each_callback(self, entity: CalendarEntity):

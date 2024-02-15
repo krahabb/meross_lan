@@ -21,7 +21,7 @@ from ..select import (
     OPTION_SPRAY_MODE_OFF,
     MLSpray,
 )
-from ..sensor import MLNumericSensor
+from ..sensor import MLHumiditySensor, MLTemperatureSensor
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
@@ -121,10 +121,8 @@ class DiffuserMixin(
         if mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR in self.descriptor.ability:
             # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
             # are supporting correct values so we implement them (#243)
-            MLNumericSensor.build_for_device(
-                self, MLNumericSensor.DeviceClass.TEMPERATURE
-            )
-            MLNumericSensor.build_for_device(self, MLNumericSensor.DeviceClass.HUMIDITY)
+            MLHumiditySensor(self, None)
+            MLTemperatureSensor(self, None)
             PollingStrategy(self, mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR, item_count=1)
 
     def _parse_diffuser(self, digest: dict):

@@ -18,11 +18,11 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = CoverEntity
 
     DIGEST_ENTITIES = {
-        mc.KEY_GARAGEDOOR: {MLGarage},
+        mc.KEY_GARAGEDOOR: [MLGarage],
     }
 
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: {MLRollerShutter},
+        mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: [MLRollerShutter],
     }
 
     COVER_TRANSITIONS = {

@@ -11,12 +11,17 @@ from custom_components.meross_lan.merossclient import const as mc
 from emulator import generate_emulators
 
 from tests import const as tc, helpers
-from tests.entities import EntityComponentTest, MerossEntityTypeSet
+from tests.entities import (
+    EntityComponentTest,
+    MerossEntityTypesDigestContainer,
+    MerossEntityTypesList,
+)
 
 COMPONENTS_TESTS: dict[str, EntityComponentTest] = {}
-DIGEST_ENTITIES: dict[str, MerossEntityTypeSet] = {}
-NAMESPACES_ENTITIES: dict[str, MerossEntityTypeSet] = {}
-HUB_SUBDEVICES_ENTITIES: dict[str, MerossEntityTypeSet] = {}
+DEVICE_ENTITIES: MerossEntityTypesList = []
+DIGEST_ENTITIES: dict[str, MerossEntityTypesDigestContainer] = {}
+NAMESPACES_ENTITIES: dict[str, MerossEntityTypesList] = {}
+HUB_SUBDEVICES_ENTITIES: dict[str, MerossEntityTypesList] = {}
 
 # list of exclusions from the general rule which states that
 # every entity must be 'available' once the device is loaded
@@ -34,24 +39,43 @@ for entity_domain in (
     "media_player",
     "number",
     "select",
+    "sensor",
     "switch",
 ):
     module = import_module(f".{entity_domain}", "tests.entities")
     entity_test: EntityComponentTest = module.EntityTest()
     entity_test.DOMAIN = entity_domain
     COMPONENTS_TESTS[entity_domain] = entity_test
+
+    DEVICE_ENTITIES.extend(entity_test.DEVICE_ENTITIES)
+
     for digest_key, entity_types in entity_test.DIGEST_ENTITIES.items():
-        digest_set = DIGEST_ENTITIES.setdefault(digest_key, set())
-        digest_set.update(entity_types)
+        # digest entity type description might be hiearchical
+        # since digest iteslf might be a dict hierarchy (2 levels though)
+        if digest_key in DIGEST_ENTITIES:
+            container = DIGEST_ENTITIES[digest_key]
+            assert type(container) == type(entity_types)
+            if isinstance(entity_types, dict):
+                assert isinstance(container, dict)
+                for sub_digest_key, sub_entity_types in entity_types.items():
+                    sub_container = container.setdefault(sub_digest_key, [])
+                    sub_container.extend(sub_entity_types)
+            else:
+                assert isinstance(container, list)
+                container.extend(entity_types)
+        else:
+            DIGEST_ENTITIES[digest_key] = entity_types.copy()
+
     for namespace, entity_types in entity_test.NAMESPACES_ENTITIES.items():
-        namespace_set = NAMESPACES_ENTITIES.setdefault(namespace, set())
-        namespace_set.update(entity_types)
+        container = NAMESPACES_ENTITIES.setdefault(namespace, [])
+        container.extend(entity_types)
+
     for subdevice_type, entity_types in entity_test.HUB_SUBDEVICES_ENTITIES.items():
-        subdevice_set = HUB_SUBDEVICES_ENTITIES.setdefault(subdevice_type, set())
-        subdevice_set.update(entity_types)
+        container = HUB_SUBDEVICES_ENTITIES.setdefault(subdevice_type, [])
+        container.extend(entity_types)
 
 
-async def test_entities(hass: HomeAssistant, aioclient_mock):
+async def test_entities(hass: HomeAssistant, aioclient_mock, capsys):
     """
     - digest_class_map, namespace_class_map, hub_class_map: if any is not empty process only the devices
     matching the digest key or namespace ability else (all empty) process all of the device entities
@@ -68,20 +92,55 @@ async def test_entities(hass: HomeAssistant, aioclient_mock):
         EntityComponentTest.digest = digest = descriptor.digest
         ishub = mc.KEY_HUB in digest
 
-        EntityComponentTest.expected_entity_types = expected_entity_types = set()
+        EntityComponentTest.expected_entity_types = expected_entity_types = (
+            DEVICE_ENTITIES.copy()
+        )
+        _add_func = expected_entity_types.extend
         for digest_key, entity_types in DIGEST_ENTITIES.items():
             if digest_key in digest:
-                expected_entity_types.update(entity_types)
+                sub_digest = digest[digest_key]
+                if isinstance(entity_types, list):
+                    if isinstance(sub_digest, list):
+                        for channel_digest in sub_digest:
+                            _add_func(entity_types)
+                    else:
+                        # this is somewhat specific for "light" digest key
+                        # which doesn't carry a list but just a single channel
+                        # dict struct
+                        _add_func(entity_types)
+                else:  # digest carries a 2nd level
+                    assert isinstance(sub_digest, dict)
+                    for sub_digest_key, sub_entity_types in entity_types.items():
+                        if sub_digest_key in sub_digest:
+                            for channel_digest in sub_digest[sub_digest_key]:
+                                _add_func(sub_entity_types)
+
         for namespace, entity_types in NAMESPACES_ENTITIES.items():
             if namespace in ability:
-                expected_entity_types.update(entity_types)
+                _add_func(entity_types)
         if ishub:
+            subdevice_ids = set()
             for p_subdevice in digest[mc.KEY_HUB][mc.KEY_SUBDEVICE]:
+                subdevice_id = p_subdevice[mc.KEY_ID]
+                if subdevice_id in subdevice_ids:
+                    # get rid of duplicated ids in digest..they'll be
+                    # discarded in MerossDeviceHub too
+                    # (see trace msh300hk-01234567890123456789012345678916)
+                    continue
+                subdevice_ids.add(subdevice_id)
                 for p_key, p_value in p_subdevice.items():
                     if isinstance(p_value, dict):
                         if p_key in HUB_SUBDEVICES_ENTITIES:
-                            expected_entity_types.update(HUB_SUBDEVICES_ENTITIES[p_key])
+                            _add_func(HUB_SUBDEVICES_ENTITIES[p_key])
                         break
+
+        with capsys.disabled():
+            print(
+                f"Testing entities for: {descriptor.productname} - {descriptor.productmodel}"
+            )
+            print(
+                f"Expected entities: {[entity_type.__name__ for entity_type in expected_entity_types]}"
+            )
 
         async with helpers.DeviceContext(
             hass, emulator, aioclient_mock
