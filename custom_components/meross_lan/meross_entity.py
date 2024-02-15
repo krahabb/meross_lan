@@ -80,6 +80,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     available: bool
     device_class: Final[object | str | None]
     name: str | None
+    suggested_object_id: str | None
     unique_id: str
 
     # used to speed-up checks if entity is enabled and loaded
@@ -93,6 +94,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         "available",
         "device_class",
         "name",
+        "suggested_object_id",
         "unique_id",
         "_hass_connected",
     )
@@ -147,6 +149,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             self.name = f"{name} {channel}" if name else str(channel)
         else:
             self.name = name
+        self.suggested_object_id = self.name
         self._hass_connected = False
         # by default all of our entities have unique_id so they're registered
         # there could be some exceptions though (MLUpdate)

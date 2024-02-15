@@ -27,8 +27,12 @@ async def async_setup_entry(
 class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
     PLATFORM = number.DOMAIN
     DeviceClass = number.NumberDeviceClass
+
+    # HA core compatibility layer for NumberDeviceClass.DURATION (HA core 2023.7 misses that)
+    DEVICE_CLASS_DURATION = getattr(number.NumberDeviceClass, "DURATION", "duration")
+
     DEVICECLASS_TO_UNIT_MAP = {
-        DeviceClass.DURATION: UnitOfTime.SECONDS,
+        DEVICE_CLASS_DURATION: UnitOfTime.SECONDS,
         DeviceClass.HUMIDITY: PERCENTAGE,
         DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
     }
@@ -58,7 +62,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
         manager: EntityManager,
         channel: object | None,
         entitykey: str | None = None,
-        device_class: DeviceClass | None = None,
+        device_class: DeviceClass | str | None = None,
         *,
         device_value: int | None = None,
     ):

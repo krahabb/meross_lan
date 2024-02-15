@@ -229,7 +229,7 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
             manager,
             channel,
             f"config_{key}",
-            self.DeviceClass.DURATION,
+            self.DEVICE_CLASS_DURATION,
             device_value=device_value,
         )
 
@@ -1145,7 +1145,7 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
         self.key_value = key
         self.name = key
         super().__init__(
-            cover.manager, cover.channel, f"config_{key}", self.DeviceClass.DURATION
+            cover.manager, cover.channel, f"config_{key}", self.DEVICE_CLASS_DURATION
         )
 
     async def async_request(self, device_value):
