@@ -317,7 +317,7 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
     async def __aexit__(self, exc_type, exc_value, traceback):
         if self.config_entry.state.recoverable:
             assert await self.async_unload()
-        return await super().__aexit__(exc_type, exc_value, traceback)
+        return None
 
 
 class MQTTHubEntryMocker(ConfigEntryMocker):
@@ -576,6 +576,7 @@ class DeviceContext(ConfigEntryMocker):
                 # what's going wrong.
                 # Right now we're strict enough to actually
                 # identify every 'suppressed' exception in real code
+                # TODO: move this patch to a fixture so to be able to reuse it
                 raise exception
 
         self._exception_warning_patcher = patch.object(
@@ -708,7 +709,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.aioclient_mock.clear_requests()
-        return super().__exit__(exc_type, exc_value, traceback)
+        return None
 
     @staticmethod
     def _validate_request_payload(data) -> dict:
@@ -841,7 +842,7 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         self.async_publish_patcher.stop()
-        return await super().__aexit__(exc_type, exc_value, traceback)
+        return None
 
     async def _async_publish(
         self, hass: HomeAssistant, topic: str, payload: str, *args, **kwargs
@@ -850,11 +851,11 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
 
 
 class MerossMQTTMocker(contextlib.AbstractContextManager):
-    def __init__(self):
+    def __init__(self, hass: HomeAssistant):
         def _safe_start(_self: MerossMQTTConnection, *args, **kwargs):
             """this runs in an executor"""
             _self._stateext = _self.STATE_CONNECTED
-            MerossApi.hass.add_job(_self._mqtt_connected)
+            hass.add_job(_self._mqtt_connected)
 
         self.safe_start_patcher = patch.object(
             MerossMQTTConnection,
@@ -866,7 +867,7 @@ class MerossMQTTMocker(contextlib.AbstractContextManager):
         def _safe_stop(_self: MerossMQTTConnection, *args, **kwargs):
             """this runs in an executor"""
             _self._stateext = _self.STATE_DISCONNECTED
-            MerossApi.hass.add_job(_self._mqtt_disconnected)
+            hass.add_job(_self._mqtt_disconnected)
 
         self.safe_stop_patcher = patch.object(
             MerossMQTTConnection,
@@ -898,4 +899,4 @@ class MerossMQTTMocker(contextlib.AbstractContextManager):
             self.safe_stop_patcher.stop()
         if self.async_mqtt_publish_mock:
             self.async_mqtt_publish_patcher.stop()
-        return super().__exit__(exc_type, exc_value, traceback)
+        return None

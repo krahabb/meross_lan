@@ -1,4 +1,5 @@
 """Global fixtures for integration_blueprint integration."""
+
 # Fixtures allow you to replace functions with a Mock object. You can perform
 # many options via the Mock to reflect a particular behavior from the original
 # function that you want to see without going through the function's actual logic.
@@ -42,8 +43,9 @@ def auto_enable(request: pytest.FixtureRequest):
 @pytest.fixture(name="skip_notifications", autouse=True)
 def skip_notifications_fixture():
     """Skip notification calls."""
-    with patch("homeassistant.components.persistent_notification.async_create"), patch(
-        "homeassistant.components.persistent_notification.async_dismiss"
+    with (
+        patch("homeassistant.components.persistent_notification.async_create"),
+        patch("homeassistant.components.persistent_notification.async_dismiss"),
     ):
         yield
 
@@ -51,14 +53,13 @@ def skip_notifications_fixture():
 @pytest.fixture(name="disable_debug", autouse=True)
 def disable_debug_fixture():
     """Disable development debug code so to test in a production env."""
-    with patch("custom_components.meross_lan.MEROSSDEBUG", None), patch(
-        "custom_components.meross_lan.meross_profile.MEROSSDEBUG", None
-    ), patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None), patch(
-        "custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None
-    ), patch(
-        "custom_components.meross_lan.merossclient.mqttclient.MEROSSDEBUG", None
-    ), patch(
-        "custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", None
+    with (
+        patch("custom_components.meross_lan.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.meross_profile.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.merossclient.mqttclient.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", None),
     ):
         yield
 
@@ -76,8 +77,8 @@ async def hamqtt_mock(mqtt_mock):
 
 
 @pytest.fixture()
-def merossmqtt_mock():
-    with helpers.MerossMQTTMocker() as _merossmqtt_mock:
+def merossmqtt_mock(hass):
+    with helpers.MerossMQTTMocker(hass) as _merossmqtt_mock:
         yield _merossmqtt_mock
 
 
