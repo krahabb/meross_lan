@@ -52,6 +52,7 @@ from .helpers.namespaces import (
 from .light import MLDNDLightEntity
 from .meross_entity import MerossFakeEntity
 from .merossclient import (
+    NAMESPACE_TO_KEY,
     HostAddress,
     MerossRequest,
     MerossResponse,
@@ -261,6 +262,12 @@ class MerossDeviceBase(EntityManager):
             if response and response[mc.KEY_HEADER][mc.KEY_METHOD] != mc.METHOD_ERROR
             else None
         )
+
+    async def async_request_push(
+        self,
+        namespace: str,
+    ) -> MerossResponse | None:
+        return await self.async_request_ack(namespace, mc.METHOD_PUSH, {})
 
     def request(self, request_tuple: MerossRequestType):
         return self.hass.async_create_task(self.async_request(*request_tuple))
@@ -2133,7 +2140,23 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     strategy = self.polling_strategies[ability]
                     await strategy.async_trace(self, None)
                 else:
-                    await self.async_request(*get_default_arguments(ability))
+                    # these requests are likely for new unknown namespaces
+                    # so our euristics might fall off very soon
+                    request = get_default_arguments(ability)
+                    if response := await self.async_request_ack(*request):
+                        key_namespace = NAMESPACE_TO_KEY[ability]
+                        request_payload = request[2][key_namespace]
+                        response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
+                        if not response_payload and not request_payload:
+                            # the namespace might need a channel index in the request
+                            if isinstance(response_payload, list):
+                                request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]
+                                await self.async_request(*request)
+                    else:
+                        # METHOD_GET doesnt work. Try PUSH
+                        if response := await self.async_request_push(ability):
+                            response = None  # yatta!
+
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")
             return

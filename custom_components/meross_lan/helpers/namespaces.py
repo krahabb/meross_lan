@@ -139,7 +139,7 @@ class NamespaceHandler:
             for p_channel in p_channel:
                 self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
 
-    def _handle_undefined(self, header, payload):
+    def _handle_undefined(self, header: dict, payload: dict):
         device = self.device
         device.log(
             device.DEBUG,
@@ -150,17 +150,20 @@ class NamespaceHandler:
             timeout=14400,
         )
         if device.create_diagnostic_entities:
-            payload = payload[self.key_namespace]
-            if isinstance(payload, dict):
-                self._parse_undefined_dict(
-                    self.key_namespace, payload, payload.get(mc.KEY_CHANNEL)
-                )
-            else:
-                for payload in payload:
-                    # not having a "channel" in the list payloads is unexpected so far
+            # since we're parsing an unknown namespace, our euristic about
+            # the key_namespace might be wrong so we use another euristic
+            for key, payload in payload.items():
+                # payload = payload[self.key_namespace]
+                if isinstance(payload, dict):
                     self._parse_undefined_dict(
-                        self.key_namespace, payload, payload[mc.KEY_CHANNEL]
+                        key, payload, payload.get(mc.KEY_CHANNEL)
                     )
+                else:
+                    for payload in payload:
+                        # not having a "channel" in the list payloads is unexpected so far
+                        self._parse_undefined_dict(
+                            key, payload, payload[mc.KEY_CHANNEL]
+                        )
 
     def _parse_list(self, digest: list):
         """twin method for _handle (same job - different context).
