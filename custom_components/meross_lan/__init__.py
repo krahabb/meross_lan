@@ -557,6 +557,15 @@ class MerossApi(ApiProfile):
             from .devices.screenbrightness import ScreenBrightnessMixin
 
             mixin_classes.append(ScreenBrightnessMixin)
+
+        if mc.NS_APPLIANCE_CONTROL_FAN in ability:
+            with self.exception_warning("import fan entity"):
+                from .fan import FanMixin
+
+                mixin_classes.append(FanMixin)
+            
+
+
         # We must be careful when ordering the mixin and leave MerossDevice as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.
         # see https://github.com/albertogeniola/MerossIot/blob/0.4.X.X/meross_iot/device_factory.py

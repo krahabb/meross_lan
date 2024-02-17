@@ -396,7 +396,7 @@ def extract_dict_payloads(payload):
     if isinstance(payload, list):
         for p in payload:
             yield p
-    else:
+    elif payload:  # assert isinstance(payload, dict)
         yield payload
 
 

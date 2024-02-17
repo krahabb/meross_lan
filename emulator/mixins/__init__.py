@@ -120,7 +120,6 @@ class MerossEmulator:
             self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
         self.mqtt = None
-        print(f"Initialized {descriptor.productname} (model:{descriptor.productmodel})")
 
     def shutdown(self):
         """cleanup when the emulator is stopped/destroyed"""
@@ -378,6 +377,28 @@ class MerossEmulator:
             raise Exception(f"'{key}' not present in 'control' key")
         return p_control[key]
 
-    def _get_namespace_state(self, namespace: str, channel, key_channel: str = mc.KEY_CHANNEL) -> dict:
-        p_namespace_state = self.descriptor.namespaces[namespace][NAMESPACE_TO_KEY[namespace]]
+    def get_namespace_state(
+        self, namespace: str, channel, key_channel: str = mc.KEY_CHANNEL
+    ) -> dict:
+        p_namespace_state = self.descriptor.namespaces[namespace][
+            NAMESPACE_TO_KEY[namespace]
+        ]
         return get_element_by_key(p_namespace_state, key_channel, channel)
+
+    def update_namespace_state(
+        self, namespace: str, channel, payload: dict, key_channel: str = mc.KEY_CHANNEL
+    ):
+        """updates the current state (stored in namespace key) eventually creating a default.
+        Useful when sanitizing mixin state during init should the trace miss some well-known namespaces info
+        """
+        p_namespace_state: list = self.descriptor.namespaces[namespace][
+            NAMESPACE_TO_KEY[namespace]
+        ]
+        try:
+            p_channel_state = get_element_by_key(
+                p_namespace_state, key_channel, channel
+            )
+        except KeyError:
+            p_channel_state = {key_channel: channel}
+            p_namespace_state.append(p_channel_state)
+        p_channel_state.update(payload)

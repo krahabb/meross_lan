@@ -35,6 +35,7 @@ for entity_domain in (
     "calendar",
     "climate",
     "cover",
+    "fan",
     "light",
     "media_player",
     "number",

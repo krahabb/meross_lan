@@ -67,6 +67,7 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
     this will also set the correct inferred mac address in the descriptor based on the uuid
     as this appears to be consistent with real devices config
     """
+    print(f"Initializing uuid({uuid}):", end="")
     descriptor = MerossEmulatorDescriptor(tracefile, uuid)
     ability = descriptor.ability
     digest = descriptor.digest
@@ -98,6 +99,11 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
 
         mixin_classes.append(LightMixin)
 
+    if mc.NS_APPLIANCE_CONTROL_FAN in ability:
+        from .mixins.fan import FanMixin
+
+        mixin_classes.append(FanMixin)
+
     if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
         from .mixins.rollershutter import RollerShutterMixin
 
@@ -110,7 +116,9 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
         class_name = class_name + m.__name__
     class_type = type(class_name, tuple(mixin_classes), {})
 
-    return class_type(descriptor, key)
+    emulator = class_type(descriptor, key)
+    print(f" {descriptor.type} (model:{descriptor.productmodel})")
+    return emulator
 
 
 def generate_emulators(tracespath: str, defaultuuid: str, defaultkey: str):

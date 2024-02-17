@@ -6,14 +6,9 @@ import asyncio
 from time import time
 import typing
 
-from custom_components.meross_lan.merossclient import (
-    const as mc,
-    extract_dict_payloads,
-)
 from custom_components.meross_lan.helpers import clamp, versiontuple
-
+from custom_components.meross_lan.merossclient import const as mc, extract_dict_payloads
 from emulator.mixins import MerossEmulatorDescriptor
-
 
 if typing.TYPE_CHECKING:
     from typing import Final
@@ -45,10 +40,10 @@ class _Transition:
         self.p_position: Final = p_position
         self.position_begin: Final = p_position[mc.KEY_POSITION]
         self.position_end: Final = position_end
-        self.p_state: Final = emulator._get_namespace_state(
+        self.p_state: Final = emulator.get_namespace_state(
             mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, channel
         )
-        p_config = emulator._get_namespace_state(
+        p_config = emulator.get_namespace_state(
             mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, channel
         )
         if self.has_native_position:
@@ -123,18 +118,28 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         ) >= versiontuple("6.6.6")
         # only 1 channel seen so far...even tho our transitions and message parsing
         # should already be multi-channel proof
-        self._get_namespace_state(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, 0).update(
+        self.update_namespace_state(
+            mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG,
+            0,
             {
                 mc.KEY_SIGNALCLOSE: RollerShutterMixin.SIGNALCLOSE,
                 mc.KEY_SIGNALOPEN: RollerShutterMixin.SIGNALOPEN,
-            }
+            },
         )
-        self._get_namespace_state(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, 0)[
-            mc.KEY_POSITION
-        ] = mc.ROLLERSHUTTER_POSITION_CLOSED
-        self._get_namespace_state(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, 0)[
-            mc.KEY_STATE
-        ] = mc.ROLLERSHUTTER_STATE_IDLE
+        self.update_namespace_state(
+            mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            0,
+            {
+                mc.KEY_POSITION: mc.ROLLERSHUTTER_POSITION_CLOSED,
+            },
+        )
+        self.update_namespace_state(
+            mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+            0,
+            {
+                mc.KEY_STATE: mc.ROLLERSHUTTER_STATE_IDLE,
+            },
+        )
 
     def shutdown(self):
         for transition in set(self._transitions.values()):
@@ -154,7 +159,7 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             if position_end == mc.ROLLERSHUTTER_POSITION_STOP:
                 continue
 
-            p_position = self._get_namespace_state(
+            p_position = self.get_namespace_state(
                 mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, channel
             )
             if self.has_native_position:

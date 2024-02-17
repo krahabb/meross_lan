@@ -67,6 +67,9 @@ NS_APPLIANCE_CONTROL_LIGHT_EFFECT = "Appliance.Control.Light.Effect"
 NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
 # Unknown abilities
 NS_APPLIANCE_CONTROL_PHYSICALLOCK = "Appliance.Control.PhysicalLock"
+# MAP100 (air purifier) abilties
+NS_APPLIANCE_CONTROL_FAN = "Appliance.Control.Fan"
+NS_APPLIANCE_CONTROL_FILTERMAINTENANCE = "Appliance.Control.FilterMaintenance"
 
 # Garage door opener
 NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
@@ -220,6 +223,11 @@ KEY_LUMINANCE = "luminance"
 KEY_TEMPERATURE = "temperature"
 KEY_HUMIDITY = "humidity"
 KEY_SPRAY = "spray"
+KEY_FAN = "fan"
+KEY_SPEED = "speed"
+KEY_MAXSPEED = "maxSpeed"
+KEY_FILTER = "filter"
+KEY_LIFE = "life"
 KEY_HUB = "hub"
 KEY_EXCEPTION = "exception"
 KEY_BATTERY = "battery"
@@ -525,6 +533,10 @@ HP110A_MP3_VOLUME_MAX = 16
 TYPE_UNKNOWN = "unknown"
 TYPE_NAME_MAP = collections.OrderedDict()
 
+CLASS_MAP = "map"
+TYPE_MAP100 = "map100"
+TYPE_NAME_MAP[CLASS_MAP] = "Smart Air Purifier"
+
 CLASS_MSH = "msh"
 TYPE_MSH300 = "msh300"  # WiFi Hub
 TYPE_NAME_MAP[CLASS_MSH] = "Smart Hub"
@@ -554,9 +566,7 @@ TYPE_NAME_MAP[CLASS_MTS] = "Smart Thermostat"
 
 CLASS_MOD = "mod"
 TYPE_MOD100 = "mod100"  # smart humidifier
-TYPE_MOD150 = (
-    "mod150"  # smart humidifier (looks the same as mod100...maybe HK version tho)
-)
+TYPE_MOD150 = "mod150"  # smart humidifier
 TYPE_NAME_MAP[CLASS_MOD] = "Smart Humidifier"
 
 CLASS_MSG = "msg"
