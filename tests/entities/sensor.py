@@ -6,6 +6,7 @@ from custom_components.meross_lan.sensor import (
     MLEnumSensor,
     MLHumiditySensor,
     MLNumericSensor,
+    MLSignalStrengthSensor,
     MLTemperatureSensor,
     ProtocolSensor,
 )
@@ -27,7 +28,7 @@ class EntityTest(EntityComponentTest):
             MLTemperatureSensor,
         ],
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: [MLTemperatureSensor],
-        mc.NS_APPLIANCE_SYSTEM_RUNTIME: [MLNumericSensor],  # Signal strength
+        mc.NS_APPLIANCE_SYSTEM_RUNTIME: [MLSignalStrengthSensor],  # Signal strength
     }
 
     HUB_SUBDEVICES_ENTITIES = {
