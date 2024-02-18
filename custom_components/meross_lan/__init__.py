@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import import_module
 from time import time
 import typing
 
@@ -49,6 +50,15 @@ else:
     # at runtime only when mqtt is actually needed in code
     mqtt_async_publish = None
 
+
+
+DIGEST_INITIALIZERS = {
+    mc.KEY_DIFFUSER: (".devices.mod100", "DiffuserMixin"),
+    mc.KEY_GARAGEDOOR: (".cover", "GarageMixin"),
+    mc.KEY_LIGHT: (".light", "LightMixin"),
+    mc.KEY_THERMOSTAT: (".devices.thermostat", "ThermostatMixin"),
+    mc.KEY_SPRAY: (".select", "SprayMixin"),
+}
 
 MerossDevice.ENTITY_INITIALIZERS = {
     mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
@@ -524,10 +534,6 @@ class MerossApi(ApiProfile):
             from .media_player import Mp3Mixin
 
             mixin_classes.append(Mp3Mixin)
-        if mc.KEY_LIGHT in digest:
-            from .light import LightMixin
-
-            mixin_classes.append(LightMixin)
         if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
             from .devices.mss import ElectricityMixin
 
@@ -540,26 +546,10 @@ class MerossApi(ApiProfile):
             from .devices.mss import OverTempMixin
 
             mixin_classes.append(OverTempMixin)
-        if mc.KEY_SPRAY in digest:
-            from .select import SprayMixin
-
-            mixin_classes.append(SprayMixin)
-        if mc.KEY_GARAGEDOOR in digest:
-            from .cover import GarageMixin
-
-            mixin_classes.append(GarageMixin)
         if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
             from .cover import RollerShutterMixin
 
             mixin_classes.append(RollerShutterMixin)
-        if mc.KEY_THERMOSTAT in digest:
-            from .devices.thermostat import ThermostatMixin
-
-            mixin_classes.append(ThermostatMixin)
-        if mc.KEY_DIFFUSER in digest:
-            from .devices.mod100 import DiffuserMixin
-
-            mixin_classes.append(DiffuserMixin)
         if mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS in ability:
             from .devices.screenbrightness import ScreenBrightnessMixin
 
@@ -570,6 +560,13 @@ class MerossApi(ApiProfile):
                 from .fan import FanMixin
 
                 mixin_classes.append(FanMixin)
+
+        for key_digest in digest:
+            if key_digest in DIGEST_INITIALIZERS:
+                init_descriptor = DIGEST_INITIALIZERS[key_digest]
+                with self.exception_warning("initializing digest(%s) mixin", key_digest):
+                    module = import_module(init_descriptor[0], "custom_components.meross_lan")
+                    mixin_classes.append(getattr(module, init_descriptor[1]))
 
         # We must be careful when ordering the mixin and leave MerossDevice as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.
