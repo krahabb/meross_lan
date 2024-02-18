@@ -8,8 +8,6 @@ from homeassistant import const as hac
 from .merossclient import cloudapi, const as mc
 
 DOMAIN: Final = "meross_lan"
-# entity (sub)id for the switch representing DNDMode
-DND_ID: Final = "dnd"
 #########################
 # common ConfigEntry keys
 #########################
@@ -163,6 +161,12 @@ CONF_NOTIFYRESPONSE = "notifyresponse"
 """key used in service 'request' call"""
 CONF_PROFILE_ID_LOCAL: Final = ""
 """label for MerossApi as a 'fake' cloud profile"""
+
+#
+# some common entitykeys
+#
+DND_ID: Final = "dnd"
+SIGNALSTRENGTH_ID: Final = "signal_strength"
 
 #
 # issues general consts

@@ -12,8 +12,9 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 
-from . import meross_entity as me
-from .const import CONF_PROTOCOL_HTTP, CONF_PROTOCOL_MQTT
+from . import const as mlc, meross_entity as me
+from .helpers.namespaces import EntityPollingStrategy
+from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from typing import Final
@@ -163,8 +164,8 @@ class ProtocolSensor(MLEnumSensor):
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
-    ATTR_HTTP = CONF_PROTOCOL_HTTP
-    ATTR_MQTT = CONF_PROTOCOL_MQTT
+    ATTR_HTTP = mlc.CONF_PROTOCOL_HTTP
+    ATTR_MQTT = mlc.CONF_PROTOCOL_MQTT
     ATTR_MQTT_BROKER = "mqtt_broker"
 
     manager: MerossDevice
@@ -174,7 +175,7 @@ class ProtocolSensor(MLEnumSensor):
     entity_category = me.EntityCategory.DIAGNOSTIC
     entity_registry_enabled_default = False
     native_value: str
-    options: list[str] = [STATE_DISCONNECTED, CONF_PROTOCOL_MQTT, CONF_PROTOCOL_HTTP]
+    options: list[str] = [STATE_DISCONNECTED, mlc.CONF_PROTOCOL_MQTT, mlc.CONF_PROTOCOL_HTTP]
 
     @staticmethod
     def _get_attr_state(value):
@@ -251,3 +252,27 @@ class ProtocolSensor(MLEnumSensor):
                 flush = True
         if flush:
             self.flush_state()
+
+
+class MLSignalStrengthSensor(MLNumericSensor):
+
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.DIAGNOSTIC
+    icon = "mdi:wifi"
+
+    def __init__(self, manager: MerossDevice):
+        super().__init__(
+            manager,
+            None,
+            mlc.SIGNALSTRENGTH_ID,
+            MLNumericSensor.DeviceClass.POWER_FACTOR,
+        )
+        EntityPollingStrategy(
+            manager,
+            mc.NS_APPLIANCE_SYSTEM_RUNTIME,
+            self,
+            handler=self._handle_Appliance_System_Runtime,
+        )
+
+    def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
+        self.update_native_value(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])

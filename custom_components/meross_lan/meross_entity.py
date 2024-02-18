@@ -31,21 +31,6 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDeviceBase
 
 
-class MerossFakeEntity:
-    """
-    a 'dummy' class we'll use as a placeholder to reduce optional and/or
-    disabled entities access overhead
-    """
-
-    @staticmethod
-    def update_onoff(onoff):
-        pass
-
-    @staticmethod
-    def update_native_value(native_value):
-        pass
-
-
 class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     """
     Mixin style base class for all of the entity platform(s)

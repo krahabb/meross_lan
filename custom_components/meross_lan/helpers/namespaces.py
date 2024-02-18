@@ -257,6 +257,7 @@ class PollingStrategy:
         *,
         payload=None,
         item_count: int = 0,
+        handler: Callable[[dict, dict], None] | None = None,
     ):
         assert namespace not in device.polling_strategies
         self.namespace: Final = namespace
@@ -288,6 +289,9 @@ class PollingStrategy:
             )
         )
         device.polling_strategies[namespace] = self
+        if handler:
+            assert namespace not in device.namespace_handlers
+            NamespaceHandler(device, namespace, handler=handler)
 
     def adjust_size(self, item_count: int):
         self.response_size = (
@@ -349,9 +353,10 @@ class EntityPollingStrategy(SmartPollingStrategy):
         entity: MerossEntity,
         *,
         item_count: int = 0,
+        handler: Callable[[dict, dict], None] | None = None,
     ):
         self.entity = entity
-        super().__init__(device, namespace, item_count=item_count)
+        super().__init__(device, namespace, item_count=item_count, handler=handler)
 
     async def async_poll(self, device: MerossDevice, epoch: float):
         """

@@ -70,7 +70,7 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
 
             sensor_signal_strength = None
             if mc.NS_APPLIANCE_SYSTEM_RUNTIME in ability:
-                sensor_signal_strength = device.sensor_signal_strength
+                sensor_signal_strength = device.entities[mlc.SIGNALSTRENGTH_ID]
                 state = hass.states.get(sensor_signal_strength.entity_id)
                 assert state and state.state == hac.STATE_UNAVAILABLE
 

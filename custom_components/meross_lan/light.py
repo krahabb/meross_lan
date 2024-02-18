@@ -12,12 +12,10 @@ from homeassistant.components.light import (
     LightEntityFeature,
 )
 
-from . import meross_entity as me
-from .const import DND_ID
+from . import const as mlc, meross_entity as me
 from .helpers import reverse_lookup
 from .helpers.namespaces import (
     EntityPollingStrategy,
-    NamespaceHandler,
     SmartPollingStrategy,
 )
 from .merossclient import const as mc, get_element_by_key_safe
@@ -402,13 +400,13 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
 
     def __init__(self, manager: MerossDevice):
-        super().__init__(manager, None, DND_ID, mc.KEY_DNDMODE)
-        NamespaceHandler(
+        super().__init__(manager, None, mlc.DND_ID, mc.KEY_DNDMODE)
+        EntityPollingStrategy(
             manager,
             mc.NS_APPLIANCE_SYSTEM_DNDMODE,
+            self,
             handler=self._handle_Appliance_System_DNDMode,
         )
-        EntityPollingStrategy(manager, mc.NS_APPLIANCE_SYSTEM_DNDMODE, self)
 
     async def async_turn_on(self, **kwargs):
         if await self.manager.async_request_ack(

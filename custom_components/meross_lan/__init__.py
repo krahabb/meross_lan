@@ -51,7 +51,8 @@ else:
 
 
 MerossDevice.ENTITY_INITIALIZERS = {
-    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity")
+    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
+    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
 }
 
 

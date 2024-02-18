@@ -46,11 +46,9 @@ from .helpers import datetime_from_epoch, schedule_async_callback, schedule_call
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import (
     DiagnosticPollingStrategy,
-    EntityPollingStrategy,
     NamespaceHandler,
     PollingStrategy,
 )
-from .meross_entity import MerossFakeEntity
 from .merossclient import (
     NAMESPACE_TO_KEY,
     HostAddress,
@@ -342,7 +340,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     _tzinfo: ZoneInfo | None  # smart cache of device tzinfo
     _unsub_polling_callback: asyncio.TimerHandle | None
     sensor_protocol: ProtocolSensor
-    sensor_signal_strength: MLNumericSensor
     update_firmware: MLUpdate | None
 
     __slots__ = (
@@ -388,7 +385,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_unsub_trace_ability_callback",
         "_diagnostics_build",
         "sensor_protocol",
-        "sensor_signal_strength",
         "update_firmware",
     )
 
@@ -466,20 +462,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     getattr(module, init_descriptor[1])(self)
 
         self.sensor_protocol = ProtocolSensor(self)
-
-        if mc.NS_APPLIANCE_SYSTEM_RUNTIME in ability:
-            self.sensor_signal_strength = sensor_signal_strength = MLNumericSensor(
-                self, None, "signal_strength", MLNumericSensor.DeviceClass.POWER_FACTOR
-            )
-            sensor_signal_strength.entity_category = (
-                MLNumericSensor.EntityCategory.DIAGNOSTIC
-            )
-            sensor_signal_strength.icon = "mdi:wifi"
-            EntityPollingStrategy(
-                self, mc.NS_APPLIANCE_SYSTEM_RUNTIME, sensor_signal_strength
-            )
-        else:
-            self.sensor_signal_strength = MerossFakeEntity  # type: ignore
 
         # the update entity will only be instantiated 'on demand' since
         # we might not have this for devices not related to a cloud profile
@@ -576,7 +558,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         await super().async_shutdown()
         self.polling_strategies.clear()
         self.namespace_handlers.clear()
-        self.sensor_signal_strength = None  # type: ignore
         self.sensor_protocol = None  # type: ignore
         self.update_firmware = None
         ApiProfile.devices[self.id] = None
@@ -1806,10 +1787,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         pass
 
     def _handle_Appliance_System_Debug(self, header: dict, payload: dict):
-        self.device_debug = p_debug = payload[mc.KEY_DEBUG]
-        self.sensor_signal_strength.update_native_value(
-            p_debug[mc.KEY_NETWORK][mc.KEY_SIGNAL]
-        )
+        self.device_debug = payload[mc.KEY_DEBUG]
 
     def _handle_Appliance_System_Online(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager
@@ -1818,11 +1796,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def _handle_Appliance_System_Report(self, header: dict, payload: dict):
         # No clue: sent (MQTT PUSH) by the device on initial connection
         pass
-
-    def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
-        self.sensor_signal_strength.update_native_value(
-            payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL]
-        )
 
     def _handle_Appliance_System_Time(self, header: dict, payload: dict):
         if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
