@@ -15,9 +15,9 @@ from .helpers.namespaces import (
 from .meross_device import MerossDevice, MerossDeviceBase
 from .merossclient import (
     const as mc,
-    get_default_arguments,
     get_productnameuuid,
     is_device_online,
+    request_get,
 )
 from .number import MLConfigNumber
 from .select import MtsTrackedSensor
@@ -119,9 +119,7 @@ class HubNamespaceHandler(NamespaceHandler):
                         # would be a waste since we wouldnt have enough info
                         # to correctly build that
                         if is_device_online(p_subdevice):
-                            self.device.request(
-                                get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
-                            )
+                            self.device.request(request_get(mc.NS_APPLIANCE_SYSTEM_ALL))
                     subdevices_parsed.add(subdevice_id)
             except Exception as exception:
                 self.log_exception(exception, "_handle_subdevice", p_subdevice)

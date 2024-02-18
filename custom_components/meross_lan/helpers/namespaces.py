@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from .. import const as mlc
-from ..merossclient import NAMESPACE_TO_KEY, const as mc, get_default_arguments
+from ..merossclient import NAMESPACE_TO_KEY, const as mc, request_get
 from ..sensor import MLDiagnosticSensor
 
 if typing.TYPE_CHECKING:
@@ -278,7 +278,7 @@ class PollingStrategy:
         )
 
         self.request = (
-            get_default_arguments(namespace)
+            request_get(namespace)
             if payload is None
             else (
                 namespace,

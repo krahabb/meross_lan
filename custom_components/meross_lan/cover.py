@@ -35,7 +35,7 @@ from .helpers import (
     versiontuple,
 )
 from .helpers.namespaces import PollingStrategy, SmartPollingStrategy
-from .merossclient import const as mc, get_default_arguments
+from .merossclient import const as mc, request_get
 from .number import MLConfigNumber
 from .switch import MLSwitch
 
@@ -519,7 +519,6 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
             self.is_closed = is_closed
             self.flush_state()
 
-
     def _parse_config(self, payload):
         if mc.KEY_SIGNALCLOSE in payload:
             self.number_signalClose.update_device_value(payload[mc.KEY_SIGNALCLOSE])  # type: ignore
@@ -555,7 +554,7 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
             await manager.async_http_request(
-                *get_default_arguments(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+                *request_get(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
             )
 
     @callback
@@ -577,7 +576,9 @@ class MLGarage(me.MerossEntity, cover.CoverEntity):
         if self.is_closing == self.is_closed:
             self.binary_sensor_timeout.update_ok()
         else:
-            self.binary_sensor_timeout.update_timeout(STATE_CLOSED if self.is_closing else STATE_OPEN)
+            self.binary_sensor_timeout.update_timeout(
+                STATE_CLOSED if self.is_closing else STATE_OPEN
+            )
 
         self.is_closing = False
         self.is_opening = False

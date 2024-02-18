@@ -1,6 +1,7 @@
 """
     A collection of utilities to help managing the Meross device protocol
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -313,8 +314,12 @@ def get_default_payload(namespace: str) -> MerossPayloadType:
     return {NAMESPACE_TO_KEY[namespace]: {}}
 
 
-def get_default_arguments(namespace: str):
+def request_get(namespace: str) -> MerossRequestType:
     return namespace, mc.METHOD_GET, get_default_payload(namespace)
+
+
+def request_push(namespace: str) -> MerossRequestType:
+    return namespace, mc.METHOD_PUSH, {}
 
 
 def get_message_signature(messageid: str, key: str, timestamp):
@@ -344,6 +349,13 @@ def get_replykey(header: MerossHeaderType, key: KeyType) -> KeyType:
             return key
 
     return header
+
+
+def is_device_online(payload: dict) -> bool:
+    try:
+        return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
+    except Exception:
+        return False
 
 
 def get_port_safe(p_dict: dict, key: str) -> int:
@@ -414,13 +426,6 @@ def get_productnameuuid(producttype: str, uuid: str) -> str:
 def get_productnametype(producttype: str) -> str:
     name = get_productname(producttype)
     return f"{name} ({producttype})" if name is not producttype else producttype
-
-
-def is_device_online(payload: dict) -> bool:
-    try:
-        return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
-    except Exception:
-        return False
 
 
 def get_subdevice_type(p_subdevice_digest: dict):

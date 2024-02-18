@@ -43,9 +43,9 @@ from .merossclient import (
     MerossResponse,
     check_message_strict,
     const as mc,
-    get_default_arguments,
     get_message_uuid,
     get_replykey,
+    request_get,
 )
 from .merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
 from .merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
@@ -559,12 +559,12 @@ class MQTTConnection(Loggable):
                     mc.KEY_MULTIPLE: [
                         MerossRequest(
                             key,
-                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
+                            *request_get(mc.NS_APPLIANCE_SYSTEM_ALL),
                             topic_response,
                         ),
                         MerossRequest(
                             key,
-                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                            *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY),
                             topic_response,
                         ),
                     ]
@@ -605,7 +605,7 @@ class MQTTConnection(Loggable):
                         device_id,
                         MerossRequest(
                             key,
-                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                            *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY),
                             topic_response,
                         ),
                     )
@@ -621,7 +621,7 @@ class MQTTConnection(Loggable):
                         device_id,
                         MerossRequest(
                             key,
-                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL),
+                            *request_get(mc.NS_APPLIANCE_SYSTEM_ALL),
                             topic_response,
                         ),
                     )

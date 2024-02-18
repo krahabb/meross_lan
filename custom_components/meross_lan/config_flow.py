@@ -1,4 +1,5 @@
 """Config flow for Meross LAN integration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -26,7 +27,7 @@ from .merossclient import (
     MerossKeyError,
     cloudapi,
     const as mc,
-    get_default_arguments,
+    request_get,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
@@ -446,13 +447,13 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 
         payload = (
             await _httpclient.async_request_strict(
-                *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
             )
         )[mc.KEY_PAYLOAD]
         payload.update(
             (
                 await _httpclient.async_request_strict(
-                    *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY)
+                    *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY)
                 )
             )[mc.KEY_PAYLOAD]
         )
@@ -640,9 +641,9 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
                         ):
                             data = dict(entry_data)
                             data.update(_device_config)
-                            data[
-                                mlc.CONF_TIMESTAMP
-                            ] = time()  # force ConfigEntry update..
+                            data[mlc.CONF_TIMESTAMP] = (
+                                time()
+                            )  # force ConfigEntry update..
                             entries.async_update_entry(entry, data=data)
                             api.log(
                                 api.INFO,

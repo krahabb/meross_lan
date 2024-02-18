@@ -57,12 +57,13 @@ from .merossclient import (
     MerossRequest,
     MerossResponse,
     const as mc,
-    get_default_arguments,
     get_message_signature,
     get_message_uuid,
     get_port_safe,
     is_device_online,
     json_dumps,
+    request_get,
+    request_push,
 )
 from .merossclient.httpclient import MerossHttpClient, TerminatedException
 from .repairs import IssueSeverity, create_issue, remove_issue
@@ -262,12 +263,6 @@ class MerossDeviceBase(EntityManager):
             if response and response[mc.KEY_HEADER][mc.KEY_METHOD] != mc.METHOD_ERROR
             else None
         )
-
-    async def async_request_push(
-        self,
-        namespace: str,
-    ) -> MerossResponse | None:
-        return await self.async_request_ack(namespace, mc.METHOD_PUSH, {})
 
     def request(self, request_tuple: MerossRequestType):
         return self.hass.async_create_task(self.async_request(*request_tuple))
@@ -510,7 +505,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
         if not self._online:
-            self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL))
+            self.request(request_get(mc.NS_APPLIANCE_SYSTEM_ALL))
 
     async def async_create_diagnostic_entities(self):
         self._diagnostics_build = True  # set a flag cause we'll lazy scan/build
@@ -845,14 +840,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         Hardware reset to factory default: the device will unpair itself from
         the (cloud) broker and then reboot, ready to be initialized/paired
         """
-        unbind = (mc.NS_APPLIANCE_CONTROL_UNBIND, mc.METHOD_PUSH, {})
         # in case we're connected to a cloud broker we'll use that since
         # it appears the broker session level will take care of also removing
         # the device from its list, thus totally cancelling it from the Meross account
         if self._mqtt_publish and self._mqtt_publish.is_cloud_connection:
-            return await self.async_mqtt_request(*unbind)
+            return await self.async_mqtt_request(
+                *request_push(mc.NS_APPLIANCE_CONTROL_UNBIND)
+            )
         # else go with whatever transport: the device will reset it's configuration
-        return await self.async_request(*unbind)
+        return await self.async_request(*request_push(mc.NS_APPLIANCE_CONTROL_UNBIND))
 
     async def async_multiple_requests_ack(
         self, requests: typing.Collection[MerossRequestType], auto_handle: bool = True
@@ -1268,7 +1264,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         # on incoming data) but that cache will not be invalidated
                         # when device offlines and might become stale
                         continue
-                    await self.async_request(*get_default_arguments(ability))
+                    await self.async_request(*request_get(ability))
             except StopIteration:
                 self._diagnostics_build = False
                 self.log(self.DEBUG, "Diagnostic scan end")
@@ -1311,7 +1307,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     and ((epoch - self._http_lastrequest) > PARAM_HEARTBEAT_PERIOD)
                 ):
                     await self.async_http_request(
-                        *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                        *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
                     )
                     # going on, should the http come online, the next
                     # async_request_updates will be 'smart' again, skipping
@@ -1323,7 +1319,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     # be unused for quite a bit
                     if (epoch - self._mqtt_lastresponse) > PARAM_HEARTBEAT_PERIOD:
                         if not await self.async_mqtt_request(
-                            *get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                            *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
                         ):
                             self._mqtt_active = None
                             self.sensor_protocol.update_attr_inactive(
@@ -1355,7 +1351,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 await self._async_request_updates(epoch, namespace)
 
             else:  # offline
-                ns_all = get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ALL)
+                ns_all = request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self._http:
                         await self.async_http_request(*ns_all)
@@ -1798,7 +1794,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if self.needsave:
             # fw update or whatever might have modified the device abilities.
             # we refresh the abilities list before saving the new config_entry
-            self.request(get_default_arguments(mc.NS_APPLIANCE_SYSTEM_ABILITY))
+            self.request(request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY))
 
     def _handle_Appliance_System_Clock(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager
@@ -1840,7 +1836,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if last_config_delay > 1800:
                 # 30 minutes 'cooldown' in order to avoid restarting
                 # the procedure too often
-                self.mqtt_request(mc.NS_APPLIANCE_SYSTEM_CLOCK, mc.METHOD_PUSH, {})
+                self.mqtt_request(*request_push(mc.NS_APPLIANCE_SYSTEM_CLOCK))
                 self.device_timedelta_config_epoch = epoch
                 return
             if last_config_delay < 30:
@@ -2109,7 +2105,27 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         strategy = self.polling_strategies[ability]
                         await strategy.async_trace(self, CONF_PROTOCOL_HTTP)
                     else:
-                        await self.async_http_request(*get_default_arguments(ability))
+                        # these requests are likely for new unknown namespaces
+                        # so our euristics might fall off very soon
+                        request = request_get(ability)
+                        response = await self.async_http_request(*request)
+                        if response and (
+                            response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
+                        ):
+                            key_namespace = NAMESPACE_TO_KEY[ability]
+                            request_payload = request[2][key_namespace]
+                            response_payload = response[mc.KEY_PAYLOAD].get(
+                                key_namespace
+                            )
+                            if not response_payload and not request_payload:
+                                # the namespace might need a channel index in the request
+                                if isinstance(response_payload, list):
+                                    request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]
+                                    await self.async_http_request(*request)
+                        else:
+                            # METHOD_GET doesnt work. Try PUSH
+                            await self.async_http_request(*request_push(ability))
+
                 return trace_data  # might be truncated because offlining or async shutting trace
             except StopIteration:
                 return trace_data
@@ -2142,7 +2158,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 else:
                     # these requests are likely for new unknown namespaces
                     # so our euristics might fall off very soon
-                    request = get_default_arguments(ability)
+                    request = request_get(ability)
                     if response := await self.async_request_ack(*request):
                         key_namespace = NAMESPACE_TO_KEY[ability]
                         request_payload = request[2][key_namespace]
@@ -2154,8 +2170,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                                 await self.async_request(*request)
                     else:
                         # METHOD_GET doesnt work. Try PUSH
-                        if response := await self.async_request_push(ability):
-                            response = None  # yatta!
+                        await self.async_request(*request_push(ability))
 
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")
