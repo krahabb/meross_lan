@@ -4,7 +4,6 @@ import typing
 
 from .. import const as mlc
 from ..merossclient import NAMESPACE_TO_KEY, const as mc, request_get
-from ..sensor import MLDiagnosticSensor
 
 if typing.TYPE_CHECKING:
     from typing import Callable, Final
@@ -210,6 +209,8 @@ class NamespaceHandler:
                     f"{channel}_{entitykey}" if channel is not None else entitykey
                 ].update_native_value(subvalue)
             except KeyError:
+                from ..sensor import MLDiagnosticSensor
+
                 device = self.device
                 MLDiagnosticSensor(
                     device,
