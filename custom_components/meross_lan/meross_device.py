@@ -4,6 +4,7 @@ import abc
 import asyncio
 import bisect
 from datetime import datetime, timezone, tzinfo
+from importlib import import_module
 from json import JSONDecodeError
 from time import time
 import typing
@@ -49,7 +50,6 @@ from .helpers.namespaces import (
     NamespaceHandler,
     PollingStrategy,
 )
-from .light import MLDNDLightEntity
 from .meross_entity import MerossFakeEntity
 from .merossclient import (
     NAMESPACE_TO_KEY,
@@ -71,6 +71,8 @@ from .sensor import MLNumericSensor, ProtocolSensor
 from .update import MLUpdate
 
 if typing.TYPE_CHECKING:
+    from typing import Callable, ClassVar, Final
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -318,6 +320,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     Generic protocol handler class managing the physical device stack/state
     """
 
+    # some namespaces are manageable with a simple single entity instance
+    # and this static map provides a list of entities to be built at device
+    # init time when the namespace appears in device ability set.
+    # Those entity initializer should just accept the device instance
+    ENTITY_INITIALIZERS: ClassVar[dict[str, tuple[str, str]]]
+
     DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
         MLUpdate.PLATFORM: None,
     }
@@ -333,7 +341,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     device_timestamp: int
     _tzinfo: ZoneInfo | None  # smart cache of device tzinfo
     _unsub_polling_callback: asyncio.TimerHandle | None
-    entity_dnd: MLDNDLightEntity
     sensor_protocol: ProtocolSensor
     sensor_signal_strength: MLNumericSensor
     update_firmware: MLUpdate | None
@@ -380,7 +387,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_timezone_next_check",
         "_unsub_trace_ability_callback",
         "_diagnostics_build",
-        "entity_dnd",
         "sensor_protocol",
         "sensor_signal_strength",
         "update_firmware",
@@ -453,11 +459,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         self._update_config()
 
-        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in ability:
-            self.entity_dnd = MLDNDLightEntity(self)
-            EntityPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DNDMODE, self.entity_dnd)
-        else:
-            self.entity_dnd = MerossFakeEntity  # type: ignore
+        for namespace, init_descriptor in MerossDevice.ENTITY_INITIALIZERS.items():
+            if namespace in ability:
+                with self.exception_warning("initializing namespace:%s", namespace):
+                    module = import_module(init_descriptor[0], "custom_components.meross_lan")
+                    getattr(module, init_descriptor[1])(self)
 
         self.sensor_protocol = ProtocolSensor(self)
 
@@ -570,7 +576,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         await super().async_shutdown()
         self.polling_strategies.clear()
         self.namespace_handlers.clear()
-        self.entity_dnd = None  # type: ignore
         self.sensor_signal_strength = None  # type: ignore
         self.sensor_protocol = None  # type: ignore
         self.update_firmware = None
@@ -1805,9 +1810,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.sensor_signal_strength.update_native_value(
             p_debug[mc.KEY_NETWORK][mc.KEY_SIGNAL]
         )
-
-    def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
-        self.entity_dnd.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
 
     def _handle_Appliance_System_Online(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager

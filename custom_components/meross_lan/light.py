@@ -15,7 +15,11 @@ from homeassistant.components.light import (
 from . import meross_entity as me
 from .const import DND_ID
 from .helpers import reverse_lookup
-from .helpers.namespaces import SmartPollingStrategy
+from .helpers.namespaces import (
+    EntityPollingStrategy,
+    NamespaceHandler,
+    SmartPollingStrategy,
+)
 from .merossclient import const as mc, get_element_by_key_safe
 
 if typing.TYPE_CHECKING:
@@ -399,6 +403,12 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
 
     def __init__(self, manager: MerossDevice):
         super().__init__(manager, None, DND_ID, mc.KEY_DNDMODE)
+        NamespaceHandler(
+            manager,
+            mc.NS_APPLIANCE_SYSTEM_DNDMODE,
+            handler=self._handle_Appliance_System_DNDMode,
+        )
+        EntityPollingStrategy(manager, mc.NS_APPLIANCE_SYSTEM_DNDMODE, self)
 
     async def async_turn_on(self, **kwargs):
         if await self.manager.async_request_ack(
@@ -415,6 +425,9 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
             {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},
         ):
             self.update_onoff(0)
+
+    def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
+        self.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
 
 
 class LightMixin(

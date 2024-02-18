@@ -63,7 +63,7 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
 
             entity_dnd = None
             if mc.NS_APPLIANCE_SYSTEM_DNDMODE in ability:
-                entity_dnd = device.entity_dnd
+                entity_dnd = device.entities[mlc.DND_ID]
                 assert isinstance(entity_dnd, MLDNDLightEntity)
                 state = hass.states.get(entity_dnd.entity_id)
                 assert state and state.state == hac.STATE_UNAVAILABLE

@@ -1,4 +1,5 @@
 """The Meross IoT local LAN integration."""
+
 from __future__ import annotations
 
 from time import time
@@ -47,6 +48,11 @@ else:
     # In order to avoid a static dependency we resolve these
     # at runtime only when mqtt is actually needed in code
     mqtt_async_publish = None
+
+
+MerossDevice.ENTITY_INITIALIZERS = {
+    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity")
+}
 
 
 class HAMQTTConnection(MQTTConnection):
@@ -563,8 +569,6 @@ class MerossApi(ApiProfile):
                 from .fan import FanMixin
 
                 mixin_classes.append(FanMixin)
-            
-
 
         # We must be careful when ordering the mixin and leave MerossDevice as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.

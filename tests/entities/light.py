@@ -2,6 +2,7 @@ from homeassistant import const as hac
 from homeassistant.components import light as haec
 from homeassistant.components.light import ColorMode, LightEntity, LightEntityFeature
 
+from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.devices.mod100 import MLDiffuserLight
 from custom_components.meross_lan.light import (
     MLDNDLightEntity,
@@ -38,7 +39,6 @@ class EntityTest(EntityComponentTest):
 
         if isinstance(entity, MLDNDLightEntity):
             # special light here with reduced set of features
-            assert entity is entity.manager.entity_dnd
             assert supported_color_modes == {ColorMode.ONOFF}
         else:
             ability = self.ability
@@ -68,7 +68,7 @@ class EntityTest(EntityComponentTest):
         state = await self.async_service_call(haec.SERVICE_TURN_ON)
         assert state.state == hac.STATE_ON
 
-        if entity is entity.manager.entity_dnd:
+        if entity.entitykey == mlc.DND_ID:
             return
         assert isinstance(entity, MLLightBase)
         supported_color_modes = entity.supported_color_modes
