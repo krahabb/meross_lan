@@ -83,6 +83,8 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     supported_features: climate.ClimateEntityFeature = (
         climate.ClimateEntityFeature.PRESET_MODE
         | climate.ClimateEntityFeature.TARGET_TEMPERATURE
+        | getattr(climate.ClimateEntityFeature, "TURN_OFF", 0)
+        | getattr(climate.ClimateEntityFeature, "TURN_ON", 0)
     )
     target_temperature: float | None
     target_temperature_step: float = 0.5
