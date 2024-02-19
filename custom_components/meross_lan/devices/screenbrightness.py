@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing
 
-from ..helpers.namespaces import SmartPollingStrategy
+from ..helpers.namespaces import NamespaceHandler, SmartPollingStrategy
 from ..merossclient import const as mc
 from ..number import PERCENTAGE, MLConfigNumber
 
@@ -11,76 +11,64 @@ if typing.TYPE_CHECKING:
 
 
 class MLScreenBrightnessNumber(MLConfigNumber):
-    manager: ScreenBrightnessMixin
+    manager: MerossDevice
+
+    namespace = mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
+    key_namespace = mc.KEY_BRIGHTNESS
 
     # HA core entity attributes:
     icon: str = "mdi:brightness-percent"
     native_max_value = 100
     native_min_value = 0
     native_step = 12.5
-    native_unit_of_measurement = PERCENTAGE
 
-    def __init__(self, manager: ScreenBrightnessMixin, channel: object, key: str):
+    def __init__(self, manager: MerossDevice, key: str):
         self.key_value = key
         self.name = f"Screen brightness ({key})"
-        super().__init__(manager, channel, f"screenbrightness_{key}")
+        super().__init__(
+            manager, 0, f"screenbrightness_{key}", native_unit_of_measurement=PERCENTAGE
+        )
 
     async def async_set_native_value(self, value: float):
-        brightness = {
-            mc.KEY_CHANNEL: self.channel,
-            mc.KEY_OPERATION: self.manager._number_brightness_operation.device_value,
-            mc.KEY_STANDBY: self.manager._number_brightness_standby.device_value,
-        }
-        brightness[self.key_value] = value
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
-            mc.METHOD_SET,
-            {mc.KEY_BRIGHTNESS: [brightness]},
-        ):
+        """Override base async_set_native_value since it would round
+        the value to an int (common device native type)."""
+        if await self.async_request(value):
             self.update_device_value(value)
 
 
-class ScreenBrightnessMixin(
-    MerossDevice if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    _number_brightness_operation: MLScreenBrightnessNumber
-    _number_brightness_standby: MLScreenBrightnessNumber
+class ScreenBrightnessNamespaceHandler(NamespaceHandler):
 
-    def __init__(self, descriptor, entry):
-        super().__init__(descriptor, entry)
+    __slots__ = (
+        "number_brightness_operation",
+        "number_brightness_standby",
+    )
 
-        with self.exception_warning("ScreenBrightnessMixin init"):
-            # the 'ScreenBrightnessMixin' actually doesnt have a clue of how many  entities
-            # are controllable since the digest payload doesnt carry anything (like MerossShutter)
-            # So we're not implementing _init_xxx and _parse_xxx methods here and
-            # we'll just add a couple of number entities to control 'active' and 'standby' brightness
-            # on channel 0 which will likely be the only one available
-            self._number_brightness_operation = MLScreenBrightnessNumber(
-                self, 0, mc.KEY_OPERATION
-            )
-            self._number_brightness_standby = MLScreenBrightnessNumber(
-                self, 0, mc.KEY_STANDBY
-            )
-            SmartPollingStrategy(
-                self,
-                mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
-                item_count=1,
-            )
+    def __init__(self, device: MerossDevice):
+        super().__init__(
+            device,
+            mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
+            handler=self._handle_Appliance_Control_Screen_Brightness,
+        )
+        self.number_brightness_operation = MLScreenBrightnessNumber(
+            device, mc.KEY_OPERATION
+        )
+        self.number_brightness_standby = MLScreenBrightnessNumber(
+            device, mc.KEY_STANDBY
+        )
+        SmartPollingStrategy(
+            device,
+            mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
+            payload=[{mc.KEY_CHANNEL: 0}],
+            item_count=1,
+        )
 
-    # interface: MerossDevice
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self._number_brightness_operation = None  # type: ignore
-        self._number_brightness_standby = None  # type: ignore
-
-    # interface: self
     def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
         for p_channel in payload[mc.KEY_BRIGHTNESS]:
-            if p_channel.get(mc.KEY_CHANNEL) == 0:
-                self._number_brightness_operation.update_device_value(
+            if p_channel[mc.KEY_CHANNEL] == 0:
+                self.number_brightness_operation.update_device_value(
                     p_channel[mc.KEY_OPERATION]
                 )
-                self._number_brightness_standby.update_device_value(
+                self.number_brightness_standby.update_device_value(
                     p_channel[mc.KEY_STANDBY]
                 )
                 break

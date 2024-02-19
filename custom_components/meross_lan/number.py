@@ -32,6 +32,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
     DEVICE_CLASS_DURATION = getattr(number.NumberDeviceClass, "DURATION", "duration")
 
     DEVICECLASS_TO_UNIT_MAP = {
+        None: None,
         DEVICE_CLASS_DURATION: UnitOfTime.SECONDS,
         DeviceClass.HUMIDITY: PERCENTAGE,
         DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
@@ -65,6 +66,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
         device_class: DeviceClass | str | None = None,
         *,
         device_value: int | None = None,
+        native_unit_of_measurement: str | None = None,
     ):
         self._async_request_debounce_unsub = None
         super().__init__(
@@ -73,6 +75,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
             entitykey,
             device_class,
             device_value=device_value,
+            native_unit_of_measurement=native_unit_of_measurement
         )
 
     async def async_shutdown(self):
@@ -85,6 +88,8 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
 
     # interface: number.NumberEntity
     async def async_set_native_value(self, value: float):
+        """round up the requested value to the device native resolution
+        which is almost always an int number (some exceptions though)."""
         device_value = round(value * self.device_scale)
         device_step = round(self.native_step * self.device_scale)
         device_value = round(device_value / device_step) * device_step

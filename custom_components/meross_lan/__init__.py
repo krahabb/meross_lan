@@ -63,6 +63,7 @@ DIGEST_INITIALIZERS = {
 MerossDevice.ENTITY_INITIALIZERS = {
     mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "MLFan"),
     mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
+    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (".devices.screenbrightness", "ScreenBrightnessNamespaceHandler"),
     mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (".cover", "MLRollerShutter"),
     mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
     mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
@@ -543,10 +544,6 @@ class MerossApi(ApiProfile):
             from .devices.mss import OverTempMixin
 
             mixin_classes.append(OverTempMixin)
-        if mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS in ability:
-            from .devices.screenbrightness import ScreenBrightnessMixin
-
-            mixin_classes.append(ScreenBrightnessMixin)
 
         for key_digest in digest:
             if key_digest in DIGEST_INITIALIZERS:

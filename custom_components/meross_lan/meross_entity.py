@@ -203,7 +203,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 class MerossNumericEntity(MerossEntity):
     """Common base class for (numeric) sensors and numbers."""
 
-    DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[object | None, str]]
+    DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[object | None, str | None]]
     """To be init in derived classes with their DeviceClass own types"""
     device_scale: int | float = 1
     """Used to scale the device value when converting to/from native value"""
@@ -228,12 +228,13 @@ class MerossNumericEntity(MerossEntity):
         device_class: object | None = None,
         *,
         device_value: int | float | None = None,
+        native_unit_of_measurement: str | None = None,
     ):
         self.device_value = device_value
         self.native_value = (
             None if device_value is None else device_value / self.device_scale
         )
-        self.native_unit_of_measurement = self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+        self.native_unit_of_measurement = native_unit_of_measurement or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
         super().__init__(
             manager,
             channel,
