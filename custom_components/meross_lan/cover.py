@@ -727,7 +727,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
 
     PLATFORM = cover.DOMAIN
 
-    manager: RollerShutterMixin
+    manager: MerossDevice
 
     # HA core entity attributes:
     assumed_state = True
@@ -755,7 +755,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         "_transition_end_unsub",
     )
 
-    def __init__(self, manager: RollerShutterMixin, channel: object):
+    def __init__(self, manager: MerossDevice):
         self.current_cover_position = None
         self.is_closed = None
         self.is_closing = None
@@ -782,12 +782,17 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 self.supported_features |= CoverEntityFeature.SET_POSITION
         except Exception:
             self._position_native_isgood = None
-        super().__init__(manager, channel, None, CoverDeviceClass.SHUTTER)
+        super().__init__(manager, 0, None, CoverDeviceClass.SHUTTER)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, self)
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, self)
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, self)
+        SmartPollingStrategy(
+            manager, mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, item_count=1
+        )
+        PollingStrategy(manager, mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, item_count=1)
+        PollingStrategy(manager, mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, item_count=1)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -1164,19 +1169,3 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
             self._cover._parse_config(config)
 
         return response
-
-
-class RollerShutterMixin(
-    MerossDevice if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    def __init__(self, descriptor, entry):
-        super().__init__(descriptor, entry)
-        with self.exception_warning("RollerShutterMixin init"):
-            # looks like digest (in NS_ALL) doesn't carry state
-            # so we're not implementing _init_xxx and _parse_xxx methods here
-            SmartPollingStrategy(
-                self, mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, item_count=1
-            )
-            PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, item_count=1)
-            PollingStrategy(self, mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, item_count=1)
-            MLRollerShutter(self, 0)

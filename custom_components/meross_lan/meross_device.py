@@ -455,12 +455,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         self._update_config()
 
-        for namespace, init_descriptor in MerossDevice.ENTITY_INITIALIZERS.items():
-            if namespace in ability:
-                with self.exception_warning("initializing namespace:%s", namespace):
-                    module = import_module(init_descriptor[0], "custom_components.meross_lan")
-                    getattr(module, init_descriptor[1])(self)
-
         self.sensor_protocol = ProtocolSensor(self)
 
         # the update entity will only be instantiated 'on demand' since
@@ -481,6 +475,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if _init := getattr(self, _init_method_name, None):
                 with self.exception_warning(_init_method_name):
                     _init(_digest)
+
+        for namespace, init_descriptor in MerossDevice.ENTITY_INITIALIZERS.items():
+            if namespace in ability:
+                with self.exception_warning("initializing namespace:%s", namespace):
+                    module = import_module(init_descriptor[0], "custom_components.meross_lan")
+                    getattr(module, init_descriptor[1])(self)
 
     # interface: ConfigEntryManager
     async def entry_update_listener(

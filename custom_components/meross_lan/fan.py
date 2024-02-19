@@ -22,7 +22,7 @@ class MLFan(me.MerossToggle, fan.FanEntity):
     """
 
     PLATFORM = fan.DOMAIN
-    manager: FanMixin
+    manager: MerossDevice
 
     # namespace = mc.NS_APPLIANCE_CONTROL_FAN
     # key_namespace = mc.KEY_FAN
@@ -43,13 +43,19 @@ class MLFan(me.MerossToggle, fan.FanEntity):
         "_saved_speed",  # used to restore previous speed when turning on/off
     )
 
-    def __init__(self, manager: FanMixin, channel):
+    def __init__(self, manager: MerossDevice):
         self.percentage = None
         self.speed_count = 4
         self._fan = {}
         self._saved_speed = 1
-        super().__init__(manager, channel)
+        super().__init__(manager, 0)
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_FAN, self)
+        PollingStrategy(
+            manager,
+            mc.NS_APPLIANCE_CONTROL_FAN,
+            payload=[{mc.KEY_CHANNEL: 0}],
+            item_count=1,
+        )
 
     # interface: MerossToggle
     def set_unavailable(self):
@@ -102,24 +108,3 @@ class MLFan(me.MerossToggle, fan.FanEntity):
             self.speed_count = maxspeed = payload[mc.KEY_MAXSPEED]
             self.percentage = round(speed * 100 / maxspeed)
             self.flush_state()
-
-
-class FanMixin(MerossDevice if typing.TYPE_CHECKING else object):
-    def __init__(self, descriptor, entry):
-        super().__init__(descriptor, entry)
-        # no idea how to get the channel(s). Maybe we should start
-        # infer this from the 'likely' associated togglex digest
-        # and refactor our mixins init logic a bit
-
-    def _init_togglex(self, digest: list):
-        polling_payload = []
-        for channel_digest in digest:
-            channel = channel_digest[mc.KEY_CHANNEL]
-            MLFan(self, channel)
-            polling_payload.append({mc.KEY_CHANNEL: channel})
-        PollingStrategy(
-            self,
-            mc.NS_APPLIANCE_CONTROL_FAN,
-            payload=polling_payload,
-            item_count=len(polling_payload),
-        )

@@ -14,10 +14,7 @@ from homeassistant.components.light import (
 
 from . import const as mlc, meross_entity as me
 from .helpers import reverse_lookup
-from .helpers.namespaces import (
-    EntityPollingStrategy,
-    SmartPollingStrategy,
-)
+from .helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
 from .merossclient import const as mc, get_element_by_key_safe
 
 if typing.TYPE_CHECKING:

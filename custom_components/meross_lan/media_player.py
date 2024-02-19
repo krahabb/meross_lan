@@ -19,7 +19,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .light import LightMixin
+    from .meross_device import MerossDevice
 
 
 async def async_setup_entry(
@@ -31,7 +31,7 @@ async def async_setup_entry(
 class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
     PLATFORM = media_player.DOMAIN
 
-    manager: Mp3Mixin
+    manager: MerossDevice
 
     # HA core entity attributes:
     is_volume_muted: bool | None
@@ -60,7 +60,7 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         "_mp3",
     )
 
-    def __init__(self, manager: Mp3Mixin, channel: object):
+    def __init__(self, manager: MerossDevice):
         self._mp3 = {}
         self.is_volume_muted = None
         self.media_title = None
@@ -68,9 +68,14 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         self.state = None
         self.volume_level = None
         super().__init__(
-            manager, channel, mc.KEY_MP3, media_player.MediaPlayerDeviceClass.SPEAKER
+            manager, 0, mc.KEY_MP3, media_player.MediaPlayerDeviceClass.SPEAKER
         )
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_MP3, self)
+        PollingStrategy(manager, mc.NS_APPLIANCE_CONTROL_MP3)
+        # cherub light entity should be there...
+        light: MLLight = manager.entities.get(0)  # type: ignore
+        if light:
+            light.update_effect_map(mc.HP110A_LIGHT_EFFECT_MAP)
 
     # interface: MerossEntity
     def set_unavailable(self):
@@ -141,18 +146,3 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
                 self.volume_level = clamp(payload[mc.KEY_VOLUME] / mc.HP110A_MP3_VOLUME_MAX, 0.0, 1.0)
             self.flush_state()
 
-
-class Mp3Mixin(
-    LightMixin if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    def __init__(self, descriptor, entry):
-        super().__init__(descriptor, entry)
-        with self.exception_warning("Mp3Mixin init"):
-            # looks like digest (in NS_ALL) doesn't carry state
-            # so we're not implementing _init_xxx and _parse_xxx methods here
-            PollingStrategy(self, mc.NS_APPLIANCE_CONTROL_MP3)
-            MLMp3Player(self, 0)
-            # cherub light entity should be there...
-            light: MLLight = self.entities.get(0)  # type: ignore
-            if light:
-                light.update_effect_map(mc.HP110A_LIGHT_EFFECT_MAP)

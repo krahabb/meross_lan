@@ -61,6 +61,9 @@ DIGEST_INITIALIZERS = {
 }
 
 MerossDevice.ENTITY_INITIALIZERS = {
+    mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "MLFan"),
+    mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (".cover", "MLRollerShutter"),
     mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
     mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
 }
@@ -528,12 +531,6 @@ class MerossApi(ApiProfile):
             from .switch import ToggleMixin
 
             mixin_classes.append(ToggleMixin)
-        # check MP3 before light since (HP110A) LightMixin
-        # need to be overriden a bit for effect list
-        if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
-            from .media_player import Mp3Mixin
-
-            mixin_classes.append(Mp3Mixin)
         if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
             from .devices.mss import ElectricityMixin
 
@@ -546,20 +543,10 @@ class MerossApi(ApiProfile):
             from .devices.mss import OverTempMixin
 
             mixin_classes.append(OverTempMixin)
-        if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
-            from .cover import RollerShutterMixin
-
-            mixin_classes.append(RollerShutterMixin)
         if mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS in ability:
             from .devices.screenbrightness import ScreenBrightnessMixin
 
             mixin_classes.append(ScreenBrightnessMixin)
-
-        if mc.NS_APPLIANCE_CONTROL_FAN in ability:
-            with self.exception_warning("import fan entity"):
-                from .fan import FanMixin
-
-                mixin_classes.append(FanMixin)
 
         for key_digest in digest:
             if key_digest in DIGEST_INITIALIZERS:
