@@ -61,6 +61,7 @@ DIGEST_INITIALIZERS = {
 }
 
 MerossDevice.ENTITY_INITIALIZERS = {
+    mc.NS_APPLIANCE_CONFIG_OVERTEMP: (".devices.mss", "OverTempEnableSwitch"),
     mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "MLFan"),
     mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
     mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (".devices.screenbrightness", "ScreenBrightnessNamespaceHandler"),
@@ -540,10 +541,6 @@ class MerossApi(ApiProfile):
             from .devices.mss import ConsumptionXMixin
 
             mixin_classes.append(ConsumptionXMixin)
-        if mc.NS_APPLIANCE_CONFIG_OVERTEMP in ability:
-            from .devices.mss import OverTempMixin
-
-            mixin_classes.append(OverTempMixin)
 
         for key_digest in digest:
             if key_digest in DIGEST_INITIALIZERS:

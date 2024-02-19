@@ -23,6 +23,7 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
+        mc.NS_APPLIANCE_CONFIG_OVERTEMP: [MLEnumSensor],
         mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: [
             MLHumiditySensor,
             MLTemperatureSensor,

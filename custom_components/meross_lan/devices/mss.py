@@ -15,9 +15,8 @@ from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from typing import Final
 
-    from ..meross_device import MerossDevice, MerossDeviceDescriptor
+    from ..meross_device import MerossDevice
 
 
 class EnergyEstimateSensor(MLNumericSensor):
@@ -434,12 +433,30 @@ class ConsumptionXMixin(
 
 
 class OverTempEnableSwitch(MLSwitch):
+
+    # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
 
-    def __init__(self, manager: OverTempMixin):
+    __slots__ = ("sensor_overtemp_type",)
+
+    def __init__(self, manager: MerossDevice):
         super().__init__(
             manager, None, "config_overtemp_enable", self.DeviceClass.SWITCH
         )
+        self.sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
+            manager, None, "config_overtemp_type"
+        )
+        EntityPollingStrategy(
+            manager,
+            mc.NS_APPLIANCE_CONFIG_OVERTEMP,
+            self,
+            handler=self._handle_Appliance_Config_OverTemp,
+        )
+
+    # interface: MerossToggle
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.sensor_overtemp_type = None  # type: ignore
 
     async def async_request_onoff(self, onoff: int):
         if await self.manager.async_request_ack(
@@ -449,34 +466,11 @@ class OverTempEnableSwitch(MLSwitch):
         ):
             self.update_onoff(onoff)
 
-
-class OverTempMixin(
-    MerossDevice if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    def __init__(self, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(descriptor, entry)
-        self._switch_overtemp_enable: OverTempEnableSwitch = OverTempEnableSwitch(self)
-        self._sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
-            self, None, "config_overtemp_type"
-        )
-        EntityPollingStrategy(
-            self,
-            mc.NS_APPLIANCE_CONFIG_OVERTEMP,
-            self._switch_overtemp_enable,
-        )
-
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self._switch_overtemp_enable = None  # type: ignore
-        self._sensor_overtemp_type = None  # type: ignore
-
+    # interface: self
     def _handle_Appliance_Config_OverTemp(self, header: dict, payload: dict):
         """{"overTemp": {"enable": 1,"type": 1}}"""
         overtemp = payload[mc.KEY_OVERTEMP]
         if mc.KEY_ENABLE in overtemp:
-            self._switch_overtemp_enable.update_onoff(overtemp[mc.KEY_ENABLE])
+            self.update_onoff(overtemp[mc.KEY_ENABLE])
         if mc.KEY_TYPE in overtemp:
-            self._sensor_overtemp_type.update_native_value(overtemp[mc.KEY_TYPE])
-
-    def _handle_Appliance_Control_OverTemp(self, header: dict, payload: dict):
-        pass
+            self.sensor_overtemp_type.update_native_value(overtemp[mc.KEY_TYPE])
