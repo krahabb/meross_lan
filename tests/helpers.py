@@ -150,6 +150,7 @@ class TimeMocker(contextlib.AbstractContextManager):
         self._freeze_time = freeze_time(time_to_freeze)
         self._warp_task: Future | None = None
         self._warp_run = False
+        hass.loop.slow_callback_duration = 2.1
 
     def __enter__(self):
         self.time = self._freeze_time.start()
