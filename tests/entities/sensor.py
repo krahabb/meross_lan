@@ -1,5 +1,9 @@
 from homeassistant.components import sensor as haec
 
+from custom_components.meross_lan.devices.mss import (
+    ConsumptionXSensor,
+    EnergyEstimateSensor,
+)
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.sensor import (
     MLDiagnosticSensor,
@@ -24,10 +28,12 @@ class EntityTest(EntityComponentTest):
 
     NAMESPACES_ENTITIES = {
         mc.NS_APPLIANCE_CONFIG_OVERTEMP: [MLEnumSensor],
+        mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: [ConsumptionXSensor],
         mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: [
             MLHumiditySensor,
             MLTemperatureSensor,
         ],
+        mc.NS_APPLIANCE_CONTROL_ELECTRICITY: [EnergyEstimateSensor, MLNumericSensor, MLNumericSensor, MLNumericSensor],
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: [MLTemperatureSensor],
         mc.NS_APPLIANCE_SYSTEM_RUNTIME: [MLSignalStrengthSensor],  # Signal strength
     }

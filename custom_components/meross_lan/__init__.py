@@ -62,6 +62,9 @@ DIGEST_INITIALIZERS = {
 
 MerossDevice.ENTITY_INITIALIZERS = {
     mc.NS_APPLIANCE_CONFIG_OVERTEMP: (".devices.mss", "OverTempEnableSwitch"),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: (".devices.mss", "ConsumptionConfigNamespaceHandler"),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (".devices.mss", "ConsumptionXSensor"),
+    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (".devices.mss", "ElectricityNamespaceHandler"),
     mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "MLFan"),
     mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
     mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (".devices.screenbrightness", "ScreenBrightnessNamespaceHandler"),
@@ -533,14 +536,6 @@ class MerossApi(ApiProfile):
             from .switch import ToggleMixin
 
             mixin_classes.append(ToggleMixin)
-        if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
-            from .devices.mss import ElectricityMixin
-
-            mixin_classes.append(ElectricityMixin)
-        if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
-            from .devices.mss import ConsumptionXMixin
-
-            mixin_classes.append(ConsumptionXMixin)
 
         for key_digest in digest:
             if key_digest in DIGEST_INITIALIZERS:

@@ -227,6 +227,19 @@ class NamespaceHandler:
         pass
 
 
+class VoidNamespaceHandler(NamespaceHandler):
+    """Utility class to manage namespaces which should be 'ignored' i.e. we're aware
+    of their existence but we don't process them at the device level. This class in turn
+    just provides an empty handler and so suppresses any log too (for unknown namespaces)
+    done by the base default handling."""
+
+    def __init__(self, device: MerossDevice, namespace: str):
+        super().__init__(device, namespace, handler=self._handle_void)
+
+    def _handle_void(self, header: dict, payload: dict):
+        pass
+
+
 class PollingStrategy:
     """
     These helper class(es) is used to implement 'smart' polling

@@ -167,7 +167,7 @@ CONF_PROFILE_ID_LOCAL: Final = ""
 #
 DND_ID: Final = "dnd"
 SIGNALSTRENGTH_ID: Final = "signal_strength"
-
+ENERGY_ESTIMATE_ID: Final = "energy_estimate"
 #
 # issues general consts
 #

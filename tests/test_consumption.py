@@ -14,9 +14,13 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
-from custom_components.meross_lan.const import PARAM_ENERGY_UPDATE_PERIOD
-from custom_components.meross_lan.devices.mss import ConsumptionXMixin, ElectricityMixin
+from custom_components.meross_lan import const as mlc
+from custom_components.meross_lan.devices.mss import (
+    ConsumptionXSensor,
+    EnergyEstimateSensor,
+)
 from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.sensor import MLNumericSensor
 from emulator.mixins.electricity import (
     ConsumptionXMixin as EmulatorConsumptionMixin,
     ElectricityMixin as EmulatorElectricityMixin,
@@ -32,8 +36,8 @@ if typing.TYPE_CHECKING:
 # 1 Wh of energy
 TEST_POWER = 1000  # unit: W
 TEST_DURATION = int(3600 / TEST_POWER) + 1  # unit: secs
-if TEST_DURATION < 5 * PARAM_ENERGY_UPDATE_PERIOD:
-    TEST_DURATION = 5 * PARAM_ENERGY_UPDATE_PERIOD
+if TEST_DURATION < 5 * mlc.PARAM_ENERGY_UPDATE_PERIOD:
+    TEST_DURATION = 5 * mlc.PARAM_ENERGY_UPDATE_PERIOD
 
 # some exotic tzs to disalign the device midnight from HA
 # "Asia/Bangkok" GMT + 7
@@ -75,8 +79,6 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
     assert await context.async_setup()
 
     device = context.device
-    assert isinstance(device, ConsumptionXMixin)
-    assert isinstance(device, ElectricityMixin)
     assert (
         device.polling_period < 60
     ), "Configured polling period is too exotic...the test will not work"
@@ -85,17 +87,20 @@ async def _async_configure_context(context: "DeviceContext", timezone: str):
 
     states = context.hass.states
 
-    sensor_power = device._sensor_power
+    sensor_power = device.entities[mc.KEY_POWER]
+    assert isinstance(sensor_power, MLNumericSensor)
     powerstate = states.get(sensor_power.entity_id)
     assert powerstate
     assert float(powerstate.state) == TEST_POWER
 
-    sensor_consumption = device._sensor_consumption
+    sensor_consumption = device.entities["energy"]
+    assert isinstance(sensor_consumption, ConsumptionXSensor)
     consumptionstate = states.get(sensor_consumption.entity_id)
     assert consumptionstate
     assert int(consumptionstate.state) == 0
 
-    sensor_estimate = device._sensor_energy_estimate
+    sensor_estimate = device.entities[mlc.ENERGY_ESTIMATE_ID]
+    assert isinstance(sensor_estimate, EnergyEstimateSensor)
     estimatestate = states.get(sensor_estimate.entity_id)
     # energy_estimate is disabled by default
     assert estimatestate is None
@@ -111,6 +116,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
     at startup, right before midnight, and check if the reset 'BUG' is
     correctly managed at day start
     """
+    hass_states_get = hass.states.get
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
     async with helpers.DeviceContext(
@@ -129,13 +135,13 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
             # energy = power * duration / 3600
             # energy_low might be off since the consumption endpoint
             # is polled on PARAM_ENERGY_UPDATE_PERIOD timeout
-            energy_low = int(power * (duration - PARAM_ENERGY_UPDATE_PERIOD) / 3600)
+            energy_low = int(power * (duration - mlc.PARAM_ENERGY_UPDATE_PERIOD) / 3600)
             # even though energy_high should be accurate, the emulator
             # (and real devices) will carry a 'quantum' of energy from the day before
             energy_high = (
-                int(power * (duration + PARAM_ENERGY_UPDATE_PERIOD) / 3600) + 1
+                int(power * (duration + mlc.PARAM_ENERGY_UPDATE_PERIOD) / 3600) + 1
             )
-            consumptionstate = hass.states.get(sensor_consumption.entity_id)
+            consumptionstate = hass_states_get(sensor_consumption.entity_id)
             assert consumptionstate, msg
             assert (
                 energy_low <= int(consumptionstate.state) <= energy_high + 1
@@ -156,7 +162,8 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
         # to a point before midnight where the reported consumption 'will' change
         # before midnight
         await context.async_move_to(
-            tomorrow - dt.timedelta(seconds=TEST_DURATION + PARAM_ENERGY_UPDATE_PERIOD)
+            tomorrow
+            - dt.timedelta(seconds=TEST_DURATION + mlc.PARAM_ENERGY_UPDATE_PERIOD)
         )
         # now the device polling state is good. We'll tick the states across
         # midnight and check the ongoing updates
@@ -180,7 +187,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
 
         # our emulator 'BUG' doesnt reset consumption so the new day offset
         # should be right equal to 'yesterday_consumption' or 1 off
-        consumptionstate = hass.states.get(sensor_consumption.entity_id)
+        consumptionstate = hass_states_get(sensor_consumption.entity_id)
         assert consumptionstate
         assert "offset" in consumptionstate.attributes
         assert (
@@ -197,6 +204,7 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
     right before device midnight, and check if the reset 'BUG' is correctly
     managed at day start (in device local time)
     """
+    hass_states_get = hass.states.get
     today, tomorrow, todayseconds = _configure_dates(ZoneInfo(DEVICE_TIMEZONE))
 
     async with helpers.DeviceContext(
@@ -215,13 +223,13 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
             # energy = power * duration / 3600
             # energy_low might be off since the consumption endpoint
             # is polled on PARAM_ENERGY_UPDATE_PERIOD timeout
-            energy_low = int(power * (duration - PARAM_ENERGY_UPDATE_PERIOD) / 3600)
+            energy_low = int(power * (duration - mlc.PARAM_ENERGY_UPDATE_PERIOD) / 3600)
             # even though energy_high should be accurate, the emulator
             # (and real devices) will carry a 'quantum' of energy from the day before
             energy_high = (
-                int(power * (duration + PARAM_ENERGY_UPDATE_PERIOD) / 3600) + 1
+                int(power * (duration + mlc.PARAM_ENERGY_UPDATE_PERIOD) / 3600) + 1
             )
-            consumptionstate = hass.states.get(sensor_consumption.entity_id)
+            consumptionstate = hass_states_get(sensor_consumption.entity_id)
             assert consumptionstate, msg
             assert (
                 energy_low <= int(consumptionstate.state) <= energy_high + 1
@@ -239,7 +247,8 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
         # to a point before midnight where the reported consumption 'will' change
         # before midnight
         await context.async_move_to(
-            tomorrow - dt.timedelta(seconds=TEST_DURATION + PARAM_ENERGY_UPDATE_PERIOD)
+            tomorrow
+            - dt.timedelta(seconds=TEST_DURATION + mlc.PARAM_ENERGY_UPDATE_PERIOD)
         )
         # now the device polling state is good. We'll tick the states across
         # midnight and check the ongoing updates
@@ -260,7 +269,7 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
 
         # our emulator 'BUG' doesnt reset consumption so the new day offset
         # should be right equal to 'yesterday_consumption' or 1 off
-        consumptionstate = hass.states.get(sensor_consumption.entity_id)
+        consumptionstate = hass_states_get(sensor_consumption.entity_id)
         assert consumptionstate
         assert "offset" in consumptionstate.attributes
         assert (
@@ -276,7 +285,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
     config_entry is reloaded due to a configuration change. This in turns also
     checks the homeassistant reload since the state is restored the same way
     """
-
+    hass_states_get = hass.states.get
     today, tomorrow, todayseconds = _configure_dates(dt_util.DEFAULT_TIME_ZONE)
 
     async with helpers.DeviceContext(
@@ -292,9 +301,11 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
 
         await context.async_enable_entity(sensor_estimate_entity_id)
         # 'async_enable_entity' will invalidate our references
-        device = None
-        sensor_consumption = None
-        sensor_estimate = None
+        device = context.device
+        sensor_consumption = device.entities["energy"]
+        assert isinstance(sensor_consumption, ConsumptionXSensor)
+        sensor_estimate = device.entities[mlc.ENERGY_ESTIMATE_ID]
+        assert isinstance(sensor_estimate, EnergyEstimateSensor)
 
         def _check_energy_states(power, duration, msg):
             # consumption values are hard to predict due to the polling
@@ -303,31 +314,29 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
             # energy = power * duration / 3600
             # energy_low might be off since the consumption endpoint
             # is polled on PARAM_ENERGY_UPDATE_PERIOD timeout
-            energy_low = int(power * (duration - PARAM_ENERGY_UPDATE_PERIOD) / 3600)
+            energy_low = int(power * (duration - mlc.PARAM_ENERGY_UPDATE_PERIOD) / 3600)
             # even though energy_high should be accurate, the emulator
             # (and real devices) will carry a 'quantum' of energy from the day before
             energy_high = (
-                int(power * (duration + PARAM_ENERGY_UPDATE_PERIOD) / 3600) + 1
+                int(power * (duration + mlc.PARAM_ENERGY_UPDATE_PERIOD) / 3600) + 1
             )
-            consumptionstate = hass.states.get(sensor_consumption_entity_id)
+            consumptionstate = hass_states_get(sensor_consumption_entity_id)
             assert consumptionstate, msg
             assert (
                 energy_low <= int(consumptionstate.state) <= energy_high + 1
             ), f"consumption in {msg}"
 
         async def _async_unload_reload(msg: str, offset: int):
-            estimatestate = hass.states.get(sensor_estimate_entity_id)
+            estimatestate = hass_states_get(sensor_estimate_entity_id)
             assert estimatestate
             saved_estimated_energy_value = estimatestate.state
 
             assert await context.async_unload()
             # device has been destroyed and entities should be unavailable
-            consumptionstate = hass.states.get(sensor_consumption_entity_id)
-            assert (consumptionstate is None) or (
-                consumptionstate.state == STATE_UNAVAILABLE
-            )
-            estimatestate = hass.states.get(sensor_estimate_entity_id)
-            assert (estimatestate is None) or (estimatestate.state == STATE_UNAVAILABLE)
+            consumptionstate = hass_states_get(sensor_consumption_entity_id)
+            assert consumptionstate and (consumptionstate.state == STATE_UNAVAILABLE)
+            estimatestate = hass_states_get(sensor_estimate_entity_id)
+            assert estimatestate and (estimatestate.state == STATE_UNAVAILABLE)
 
             await async_wait_recording_done(hass)
 
@@ -335,22 +344,31 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
             await context.async_tick(dt.timedelta(seconds=2 * TEST_DURATION))
 
             assert await context.async_setup()
+            device = context.device
+            sensor_consumption = device.entities["energy"]
+            assert isinstance(sensor_consumption, ConsumptionXSensor)
+            sensor_estimate = device.entities[mlc.ENERGY_ESTIMATE_ID]
+            assert isinstance(sensor_estimate, EnergyEstimateSensor)
+
             # sensor states should have been restored
-            assert context.device._sensor_consumption.offset == offset  # type: ignore
-            consumptionstate = hass.states.get(sensor_consumption_entity_id)
+            assert sensor_consumption.offset == offset
+            consumptionstate = hass_states_get(sensor_consumption_entity_id)
             assert consumptionstate and consumptionstate.state == STATE_UNAVAILABLE
-            estimatestate = hass.states.get(sensor_estimate_entity_id)
+            estimatestate = hass_states_get(sensor_estimate_entity_id)
             assert estimatestate and estimatestate.state == saved_estimated_energy_value
 
             # online the device
             await context.perform_coldstart()
             # check the real consumption
             _check_energy_states(TEST_POWER, 3 * TEST_DURATION, msg)
+            return device, sensor_consumption, sensor_estimate
 
         await context.async_poll_timeout(TEST_DURATION)
         _check_energy_states(TEST_POWER, TEST_DURATION, "boot measures")
 
-        await _async_unload_reload("reboot no offset", 0)
+        device, sensor_consumption, sensor_estimate = await _async_unload_reload(
+            "reboot no offset", 0
+        )
 
         # since the device polling callback checks for timeouts in communication,
         # this next 'tick' will move the time close to midnight
@@ -361,7 +379,8 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
         # to a point before midnight where the reported consumption 'will' change
         # before midnight
         await context.async_move_to(
-            tomorrow - dt.timedelta(seconds=TEST_DURATION + PARAM_ENERGY_UPDATE_PERIOD)
+            tomorrow
+            - dt.timedelta(seconds=TEST_DURATION + mlc.PARAM_ENERGY_UPDATE_PERIOD)
         )
         # now the device polling state is good. We'll tick the states across
         # midnight and check the ongoing updates
@@ -373,11 +392,11 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
                 _check_energy_states(
                     TEST_POWER, todayseconds, "end of the day measures"
                 )
-                yesterday_consumption = context.device._sensor_consumption.native_value  # type: ignore
+                yesterday_consumption = sensor_consumption.native_value
                 assert yesterday_consumption is not None
                 # the estimate should be reset right at midnight
                 await context.async_move_to(tomorrow)
-                assert context.device._sensor_energy_estimate.native_value == 0  # type: ignore
+                assert sensor_estimate.native_value == 0
                 break
 
         await context.async_poll_timeout(TEST_DURATION)
@@ -385,7 +404,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
 
         # our emulator 'BUG' doesnt reset consumption so the new day offset
         # should be right equal to 'yesterday_consumption' or 1 off
-        consumptionstate = hass.states.get(sensor_consumption_entity_id)
+        consumptionstate = hass_states_get(sensor_consumption_entity_id)
         assert consumptionstate
         assert "offset" in consumptionstate.attributes
         today_offset = consumptionstate.attributes["offset"]
