@@ -25,6 +25,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
 from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
 from custom_components.meross_lan.config_flow import ConfigFlow
 from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
+from custom_components.meross_lan.helpers import Loggable
 from custom_components.meross_lan.meross_profile import (
     MerossCloudProfileStoreType,
     MerossMQTTConnection,
@@ -567,25 +568,20 @@ class DeviceContext(ConfigEntryMocker):
         )
         self.emulator_context.__enter__()
 
-        @contextlib.contextmanager
-        def _patch_exception_warning(msg: str, *args, **kwargs):
-            try:
-                yield
-            except Exception as exception:
-                # These exceptions are suppresed in 'live' code and
-                # logged as warnings but in tests we want to better see
-                # what's going wrong.
-                # Right now we're strict enough to actually
-                # identify every 'suppressed' exception in real code
-                # TODO: move this patch to a fixture so to be able to reuse it
-                raise exception
+        def _patch_loggable_log_exception(
+            level: int, exception: Exception, msg: str, *args, **kwargs
+        ):
+            raise Exception(
+                f"log_exception called while testing {self.device_id}"
+            ) from exception
 
         self._exception_warning_patcher = patch.object(
-            MerossDevice,
-            "exception_warning",
-            side_effect=_patch_exception_warning,
+            Loggable,
+            "log_exception",
+            side_effect=_patch_loggable_log_exception,
         )
         self.exception_warning_mock = self._exception_warning_patcher.start()
+
         return await super().__aenter__()
 
     async def __aexit__(self, exc_type, exc_value: BaseException | None, traceback):
