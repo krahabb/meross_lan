@@ -5,7 +5,7 @@ import typing
 from homeassistant.components import fan
 
 from . import meross_entity as me
-from .helpers.namespaces import PollingStrategy
+from .helpers.namespaces import EntityPollingStrategy, PollingStrategy
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
@@ -24,11 +24,6 @@ class MLFan(me.MerossToggle, fan.FanEntity):
     PLATFORM = fan.DOMAIN
     manager: MerossDevice
 
-    # namespace = mc.NS_APPLIANCE_CONTROL_FAN
-    # key_namespace = mc.KEY_FAN
-    # key_channel = mc.KEY_CHANNEL
-    # key_onoff = mc.KEY_SPEED
-
     # HA core entity attributes:
     percentage: int | None
     preset_mode: str | None = None
@@ -41,6 +36,7 @@ class MLFan(me.MerossToggle, fan.FanEntity):
         "speed_count",
         "_fan",
         "_saved_speed",  # used to restore previous speed when turning on/off
+        "sensor_filtermaintenance",
     )
 
     def __init__(self, manager: MerossDevice):
@@ -56,6 +52,26 @@ class MLFan(me.MerossToggle, fan.FanEntity):
             payload=[{mc.KEY_CHANNEL: 0}],
             item_count=1,
         )
+        if mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE in manager.descriptor.ability:
+            from .sensor import MLNumericSensor
+
+            sensor_filtermaintenance = MLNumericSensor(
+                manager,
+                0,
+                mc.KEY_FILTER,
+                None,
+                native_unit_of_measurement=MLNumericSensor.UNIT_PERCENTAGE,
+            )
+            sensor_filtermaintenance.key_value = mc.KEY_LIFE
+            manager.register_parser(
+                mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE, sensor_filtermaintenance
+            )
+            EntityPollingStrategy(
+                manager,
+                mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
+                sensor_filtermaintenance,
+                item_count=1,
+            )
 
     # interface: MerossToggle
     def set_unavailable(self):

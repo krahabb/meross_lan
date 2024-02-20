@@ -283,6 +283,11 @@ class MerossNumericEntity(MerossEntity):
             self.native_value = native_value
             self.flush_state()
 
+    def _parse(self, payload: dict):
+        """Default parsing for sensor and number entities. Set the proper
+        key_value in class/instance definition to make it work."""
+        self.update_device_value(payload[self.key_value])
+
 
 class MerossBinaryEntity(MerossEntity):
     """Partially abstract common base class for ToggleEntity and BinarySensor.

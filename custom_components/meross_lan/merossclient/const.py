@@ -1,6 +1,7 @@
 """
     static constants symbols for Meross protocol symbols/semantics
 """
+
 import collections
 import re
 
@@ -122,7 +123,9 @@ NS_APPLIANCE_CONTROL_MP3 = "Appliance.Control.Mp3"
 NS_APPLIANCE_CONTROL_THERMOSTAT_ALARM = "Appliance.Control.Thermostat.Alarm"
 NS_APPLIANCE_CONTROL_THERMOSTAT_ALARMCONFIG = "Appliance.Control.Thermostat.AlarmConfig"
 NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION = "Appliance.Control.Thermostat.Calibration"
-NS_APPLIANCE_CONTROL_THERMOSTAT_COMPRESSORDELAY = "Appliance.Control.Thermostat.CompressorDelay"
+NS_APPLIANCE_CONTROL_THERMOSTAT_COMPRESSORDELAY = (
+    "Appliance.Control.Thermostat.CompressorDelay"
+)
 NS_APPLIANCE_CONTROL_THERMOSTAT_CTLRANGE = "Appliance.Control.Thermostat.CtlRange"
 NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE = "Appliance.Control.Thermostat.DeadZone"
 NS_APPLIANCE_CONTROL_THERMOSTAT_FROST = "Appliance.Control.Thermostat.Frost"
@@ -210,6 +213,7 @@ KEY_SIGNAL = "signal"
 KEY_LMTIME = "lmTime"
 KEY_LMTIME_ = "lmtime"
 KEY_CHANNEL = "channel"
+KEY_LOCK = "lock"
 KEY_TOGGLE = "toggle"
 KEY_TOGGLEX = "togglex"
 KEY_ONOFF = "onoff"
@@ -307,6 +311,7 @@ KEY_HOLDACTION = "holdAction"
 KEY_HISTORY = "history"
 KEY_SENSOR = "sensor"
 KEY_SUMMERMODE = "summerMode"
+KEY_DELAY = "delay"
 KEY_WARNING = "warning"
 KEY_WORKING = "working"
 KEY_SENSORSTATUS = "sensorStatus"
@@ -361,9 +366,11 @@ KEY_SUBDEVICENAME = "subDeviceName"
 PAYLOAD_GET = {
     NS_APPLIANCE_CONTROL_CONSUMPTIONX: {KEY_CONSUMPTIONX: []},
     NS_APPLIANCE_CONTROL_ELECTRICITY: {KEY_ELECTRICITY: {}},
+    NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: {KEY_FILTER: {}},
     NS_APPLIANCE_CONTROL_LIGHT: {KEY_LIGHT: {}},
     NS_APPLIANCE_CONTROL_LIGHT_EFFECT: {KEY_EFFECT: []},
     NS_APPLIANCE_CONTROL_MP3: {KEY_MP3: {}},
+    NS_APPLIANCE_CONTROL_PHYSICALLOCK: {KEY_LOCK: {}},
     NS_APPLIANCE_CONTROL_SPRAY: {KEY_SPRAY: {}},
     NS_APPLIANCE_CONTROL_TEMPUNIT: {KEY_TEMPUNIT: [{KEY_CHANNEL: 0}]},
     NS_APPLIANCE_CONTROL_TIMERX: {KEY_TIMERX: {}},
@@ -374,7 +381,7 @@ PAYLOAD_GET = {
     NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: {KEY_BRIGHTNESS: [{KEY_CHANNEL: 0}]},
     NS_APPLIANCE_CONTROL_SENSOR_HISTORY: {KEY_HISTORY: [{KEY_CHANNEL: 0}]},
     # Appliance.Control.Thermostat. namespace typically handled with euristics in get_default_payload
-    NS_APPLIANCE_CONTROL_THERMOSTAT_COMPRESSORDELAY: {"delay": [{KEY_CHANNEL: 0}]},
+    NS_APPLIANCE_CONTROL_THERMOSTAT_COMPRESSORDELAY: {KEY_DELAY: [{KEY_CHANNEL: 0}]},
     NS_APPLIANCE_DIGEST_TRIGGERX: {KEY_DIGEST: []},
     NS_APPLIANCE_DIGEST_TIMERX: {KEY_DIGEST: []},
     NS_APPLIANCE_GARAGEDOOR_CONFIG: {KEY_CONFIG: {}},
@@ -385,13 +392,13 @@ PAYLOAD_GET = {
     NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST: {
         KEY_ADJUST: []
     },  # unconfirmed but 'motoradjust' is wrong for sure
-    NS_APPLIANCE_SYSTEM_ALL: {
-        KEY_ALL: {}
-    },  # even if euristics work this to speed an often used lookup
-    NS_APPLIANCE_SYSTEM_ABILITY: {
-        KEY_ABILITY: {}
-    },  # even if euristics work this to speed an often used lookup
     NS_APPLIANCE_SYSTEM_DNDMODE: {KEY_DNDMODE: {}},
+}
+# these namespaces do not provide the GET/GETACK methods
+# hence querying works by issuing an empty PUSH. SET/SETACK might work though
+PUSH_ONLY_NAMESPACES = {
+    NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
+    NS_APPLIANCE_CONTROL_PHYSICALLOCK,  # SET works
 }
 # error codes as reported by Meross device protocol
 ERROR_INVALIDKEY = 5001

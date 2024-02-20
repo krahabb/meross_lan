@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from .. import const as mlc
-from ..merossclient import NAMESPACE_TO_KEY, const as mc, request_get
+from ..merossclient import NAMESPACE_TO_KEY, const as mc, request_get, request_push
 
 if typing.TYPE_CHECKING:
     from typing import Callable, Final
@@ -290,15 +290,18 @@ class PollingStrategy:
             self.response_base_size + item_count * self.response_item_size
         )
 
-        self.request = (
-            request_get(namespace)
-            if payload is None
-            else (
+        if payload is None:
+            self.request = (
+                request_push(namespace)
+                if namespace in mc.PUSH_ONLY_NAMESPACES
+                else request_get(namespace)
+            )
+        else:
+            self.request = (
                 namespace,
                 mc.METHOD_GET,
                 {self.key_namespace: payload},
             )
-        )
         device.polling_strategies[namespace] = self
         if handler:
             assert namespace not in device.namespace_handlers

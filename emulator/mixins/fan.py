@@ -19,21 +19,6 @@ class FanMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 mc.KEY_MAXSPEED: 4,
         })
 
-    """
-    def _GET_Appliance_Control_Fan(self, header, payload):
-        response = []
-        for p_request in extract_dict_payloads(payload[mc.KEY_FAN]):
-            channel: int = p_request[mc.KEY_CHANNEL]
-            response.append(
-                {
-                    mc.KEY_CHANNEL: channel,
-                    mc.KEY_SPEED: 3,
-                    mc.KEY_MAXSPEED: 4,
-                }
-            )
-        return mc.METHOD_GETACK, {mc.KEY_FAN: response}
-    """
-
     def _PUSH_Appliance_Control_FilterMaintenance(self, header, payload):
         return mc.METHOD_PUSH, {
             mc.KEY_FILTER: [
