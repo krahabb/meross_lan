@@ -639,7 +639,7 @@ class DeviceContext(ConfigEntryMocker):
             timedelta(seconds=config_entries.RELOAD_AFTER_UPDATE_DELAY)
         )
         # (re)online the device
-        await self.perform_coldstart()
+        return await self.perform_coldstart()
 
     async def async_tick(self, tick: timedelta | float | int):
         await self._time_mock.async_tick(tick)

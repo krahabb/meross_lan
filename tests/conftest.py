@@ -65,6 +65,18 @@ def disable_debug_fixture():
 
 
 @pytest.fixture()
+def disable_entity_registry_update():
+    """This fixture comes at hand when we want to disable the 'automatic entity
+    disable feature provided by our GarageDoor code. It would be too difficult
+    in our tests to cover this scenario so we totally disable calling into
+    the entity registry."""
+    from homeassistant.helpers.entity_registry import EntityRegistry
+
+    with patch.object(EntityRegistry, "async_update_entity"):
+        yield
+
+
+@pytest.fixture()
 def cloudapi_mock(aioclient_mock: AiohttpClientMocker):
     with helpers.CloudApiMocker(aioclient_mock) as _cloudapi_mock:
         yield _cloudapi_mock

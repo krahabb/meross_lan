@@ -54,6 +54,20 @@ class EntityComponentTest:
         assert (state := self.hass_states.get(self.entity_id))
         return state
 
+    async def async_service_call_check(
+        self, service: str, expected_state: str, service_data: dict = {}
+    ):
+        state = await self.async_service_call(service, service_data)
+        assert (
+            state.state == expected_state
+        ), f"service:{service} expected_state:{expected_state}"
+        await self.device_context.async_poll_single()
+        assert (state := self.hass_states.get(self.entity_id))
+        assert (
+            state.state == expected_state
+        ), f"service:{service} expected_state:{expected_state}"
+        return state
+
     async def async_test_each_callback(self, entity: MerossEntity):
         pass
 

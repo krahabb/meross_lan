@@ -63,10 +63,8 @@ class EntityTest(EntityComponentTest):
     async def async_test_enabled_callback(
         self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity
     ):
-        state = await self.async_service_call(haec.SERVICE_TURN_OFF)
-        assert state.state == hac.STATE_OFF
-        state = await self.async_service_call(haec.SERVICE_TURN_ON)
-        assert state.state == hac.STATE_ON
+        await self.async_service_call_check(haec.SERVICE_TURN_OFF, hac.STATE_OFF)
+        await self.async_service_call_check(haec.SERVICE_TURN_ON, hac.STATE_ON)
 
         if entity.entitykey == mlc.DND_ID:
             return
@@ -74,32 +72,29 @@ class EntityTest(EntityComponentTest):
         supported_color_modes = entity.supported_color_modes
 
         if ColorMode.BRIGHTNESS in supported_color_modes:
-            state = await self.async_service_call(
-                haec.SERVICE_TURN_ON, {haec.ATTR_BRIGHTNESS: 1}
+            state = await self.async_service_call_check(
+                haec.SERVICE_TURN_ON, hac.STATE_ON, {haec.ATTR_BRIGHTNESS: 1}
             )
             assert (
-                state.state == hac.STATE_ON
-                and state.attributes[haec.ATTR_BRIGHTNESS] == (255 // 100)
+                state.attributes[haec.ATTR_BRIGHTNESS] == (255 // 100)
                 and entity._light[mc.KEY_LUMINANCE] == 1
             )
-            state = await self.async_service_call(
-                haec.SERVICE_TURN_ON, {haec.ATTR_BRIGHTNESS: 255}
+            state = await self.async_service_call_check(
+                haec.SERVICE_TURN_ON, hac.STATE_ON, {haec.ATTR_BRIGHTNESS: 255}
             )
             assert (
-                state.state == hac.STATE_ON
-                and state.attributes[haec.ATTR_BRIGHTNESS] == 255
+                state.attributes[haec.ATTR_BRIGHTNESS] == 255
                 and entity._light[mc.KEY_LUMINANCE] == 100
             )
 
         if ColorMode.RGB in supported_color_modes:
             rgb_tuple = (255, 0, 0)
             rgb_meross = _rgb_to_int(rgb_tuple)
-            state = await self.async_service_call(
-                haec.SERVICE_TURN_ON, {haec.ATTR_RGB_COLOR: rgb_tuple}
+            state = await self.async_service_call_check(
+                haec.SERVICE_TURN_ON, hac.STATE_ON, {haec.ATTR_RGB_COLOR: rgb_tuple}
             )
             assert (
-                state.state == hac.STATE_ON
-                and state.attributes[haec.ATTR_RGB_COLOR] == _int_to_rgb(rgb_meross)
+                state.attributes[haec.ATTR_RGB_COLOR] == _int_to_rgb(rgb_meross)
                 and entity._light[mc.KEY_RGB] == rgb_meross
             )
 
@@ -109,12 +104,13 @@ class EntityTest(EntityComponentTest):
                 entity.max_mireds: 1,
             }
             for temp_mired, temp_meross in MIREDS_TO_MEROSS_TEMP.items():
-                state = await self.async_service_call(
-                    haec.SERVICE_TURN_ON, {haec.ATTR_COLOR_TEMP: temp_mired}
+                state = await self.async_service_call_check(
+                    haec.SERVICE_TURN_ON,
+                    hac.STATE_ON,
+                    {haec.ATTR_COLOR_TEMP: temp_mired},
                 )
                 assert (
-                    state.state == hac.STATE_ON
-                    and state.attributes[haec.ATTR_COLOR_TEMP] == temp_mired
+                    state.attributes[haec.ATTR_COLOR_TEMP] == temp_mired
                     and entity._light[mc.KEY_TEMPERATURE] == temp_meross
                 )
 

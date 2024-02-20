@@ -29,20 +29,28 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_enabled_callback(self, entity: MLMp3Player):
         for service_name, expected_state in EntityTest.SERVICE_STATE_MAP.items():
-            state = await self.async_service_call(service_name)
-            assert state.state == expected_state, expected_state
-        state = await self.async_service_call(
-            haec.SERVICE_VOLUME_MUTE, {haec.ATTR_MEDIA_VOLUME_MUTED: False}
+            await self.async_service_call_check(service_name, expected_state)
+        await self.async_service_call_check(
+            haec.SERVICE_VOLUME_MUTE,
+            MediaPlayerState.PLAYING,
+            {haec.ATTR_MEDIA_VOLUME_MUTED: False},
         )
-        assert state.state == MediaPlayerState.PLAYING, MediaPlayerState.PLAYING
-        state = await self.async_service_call(
-            haec.SERVICE_VOLUME_SET, {haec.ATTR_MEDIA_VOLUME_LEVEL: 1}
+        state = await self.async_service_call_check(
+            haec.SERVICE_VOLUME_SET,
+            MediaPlayerState.PLAYING,
+            {haec.ATTR_MEDIA_VOLUME_LEVEL: 1},
         )
-        assert state.attributes[haec.ATTR_MEDIA_VOLUME_LEVEL] == 1, haec.ATTR_MEDIA_VOLUME_LEVEL
-        state = await self.async_service_call(
-            haec.SERVICE_VOLUME_SET, {haec.ATTR_MEDIA_VOLUME_LEVEL: 0.1}
+        assert (
+            state.attributes[haec.ATTR_MEDIA_VOLUME_LEVEL] == 1
+        ), haec.ATTR_MEDIA_VOLUME_LEVEL
+        state = await self.async_service_call_check(
+            haec.SERVICE_VOLUME_SET,
+            MediaPlayerState.PLAYING,
+            {haec.ATTR_MEDIA_VOLUME_LEVEL: 0.1},
         )
-        assert state.attributes[haec.ATTR_MEDIA_VOLUME_LEVEL] == round(0.1 * 16) / 16, haec.ATTR_MEDIA_VOLUME_LEVEL
+        assert (
+            state.attributes[haec.ATTR_MEDIA_VOLUME_LEVEL] == round(0.1 * 16) / 16
+        ), haec.ATTR_MEDIA_VOLUME_LEVEL
 
     async def async_test_disabled_callback(self, entity: MLMp3Player):
         pass

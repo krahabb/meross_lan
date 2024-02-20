@@ -299,9 +299,8 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
         sensor_consumption_entity_id = sensor_consumption.entity_id
         sensor_estimate_entity_id = sensor_estimate.entity_id
 
-        await context.async_enable_entity(sensor_estimate_entity_id)
+        device = await context.async_enable_entity(sensor_estimate_entity_id)
         # 'async_enable_entity' will invalidate our references
-        device = context.device
         sensor_consumption = device.entities["energy"]
         assert isinstance(sensor_consumption, ConsumptionXSensor)
         sensor_estimate = device.entities[mlc.ENERGY_ESTIMATE_ID]

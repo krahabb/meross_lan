@@ -80,10 +80,9 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_enabled_callback(self, entity: MtsClimate):
         for hvac_mode in entity.hvac_modes:
-            state = await self.async_service_call(
-                haec.SERVICE_SET_HVAC_MODE, {haec.ATTR_HVAC_MODE: hvac_mode}
+            await self.async_service_call_check(
+                haec.SERVICE_SET_HVAC_MODE, hvac_mode, {haec.ATTR_HVAC_MODE: hvac_mode}
             )
-            assert state.state == hvac_mode, f"hvac_mode: {hvac_mode}"
 
         for preset_mode in entity.preset_modes:
             state = await self.async_service_call(
@@ -105,8 +104,7 @@ class EntityTest(EntityComponentTest):
         assert (
             state.attributes[haec.ATTR_TEMPERATURE] == entity.max_temp
         ), "set_temperature: max_temp"
-        state = await self.async_service_call(haec.SERVICE_TURN_OFF)
-        assert state.state == HVACMode.OFF, "turn_off"
+        await self.async_service_call_check(haec.SERVICE_TURN_OFF, HVACMode.OFF)
 
     async def async_test_disabled_callback(self, entity: ClimateEntity):
         pass

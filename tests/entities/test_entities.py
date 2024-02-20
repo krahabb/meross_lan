@@ -1,6 +1,6 @@
 from importlib import import_module
 import re
-from typing import Iterable
+import typing
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
@@ -16,6 +16,10 @@ from tests.entities import (
     MerossEntityTypesDigestContainer,
     MerossEntityTypesList,
 )
+
+if typing.TYPE_CHECKING:
+    from custom_components.meross_lan.meross_device import MerossDeviceBase
+
 
 COMPONENTS_TESTS: dict[str, EntityComponentTest] = {}
 DEVICE_ENTITIES: MerossEntityTypesList = []
@@ -76,10 +80,14 @@ for entity_domain in (
         container.extend(entity_types)
 
 
-async def test_entities(hass: HomeAssistant, aioclient_mock, capsys):
+async def test_entities(
+    hass: HomeAssistant, aioclient_mock, capsys, disable_entity_registry_update
+):
     """
-    - digest_class_map, namespace_class_map, hub_class_map: if any is not empty process only the devices
-    matching the digest key or namespace ability else (all empty) process all of the device entities
+    tests basic (and complex sometimes) entities behavior when running/responding
+    to actual HA service calls. We're looping through all of our emulator traces
+    in order to try cover all of the entities features. For each entity platform
+    the test code is defined in the respective module.
     """
     EntityComponentTest.hass = hass
     EntityComponentTest.hass_states = hass.states
@@ -149,11 +157,11 @@ async def test_entities(hass: HomeAssistant, aioclient_mock, capsys):
             try:
                 EntityComponentTest.device_context = device_context
                 device = await device_context.perform_coldstart()
-                await _async_test_entities(device.entities.values())
+                await _async_test_entities(device)
                 if ishub:
                     assert isinstance(device, MerossDeviceHub)
                     for subdevice in device.subdevices.values():
-                        await _async_test_entities(subdevice.entities.values())
+                        await _async_test_entities(subdevice)
 
                 assert (
                     not expected_entity_types
@@ -168,12 +176,14 @@ async def test_entities(hass: HomeAssistant, aioclient_mock, capsys):
 
 
 async def _async_test_entities(
-    entities: Iterable[MerossEntity],
+    manager: "MerossDeviceBase",
 ):
-    for entity in entities:
+    for entity in manager.entities.values():
+
         if entity.PLATFORM not in COMPONENTS_TESTS:
             # TODO: add missing platform tests
             continue
+
         EntityComponentTest.entity_id = entity_id = entity.entity_id
         entity_type = type(entity)
         if entity_type in EntityComponentTest.expected_entity_types:
