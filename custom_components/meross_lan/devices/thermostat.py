@@ -51,11 +51,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         manager.platforms.setdefault(MLNumericSensor.PLATFORM)
         self.sensor_warning = None
         self.switch = None
-        manager.register_parser(
-            self.namespace,
-            self,
-            self._parse,
-        )
+        manager.register_parser(self.namespace, self)
 
     async def async_shutdown(self):
         self.switch = None
@@ -188,6 +184,8 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
 class MtsWindowOpened(MLBinarySensor):
     """specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe)."""
 
+    key_value = mc.KEY_STATUS
+
     def __init__(self, climate: MtsThermostatClimate):
         super().__init__(
             climate.manager,
@@ -198,10 +196,9 @@ class MtsWindowOpened(MLBinarySensor):
         climate.manager.register_parser(
             mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED,
             self,
-            self._parse_windowOpened,
         )
 
-    def _parse_windowOpened(self, payload: dict):
+    def _parse(self, payload: dict):
         """{ "channel": 0, "status": 0, "detect": 1, "lmTime": 1642425303 }"""
         self.update_onoff(payload[mc.KEY_STATUS])
 
@@ -209,7 +206,7 @@ class MtsWindowOpened(MLBinarySensor):
 class MtsExternalSensorSwitch(MtsConfigSwitch):
     """sensor mode: use internal(0) vs external(1) sensor as temperature loopback."""
 
-    key_onoff = mc.KEY_MODE
+    key_value = mc.KEY_MODE
 
     def __init__(self, climate: MtsThermostatClimate):
         super().__init__(
@@ -217,11 +214,7 @@ class MtsExternalSensorSwitch(MtsConfigSwitch):
             "external sensor mode",
             namespace=mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
         )
-        climate.manager.register_parser(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
-            self,
-            self._parse_togglex,
-        )
+        climate.manager.register_parser(mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR, self)
 
 
 class ThermostatMixin(
@@ -295,24 +288,13 @@ class ThermostatMixin(
                 for channel_digest in ns_digest:
                     channel = channel_digest[mc.KEY_CHANNEL]
                     climate = climate_class(self, channel)
-                    self.register_parser(
-                        climate.namespace,
-                        climate,
-                        climate._parse,
-                    )
+                    self.register_parser(climate.namespace, climate)
                     schedule = climate.schedule
                     # TODO: the scheduleB parsing might be different than 'classic' schedule
-                    self.register_parser(
-                        schedule.namespace,
-                        schedule,
-                        schedule._parse,
-                    )
+                    self.register_parser(schedule.namespace, schedule)
                     for ns in self.OPTIONAL_NAMESPACES_INITIALIZERS:
                         if ns in ability:
-                            self.register_parser(
-                                ns,
-                                climate,
-                            )
+                            self.register_parser(ns, climate)
 
                     for ns, entity_class in self.OPTIONAL_ENTITIES_INITIALIZERS.items():
                         if ns in ability:

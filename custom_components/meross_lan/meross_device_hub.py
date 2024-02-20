@@ -122,7 +122,7 @@ class HubNamespaceHandler(NamespaceHandler):
                             self.device.request(request_get(mc.NS_APPLIANCE_SYSTEM_ALL))
                     subdevices_parsed.add(subdevice_id)
             except Exception as exception:
-                self.log_exception(exception, "_handle_subdevice", p_subdevice)
+                self.handle_exception(exception, "_handle_subdevice", p_subdevice)
 
 
 class HubChunkedPollingStrategy(PollingStrategy):

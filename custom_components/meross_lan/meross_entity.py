@@ -47,6 +47,20 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     is_diagnostic: ClassVar[bool] = False
     """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
+    # These 'placeholder' definitions support generalization of
+    # Meross protocol message build/parsing when related to the
+    # current entity. These are usually relevant when this entity
+    # is strictly related to a namespace payload key value.
+    # See MLConfigNumber or MerossToggle as basic implementations
+    # supporting this semantic. They're generally set as class definitions
+    # in inherited entities but could nonetheless be set 'per instance'.
+    # These also come handy when generalizing parsing of received payloads
+    # for simple enough entities (like sensors, numbers or switches)
+    namespace: str
+    key_namespace: str
+    key_channel: str = mc.KEY_CHANNEL
+    key_value: str
+
     # HA core entity attributes:
     # These are constants throughout our model
     force_update: Final[bool] = False
@@ -189,9 +203,15 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     def _generate_unique_id(self):
         return self.manager.generate_unique_id(self)
 
-    def _parse_undefined(self, payload):
-        # this is a default handler for any message (in protocol routing)
-        # for which we haven't defined a specific handler
+    def _parse(self, payload):
+        """Default entity payload message parser. This is invoked automatically
+        when the entity is registered to a NamespaceHandler for a given namespace
+        and no 'better' _parse_xxxx has been defined. See NamespaceHandler.register.
+        At this root level, coming here is likely an error but this feature
+        (default parser) is being leveraged to setup a quick parsing route for some
+        specific class of entities instead of having to define a specific _parse_xxxx.
+        This is useful for generalized sensor classes which are just mapped to a single
+        namespace."""
         self.log(
             self.WARNING,
             "Handler undefined for payload:(%s)",
@@ -202,6 +222,8 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
 class MerossNumericEntity(MerossEntity):
     """Common base class for (numeric) sensors and numbers."""
+
+    UNIT_PERCENTAGE: Final = hac.PERCENTAGE
 
     DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[object | None, str | None]]
     """To be init in derived classes with their DeviceClass own types"""
@@ -234,7 +256,9 @@ class MerossNumericEntity(MerossEntity):
         self.native_value = (
             None if device_value is None else device_value / self.device_scale
         )
-        self.native_unit_of_measurement = native_unit_of_measurement or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+        self.native_unit_of_measurement = (
+            native_unit_of_measurement or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
+        )
         super().__init__(
             manager,
             channel,
@@ -263,6 +287,8 @@ class MerossNumericEntity(MerossEntity):
 class MerossBinaryEntity(MerossEntity):
     """Partially abstract common base class for ToggleEntity and BinarySensor.
     The initializer is skipped."""
+
+    key_value = mc.KEY_ONOFF
 
     # HA core entity attributes:
     is_on: bool | None
@@ -296,6 +322,11 @@ class MerossBinaryEntity(MerossEntity):
             self.is_on = onoff
             self.flush_state()
 
+    def _parse(self, payload: dict):
+        """Default parsing for toggles and binary sensors. Set the proper
+        key_value in class/instance definition to make it work."""
+        self.update_onoff(payload[self.key_value])
+
 
 class MerossToggle(MerossBinaryEntity):
     """
@@ -304,12 +335,6 @@ class MerossToggle(MerossBinaryEntity):
     """
 
     manager: MerossDeviceBase
-    # customize the request payload for different
-    # devices api. see 'request_onoff' to see how
-    namespace: str
-    key_namespace: str
-    key_channel: str = mc.KEY_CHANNEL
-    key_onoff: str = mc.KEY_ONOFF
 
     def __init__(
         self,
@@ -350,17 +375,11 @@ class MerossToggle(MerossBinaryEntity):
             {
                 self.key_namespace: {
                     self.key_channel: self.channel,
-                    self.key_onoff: onoff,
+                    self.key_value: onoff,
                 }
             },
         ):
             self.update_onoff(onoff)
-
-    def _parse_toggle(self, payload: dict):
-        self.update_onoff(payload.get(self.key_onoff))
-
-    def _parse_togglex(self, payload: dict):
-        self.update_onoff(payload.get(self.key_onoff))
 
 
 #

@@ -4,7 +4,7 @@ import typing
 
 from ..helpers.namespaces import NamespaceHandler, SmartPollingStrategy
 from ..merossclient import const as mc
-from ..number import PERCENTAGE, MLConfigNumber
+from ..number import MLConfigNumber
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
@@ -26,7 +26,10 @@ class MLScreenBrightnessNumber(MLConfigNumber):
         self.key_value = key
         self.name = f"Screen brightness ({key})"
         super().__init__(
-            manager, 0, f"screenbrightness_{key}", native_unit_of_measurement=PERCENTAGE
+            manager,
+            0,
+            f"screenbrightness_{key}",
+            native_unit_of_measurement=MLConfigNumber.UNIT_PERCENTAGE,
         )
 
     async def async_set_native_value(self, value: float):

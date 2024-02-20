@@ -4,7 +4,6 @@ import typing
 
 from homeassistant.components import sensor
 from homeassistant.const import (
-    PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
     UnitOfEnergy,
@@ -76,20 +75,21 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
     DeviceClass = sensor.SensorDeviceClass
     StateClass = sensor.SensorStateClass
 
-    DEVICECLASS_TO_UNIT_MAP: dict[DeviceClass, str] = {
+    DEVICECLASS_TO_UNIT_MAP = {
         DeviceClass.POWER: UnitOfPower.WATT,
         DeviceClass.CURRENT: UnitOfElectricCurrent.AMPERE,
         DeviceClass.VOLTAGE: UnitOfElectricPotential.VOLT,
         DeviceClass.ENERGY: UnitOfEnergy.WATT_HOUR,
         DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
-        DeviceClass.HUMIDITY: PERCENTAGE,
-        DeviceClass.BATTERY: PERCENTAGE,
-        DeviceClass.POWER_FACTOR: PERCENTAGE,
+        DeviceClass.HUMIDITY: me.MerossNumericEntity.UNIT_PERCENTAGE,
+        DeviceClass.BATTERY: me.MerossNumericEntity.UNIT_PERCENTAGE,
+        DeviceClass.POWER_FACTOR: me.MerossNumericEntity.UNIT_PERCENTAGE,
     }
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
     # except these device classes
-    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass, StateClass] = {
+    DEVICECLASS_TO_STATECLASS_MAP: dict[DeviceClass | None, StateClass] = {
+        None: StateClass.MEASUREMENT,
         DeviceClass.ENERGY: StateClass.TOTAL_INCREASING,
     }
 
@@ -106,13 +106,19 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         device_class: DeviceClass | None = None,
         *,
         device_value: int | None = None,
+        native_unit_of_measurement: str | None = None,
     ):
-        assert device_class and device_class is not sensor.SensorDeviceClass.ENUM
+        assert device_class is not sensor.SensorDeviceClass.ENUM
         self.state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
             device_class, MLNumericSensor.StateClass.MEASUREMENT
         )
         super().__init__(
-            manager, channel, entitykey, device_class, device_value=device_value
+            manager,
+            channel,
+            entitykey,
+            device_class,
+            device_value=device_value,
+            native_unit_of_measurement=native_unit_of_measurement,
         )
 
     @staticmethod
@@ -175,7 +181,11 @@ class ProtocolSensor(MLEnumSensor):
     entity_category = me.EntityCategory.DIAGNOSTIC
     entity_registry_enabled_default = False
     native_value: str
-    options: list[str] = [STATE_DISCONNECTED, mlc.CONF_PROTOCOL_MQTT, mlc.CONF_PROTOCOL_HTTP]
+    options: list[str] = [
+        STATE_DISCONNECTED,
+        mlc.CONF_PROTOCOL_MQTT,
+        mlc.CONF_PROTOCOL_HTTP,
+    ]
 
     @staticmethod
     def _get_attr_state(value):

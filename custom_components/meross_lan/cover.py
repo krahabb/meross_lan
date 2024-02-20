@@ -123,7 +123,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
         onoff=None,
         namespace=mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
     ):
-        self.key_onoff = key
+        self.key_value = key
         self.name = key
         super().__init__(
             manager,
@@ -142,7 +142,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
                 mc.KEY_CONFIG: [
                     {
                         mc.KEY_CHANNEL: self.channel,
-                        self.key_onoff: onoff,
+                        self.key_value: onoff,
                     }
                 ]
             },
@@ -198,7 +198,7 @@ class MLGarageConfigSwitch(MLGarageMultipleConfigSwitch):
         if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
             mc.METHOD_SET,
-            {mc.KEY_CONFIG: {self.key_onoff: onoff}},
+            {mc.KEY_CONFIG: {self.key_value: onoff}},
         ):
             self.update_onoff(onoff)
 

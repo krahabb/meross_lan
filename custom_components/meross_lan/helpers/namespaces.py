@@ -56,9 +56,7 @@ class NamespaceHandler:
         self.entities: dict[object, Callable[[dict], None]] = {}
         device.namespace_handlers[namespace] = self
 
-    def register(
-        self, entity: MerossEntity, parse_func: Callable[[dict], None] | None = None
-    ):
+    def register(self, entity: MerossEntity):
         # when setting up the entity-dispatching we'll substitute the legacy handler
         # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
         # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
@@ -71,8 +69,8 @@ class NamespaceHandler:
         # (ToggleX is a well-known example)
         self.handler = self._handle_list
         assert entity.channel is not None
-        self.entities[entity.channel] = parse_func or getattr(
-            entity, f"_parse_{self.key_namespace}", entity._parse_undefined
+        self.entities[entity.channel] = getattr(
+            entity, f"_parse_{self.key_namespace}", entity._parse
         )
         entity.namespace_handlers.add(self)
 
@@ -80,7 +78,7 @@ class NamespaceHandler:
         if self.entities.pop(entity.channel, None):
             entity.namespace_handlers.remove(self)
 
-    def log_exception(self, exception: Exception, function_name: str, payload):
+    def handle_exception(self, exception: Exception, function_name: str, payload):
         device = self.device
         device.log_exception(
             device.WARNING,
@@ -171,7 +169,7 @@ class NamespaceHandler:
             for channel_digest in digest:
                 self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
         except Exception as exception:
-            self.log_exception(exception, "_parse_list", digest)
+            self.handle_exception(exception, "_parse_list", digest)
 
     def _parse_generic(self, digest):
         """twin method for _handle (same job - different context).
@@ -183,7 +181,7 @@ class NamespaceHandler:
                 for channel_digest in digest:
                     self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
         except Exception as exception:
-            self.log_exception(exception, "_parse_generic", digest)
+            self.handle_exception(exception, "_parse_generic", digest)
 
     def _parse_undefined_dict(self, key: str, payload: dict, channel: object | None):
         device_entities = self.device.entities

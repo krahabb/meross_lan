@@ -479,7 +479,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         for namespace, init_descriptor in MerossDevice.ENTITY_INITIALIZERS.items():
             if namespace in ability:
                 with self.exception_warning("initializing namespace:%s", namespace):
-                    module = import_module(init_descriptor[0], "custom_components.meross_lan")
+                    module = import_module(
+                        init_descriptor[0], "custom_components.meross_lan"
+                    )
                     getattr(module, init_descriptor[1])(self)
 
     # interface: ConfigEntryManager
@@ -724,11 +726,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         namespace: str,
         entity: MerossEntity,
-        parse_func: typing.Callable[[dict], None] | None = None,
     ):
         if not (handler := self.namespace_handlers.get(namespace)):
             handler = self._create_handler(namespace)
-        handler.register(entity, parse_func)
+        handler.register(entity)
 
     def unregister_parser(self, namespace: str, entity: MerossEntity):
         if handler := self.namespace_handlers.get(namespace):
@@ -1647,14 +1648,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         try:
             handler.handler(header, payload)  # type: ignore
         except Exception as exception:
-            self.log_exception(
-                self.WARNING,
-                exception,
-                "NamespaceHandler(%s).%s: payload=%s",
-                namespace,
-                handler.handler.__name__,
-                self.loggable_dict(payload),
-            )
+            handler.handle_exception(exception, handler.handler.__name__, payload)
 
     def _create_handler(self, namespace: str):
         """Called by the base device message parsing chain when a new

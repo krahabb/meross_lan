@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from homeassistant.components import number
-from homeassistant.const import PERCENTAGE, UnitOfTemperature, UnitOfTime
+from homeassistant.const import UnitOfTemperature, UnitOfTime
 
 from . import meross_entity as me
 from .helpers import reverse_lookup, schedule_async_callback
@@ -34,20 +34,13 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
     DEVICECLASS_TO_UNIT_MAP = {
         None: None,
         DEVICE_CLASS_DURATION: UnitOfTime.SECONDS,
-        DeviceClass.HUMIDITY: PERCENTAGE,
+        DeviceClass.HUMIDITY: me.MerossNumericEntity.UNIT_PERCENTAGE,
         DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
     }
 
     DEBOUNCE_DELAY = 1
 
     manager: MerossDevice
-
-    # customize the request payload for different
-    # devices api. see 'async_set_native_value' to see how
-    namespace: str
-    key_namespace: str
-    key_channel: str = mc.KEY_CHANNEL
-    key_value: str
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG

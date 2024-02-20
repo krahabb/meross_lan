@@ -37,8 +37,6 @@ class MLSwitch(me.MerossToggle, switch.SwitchEntity):
 class MtsConfigSwitch(MLSwitch):
     entity_category = MLSwitch.EntityCategory.CONFIG
 
-    namespace: str
-
     def __init__(
         self,
         climate: MtsClimate,
@@ -64,7 +62,7 @@ class MtsConfigSwitch(MLSwitch):
                 self.key_namespace: [
                     {
                         self.key_channel: self.channel,
-                        self.key_onoff: onoff,
+                        self.key_value: onoff,
                     }
                 ]
             },
