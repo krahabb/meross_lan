@@ -5,7 +5,7 @@ from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
 from custom_components.meross_lan.devices.thermostat import MtsExternalSensorSwitch
 from custom_components.meross_lan.meross_entity import MerossToggle
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.switch import MLSwitch
+from custom_components.meross_lan.switch import MLSwitch, PhysicalLockSwitch
 
 from tests.entities import EntityComponentTest
 
@@ -22,6 +22,7 @@ class EntityTest(EntityComponentTest):
 
     NAMESPACES_ENTITIES = {
         mc.NS_APPLIANCE_CONFIG_OVERTEMP: [OverTempEnableSwitch],
+        mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: [PhysicalLockSwitch],
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: [MtsExternalSensorSwitch],
         mc.NS_APPLIANCE_CONTROL_TOGGLE: [MLSwitch],
     }

@@ -38,12 +38,6 @@ class FanMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             },
         )
 
-    def _PUSH_Appliance_Control_FilterMaintenance(self, header, payload):
-        return (
-            mc.METHOD_PUSH,
-            self.descriptor.namespaces[mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE],
-        )
-
     def _scheduler(self):
         super()._scheduler()
         p_payload = self.descriptor.namespaces[

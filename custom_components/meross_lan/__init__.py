@@ -51,7 +51,6 @@ else:
     mqtt_async_publish = None
 
 
-
 DIGEST_INITIALIZERS = {
     mc.KEY_DIFFUSER: (".devices.mod100", "DiffuserMixin"),
     mc.KEY_GARAGEDOOR: (".cover", "GarageMixin"),
@@ -62,12 +61,22 @@ DIGEST_INITIALIZERS = {
 
 MerossDevice.ENTITY_INITIALIZERS = {
     mc.NS_APPLIANCE_CONFIG_OVERTEMP: (".devices.mss", "OverTempEnableSwitch"),
-    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: (".devices.mss", "ConsumptionConfigNamespaceHandler"),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: (
+        ".devices.mss",
+        "ConsumptionConfigNamespaceHandler",
+    ),
     mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (".devices.mss", "ConsumptionXSensor"),
-    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (".devices.mss", "ElectricityNamespaceHandler"),
+    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (
+        ".devices.mss",
+        "ElectricityNamespaceHandler",
+    ),
     mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "MLFan"),
     mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
-    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (".devices.screenbrightness", "ScreenBrightnessNamespaceHandler"),
+    mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (".switch", "PhysicalLockSwitch"),
+    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
+        ".devices.screenbrightness",
+        "ScreenBrightnessNamespaceHandler",
+    ),
     mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (".cover", "MLRollerShutter"),
     mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
     mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
@@ -382,9 +391,11 @@ class MerossApi(ApiProfile):
                 service_response["response"] = (
                     await device.async_mqtt_request_raw(request)
                     if protocol is mlc.CONF_PROTOCOL_MQTT
-                    else await device.async_http_request_raw(request)
-                    if protocol is mlc.CONF_PROTOCOL_HTTP
-                    else await device.async_request_raw(request)
+                    else (
+                        await device.async_http_request_raw(request)
+                        if protocol is mlc.CONF_PROTOCOL_HTTP
+                        else await device.async_request_raw(request)
+                    )
                 ) or {}
                 return service_response
 
@@ -434,9 +445,9 @@ class MerossApi(ApiProfile):
                             or {}
                         )
                     except Exception as exception:
-                        service_response[
-                            "exception"
-                        ] = f"{exception.__class__.__name__}({str(exception)})"
+                        service_response["exception"] = (
+                            f"{exception.__class__.__name__}({str(exception)})"
+                        )
 
                     return service_response
 
@@ -540,8 +551,12 @@ class MerossApi(ApiProfile):
         for key_digest in digest:
             if key_digest in DIGEST_INITIALIZERS:
                 init_descriptor = DIGEST_INITIALIZERS[key_digest]
-                with self.exception_warning("initializing digest(%s) mixin", key_digest):
-                    module = import_module(init_descriptor[0], "custom_components.meross_lan")
+                with self.exception_warning(
+                    "initializing digest(%s) mixin", key_digest
+                ):
+                    module = import_module(
+                        init_descriptor[0], "custom_components.meross_lan"
+                    )
                     mixin_classes.append(getattr(module, init_descriptor[1]))
 
         # We must be careful when ordering the mixin and leave MerossDevice as last class.

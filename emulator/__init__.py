@@ -109,6 +109,11 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
 
         mixin_classes.append(RollerShutterMixin)
 
+    if mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK in ability:
+        from .mixins.physicallock import PhysicalLockMixin
+
+        mixin_classes.append(PhysicalLockMixin)
+
     mixin_classes.append(MerossEmulator)
     # build a label to cache the set
     class_name = ""

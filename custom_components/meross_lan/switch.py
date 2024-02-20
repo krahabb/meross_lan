@@ -5,6 +5,7 @@ import typing
 from homeassistant.components import switch
 
 from . import meross_entity as me
+from .helpers.namespaces import EntityPollingStrategy
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
@@ -64,6 +65,34 @@ class MtsConfigSwitch(MLSwitch):
                         self.key_channel: self.channel,
                         self.key_value: onoff,
                     }
+                ]
+            },
+        ):
+            self.update_onoff(onoff)
+
+
+class PhysicalLockSwitch(MLSwitch):
+
+    namespace = mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK
+    key_namespace = mc.KEY_LOCK
+
+    # HA core entity attributes:
+    entity_category = MLSwitch.EntityCategory.CONFIG
+
+    def __init__(self, manager: MerossDevice):
+        # right now we expect only 1 entity on channel == 0 (whatever)
+        super().__init__(manager, 0, mc.KEY_LOCK, self.DeviceClass.SWITCH)
+        manager.register_parser(self.namespace, self)
+        EntityPollingStrategy(manager, self.namespace, self, item_count=1)
+
+    # interface: MerossToggle
+    async def async_request_onoff(self, onoff: int):
+        if await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: [
+                    {self.key_channel: self.channel, self.key_value: onoff}
                 ]
             },
         ):

@@ -284,25 +284,28 @@ class MerossEmulator:
         if method == mc.METHOD_GET:
             return mc.METHOD_GETACK, {key: p_state}
 
-        if method != mc.METHOD_SET:
-            # TODO.....
-            raise Exception(f"{method} not supported in emulator")
-
-        p_payload = payload[key]
-        if isinstance(p_state, list):
-            for p_payload_channel in extract_dict_payloads(p_payload):
-                update_dict_strict_by_key(p_state, p_payload_channel)
-        elif mc.KEY_CHANNEL in p_state:
-            if p_state[mc.KEY_CHANNEL] == p_payload[mc.KEY_CHANNEL]:
-                update_dict_strict(p_state, p_payload)
+        if method == mc.METHOD_SET:
+            p_payload = payload[key]
+            if isinstance(p_state, list):
+                for p_payload_channel in extract_dict_payloads(p_payload):
+                    update_dict_strict_by_key(p_state, p_payload_channel)
+            elif mc.KEY_CHANNEL in p_state:
+                if p_state[mc.KEY_CHANNEL] == p_payload[mc.KEY_CHANNEL]:
+                    update_dict_strict(p_state, p_payload)
+                else:
+                    raise Exception(
+                        f"{p_payload[mc.KEY_CHANNEL]} not present in digest.{key}"
+                    )
             else:
-                raise Exception(
-                    f"{p_payload[mc.KEY_CHANNEL]} not present in digest.{key}"
-                )
-        else:
-            update_dict_strict(p_state, p_payload)
+                update_dict_strict(p_state, p_payload)
 
-        return mc.METHOD_SETACK, {}
+            return mc.METHOD_SETACK, {}
+
+        if method == mc.METHOD_PUSH:
+            if namespace in mc.PUSH_ONLY_NAMESPACES:
+                return mc.METHOD_PUSH, self.descriptor.namespaces[namespace]
+
+        raise Exception(f"{method} not supported in emulator for {namespace}")
 
     def _SETACK_Appliance_Control_Bind(self, header, payload):
         return None, None
@@ -418,6 +421,8 @@ class MerossEmulator:
         except KeyError:
             p_channel_state = {key_channel: channel}
             p_namespace_state = [p_channel_state]
-            self.descriptor.namespaces[namespace] = { NAMESPACE_TO_KEY[namespace]: p_namespace_state}
+            self.descriptor.namespaces[namespace] = {
+                NAMESPACE_TO_KEY[namespace]: p_namespace_state
+            }
 
         p_channel_state.update(payload)
