@@ -70,10 +70,14 @@ def disable_entity_registry_update():
     disable feature provided by our GarageDoor code. It would be too difficult
     in our tests to cover this scenario so we totally disable calling into
     the entity registry."""
-    from homeassistant.helpers.entity_registry import EntityRegistry
 
-    with patch.object(EntityRegistry, "async_update_entity"):
-        yield
+    from custom_components.meross_lan.cover import (
+        MLGarageDoorEnableSwitch,
+        MLGarageMultipleConfigSwitch,
+    )
+
+    MLGarageDoorEnableSwitch.update_onoff = MLGarageMultipleConfigSwitch.update_onoff
+    yield
 
 
 @pytest.fixture()
