@@ -12,6 +12,7 @@ from custom_components.meross_lan.merossclient import (
     get_element_by_key,
     get_element_by_key_safe,
     get_mts_digest,
+    update_dict_strict,
 )
 
 if typing.TYPE_CHECKING:
@@ -267,7 +268,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             p_subdevice_temperature = self._get_subdevice_namespace(
                 subdevice_id, mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE
             )
-            p_subdevice_temperature.update(p_subdevice)
+            update_dict_strict(p_subdevice_temperature, p_subdevice)
 
             p_subdevice_mode = self._get_subdevice_namespace(
                 subdevice_id, mc.NS_APPLIANCE_HUB_MTS100_MODE

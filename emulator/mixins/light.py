@@ -1,4 +1,5 @@
 """"""
+
 from __future__ import annotations
 
 import typing
@@ -6,6 +7,7 @@ import typing
 from custom_components.meross_lan.merossclient import (
     const as mc,
     get_element_by_key_safe,
+    update_dict_strict,
 )
 
 if typing.TYPE_CHECKING:
@@ -43,7 +45,7 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 p_digest[mc.KEY_TOGGLEX][channel][mc.KEY_ONOFF] = 1
         else:
             p_light[mc.KEY_ONOFF] = p_light.get(mc.KEY_ONOFF, 1)
-        p_digest[mc.KEY_LIGHT] = p_light
+        update_dict_strict(p_digest[mc.KEY_LIGHT], p_light)
         return mc.METHOD_SETACK, {}
 
     def _GET_Appliance_Control_Light_Effect(self, header, payload):

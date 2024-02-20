@@ -20,6 +20,8 @@ from custom_components.meross_lan.merossclient import (
     get_replykey,
     json_dumps,
     json_loads,
+    update_dict_strict,
+    update_dict_strict_by_key,
 )
 
 if typing.TYPE_CHECKING:
@@ -269,42 +271,22 @@ class MerossEmulator:
 
         p_payload = payload[key]
         if isinstance(p_state, list):
-
-            for p in extract_dict_payloads(p_payload):
-                get_element_by_key(p_state, mc.KEY_CHANNEL, p[mc.KEY_CHANNEL]).update(p)
-
-        else:
+            for p_payload_channel in extract_dict_payloads(p_payload):
+                update_dict_strict_by_key(p_state, p_payload_channel)
+        elif mc.KEY_CHANNEL in p_state:
             if p_state[mc.KEY_CHANNEL] == p_payload[mc.KEY_CHANNEL]:
-                p_state.update(p_payload)
+                update_dict_strict(p_state, p_payload)
             else:
                 raise Exception(
                     f"{p_payload[mc.KEY_CHANNEL]} not present in digest.{key}"
                 )
+        else:
+            update_dict_strict(p_state, p_payload)
 
-        return mc.METHOD_SETACK, {}
-
-    def _SET_Appliance_Config_OverTemp(self, header, payload):
-        if mc.NS_APPLIANCE_CONFIG_OVERTEMP not in self.descriptor.namespaces:
-            raise Exception(
-                f"{mc.NS_APPLIANCE_CONFIG_OVERTEMP} not supported in namespaces"
-            )
-        config_overtemp = self.descriptor.namespaces[mc.NS_APPLIANCE_CONFIG_OVERTEMP]
-        config_overtemp[mc.KEY_OVERTEMP][mc.KEY_ENABLE] = payload[mc.KEY_OVERTEMP][
-            mc.KEY_ENABLE
-        ]
         return mc.METHOD_SETACK, {}
 
     def _SETACK_Appliance_Control_Bind(self, header, payload):
         return None, None
-
-    def _SET_Appliance_Control_Mp3(self, header, payload):
-        if mc.NS_APPLIANCE_CONTROL_MP3 not in self.descriptor.namespaces:
-            raise Exception(
-                f"{mc.NS_APPLIANCE_CONTROL_MP3} not supported in namespaces"
-            )
-        mp3 = self.descriptor.namespaces[mc.NS_APPLIANCE_CONTROL_MP3]
-        mp3[mc.KEY_MP3].update(payload[mc.KEY_MP3])
-        return mc.METHOD_SETACK, {}
 
     def _SET_Appliance_Control_Multiple(self, header, payload):
         multiple = []
@@ -332,7 +314,7 @@ class MerossEmulator:
         return mc.METHOD_GETACK, self.p_dndmode
 
     def _SET_Appliance_System_DNDMode(self, header, payload):
-        self.p_dndmode = payload
+        update_dict_strict(self.p_dndmode, payload)
         return mc.METHOD_SETACK, {}
 
     def _SET_Appliance_System_Time(self, header, payload):
@@ -340,7 +322,7 @@ class MerossEmulator:
         self.update_epoch()
         return mc.METHOD_SETACK, {}
 
-    def _get_key_state(self, namespace: str) -> tuple[str, dict]:
+    def _get_key_state(self, namespace: str) -> tuple[str, dict | list]:
         """
         general device state is usually carried in NS_ALL into the "digest" key
         and is also almost regularly keyed by using the camelCase of the last verb
@@ -352,6 +334,8 @@ class MerossEmulator:
 
         match namespace.split("."):
             case (_, "RollerShutter", _):
+                return key, self.descriptor.namespaces[namespace][key]
+            case (_, "Config", _):
                 return key, self.descriptor.namespaces[namespace][key]
             case (_, "Control", _):
                 p_digest = self.descriptor.digest

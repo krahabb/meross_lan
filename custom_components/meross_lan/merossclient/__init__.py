@@ -398,6 +398,35 @@ def get_element_by_key_safe(payload, key: str, value) -> dict | None:
         return None
 
 
+def update_dict_strict(dst_dict: dict, src_dict: dict):
+    """Updates (merge) the dst_dict with values from src_dict checking
+    their existence in dst_dict before applying. Used in emulators to update
+    current state when receiving a SET payload. This is needed for testing so
+    that we're sure the meross_lan client doesn't pollute the emulator device
+    state with wrong or unexpected keys. TODO: we should also add a semantic
+    value check to ensure it is valid."""
+    for key, value in src_dict.items():
+        if key in dst_dict:
+            dst_dict[key] = value
+
+
+def update_dict_strict_by_key(
+    dst_lst: list[dict], src_dict: dict, key: str = mc.KEY_CHANNEL
+) -> dict:
+    """
+    Much like get_element_by_key scans the dst list looking for the first item matching
+    the key value to the corresponding one in src_dict. Usually looking for the matching
+    channel payload inside list payloads. Before returning, merges the src_dict into
+    the matched dst_dict
+    """
+    key_value = src_dict[key]
+    for dst_dict in dst_lst:
+        if dst_dict.get(key) == key_value:
+            update_dict_strict(dst_dict, src_dict)
+            return dst_dict
+    raise KeyError(f"No match for key '{key}' on value:'{str(key_value)}' in {dst_lst}")
+
+
 def extract_dict_payloads(payload):
     """
     Helper generator to manage payloads which might carry list of payloads:

@@ -10,6 +10,8 @@ from custom_components.meross_lan.merossclient import (
     NAMESPACE_TO_KEY,
     const as mc,
     get_element_by_key,
+    update_dict_strict,
+    update_dict_strict_by_key,
 )
 
 if typing.TYPE_CHECKING:
@@ -61,10 +63,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         p_mode_list = payload[mc.KEY_MODE]
         for p_mode in p_mode_list:
             channel = p_mode[mc.KEY_CHANNEL]
-            p_digest_mode = get_element_by_key(
-                p_digest_mode_list, mc.KEY_CHANNEL, channel
-            )
-            p_digest_mode.update(p_mode)
+            p_digest_mode = update_dict_strict_by_key(p_digest_mode_list, p_mode)
             mode = p_digest_mode[mc.KEY_MODE]
             if mode in mc.MTS200_MODE_TO_TARGETTEMP_MAP:
                 p_digest_mode[mc.KEY_TARGETTEMP] = p_digest_mode[
@@ -151,7 +150,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                     )
                 response_list.append(p_digest_channel)
             elif method == mc.METHOD_SET:
-                p_digest_channel.update(p_request_channel)
+                update_dict_strict(p_digest_channel, p_request_channel)
 
         if method == mc.METHOD_GET:
             return mc.METHOD_GETACK, {namespace_key: response_list}
