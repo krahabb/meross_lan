@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 
 import threading
 from time import time
@@ -112,7 +113,18 @@ class MerossEmulator:
     command carrying the message and so automatically managed too
     """
 
-    _tzinfo: ZoneInfo | None = None
+    __slots__ = (
+        "epoch",
+        "lock",
+        "key",
+        "descriptor",
+        "p_dndmode",
+        "topic_response",
+        "mqtt",
+        "_scheduler_unsub",
+        "_tzinfo",
+        "__dict__",
+    )
 
     def __init__(self, descriptor: MerossEmulatorDescriptor, key: str):
         self.lock = threading.Lock()
@@ -122,10 +134,15 @@ class MerossEmulator:
             self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
         self.mqtt = None
+        self._scheduler_unsub = None
+        self._tzinfo: ZoneInfo | None = None
+        self.update_epoch()
 
     def shutdown(self):
         """cleanup when the emulator is stopped/destroyed"""
-        pass
+        if self._scheduler_unsub:
+            self._scheduler_unsub.cancel()
+            self._scheduler_unsub = None
 
     def set_timezone(self, timezone: str):
         # beware when using TZ names: here we expect a IANA zoneinfo key
@@ -187,28 +204,30 @@ class MerossEmulator:
         return response
 
     def handle_connect(self, client: mqtt.Client):
-        self.mqtt = client
-        self.update_epoch()
-        # kind of Bind message..we're just interested in validating
-        # the server code in meross_lan (it doesn't really check this
-        # payload)
-        message_bind_set = build_message(
-            mc.NS_APPLIANCE_CONTROL_BIND,
-            mc.METHOD_SET,
-            {
-                "bind": {
-                    "bindTime": self.epoch,
-                    mc.KEY_HARDWARE: self.descriptor.hardware,
-                    mc.KEY_FIRMWARE: self.descriptor.firmware,
-                }
-            },
-            self.key,
-            self.topic_response,
-        )
-        client.publish(self.topic_response, json_dumps(message_bind_set))
+        with self.lock:
+            self.mqtt = client
+            self.update_epoch()
+            # kind of Bind message..we're just interested in validating
+            # the server code in meross_lan (it doesn't really check this
+            # payload)
+            message_bind_set = build_message(
+                mc.NS_APPLIANCE_CONTROL_BIND,
+                mc.METHOD_SET,
+                {
+                    "bind": {
+                        "bindTime": self.epoch,
+                        mc.KEY_HARDWARE: self.descriptor.hardware,
+                        mc.KEY_FIRMWARE: self.descriptor.firmware,
+                    }
+                },
+                self.key,
+                self.topic_response,
+            )
+            client.publish(self.topic_response, json_dumps(message_bind_set))
 
     def handle_disconnect(self, client: mqtt.Client):
-        self.mqtt = None
+        with self.lock:
+            self.mqtt = None
 
     def _handle_message(self, header: MerossHeaderType, payload: MerossPayloadType):
         namespace = header[mc.KEY_NAMESPACE]
@@ -361,6 +380,16 @@ class MerossEmulator:
             raise Exception(f"'{key}' not present in 'control' key")
         return p_control[key]
 
+    def _scheduler(self):
+        """Called by asyncio at (almost) regular intervals to trigger
+        internal state changes useful for PUSHes. To be called by
+        inherited implementations at start so to update the epoch."""
+        self._scheduler_unsub = asyncio.get_event_loop().call_later(
+            30,
+            self._scheduler,
+        )
+        self.update_epoch()
+
     def get_namespace_state(
         self, namespace: str, channel, key_channel: str = mc.KEY_CHANNEL
     ) -> dict:
@@ -375,14 +404,20 @@ class MerossEmulator:
         """updates the current state (stored in namespace key) eventually creating a default.
         Useful when sanitizing mixin state during init should the trace miss some well-known namespaces info
         """
-        p_namespace_state: list = self.descriptor.namespaces[namespace][
-            NAMESPACE_TO_KEY[namespace]
-        ]
         try:
-            p_channel_state = get_element_by_key(
-                p_namespace_state, key_channel, channel
-            )
+            p_namespace_state: list = self.descriptor.namespaces[namespace][
+                NAMESPACE_TO_KEY[namespace]
+            ]
+            try:
+                p_channel_state = get_element_by_key(
+                    p_namespace_state, key_channel, channel
+                )
+            except KeyError:
+                p_channel_state = {key_channel: channel}
+                p_namespace_state.append(p_channel_state)
         except KeyError:
             p_channel_state = {key_channel: channel}
-            p_namespace_state.append(p_channel_state)
+            p_namespace_state = [p_channel_state]
+            self.descriptor.namespaces[namespace] = { NAMESPACE_TO_KEY[namespace]: p_namespace_state}
+
         p_channel_state.update(payload)

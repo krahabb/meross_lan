@@ -181,6 +181,9 @@ def run(argv):
 
     def web_post_handler(emulator: MerossEmulator):
         async def _callback(request: web.Request) -> web.Response:
+            if not emulator._scheduler_unsub:
+                # starts internal scheduler once when we're in asyncio environment
+                emulator._scheduler()
             return web.json_response(emulator.handle(await request.text()))
 
         return _callback

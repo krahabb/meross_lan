@@ -63,8 +63,7 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             def _state_update_callback():
                 p_state[mc.KEY_OPEN] = request_open
 
-            loop = asyncio.get_event_loop()
-            loop.call_later(
+            asyncio.get_event_loop().call_later(
                 self.OPENDURATION if request_open else self.CLOSEDURATION,
                 _state_update_callback,
             )
