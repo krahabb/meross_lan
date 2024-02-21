@@ -782,8 +782,8 @@ class MS100SubDevice(MerossSubDevice):
         self.number_adjust_humidity: MLHubSensorAdjustNumber = None  # type: ignore
 
     def _parse_humidity(self, p_humidity: dict):
-        if isinstance(p_latest := p_humidity.get(mc.KEY_LATEST), int):
-            self.sensor_humidity.update_native_value(p_latest / 10)
+        if mc.KEY_LATEST in p_humidity:
+            self._update_sensor(self.sensor_humidity, p_humidity[mc.KEY_LATEST])
 
     def _parse_ms100(self, p_ms100: dict):
         # typically called by MerossSubDevice.parse_digest
@@ -792,24 +792,29 @@ class MS100SubDevice(MerossSubDevice):
 
     def _parse_temperature(self, p_temperature: dict):
         if mc.KEY_LATEST in p_temperature:
-            self.sensor_temperature.update_native_value(
-                p_temperature[mc.KEY_LATEST] / 10
-            )
+            self._update_sensor(self.sensor_temperature, p_temperature[mc.KEY_LATEST])
 
     def _parse_tempHum(self, p_temphum: dict):
         if mc.KEY_LATESTTEMPERATURE in p_temphum:
-            self.sensor_temperature.update_native_value(
-                p_temphum[mc.KEY_LATESTTEMPERATURE] / 10
+            self._update_sensor(
+                self.sensor_temperature, p_temphum[mc.KEY_LATESTTEMPERATURE]
             )
         if mc.KEY_LATESTHUMIDITY in p_temphum:
-            self.sensor_humidity.update_native_value(
-                p_temphum[mc.KEY_LATESTHUMIDITY] / 10
-            )
+            self._update_sensor(self.sensor_humidity, p_temphum[mc.KEY_LATESTHUMIDITY])
 
     def _parse_togglex(self, p_togglex: dict):
         # avoid the base class creating a toggle entity
         # since we're pretty sure ms100 doesn't have one
         pass
+
+    def _update_sensor(self, sensor: MLNumericSensor, device_value):
+        # when a temp/hum reading changes we're smartly requesting
+        # the adjust sooner than scheduled in case the change
+        # was due to an adjustment
+        if sensor.update_native_value(device_value / 10):
+            strategy = self.hub.polling_strategies[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST]
+            if strategy.lastrequest < (self.hub.lastresponse - 30):
+                strategy.lastrequest = 0
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice

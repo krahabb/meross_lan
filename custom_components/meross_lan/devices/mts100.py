@@ -159,10 +159,16 @@ class Mts100Climate(MtsClimate):
 
     # message handlers
     def _parse(self, p_temperature: dict):
+        mts100 = self.manager
         if mc.KEY_ROOM in p_temperature:
             self.current_temperature = p_temperature[mc.KEY_ROOM] / self.device_scale
             self.select_tracked_sensor.check_tracking()
-            self.manager.sensor_temperature.update_native_value(self.current_temperature)
+            if mts100.sensor_temperature.update_native_value(self.current_temperature):
+                strategy = mts100.hub.polling_strategies[
+                    mc.NS_APPLIANCE_HUB_MTS100_ADJUST
+                ]
+                if strategy.lastrequest < (mts100.hub.lastresponse - 30):
+                    strategy.lastrequest = 0
 
         p_temperature_patch = {}
         _mts_adjusted_temperature = self._mts_adjusted_temperature
@@ -221,7 +227,7 @@ class Mts100Climate(MtsClimate):
             # discards every SET_ACK. Here (manager.request) we still have the calback
             # for this but it's going to be removed in the next major release
             # The mts state will anyway be eventually pushed or we'll poll it very soon
-            self.manager.request(
+            mts100.request(
                 (
                     mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
                     mc.METHOD_SET,

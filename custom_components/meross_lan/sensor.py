@@ -68,6 +68,7 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()
+            return True
 
 
 class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):

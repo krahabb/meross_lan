@@ -277,11 +277,13 @@ class MerossNumericEntity(MerossEntity):
             self.device_value = device_value
             self.native_value = device_value / self.device_scale
             self.flush_state()
+            return True
 
     def update_native_value(self, native_value: int | float):
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()
+            return True
 
     def _parse(self, payload: dict):
         """Default parsing for sensor and number entities. Set the proper
