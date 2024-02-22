@@ -66,7 +66,8 @@ Most of this software has been developed and tested on my owned Meross devices w
 - Switches
   - [MSS110](https://www.meross.com/Detail/58/Smart%20Wi-Fi%20Plug%20Mini): Smart Wifi plug mini
   - [MSS210](https://www.meross.com/Detail/3/Smart%20Wi-Fi%20Plug): Smart Wifi plug
-  - [MSS310](https://www.meross.com/Detail/38/Smart%20Wi-Fi%20Plug%20with%20Energy%20Monitor): power plug with metering capabilties
+  - [MSS305](https://www.meross.com/en-gc/smart-plug/amazon-smart-plug/137): power plug with metering capabilities
+    - [MSS310](https://www.meross.com/Detail/38/Smart%20Wi-Fi%20Plug%20with%20Energy%20Monitor): power plug with metering capabilities
   - [MSS315](https://www.meross.com/en-gc/smart-plug/matter-smart-plug/159): Matter power plug with metering capabilties
   - [MSS425](https://www.meross.com/Detail/16/Smart%20Wi-Fi%20Surge%20Protector): Smart WiFi Surge Protector (multiple sockets power strip)
   - [MSS510](https://www.meross.com/Detail/23/Smart%20Wi-Fi%20Single%20Pole%20Switch): Smart WiFi single pole switch
@@ -83,11 +84,14 @@ Most of this software has been developed and tested on my owned Meross devices w
 - Sensors
   - [MS100](https://www.meross.com/Detail/46/Smart%20Temperature%20and%20Humidity%20Sensor): Smart Temperature/Humidity Sensor
   - [MS200](https://www.meross.com/en-gc/smart-sensor/smart-door-and-window-sensor/138): Smart Door/Window Sensor
+  - [MS400](https://www.meross.com/en-gc/smart-sensor/smart-water-leak-sensor/130): Smart Water Leak Sensor
   - [GS559AH](https://www.meross.com/en-gc/smart-sensor/homekit-smoke-detector/120): Smart Smoke Sensor
 - Thermostats
   - [MTS100](https://www.meross.com/Detail/30/Smart%20Thermostat%20Valve): Smart Thermostat Valve
-  - [MTS150](https://www.meross.com/en-gc/smart-thermostat/smart-thermostat-valve/99): Smart Thermostat Valve
+  - [MTS150](https://www.meross.com/en-gc/smart-thermostat/smart-thermostat-valve/99): Smart Thermostat
+  Valve
   - [MTS200](https://www.meross.com/Detail/116/Smart%20Wi-Fi%20Thermostat): Smart Wifi Thermostat
+  - [MTS960](https://www.meross.com/en-gc/smart-thermostat/smart-socket-thermostat/145): Smart Wifi Socket Thermostat
 - Covers
   - [MRS100](https://www.meross.com/product/91/article/): Smart WiFi Roller Shutter
   - [MSG100](https://www.meross.com/product/29/article/): Smart WiFi Garage Door Opener
@@ -96,7 +100,9 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MSXH0](https://www.meross.com/Detail/47/Smart%20Wi-Fi%20Humidifier) [experimental]: Smart WiFi Humidifier
   - [MOD100](https://www.meross.com/Detail/93/Smart%20Wi-Fi%20Essential%20Oil%20Diffuser) [experimental]: Smart WiFi Essential Oil Diffuser
 - Smart Cherub Baby Machine
-  - [HP110A](https://www.meross.com/product/53/article/) [experimental]: Smart Cherub Baby Machine
+  - [HP110A](https://www.meross.com/product/53/article/): Smart Cherub Baby Machine
+- Air Purifier
+  - [MAP100](https://www.meross.com/en-gc/smart-air-purifier/homekit-air-purifier/112) [experimental]: Smart WiFi Air Purifier
 
 ## Features
 

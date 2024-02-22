@@ -565,10 +565,15 @@ TYPE_NAME_MAP[TYPE_MSL120] = "Smart RGB Bulb"
 TYPE_NAME_MAP[CLASS_MSL] = "Smart Light"
 
 CLASS_MTS = "mts"
+CLASS_MTSV = "mts1"
 TYPE_MTS100 = "mts100"  # Smart thermostat over hub
 TYPE_MTS100V3 = "mts100v3"  # Smart thermostat over hub
 TYPE_MTS150 = "mts150"  # Smart thermostat over hub
+TYPE_NAME_MAP[CLASS_MTSV] = "Smart Thermostat Valve"
 TYPE_MTS200 = "mts200"  # Smart thermostat over wifi
+TYPE_NAME_MAP[TYPE_MTS200] = "Smart Thermostat"
+TYPE_MTS960 = "mts960"  # Smart thermostat over wifi
+TYPE_NAME_MAP[TYPE_MTS960] = "Smart Socket Thermostat"
 TYPE_NAME_MAP[CLASS_MTS] = "Smart Thermostat"
 
 CLASS_MOD = "mod"
