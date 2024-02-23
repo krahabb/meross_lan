@@ -282,6 +282,19 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
         return mc.METHOD_SETACK, {mc.KEY_TEMPERATURE: response_payload}
 
+    def _SET_Appliance_Hub_Sensor_Adjust(self, header, payload):
+        for p_subdevice in payload[mc.KEY_ADJUST]:
+            subdevice_id = p_subdevice[mc.KEY_ID]
+            p_subdevice_adjust = self._get_subdevice_namespace(
+                subdevice_id, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
+            )
+            if mc.KEY_HUMIDITY in p_subdevice:
+                p_subdevice_adjust[mc.KEY_HUMIDITY] = p_subdevice_adjust.get(mc.KEY_HUMIDITY, 0) + p_subdevice[mc.KEY_HUMIDITY]
+            if mc.KEY_TEMPERATURE in p_subdevice:
+                p_subdevice_adjust[mc.KEY_TEMPERATURE] = p_subdevice_adjust.get(mc.KEY_TEMPERATURE, 0) + p_subdevice[mc.KEY_TEMPERATURE]
+
+        return mc.METHOD_SETACK, {}
+
     def _GET_Appliance_Hub_Sensor_All(self, header, payload):
         response_payload = self.descriptor.namespaces[mc.NS_APPLIANCE_HUB_SENSOR_ALL]
         for p_subdevice in response_payload[mc.KEY_ALL]:
