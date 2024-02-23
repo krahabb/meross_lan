@@ -24,7 +24,10 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: CalendarEntity):
-        pass
+        if isinstance(entity, Mts100Schedule):
+            # these are not set in stone though, but always appears like these in our traces
+            assert entity._schedule_entry_count == 6, "schedule_entry_count"
+            assert entity._schedule_unit_time == 15, "schedule_unit_time"
 
     async def async_test_enabled_callback(self, entity: CalendarEntity):
         pass

@@ -70,17 +70,6 @@ class Mts100Climate(MtsClimate):
         )
         self.binary_sensor_window = manager.build_binary_sensor_window()
 
-    @property
-    def scheduleBMode(self):
-        return self.extra_state_attributes.get(mc.KEY_SCHEDULEBMODE)
-
-    @scheduleBMode.setter
-    def scheduleBMode(self, value):
-        if value:
-            self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = value
-        else:
-            self.extra_state_attributes.pop(mc.KEY_SCHEDULEBMODE)
-
     # interface: MtsClimate
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -246,6 +235,10 @@ class Mts100Climate(MtsClimate):
 
         self.flush_state()
 
+    # interface: self
+    def update_scheduleb_mode(self, mode):
+        self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
+        self.schedule._schedule_entry_count = mode
 
 class Mts100SetPointNumber(MtsSetPointNumber):
     """

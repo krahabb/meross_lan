@@ -30,10 +30,8 @@ HUB_SUBDEVICES_ENTITIES: dict[str, MerossEntityTypesList] = {}
 # list of exclusions from the general rule which states that
 # every entity must be 'available' once the device is loaded
 # this might be due to malformed traces which miss some info
-# and so cannot properly 'online' the releated entity
-UNAVAILABLE_ENTITIES = {
-    r"calendar.*",  # a lot of mts schedules are not available in traces so far...
-}
+# and so cannot properly 'online' the releated entity. Use with care!
+UNAVAILABLE_ENTITIES = {}
 
 for entity_domain in (
     "calendar",

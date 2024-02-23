@@ -850,7 +850,8 @@ class MTS100SubDevice(MerossSubDevice):
 
         climate = self.climate
 
-        climate.scheduleBMode = p_all.get(mc.KEY_SCHEDULEBMODE)
+        if mc.KEY_SCHEDULEBMODE in p_all:
+            climate.update_scheduleb_mode(p_all[mc.KEY_SCHEDULEBMODE])
 
         if isinstance(p_mode := p_all.get(mc.KEY_MODE), dict):
             climate._mts_mode = p_mode[mc.KEY_STATE]
