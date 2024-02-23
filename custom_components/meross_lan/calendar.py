@@ -664,5 +664,6 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         else:
             native_schedule = payload
         self.extra_state_attributes[self.key_namespace] = str(native_schedule)
+        self._native_schedule = native_schedule
         self._build_internal_schedule()
         self.flush_state()
