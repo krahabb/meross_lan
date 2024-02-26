@@ -5,8 +5,8 @@ import typing
 from homeassistant.components import climate
 
 from . import meross_entity as me
-from .merossclient import const as mc  # mEROSS cONST
-from .number import MLConfigNumber
+from .helpers import reverse_lookup
+from .merossclient import const as mc
 from .select import MtsTrackedSensor
 from .sensor import UnitOfTemperature
 
@@ -16,9 +16,9 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .binary_sensor import MLBinarySensor
     from .calendar import MtsSchedule
     from .meross_device import MerossDeviceBase
+    from .number import MtsSetPointNumber, MtsTemperatureNumber
 
 
 async def async_setup_entry(
@@ -33,8 +33,8 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     ATTR_TEMPERATURE: Final = climate.ATTR_TEMPERATURE
     TEMP_CELSIUS: Final = UnitOfTemperature.CELSIUS
 
-    HVACAction = climate.HVACAction
-    HVACMode = climate.HVACMode
+    HVACAction: Final = climate.HVACAction
+    HVACMode: Final = climate.HVACMode
 
     PRESET_CUSTOM: Final = "custom"
     PRESET_COMFORT: Final = "comfort"
@@ -42,49 +42,69 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PRESET_AWAY: Final = "away"
     PRESET_AUTO: Final = "auto"
 
+    namespace: ClassVar[str]
+    key_namespace: ClassVar[str]
+    device_scale: ClassVar[float] = mc.MTS_TEMP_SCALE
+
+    MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
+    """maps device 'mode' value to the HA climate.preset_mode"""
+    MTS_MODE_TO_TEMPERATUREKEY_MAP: ClassVar[dict[int | None, str]]
+    """maps the current mts mode to the name of temperature setpoint key"""
+    PRESET_TO_ICON_MAP: Final = {
+        PRESET_COMFORT: "mdi:sun-thermometer",
+        PRESET_SLEEP: "mdi:power-sleep",
+        PRESET_AWAY: "mdi:bag-checked",
+    }
+    """lookups used in MtsSetpointNumber to map a pretty icon to the setpoint entity"""
+
     manager: MerossDeviceBase
-    binary_sensor_window: Final[MLBinarySensor]
-    number_adjust_temperature: Final[MLConfigNumber]
+    number_adjust_temperature: Final[MtsTemperatureNumber]
     number_away_temperature: Final[MtsSetPointNumber]
     number_comfort_temperature: Final[MtsSetPointNumber]
     number_sleep_temperature: Final[MtsSetPointNumber]
     schedule: Final[MtsSchedule]
     select_tracked_sensor: Final[MtsTrackedSensor]
 
-    _attr_preset_modes: Final = [
+    # HA core entity attributes:
+    current_temperature: float | None
+    hvac_action: climate.HVACAction | None
+    hvac_mode: climate.HVACMode | None
+    hvac_modes: list[climate.HVACMode] = [HVACMode.OFF, HVACMode.HEAT]
+    max_temp: float
+    min_temp: float
+    preset_mode: str | None
+    preset_modes: list[str] = [
         PRESET_CUSTOM,
         PRESET_COMFORT,
         PRESET_SLEEP,
         PRESET_AWAY,
         PRESET_AUTO,
     ]
-    _attr_supported_features: Final = (
+    supported_features: climate.ClimateEntityFeature = (
         climate.ClimateEntityFeature.PRESET_MODE
         | climate.ClimateEntityFeature.TARGET_TEMPERATURE
+        | getattr(climate.ClimateEntityFeature, "TURN_OFF", 0)
+        | getattr(climate.ClimateEntityFeature, "TURN_ON", 0)
     )
-
-    # these mappings are defined in inherited MtsXXX
-    # they'll map between mts device 'mode' and HA 'preset'
-    MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int, str]]
-    PRESET_TO_TEMPERATUREKEY_MAP: ClassVar[dict[str, str]]
-    # in general Mts thermostats are only heating..MTS200 with 'summer mode' could override this
-    MTS_HVAC_MODES: Final = [HVACMode.OFF, HVACMode.HEAT]
+    _enable_turn_on_off_backwards_compatibility = False
+    target_temperature: float | None
+    target_temperature_step: float = 0.5
+    temperature_unit: str = TEMP_CELSIUS
+    translation_key = "mts_climate"
 
     __slots__ = (
-        "_attr_current_temperature",
-        "_attr_hvac_action",
-        "_attr_hvac_mode",
-        "_attr_hvac_modes",
-        "_attr_max_temp",
-        "_attr_min_temp",
-        "_attr_preset_mode",
-        "_attr_target_temperature",
+        "current_temperature",
+        "hvac_action",
+        "hvac_mode",
+        "max_temp",
+        "min_temp",
+        "preset_mode",
+        "target_temperature",
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
         "_mts_adjust_offset",
         "_mts_adjusted_temperature",
-        "binary_sensor_window",
         "number_adjust_temperature",
         "number_comfort_temperature",
         "number_sleep_temperature",
@@ -97,27 +117,24 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self,
         manager: MerossDeviceBase,
         channel: object,
-        binary_sensor_window: MLBinarySensor,
-        number_adjust_temperature: MLConfigNumber,
+        adjust_number_class: typing.Type[MtsTemperatureNumber],
         preset_number_class: typing.Type[MtsSetPointNumber],
         calendar_class: typing.Type[MtsSchedule],
     ):
-        self._attr_current_temperature = None
-        self._attr_hvac_action = None
-        self._attr_hvac_mode = None
-        self._attr_hvac_modes = self.MTS_HVAC_MODES
-        self._attr_max_temp = 35
-        self._attr_min_temp = 5
-        self._attr_preset_mode = None
-        self._attr_target_temperature = None
+        self.current_temperature = None
+        self.hvac_action = None
+        self.hvac_mode = None
+        self.max_temp = 35
+        self.min_temp = 5
+        self.preset_mode = None
+        self.target_temperature = None
         self._mts_active = None
         self._mts_mode: int | None = None
         self._mts_onoff: int | None = None
         self._mts_adjust_offset = 0
         self._mts_adjusted_temperature = {}
-        super().__init__(manager, channel, None, None)
-        self.binary_sensor_window = binary_sensor_window
-        self.number_adjust_temperature = number_adjust_temperature
+        super().__init__(manager, channel)
+        self.number_adjust_temperature = adjust_number_class(self)  # type: ignore
         self.number_away_temperature = preset_number_class(self, MtsClimate.PRESET_AWAY)
         self.number_comfort_temperature = preset_number_class(
             self, MtsClimate.PRESET_COMFORT
@@ -130,161 +147,64 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     # interface: MerossEntity
     async def async_shutdown(self):
+        await super().async_shutdown()
         self.select_tracked_sensor = None  # type: ignore
         self.schedule = None  # type: ignore
         self.number_sleep_temperature = None  # type: ignore
         self.number_comfort_temperature = None  # type: ignore
         self.number_away_temperature = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
-        self.binary_sensor_window = None  # type: ignore
-        await super().async_shutdown()
 
     def set_unavailable(self):
         self._mts_active = None
         self._mts_mode = None
         self._mts_onoff = None
         self._mts_adjusted_temperature = {}
+        self.preset_mode = None
+        self.hvac_action = None
+        self.hvac_mode = None
         super().set_unavailable()
 
+    def flush_state(self):
+        self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
+        super().flush_state()
+        self.schedule.flush_state()
+
     # interface: ClimateEntity
-    @property
-    def supported_features(self):
-        return self._attr_supported_features
-
-    @property
-    def temperature_unit(self):
-        return MtsClimate.TEMP_CELSIUS
-
-    @property
-    def min_temp(self):
-        return self._attr_min_temp
-
-    @property
-    def max_temp(self):
-        return self._attr_max_temp
-
-    @property
-    def hvac_modes(self):
-        return self._attr_hvac_modes
-
-    @property
-    def hvac_mode(self):
-        return self._attr_hvac_mode
-
-    @property
-    def hvac_action(self):
-        return self._attr_hvac_action
-
-    @property
-    def current_temperature(self):
-        return self._attr_current_temperature
-
-    @property
-    def target_temperature(self):
-        return self._attr_target_temperature
-
-    @property
-    def target_temperature_step(self):
-        return 0.5
-
-    @property
-    def preset_modes(self):
-        return self._attr_preset_modes
-
-    @property
-    def preset_mode(self):
-        return self._attr_preset_mode
-
-    @property
-    def translation_key(self):
-        return "mts_climate"
-
     async def async_turn_on(self):
         await self.async_request_onoff(1)
 
     async def async_turn_off(self):
         await self.async_request_onoff(0)
 
-    async def async_set_preset_mode(self, preset_mode: str):
+    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
         raise NotImplementedError()
+
+    async def async_set_preset_mode(self, preset_mode: str):
+        mode = reverse_lookup(self.MTS_MODE_TO_PRESET_MAP, preset_mode)
+        if mode is not None:
+            await self.async_request_mode(mode)
 
     async def async_set_temperature(self, **kwargs):
         raise NotImplementedError()
 
     # interface: self
+    async def async_request_mode(self, mode: int):
+        """Implements the protocol to set the Meross thermostat mode"""
+        raise NotImplementedError()
+
     async def async_request_onoff(self, onoff: int):
+        """Implements the protocol to turn on the thermostat"""
         raise NotImplementedError()
 
     def is_mts_scheduled(self):
         raise NotImplementedError()
 
-    def update_mts_state(self):
-        self._attr_state = self._attr_hvac_mode if self.manager.online else None
-        if self._hass_connected:
-            self._async_write_ha_state()
-        self.schedule.update_mts_state()
-
-
-class MtsSetPointNumber(MLConfigNumber):
-    """
-    Helper entity to configure MTS (thermostats) setpoints
-    AKA: Heat(comfort) - Cool(sleep) - Eco(away)
-    """
-
-    PRESET_TO_ICON_MAP: Final = {
-        MtsClimate.PRESET_COMFORT: "mdi:sun-thermometer",
-        MtsClimate.PRESET_SLEEP: "mdi:power-sleep",
-        MtsClimate.PRESET_AWAY: "mdi:bag-checked",
-    }
-
-    __slots__ = ("climate",)
-
-    def __init__(self, climate: MtsClimate, preset_mode: str):
-        self.climate = climate
-        self._preset_mode = preset_mode
-        self.key_value = climate.PRESET_TO_TEMPERATUREKEY_MAP[preset_mode]
-        self._attr_icon = MtsSetPointNumber.PRESET_TO_ICON_MAP[preset_mode]
-        self._attr_name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
-        super().__init__(
-            climate.manager,
-            climate.channel,
-            f"config_{mc.KEY_TEMPERATURE}_{self.key_value}",
-            MLConfigNumber.DeviceClass.TEMPERATURE,
-        )
-
-    @property
-    def native_max_value(self):
-        return self.climate._attr_max_temp
-
-    @property
-    def native_min_value(self):
-        return self.climate._attr_min_temp
-
-    @property
-    def native_step(self):
-        return self.climate.target_temperature_step
-
-    @property
-    def native_unit_of_measurement(self):
-        return MtsClimate.TEMP_CELSIUS
-
-    @property
-    def device_scale(self):
-        return mc.MTS_TEMP_SCALE
-
-    async def async_request(self, device_value):
-        if response := await super().async_request(device_value):
-            # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
-            # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
-            # make sure the climate state is consistent and all the correct roundings
-            # are processed when changing any of the presets
-            # not sure about mts200 replies..but we're optimist
-            key_namespace = self.key_namespace
-            payload = response[mc.KEY_PAYLOAD]
-            if key_namespace in payload:
-                # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)
-                getattr(self.climate, f"_parse_{key_namespace}")(
-                    payload[key_namespace][0]
-                )
-
-        return response
+    def _parse(self, p_temperature: dict):
+        """
+        This the handler for the default payload carrying the gross state of the climate entity.
+        It is dynamically binded to the self.namespace NamespaceHandler on __init__.
+        By convention every implementation used to define this as _parse_'key_namespace' but
+        it is not needed anymore since that was due to the legacy message handle/parse engine
+        """
+        raise NotImplementedError()

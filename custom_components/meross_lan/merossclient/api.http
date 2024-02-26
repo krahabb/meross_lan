@@ -1,60 +1,84 @@
-###
+###   use REST Client extension to enable file features
 ###   device api: exchange the same message payload as per the mqtt protocol
 ###   "sign" = md5(messageId + key + timestamp)
 
-POST http://192.168.10.13/config HTTP/1.1
+POST http://192.168.1.156/config HTTP/1.1
 Content-Type: application/json
 
 {
     "header":{
-        "from":"",
+        "from":"pippo",
+        "messageId":"",
+        "method":"SET",
+        "namespace":"Appliance.Control.Multiple",
+        "payloadVersion":1,
+        "sign":"101e90ad792dde44306956cdcb50bdd4",
+        "timestamp": 1701342117
+        },
+    "payload":{
+      "multiple": [
+        {
+            "header":{
+                "from":"pippo",
+                "messageId":"",
+                "method":"GET",
+                "namespace":"Appliance.System.All",
+                "payloadVersion":1,
+                "sign":"101e90ad792dde44306956cdcb50bdd4",
+                "timestamp": 1701342117
+                },
+            "payload":{
+              "all": {}
+            }
+        },
+        {
+            "header":{
+                "from":"pippo",
+                "messageId":"",
+                "method":"GET",
+                "namespace":"Appliance.System.Ability",
+                "payloadVersion":1,
+                "sign":"101e90ad792dde44306956cdcb50bdd4",
+                "timestamp": 1701342117
+                },
+            "payload":{
+              "ability": {}
+            }
+        }
+      ]
+    }
+}
+###
+POST http://192.168.1.156/config HTTP/1.1
+Content-Type: application/json
+
+{
+    "header":{
+        "from":"pippo",
         "messageId":"",
         "method":"GET",
-        "namespace":"Appliance.Hub.Mts100.All",
+        "namespace":"Appliance.System.All",
         "payloadVersion":1,
-        "sign":"b2f7be905c2e36511b5207dc6b313d02",
-        "timestamp": 1622314429
+        "sign":"101e90ad792dde44306956cdcb50bdd4",
+        "timestamp": 1701342117
         },
     "payload":{
       "all": []
     }
 }
-
 ###
-POST http://192.168.10.21/config HTTP/1.1
+POST http://192.168.10.6/config HTTP/1.1
 Content-Type: application/json
 
-{
-    "header":{
-        "from":"",
-        "messageId":"1",
-        "method":"SET",
-        "namespace":"Appliance.Config.Key",
-        "payloadVersion":1,
-        "sign":"f3030ba98178e1afc9b47b97dad18221",
-        "timestamp":1617116856
-        },
-    "payload":{
-      "key":{
-        "gateway":{
-          "host": "192.168.10.11",
-          "port": 8883,
-          "secondHost": "192.168.10.11",
-          "secondPort": 8883
-        },
-        "key": "",
-        "userId": "0"
-      }
-    }
-}
+{"header": {"messageId": "71ace8c7e7864850a92b8e0365a9b5d1", "namespace": "Appliance.Control.Multiple", "method": "SET", "payloadVersion": 1, "from": "Meross", "timestamp": 1702240769, "timestampMs": 0, "sign": "47e3ba32647adc86fd657e4098cfd69c"}, "payload": {"multiple": [{"header": {"messageId": "776052a464094186a0fbf2a8ee5d1824", "namespace": "Appliance.System.All", "method": "GET", "payloadVersion": 1, "from": "Meross", "timestamp": 1702240769, "timestampMs": 0, "sign": "fb50118c0c328197dcc759d2c2f616ba"}, "payload": {"all": {}}}, {"header": {"messageId": "19b9c3f9d77040eca5d8dab1179257f1", "namespace": "Appliance.System.Debug", "method": "GET", "payloadVersion": 1, "from": "Meross", "timestamp": 1702240769, "timestampMs": 0, "sign": "ad27d3e9e88c685061132ea980e2a2fe"}, "payload": {"debug": {}}}, {"header": {"messageId": "fc4f79cb91164f37b5208e8647c45987", "namespace": "Appliance.System.DNDMode", "method": "GET", "payloadVersion": 1, "from": "Meross", "timestamp": 1702240769, "timestampMs": 0, "sign": "646d98db0901e45994e685412a2374e0"}, "payload": {"DNDMode": {}}}, {"header": {"messageId": "127b84c1868047e0a9efcd96665d1dc1", "namespace": "Appliance.Control.Electricity", "method": "GET", "payloadVersion": 1, "from": "Meross", "timestamp": 1702240769, "timestampMs": 0, "sign": "ea2faaa3a7a1d268b2e842a94d99ee44"}, "payload": {"electricity": {}}}]}}
 ###
-POST http://192.168.10.14/config HTTP/1.1
+POST http://192.168.10.12/config HTTP/1.1
 Content-Type: application/json
 
 {
     "header": {
         "messageId": "",
-        "namespace": "Appliance.Control.ToggleX",
+        "namespace": "Appliance.Control.TimerX",
         "method": "GET",
         "payloadVersion": 1,
         "from": "",
@@ -63,9 +87,43 @@ Content-Type: application/json
         "sign": "cfcd208495d565ef66e7dff9f98764da"
     },
     "payload": {
-        "togglex": [ { "channel": 1}]
+        "timerx": { "id": "n1jxtruoknvotm8a"}
     }
 }
+
+###
+POST http://192.168.10.12/config HTTP/1.1
+Content-Type: application/json
+
+{
+    "header": {
+        "messageId": "",
+        "namespace": "Appliance.Control.TimerX",
+        "method": "SET",
+        "payloadVersion": 1,
+        "from": "",
+        "timestamp": 0,
+        "timestampMs": 60,
+        "sign": "cfcd208495d565ef66e7dff9f98764da"
+    },
+    "payload": {
+        "timerx": {
+    "id": "n1jxtruoknvotm8a",
+    "alias": "",
+    "type": 0,
+    "enable": 0,
+    "channel": 0,
+    "createTime": 0,
+    "week": 0,
+    "time": -1,
+    "sunOffset": 0,
+    "duration": 0,
+    "extend": { "toggle": { "onoff": 1}
+    }
+  }
+    }
+}
+
 ###
 POST http://192.168.10.21/config HTTP/1.1
 Content-Type: application/json
@@ -113,7 +171,26 @@ Content-Type: application/json
 }
 
 ###
-POST http://192.168.10.14/config HTTP/1.1
+POST http://192.168.10.12/config HTTP/1.1
+Content-Type: application/json
+
+{
+    "header":{
+        "from":"a",
+        "messageId":"2",
+        "method":"GET",
+        "namespace":"Appliance.System.Debug",
+        "payloadVersion":1,
+        "sign":"c4081e97e9fa80a29f38f5a68a688c85",
+        "timestampMs": 80,
+        "timestamp": 1681722612
+        },
+    "payload":{ "all": {}
+    }
+}
+
+###
+POST http://192.168.1.70/config HTTP/1.1
 Content-Type: application/json
 
 {

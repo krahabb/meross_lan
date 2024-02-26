@@ -1,7 +1,8 @@
 """Constants for integration_blueprint tests."""
+
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import cloudapi, const as mc
 from custom_components.meross_lan.meross_profile import MerossCloudProfileStoreType
+from custom_components.meross_lan.merossclient import cloudapi, const as mc
 
 # Mock config data to be used across multiple tests
 MOCK_DEVICE_UUID = "01234567890123456789001122334455"
@@ -112,7 +113,7 @@ MOCK_DEVICE_CONFIG: mlc.DeviceConfigType = {
 
 MOCK_POLLING_PERIOD = 15.0
 MOCK_TRACE_TIMEOUT = 120
-MOCK_HTTP_RESPONSE_DELAY = 0.1
+MOCK_HTTP_RESPONSE_DELAY = 0.05
 
 # cloud profiles
 # setting mocks for a 'default' nicely working cloud profile
@@ -137,7 +138,11 @@ MOCK_PROFILE_CREDENTIALS_SIGNIN: cloudapi.MerossCloudCredentials = {
     mc.KEY_MQTTDOMAIN: "mqtt-1.meross_lan.local",
     mc.KEY_MFALOCKEXPIRE: 0,
 }
-MOCK_PROFILE_CONFIG: mlc.ProfileConfigType = MOCK_PROFILE_CREDENTIALS_SIGNIN | {mlc.CONF_ALLOW_MQTT_PUBLISH: True}  # type: ignore
+MOCK_PROFILE_CONFIG: mlc.ProfileConfigType = MOCK_PROFILE_CREDENTIALS_SIGNIN | {
+    mlc.CONF_SAVE_PASSWORD: False,
+    mlc.CONF_ALLOW_MQTT_PUBLISH: True,
+    mlc.CONF_CHECK_FIRMWARE_UPDATES: True,
+}  # type: ignore
 
 MOCK_PROFILE_MSS310_UUID = "00000000000000000000000000000001"
 MOCK_PROFILE_MSS310_DEVNAME_STORED = "Cloud plug"
@@ -148,7 +153,8 @@ MOCK_PROFILE_MSH300_UUID = "00000000000000000000000000000002"
 MOCK_PROFILE_MSH300_DEVNAME = "Cloud smart hub"
 MOCK_PROFILE_MSH300_DOMAIN = "mqtt-2.meross_lan.local"
 MOCK_PROFILE_MSH300_RESERVEDDOMAIN = "mqtt-1.meross_lan.local"
-MOCK_PROFILE_CLOUDAPI_DEVLIST: list[cloudapi.DeviceInfoType] = [
+# cloudapi mocked responses
+MOCK_CLOUDAPI_DEVICE_DEVLIST: list[cloudapi.DeviceInfoType] = [
     {
         "uuid": MOCK_PROFILE_MSS310_UUID,
         "onlineStatus": 1,
@@ -183,10 +189,23 @@ MOCK_PROFILE_CLOUDAPI_DEVLIST: list[cloudapi.DeviceInfoType] = [
         "iconType": 1,
         "domain": MOCK_PROFILE_MSH300_DOMAIN,
         "reservedDomain": MOCK_PROFILE_MSH300_RESERVEDDOMAIN,
-        "hardwareCapabilities": []
+        "hardwareCapabilities": [],
     },
 ]
-MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT: dict[str, list[cloudapi.SubDeviceInfoType]] = {
+MOCK_CLOUDAPI_DEVICE_LATESTVERSION: list[cloudapi.LatestVersionType] = [
+    {
+        "type": "mss310r",
+        "subType": "it",
+        "md5": "1708a3fa2163716da05f18c99160c6e7",
+        "url": "http:\/\/bucket-meross-static.meross.com\/production\/upload\/2019\/11\/28\/17\/22\/38\/201911281722388922034.bin",
+        "version": "2.1.4",
+        "alias": "",
+        "mcu": [],
+        "upgradeType": "01",
+        "description": "Release Notes:\n1. Enhanced the stability of connection;\n2. Fixed the issue that devices are often offline.",
+    },
+]
+MOCK_CLOUDAPI_HUB_GETSUBDEVICES: dict[str, list[cloudapi.SubDeviceInfoType]] = {
     MOCK_PROFILE_MSH300_UUID: [
         {
             "subDeviceId": "00001234",
@@ -204,6 +223,7 @@ MOCK_PROFILE_CLOUDAPI_SUBDEVICE_DICT: dict[str, list[cloudapi.SubDeviceInfoType]
         },
     ]
 }
+# MerossCloudProfile storage
 MOCK_PROFILE_STORE_KEY = f"{mlc.DOMAIN}.profile.{MOCK_PROFILE_ID}"
 MOCK_PROFILE_STORE_DEVICEINFO_DICT: dict[str, cloudapi.DeviceInfoType] = {
     MOCK_PROFILE_MSS310_UUID: {
@@ -222,20 +242,22 @@ MOCK_PROFILE_STORE_DEVICEINFO_DICT: dict[str, cloudapi.DeviceInfoType] = {
         "iconType": 1,
         "domain": MOCK_PROFILE_MSS310_DOMAIN,
         "reservedDomain": MOCK_PROFILE_MSS310_RESERVEDDOMAIN,
-        "hardwareCapabilities": []
+        "hardwareCapabilities": [],
     }
 }
 MOCK_PROFILE_STORE = {
     "version": 1,
-    "data": MerossCloudProfileStoreType({
-        "appId": "0",
-        "deviceInfo": MOCK_PROFILE_STORE_DEVICEINFO_DICT,
-        "deviceInfoTime": 0.0,
-        "latestVersion": [],
-        "latestVersionTime": 0.0,
-        "tokenRequestTime": 0.0,
-        mc.KEY_TOKEN: MOCK_PROFILE_TOKEN,
-    }),
+    "data": MerossCloudProfileStoreType(
+        {
+            "appId": "0",
+            "deviceInfo": MOCK_PROFILE_STORE_DEVICEINFO_DICT,
+            "deviceInfoTime": 0.0,
+            "latestVersion": [],
+            "latestVersionTime": 0.0,
+            "tokenRequestTime": 0.0,
+            mc.KEY_TOKEN: MOCK_PROFILE_TOKEN,
+        }
+    ),
 }
 # storage could contain more than one cloud profiles.
 # right now we just set our 'default' nice one

@@ -1,14 +1,13 @@
 """The Meross IoT local LAN integration."""
+
 from __future__ import annotations
 
-import asyncio
-from json import dumps as json_dumps, loads as json_loads
-from logging import DEBUG
+from importlib import import_module
+from time import time
 import typing
 
-from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HomeAssistant, SupportsResponse
+from homeassistant.core import HomeAssistant, SupportsResponse, callback
 from homeassistant.exceptions import (
     ConfigEntryError,
     ConfigEntryNotReady,
@@ -17,27 +16,32 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const as mlc
-from .helpers import LOGGER, ApiProfile, ConfigEntriesHelper, schedule_async_callback
+from .helpers import LOGGER, ConfigEntriesHelper, Loggable, schedule_async_callback
+from .helpers.manager import ApiProfile, ConfigEntryManager
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
 from .merossclient import (
     MEROSSDEBUG,
+    HostAddress,
+    MerossAckReply,
     MerossDeviceDescriptor,
-    build_message,
+    MerossPushReply,
+    MerossRequest,
+    cloudapi,
     const as mc,
     get_default_payload,
+    json_loads,
 )
-from .merossclient.cloudapi import async_cloudapi_logout_safe
 from .merossclient.httpclient import MerossHttpClient
 
 if typing.TYPE_CHECKING:
     from typing import Callable
 
-    from homeassistant.core import ServiceCall, ServiceResponse
     from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import ServiceCall, ServiceResponse
 
-    from .merossclient import KeyType, MerossMessageType, ResponseCallbackType
+    from .merossclient import MerossHeaderType, MerossMessage, MerossPayloadType
     from .merossclient.cloudapi import MerossCloudCredentials
 
 
@@ -45,6 +49,38 @@ else:
     # In order to avoid a static dependency we resolve these
     # at runtime only when mqtt is actually needed in code
     mqtt_async_publish = None
+
+
+DIGEST_INITIALIZERS = {
+    mc.KEY_DIFFUSER: (".devices.mod100", "DiffuserMixin"),
+    mc.KEY_GARAGEDOOR: (".cover", "GarageMixin"),
+    mc.KEY_LIGHT: (".light", "LightMixin"),
+    mc.KEY_THERMOSTAT: (".devices.thermostat", "ThermostatMixin"),
+    mc.KEY_SPRAY: (".select", "SprayMixin"),
+}
+
+MerossDevice.ENTITY_INITIALIZERS = {
+    mc.NS_APPLIANCE_CONFIG_OVERTEMP: (".devices.mss", "OverTempEnableSwitch"),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: (
+        ".devices.mss",
+        "ConsumptionConfigNamespaceHandler",
+    ),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (".devices.mss", "ConsumptionXSensor"),
+    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (
+        ".devices.mss",
+        "ElectricityNamespaceHandler",
+    ),
+    mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "MLFan"),
+    mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
+    mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (".switch", "PhysicalLockSwitch"),
+    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
+        ".devices.screenbrightness",
+        "ScreenBrightnessNamespaceHandler",
+    ),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (".cover", "MLRollerShutter"),
+    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
+    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
+}
 
 
 class HAMQTTConnection(MQTTConnection):
@@ -57,30 +93,34 @@ class HAMQTTConnection(MQTTConnection):
     )
 
     def __init__(self, api: MerossApi):
-        super().__init__(api, mlc.CONF_PROFILE_ID_LOCAL, ("homeassistant", 0))
+        super().__init__(
+            api,
+            HostAddress("homeassistant", 0),
+            mc.TOPIC_RESPONSE.format(mlc.DOMAIN),
+        )
         self._unsub_mqtt_subscribe: Callable | None = None
         self._unsub_mqtt_disconnected: Callable | None = None
         self._unsub_mqtt_connected: Callable | None = None
         self._mqtt_subscribing = False  # guard for asynchronous mqtt sub registration
         if MEROSSDEBUG:
-
+            # TODO : check bug in hass shutdown
             async def _async_random_disconnect():
                 self._unsub_random_disconnect = schedule_async_callback(
-                    ApiProfile.hass, 60, _async_random_disconnect
+                    MerossApi.hass, 60, _async_random_disconnect
                 )
                 if self._mqtt_subscribing:
                     return
                 elif self._unsub_mqtt_subscribe is None:
                     if MEROSSDEBUG.mqtt_random_connect():
-                        self.log(DEBUG, "random connect")
+                        self.log(self.DEBUG, "random connect")
                         await self.async_mqtt_subscribe()
                 else:
                     if MEROSSDEBUG.mqtt_random_disconnect():
-                        self.log(DEBUG, "random disconnect")
+                        self.log(self.DEBUG, "random disconnect")
                         await self.async_mqtt_unsubscribe()
 
             self._unsub_random_disconnect = schedule_async_callback(
-                ApiProfile.hass, 60, _async_random_disconnect
+                MerossApi.hass, 60, _async_random_disconnect
             )
         else:
             self._unsub_random_disconnect = None
@@ -93,82 +133,20 @@ class HAMQTTConnection(MQTTConnection):
         await self.async_mqtt_unsubscribe()
         await super().async_shutdown()
 
-    def mqtt_publish(
+    @property
+    def is_cloud_connection(self):
+        return False
+
+    async def _async_mqtt_publish(
         self,
         device_id: str,
-        namespace: str,
-        method: str,
-        payload: dict,
-        key: KeyType = None,
-        response_callback: ResponseCallbackType | None = None,
-        messageid: str | None = None,
-    ) -> asyncio.Future:
-        return ApiProfile.hass.async_create_task(
-            self.async_mqtt_publish(
-                device_id, namespace, method, payload, key, response_callback, messageid
-            )
-        )
-
-    async def async_mqtt_publish(
-        self,
-        device_id: str,
-        namespace: str,
-        method: str,
-        payload: dict,
-        key: KeyType = None,
-        response_callback: ResponseCallbackType | None = None,
-        messageid: str | None = None,
-    ):
-        if method in mc.METHOD_ACK_MAP.keys():
-            transaction = self._mqtt_transaction_init(
-                namespace, method, response_callback
-            )
-            messageid = transaction.messageid
-        else:
-            transaction = None
-
-        self.log(
-            DEBUG,
-            "MQTT PUBLISH device_id:(%s) method:(%s) namespace:(%s)",
-            device_id,
-            method,
-            namespace,
-        )
+        request: MerossMessage,
+    ) -> tuple[str, int]:
         await mqtt_async_publish(
-            ApiProfile.hass,
-            mc.TOPIC_REQUEST.format(device_id),
-            json_dumps(
-                build_message(
-                    namespace,
-                    method,
-                    payload,
-                    key,
-                    mc.TOPIC_RESPONSE.format(device_id),
-                    messageid,
-                )
-            ),
+            MerossApi.hass, mc.TOPIC_REQUEST.format(device_id), request.json()
         )
-        if transaction:
-            return await self._async_mqtt_transaction_wait(transaction)  # type: ignore
-
-    async def async_mqtt_publish_reply(
-        self,
-        device_id: str,
-        message: MerossMessageType
-    ):
-        self.log(
-            DEBUG,
-            "MQTT PUBLISH REPLY device_id:(%s) method:(%s) namespace:(%s)",
-            device_id,
-            message[mc.KEY_HEADER][mc.KEY_METHOD],
-            message[mc.KEY_HEADER][mc.KEY_NAMESPACE],
-        )
-        await mqtt_async_publish(
-            ApiProfile.hass,
-            mc.TOPIC_REQUEST.format(device_id),
-            json_dumps(message)
-        )
-
+        self._mqtt_published()
+        return self._MQTT_PUBLISH, self.DEFAULT_RESPONSE_TIMEOUT
 
     # interface: self
     @property
@@ -184,7 +162,7 @@ class HAMQTTConnection(MQTTConnection):
 
                 global mqtt_async_publish
                 mqtt_async_publish = mqtt.async_publish
-                hass = ApiProfile.hass
+                hass = MerossApi.hass
                 self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
                     hass, mc.TOPIC_DISCOVERY, self.async_mqtt_message
                 )
@@ -194,14 +172,6 @@ class HAMQTTConnection(MQTTConnection):
                 self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
                     hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
                 )
-                # try to also get the HA broker conf
-                with self.exception_warning(
-                    "async_mqtt_subscribe: recovering broker conf"
-                ):
-                    mqtt_data = mqtt.get_mqtt_data(hass)
-                    if mqtt_data and mqtt_data.client:
-                        conf = mqtt_data.client.conf
-                        self.broker = (conf[mqtt.CONF_BROKER], conf[mqtt.CONF_PORT])
                 if mqtt.is_connected(hass):
                     self._mqtt_connected()
             self._mqtt_subscribing = False
@@ -221,6 +191,118 @@ class HAMQTTConnection(MQTTConnection):
         if self._mqtt_is_connected:
             self._mqtt_disconnected()
 
+    @callback
+    def _mqtt_connected(self):
+        """called when the underlying mqtt.Client connects to the broker"""
+        # try to get the HA broker host address
+        with self.exception_warning("async_mqtt_subscribe: recovering broker conf"):
+            from homeassistant.components import mqtt
+
+            mqtt_data = mqtt.get_mqtt_data(MerossApi.hass)
+            if mqtt_data and mqtt_data.client:
+                conf = mqtt_data.client.conf
+                self.broker.host = conf[mqtt.CONF_BROKER]
+                self.broker.port = conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT)
+                self.configure_logger()
+
+        super()._mqtt_connected()
+
+    # these handlers are used to manage session establishment on MQTT.
+    # They are typically sent by the device when they connect to the broker
+    # and they are used to mimic the official Meross brokers session managment
+    # They're implemented at the MQTTConnection level since the device might not be
+    # configured yet in meross_lan. When the device is configured, we still manage
+    # these 'session messages' here but we'll forward them to the device too in order
+    # to trigger all of the device connection management.
+    async def _handle_Appliance_Control_Bind(
+        self: MQTTConnection,
+        device_id: str,
+        header: MerossHeaderType,
+        payload: MerossPayloadType,
+    ):
+        # this transaction appears when a device (firstly)
+        # connects to an MQTT broker and tries to 'register'
+        # itself. Our guess right now is to just SETACK
+        # trying fix #346. When building the reply, the
+        # meross broker sets the from field as
+        # "from": "cloud/sub/kIGFRwvtAQP4sbXv/58c35d719350a689"
+        # and the fields look like hashes or something since
+        # they change between attempts (hashed broker id ?)
+        # At any rate I don't have a clue on how to properly
+        # replicate this and the "from" field is set as ususal
+
+        if device_id in MerossApi.devices:
+            if device := MerossApi.devices[device_id]:
+                key = device.key
+            else:  # device not loaded...
+                helper = ConfigEntriesHelper(MerossApi.hass)
+                device_entry = helper.get_config_entry(device_id)
+                if device_entry:
+                    key = device_entry.data.get(mlc.CONF_KEY) or ""
+                else:
+                    key = self.profile.key
+        else:
+            key = self.profile.key
+        if header[mc.KEY_METHOD] == mc.METHOD_SET:
+            await self.async_mqtt_publish(
+                device_id,
+                MerossAckReply(
+                    key,
+                    header,
+                    {},
+                    mc.TOPIC_RESPONSE.format(device_id),
+                ),
+            )
+        # keep forwarding the message
+        return False
+
+    async def _handle_Appliance_Control_ConsumptionConfig(
+        self: MQTTConnection,
+        device_id: str,
+        header: MerossHeaderType,
+        payload: MerossPayloadType,
+    ):
+        # this message is published by mss switches
+        # and it appears newer mss315 could abort their connection
+        # if not replied (see #346)
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
+            await self.async_mqtt_publish(
+                device_id,
+                MerossPushReply(header, payload),
+            )
+        # keep forwarding the message
+        return False
+
+    async def _handle_Appliance_System_Clock(
+        self: MQTTConnection,
+        device_id: str,
+        header: MerossHeaderType,
+        payload: MerossPayloadType,
+    ):
+        # this is part of initial flow over MQTT
+        # we'll try to set the correct time in order to avoid
+        # having NTP opened to setup the device
+        # Note: I actually see this NS only on mss310 plugs
+        # (msl120j bulb doesnt have it)
+        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
+            await self.async_mqtt_publish(
+                device_id,
+                MerossPushReply(
+                    header,
+                    {mc.KEY_CLOCK: {mc.KEY_TIMESTAMP: int(time())}},
+                ),
+            )
+        # keep forwarding the message
+        return False
+
+
+HAMQTTConnection.SESSION_HANDLERS = {
+    mc.NS_APPLIANCE_CONTROL_BIND: HAMQTTConnection._handle_Appliance_Control_Bind,
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
+    mc.NS_APPLIANCE_SYSTEM_CLOCK: HAMQTTConnection._handle_Appliance_System_Clock,
+    mc.NS_APPLIANCE_SYSTEM_ONLINE: MQTTConnection._handle_Appliance_System_Online,
+}
+
 
 class MerossApi(ApiProfile):
     """
@@ -238,25 +320,29 @@ class MerossApi(ApiProfile):
         """
         Set up the MerossApi component.
         'Our' truth singleton is saved in hass.data[DOMAIN] and
-        ApiProfile.api is just a cache to speed access
+        MerossApi.api is just a cache to speed access
         """
-        if mlc.DOMAIN not in hass.data:
-            hass.data[mlc.DOMAIN] = api = MerossApi(hass)
+        if not (api := Loggable.api):
+            Loggable.api = hass.data[mlc.DOMAIN] = api = MerossApi(hass)
+            Loggable.hass = hass
 
             async def _async_unload_merossapi(_event) -> None:
-                await api.async_shutdown()
+                for device in MerossApi.active_devices():
+                    await device.async_shutdown()
+                for profile in MerossApi.active_profiles():
+                    await profile.async_shutdown()
+                await api.async_terminate()
+                Loggable.api = None  # type: ignore
+                Loggable.hass = None  # type: ignore
                 hass.data.pop(mlc.DOMAIN)
 
             hass.bus.async_listen_once(
                 EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi
             )
-            return api
-        return hass.data[mlc.DOMAIN]
+        return api
 
     def __init__(self, hass: HomeAssistant):
-        ApiProfile.hass = hass
-        ApiProfile.api = self
-        super().__init__(mlc.CONF_PROFILE_ID_LOCAL)
+        super().__init__(mlc.CONF_PROFILE_ID_LOCAL, None)
         self._deviceclasses: dict[str, type] = {}
         self._mqtt_connection: HAMQTTConnection | None = None
 
@@ -270,7 +356,7 @@ class MerossApi(ApiProfile):
             else:
                 self.devices[unique_id[0]] = None
 
-        async def async_service_request(service_call: ServiceCall) -> ServiceResponse:
+        async def _async_service_request(service_call: ServiceCall) -> ServiceResponse:
             service_response = {}
             device_id = service_call.data.get(mlc.CONF_DEVICE_ID)
             host = service_call.data.get(mlc.CONF_HOST)
@@ -283,6 +369,7 @@ class MerossApi(ApiProfile):
             )
             namespace = service_call.data[mc.KEY_NAMESPACE]
             method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
+            key = service_call.data.get(mlc.CONF_KEY)
             if mc.KEY_PAYLOAD in service_call.data:
                 try:
                     payload = json_loads(service_call.data[mc.KEY_PAYLOAD])
@@ -292,57 +379,76 @@ class MerossApi(ApiProfile):
                 payload = get_default_payload(namespace)
             else:
                 payload = {}  # likely failing the request...
-            key = service_call.data.get(mlc.CONF_KEY, self.key)
-
-            def response_callback(acknowledge: bool, header, payload):
-                service_response["response"] = {
-                    mc.KEY_HEADER: header,
-                    mc.KEY_PAYLOAD: payload,
-                }
 
             async def _async_device_request(device: MerossDevice):
-                if protocol is mlc.CONF_PROTOCOL_MQTT:
-                    return await device.async_mqtt_request(
-                        namespace, method, payload, response_callback
+                service_response["request"] = request = MerossRequest(
+                    key or device.key,
+                    namespace,
+                    method,
+                    payload,
+                    device._topic_response,
+                )
+                service_response["response"] = (
+                    await device.async_mqtt_request_raw(request)
+                    if protocol is mlc.CONF_PROTOCOL_MQTT
+                    else (
+                        await device.async_http_request_raw(request)
+                        if protocol is mlc.CONF_PROTOCOL_HTTP
+                        else await device.async_request_raw(request)
                     )
-                elif protocol is mlc.CONF_PROTOCOL_HTTP:
-                    return await device.async_http_request(
-                        namespace, method, payload, response_callback
-                    )
-                else:
-                    return await device.async_request(
-                        namespace, method, payload, response_callback
-                    )
+                ) or {}
+                return service_response
 
             if device_id:
                 if device := self.devices.get(device_id):
-                    await _async_device_request(device)
-                    return service_response
+                    return await _async_device_request(device)
                 if (
                     protocol is not mlc.CONF_PROTOCOL_HTTP
                     and (mqtt_connection := self._mqtt_connection)
                     and mqtt_connection.mqtt_is_connected
                 ):
-                    await mqtt_connection.async_mqtt_publish(
-                        device_id,
+                    service_response["request"] = request = MerossRequest(
+                        key or self.key,
                         namespace,
                         method,
                         payload,
-                        key,
-                        response_callback,
+                        mqtt_connection.topic_response,
+                    )
+                    service_response["response"] = (
+                        await mqtt_connection.async_mqtt_publish(device_id, request)
+                        or {}
                     )
                     return service_response
 
             if host:
                 for device in self.active_devices():
                     if device.host == host:
-                        await _async_device_request(device)
-                        return service_response
+                        return await _async_device_request(device)
 
                 if protocol is not mlc.CONF_PROTOCOL_MQTT:
-                    service_response["response"] = await self.async_http_request(
-                        host, namespace, method, payload, key
+                    service_response["request"] = request = MerossRequest(
+                        key or self.key,
+                        namespace,
+                        method,
+                        payload,
+                        mc.MANUFACTURER,
                     )
+                    try:
+                        service_response["response"] = (
+                            await MerossHttpClient(
+                                host,
+                                key or self.key,
+                                async_get_clientsession(self.hass),
+                                self,  # type: ignore (self almost duck-compatible with logging.Logger)
+                                self.VERBOSE,
+                            ).async_request_message(request)
+                            or {}
+                        )
+                    except Exception as exception:
+                        service_response["exception"] = (
+                            f"{exception.__class__.__name__}({str(exception)})"
+                        )
+
                     return service_response
 
             raise HomeAssistantError(
@@ -352,23 +458,25 @@ class MerossApi(ApiProfile):
         hass.services.async_register(
             mlc.DOMAIN,
             mlc.SERVICE_REQUEST,
-            async_service_request,
+            _async_service_request,
             supports_response=SupportsResponse.OPTIONAL,
         )
         return
 
-    # interface: EntityManager
+    # interface: ConfigEntryManager
     async def async_shutdown(self):
-        if self._mqtt_connection:
-            await self._mqtt_connection.async_shutdown()
-            self._mqtt_connection = None
-        for device in self.active_devices():
-            await device.async_shutdown()
-        for profile in self.active_profiles():
-            await profile.async_shutdown()
-        await super().async_shutdown()
-        ApiProfile.hass = None  # type: ignore
-        ApiProfile.api = None  # type: ignore
+        # This is the base entry point when the config entry (MQTT Hub) is unloaded
+        # but we want to actually preserve some of our state since MerossApi provides
+        # static services to the whole component and we want to preserve them even
+        # when unloading the entry.
+        # We're so trying to just destroy the config related state (entities for instance)
+        # while preserving our mqtt_connection and device linking.
+        # That's a risky mess
+        # for real shutdown there's self.async_terminate
+        await ConfigEntryManager.async_shutdown(self)
+
+    def get_logger_name(self) -> str:
+        return "api"
 
     # interface: ApiProfile
     @property
@@ -379,6 +487,12 @@ class MerossApi(ApiProfile):
         self.mqtt_connection.attach(device)
 
     # interface: self
+    async def async_terminate(self):
+        """complete shutdown when HA exits. See self.async_shutdown for differences"""
+        self.hass.services.async_remove(mlc.DOMAIN, mlc.SERVICE_REQUEST)
+        await super().async_shutdown()
+        self._mqtt_connection = None
+
     def build_device(self, device_id: str, config_entry: ConfigEntry) -> MerossDevice:
         """
         scans device descriptor to build a 'slightly' specialized MerossDevice
@@ -388,9 +502,11 @@ class MerossApi(ApiProfile):
         if device_id != config_entry.data.get(mlc.CONF_DEVICE_ID):
             # shouldnt really happen: it means we have a 'critical' bug in our config entry/flow management
             # or that the config_entry was tampered
-            raise ConfigEntryError("Unrecoverable device id mismatch. 'ConfigEntry.unique_id' "
-                                   "does not match the configured 'device_id'. "
-                                   "Please delete the entry and reconfigure it")
+            raise ConfigEntryError(
+                "Unrecoverable device id mismatch. 'ConfigEntry.unique_id' "
+                "does not match the configured 'device_id'. "
+                "Please delete the entry and reconfigure it"
+            )
         descriptor = MerossDeviceDescriptor(config_entry.data.get(mlc.CONF_PAYLOAD))
         if device_id != descriptor.uuid:
             # this could happen (#341 raised the suspect) if a working device
@@ -398,9 +514,11 @@ class MerossApi(ApiProfile):
             # the mismatch (the issue appears as the device usually keeps updating
             # the config_entry data from live communication). This behavior is being
             # fixed in 4.5.0 so that devices don't update wrong configurations 'in the wild'
-            raise ConfigEntryError("Configuration data mismatch. Please refresh "
-                                   "the configuration by hitting 'Configure' "
-                                   "in the integration configuration page")
+            raise ConfigEntryError(
+                "Configuration data mismatch. Please refresh "
+                "the configuration by hitting 'Configure' "
+                "in the integration configuration page"
+            )
 
         ability = descriptor.ability
         digest = descriptor.digest
@@ -429,52 +547,18 @@ class MerossApi(ApiProfile):
             from .switch import ToggleMixin
 
             mixin_classes.append(ToggleMixin)
-        # check MP3 before light since (HP110A) LightMixin
-        # need to be overriden a bit for effect list
-        if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
-            from .media_player import Mp3Mixin
 
-            mixin_classes.append(Mp3Mixin)
-        if mc.KEY_LIGHT in digest:
-            from .light import LightMixin
+        for key_digest in digest:
+            if key_digest in DIGEST_INITIALIZERS:
+                init_descriptor = DIGEST_INITIALIZERS[key_digest]
+                with self.exception_warning(
+                    "initializing digest(%s) mixin", key_digest
+                ):
+                    module = import_module(
+                        init_descriptor[0], "custom_components.meross_lan"
+                    )
+                    mixin_classes.append(getattr(module, init_descriptor[1]))
 
-            mixin_classes.append(LightMixin)
-        if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
-            from .devices.mss import ElectricityMixin
-
-            mixin_classes.append(ElectricityMixin)
-        if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
-            from .devices.mss import ConsumptionXMixin
-
-            mixin_classes.append(ConsumptionXMixin)
-        if mc.NS_APPLIANCE_CONFIG_OVERTEMP in ability:
-            from .devices.mss import OverTempMixin
-
-            mixin_classes.append(OverTempMixin)
-        if mc.KEY_SPRAY in digest:
-            from .select import SprayMixin
-
-            mixin_classes.append(SprayMixin)
-        if mc.KEY_GARAGEDOOR in digest:
-            from .cover import GarageMixin
-
-            mixin_classes.append(GarageMixin)
-        if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
-            from .cover import RollerShutterMixin
-
-            mixin_classes.append(RollerShutterMixin)
-        if mc.KEY_THERMOSTAT in digest:
-            from .devices.mts200 import ThermostatMixin
-
-            mixin_classes.append(ThermostatMixin)
-        if mc.KEY_DIFFUSER in digest:
-            from .devices.mod100 import DiffuserMixin
-
-            mixin_classes.append(DiffuserMixin)
-        if mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS in ability:
-            from .devices.mts200 import ScreenBrightnessMixin
-
-            mixin_classes.append(ScreenBrightnessMixin)
         # We must be careful when ordering the mixin and leave MerossDevice as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.
         # see https://github.com/albertogeniola/MerossIot/blob/0.4.X.X/meross_iot/device_factory.py
@@ -498,43 +582,20 @@ class MerossApi(ApiProfile):
             self._mqtt_connection = mqtt_connection = HAMQTTConnection(self)
         return mqtt_connection
 
-    async def async_http_request(
-        self,
-        host: str,
-        namespace: str,
-        method: str,
-        payload: dict,
-        key: KeyType = None,
-    ):
-        with self.exception_warning("async_http_request"):
-            _httpclient: MerossHttpClient = getattr(self, "_httpclient", None)  # type: ignore
-            if _httpclient:
-                _httpclient.host = host
-                _httpclient.key = key
-            else:
-                self._httpclient = _httpclient = MerossHttpClient(
-                    host, key, async_get_clientsession(self.hass), LOGGER
-                )
-            return await _httpclient.async_request(namespace, method, payload)
-        return None
-
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    """Set up Meross IoT local LAN from a config entry."""
+    LOGGER.debug("async_setup_entry { entry_id: %s }", config_entry.entry_id)
+
     unique_id = config_entry.unique_id
-    assert unique_id, "unique_id must be set"
-    LOGGER.debug(
-        "async_setup_entry { unique_id: %s, entry_id: %s }",
-        unique_id,
-        config_entry.entry_id,
-    )
+    assert unique_id, f"unique_id not set in {config_entry.entry_id}"
     api = MerossApi.api or MerossApi.get(hass)
 
     if unique_id == mlc.DOMAIN:
         # MQTT Hub entry
-        await api.entry_update_listener(hass, config_entry)
         if not await api.mqtt_connection.async_mqtt_subscribe():
             raise ConfigEntryNotReady("MQTT unavailable")
+        api.config_entry_id = config_entry.entry_id
+        await api.entry_update_listener(hass, config_entry)
         await api.async_setup_entry(hass, config_entry)
         return True
 
@@ -548,15 +609,14 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
             # this could happen when we add profile entries
             # after boot
             api.profiles[profile_id] = None
-        profile = MerossCloudProfile(config_entry)
+        profile = MerossCloudProfile(profile_id, config_entry)
         try:
-            await profile.async_start()
+            await profile.async_init()
             await profile.async_setup_entry(hass, config_entry)
             api.profiles[profile_id] = profile
             # 'link' the devices already initialized
             for device in api.active_devices():
-                if device.descriptor.userId == profile_id:
-                    profile.link(device)
+                profile.try_link(device)
             return True
         except Exception as error:
             await profile.async_shutdown()
@@ -573,32 +633,15 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     device = api.build_device(device_id, config_entry)
     try:
         await device.async_setup_entry(hass, config_entry)
-        device.start()
         api.devices[device_id] = device
         # this code needs to run after registering api.devices[device_id]
         # because of race conditions with profile entry loading
-        profile_id = device.descriptor.userId
-        if profile_id in api.profiles:
-            # the profile is somehow configured, either disabled or not
-            if profile := api.profiles[profile_id]:
-                profile.link(device)
+        for profile in api.active_profiles():
+            if profile.try_link(device):
+                break
         else:
-            # trigger a cloud profile discovery if we guess it reasonable
-            if profile_id and (config_entry.data.get(mlc.CONF_CLOUD_KEY) == device.key):
-                helper = ConfigEntriesHelper(hass)
-                flow_unique_id = f"profile.{profile_id}"
-                if not helper.get_config_flow(flow_unique_id):
-                    await hass.config_entries.flow.async_init(
-                        mlc.DOMAIN,
-                        context={
-                            "source": SOURCE_INTEGRATION_DISCOVERY,
-                            "unique_id": flow_unique_id,
-                            "title_placeholders": {"name": "unknown cloud profile"},
-                        },
-                        data={
-                            mc.KEY_USERID_: profile_id,
-                        },
-                    )
+            api.try_link(device)
+        device.start()
         return True
     except Exception as error:
         await device.async_shutdown()
@@ -606,29 +649,16 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    LOGGER.debug(
-        "async_unload_entry { unique_id: %s, entry_id: %s }",
-        config_entry.unique_id,
-        config_entry.entry_id,
-    )
+    LOGGER.debug("async_unload_entry { entry_id: %s }", config_entry.entry_id)
 
-    manager = ApiProfile.managers[config_entry.entry_id]
-    if not await manager.async_unload_entry(hass, config_entry):
-        return False
-
-    if manager is not ApiProfile.api:
-        await manager.async_shutdown()
-
-    return True
+    manager = MerossApi.managers[config_entry.entry_id]
+    return await manager.async_unload_entry(hass, config_entry)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
+    LOGGER.debug("async_remove_entry { entry_id: %s }", entry.entry_id)
+
     unique_id = entry.unique_id
-    LOGGER.debug(
-        "async_remove_entry { unique_id: %s, entry_id: %s }",
-        unique_id,
-        entry.entry_id,
-    )
     if unique_id == mlc.DOMAIN:
         return
 
@@ -637,19 +667,12 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     if unique_id[0] == "profile":
         profile_id = unique_id[1]
-        ApiProfile.profiles.pop(profile_id)
+        MerossApi.profiles.pop(profile_id)
+        await MerossCloudProfileStore(profile_id).async_remove()
         credentials: MerossCloudCredentials = entry.data  # type: ignore
-        store = MerossCloudProfileStore(profile_id)
-        if data := await store.async_load():
-            # check if the (credentials) token has not expired
-            if data.get(mc.KEY_TOKEN) == credentials[mc.KEY_TOKEN]:
-                await async_cloudapi_logout_safe(
-                    credentials, async_get_clientsession(hass)
-                )
-        else:
-            # consider the token not expired
-            await async_cloudapi_logout_safe(credentials, async_get_clientsession(hass))
-        await store.async_remove()
+        await cloudapi.CloudApiClient(
+            credentials=credentials, session=async_get_clientsession(hass)
+        ).async_logout_safe()
         return
 
-    ApiProfile.devices.pop(unique_id[0])
+    MerossApi.devices.pop(unique_id[0])

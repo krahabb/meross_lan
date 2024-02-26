@@ -1,4 +1,55 @@
 {
+    "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Off",
+                            "custom": "Manual",
+                            "comfort": "Comfort (heat)",
+                            "sleep": "Sleep (cool)",
+                            "away": "Away (economy)",
+                            "auto": "Auto"
+                        }
+                    }
+                }
+            }
+        },
+        "sensor": {
+            "smoke_alarm_status": {
+                "state": {
+                    "error_temperature": "Error: Temperature sensor",
+                    "error_smoke": "Error: Smoke sensor",
+                    "error_battery": "Error: Battery",
+                    "alarm_test": "Alarm: Test",
+                    "alarm_temperature_high": "Alarm: High temperature",
+                    "alarm_smoke": "Alarm: Smoke",
+                    "ok": "No issues"
+                }
+            },
+            "common": {
+                "state": {
+                    "ok": "Ok",
+                    "disconnected": "Disconnected"
+                }
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "1": "Overheating",
+                    "0": "[%key:entity::sensor::common::state::ok%]",
+                    "2": "[%key:entity::sensor::common::state::disconnected%]"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "[%key:entity::sensor::common::state::ok%]",
+                    "1": "Freezing",
+                    "2": "[%key:entity::sensor::common::state::disconnected%]"
+                }
+            }
+        }
+    },
     "config": {
         "flow_title": "{name}",
         "abort": {
@@ -17,7 +68,6 @@
         "step": {
             "user": {
                 "title": "Choose option",
-                "description": "",
                 "menu_options": {
                     "profile": "Register a Meross cloud profile",
                     "device": "Manually configure a device"
@@ -27,14 +77,16 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Configure global Meross LAN settings",
                 "data": {
-                    "key": "Device key"
+                    "key": "Device key",
+                    "error": "Error message"
                 }
             },
             "device": {
                 "description": "Setup meross device\nType: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "Device host address",
-                    "key": "Device key"
+                    "key": "[%key:config::step::hub::data::key%]",
+                    "error": "[%key:config::step::hub::data::error%]"
                 }
             },
             "keyerror": {
@@ -53,67 +105,187 @@
                     "password": "Meross password",
                     "save_password": "Save password",
                     "allow_mqtt_publish": "Allow cloud MQTT publish",
-                    "create_diagnostic_entities": "Create diagnostic entities"
+                    "check_firmware_updates": "Check firmware updates",
+                    "error": "[%key:config::step::hub::data::error%]",
+                    "cloud_region": "Account region"
                 }
             },
             "finalize": {
                 "title": "Device configuration",
-                "description": "Type: {device_type}\nUUID: {device_id}",
-                "data": {}
+                "description": "Type: {device_type}\nUUID: {device_id}"
             }
         }
     },
     "options": {
         "error": {
-            "already_configured_device": "Device is already configured",
-            "cannot_connect": "Unable to connect",
-            "cloud_profile_mismatch": "Cloud profile does not match configuration",
+            "already_configured_device": "[%key:config::error::already_configured_device%]",
+            "cannot_connect": "[%key:config::error::cannot_connect%]",
+            "cloud_profile_mismatch": "[%key:config::error::cloud_profile_mismatch%]",
             "device_id_mismatch": "Device UUID mismatch: the device is not the same",
-            "invalid_key": "Key error: select 'Cloud retrieve' to get from Meross account",
-            "invalid_nullkey": "Key error: select 'Hack mode' to allow empty key",
-            "invalid_auth": "Authentication error"
+            "invalid_auth": "[%key:config::error::invalid_auth%]",
+            "invalid_key": "[%key:config::error::invalid_key%]",
+            "invalid_nullkey": "[%key:config::error::invalid_nullkey%]",
+            "habroker_not_connected": "The HomeAssistant MQTT broker is not connected"
         },
         "step": {
             "hub": {
-                "title": "Meross LAN MQTT Hub",
-                "description": "Configure global Meross LAN settings",
+                "title": "[%key:config::step::hub::title%]",
+                "description": "[%key:config::step::hub::description%]",
                 "data": {
-                    "key": "Device key"
+                    "key": "[%key:config::step::hub::data::key%]",
+                    "error": "[%key:config::step::hub::data::error%]",
+                    "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]"
                 }
             },
             "device": {
                 "title": "Device configuration",
                 "description": "Type: {device_type}\nUUID: {device_id}\nHost: {host}",
                 "data": {
-                    "host": "Device host address",
-                    "key": "Device key",
+                    "host": "[%key:config::step::device::data::host%]",
+                    "key": "[%key:config::step::device::data::key%]",
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
                     "timezone": "Device time zone",
-                    "trace": "Activate device debug tracing",
                     "trace_timeout": "Debug tracing duration (sec)",
-                    "all": "Appliance.System.All",
-                    "ability": "Appliance.System.Ability"
+                    "error": "[%key:config::step::device::data::error%]"
                 }
             },
             "keyerror": {
-                "title": "Device key error",
-                "description": "The provided key is wrong. Choose an option",
+                "title": "[%key:config::step::keyerror::title%]",
+                "description": "[%key:config::step::keyerror::description%]",
                 "menu_options": {
-                    "profile": "Retrieve from Meross cloud",
-                    "device": "Retry"
+                    "profile": "[%key:config::step::keyerror::menu_options::profile%]",
+                    "device": "[%key:config::step::keyerror::menu_options::device%]"
                 }
             },
             "profile": {
-                "title": "Meross cloud profile",
-                "description": "Register and connect to a Meross account",
+                "title": "[%key:config::step::profile::title%]",
+                "description": "Configure Meross {email} account\n{placeholder}",
                 "data": {
-                    "email": "Meross login",
-                    "password": "Meross password",
-                    "save_password": "Save password",
-                    "allow_mqtt_publish": "Allow cloud MQTT publish",
-                    "create_diagnostic_entities": "Create diagnostic entities"
+                    "email": "[%key:config::step::profile::data::email%]",
+                    "password": "[%key:config::step::profile::data::password%]",
+                    "save_password": "[%key:config::step::profile::data::save_password%]",
+                    "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]",
+                    "check_firmware_updates": "[%key:config::step::profile::data::check_firmware_updates%]",
+                    "error": "[%key:config::step::profile::data::error%]"
                 }
+            },
+            "menu": {
+                "title": "Choose option",
+                "menu_options": {
+                    "hub": "Configure",
+                    "device": "[%key:options::step::menu::menu_options::hub%]",
+                    "profile": "[%key:options::step::menu::menu_options::hub%]",
+                    "diagnostics": "Diagnostics",
+                    "bind": "Reconfigure MQTT (local binding)",
+                    "unbind": "Hardware reset"
+                }
+            },
+            "diagnostics": {
+                "title": "[%key:options::step::menu::menu_options::diagnostics%]",
+                "description": "Set the logging level for this device\/profile and optionally start a diagnostic trace for the configured period",
+                "data": {
+                    "create_diagnostic_entities": "Create diagnostic entities",
+                    "logging_level": "Logging level",
+                    "obfuscate": "Obfuscate sensitive data in logs",
+                    "trace": "Start diagnostics trace",
+                    "trace_timeout": "Debug tracing duration (sec)",
+                    "error": "[%key:config::step::hub::data::error%]"
+                }
+            },
+            "bind": {
+                "title": "[%key:options::step::menu::menu_options::bind%]",
+                "description": "Connect (Bind) the device to a different MQTT broker\nCurrent broker: {domain}",
+                "data": {
+                    "domain": "Address of the new MQTT broker",
+                    "check": "Check broker compatibility before reconfiguring",
+                    "key": "[%key:config::step::hub::data::key%]",
+                    "userid": "User Id",
+                    "error": "[%key:options::step::device::data::error%]"
+                },
+                "data_description": {
+                    "domain": "Enter the address in the form 'host(:port)' or leave empty to use the HA one",
+                    "userid": "Leave empty for better compatibility with meross_lan",
+                    "key": "[%key:options::step::bind::data_description::userid%]"
+                }
+            },
+            "bind_finalize": {
+                "title": "[%key:options::step::menu::menu_options::bind%]",
+                "description": "The device has been succesfully configured with the new MQTT broker at {domain}.\nThe configuration has been updated and reloaded but you might need to reboot (power-cycle) the device for it to connect to the new broker."
+            },
+            "unbind": {
+                "title": "[%key:options::step::menu::menu_options::unbind%]",
+                "description": "WARNING! this will issue a special command to unbind the device from the current MQTT broker (either Meross cloud or local one) and reset it to factory defaults.\n After that, the device will need to be re-configured again in order to use it",
+                "data": {
+                    "post_action": "After unbinding:",
+                    "error": "[%key:options::step::device::data::error%]"
+                }
+            }
+        }
+    },
+    "issues": {
+        "cloud_token_expired": {
+            "title": "Cloud token expired for {email}",
+            "fix_flow": {
+                "step": {
+                    "profile": {
+                        "title": "[%key:options::step::profile::title%]",
+                        "description": "[%key:options::step::profile::description%]",
+                        "data": {
+                            "email": "[%key:options::step::profile::data::email%]",
+                            "password": "[%key:options::step::profile::data::password%]",
+                            "save_password": "[%key:options::step::profile::data::save_password%]",
+                            "allow_mqtt_publish": "[%key:options::step::profile::data::allow_mqtt_publish%]",
+                            "check_firmware_updates": "[%key:options::step::profile::data::check_firmware_updates%]",
+                            "error": "[%key:options::step::profile::data::error%]"
+                        }
+                    }
+                }
+            }
+        },
+        "device_identity_mismatch": {
+            "title": "Received mismatched identity for device '{device_name}'",
+            "fix_flow": {
+                "step": {
+                    "device": {
+                        "title": "[%key:options::step::device::title%]",
+                        "description": "[%key:options::step::device::description%]",
+                        "data": {
+                            "host": "[%key:options::step::device::data::host%]",
+                            "key": "[%key:options::step::device::data::key%]",
+                            "protocol": "[%key:options::step::device::data::protocol%]",
+                            "polling_period": "[%key:options::step::device::data::polling_period%]",
+                            "timezone": "[%key:options::step::device::data::timezone%]",
+                            "trace_timeout": "[%key:options::step::device::data::trace_timeout%]",
+                            "error": "[%key:options::step::device::data::error%]"
+                        }
+                    }
+                }
+            }
+        },
+        "device_timezone": {
+            "title": "Time zone for {device_name} is not set or different from HomeAssistant default",
+            "fix_flow": {
+                "abort": {
+                    "cannot_connect": "[%key:config::error::cannot_connect%]"
+                },
+                "step": {
+                }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Disable the configuration entry",
+                "delete": "Permanently delete the configuration entry"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "Asia\/Pacific",
+                "eu": "Europe",
+                "us": "USA"
             }
         }
     }

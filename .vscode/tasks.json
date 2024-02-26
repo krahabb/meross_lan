@@ -12,6 +12,18 @@
             "type": "shell",
             "command": "pip3 install --upgrade git+https://github.com/home-assistant/core.git@dev",
             "problemMatcher": []
+        },
+        {
+            "label": "Upload to lokalise",
+            "type": "shell",
+            "command": "./bin/lokalise2 --config=./bin/lokalise2_config.yml file upload --file=./custom_components/meross_lan/strings.json --lang-iso=en --replace_modified=true",
+            "problemMatcher": []
+        },
+        {
+            "label": "Download from lokalise",
+            "type": "shell",
+            "command": "./bin/lokalise2 --config=./bin/lokalise2_config.yml file download --bundle-structure=%LANG_ISO%.%FORMAT% --export-empty-as=base --export-sort=first_added --format=json --json-unescaped-slashes=false --original-filenames=false --placeholder-format=icu --replace-breaks=false --unzip-to=./custom_components/meross_lan/translations",
+            "problemMatcher": []
         }
     ]
 }

@@ -1,5 +1,5 @@
 """
-    Emulator module: implementation for an emulator class able to
+    Emulator module: implementation for an emulator able to
     simulate the real protocol stack working on a device. This can be used to
     setup an http server representing a connection to a physical device for
     testing purposes (or for fun).
@@ -7,15 +7,16 @@
     the grammar from a trace/diagnostic to setup the proper response
     Somewhere, here and there, some hardcoded behavior is implemented to
     reach an higher state of functionality since at the core, the emulator
-    is just a 'reply' service of what's inside a trace
+    is just a reply service of what's inside a trace.
+    Typically, an emulator is built by using 'build_emulator' since it is
+    a mixin based class.
+    'generate_emulators' is an helper (python generator) to build a whole
+    set of emulators from all the traces stored in a path.
 """
+
 from __future__ import annotations
 
-import json
 import os
-import re
-from time import time
-from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
@@ -51,294 +52,12 @@ from aiohttp import web
 # to have the homeassistant.core imported (initialized) before
 # homeassistant.helpers.storage
 from custom_components.meross_lan.merossclient import (
-    MerossDeviceDescriptor,
-    MerossMessageType,
-    build_message,
+    MerossMessage,
     const as mc,
-    get_namespacekey,
-    get_replykey,
+    json_dumps,
 )
 
-
-class MerossEmulatorDescriptor(MerossDeviceDescriptor):
-    namespaces: dict
-
-    def __init__(self, tracefile: str, uuid):
-        self.namespaces = {}
-        with open(tracefile, "r", encoding="utf8") as f:
-            if tracefile.endswith(".json.txt"):
-                # HA diagnostics trace
-                self._import_json(f)
-            else:
-                self._import_tsv(f)
-
-        super().__init__(self.namespaces[mc.NS_APPLIANCE_SYSTEM_ABILITY])
-        self.update(self.namespaces[mc.NS_APPLIANCE_SYSTEM_ALL])
-        # patch system payload with fake ids
-        hardware = self.hardware
-        hardware[mc.KEY_UUID] = uuid
-        hardware[mc.KEY_MACADDRESS] = ":".join(re.findall("..", uuid[-12:]))
-
-    def _import_tsv(self, f):
-        """
-        parse a legacy tab separated values meross_lan trace
-        """
-        for line in f:
-            row = line.split("\t")
-            self._import_tracerow(row)
-
-    def _import_json(self, f):
-        """
-        parse a 'diagnostics' HA trace
-        """
-        try:
-            _json = json.loads(f.read())
-            data = _json["data"]
-            columns = None
-            for row in data["trace"]:
-                if columns is None:
-                    columns = row
-                    # we could parse and setup a 'column search'
-                    # algorithm here should the trace layout change
-                    # right now it's the same as for csv files...
-                else:
-                    self._import_tracerow(row)
-
-        except Exception:
-            pass
-
-        return
-
-    def _import_tracerow(self, values: list):
-        # rxtx = values[1]
-        protocol = values[-4]
-        method = values[-3]
-        namespace = values[-2]
-        data = values[-1]
-        if method == mc.METHOD_GETACK:
-            if protocol == "auto":
-                self.namespaces[namespace] = {
-                    get_namespacekey(namespace): data
-                    if isinstance(data, dict)
-                    else json.loads(data)
-                }
-            else:
-                self.namespaces[namespace] = (
-                    data if isinstance(data, dict) else json.loads(data)
-                )
-
-
-class MerossEmulator:
-    """
-    Based off the knowledge inside the MerossEmulatorDescriptor
-    this class tries to reply to an incoming request by looking
-    at the vocabulary of known namespaces listed in the descriptor.
-    It is also able to manage a sort of state for commands accessing
-    data in the Apllication.System.All namespace at the 'digest' key
-    which are the majority.
-    If state is not available there it could be looked up in the specific
-    command carrying the message and so automatically managed too
-    """
-
-    _tzinfo: ZoneInfo | None = None
-
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key):
-        self.key = key
-        self.descriptor = descriptor
-        self.p_all_system_time = descriptor.system.get(mc.KEY_TIME)
-        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
-            self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
-        print(f"Initialized {descriptor.productname} (model:{descriptor.productmodel})")
-
-    def set_timezone(self, timezone: str):
-        # beware when using TZ names: here we expect a IANA zoneinfo key
-        # as "US/Pacific" or so. Using tzname(s) like "PDT" or "PST"
-        # such as those recovered from tzinfo.tzname() might be wrong
-        self.descriptor.timezone = self.descriptor.time[mc.KEY_TIMEZONE] = timezone
-
-    @property
-    def tzinfo(self):
-        tz_name = self.descriptor.timezone
-        if not tz_name:
-            return None
-        if self._tzinfo and (self._tzinfo.key == tz_name):
-            return self._tzinfo
-        try:
-            self._tzinfo = ZoneInfo(tz_name)
-        except Exception:
-            self._tzinfo = None
-        return self._tzinfo
-
-    # async def post_config(self, request: web_Request):
-    def handle(self, request: str) -> MerossMessageType:
-        jsonrequest: MerossMessageType = json.loads(request)
-        header = jsonrequest[mc.KEY_HEADER]
-        payload = jsonrequest[mc.KEY_PAYLOAD]
-        namespace = header[mc.KEY_NAMESPACE]
-        method = header[mc.KEY_METHOD]
-
-        print(
-            f"Emulator({self.descriptor.uuid}) "
-            f"RX: namespace={namespace} method={method} payload={json.dumps(payload)}"
-        )
-        try:
-            self.update_epoch()
-
-            if namespace not in self.descriptor.ability:
-                raise Exception(f"{namespace} not supported in ability")
-
-            elif get_replykey(header, self.key) is not self.key:
-                method = mc.METHOD_ERROR
-                payload = {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}}
-
-            elif handler := getattr(
-                self, f"_{method}_{namespace.replace('.', '_')}", None
-            ):
-                method, payload = handler(header, payload)
-
-            else:
-                method, payload = self._handler_default(method, namespace, payload)
-
-        except Exception as e:
-            method = mc.METHOD_ERROR
-            payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
-
-        data = build_message(
-            namespace,
-            method,
-            payload,
-            self.key,
-            mc.MANUFACTURER,
-            header[mc.KEY_MESSAGEID],
-        )
-        print(
-            f"Emulator({self.descriptor.uuid}) TX: namespace={namespace} method={method} payload={json.dumps(payload)}"
-        )
-        return data
-
-    def update_epoch(self):
-        """
-        Called (by default) on every command processing.
-        Could be used to (rather asynchronously) trigger internal state changes
-        """
-        self.epoch = int(time())
-        if self.p_all_system_time:
-            self.p_all_system_time[mc.KEY_TIMESTAMP] = self.epoch
-
-    def _get_key_state(self, namespace: str) -> tuple[str, dict]:
-        """
-        general device state is usually carried in NS_ALL into the "digest" key
-        and is also almost regularly keyed by using the camelCase of the last verb
-        in namespace.
-        For some devices not all state is carried there tho, so we'll inspect the
-        GETACK payload for the relevant namespace looking for state there too
-        """
-        n = namespace.split(".")
-        if n[1] != "Control":
-            raise Exception(f"{namespace} not supported in emulator")
-
-        key = get_namespacekey(namespace)
-        p_digest = self.descriptor.digest
-        if len(n) == 4:
-            # 4 parts namespaces usually access a subkey in digest
-            subkey = n[2].lower()
-            if subkey in p_digest:
-                p_digest = p_digest[subkey]
-
-        if key not in p_digest:
-            if namespace in self.descriptor.namespaces:
-                p_digest = self.descriptor.namespaces[namespace]
-                if key not in p_digest:
-                    raise Exception(f"{key} not present in digest and {namespace}")
-            else:
-                raise Exception(f"{key} not present in digest")
-
-        return key, p_digest[key]
-
-    def _handler_default(self, method: str, namespace: str, payload: dict):
-        """
-        This is an euristhic to try parse a namespace carrying state stored in all->digest
-        If the state is not stored in all->digest we'll search our namespace(s) list for
-        state carried through our GETACK messages in the trace
-        """
-        try:
-            key, p_state = self._get_key_state(namespace)
-        except Exception as error:
-            # when the 'looking for state' euristic fails
-            # we might fallback to a static reply should it fit...
-            if (method == mc.METHOD_GET) and (namespace in self.descriptor.namespaces):
-                return mc.METHOD_GETACK, self.descriptor.namespaces[namespace]
-            raise error
-
-        if method == mc.METHOD_GET:
-            return mc.METHOD_GETACK, {key: p_state}
-
-        if method != mc.METHOD_SET:
-            # TODO.....
-            raise Exception(f"{method} not supported in emulator")
-
-        def _update(payload: dict):
-            channel = payload[mc.KEY_CHANNEL]
-            for p in p_state:
-                if p[mc.KEY_CHANNEL] == channel:
-                    p.update(payload)
-                    break
-            else:
-                raise Exception(f"{channel} not present in digest.{key}")
-
-        p_payload = payload[key]
-        if isinstance(p_state, list):
-            if isinstance(p_payload, list):
-                for p_p in p_payload:
-                    _update(p_p)
-            else:
-                _update(p_payload)
-        else:
-            if p_state[mc.KEY_CHANNEL] == p_payload[mc.KEY_CHANNEL]:
-                p_state.update(p_payload)
-            else:
-                raise Exception(
-                    f"{p_payload[mc.KEY_CHANNEL]} not present in digest.{key}"
-                )
-
-        return mc.METHOD_SETACK, {}
-
-    def _GET_Appliance_System_DNDMode(self, header, payload):
-        return mc.METHOD_GETACK, self.p_dndmode
-
-    def _SET_Appliance_System_DNDMode(self, header, payload):
-        self.p_dndmode = payload
-        return mc.METHOD_SETACK, {}
-
-    def _get_control_key(self, key):
-        p_control = self.descriptor.all.get(mc.KEY_CONTROL)
-        if p_control is None:
-            raise Exception(f"{mc.KEY_CONTROL} not present")
-        if key not in p_control:
-            raise Exception(f"{key} not present in control")
-        return p_control[key]
-
-    def _GET_Appliance_Control_Toggle(self, header, payload):
-        # only acual example of this usage comes from legacy firmwares
-        # carrying state in all->control
-        return mc.METHOD_GETACK, {mc.KEY_TOGGLE: self._get_control_key(mc.KEY_TOGGLE)}
-
-    def _SET_Appliance_Control_Toggle(self, header, payload):
-        # only acual example of this usage comes from legacy firmwares
-        # carrying state in all->control
-        self._get_control_key(mc.KEY_TOGGLE)[mc.KEY_ONOFF] = payload[mc.KEY_TOGGLE][
-            mc.KEY_ONOFF
-        ]
-        return mc.METHOD_SETACK, {}
-
-    def _SET_Appliance_Control_Mp3(self, header, payload):
-        if mc.NS_APPLIANCE_CONTROL_MP3 not in self.descriptor.namespaces:
-            raise Exception(
-                f"{mc.NS_APPLIANCE_CONTROL_MP3} not supported in namespaces"
-            )
-        mp3 = self.descriptor.namespaces[mc.NS_APPLIANCE_CONTROL_MP3]
-        mp3[mc.KEY_MP3].update(payload[mc.KEY_MP3])
-        return mc.METHOD_SETACK, {}
+from .mixins import MerossEmulator, MerossEmulatorDescriptor
 
 
 def build_emulator(tracefile, uuid, key) -> MerossEmulator:
@@ -348,35 +67,52 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
     this will also set the correct inferred mac address in the descriptor based on the uuid
     as this appears to be consistent with real devices config
     """
+    print(f"Initializing uuid({uuid}):", end="")
     descriptor = MerossEmulatorDescriptor(tracefile, uuid)
-
+    ability = descriptor.ability
+    digest = descriptor.digest
     mixin_classes = []
 
-    if mc.KEY_HUB in descriptor.digest:
+    if mc.KEY_HUB in digest:
         from .mixins.hub import HubMixin
 
         mixin_classes.append(HubMixin)
-    if mc.KEY_THERMOSTAT in descriptor.digest:
+    if mc.KEY_THERMOSTAT in digest:
         from .mixins.thermostat import ThermostatMixin
 
         mixin_classes.append(ThermostatMixin)
-    if mc.KEY_GARAGEDOOR in descriptor.digest:
+    if mc.KEY_GARAGEDOOR in digest:
         from .mixins.garagedoor import GarageDoorMixin
 
         mixin_classes.append(GarageDoorMixin)
-    if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in descriptor.ability:
+    if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
         from .mixins.electricity import ElectricityMixin
 
         mixin_classes.append(ElectricityMixin)
-    if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in descriptor.ability:
+    if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
         from .mixins.electricity import ConsumptionXMixin
 
         mixin_classes.append(ConsumptionXMixin)
 
-    if mc.NS_APPLIANCE_CONTROL_LIGHT in descriptor.ability:
+    if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
         from .mixins.light import LightMixin
 
         mixin_classes.append(LightMixin)
+
+    if mc.NS_APPLIANCE_CONTROL_FAN in ability:
+        from .mixins.fan import FanMixin
+
+        mixin_classes.append(FanMixin)
+
+    if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
+        from .mixins.rollershutter import RollerShutterMixin
+
+        mixin_classes.append(RollerShutterMixin)
+
+    if mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK in ability:
+        from .mixins.physicallock import PhysicalLockMixin
+
+        mixin_classes.append(PhysicalLockMixin)
 
     mixin_classes.append(MerossEmulator)
     # build a label to cache the set
@@ -385,7 +121,9 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
         class_name = class_name + m.__name__
     class_type = type(class_name, tuple(mixin_classes), {})
 
-    return class_type(descriptor, key)
+    emulator = class_type(descriptor, key)
+    print(f" {descriptor.type} (model:{descriptor.productmodel})")
+    return emulator
 
 
 def generate_emulators(tracespath: str, defaultuuid: str, defaultkey: str):
@@ -431,31 +169,82 @@ def run(argv):
     """
     key = ""
     uuid = "01234567890123456789001122334455"
+    broker = None
     tracefilepath = "."
     for arg in argv:
         arg: str
-        if arg.startswith("-K"):
-            key = arg[2:].strip()
-        elif arg.startswith("-U"):
-            uuid = arg[2:].strip()
+        if arg.startswith("-key"):
+            key = arg[4:].strip()
+        elif arg.startswith("-uuid"):
+            uuid = arg[5:].strip()
+        elif arg.startswith("-broker"):
+            broker = arg[7:].strip()
         else:
             tracefilepath = arg
 
     app = web.Application()
 
-    def make_post_handler(emulator: MerossEmulator):
+    def web_post_handler(emulator: MerossEmulator):
         async def _callback(request: web.Request) -> web.Response:
+            if not emulator._scheduler_unsub:
+                # starts internal scheduler once when we're in asyncio environment
+                emulator._scheduler()
             return web.json_response(emulator.handle(await request.text()))
 
         return _callback
 
     if os.path.isdir(tracefilepath):
-        for emulator in generate_emulators(tracefilepath, uuid, key):
-            app.router.add_post(
-                f"/{emulator.descriptor.uuid}/config", make_post_handler(emulator)
-            )
+        emulators = {
+            emulator.descriptor.uuid: emulator
+            for emulator in generate_emulators(tracefilepath, uuid, key)
+        }
+        for _uuid, emulator in emulators.items():
+            app.router.add_post(f"/{_uuid}/config", web_post_handler(emulator))
     else:
         emulator = build_emulator(tracefilepath, uuid, key)
-        app.router.add_post("/config", make_post_handler(emulator))
+        emulators = {emulator.descriptor.uuid: emulator}
+        app.router.add_post("/config", web_post_handler(emulator))
+
+    if broker:
+        import ssl
+
+        import paho.mqtt.client as mqtt
+
+        def _mqttc_connect(client: mqtt.Client, userdata, flags, rc):
+            result, mid = client.subscribe([(mc.TOPIC_REQUEST.format("+"), 1)])
+            if result != mqtt.MQTT_ERR_SUCCESS:
+                print("Failed to subscribe to mqtt topic")
+            for emulator in emulators.values():
+                emulator.handle_connect(client)
+
+        def _mqttc_disconnect(client: mqtt.Client, userdata, rc):
+            for emulator in emulators.values():
+                emulator.handle_disconnect(client)
+
+        def _mqttc_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
+            if msg_uuid := mc.RE_PATTERN_TOPIC_UUID.match(msg.topic):
+                if emulator := emulators.get(msg_uuid.group(1)):
+                    request = MerossMessage.decode(msg.payload.decode("utf-8"))
+                    if response := emulator.handle(request):
+                        client.publish(
+                            request[mc.KEY_HEADER][mc.KEY_FROM], json_dumps(response)
+                        )
+
+        mqtt_client = mqtt.Client("MerossEmulator", protocol=mqtt.MQTTv311)
+        mqtt_client.username_pw_set("emulator")
+        mqtt_client.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
+        mqtt_client.tls_insecure_set(True)
+        mqtt_client.on_connect = _mqttc_connect
+        mqtt_client.on_disconnect = _mqttc_disconnect
+        mqtt_client.on_message = _mqttc_message
+        mqtt_client.suppress_exceptions = True
+        if ":" in broker:
+            broker = broker.split(":")
+            port = int(broker[1])
+            broker = broker[0]
+        else:
+            port = 8883
+        mqtt_client.connect_async(broker, port)
+        mqtt_client.loop_start()
 
     return app

@@ -1,0 +1,2303 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2024.2.1",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.12.1",
+    "docker": true,
+    "arch": "x86_64",
+    "timezone": "America/New_York",
+    "os_name": "Linux",
+    "os_version": "6.1.74-haos",
+    "supervisor": "2024.01.1",
+    "host_os": "Home Assistant OS 11.5",
+    "docker_version": "24.0.7",
+    "chassis": "embedded",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "spotcast": {
+      "version": "v3.6.30",
+      "requirements": []
+    },
+    "hyperhdr": {
+      "version": "0.0.6",
+      "requirements": [
+        "hyperhdr-py==0.0.3"
+      ]
+    },
+    "auto_backup": {
+      "version": "1.4.1",
+      "requirements": []
+    },
+    "unified_remote": {
+      "version": "6",
+      "requirements": []
+    },
+    "hacs": {
+      "version": "1.34.0",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "fordpass": {
+      "version": "0.1.66",
+      "requirements": []
+    },
+    "browser_mod": {
+      "version": "2.3.0",
+      "requirements": []
+    },
+    "hass_agent": {
+      "version": "2022.11.9",
+      "requirements": []
+    },
+    "zha_toolkit": {
+      "version": "v1.1.8",
+      "requirements": [
+        "pytz"
+      ]
+    },
+    "aprilaire": {
+      "version": "0.8.1",
+      "requirements": [
+        "pyaprilaire==0.7.2"
+      ]
+    },
+    "meross_lan": {
+      "version": "4.5.3",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "4.5.3",
+    "is_built_in": false
+  },
+  "data": {
+    "host": "############0",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "map100",
+            "subType": "un",
+            "version": "7.0.0",
+            "chipType": "rtl8710cm",
+            "uuid": "###############################0",
+            "macAddress": "################0"
+          },
+          "firmware": {
+            "version": "7.2.27",
+            "homekitVersion": "4.1",
+            "compileTime": "2022/06/29-01:25:46",
+            "encrypt": 1,
+            "wifiMac": "################0",
+            "innerIp": "############0",
+            "server": "###################0",
+            "port": "@0",
+            "userId": "@0"
+          },
+          "time": {
+            "timestamp": 9,
+            "timezone": "America/New_York",
+            "timeRule": [
+              [
+                1678604400,
+                -14400,
+                1
+              ],
+              [
+                1699164000,
+                -18000,
+                0
+              ],
+              [
+                1710054000,
+                -14400,
+                1
+              ],
+              [
+                1730613600,
+                -18000,
+                0
+              ],
+              [
+                1741503600,
+                -14400,
+                1
+              ],
+              [
+                1762063200,
+                -18000,
+                0
+              ],
+              [
+                1772953200,
+                -14400,
+                1
+              ],
+              [
+                1793512800,
+                -18000,
+                0
+              ],
+              [
+                1805007600,
+                -14400,
+                1
+              ],
+              [
+                1825567200,
+                -18000,
+                0
+              ],
+              [
+                1836457200,
+                -14400,
+                1
+              ],
+              [
+                1857016800,
+                -18000,
+                0
+              ],
+              [
+                1867906800,
+                -14400,
+                1
+              ],
+              [
+                1888466400,
+                -18000,
+                0
+              ],
+              [
+                1899356400,
+                -14400,
+                1
+              ],
+              [
+                1919916000,
+                -18000,
+                0
+              ],
+              [
+                1930806000,
+                -14400,
+                1
+              ],
+              [
+                1951365600,
+                -18000,
+                0
+              ],
+              [
+                1962860400,
+                -14400,
+                1
+              ],
+              [
+                1983420000,
+                -18000,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 0,
+            "bindId": "Z5u8ltFvfDnOVpRr",
+            "who": 1
+          }
+        },
+        "digest": {
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 0,
+              "lmTime": 0
+            }
+          ],
+          "triggerx": [],
+          "timerx": []
+        }
+      },
+      "payloadVersion": 1,
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Info": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 5
+        },
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Control.ToggleX": {},
+        "Appliance.Control.TimerX": {
+          "sunOffsetSupport": 1
+        },
+        "Appliance.Control.TriggerX": {},
+        "Appliance.Control.Fan": {},
+        "Appliance.Control.PhysicalLock": {},
+        "Appliance.Control.FilterMaintenance": {},
+        "Appliance.Control.Beep": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.Digest.TimerX": {}
+      }
+    },
+    "key": "###############################0",
+    "device_id": "###############################0",
+    "device": {
+      "class": "ToggleXMixinMerossDevice",
+      "conf_protocol": "auto",
+      "pref_protocol": "http",
+      "curr_protocol": "http",
+      "MQTT": {
+        "cloud_profile": false,
+        "locally_active": false,
+        "mqtt_connection": false,
+        "mqtt_connected": false,
+        "mqtt_publish": false,
+        "mqtt_active": false
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "polling_period": 30,
+      "polling_dictionary": {
+        "Appliance.System.All": 1707948795.8744109,
+        "Appliance.System.DNDMode": 1707948795.8744109,
+        "Appliance.System.Runtime": 1707948795.8744109
+      }
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2024/02/14 - 17:13:43",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "map100",
+              "subType": "un",
+              "version": "7.0.0",
+              "chipType": "rtl8710cm",
+              "uuid": "###############################0",
+              "macAddress": "################0"
+            },
+            "firmware": {
+              "version": "7.2.27",
+              "homekitVersion": "4.1",
+              "compileTime": "2022/06/29-01:25:46",
+              "encrypt": 1,
+              "wifiMac": "################0",
+              "innerIp": "############0",
+              "server": "###################0",
+              "port": "@0",
+              "userId": "@0"
+            },
+            "time": {
+              "timestamp": 1707948795,
+              "timezone": "America/New_York",
+              "timeRule": [
+                [
+                  1678604400,
+                  -14400,
+                  1
+                ],
+                [
+                  1699164000,
+                  -18000,
+                  0
+                ],
+                [
+                  1710054000,
+                  -14400,
+                  1
+                ],
+                [
+                  1730613600,
+                  -18000,
+                  0
+                ],
+                [
+                  1741503600,
+                  -14400,
+                  1
+                ],
+                [
+                  1762063200,
+                  -18000,
+                  0
+                ],
+                [
+                  1772953200,
+                  -14400,
+                  1
+                ],
+                [
+                  1793512800,
+                  -18000,
+                  0
+                ],
+                [
+                  1805007600,
+                  -14400,
+                  1
+                ],
+                [
+                  1825567200,
+                  -18000,
+                  0
+                ],
+                [
+                  1836457200,
+                  -14400,
+                  1
+                ],
+                [
+                  1857016800,
+                  -18000,
+                  0
+                ],
+                [
+                  1867906800,
+                  -14400,
+                  1
+                ],
+                [
+                  1888466400,
+                  -18000,
+                  0
+                ],
+                [
+                  1899356400,
+                  -14400,
+                  1
+                ],
+                [
+                  1919916000,
+                  -18000,
+                  0
+                ],
+                [
+                  1930806000,
+                  -14400,
+                  1
+                ],
+                [
+                  1951365600,
+                  -18000,
+                  0
+                ],
+                [
+                  1962860400,
+                  -14400,
+                  1
+                ],
+                [
+                  1983420000,
+                  -18000,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "Z5u8ltFvfDnOVpRr",
+              "who": 1
+            }
+          },
+          "digest": {
+            "togglex": [
+              {
+                "channel": 0,
+                "onoff": 1,
+                "lmTime": 1707948744
+              }
+            ],
+            "triggerx": [],
+            "timerx": []
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:43",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 5
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.ToggleX": {},
+          "Appliance.Control.TimerX": {
+            "sunOffsetSupport": 1
+          },
+          "Appliance.Control.TriggerX": {},
+          "Appliance.Control.Fan": {},
+          "Appliance.Control.PhysicalLock": {},
+          "Appliance.Control.FilterMaintenance": {},
+          "Appliance.Control.Beep": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.Digest.TimerX": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:43",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:43",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {
+              "model": "MAP100",
+              "sn": "731701220700242",
+              "category": 19,
+              "setupId": "RBSH",
+              "setupCode": "988-38-674",
+              "uuid": "###################################1",
+              "token": "###########################################################################################################################################################################################################################################0"
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:43",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "handler undefined for method:(GETACK) namespace:(Appliance.Config.Info) payload:({'info': {'homekit': {'model': 'MAP100', 'sn': '731701220700242', 'category': 19, 'setupId': 'RBSH', 'setupCode': '988-38-674', 'uuid': '###################################1', 'token': '###########################################################################################################################################################################################################################################0'}}})"
+      ],
+      [
+        "2024/02/14 - 17:13:45",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:45",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling start"
+      ],
+      [
+        "2024/02/14 - 17:13:46",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:46",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "7.2.27",
+              "homekitVersion": "4.1",
+              "sysUpTime": "0h26m11s",
+              "localTimeOffset": -18000,
+              "localTime": "Wed Feb 14 17:13:45 2024",
+              "suncalc": "1:10;13:17"
+            },
+            "network": {
+              "linkStatus": "connected",
+              "signal": 100,
+              "ssid": "#########0",
+              "gatewayMac": "################0",
+              "innerIp": "############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "###################0",
+              "secondPort": "@0",
+              "userId": "@0",
+              "sysConnectTime": "Wed Feb 14 21:47:48 2024",
+              "sysOnlineTime": "0h25m57s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:46",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:46",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "map100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "###############################0",
+                "macAddress": "################0"
+              },
+              "firmware": {
+                "version": "7.2.27",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/06/29-01:25:46",
+                "encrypt": 1,
+                "wifiMac": "################0",
+                "innerIp": "############0",
+                "server": "###################0",
+                "port": "@0",
+                "userId": "@0"
+              },
+              "time": {
+                "timestamp": 1707948825,
+                "timezone": "America/New_York",
+                "timeRule": [
+                  [
+                    1678604400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1699164000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1710054000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1730613600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1741503600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1762063200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1772953200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1793512800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1805007600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1825567200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1836457200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1857016800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1867906800,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1888466400,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1899356400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1919916000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1930806000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1951365600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1962860400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1983420000,
+                    -18000,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "Z5u8ltFvfDnOVpRr",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1707948744
+                }
+              ],
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:46",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:46",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:46",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling end"
+      ],
+      [
+        "2024/02/14 - 17:13:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:47",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ToggleX",
+        {
+          "channel": 0,
+          "togglex": {
+            "channel": 0,
+            "onoff": 1,
+            "lmTime": 1707948744
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:49",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Fan",
+        {
+          "fan": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:50",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Fan",
+        {
+          "fan": []
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:50",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "handler undefined for method:(GETACK) namespace:(Appliance.Control.Fan) payload:({'fan': []})"
+      ],
+      [
+        "2024/02/14 - 17:13:51",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.FilterMaintenance",
+        {
+          "filterMaintenance": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:52",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "ServerDisconnectedError(Server disconnected) in async_http_request GET Appliance.Control.FilterMaintenance attempt(0)"
+      ],
+      [
+        "2024/02/14 - 17:13:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.FilterMaintenance",
+        {
+          "filterMaintenance": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:52",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "ServerDisconnectedError(Server disconnected) in async_http_request GET Appliance.Control.FilterMaintenance attempt(1)"
+      ],
+      [
+        "2024/02/14 - 17:13:52",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.FilterMaintenance",
+        {
+          "filterMaintenance": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:52",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "ServerDisconnectedError(Server disconnected) in async_http_request GET Appliance.Control.FilterMaintenance attempt(2)"
+      ],
+      [
+        "2024/02/14 - 17:13:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Beep",
+        {
+          "beep": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:53",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "ServerDisconnectedError(Server disconnected) in async_http_request GET Appliance.Control.Beep attempt(0)"
+      ],
+      [
+        "2024/02/14 - 17:13:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Beep",
+        {
+          "beep": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:53",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "ServerDisconnectedError(Server disconnected) in async_http_request GET Appliance.Control.Beep attempt(1)"
+      ],
+      [
+        "2024/02/14 - 17:13:53",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Beep",
+        {
+          "beep": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:13:53",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "ServerDisconnectedError(Server disconnected) in async_http_request GET Appliance.Control.Beep attempt(2)"
+      ],
+      [
+        "2024/02/14 - 17:14:16",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling start"
+      ],
+      [
+        "2024/02/14 - 17:14:16",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:16",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "7.2.27",
+              "homekitVersion": "4.1",
+              "sysUpTime": "0h26m42s",
+              "localTimeOffset": -18000,
+              "localTime": "Wed Feb 14 17:14:16 2024",
+              "suncalc": "1:10;13:17"
+            },
+            "network": {
+              "linkStatus": "connected",
+              "signal": 100,
+              "ssid": "#########0",
+              "gatewayMac": "################0",
+              "innerIp": "############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "###################0",
+              "secondPort": "@0",
+              "userId": "@0",
+              "sysConnectTime": "Wed Feb 14 21:47:48 2024",
+              "sysOnlineTime": "0h26m28s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:16",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:16",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "map100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "###############################0",
+                "macAddress": "################0"
+              },
+              "firmware": {
+                "version": "7.2.27",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/06/29-01:25:46",
+                "encrypt": 1,
+                "wifiMac": "################0",
+                "innerIp": "############0",
+                "server": "###################0",
+                "port": "@0",
+                "userId": "@0"
+              },
+              "time": {
+                "timestamp": 1707948856,
+                "timezone": "America/New_York",
+                "timeRule": [
+                  [
+                    1678604400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1699164000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1710054000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1730613600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1741503600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1762063200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1772953200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1793512800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1805007600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1825567200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1836457200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1857016800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1867906800,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1888466400,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1899356400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1919916000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1930806000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1951365600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1962860400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1983420000,
+                    -18000,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "Z5u8ltFvfDnOVpRr",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1707948744
+                }
+              ],
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:16",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:17",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:17",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling end"
+      ],
+      [
+        "2024/02/14 - 17:14:47",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling start"
+      ],
+      [
+        "2024/02/14 - 17:14:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:47",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "7.2.27",
+              "homekitVersion": "4.1",
+              "sysUpTime": "0h27m12s",
+              "localTimeOffset": -18000,
+              "localTime": "Wed Feb 14 17:14:46 2024",
+              "suncalc": "1:10;13:17"
+            },
+            "network": {
+              "linkStatus": "connected",
+              "signal": 100,
+              "ssid": "#########0",
+              "gatewayMac": "################0",
+              "innerIp": "############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "###################0",
+              "secondPort": "@0",
+              "userId": "@0",
+              "sysConnectTime": "Wed Feb 14 21:47:48 2024",
+              "sysOnlineTime": "0h26m58s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:47",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "map100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "###############################0",
+                "macAddress": "################0"
+              },
+              "firmware": {
+                "version": "7.2.27",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/06/29-01:25:46",
+                "encrypt": 1,
+                "wifiMac": "################0",
+                "innerIp": "############0",
+                "server": "###################0",
+                "port": "@0",
+                "userId": "@0"
+              },
+              "time": {
+                "timestamp": 1707948886,
+                "timezone": "America/New_York",
+                "timeRule": [
+                  [
+                    1678604400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1699164000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1710054000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1730613600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1741503600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1762063200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1772953200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1793512800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1805007600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1825567200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1836457200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1857016800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1867906800,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1888466400,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1899356400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1919916000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1930806000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1951365600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1962860400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1983420000,
+                    -18000,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "Z5u8ltFvfDnOVpRr",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1707948744
+                }
+              ],
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:47",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:14:47",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling end"
+      ],
+      [
+        "2024/02/14 - 17:15:17",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling start"
+      ],
+      [
+        "2024/02/14 - 17:15:17",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:17",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "7.2.27",
+              "homekitVersion": "4.1",
+              "sysUpTime": "0h27m43s",
+              "localTimeOffset": -18000,
+              "localTime": "Wed Feb 14 17:15:16 2024",
+              "suncalc": "1:10;13:17"
+            },
+            "network": {
+              "linkStatus": "connected",
+              "signal": 100,
+              "ssid": "#########0",
+              "gatewayMac": "################0",
+              "innerIp": "############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "###################0",
+              "secondPort": "@0",
+              "userId": "@0",
+              "sysConnectTime": "Wed Feb 14 21:47:48 2024",
+              "sysOnlineTime": "0h27m28s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:17",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:17",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "map100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "###############################0",
+                "macAddress": "################0"
+              },
+              "firmware": {
+                "version": "7.2.27",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/06/29-01:25:46",
+                "encrypt": 1,
+                "wifiMac": "################0",
+                "innerIp": "############0",
+                "server": "###################0",
+                "port": "@0",
+                "userId": "@0"
+              },
+              "time": {
+                "timestamp": 1707948916,
+                "timezone": "America/New_York",
+                "timeRule": [
+                  [
+                    1678604400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1699164000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1710054000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1730613600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1741503600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1762063200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1772953200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1793512800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1805007600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1825567200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1836457200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1857016800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1867906800,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1888466400,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1899356400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1919916000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1930806000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1951365600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1962860400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1983420000,
+                    -18000,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "Z5u8ltFvfDnOVpRr",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1707948744
+                }
+              ],
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:17",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:17",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:17",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling end"
+      ],
+      [
+        "2024/02/14 - 17:15:47",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling start"
+      ],
+      [
+        "2024/02/14 - 17:15:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:47",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "7.2.27",
+              "homekitVersion": "4.1",
+              "sysUpTime": "0h28m13s",
+              "localTimeOffset": -18000,
+              "localTime": "Wed Feb 14 17:15:47 2024",
+              "suncalc": "1:10;13:17"
+            },
+            "network": {
+              "linkStatus": "connected",
+              "signal": 100,
+              "ssid": "#########0",
+              "gatewayMac": "################0",
+              "innerIp": "############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "###################0",
+              "secondPort": "@0",
+              "userId": "@0",
+              "sysConnectTime": "Wed Feb 14 21:47:48 2024",
+              "sysOnlineTime": "0h27m59s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:47",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:48",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "map100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "###############################0",
+                "macAddress": "################0"
+              },
+              "firmware": {
+                "version": "7.2.27",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/06/29-01:25:46",
+                "encrypt": 1,
+                "wifiMac": "################0",
+                "innerIp": "############0",
+                "server": "###################0",
+                "port": "@0",
+                "userId": "@0"
+              },
+              "time": {
+                "timestamp": 1707948947,
+                "timezone": "America/New_York",
+                "timeRule": [
+                  [
+                    1678604400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1699164000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1710054000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1730613600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1741503600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1762063200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1772953200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1793512800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1805007600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1825567200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1836457200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1857016800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1867906800,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1888466400,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1899356400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1919916000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1930806000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1951365600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1962860400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1983420000,
+                    -18000,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "Z5u8ltFvfDnOVpRr",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1707948744
+                }
+              ],
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:48",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:48",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:15:48",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling end"
+      ],
+      [
+        "2024/02/14 - 17:16:18",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling start"
+      ],
+      [
+        "2024/02/14 - 17:16:18",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:16:18",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "7.2.27",
+              "homekitVersion": "4.1",
+              "sysUpTime": "0h28m44s",
+              "localTimeOffset": -18000,
+              "localTime": "Wed Feb 14 17:16:17 2024",
+              "suncalc": "1:10;13:17"
+            },
+            "network": {
+              "linkStatus": "connected",
+              "signal": 100,
+              "ssid": "#########0",
+              "gatewayMac": "################0",
+              "innerIp": "############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "###################0",
+              "secondPort": "@0",
+              "userId": "@0",
+              "sysConnectTime": "Wed Feb 14 21:47:48 2024",
+              "sysOnlineTime": "0h28m29s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:16:18",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.All",
+        {
+          "all": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:16:18",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "all": {
+            "system": {
+              "hardware": {
+                "type": "map100",
+                "subType": "un",
+                "version": "7.0.0",
+                "chipType": "rtl8710cm",
+                "uuid": "###############################0",
+                "macAddress": "################0"
+              },
+              "firmware": {
+                "version": "7.2.27",
+                "homekitVersion": "4.1",
+                "compileTime": "2022/06/29-01:25:46",
+                "encrypt": 1,
+                "wifiMac": "################0",
+                "innerIp": "############0",
+                "server": "###################0",
+                "port": "@0",
+                "userId": "@0"
+              },
+              "time": {
+                "timestamp": 1707948977,
+                "timezone": "America/New_York",
+                "timeRule": [
+                  [
+                    1678604400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1699164000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1710054000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1730613600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1741503600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1762063200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1772953200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1793512800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1805007600,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1825567200,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1836457200,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1857016800,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1867906800,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1888466400,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1899356400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1919916000,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1930806000,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1951365600,
+                    -18000,
+                    0
+                  ],
+                  [
+                    1962860400,
+                    -14400,
+                    1
+                  ],
+                  [
+                    1983420000,
+                    -18000,
+                    0
+                  ]
+                ]
+              },
+              "online": {
+                "status": 1,
+                "bindId": "Z5u8ltFvfDnOVpRr",
+                "who": 1
+              }
+            },
+            "digest": {
+              "togglex": [
+                {
+                  "channel": 0,
+                  "onoff": 1,
+                  "lmTime": 1707948744
+                }
+              ],
+              "triggerx": [],
+              "timerx": []
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:16:18",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {}
+        }
+      ],
+      [
+        "2024/02/14 - 17:16:18",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.DNDMode",
+        {
+          "DNDMode": {
+            "mode": 0
+          }
+        }
+      ],
+      [
+        "2024/02/14 - 17:16:18",
+        "",
+        "auto",
+        "LOG",
+        "DEBUG",
+        "polling end"
+      ]
+    ]
+  }
+}

@@ -1,88 +1,78 @@
 """"""
+
 from __future__ import annotations
 
 from random import randint
 import typing
 
-from custom_components.meross_lan.merossclient import const as mc, get_element_by_key
+from custom_components.meross_lan.helpers import clamp
+from custom_components.meross_lan.merossclient import (
+    NAMESPACE_TO_KEY,
+    const as mc,
+    get_element_by_key,
+    update_dict_strict,
+    update_dict_strict_by_key,
+)
 
-from .. import MerossEmulator, MerossEmulatorDescriptor
+if typing.TYPE_CHECKING:
+    from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
 class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+    MAP_DEVICE_SCALE = {
+        "mts200": 10,
+        "mts200b": 10,
+        "mts960": 100,
+    }
+    MAP_ENTITY_NS_DEFAULT = {
+        mc.KEY_CALIBRATION: {
+            mc.KEY_VALUE: 0,
+            mc.KEY_MIN: -5,
+            mc.KEY_MAX: 5,
+        },
+        mc.KEY_DEADZONE: {
+            mc.KEY_VALUE: 0.5,
+            mc.KEY_MIN: 0.5,
+            mc.KEY_MAX: 3.5,
+        },
+        mc.KEY_FROST: {
+            mc.KEY_VALUE: 5,
+            mc.KEY_MIN: 5,
+            mc.KEY_MAX: 15,
+            mc.KEY_ONOFF: 0,
+            mc.KEY_WARNING: 0,
+        },
+        mc.KEY_OVERHEAT: {
+            mc.KEY_VALUE: 32,
+            mc.KEY_MIN: 20,
+            mc.KEY_MAX: 70,
+            mc.KEY_ONOFF: 0,
+            mc.KEY_WARNING: 0,
+            mc.KEY_CURRENTTEMP: 32,
+        },
+    }
+
     def __init__(self, descriptor: MerossEmulatorDescriptor, key):
         super().__init__(descriptor, key)
-        # ensure (despite our trace content..) the mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
-        # list is in place
-        self._thermostat_overheat: list[dict[str, object]] = descriptor.namespaces[
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
-        ][mc.KEY_OVERHEAT]
-        for p_digest_thermostat_mode in descriptor.digest[mc.KEY_THERMOSTAT][
-            mc.KEY_MODE
-        ]:
-            channel = p_digest_thermostat_mode[mc.KEY_CHANNEL]
-            try:
-                get_element_by_key(self._thermostat_overheat, mc.KEY_CHANNEL, channel)
-            except Exception:
-                self._thermostat_overheat.append(
-                    {
-                        mc.KEY_CHANNEL: channel,
-                        mc.KEY_WARNING: 0,
-                        mc.KEY_VALUE: 335,
-                        mc.KEY_ONOFF: 0,
-                        mc.KEY_MIN: 200,
-                        mc.KEY_MAX: 700,
-                        mc.KEY_CURRENTTEMP: 355,
-                        mc.KEY_LMTIME: 0
-                    }
-                )
-
-    def _GET_Appliance_Control_Thermostat_Overheat(self, header, payload):
-        """
-        {
-            "overheat": [
-                {
-                    "channel":0, "warning":0, "value": 335, "onoff": 1,
-                    "min": 200, "max": 700, "lmTime": 1674121910, "currentTemp": 355,
-                }
-            ]
-        }
-        """
-        response_overheat_list = []
-        for p_payload_channel in payload[mc.KEY_OVERHEAT]:
-            channel = p_payload_channel[mc.KEY_CHANNEL]
-            p_overheat = get_element_by_key(
-                self._thermostat_overheat, mc.KEY_CHANNEL, channel
-            )
-            p_overheat[mc.KEY_WARNING] = randint(0, 2)
-            p_overheat[mc.KEY_LMTIME] = self.epoch
-            response_overheat_list.append(p_overheat)
-        return mc.METHOD_GETACK, {mc.KEY_OVERHEAT: response_overheat_list}
+        self.device_scale = self.MAP_DEVICE_SCALE[descriptor.type]
 
     def _SET_Appliance_Control_Thermostat_Mode(self, header, payload):
         p_digest = self.descriptor.digest
         p_digest_mode_list = p_digest[mc.KEY_THERMOSTAT][mc.KEY_MODE]
-        p_digest_windowopened_list = {}
+        p_digest_windowopened_list = []
         p_mode_list = payload[mc.KEY_MODE]
         for p_mode in p_mode_list:
             channel = p_mode[mc.KEY_CHANNEL]
-            p_digest_mode = get_element_by_key(
-                p_digest_mode_list, mc.KEY_CHANNEL, channel
-            )
-            p_digest_mode.update(p_mode)
+            p_digest_mode = update_dict_strict_by_key(p_digest_mode_list, p_mode)
             mode = p_digest_mode[mc.KEY_MODE]
-            MODE_KEY_MAP = {
-                mc.MTS200_MODE_HEAT: mc.KEY_HEATTEMP,
-                mc.MTS200_MODE_COOL: mc.KEY_COOLTEMP,
-                mc.MTS200_MODE_ECO: mc.KEY_ECOTEMP,
-                mc.MTS200_MODE_CUSTOM: mc.KEY_MANUALTEMP,
-            }
-            if mode in MODE_KEY_MAP:
-                p_digest_mode[mc.KEY_TARGETTEMP] = p_digest_mode[MODE_KEY_MAP[mode]]
-            else:  # we use this to trigger a windowOpened later in code
-                p_digest_windowopened_list = p_digest[mc.KEY_THERMOSTAT][
-                    mc.KEY_WINDOWOPENED
+            if mode in mc.MTS200_MODE_TO_TARGETTEMP_MAP:
+                p_digest_mode[mc.KEY_TARGETTEMP] = p_digest_mode[
+                    mc.MTS200_MODE_TO_TARGETTEMP_MAP[mode]
                 ]
+            else:  # we use this to trigger a windowOpened later in code
+                p_digest_windowopened_list = p_digest[mc.KEY_THERMOSTAT].get(
+                    mc.KEY_WINDOWOPENED, []
+                )
             if p_digest_mode[mc.KEY_ONOFF]:
                 p_digest_mode[mc.KEY_STATE] = (
                     1
@@ -102,3 +92,93 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                     break
 
         return mc.METHOD_SETACK, {}
+
+    def _handle_Appliance_Control_Thermostat_Any(self, header, payload):
+        """
+        {
+            "frost": [
+                {
+                    "channel":0, "warning":0, "value": 335, "onoff": 1,
+                    "min": 200, "max": 700
+                }
+            ]
+        }
+        """
+        namespace = header[mc.KEY_NAMESPACE]
+        namespace_key = NAMESPACE_TO_KEY[namespace]
+        method = header[mc.KEY_METHOD]
+
+        digest: list[dict[str, object]] = self.descriptor.namespaces[namespace][
+            namespace_key
+        ]
+        response_list = []
+        for p_request_channel in payload[namespace_key]:
+            channel = p_request_channel[mc.KEY_CHANNEL]
+            try:
+                p_digest_channel = get_element_by_key(digest, mc.KEY_CHANNEL, channel)
+            except Exception as exception:
+                p_digest_channel = dict(self.MAP_ENTITY_NS_DEFAULT[namespace_key])
+                p_digest_channel[mc.KEY_CHANNEL] = channel
+                p_digest_channel[mc.KEY_VALUE] = (
+                    p_digest_channel[mc.KEY_VALUE] * self.device_scale
+                )
+                p_digest_channel[mc.KEY_MIN] = (
+                    p_digest_channel[mc.KEY_MIN] * self.device_scale
+                )
+                p_digest_channel[mc.KEY_MAX] = (
+                    p_digest_channel[mc.KEY_MAX] * self.device_scale
+                )
+                digest.append(p_digest_channel)
+
+            p_digest_channel[mc.KEY_LMTIME] = self.epoch
+
+            if method == mc.METHOD_GET:
+                # randomize some input in case
+                """
+                generally speaking the KEY_VALUE hosts a config and not a reading
+                some entity ns have additional values like 'Overheat' that carries 'currentTemp'
+                """
+                if mc.KEY_WARNING in p_digest_channel:
+                    p_digest_channel[mc.KEY_WARNING] = randint(0, 2)
+                if mc.KEY_CURRENTTEMP in p_digest_channel and randint(0, 5):
+                    current_temp = p_digest_channel[mc.KEY_CURRENTTEMP]
+                    current_temp += randint(-1, 1) * self.device_scale
+                    p_digest_channel[mc.KEY_CURRENTTEMP] = clamp(
+                        current_temp,
+                        p_digest_channel[mc.KEY_MIN],
+                        p_digest_channel[mc.KEY_MAX],
+                    )
+                response_list.append(p_digest_channel)
+            elif method == mc.METHOD_SET:
+                update_dict_strict(p_digest_channel, p_request_channel)
+
+        if method == mc.METHOD_GET:
+            return mc.METHOD_GETACK, {namespace_key: response_list}
+        elif method == mc.METHOD_SET:
+            return mc.METHOD_SETACK, {}
+        else:
+            raise Exception(f"unsupported request method {method}")
+
+    def _GET_Appliance_Control_Thermostat_Calibration(self, header, payload):
+        return self._handle_Appliance_Control_Thermostat_Any(header, payload)
+
+    def _SET_Appliance_Control_Thermostat_Calibration(self, header, payload):
+        return self._handle_Appliance_Control_Thermostat_Any(header, payload)
+
+    def _GET_Appliance_Control_Thermostat_Frost(self, header, payload):
+        return self._handle_Appliance_Control_Thermostat_Any(header, payload)
+
+    def _SET_Appliance_Control_Thermostat_Frost(self, header, payload):
+        return self._handle_Appliance_Control_Thermostat_Any(header, payload)
+
+    def _GET_Appliance_Control_Thermostat_DeadZone(self, header, payload):
+        return self._handle_Appliance_Control_Thermostat_Any(header, payload)
+
+    def _SET_Appliance_Control_Thermostat_DeadZone(self, header, payload):
+        return self._handle_Appliance_Control_Thermostat_Any(header, payload)
+
+    def _GET_Appliance_Control_Thermostat_Overheat(self, header, payload):
+        return self._handle_Appliance_Control_Thermostat_Any(header, payload)
+
+    def _SET_Appliance_Control_Thermostat_Overheat(self, header, payload):
+        return self._handle_Appliance_Control_Thermostat_Any(header, payload)

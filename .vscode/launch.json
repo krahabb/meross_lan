@@ -15,8 +15,9 @@
         "40000",
         "emulator:run",
         "emulator_traces",
-        "-K pippo"
-        //"-U 01234567890123456789012345678901"
+        "-key pippo",
+        "-broker localhost:8883",
+        //"-uuid 01234567890123456789012345678901"
       ]
     },
     {

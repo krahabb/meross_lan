@@ -21,6 +21,8 @@ from .helpers import clamp
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
+    from typing import ClassVar, Final
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -31,10 +33,6 @@ async def async_setup_entry(
     hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, calendar.DOMAIN)
-
-
-class MLCalendar(me.MerossEntity, calendar.CalendarEntity):  # type: ignore
-    PLATFORM = calendar.DOMAIN
 
 
 MTS_SCHEDULE_WEEKDAY = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
@@ -63,7 +61,7 @@ class MtsScheduleEntry:
     day: datetime  # base date of day used when querying this: used to calculate CalendarEvent
     data: MtsScheduleNativeEntry  # actually points to the inner list in the native payload (not a copy)
 
-    def get_event(self) -> calendar.CalendarEvent:
+    def get_event(self, climate: MtsClimate) -> calendar.CalendarEvent:
         """
         returns an HA CalendarEvent set up with this entry data (schedule)
         relevant for the calendar day provided in event_day
@@ -88,33 +86,38 @@ class MtsScheduleEntry:
         return calendar.CalendarEvent(
             start=dt.as_utc(event_begin),
             end=dt.as_utc(event_end),
-            summary=f"{self.data[1] / 10} {MtsClimate.TEMP_CELSIUS}",
+            summary=f"{self.data[1] / climate.device_scale} {climate.temperature_unit}",
             description="",
             uid=f"{MTS_SCHEDULE_WEEKDAY[self.weekday_index]}#{self.index}",
             rrule=MTS_SCHEDULE_RRULE,
         )
 
 
-class MtsSchedule(MLCalendar):
+class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
+    PLATFORM = calendar.DOMAIN
     manager: MerossDeviceBase
-    climate: typing.Final[MtsClimate]
 
-    namespace: str  # set in descendant class def
-    key_channel: str  # set in descendant class def
+    # set in descendants class def
+    namespace: ClassVar[str]
+    key_namespace: ClassVar[str]
+    key_channel: ClassVar[str]
 
-    _attr_entity_category = me.EntityCategory.CONFIG
-    _attr_state: MtsScheduleNativeType | None
-    _attr_supported_features = (
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.CONFIG
+    supported_features: calendar.CalendarEntityFeature = (
         calendar.CalendarEntityFeature.CREATE_EVENT
         | calendar.CalendarEntityFeature.DELETE_EVENT
         | calendar.CalendarEntityFeature.UPDATE_EVENT
     )
 
+    climate: Final[MtsClimate]
+    _native_schedule: MtsScheduleNativeType | None
     _schedule: MtsScheduleNativeType | None
 
     __slots__ = (
         "climate",
         "_flatten",
+        "_native_schedule",
         "_schedule",
         "_schedule_unit_time",
         "_schedule_entry_count",
@@ -129,24 +132,38 @@ class MtsSchedule(MLCalendar):
         # save a flattened version of the device schedule to ease/optimize CalendarEvent management
         # since the original schedule has a fixed number of contiguous events spanning the day(s) (6 on my MTS100)
         # we might 'compress' these when 2 or more consecutive entries don't change the temperature
-        # self._attr_state carries the original unpacked schedule payload from the device representing
+        # _native_schedule carries the original unpacked schedule payload from the device representing
         # its effective state
+        self._native_schedule = None
         self._schedule = None
         # set the 'granularity' of the schedule entries i.e. the schedule duration
         # must be a multiple of this time (in minutes). It is set lately by customized
         # implementations
         self._schedule_unit_time = 15
         # number of schedules per day supported by the device. Mines (mts100) default to 6
-        # but we're recovering the value by inspecting the device scheduleB payload.
-        # Also, this should be the same as scheduleBMode in Mts100Climate
+        # The exact value should be extracted from scheduleBMode for mts100.
+        # mts200 instead are showing a "section" == 8 value in their .Schedule payload which
+        # could represent this information. Being not sure we're skipping that.
+        # The default here (=0) disables any schedule entry count check in building payloads
+        # meaning we're sending (more or less) the effective number of entries (per day) as
+        # shown/available in the calendar UI.
         self._schedule_entry_count = 0
-        self._attr_extra_state_attributes = {}
-        super().__init__(climate.manager, climate.channel, mc.KEY_SCHEDULE, None)
+        self.extra_state_attributes = {}
+        super().__init__(climate.manager, climate.channel, self.key_namespace)
 
     # interface: MerossEntity
     async def async_shutdown(self):
         self.climate = None  # type: ignore
         await super().async_shutdown()
+
+    async def async_added_to_hass(self):
+        self.manager.check_device_timezone()
+        return await super().async_added_to_hass()
+
+    def set_unavailable(self):
+        self._native_schedule = None
+        self._schedule = None
+        super().set_unavailable()
 
     # interface: Calendar
     @property
@@ -154,7 +171,7 @@ class MtsSchedule(MLCalendar):
         """Return the next upcoming event."""
         if self.climate.is_mts_scheduled():
             if event_index := self._get_event_entry(datetime.now(tz=self.manager.tz)):
-                return event_index.get_event()
+                return event_index.get_event(self.climate)
         return None
 
     async def async_get_events(
@@ -167,13 +184,14 @@ class MtsSchedule(MLCalendar):
         events = []
         event_entry = self._get_event_entry(start_date.astimezone(self.manager.tz))
         while event_entry:
-            event = event_entry.get_event()
+            event = event_entry.get_event(self.climate)
             if event.start >= end_date:
                 break
             events.append(event)
             # we'll set a guard to prevent crazy loops
             if len(events) > 1000:
-                self.warning(
+                self.log(
+                    self.WARNING,
                     "returning too many calendar events: breaking the loop now",
                     timeout=14400,
                 )
@@ -187,7 +205,7 @@ class MtsSchedule(MLCalendar):
             await self._async_request_schedule()
         except Exception as exception:
             # invalidate working data (might be dirty)
-            self._schedule = None
+            self._build_internal_schedule()
             raise HomeAssistantError(
                 f"{type(exception).__name__} {str(exception)}"
             ) from exception
@@ -205,7 +223,7 @@ class MtsSchedule(MLCalendar):
                 raise Exception("The daily schedule must contain at least one event")
         except Exception as error:
             # invalidate working data (might be dirty)
-            self._schedule = None
+            self._build_internal_schedule()
             raise HomeAssistantError(str(error)) from error
 
     async def async_update_event(
@@ -221,85 +239,33 @@ class MtsSchedule(MLCalendar):
             await self._async_request_schedule()
         except Exception as error:
             # invalidate working data (might be dirty)
-            self._schedule = None
+            self._build_internal_schedule()
             raise HomeAssistantError(str(error)) from error
 
     # interface: self
-    @property
-    def schedule(self):
-        if self._schedule is None:
-            if state := self._attr_state:
-                # state = {
-                #   ...
-                #   "mon": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-                #   "tue": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-                #   "wed": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-                #   "thu": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-                #   "fri": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-                #   "sat": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
-                #   "sun": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
-                #   }
-                schedule: MtsScheduleNativeType = {w: [] for w in MTS_SCHEDULE_WEEKDAY}
-                for weekday, weekday_schedule in schedule.items():
-                    if weekday_state := state.get(weekday):
-                        # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
-                        # recover the length and do a sanity check: we expect
-                        # the device schedules to be the same fixed length
-                        schedule_entry_count = len(weekday_state)
-                        if self._schedule_entry_count != schedule_entry_count:
-                            # this should fire only on first weekday scan
-                            if self._schedule_entry_count:
-                                # TODO: mts200b (trace from #369) shows this is possible
-                                # so we'll have to rethink our algorithm
-                                self.warning(
-                                    "unexpected device schedule entries count",
-                                    timeout=14400,
-                                )
-                            else:
-                                self._schedule_entry_count = schedule_entry_count
-                        if self._flatten:
-                            current_entry = None
-                            for entry in weekday_state:
-                                if current_entry and (entry[1] == current_entry[1]):
-                                    # same T: flatten out
-                                    current_entry[0] = current_entry[0] + entry[0]
-                                else:
-                                    current_entry = list(entry)
-                                    weekday_schedule.append(current_entry)
-                        else:
-                            # don't flatten..but (deep)copy over
-                            for entry in weekday_state:
-                                weekday_schedule.append(list(entry))
-
-                self._schedule = schedule
-
-        return self._schedule
-
-    def update_mts_state(self):
-        # since our state/active event is dependent on climate mode
-        # we'll force a state update when the climate entity
-        if self._hass_connected:
-            self._async_write_ha_state()
-
     async def _async_request_schedule(self):
-        if schedule := self.schedule:
+        if schedule := self._schedule:
             payload = {}
             # the time duration step (minimum interval) of the schedule intervals
-            schedule_entry_unittime = self._schedule_unit_time
+            schedule_unit_time = self._schedule_unit_time
             # unpack our schedule struct to be compliant with the device payload i.e.
             # the weekday_schedule must contain
             for weekday, weekday_schedule in schedule.items():
+                schedule_entry_count = self._schedule_entry_count
+                if not schedule_entry_count:
+                    # no checks on number of items in day schedule
+                    payload[weekday] = weekday_schedule
+                    continue
+
                 # our working schedule might contain less entries than requested by MTS
-                schedule_items_missing = self._schedule_entry_count - len(
-                    weekday_schedule
-                )
+                schedule_items_missing = schedule_entry_count - len(weekday_schedule)
                 if schedule_items_missing < 0:
                     raise Exception("Inconsistent number of elements in the schedule")
                 if schedule_items_missing == 0:
                     payload[weekday] = weekday_schedule
                     continue
                 # we have to generate some 'filler' since the mts expects
-                # schedule_items_count in the weekday schedule
+                # _schedule_entry_count in the weekday schedule
                 payload_weekday_schedule = []
                 for schedule_entry in weekday_schedule:
                     # schedule_entry[0] = duration
@@ -309,13 +275,13 @@ class MtsSchedule(MLCalendar):
                         payload_weekday_schedule.append(schedule_entry)
                         continue
                     schedule_entry_duration = schedule_entry[0]
-                    while (schedule_entry_duration > schedule_entry_unittime) and (
+                    while (schedule_entry_duration > schedule_unit_time) and (
                         schedule_items_missing > 0
                     ):
                         payload_weekday_schedule.append(
-                            [schedule_entry_unittime, schedule_entry[1]]
+                            [schedule_unit_time, schedule_entry[1]]
                         )
-                        schedule_entry_duration -= schedule_entry_unittime
+                        schedule_entry_duration -= schedule_unit_time
                         schedule_items_missing -= 1
                     payload_weekday_schedule.append(
                         [schedule_entry_duration, schedule_entry[1]]
@@ -327,14 +293,14 @@ class MtsSchedule(MLCalendar):
             if not await self.manager.async_request_ack(
                 self.namespace,
                 mc.METHOD_SET,
-                {mc.KEY_SCHEDULE: [payload]},
+                {self.key_namespace: [payload]},
             ):
                 # there was an error so we request the actual device state again
                 if self.manager.online:
                     await self.manager.async_request(
                         self.namespace,
                         mc.METHOD_GET,
-                        {mc.KEY_SCHEDULE: [{self.key_channel: self.channel}]},
+                        {self.key_namespace: [{self.key_channel: self.channel}]},
                     )
 
     def _get_event_entry(self, event_time: datetime) -> MtsScheduleEntry | None:
@@ -343,7 +309,7 @@ class MtsSchedule(MLCalendar):
         the internal representation to the HA CaleandarEvent used to pass the state to HA.
         event_time is expressed in local time of the device (if it has any configured)
         """
-        schedule = self.schedule
+        schedule = self._schedule
         if not schedule:
             return None
         weekday_index = event_time.weekday()
@@ -376,10 +342,10 @@ class MtsSchedule(MLCalendar):
         """Extracts the next event entry description from the internal schedule representation
         Useful to iterate over when HA asks for data
         """
+        schedule = self._schedule
+        if not schedule:
+            return None
         with self.exception_warning("parsing internal schedule", timeout=14400):
-            schedule = self.schedule
-            if not schedule:
-                return None
             weekday_index = event_entry.weekday_index
             weekday_schedule: list = schedule[MTS_SCHEDULE_WEEKDAY[weekday_index]]
             schedule_index = event_entry.index + 1
@@ -392,14 +358,14 @@ class MtsSchedule(MLCalendar):
                 weekday_schedule = schedule[MTS_SCHEDULE_WEEKDAY[weekday_index]]
                 schedule_index = 0
                 schedule_minutes_begin = 0
-            schedule = weekday_schedule[schedule_index]
+            schedule_native_entry = weekday_schedule[schedule_index]
             return MtsScheduleEntry(
                 weekday_index=weekday_index,
                 index=schedule_index,
                 minutes_begin=schedule_minutes_begin,
-                minutes_end=schedule_minutes_begin + schedule[0],
+                minutes_end=schedule_minutes_begin + schedule_native_entry[0],
                 day=event_day,
-                data=schedule,
+                data=schedule_native_entry,
             )
 
     def _extract_rfc5545_temp(self, event: dict[str, typing.Any]) -> int:
@@ -444,7 +410,7 @@ class MtsSchedule(MLCalendar):
         )
 
     def _internal_delete_event(self, uid: str):
-        schedule = self.schedule
+        schedule = self._schedule
         if not schedule:
             raise Exception("Internal state unavailable")
         uid_split = uid.split("#")
@@ -466,12 +432,10 @@ class MtsSchedule(MLCalendar):
         return True
 
     async def _internal_create_event(self, **kwargs):
-        schedule = self.schedule
+        schedule = self._schedule
         if not schedule:
             raise Exception("Internal state unavailable")
-        # get the number of maximum entries for the day from device state
-        if self._schedule_entry_count < 1:
-            raise Exception("Not enough schedule space available")
+        schedule_unit_time = self._schedule_unit_time
         (
             event_start,
             event_end,
@@ -480,7 +444,7 @@ class MtsSchedule(MLCalendar):
         # allow only schedule up to midnight: i.e. not spanning multiple days
         event_day_start = event_start.replace(hour=0, minute=0, second=0, microsecond=0)
         event_minutes_start = event_start.hour * 60 + event_start.minute
-        event_minutes_start -= event_minutes_start % self._schedule_unit_time
+        event_minutes_start -= event_minutes_start % schedule_unit_time
         event_day_end = event_day_start + timedelta(days=1)
         if event_end > event_day_end:
             raise Exception("Events spanning multiple days are not allowed")
@@ -489,16 +453,12 @@ class MtsSchedule(MLCalendar):
         else:
             # round up to the next self._scheduleunittime interval
             event_minutes_end = event_end.hour * 60 + event_end.minute
-            event_minutes_end_remainder = event_minutes_end % self._schedule_unit_time
+            event_minutes_end_remainder = event_minutes_end % schedule_unit_time
             if event_minutes_end_remainder:
-                event_minutes_end += (
-                    self._schedule_unit_time - event_minutes_end_remainder
-                )
+                event_minutes_end += schedule_unit_time - event_minutes_end_remainder
         event_minutes_duration = event_minutes_end - event_minutes_start
-        if event_minutes_duration < self._schedule_unit_time:
-            raise Exception(
-                f"Minimum event duration is {self._schedule_unit_time} minutes"
-            )
+        if event_minutes_duration < schedule_unit_time:
+            raise Exception(f"Minimum event duration is {schedule_unit_time} minutes")
 
         # recognize some basic recurrence scheme: typically the MTS100 has a weekly schedule
         # and that's by default but we let the user select a daily schedule to setup
@@ -617,7 +577,12 @@ class MtsSchedule(MLCalendar):
             # at this point our schedule is set but might have too many events in it
             # (total schedules entry need to be less than so we'll reparse and kindly coalesce some events
             assert schedule_index_insert is not None, "New event was not added"
-            while len(weekday_schedule) > self._schedule_entry_count:
+            schedule_entry_count = self._schedule_entry_count
+            if not schedule_entry_count:
+                # we don't have a set limit. Leave as is
+                continue
+
+            while len(weekday_schedule) > schedule_entry_count:
                 # note that len(weekday_schedule) will always be >= 2 since we floored schedule_count
                 if schedule_index_insert > 1:
                     # remove event before if not inserted as first or second
@@ -643,18 +608,53 @@ class MtsSchedule(MLCalendar):
 
             # end for weekday
 
+    def _build_internal_schedule(self):
+        self._schedule = None
+        if state := self._native_schedule:
+            # state = {
+            #   ...
+            #   "mon": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+            #   "tue": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+            #   "wed": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+            #   "thu": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+            #   "fri": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+            #   "sat": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]],
+            #   "sun": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
+            #   }
+            with self.exception_warning("_build_internal_schedule", timeout=14400):
+                schedule: MtsScheduleNativeType = {w: [] for w in MTS_SCHEDULE_WEEKDAY}
+                for weekday, weekday_schedule in schedule.items():
+                    if weekday_state := state.get(weekday):
+                        # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
+                        if self._flatten:
+                            current_entry = None
+                            for entry in weekday_state:
+                                if current_entry and (entry[1] == current_entry[1]):
+                                    # same T: flatten out
+                                    current_entry[0] = current_entry[0] + entry[0]
+                                else:
+                                    current_entry = list(entry)
+                                    weekday_schedule.append(current_entry)
+                        else:
+                            # don't flatten..but (deep)copy over
+                            for entry in weekday_state:
+                                weekday_schedule.append(list(entry))
+
+                self._schedule = schedule
+
     # message handlers
-    def _parse_schedule(self, payload: dict):
+    def _parse(self, payload: dict):
         # the payload we receive from the device might be partial
         # if we're getting the PUSH in realtime since it only carries
         # the updated entries for the updated day.
-        if isinstance(self._attr_state, dict):
-            self._attr_state.update(payload)
+        native_schedule = self._native_schedule
+        if native_schedule:
+            native_schedule.update(payload)
+            if self._native_schedule == native_schedule:
+                return
         else:
-            self._attr_state = payload
-        self._attr_extra_state_attributes[mc.KEY_SCHEDULE] = str(self._attr_state)
-        # invalidate our internal representation and flush
-        self._schedule = None
-        self._schedule_entry_count = 0
-        if self._hass_connected:
-            self._async_write_ha_state()
+            native_schedule = payload
+        self.extra_state_attributes[self.key_namespace] = str(native_schedule)
+        self._native_schedule = native_schedule
+        self._build_internal_schedule()
+        self.flush_state()

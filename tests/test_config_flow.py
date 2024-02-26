@@ -1,7 +1,6 @@
 """Test meross_lan config flow"""
-import json
+from typing import Final
 from uuid import uuid4
-import typing
 
 from homeassistant import config_entries
 from homeassistant.components.dhcp import DhcpServiceInfo
@@ -15,6 +14,7 @@ from custom_components.meross_lan.merossclient import (
     build_message,
     cloudapi,
     const as mc,
+    json_dumps,
 )
 
 from tests import const as tc, helpers
@@ -32,43 +32,41 @@ async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
     """
     with helpers.EmulatorContext(mc.TYPE_MTS200, aioclient_mock) as emulator_context:
         emulator = emulator_context.emulator
-        device_id = emulator.descriptor.uuid
         host = emulator_context.host
 
-        result = await hass.config_entries.flow.async_init(
+        config_flow = hass.config_entries.flow
+        result = await config_flow.async_init(
             mlc.DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
-        # Check that the config flow shows the menu as the first step
-        assert result["type"] == FlowResultType.MENU  # type: ignore
-        assert result["step_id"] == "user"  # type: ignore
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            user_input={"next_step_id": "device"},
+        result = await helpers.async_assert_flow_menu_to_step(
+            config_flow, result, "user", "device"
         )
-        assert result["type"] == FlowResultType.FORM  # type: ignore
-        assert result["step_id"] == "device"  # type: ignore
         # we'll use the configuration of the emulator to reach it
         # through the aioclient_mock
-        result = await hass.config_entries.flow.async_configure(
+        result = await config_flow.async_configure(
             result["flow_id"],
             user_input={mlc.CONF_HOST: host, mlc.CONF_KEY: emulator.key},
         )
-
         assert result["type"] == FlowResultType.FORM  # type: ignore
         assert result["step_id"] == "finalize"  # type: ignore
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], user_input={}
-        )
-
+        result = await config_flow.async_configure(result["flow_id"], user_input={})
         assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
 
-        data = result["data"]  # type: ignore
-        assert data[mlc.CONF_DEVICE_ID] == device_id
+        data: mlc.DeviceConfigType = result["data"]  # type: ignore
+        descriptor = emulator.descriptor
+        assert data[mlc.CONF_DEVICE_ID] == descriptor.uuid
         assert data[mlc.CONF_HOST] == host
         assert data[mlc.CONF_KEY] == emulator.key
-        assert data[mlc.CONF_PAYLOAD][mc.KEY_ALL] == emulator.descriptor.all
-        assert data[mlc.CONF_PAYLOAD][mc.KEY_ABILITY] == emulator.descriptor.ability
+        # since the emulator updates it's own state (namely the timestamp)
+        # on every request we have to be careful in comparing configuration
+        payload = data[mlc.CONF_PAYLOAD]
+        payload_all = payload[mc.KEY_ALL]
+        payload_time = payload_all[mc.KEY_SYSTEM][mc.KEY_TIME]
+        if payload_time[mc.KEY_TIMESTAMP] == descriptor.time[mc.KEY_TIMESTAMP] - 1:
+            # we just have to patch when the emulator timestamp ticked around a second
+            payload_time[mc.KEY_TIMESTAMP] = descriptor.time[mc.KEY_TIMESTAMP]
+        assert payload_all == descriptor.all
+        assert payload[mc.KEY_ABILITY] == descriptor.ability
 
         # now cleanup the entry
         await _cleanup_config_entry(hass, result)
@@ -82,56 +80,58 @@ async def test_profile_config_flow(
     """
     Test cloud profile entry config flow
     """
-    result = await hass.config_entries.flow.async_init(
+    config_flow = hass.config_entries.flow
+
+    result = await config_flow.async_init(
         mlc.DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
-    # Check that the config flow shows the menu as the first step
-    assert result["type"] == FlowResultType.MENU  # type: ignore
-    assert result["step_id"] == "user"  # type: ignore
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        user_input={"next_step_id": "profile"},
+    result = await helpers.async_assert_flow_menu_to_step(
+        config_flow, result, "user", "profile"
     )
-    assert result["type"] == FlowResultType.FORM  # type: ignore
-    assert result["step_id"] == "profile"  # type: ignore
-
     # enter wrong profile username/password
-    result = await hass.config_entries.flow.async_configure(
+    result = await config_flow.async_configure(
         result["flow_id"],
         user_input={
             mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: "",
+            mlc.CONF_SAVE_PASSWORD: False,
+            mlc.CONF_ALLOW_MQTT_PUBLISH: False,
+            mlc.CONF_CHECK_FIRMWARE_UPDATES: False,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 1
     assert result["type"] == FlowResultType.FORM  # type: ignore
     assert result["step_id"] == "profile"  # type: ignore
-
     # put the cloud offline
     cloudapi_mock.online = False
-    result = await hass.config_entries.flow.async_configure(
+    result = await config_flow.async_configure(
         result["flow_id"],
         user_input={
             mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
+            mlc.CONF_SAVE_PASSWORD: False,
+            mlc.CONF_ALLOW_MQTT_PUBLISH: False,
+            mlc.CONF_CHECK_FIRMWARE_UPDATES: False,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 2
     assert result["type"] == FlowResultType.FORM  # type: ignore
     assert result["step_id"] == "profile"  # type: ignore
-
     # online the cloud and finish setup
     cloudapi_mock.online = True
-    result = await hass.config_entries.flow.async_configure(
+    result = await config_flow.async_configure(
         result["flow_id"],
         user_input={
             mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
             mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
+            mlc.CONF_SAVE_PASSWORD: False,
             mlc.CONF_ALLOW_MQTT_PUBLISH: True,
+            mlc.CONF_CHECK_FIRMWARE_UPDATES: True,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 3
     assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
+
     data: mlc.ProfileConfigType = result["data"]  # type: ignore
     assert data == tc.MOCK_PROFILE_CONFIG
 
@@ -156,7 +156,7 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
         mc.TOPIC_REQUEST.format(device_id),
     )
 
-    async_fire_mqtt_message(hass, topic, json.dumps(payload))
+    async_fire_mqtt_message(hass, topic, json_dumps(payload))
     await hass.async_block_till_done()
 
     # we should have 2 flows now: one for the MQTT hub and the other for the
@@ -203,14 +203,12 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
     When an entry is already configured, check what happens when dhcp sends
     us a new ip
     """
-    device_type: typing.Final = mc.TYPE_MTS200
+    device_type: Final = mc.TYPE_MTS200
     async with helpers.DeviceContext(
         hass, device_type, aioclient_mock
     ) as device_context:
-        await device_context.perform_coldstart()
-
-        assert (device := device_context.device)
-        assert (emulator := device_context.emulator)
+        emulator = device_context.emulator
+        device = await device_context.perform_coldstart()
 
         # better be sure our context is consistent with expectations!
         assert device.host == str(id(emulator))
@@ -231,7 +229,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             emulator_dhcp.descriptor.uuid == device.descriptor.uuid
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
-        DHCP_GOOD_HOST: typing.Final = "88.88.88.88"
+        DHCP_GOOD_HOST: Final = "88.88.88.88"
         with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_GOOD_HOST
         ):
@@ -247,7 +245,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             assert device.host == DHCP_GOOD_HOST, "device host was not updated"
 
         # here we build a different (device uuid) device instance
-        BOGUS_DEVICE_ID: typing.Final = uuid4().hex
+        BOGUS_DEVICE_ID: Final = uuid4().hex
         emulator_dhcp = helpers.build_emulator(
             device_type, device_id=BOGUS_DEVICE_ID, key=device.key
         )
@@ -258,7 +256,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             emulator_dhcp.descriptor.uuid != device.descriptor.uuid
         ), "wrong emulator clone"
         # now we mock the device emulator at new address
-        DHCP_BOGUS_HOST: typing.Final = "99.99.99.99"
+        DHCP_BOGUS_HOST: Final = "99.99.99.99"
         with helpers.EmulatorContext(
             emulator_dhcp, aioclient_mock, host=DHCP_BOGUS_HOST
         ):
@@ -274,7 +272,9 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             assert device.host == DHCP_GOOD_HOST, "device host was wrongly updated"
 
 
-async def test_options_flow(hass, aioclient_mock, hamqtt_mock, merossmqtt_mock):
+async def test_options_flow(
+    hass: HomeAssistant, aioclient_mock, hamqtt_mock, merossmqtt_mock
+):
     """
     Tests the device config entry option flow. This code could potentially use
     either HTTP or MQTT so we accordingly mock both. TODO: perform the test check
@@ -282,16 +282,14 @@ async def test_options_flow(hass, aioclient_mock, hamqtt_mock, merossmqtt_mock):
     they behave as expected
     """
     async with helpers.DeviceContext(hass, mc.TYPE_MTS200, aioclient_mock) as context:
-        await context.perform_coldstart()
+        device = await context.perform_coldstart()
 
-        assert (device := context.device)
-
-        result = await hass.config_entries.options.async_init(device.config_entry_id)
-
-        assert result["type"] == FlowResultType.FORM
-        assert result["step_id"] == "device"
-
-        result = await hass.config_entries.options.async_configure(
+        options_flow = hass.config_entries.options
+        result = await options_flow.async_init(device.config_entry_id)
+        result = await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "menu", "device"
+        )
+        result = await options_flow.async_configure(
             result["flow_id"],
             user_input={
                 mlc.CONF_HOST: device.host,
@@ -299,21 +297,10 @@ async def test_options_flow(hass, aioclient_mock, hamqtt_mock, merossmqtt_mock):
                 mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
             },
         )
-
-        assert result["type"] == FlowResultType.MENU
-        assert result["step_id"] == "keyerror"
-
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            user_input={
-                "next_step_id": "device",
-            },
+        result = await helpers.async_assert_flow_menu_to_step(
+            options_flow, result, "keyerror", "device"
         )
-
-        assert result["type"] == FlowResultType.FORM
-        assert result["step_id"] == "device"
-
-        result = await hass.config_entries.options.async_configure(
+        result = await options_flow.async_configure(
             result["flow_id"],
             user_input={
                 mlc.CONF_HOST: device.host,
@@ -321,5 +308,4 @@ async def test_options_flow(hass, aioclient_mock, hamqtt_mock, merossmqtt_mock):
                 mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
             },
         )
-
         assert result["type"] == FlowResultType.CREATE_ENTRY

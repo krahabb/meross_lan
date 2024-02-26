@@ -1,6 +1,7 @@
 """Test meross_lan config entry setup"""
+
+from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
@@ -37,7 +38,7 @@ async def test_mqtthub_entry_notready(hass: HomeAssistant):
         await mqtthub_entry_mocker.async_setup()
         # In this case we are testing the condition where async_setup_entry raises
         # ConfigEntryNotReady since we don't have mqtt component in the test environment
-        assert mqtthub_entry_mocker.state == ConfigEntryState.SETUP_RETRY
+        assert mqtthub_entry_mocker.config_entry.state == ConfigEntryState.SETUP_RETRY
 
 
 async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
@@ -54,29 +55,30 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
         tc.EMULATOR_TRACES_PATH, tc.MOCK_DEVICE_UUID, tc.MOCK_KEY
     ):
         async with helpers.DeviceContext(hass, emulator, aioclient_mock) as context:
-            await context.async_load_config_entry()
+            assert await context.async_setup()
 
-            assert (device := context.device)
-            device_ability = emulator.descriptor.ability
+            descriptor = emulator.descriptor
+            ability = descriptor.ability
+            device = context.device
 
             entity_dnd = None
-            if mc.NS_APPLIANCE_SYSTEM_DNDMODE in device_ability:
-                entity_dnd = device.entity_dnd
+            if mc.NS_APPLIANCE_SYSTEM_DNDMODE in ability:
+                entity_dnd = device.entities[mlc.DND_ID]
                 assert isinstance(entity_dnd, MLDNDLightEntity)
                 state = hass.states.get(entity_dnd.entity_id)
-                assert state and state.state == STATE_UNAVAILABLE
+                assert state and state.state == hac.STATE_UNAVAILABLE
 
             sensor_signal_strength = None
-            if mc.NS_APPLIANCE_SYSTEM_RUNTIME in device_ability:
-                sensor_signal_strength = device.sensor_signal_strength
+            if mc.NS_APPLIANCE_SYSTEM_RUNTIME in ability:
+                sensor_signal_strength = device.entities[mlc.SIGNALSTRENGTH_ID]
                 state = hass.states.get(sensor_signal_strength.entity_id)
-                assert state and state.state == STATE_UNAVAILABLE
+                assert state and state.state == hac.STATE_UNAVAILABLE
 
             await context.perform_coldstart()
 
             if entity_dnd:
                 state = hass.states.get(entity_dnd.entity_id)
-                assert state and state.state in (STATE_OFF, STATE_ON)
+                assert state and state.state in (hac.STATE_OFF, hac.STATE_ON)
 
             if sensor_signal_strength:
                 state = hass.states.get(sensor_signal_strength.entity_id)

@@ -52,12 +52,10 @@ When manually configuring a device entry you'll have the option to set:
 - host address: this is available when manually adding a device or when a device is discovered via DHCP: provide the ip address or a valid network host name. When you set the ip address, try to ensure it is 'stable' and not changing between re-boots else the integration could 'loose' access to the device. Starting from version 2.7.0 any dynamic ip change should be recognized by meross_lan so you don't have to manually fix this anymore.
 - device key: this is used to sign messages according to the official Meross protocol behaviour. This should be prefilled with a known key from other devices if you already configured any before. If you enter a wrong or empty key a menu will ask you if you want to manually retry entering a different key or if you want to recover the key from your Meross account. If your device is still paired to the Meross App, this is the way to recover the device key since it is managed by the Meross App and saved in your cloud profile.
 
-These other options are available once the device is setup the first time. To access them just access the integration configuration UI:
+These other options are available once the device is setup the first time. To access them just access the integration configuration UI by hitting 'CONFIGURE' on the device entry from the meross_lan integration page and then 'Configure' (again) from the menu:
 - protocol: the software is able to communicate both over http directly to the device or through an mqtt broker. When you configure an entry by ip address (either manually or dhcp discovered) it usually 'prefers' to talk http for obvious reasons but can nevertheless automatically switch to mqtt if it recognizes it is available (by 'sensing' mqtt messages flowing through). If you set 'Auto' (or leave empty/unconfigured) you'll have this automatic 'failover' switch in both directions (HTTP <-> MQTT) trying to always ensure the best available transport to communicate. If you force it (either HTTP or MQTT) no automatic protocol switching will occur and the integration will only talk that protocol for that configuration entry (some minor exceptions are in place at the moment and some commands are tried over HTTP first anyway).
 - polling: sets the polling period (default is 30 sec) for the device. Devices are generally polled to update their status. There are some optimizations so, for example, if the device is connected through MQTT many general status update requests are automatically 'dropped' since the integration can rely on the device 'PUSH' behaviour (this works if you set protocol 'AUTO' too). Some other status info anyway need to be polled (an example is power/energy readings for power metered plugs) even on MQTT and so the polling is in place 'lightly' even on MQTT. If the device is only reachable on HTTP the integration will nevertheless perform a 'full' status update on every polling cycle. Beware some info are polled on an internal (fixed and probably longer) timeout regardless of the configuration parameter you set.
 - time zone: you can enter your local time zone from the preset list so your device will be set accordingly. Every device tries to get the actual (UTC) time when booting but, expecially if you unpaired it from the Meross cloud service, its time-zone informations are empty since it doesn't know where it lives. This could give some [issues](https://github.com/krahabb/meross_lan/issues/36) so, in order to fix it, it is better to let them know where they live. The integration is not able at the moment to set the device time so ensure your appliances are able to reach an NTP server (they do so at startup).
-- debug tracing: when enabling this option the integration will start to dump every protocol exchange for that device together with relevant logs until timeout is reached. The trace is saved under 'custom_components/meross_lan/traces' (see [wiki](https://github.com/krahabb/meross_lan/wiki/Diagnostics)).
-- debug tracing duration: set the duration of the 'debug tracing' feature. This value will be used as a timeout for tracing data collection. See 'debug tracing' option and the [wiki](https://github.com/krahabb/meross_lan/wiki/Diagnostics) for insights.
 
 ## Supported hardware
 
@@ -66,7 +64,8 @@ Most of this software has been developed and tested on my owned Meross devices w
 - Switches
   - [MSS110](https://www.meross.com/Detail/58/Smart%20Wi-Fi%20Plug%20Mini): Smart Wifi plug mini
   - [MSS210](https://www.meross.com/Detail/3/Smart%20Wi-Fi%20Plug): Smart Wifi plug
-  - [MSS310](https://www.meross.com/Detail/38/Smart%20Wi-Fi%20Plug%20with%20Energy%20Monitor): power plug with metering capabilties
+  - [MSS305](https://www.meross.com/en-gc/smart-plug/amazon-smart-plug/137): power plug with metering capabilities
+    - [MSS310](https://www.meross.com/Detail/38/Smart%20Wi-Fi%20Plug%20with%20Energy%20Monitor): power plug with metering capabilities
   - [MSS315](https://www.meross.com/en-gc/smart-plug/matter-smart-plug/159): Matter power plug with metering capabilties
   - [MSS425](https://www.meross.com/Detail/16/Smart%20Wi-Fi%20Surge%20Protector): Smart WiFi Surge Protector (multiple sockets power strip)
   - [MSS510](https://www.meross.com/Detail/23/Smart%20Wi-Fi%20Single%20Pole%20Switch): Smart WiFi single pole switch
@@ -83,11 +82,14 @@ Most of this software has been developed and tested on my owned Meross devices w
 - Sensors
   - [MS100](https://www.meross.com/Detail/46/Smart%20Temperature%20and%20Humidity%20Sensor): Smart Temperature/Humidity Sensor
   - [MS200](https://www.meross.com/en-gc/smart-sensor/smart-door-and-window-sensor/138): Smart Door/Window Sensor
+  - [MS400](https://www.meross.com/en-gc/smart-sensor/smart-water-leak-sensor/130): Smart Water Leak Sensor
   - [GS559AH](https://www.meross.com/en-gc/smart-sensor/homekit-smoke-detector/120): Smart Smoke Sensor
 - Thermostats
   - [MTS100](https://www.meross.com/Detail/30/Smart%20Thermostat%20Valve): Smart Thermostat Valve
-  - [MTS150](https://www.meross.com/en-gc/smart-thermostat/smart-thermostat-valve/99): Smart Thermostat Valve
+  - [MTS150](https://www.meross.com/en-gc/smart-thermostat/smart-thermostat-valve/99): Smart Thermostat
+  Valve
   - [MTS200](https://www.meross.com/Detail/116/Smart%20Wi-Fi%20Thermostat): Smart Wifi Thermostat
+  - [MTS960](https://www.meross.com/en-gc/smart-thermostat/smart-socket-thermostat/145): Smart Wifi Socket Thermostat
 - Covers
   - [MRS100](https://www.meross.com/product/91/article/): Smart WiFi Roller Shutter
   - [MSG100](https://www.meross.com/product/29/article/): Smart WiFi Garage Door Opener
@@ -96,7 +98,9 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MSXH0](https://www.meross.com/Detail/47/Smart%20Wi-Fi%20Humidifier) [experimental]: Smart WiFi Humidifier
   - [MOD100](https://www.meross.com/Detail/93/Smart%20Wi-Fi%20Essential%20Oil%20Diffuser) [experimental]: Smart WiFi Essential Oil Diffuser
 - Smart Cherub Baby Machine
-  - [HP110A](https://www.meross.com/product/53/article/) [experimental]: Smart Cherub Baby Machine
+  - [HP110A](https://www.meross.com/product/53/article/): Smart Cherub Baby Machine
+- Air Purifier
+  - [MAP100](https://www.meross.com/en-gc/smart-air-purifier/homekit-air-purifier/112) [experimental]: Smart WiFi Air Purifier
 
 ## Features
 

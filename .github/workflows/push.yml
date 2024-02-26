@@ -10,7 +10,7 @@ jobs:
     runs-on: "ubuntu-latest"
     name: Validate
     steps:
-        - uses: "actions/checkout@v3"
+        - uses: "actions/checkout@v4"
 
         - name: HACS validation
           uses: "hacs/action@main"
@@ -25,8 +25,8 @@ jobs:
     runs-on: "ubuntu-latest"
     name: Check style formatting
     steps:
-        - uses: "actions/checkout@v3"
-        - uses: "actions/setup-python@v4"
+        - uses: "actions/checkout@v4"
+        - uses: "actions/setup-python@v5"
           with:
             python-version: ${{ env.DEFAULT_PYTHON }}
         - run: python3 -m pip install black
@@ -37,9 +37,9 @@ jobs:
     name: Run tests
     steps:
       - name: Check out code from GitHub
-        uses: "actions/checkout@v3"
+        uses: "actions/checkout@v4"
       - name: Setup Python
-        uses: "actions/setup-python@v4"
+        uses: "actions/setup-python@v5"
         with:
           python-version: ${{ env.DEFAULT_PYTHON }}
       - name: Install requirements
@@ -48,7 +48,7 @@ jobs:
         run: |
           pytest \
             -qq \
-            --timeout=30 \
+            --timeout=60 \
             --durations=10 \
             -n auto \
             --cov custom_components.meross_lan \

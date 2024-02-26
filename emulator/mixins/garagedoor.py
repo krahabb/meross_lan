@@ -1,23 +1,31 @@
 """"""
+
 from __future__ import annotations
 
 import asyncio
 import typing
 
-from custom_components.meross_lan.merossclient import const as mc, get_element_by_key
+from custom_components.meross_lan.merossclient import (
+    const as mc,
+    get_element_by_key,
+    update_dict_strict,
+    update_dict_strict_by_key,
+)
 
-from .. import MerossEmulator
+if typing.TYPE_CHECKING:
+    from .. import MerossEmulator
 
 
 class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+
+    OPENDURATION = 10
+    CLOSEDURATION = 10
+
     def _SET_Appliance_GarageDoor_Config(self, header, payload):
         p_config = self.descriptor.namespaces[mc.NS_APPLIANCE_GARAGEDOOR_CONFIG][
             mc.KEY_CONFIG
         ]
-        p_request = payload[mc.KEY_CONFIG]
-        for _key, _value in p_request.items():
-            if _key in p_config:
-                p_config[_key] = _value
+        update_dict_strict(p_config, payload[mc.KEY_CONFIG])
         return mc.METHOD_SETACK, {}
 
     def _SET_Appliance_GarageDoor_MultipleConfig(self, header, payload):
@@ -25,9 +33,8 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
         ][mc.KEY_CONFIG]
         for p_payload_channel in payload[mc.KEY_CONFIG]:
-            channel = p_payload_channel[mc.KEY_CHANNEL]
-            p_config_channel = get_element_by_key(p_config, mc.KEY_CHANNEL, channel)
-            p_config_channel.update(p_payload_channel)
+            """{"channel":3,"doorEnable":0,"timestamp":1699130748,"timestampMs":663,"signalClose":10000,"signalOpen":10000,"buzzerEnable":1}"""
+            p_config_channel = update_dict_strict_by_key(p_config, p_payload_channel)
             p_config_channel[mc.KEY_TIMESTAMP] = self.epoch
         return mc.METHOD_SETACK, {}
 
@@ -56,8 +63,10 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             def _state_update_callback():
                 p_state[mc.KEY_OPEN] = request_open
 
-            loop = asyncio.get_event_loop()
-            loop.call_later(2 if request_open else 10, _state_update_callback)
+            asyncio.get_event_loop().call_later(
+                self.OPENDURATION if request_open else self.CLOSEDURATION,
+                _state_update_callback,
+            )
 
         p_response[mc.KEY_EXECUTE] = 1
         return mc.METHOD_SETACK, {mc.KEY_STATE: p_response}

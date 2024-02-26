@@ -1,9 +1,8 @@
 import typing
 
-from . import MerossApi
-from .const import CONF_TRACE, CONF_TRACE_TIMEOUT, DOMAIN
-from .helpers import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict_copy
-from .meross_profile import MerossCloudProfile
+from . import MerossApi, const as mlc
+from .helpers.obfuscate import OBFUSCATE_DEVICE_ID_MAP, obfuscated_dict
+from .meross_profile import MerossCloudProfile, MerossCloudProfileStore
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -23,26 +22,41 @@ async def async_get_config_entry_diagnostics(
     unique_id = entry.unique_id
     assert unique_id, "unique_id must be set to a valid value"
 
-    if unique_id == DOMAIN:
+    data = entry.data
+    obfuscate = data.get(mlc.CONF_OBFUSCATE, True)
+    data = obfuscated_dict(data) if obfuscate else dict(data)
+
+    if unique_id == mlc.DOMAIN:
         # MQTT Hub entry
-        return obfuscated_dict_copy(entry.data)
+        return data
 
     unique_id = unique_id.split(".")
     if unique_id[0] == "profile":
         # profile entry
-        if profile := MerossApi.profiles.get(unique_id[1]):
-            data = obfuscated_dict_copy(profile._data)
-            # the profile contains uuid as keys and obfuscation
-            # is not smart enough
-            data[MerossCloudProfile.KEY_DEVICE_INFO] = {
-                OBFUSCATE_DEVICE_ID_MAP[key]: value
-                for key, value in data[MerossCloudProfile.KEY_DEVICE_INFO].items()  # type: ignore
-            }
-            return data
+        profile_id = unique_id[1]
+        if profile := MerossApi.profiles.get(profile_id):
+            store_data = profile._data
         else:
-            return obfuscated_dict_copy(entry.data)
+            try:
+                store_data = await MerossCloudProfileStore(profile_id).async_load()
+            except Exception:
+                store_data = None
+        if obfuscate:
+            store_data = obfuscated_dict(store_data or {})
+            # the profile contains uuid as keys and obfuscation
+            # is not smart enough (but OBFUSCATE_DEVICE_ID_MAP is already
+            # filled with uuid(s) from the profile device_info(s) and
+            # the device_info(s) were already obfuscated in data)
+            store_data[MerossCloudProfile.KEY_DEVICE_INFO] = {
+                OBFUSCATE_DEVICE_ID_MAP[device_id]: device_info
+                for device_id, device_info in store_data[
+                    MerossCloudProfile.KEY_DEVICE_INFO
+                ].items()
+            }
+        data["store"] = store_data
+        return data
 
-    data = obfuscated_dict_copy(entry.data)
+    # device entry
     if device := MerossApi.devices.get(unique_id[0]):
         data["device"] = {
             "class": type(device).__name__,
@@ -50,7 +64,7 @@ async def async_get_config_entry_diagnostics(
             "pref_protocol": device.pref_protocol,
             "curr_protocol": device.curr_protocol,
             "MQTT": {
-                "cloud_profile": bool(device._cloud_profile),
+                "cloud_profile": isinstance(device._profile, MerossCloudProfile),
                 "locally_active": bool(device.mqtt_locallyactive),
                 "mqtt_connection": bool(device._mqtt_connection),
                 "mqtt_connected": bool(device._mqtt_connected),
@@ -62,12 +76,12 @@ async def async_get_config_entry_diagnostics(
                 "http_active": bool(device._http_active),
             },
             "polling_period": device.polling_period,
-            "polling_dictionary": {
-                namespace: strategy.lastrequest
-                for namespace, strategy in device.polling_dictionary.items()
+            "polling_strategies": {
+                strategy.namespace: strategy.lastrequest
+                for strategy in device.polling_strategies.values()
             },
+            "device_response_size_min": device.device_response_size_min,
+            "device_response_size_max": device.device_response_size_max,
         }
-        data[CONF_TRACE] = await device.get_diagnostics_trace(
-            data.get(CONF_TRACE_TIMEOUT)
-        )
+        data["trace"] = await device.async_get_diagnostics_trace()
     return data

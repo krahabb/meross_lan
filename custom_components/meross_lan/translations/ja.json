@@ -28,11 +28,24 @@
                     "ok": "問題ありません"
                 }
             },
-            "mts200_overheat_warning": {
+            "common": {
                 "state": {
                     "ok": "良い",
-                    "overheating": "過熱",
                     "disconnected": "切断された"
+                }
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "1": "過熱",
+                    "0": "良い",
+                    "2": "切断された"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "良い",
+                    "1": "Freezing",
+                    "2": "切断された"
                 }
             }
         }
@@ -55,7 +68,6 @@
         "step": {
             "user": {
                 "title": "オプションを選択してください",
-                "description": "",
                 "menu_options": {
                     "profile": "Meross クラウド プロファイルを登録する",
                     "device": "デバイスを手動で構成する"
@@ -65,14 +77,16 @@
                 "title": "Meross LAN MQTT Hub",
                 "description": "Meross LAN のグローバル設定",
                 "data": {
-                    "key": "デバイスキー"
+                    "key": "デバイスキー",
+                    "error": "エラーメッセージ"
                 }
             },
             "device": {
                 "description": "Meross デバイスのセットアップ\nタイップ: {device_type}\nUUID: {device_id}",
                 "data": {
                     "host": "デバイスのホストアドレス",
-                    "key": "デバイスキー"
+                    "key": "デバイスキー",
+                    "error": "エラーメッセージ"
                 }
             },
             "keyerror": {
@@ -92,32 +106,38 @@
                     "save_password": "パスワードを保存する",
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
-                    "create_diagnostic_entities": "診断エンティティの作成"
+                    "error": "エラーメッセージ",
+                    "cloud_region": "アカウントの地域",
+                    "mfa_code": "認証コード"
                 }
             },
             "finalize": {
                 "title": "デバイス設定",
-                "description": "タイップ: {device_type}\nUUID: {device_id}",
-                "data": {}
+                "description": "タイップ: {device_type}\nUUID: {device_id}"
             }
         }
     },
     "options": {
-        "error": {
-            "already_configured_device": "可能なデバイスは1つだけ",
-            "cannot_connect": "接続できません",
-            "cloud_profile_mismatch": "クラウドプロファイルが構成と一致しません",
-            "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません",
-            "invalid_auth": "認証エラー",
-            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
-            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key"
-        },
         "step": {
+            "diagnostics": {
+                "data": {
+                    "create_diagnostic_entities": "診断エンティティの作成",
+                    "trace_timeout": "デバグトレース時間 [秒]",
+                    "error": "エラーメッセージ",
+                    "logging_level": "ログレベル",
+                    "trace": "診断トレースの開始",
+                    "obfuscate": "ログ内の機密データを難読化する"
+                },
+                "title": "診断",
+                "description": "このデバイス\/プロファイルのロギングレベルを設定し、オプションで設定された期間の診断トレースを開始します"
+            },
             "hub": {
                 "title": "Meross LAN MQTT Hub",
                 "description": "Meross LAN のグローバル設定",
                 "data": {
-                    "key": "デバイスキー"
+                    "key": "デバイスキー",
+                    "error": "エラーメッセージ",
+                    "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する"
                 }
             },
             "device": {
@@ -127,11 +147,10 @@
                     "host": "デバイスのホストアドレス",
                     "key": "デバイスキー",
                     "protocol": "接続プロトコル",
-                    "profile_id": "クラウド プロファイル",
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
-                    "trace": "デバイスのデバグトレースを開始する",
-                    "trace_timeout": "デバグトレース時間 [秒]"
+                    "trace_timeout": "デバグトレース時間 [秒]",
+                    "error": "エラーメッセージ"
                 }
             },
             "keyerror": {
@@ -144,16 +163,66 @@
             },
             "profile": {
                 "title": "Meross クラウドプロファイル",
-                "description": "Meross アカウントに登録して接続する",
+                "description": "Meross {email} アカウントに登録して接続する\n{placeholder}",
                 "data": {
                     "email": "メロスログイン",
                     "password": "メロスパスワード",
                     "save_password": "パスワードを保存する",
                     "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                     "check_firmware_updates": "ファームウェアのアップデートを確認する",
-                    "create_diagnostic_entities": "診断エンティティの作成"
+                    "error": "エラーメッセージ",
+                    "mfa_code": "認証コード"
                 }
+            },
+            "menu": {
+                "title": "オプションを選択",
+                "menu_options": {
+                    "hub": "設定",
+                    "device": "設定",
+                    "profile": "設定",
+                    "diagnostics": "診断",
+                    "bind": "MQTTの再設定（ローカルバインディング）",
+                    "unbind": "ハードウェア・リセット"
+                }
+            },
+            "bind": {
+                "title": "MQTTの再設定（ローカルバインディング）",
+                "description": "デバイスを別のMQTTブローカーに接続（バインド）します\n現在のブローカー：{domain}",
+                "data": {
+                    "domain": "新しいMQTTブローカーのアドレス",
+                    "check": "再設定前にMQTTブローカーとの互換性を確認する",
+                    "key": "デバイスキー",
+                    "userid": "ユーザーID",
+                    "error": "エラーメッセージ"
+                },
+                "data_description": {
+                    "domain": "host(:port)'形式でアドレスを入力するか、HomeAssistantのものを使用する場合は空のままにします。",
+                    "userid": "meross_lanとの互換性を高めるために空白にしてください",
+                    "key": "meross_lanとの互換性を高めるために空白にしてください"
+                }
+            },
+            "unbind": {
+                "title": "ハードウェア・リセット",
+                "description": "警告！これは、現在のMQTTブローカー（Merossクラウドまたはローカルのいずれか）からデバイスをアンバインドし、工場出荷時のデフォルトにリセットする特別なコマンドを発行します。\n その後、デバイスを使用するには再度設定する必要があります。",
+                "data": {
+                    "post_action": "バインドを解いた後",
+                    "error": "エラーメッセージ"
+                }
+            },
+            "bind_finalize": {
+                "title": "MQTTの再設定（ローカルバインディング）",
+                "description": "デバイスは新しいMQTTブローカーに成功的に設定されました{domain}。\n設定は更新され、再読み込みされましたが、新しいブローカーに接続するためにはデバイスを再起動（電源を切る）する必要があるかもしれません。"
             }
+        },
+        "error": {
+            "already_configured_device": "可能なデバイスは1つだけ",
+            "cannot_connect": "接続できません",
+            "cloud_profile_mismatch": "クラウドプロファイルが構成と一致しません",
+            "device_id_mismatch": "デバイス UUID の不一致: デバイスが同じではありません",
+            "invalid_auth": "認証エラー",
+            "invalid_key": "キーエラー: select 'Cloud retrieve' to get from Meross",
+            "invalid_nullkey": "キーエラー: select 'Hack mode' to allow empty key",
+            "habroker_not_connected": "HomeAssistant MQTTブローカーが接続されていない"
         }
     },
     "issues": {
@@ -170,7 +239,7 @@
                             "save_password": "パスワードを保存する",
                             "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する",
                             "check_firmware_updates": "ファームウェアのアップデートを確認する",
-                            "create_diagnostic_entities": "診断エンティティの作成"
+                            "error": "エラーメッセージ"
                         }
                     }
                 }
@@ -187,14 +256,41 @@
                             "host": "デバイスのホストアドレス",
                             "key": "デバイスキー",
                             "protocol": "接続プロトコル",
-                            "profile_id": "クラウド プロファイル",
                             "polling_period": "ポーリング間隔(秒)",
                             "timezone": "デバイスのタイムゾーン",
-                            "trace": "デバイスのデバグトレースを開始する",
-                            "trace_timeout": "デバグトレース時間 [秒]"
+                            "trace_timeout": "デバグトレース時間 [秒]",
+                            "error": "エラーメッセージ"
                         }
                     }
                 }
+            }
+        },
+        "device_timezone": {
+            "title": "{device_name}のタイムゾーンが設定されていないか、HomeAssistantのデフォルトと異なります",
+            "fix_flow": {
+                "abort": {
+                    "cannot_connect": "接続できません"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "{device_name}のタイムゾーンが設定されていないか、HomeAssistantのデフォルトと異なります"
+                    }
+                }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "設定エントリーを無効にする",
+                "delete": "コンフィギュレーション・エントリーを永久に削除する"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "アジア\/太平洋",
+                "eu": "ヨーロッパ",
+                "us": "アメリカ"
             }
         }
     }

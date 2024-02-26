@@ -1,17 +1,81 @@
 """Constants for the Meross IoT local LAN integration."""
-from typing import Final, TypedDict
+
+import logging
+from typing import Final, NotRequired, TypedDict
 
 from homeassistant import const as hac
 
 from .merossclient import cloudapi, const as mc
 
 DOMAIN: Final = "meross_lan"
-# entity (sub)id for the switch representing DNDMode
-DND_ID: Final = "dnd"
-# ConfigEntry keys
-CONF_DEVICE_ID: Final = hac.CONF_DEVICE_ID
-# actual device key used to sign messages
+#########################
+# common ConfigEntry keys
+#########################
+CONF_CREATE_DIAGNOSTIC_ENTITIES: Final = "create_diagnostic_entities"
 CONF_KEY: Final = "key"
+# sets the logging level x ConfigEntry
+CONF_LOGGING_LEVEL: Final = "logging_level"
+CONF_LOGGING_VERBOSE: Final = 5
+CONF_LOGGING_DEBUG: Final = logging.DEBUG
+CONF_LOGGING_INFO: Final = logging.INFO
+CONF_LOGGING_WARNING: Final = logging.WARNING
+CONF_LOGGING_CRITICAL: Final = logging.CRITICAL
+CONF_LOGGING_LEVEL_OPTIONS: Final = {
+    logging.NOTSET: "default",
+    CONF_LOGGING_CRITICAL: "critical",
+    CONF_LOGGING_WARNING: "warning",
+    CONF_LOGGING_INFO: "info",
+    CONF_LOGGING_DEBUG: "debug",
+    CONF_LOGGING_VERBOSE: "verbose",
+}
+CONF_OBFUSCATE: Final = "obfuscate"
+# create a file with device info and communication tracing
+CONF_TRACE: Final = "trace"
+# when starting a trace stop it and close the file after .. secs
+CONF_TRACE_TIMEOUT: Final = "trace_timeout"
+CONF_TRACE_TIMEOUT_DEFAULT: Final = 600
+CONF_TRACE_MAXSIZE: Final = 262144  # or when MAXSIZE exceeded
+# folder where to store traces
+CONF_TRACE_DIRECTORY: Final = "traces"
+CONF_TRACE_FILENAME: Final = "{}_{}.csv"
+
+
+class ManagerConfigType(TypedDict):
+    """Common config_entry keys for any ConfigEntryManager type"""
+
+    key: str
+    """device key unique to this ConfigEntryManager type"""
+    create_diagnostic_entities: NotRequired[bool]
+    """create various diagnostic entities for debugging/diagnostics purposes"""
+    logging_level: NotRequired[int]
+    """override the default log level set in HA configuration"""
+    obfuscate: NotRequired[bool]
+    """obfuscate sensitive data when logging/tracing"""
+    trace_timeout: NotRequired[int | None]
+    """duration of the tracing feature when activated"""
+
+
+#####################################################
+# ApiProfile (Hub and MerossProfile) ConfigEntry keys
+#####################################################
+CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
+
+
+class ApiProfileConfigType(ManagerConfigType):
+    """Common config_entry keys for ApiProfile type"""
+
+    allow_mqtt_publish: NotRequired[bool]
+    """allow meross_lan to publish over local MQTT: actually ignored since it is True in code"""
+
+
+class HubConfigType(ApiProfileConfigType):
+    """MQTT Hub config_entry keys"""
+
+
+###############################
+# MerossDevice ConfigEntry keys
+###############################
+CONF_DEVICE_ID: Final = hac.CONF_DEVICE_ID
 # device key eventually retrieved from Meross account
 # This has been superseded by cloud_profile and will be
 # removed from configentries as soon as the users
@@ -29,32 +93,15 @@ CONF_PROTOCOL_OPTIONS: dict[str | None, str] = {
     CONF_PROTOCOL_MQTT: CONF_PROTOCOL_MQTT,
     CONF_PROTOCOL_HTTP: CONF_PROTOCOL_HTTP,
 }
-
 # general device state polling or whatever
 CONF_POLLING_PERIOD: Final = "polling_period"
 CONF_POLLING_PERIOD_MIN: Final = 5
 CONF_POLLING_PERIOD_DEFAULT: Final = 30
-# create a file with device info and communication tracing
-CONF_TRACE: Final = "trace"
-# when starting a trace stop it and close the file after .. secs
-CONF_TRACE_TIMEOUT: Final = "trace_timeout"
-CONF_TRACE_TIMEOUT_DEFAULT: Final = 600
-CONF_TRACE_MAXSIZE: Final = 65536  # or when MAXSIZE exceeded
-# folder where to store traces
-CONF_TRACE_DIRECTORY: Final = "traces"
-# filename format: device_type-device_id.csv
-CONF_TRACE_FILENAME: Final = "{}-{}.csv"
 # this is a 'fake' conf used to force-flush
 CONF_TIMESTAMP: Final = mc.KEY_TIMESTAMP
 
 
-class HubConfigType(TypedDict):
-    """MQTT Hub config_entry keys"""
-
-    key: str
-
-
-class DeviceConfigTypeMinimal(TypedDict):
+class DeviceConfigTypeMinimal(ManagerConfigType):
     """Device config_entry required keys"""
 
     device_id: str
@@ -68,37 +115,44 @@ class DeviceConfigType(DeviceConfigTypeMinimal, total=False):
     and defined though DeviceConfigTypeMinimal
     """
 
-    key: str | None
-    cloud_key: str | None
-    profile_id: str | None
-    host: str
-    protocol: str
-    polling_period: int | None
-    trace: int | float | None
-    trace_timeout: int | None
-    timezone: str | None
-    timestamp: float | None
+    cloud_key: NotRequired[str | None]
+    """deprecated field: used to store the device key as recovered from the cloud account"""
+    host: NotRequired[str]
+    """device address: when empty the device can still use the host address recovered through MQTT payloads"""
+    protocol: NotRequired[str]
+    """configures the protocol: auto will automatically switch between the available transports"""
+    polling_period: NotRequired[int | None]
+    """base polling period to query device state"""
+    timezone: NotRequired[str]
+    """IANA timezone set in the device"""
+    timestamp: NotRequired[float]
+    """special (hidden from UI) field used to force entry save"""
 
 
 CONF_CLOUD_REGION: Final = "cloud_region"
 CONF_EMAIL: Final = mc.KEY_EMAIL
 CONF_PASSWORD: Final = hac.CONF_PASSWORD
+CONF_MFA_CODE: Final = "mfa_code"
 CONF_SAVE_PASSWORD: Final = "save_password"
-CONF_ALLOW_MQTT_PUBLISH: Final = "allow_mqtt_publish"
 CONF_CHECK_FIRMWARE_UPDATES: Final = "check_firmware_updates"
-CONF_CREATE_DIAGNOSTIC_ENTITIES: Final = "create_diagnostic_entities"
 
 
-class ProfileConfigType(cloudapi.MerossCloudCredentials, total=False):
+class ProfileConfigType(
+    ApiProfileConfigType, cloudapi.MerossCloudCredentials, total=False
+):
     """
     Meross cloud profile config_entry keys
     """
 
-    password: str | None
-    save_password: bool | None
-    allow_mqtt_publish: bool | None
-    check_firmware_updates: bool | None
-    create_diagnostic_entities: bool | None
+    cloud_region: NotRequired[str]
+    mfa_code: NotRequired[bool]
+    """logged in with MFA"""
+    password: NotRequired[str]
+    """password of the Meross user account"""
+    save_password: NotRequired[bool]
+    """saves the account password in HA storage"""
+    check_firmware_updates: NotRequired[bool]
+    """activate a periodical query to the cloud api to look for fw updates """
 
 
 SERVICE_REQUEST = "request"
@@ -109,12 +163,20 @@ CONF_PROFILE_ID_LOCAL: Final = ""
 """label for MerossApi as a 'fake' cloud profile"""
 
 #
+# some common entitykeys
+#
+DND_ID: Final = "dnd"
+SIGNALSTRENGTH_ID: Final = "signal_strength"
+ENERGY_ESTIMATE_ID: Final = "energy_estimate"
+#
 # issues general consts
 #
 ISSUE_CLOUD_TOKEN_EXPIRED = "cloud_token_expired"
 """raised when the token used to access the cloud api expires and need to be refreshed"""
 ISSUE_DEVICE_ID_MISMATCH = "device_identity_mismatch"
 """raised when a device receives data from a different (uuid) appliance"""
+ISSUE_DEVICE_TIMEZONE = "device_timezone"
+"""raised when a device timezone is not set or is anyway different from HA default"""
 
 # general working/configuration parameters
 PARAM_INFINITE_EPOCH = 2147483647  # inifinite epoch (2038 bug?)
@@ -133,6 +195,8 @@ PARAM_TIMESTAMP_TOLERANCE = 5
 """max device timestamp diff against our and trigger warning and (eventually) fix it"""
 PARAM_TRACING_ABILITY_POLL_TIMEOUT = 2
 """used to delay the iteration of abilities while tracing"""
+PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT = 2
+"""used when polling the cover state to monitor an ongoing transition"""
 PARAM_CLOUDMQTT_UPDATE_PERIOD = 1795
 """for polled entities over cloud MQTT use 'at least' this"""
 PARAM_RESTORESTATE_TIMEOUT = 300
@@ -146,9 +210,162 @@ PARAM_HUBBATTERY_UPDATE_PERIOD = 3595
 PARAM_HUBSENSOR_UPDATE_PERIOD = 55
 PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
+PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT = 5
+"""(mimimum) timeout before querying cloud api after loading the profile"""
 PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT = 86400  # 1 day
 """timeout for querying cloud api deviceInfo endpoint"""
 PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT = 604800  # 1 week
 """timeout for querying cloud api latestVersion endpoint"""
 PARAM_CLOUDPROFILE_DELAYED_SAVE_TIMEOUT = 30
 """used to delay updated profile data to storage"""
+PARAM_HEADER_SIZE = 300
+"""(rough) estimate of the header part of any response"""
+PARAM_RESPONSE_SIZE_MAX = 3000
+"""(rough) estimate of the allowed response size limit before overflow occurs (see #244)"""
+
+"""
+Default timeouts and config parameters for polled namespaces managed
+through PollingStrategy helper classes. For every namespace we
+set the defaults used to initialize these helpers.
+The configuration is set in the tuple as:
+(polling_timeout, polling_timeout_cloud, response_size, additional_size)
+see the PollingStrategy for the meaning of these values
+The 'response_size' is a conservative (in excess) estimate of the
+expected response size for the whole message (header itself weights around 300 bytes).
+Some payloads would depend on the number of channels/subdevices available
+and the configured number would just be a base size (minimum) while
+the 'additional_size' value must be multiplied for the number of channels/subdevices
+and will be used to adjust the actual 'response_size' at runtime in the relative PollingStrategy.
+This parameter in turn will be used to split expected huge payload requests/responses
+in Appliance.Control.Multiple since it appears the HTTP interface has an outbound
+message size limit around 3000 chars/bytes (on a legacy mss310) and this would lead to a malformed (truncated)
+response. This issue also appeared on hubs when querying for a big number of subdevices
+as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
+responses though
+"""
+POLLING_STRATEGY_CONF: dict[str, tuple[int, int, int, int]] = {
+    mc.NS_APPLIANCE_SYSTEM_ALL: (0, 0, 1000, 0),
+    mc.NS_APPLIANCE_SYSTEM_DEBUG: (0, 0, 1900, 0),
+    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 320, 0),
+    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (
+        PARAM_SIGNAL_UPDATE_PERIOD,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        330,
+        0,
+    ),
+    mc.NS_APPLIANCE_CONFIG_OVERTEMP: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 340, 0),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (
+        PARAM_ENERGY_UPDATE_PERIOD,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        320,
+        53,
+    ),
+    mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: (0, 0, PARAM_HEADER_SIZE, 100),
+    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 430, 0),
+    mc.NS_APPLIANCE_CONTROL_FAN: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        20,
+    ),
+    mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: (
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        35,
+    ),
+    mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 1850, 0),
+    mc.NS_APPLIANCE_CONTROL_MP3: (0, 0, 380, 0),
+    mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        35,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        80,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        80,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        80,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: (0, 0, PARAM_HEADER_SIZE, 140),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: (0, 0, PARAM_HEADER_SIZE, 550),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: (0, 0, PARAM_HEADER_SIZE, 550),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: (0, 0, PARAM_HEADER_SIZE, 40),
+    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        70,
+    ),
+    mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 410, 0),
+    mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        140,
+    ),
+    mc.NS_APPLIANCE_HUB_BATTERY: (
+        PARAM_HUBBATTERY_UPDATE_PERIOD,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        40,
+    ),
+    mc.NS_APPLIANCE_HUB_MTS100_ADJUST: (
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        40,
+    ),
+    mc.NS_APPLIANCE_HUB_MTS100_ALL: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        350,
+    ),
+    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        500,
+    ),
+    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST: (
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        60,
+    ),
+    mc.NS_APPLIANCE_HUB_SENSOR_ALL: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        250,
+    ),
+    mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        55,
+    ),
+    mc.NS_APPLIANCE_HUB_TOGGLEX: (0, 0, PARAM_HEADER_SIZE, 35),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: (
+        0,
+        PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        PARAM_HEADER_SIZE,
+        70,
+    ),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION: (0, 0, PARAM_HEADER_SIZE, 50),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (0, 0, PARAM_HEADER_SIZE, 40),
+}

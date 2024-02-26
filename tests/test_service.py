@@ -1,11 +1,10 @@
 """Test for meross_lan.request service calls"""
-import json
 from unittest.mock import ANY
 
 from homeassistant.core import HomeAssistant
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, json_dumps
 
 from tests import const as tc, helpers
 
@@ -29,18 +28,22 @@ async def test_request_on_mqtt(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTM
         )
         # this call, with no devices registered in configuration
         # will just try to publish on mqtt so we'll check the mock
-        hamqtt_mock.mqtt_async_publish.assert_called_once_with(
+        hamqtt_mock.async_publish_mock.assert_called_once_with(
             hass, mc.TOPIC_REQUEST.format(tc.MOCK_DEVICE_UUID), ANY
         )
 
 
 async def test_request_on_device(
-    hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker, aioclient_mock
+    hass: HomeAssistant,
+    hamqtt_mock: helpers.HAMQTTMocker,
+    aioclient_mock,
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
+    async with helpers.DeviceContext(
+        hass, mc.TYPE_MSS310, aioclient_mock
+    ) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -55,7 +58,7 @@ async def test_request_on_device(
                 mlc.CONF_DEVICE_ID: context.device_id,
                 mc.KEY_NAMESPACE: mc.NS_APPLIANCE_CONTROL_TOGGLEX,
                 mc.KEY_METHOD: mc.METHOD_SET,
-                mc.KEY_PAYLOAD: json.dumps(
+                mc.KEY_PAYLOAD: json_dumps(
                     {
                         mc.KEY_TOGGLEX: {
                             mc.KEY_CHANNEL: 0,
@@ -73,19 +76,22 @@ async def test_request_on_device(
 
         # this call, should not be routed to mqtt since our device is
         # emulated in http
-        hamqtt_mock.mqtt_async_publish.assert_not_called()
+        hamqtt_mock.async_publish_mock.assert_not_called()
 
 
 async def test_request_notification(
-    hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker, aioclient_mock
+    hass: HomeAssistant,
+    hamqtt_mock: helpers.HAMQTTMocker,
+    aioclient_mock,
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
+    async with helpers.DeviceContext(
+        hass, mc.TYPE_MSS310, aioclient_mock
+    ) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
-
         # when routing the call through a device the service data 'key' is not used
         await hass.services.async_call(
             mlc.DOMAIN,
@@ -106,4 +112,4 @@ async def test_request_notification(
 
         # this call, should not be routed to mqtt since our device is
         # emulated in http
-        hamqtt_mock.mqtt_async_publish.assert_not_called()
+        hamqtt_mock.async_publish_mock.assert_not_called()
