@@ -47,7 +47,7 @@ class MLFan(me.MerossToggle, fan.FanEntity):
         self.speed_count = 0
         self._fan = {}
         self._saved_speed = 1
-        super().__init__(manager, channel, mc.KEY_FAN)
+        super().__init__(manager, channel)
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_FAN, self)
 
     # interface: MerossToggle
@@ -112,7 +112,7 @@ class FanNamespaceHandler(NamespaceHandler):
         )
         if mc.KEY_FAN not in device.descriptor.digest:
             # actually only map100 (so far)
-            # MLFan(device, 0)
+            MLFan(device, 0)
             # setup a polling strategy since state is not carried in digest
             PollingStrategy(
                 device,
