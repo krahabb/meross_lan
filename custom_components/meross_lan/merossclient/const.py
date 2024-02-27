@@ -77,9 +77,10 @@ NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
 NS_APPLIANCE_GARAGEDOOR_CONFIG = "Appliance.GarageDoor.Config"
 NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG = "Appliance.GarageDoor.MultipleConfig"
 # Roller shutter
-NS_APPLIANCE_ROLLERSHUTTER_STATE = "Appliance.RollerShutter.State"
-NS_APPLIANCE_ROLLERSHUTTER_POSITION = "Appliance.RollerShutter.Position"
+NS_APPLIANCE_ROLLERSHUTTER_ADJUST = "Appliance.RollerShutter.Adjust"
 NS_APPLIANCE_ROLLERSHUTTER_CONFIG = "Appliance.RollerShutter.Config"
+NS_APPLIANCE_ROLLERSHUTTER_POSITION = "Appliance.RollerShutter.Position"
+NS_APPLIANCE_ROLLERSHUTTER_STATE = "Appliance.RollerShutter.State"
 # Hub
 NS_APPLIANCE_DIGEST_HUB = "Appliance.Digest.Hub"
 NS_APPLIANCE_HUB_SUBDEVICELIST = "Appliance.Hub.SubdeviceList"
@@ -399,6 +400,7 @@ PAYLOAD_GET = {
 PUSH_ONLY_NAMESPACES = {
     NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
     NS_APPLIANCE_CONTROL_PHYSICALLOCK,  # SET works
+    NS_APPLIANCE_ROLLERSHUTTER_ADJUST,
 }
 # error codes as reported by Meross device protocol
 ERROR_INVALIDKEY = 5001
