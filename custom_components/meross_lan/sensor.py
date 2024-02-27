@@ -56,13 +56,7 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
         native_value: me.StateType = None,
     ):
         self.native_value = native_value
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            sensor.SensorDeviceClass.ENUM,
-            available=native_value is not None,
-        )
+        super().__init__(manager, channel, entitykey, sensor.SensorDeviceClass.ENUM)
 
     def set_unavailable(self):
         self.native_value = None
