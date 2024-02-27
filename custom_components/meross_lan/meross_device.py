@@ -469,13 +469,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             ent_reg.async_remove(update_firmware_entity_id)
         self.update_firmware = None
 
-        for _key, _digest in descriptor.digest.items():
-            # _init_xxxx methods provided by mixins
-            _init_method_name = f"_init_{_key}"
-            if _init := getattr(self, _init_method_name, None):
-                with self.exception_warning(_init_method_name):
-                    _init(_digest)
-
         for namespace, init_descriptor in MerossDevice.ENTITY_INITIALIZERS.items():
             if namespace in ability:
                 with self.exception_warning("initializing namespace:%s", namespace):
@@ -483,6 +476,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         init_descriptor[0], "custom_components.meross_lan"
                     )
                     getattr(module, init_descriptor[1])(self)
+
+        for _key, _digest in descriptor.digest.items():
+            # _init_xxxx methods provided by mixins
+            _init_method_name = f"_init_{_key}"
+            if _init := getattr(self, _init_method_name, None):
+                with self.exception_warning(_init_method_name):
+                    _init(_digest)
 
     # interface: ConfigEntryManager
     async def entry_update_listener(
@@ -722,18 +722,24 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         """
         return datetime_from_epoch(epoch, self.tz)
 
+    def get_handler(self, namespace: str):
+        try:
+            return self.namespace_handlers[namespace]
+        except KeyError:
+            return self._create_handler(namespace)
+
     def register_parser(
         self,
         namespace: str,
         entity: MerossEntity,
     ):
-        if not (handler := self.namespace_handlers.get(namespace)):
-            handler = self._create_handler(namespace)
-        handler.register(entity)
+        self.get_handler(namespace).register_entity(entity)
 
     def unregister_parser(self, namespace: str, entity: MerossEntity):
-        if handler := self.namespace_handlers.get(namespace):
-            handler.unregister(entity)
+        try:
+            self.namespace_handlers[namespace].unregister(entity)
+        except KeyError:
+            pass
 
     def start(self):
         # called by async_setup_entry after the entities have been registered
@@ -1641,7 +1647,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # in place so we have no need to further process
             return
 
-        if not (handler := self.namespace_handlers.get(namespace)):
+        try:
+            handler = self.namespace_handlers[namespace]
+        except KeyError:
             handler = self._create_handler(namespace)
 
         handler.lastrequest = self.lastresponse  # type: ignore

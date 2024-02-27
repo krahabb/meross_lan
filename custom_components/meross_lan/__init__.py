@@ -53,6 +53,7 @@ else:
 
 DIGEST_INITIALIZERS = {
     mc.KEY_DIFFUSER: (".devices.mod100", "DiffuserMixin"),
+    mc.KEY_FAN: (".fan", "FanMixin"),
     mc.KEY_GARAGEDOOR: (".cover", "GarageMixin"),
     mc.KEY_LIGHT: (".light", "LightMixin"),
     mc.KEY_THERMOSTAT: (".devices.thermostat", "ThermostatMixin"),
@@ -70,7 +71,11 @@ MerossDevice.ENTITY_INITIALIZERS = {
         ".devices.mss",
         "ElectricityNamespaceHandler",
     ),
-    mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "MLFan"),
+    mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "FanNamespaceHandler"),
+    mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: (
+        ".sensor",
+        "FilterMaintenanceNamespaceHandler",
+    ),
     mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
     mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (".switch", "PhysicalLockSwitch"),
     mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (

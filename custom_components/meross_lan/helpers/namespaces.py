@@ -19,12 +19,14 @@ class NamespaceHandler:
     the message namespace in order to speed up parsing/routing when receiving
     a message from the device see MerossDevice.namespace_handlers and
     MerossDevice._handle to get the basic behavior.
-    Actually, every namespace handler is defined as a MerossDevice method with
-    a well defined signature but this requires a bit of string manipulation on
-    every incoming message. Also, the PollingStrategy class is itself related to
-    a specific namespace polling/handling system and inherits from this basic class
-    At runtime, the list of handlers is 'lazily' built when we receive the namespace
-    for the first time
+
+    - handler: specify a custom handler method for this namespace. By default
+    it will be looked-up in the device definition (looking for _handle_xxxxxx)
+
+    - entity_class: specify a MerossEntity type (actually an implementation
+    of Merossentity) to be instanced whenever a message for a particular channel
+    is received and the channel has no parser associated (see _handle_list)
+
     """
 
     __slots__ = (
@@ -33,6 +35,7 @@ class NamespaceHandler:
         "key_namespace",
         "lastrequest",
         "handler",
+        "entity_class",
         "entities",
     )
 
@@ -42,21 +45,28 @@ class NamespaceHandler:
         namespace: str,
         *,
         handler: Callable[[dict, dict], None] | None = None,
+        entity_class: type[MerossEntity] | None = None,
     ):
+        assert (
+            namespace not in device.namespace_handlers
+        ), "namespace already registered"
         self.device: typing.Final = device
         self.namespace: typing.Final = namespace
         self.key_namespace = NAMESPACE_TO_KEY[namespace]
-        # this 'default' handler mapping might become obsolete
-        # as soon as we move our handlers to the entity register/unregister
-        # metaphore. As for now it is no harm
-        self.handler = handler or getattr(
-            device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
-        )
+        if entity_class:
+            self.entity_class = entity_class
+            self.handler = self._handle_list
+            self.device.platforms.setdefault(entity_class.PLATFORM)
+        else:
+            self.entity_class = None
+            self.handler = handler or getattr(
+                device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
+            )
         self.lastrequest = 0
         self.entities: dict[object, Callable[[dict], None]] = {}
         device.namespace_handlers[namespace] = self
 
-    def register(self, entity: MerossEntity):
+    def register_entity(self, entity: MerossEntity):
         # when setting up the entity-dispatching we'll substitute the legacy handler
         # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
         # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
@@ -67,12 +77,12 @@ class NamespaceHandler:
         # Thermostat payloads for instance) but many older ones are not, and still
         # either carry dict or, worse, could present themselves in both forms
         # (ToggleX is a well-known example)
-        self.handler = self._handle_list
-        assert entity.channel is not None
+        assert entity.channel not in self.entities, "entity already registered"
         self.entities[entity.channel] = getattr(
             entity, f"_parse_{self.key_namespace}", entity._parse
         )
         entity.namespace_handlers.add(self)
+        self.handler = self._handle_list
 
     def unregister(self, entity: MerossEntity):
         if self.entities.pop(entity.channel, None):
@@ -99,7 +109,18 @@ class NamespaceHandler:
         """
         try:
             for p_channel in payload[self.key_namespace]:
-                self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+                try:
+                    self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+                except KeyError as key_error:
+                    channel = key_error.args[0]
+                    if channel != mc.KEY_CHANNEL and self.entity_class:
+                        # ensure key represents a channel and not the "channel" key
+                        # in the p_channel dict
+                        self.entity_class(self.device, channel)
+                        self.entities[channel](p_channel)
+                    else:
+                        raise key_error
+
         except TypeError:
             # this might be expected: the payload is not a list
             self.handler = self._handle_dict
