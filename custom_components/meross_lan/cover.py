@@ -749,6 +749,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         "_signalOpen",
         "_signalClose",
         "_position_native",
+        "_position_native_isgood",
         "_position_start",
         "_position_starttime",
         "_transition_unsub",
@@ -772,26 +773,32 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         self._position_starttime = 0  # epoch of transition start
         self._transition_unsub = None
         self._transition_end_unsub = None
+        descriptor = manager.descriptor
         # flag indicating the device position is reliable (#227)
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
-            self._position_native_isgood = versiontuple(
-                manager.descriptor.firmwareVersion
-            ) >= versiontuple("6.6.6")
-            if self._position_native_isgood:
+            if versiontuple(descriptor.firmwareVersion) >= versiontuple("6.6.6"):
+                self._position_native_isgood = True
                 self.supported_features |= CoverEntityFeature.SET_POSITION
+            else:
+                self._position_native_isgood = False
         except Exception:
-            self._position_native_isgood = None
+            self._position_native_isgood = False
         super().__init__(manager, 0, None, CoverDeviceClass.SHUTTER)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
+        if mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST in descriptor.ability:
+            manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST, self)
+            SmartPollingStrategy(
+                manager, mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST, item_count=1
+            )
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, self)
-        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, self)
-        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, self)
         SmartPollingStrategy(
             manager, mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, item_count=1
         )
+        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, self)
         PollingStrategy(manager, mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, item_count=1)
+        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, self)
         PollingStrategy(manager, mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, item_count=1)
 
     async def async_added_to_hass(self):
@@ -875,6 +882,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         self._transition_cancel()
         manager = self.manager
         channel = self.channel
+        """ REMOVE: looks like the mrs100 doesn't love set_position in multiple req
         if (manager.multiple_max >= 3) and (
             responses := await manager.async_multiple_requests_ack(
                 (
@@ -929,6 +937,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     # at any rate, we'll monitor the state
                     await self._async_transition_callback()
                 return True
+        """
 
         # in case the ns_multiple didn't succesfully kick-in we'll
         # fallback to the legacy procedure
@@ -954,6 +963,23 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         self._mrs_state = None
         self._transition_cancel()
         super().set_unavailable()
+
+    def _parse_adjust(self, payload: dict):
+        # payload = {"channel": 0, "status": 0}
+        for key, value in payload.items():
+            if key != mc.KEY_CHANNEL:
+                self.extra_state_attributes[f"adjust_{key}"] = value
+
+    def _parse_config(self, payload: dict):
+        # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
+        if mc.KEY_SIGNALOPEN in payload:
+            self._signalOpen = payload[mc.KEY_SIGNALOPEN]
+            self.number_signalOpen.update_device_value(self._signalOpen)
+            self.extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
+        if mc.KEY_SIGNALCLOSE in payload:
+            self._signalClose = payload[mc.KEY_SIGNALCLOSE]
+            self.number_signalClose.update_device_value(self._signalClose)
+            self.extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
 
     def _parse_position(self, payload: dict):
         """
@@ -981,12 +1007,13 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             # detecting a device reporting 'good' positions
             self._position_native_isgood = True
             self._position_native = None
+            self.is_closed = False
             self.extra_state_attributes.pop(EXTRA_ATTR_POSITION_NATIVE, None)
             self.supported_features |= CoverEntityFeature.SET_POSITION
             self.current_cover_position = position
-            self.is_closed = False
         else:
             self._position_native = position
+            self.is_closed = position == mc.ROLLERSHUTTER_POSITION_CLOSED
             self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
             if self.current_cover_position is None:
                 # only happening when we didn't restore state on devices
@@ -997,7 +1024,6 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 # emulated state and so we don't touch it
                 self.supported_features |= CoverEntityFeature.SET_POSITION
                 self.current_cover_position = position
-                self.is_closed = position == mc.ROLLERSHUTTER_POSITION_CLOSED
 
         self.flush_state()
 
@@ -1062,17 +1088,6 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         if self._transition_unsub and (state == mc.ROLLERSHUTTER_STATE_IDLE):
             self._transition_cancel()
 
-    def _parse_config(self, payload: dict):
-        # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
-        if mc.KEY_SIGNALOPEN in payload:
-            self._signalOpen = payload[mc.KEY_SIGNALOPEN]
-            self.number_signalOpen.update_device_value(self._signalOpen)
-            self.extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
-        if mc.KEY_SIGNALCLOSE in payload:
-            self._signalClose = payload[mc.KEY_SIGNALCLOSE]
-            self.number_signalClose.update_device_value(self._signalClose)
-            self.extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
-
     async def _async_transition_callback(self):
         """Schedule a repetitive callback when we detect or suspect shutter movement.
         It will be invalidated only when a successful state message is parsed stating
@@ -1086,7 +1101,9 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._async_transition_callback,
         )
         manager = self.manager
-        if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
+        if (manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active) or (
+            self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE
+        ):
             p_channel_payload = [{mc.KEY_CHANNEL: self.channel}]
             if manager.multiple_max >= 2:
                 await manager.async_multiple_requests_ack(
@@ -1104,13 +1121,13 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     )
                 )
             else:
-                await manager.async_http_request(
+                await manager.async_request(
                     mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
                     mc.METHOD_GET,
                     {mc.KEY_STATE: p_channel_payload},
                 )
                 if self._position_native_isgood:
-                    await manager.async_http_request(
+                    await manager.async_request(
                         mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
                         mc.METHOD_GET,
                         {mc.KEY_POSITION: p_channel_payload},

@@ -12,7 +12,11 @@ from homeassistant.const import (
 )
 
 from . import const as mlc, meross_entity as me
-from .helpers.namespaces import EntityPollingStrategy
+from .helpers.namespaces import (
+    EntityPollingStrategy,
+    NamespaceHandler,
+    SmartPollingStrategy,
+)
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
@@ -52,13 +56,7 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
         native_value: me.StateType = None,
     ):
         self.native_value = native_value
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            sensor.SensorDeviceClass.ENUM,
-            available=native_value is not None,
-        )
+        super().__init__(manager, channel, entitykey, sensor.SensorDeviceClass.ENUM)
 
     def set_unavailable(self):
         self.native_value = None
@@ -287,3 +285,34 @@ class MLSignalStrengthSensor(MLNumericSensor):
 
     def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
         self.update_native_value(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])
+
+
+class MLFilterMaintenanceSensor(MLNumericSensor):
+
+    namespace = mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE
+    key_namespace = mc.KEY_FILTER
+    key_value = mc.KEY_LIFE
+
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.DIAGNOSTIC
+
+    def __init__(self, manager: MerossDevice, channel):
+        super().__init__(
+            manager,
+            channel,
+            mc.KEY_FILTER,
+            None,
+            native_unit_of_measurement=MLNumericSensor.UNIT_PERCENTAGE,
+        )
+        manager.register_parser(self.namespace, self)
+
+
+class FilterMaintenanceNamespaceHandler(NamespaceHandler):
+
+    def __init__(self, device: MerossDevice):
+        super().__init__(
+            device,
+            mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
+            entity_class=MLFilterMaintenanceSensor,
+        )
+        SmartPollingStrategy(device, mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE)

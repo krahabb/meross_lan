@@ -8,6 +8,7 @@ from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.sensor import (
     MLDiagnosticSensor,
     MLEnumSensor,
+    MLFilterMaintenanceSensor,
     MLHumiditySensor,
     MLNumericSensor,
     MLSignalStrengthSensor,
@@ -39,7 +40,7 @@ class EntityTest(EntityComponentTest):
             MLNumericSensor,
             MLNumericSensor,
         ],
-        mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: [MLNumericSensor],
+        mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: [MLFilterMaintenanceSensor],
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: [MLTemperatureSensor],
         mc.NS_APPLIANCE_SYSTEM_RUNTIME: [MLSignalStrengthSensor],  # Signal strength
     }

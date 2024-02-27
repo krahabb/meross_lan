@@ -59,6 +59,7 @@ from .merossclient import (
     get_message_uuid,
     get_port_safe,
     is_device_online,
+    is_hub_namespace,
     json_dumps,
     request_get,
     request_push,
@@ -469,13 +470,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             ent_reg.async_remove(update_firmware_entity_id)
         self.update_firmware = None
 
-        for _key, _digest in descriptor.digest.items():
-            # _init_xxxx methods provided by mixins
-            _init_method_name = f"_init_{_key}"
-            if _init := getattr(self, _init_method_name, None):
-                with self.exception_warning(_init_method_name):
-                    _init(_digest)
-
         for namespace, init_descriptor in MerossDevice.ENTITY_INITIALIZERS.items():
             if namespace in ability:
                 with self.exception_warning("initializing namespace:%s", namespace):
@@ -483,6 +477,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         init_descriptor[0], "custom_components.meross_lan"
                     )
                     getattr(module, init_descriptor[1])(self)
+
+        for _key, _digest in descriptor.digest.items():
+            # _init_xxxx methods provided by mixins
+            _init_method_name = f"_init_{_key}"
+            if _init := getattr(self, _init_method_name, None):
+                with self.exception_warning(_init_method_name):
+                    _init(_digest)
 
     # interface: ConfigEntryManager
     async def entry_update_listener(
@@ -722,18 +723,24 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         """
         return datetime_from_epoch(epoch, self.tz)
 
+    def get_handler(self, namespace: str):
+        try:
+            return self.namespace_handlers[namespace]
+        except KeyError:
+            return self._create_handler(namespace)
+
     def register_parser(
         self,
         namespace: str,
         entity: MerossEntity,
     ):
-        if not (handler := self.namespace_handlers.get(namespace)):
-            handler = self._create_handler(namespace)
-        handler.register(entity)
+        self.get_handler(namespace).register_entity(entity)
 
     def unregister_parser(self, namespace: str, entity: MerossEntity):
-        if handler := self.namespace_handlers.get(namespace):
-            handler.unregister(entity)
+        try:
+            self.namespace_handlers[namespace].unregister(entity)
+        except KeyError:
+            pass
 
     def start(self):
         # called by async_setup_entry after the entities have been registered
@@ -1641,7 +1648,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # in place so we have no need to further process
             return
 
-        if not (handler := self.namespace_handlers.get(namespace)):
+        try:
+            handler = self.namespace_handlers[namespace]
+        except KeyError:
             handler = self._create_handler(namespace)
 
         handler.lastrequest = self.lastresponse  # type: ignore
@@ -2081,16 +2090,26 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         if response and (
                             response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
                         ):
+                            if is_hub_namespace(ability):
+                                # for Hub namespaces there's nothing more guessable
+                                continue
                             key_namespace = NAMESPACE_TO_KEY[ability]
-                            request_payload = request[2][key_namespace]
+                            # we're not sure our key_namespace is correct (euristics!)
                             response_payload = response[mc.KEY_PAYLOAD].get(
                                 key_namespace
                             )
-                            if not response_payload and not request_payload:
+                            if response_payload:
+                                # our euristic query hit something..loop next
+                                continue
+                            request_payload = request[2][key_namespace]
+                            if request_payload:
+                                # we've already issued a channel-like GET
+                                continue
+                            
+                            if isinstance(response_payload, list):
                                 # the namespace might need a channel index in the request
-                                if isinstance(response_payload, list):
-                                    request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]
-                                    await self.async_http_request(*request)
+                                request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]
+                                await self.async_http_request(*request)
                         else:
                             # METHOD_GET doesnt work. Try PUSH
                             await self.async_http_request(*request_push(ability))
@@ -2132,7 +2151,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         key_namespace = NAMESPACE_TO_KEY[ability]
                         request_payload = request[2][key_namespace]
                         response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
-                        if not response_payload and not request_payload:
+                        if (
+                            not response_payload
+                            and not request_payload
+                            and not is_hub_namespace(ability)
+                        ):
                             # the namespace might need a channel index in the request
                             if isinstance(response_payload, list):
                                 request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]

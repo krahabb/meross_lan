@@ -104,8 +104,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         channel: object | None,
         entitykey: str | None = None,
         device_class: object | str | None = None,
-        *,
-        available: bool = False,
     ):
         """
         - channel: historically used to create an unique id for this entity inside the device
@@ -132,7 +130,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.channel = channel
         self.entitykey = entitykey
         self.namespace_handlers: set[NamespaceHandler] = set()
-        self.available = available or self._attr_available
+        self.available = self._attr_available or manager.online
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
         if hasattr(self, "name"):
@@ -259,13 +257,7 @@ class MerossNumericEntity(MerossEntity):
         self.native_unit_of_measurement = (
             native_unit_of_measurement or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
         )
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            device_class,
-            available=device_value is not None,
-        )
+        super().__init__(manager, channel, entitykey, device_class)
 
     def set_unavailable(self):
         self.device_value = None
@@ -312,13 +304,7 @@ class MerossBinaryEntity(MerossEntity):
         onoff=None,
     ):
         self.is_on = onoff
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            device_class,
-            available=onoff is not None,
-        )
+        super().__init__(manager, channel, entitykey, device_class)
 
     def set_unavailable(self):
         self.is_on = None

@@ -1,0 +1,1129 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant Supervised",
+    "version": "2024.2.3",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.12.1",
+    "docker": true,
+    "arch": "aarch64",
+    "timezone": "America/New_York",
+    "os_name": "Linux",
+    "os_version": "6.1.21-v8+",
+    "supervisor": "2024.02.0",
+    "host_os": "Debian GNU/Linux 11 (bullseye)",
+    "docker_version": "24.0.7",
+    "chassis": "",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "samsungtv_tizen": {
+      "version": "1.6.1",
+      "requirements": [
+        "websocket-client>=0.56.0",
+        "wakeonlan>=2.0.0",
+        "numpy>=1.19.2"
+      ]
+    },
+    "dahua": {
+      "version": "0.5.0",
+      "requirements": []
+    },
+    "adaptive_lighting": {
+      "version": "1.20.0",
+      "requirements": [
+        "ulid-transform"
+      ]
+    },
+    "smartlife": {
+      "version": "0.1.0",
+      "requirements": [
+        "tuya-device-sharing-sdk==0.1.9"
+      ]
+    },
+    "browser_mod": {
+      "version": "2.3.0",
+      "requirements": []
+    },
+    "frigate": {
+      "version": "5.0.1",
+      "requirements": [
+        "pytz==2022.7"
+      ]
+    },
+    "deebot": {
+      "version": "3.2.1",
+      "requirements": [
+        "deebot-client==5.1.0",
+        "numpy>=1.23.2"
+      ]
+    },
+    "alexa_media": {
+      "version": "4.9.2",
+      "requirements": [
+        "alexapy==1.27.10",
+        "packaging>=20.3",
+        "wrapt>=1.14.0"
+      ]
+    },
+    "watchman": {
+      "version": "0.5.1",
+      "requirements": [
+        "prettytable==3.0.0"
+      ]
+    },
+    "linksys_velop": {
+      "version": "2024.1.1",
+      "requirements": [
+        "pyvelop>=2023.9.1"
+      ]
+    },
+    "hacs": {
+      "version": "1.34.0",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "scrypted": {
+      "version": "0.0.8",
+      "requirements": []
+    },
+    "nest_protect": {
+      "version": "0.4.0b4",
+      "requirements": []
+    },
+    "localtuya": {
+      "version": "5.2.1",
+      "requirements": []
+    },
+    "tesla_custom": {
+      "version": "3.19.9",
+      "requirements": [
+        "teslajsonpy==3.9.11"
+      ]
+    },
+    "meross_lan": {
+      "version": "5.0.0",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "5.0.0",
+    "is_built_in": false
+  },
+  "data": {
+    "host": "#########0",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "mfc100",
+            "subType": "un",
+            "version": "7.0.0",
+            "chipType": "rtl8710cm",
+            "uuid": "##############################60",
+            "macAddress": "################0"
+          },
+          "firmware": {
+            "version": "7.3.14",
+            "homekitVersion": "6.3",
+            "compileTime": "2023/09/25-17:05:34",
+            "encrypt": 1,
+            "wifiMac": "################0",
+            "innerIp": "#########0",
+            "server": "###################2",
+            "port": "@2",
+            "userId": "@0"
+          },
+          "time": {
+            "timestamp": 1708959558,
+            "timezone": "America/Detroit",
+            "timeRule": [
+              [
+                1667714400,
+                -18000,
+                0
+              ],
+              [
+                1678604400,
+                -14400,
+                1
+              ],
+              [
+                1699164000,
+                -18000,
+                0
+              ],
+              [
+                1710054000,
+                -14400,
+                1
+              ],
+              [
+                1730613600,
+                -18000,
+                0
+              ],
+              [
+                1741503600,
+                -14400,
+                1
+              ],
+              [
+                1762063200,
+                -18000,
+                0
+              ],
+              [
+                1772953200,
+                -14400,
+                1
+              ],
+              [
+                1793512800,
+                -18000,
+                0
+              ],
+              [
+                1805007600,
+                -14400,
+                1
+              ],
+              [
+                1825567200,
+                -18000,
+                0
+              ],
+              [
+                1836457200,
+                -14400,
+                1
+              ],
+              [
+                1857016800,
+                -18000,
+                0
+              ],
+              [
+                1867906800,
+                -14400,
+                1
+              ],
+              [
+                1888466400,
+                -18000,
+                0
+              ],
+              [
+                1899356400,
+                -14400,
+                1
+              ],
+              [
+                1919916000,
+                -18000,
+                0
+              ],
+              [
+                1930806000,
+                -14400,
+                1
+              ],
+              [
+                1951365600,
+                -18000,
+                0
+              ],
+              [
+                1962860400,
+                -14400,
+                1
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "YRyTZ9om5gG8PdfQ",
+            "who": 1
+          }
+        },
+        "digest": {
+          "light": {
+            "capacity": 4,
+            "channel": 1,
+            "luminance": 100,
+            "onoff": 0
+          },
+          "fan": [
+            {
+              "channel": 2,
+              "speed": 3,
+              "maxSpeed": 3
+            }
+          ],
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 0,
+              "lmTime": 1708959436
+            },
+            {
+              "channel": 1,
+              "onoff": 0,
+              "lmTime": 1708959436
+            },
+            {
+              "channel": 2,
+              "onoff": 0,
+              "lmTime": 1708959435
+            }
+          ],
+          "triggerx": [],
+          "timerx": []
+        }
+      },
+      "payloadVersion": 1,
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Info": {},
+        "Appliance.Config.OverTemp": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.Config.Calibration": {},
+        "Appliance.Mcu.Firmware": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 3
+        },
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Control.OverTemp": {},
+        "Appliance.Control.ToggleX": {},
+        "Appliance.Control.TimerX": {
+          "sunOffsetSupport": 1
+        },
+        "Appliance.Control.TriggerX": {},
+        "Appliance.Control.Light": {
+          "capacity": 4
+        },
+        "Appliance.Control.Fan": {},
+        "Appliance.Control.Fan.Config": {},
+        "Appliance.Control.PowerRetention": {},
+        "Appliance.Control.Fan.BtnConfig": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.Digest.TimerX": {}
+      }
+    },
+    "key": "###############################0",
+    "device_id": "##############################60",
+    "device": {
+      "class": "ToggleXMixinLightMixinMerossDevice",
+      "conf_protocol": "auto",
+      "pref_protocol": "http",
+      "curr_protocol": "http",
+      "MQTT": {
+        "cloud_profile": true,
+        "locally_active": false,
+        "mqtt_connection": true,
+        "mqtt_connected": true,
+        "mqtt_publish": false,
+        "mqtt_active": true
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "polling_period": 30,
+      "polling_strategies": {
+        "Appliance.System.All": 1708959590.6235068,
+        "Appliance.Config.OverTemp": 1708961035.4086273,
+        "Appliance.Control.Fan": 1708959560.2836063,
+        "Appliance.System.DNDMode": 1708961035.4086273,
+        "Appliance.System.Runtime": 1708960764.4358459,
+        "Appliance.System.Debug": 0
+      },
+      "device_response_size_min": 2657,
+      "device_response_size_max": 5000
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2024/02/26 - 10:24:18",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "mfc100",
+              "subType": "un",
+              "version": "7.0.0",
+              "chipType": "rtl8710cm",
+              "uuid": "##############################60",
+              "macAddress": "################0"
+            },
+            "firmware": {
+              "version": "7.3.14",
+              "homekitVersion": "6.3",
+              "compileTime": "2023/09/25-17:05:34",
+              "encrypt": 1,
+              "wifiMac": "################0",
+              "innerIp": "#########0",
+              "server": "###################2",
+              "port": "@2",
+              "userId": "@0"
+            },
+            "time": {
+              "timestamp": 1708959590,
+              "timezone": "America/Detroit",
+              "timeRule": [
+                [
+                  1667714400,
+                  -18000,
+                  0
+                ],
+                [
+                  1678604400,
+                  -14400,
+                  1
+                ],
+                [
+                  1699164000,
+                  -18000,
+                  0
+                ],
+                [
+                  1710054000,
+                  -14400,
+                  1
+                ],
+                [
+                  1730613600,
+                  -18000,
+                  0
+                ],
+                [
+                  1741503600,
+                  -14400,
+                  1
+                ],
+                [
+                  1762063200,
+                  -18000,
+                  0
+                ],
+                [
+                  1772953200,
+                  -14400,
+                  1
+                ],
+                [
+                  1793512800,
+                  -18000,
+                  0
+                ],
+                [
+                  1805007600,
+                  -14400,
+                  1
+                ],
+                [
+                  1825567200,
+                  -18000,
+                  0
+                ],
+                [
+                  1836457200,
+                  -14400,
+                  1
+                ],
+                [
+                  1857016800,
+                  -18000,
+                  0
+                ],
+                [
+                  1867906800,
+                  -14400,
+                  1
+                ],
+                [
+                  1888466400,
+                  -18000,
+                  0
+                ],
+                [
+                  1899356400,
+                  -14400,
+                  1
+                ],
+                [
+                  1919916000,
+                  -18000,
+                  0
+                ],
+                [
+                  1930806000,
+                  -14400,
+                  1
+                ],
+                [
+                  1951365600,
+                  -18000,
+                  0
+                ],
+                [
+                  1962860400,
+                  -14400,
+                  1
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "YRyTZ9om5gG8PdfQ",
+              "who": 1
+            }
+          },
+          "digest": {
+            "light": {
+              "capacity": 4,
+              "channel": 1,
+              "luminance": 100,
+              "onoff": 0
+            },
+            "fan": [
+              {
+                "channel": 2,
+                "speed": 3,
+                "maxSpeed": 3
+              }
+            ],
+            "togglex": [
+              {
+                "channel": 0,
+                "onoff": 0,
+                "lmTime": 1708959436
+              },
+              {
+                "channel": 1,
+                "onoff": 0,
+                "lmTime": 1708959436
+              },
+              {
+                "channel": 2,
+                "onoff": 0,
+                "lmTime": 1708959435
+              }
+            ],
+            "triggerx": [],
+            "timerx": []
+          }
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:18",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.Config.OverTemp": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.Config.Calibration": {},
+          "Appliance.Mcu.Firmware": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 3
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.OverTemp": {},
+          "Appliance.Control.ToggleX": {},
+          "Appliance.Control.TimerX": {
+            "sunOffsetSupport": 1
+          },
+          "Appliance.Control.TriggerX": {},
+          "Appliance.Control.Light": {
+            "capacity": 4
+          },
+          "Appliance.Control.Fan": {},
+          "Appliance.Control.Fan.Config": {},
+          "Appliance.Control.PowerRetention": {},
+          "Appliance.Control.Fan.BtnConfig": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.Digest.TimerX": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:18",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:18",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {
+              "model": "MFC100",
+              "sn": "##############0",
+              "category": 8,
+              "setupId": "###0",
+              "setupCode": "#########0",
+              "uuid": "##################################61",
+              "token": "###################################################################################################################################################################################################################################################################################################################################################################################################################################################################################0"
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:18",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.OverTemp",
+        {
+          "overTemp": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:18",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.OverTemp",
+        {
+          "overTemp": {
+            "enable": -1,
+            "type": -1
+          }
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:18",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "7.3.14",
+              "homekitVersion": "6.3",
+              "sysUpTime": "19h39m33s",
+              "UTC": 1708961058,
+              "localTimeOffset": -18000,
+              "localTime": "Mon Feb 26 10:24:18 2024",
+              "suncalc": "7:23;18:28",
+              "memTotal": 3605504,
+              "memFree": 3321712,
+              "memMini": 3306872
+            },
+            "network": {
+              "linkStatus": "connected",
+              "snr": 36,
+              "channel": 11,
+              "signal": 81,
+              "rssi": -58,
+              "ssid": "############0",
+              "gatewayMac": "################0",
+              "innerIp": "#########0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "linkStatus": "connected",
+              "activeServer": "###################2",
+              "mainServer": "###################2",
+              "mainPort": "@2",
+              "secondServer": "##############3",
+              "secondPort": "@2",
+              "userId": "@0",
+              "sysConnectTime": "Sun Feb 25 19:44:53 2024",
+              "sysOnlineTime": "19h39m25s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 81
+          }
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Calibration",
+        {
+          "calibration": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Calibration",
+        {
+          "calibration": {
+            "minimum": 1,
+            "maxmum": 100,
+            "channel": 1,
+            "lightUp": 30
+          }
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.Calibration payload:{'calibration': {'minimum': 1, 'maxmum': 100, 'channel': 1, 'lightUp': 30}}"
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.OverTemp",
+        {
+          "overTemp": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.OverTemp (messageId:4d884d9f43474e45874a8bc293a764c0 ServerDisconnectedError:Server disconnected attempt:0)"
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.OverTemp",
+        {}
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.OverTemp (messageId:2a8559b66c784834b05c8d296f623db5 ServerDisconnectedError:Server disconnected attempt:0)"
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ToggleX",
+        {
+          "channel": 4294967295,
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 0,
+              "lmTime": 1708960874
+            },
+            {
+              "channel": 1,
+              "onoff": 0,
+              "lmTime": 1708960874
+            },
+            {
+              "channel": 2,
+              "onoff": 0,
+              "lmTime": 1708960867
+            }
+          ]
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Light",
+        {
+          "light": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Light",
+        {
+          "light": {
+            "capacity": 4,
+            "channel": 1,
+            "luminance": 100,
+            "onoff": 0
+          }
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Fan",
+        {
+          "fan": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Fan",
+        {
+          "fan": [
+            {
+              "channel": 0,
+              "speed": 1,
+              "maxSpeed": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Fan.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Fan.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Fan.Config payload:{'config': []}"
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Fan.Config",
+        {
+          "config": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Fan.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "maxSpeed": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Fan.Config payload:{'config': [{'channel': 0, 'maxSpeed': 0}]}"
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.PowerRetention",
+        {
+          "powerRetention": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.PowerRetention",
+        {
+          "powerRetention": []
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.PowerRetention payload:{'powerRetention': []}"
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.PowerRetention",
+        {
+          "powerRetention": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.PowerRetention",
+        {
+          "powerRetention": [
+            {
+              "channel": 0,
+              "state": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.PowerRetention payload:{'powerRetention': [{'channel': 0, 'state': 1}]}"
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Fan.BtnConfig",
+        {
+          "btnConfig": {}
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.Fan.BtnConfig (messageId:38ab70435c2f46d3a9cd72702e038a0a ServerDisconnectedError:Server disconnected attempt:0)"
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Fan.BtnConfig",
+        {}
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Fan.BtnConfig",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "powerBtn": {
+                "type": 1
+              }
+            },
+            {
+              "channel": 1,
+              "controlBtn": {
+                "onoffType": 1,
+                "levelType": 2
+              }
+            },
+            {
+              "channel": 2,
+              "controlBtn": {
+                "onoffType": 1,
+                "levelType": 2
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2024/02/26 - 10:24:19",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Control.Fan.BtnConfig payload:{'config': [{'channel': 0, 'powerBtn': {'type': 1}}, {'channel': 1, 'controlBtn': {'onoffType': 1, 'levelType': 2}}, {'channel': 2, 'controlBtn': {'onoffType': 1, 'levelType': 2}}]}"
+      ]
+    ]
+  }
+}
