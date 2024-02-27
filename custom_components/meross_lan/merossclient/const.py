@@ -540,64 +540,59 @@ HP110A_MP3_VOLUME_MAX = 16
 TYPE_UNKNOWN = "unknown"
 TYPE_NAME_MAP = collections.OrderedDict()
 
-CLASS_MAP = "map"
 TYPE_MAP100 = "map100"
-TYPE_NAME_MAP[CLASS_MAP] = "Smart Air Purifier"
+TYPE_NAME_MAP["map"] = "Smart Air Purifier"
 
-CLASS_MSH = "msh"
+TYPE_MFC100 = "mfc100"
+TYPE_NAME_MAP["mfc"] = "Smart Fan"
+
+TYPE_MOD100 = "mod100"  # smart humidifier
+TYPE_MOD150 = "mod150"  # smart humidifier
+TYPE_NAME_MAP["mod"] = "Smart Humidifier"
+
+TYPE_NAME_MAP["mrs"] = "Smart Roller Shutter"
+
+TYPE_NAME_MAP["msg"] = "Smart Garage Door"
+
 TYPE_MSH300 = "msh300"  # WiFi Hub
-TYPE_NAME_MAP[CLASS_MSH] = "Smart Hub"
+TYPE_NAME_MAP["msh"] = "Smart Hub"
 
-CLASS_MSS = "mss"
+TYPE_MSL100 = "msl100"  # smart bulb
+TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"
+TYPE_MSL120 = "msl120"  # smart bulb with color/temp
+TYPE_NAME_MAP[TYPE_MSL120] = "Smart RGB Bulb"
+TYPE_NAME_MAP["msl"] = "Smart Light"
+
 TYPE_MSS310 = "mss310"  # smart plug with energy meter
 TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
 TYPE_MSS560 = "mss560"
 TYPE_NAME_MAP[TYPE_MSS560] = "Smart Dimmer Switch"
 TYPE_MSS570 = "mss570"
 TYPE_NAME_MAP[TYPE_MSS570] = TYPE_NAME_MAP[TYPE_MSS560]
-TYPE_NAME_MAP[CLASS_MSS] = "Smart Switch"
+TYPE_NAME_MAP["mss"] = "Smart Switch"
 
-CLASS_MSL = "msl"
-TYPE_MSL100 = "msl100"  # smart bulb
-TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"
-TYPE_MSL120 = "msl120"  # smart bulb with color/temp
-TYPE_NAME_MAP[TYPE_MSL120] = "Smart RGB Bulb"
-TYPE_NAME_MAP[CLASS_MSL] = "Smart Light"
-
-CLASS_MTS = "mts"
-CLASS_MTSV = "mts1"
 TYPE_MTS100 = "mts100"  # Smart thermostat over hub
 TYPE_MTS100V3 = "mts100v3"  # Smart thermostat over hub
 TYPE_MTS150 = "mts150"  # Smart thermostat over hub
-TYPE_NAME_MAP[CLASS_MTSV] = "Smart Thermostat Valve"
+TYPE_NAME_MAP["mts1"] = "Smart Thermostat Valve"
 TYPE_MTS200 = "mts200"  # Smart thermostat over wifi
-TYPE_NAME_MAP[TYPE_MTS200] = "Smart Thermostat"
 TYPE_MTS960 = "mts960"  # Smart thermostat over wifi
 TYPE_NAME_MAP[TYPE_MTS960] = "Smart Socket Thermostat"
-TYPE_NAME_MAP[CLASS_MTS] = "Smart Thermostat"
-
-CLASS_MOD = "mod"
-TYPE_MOD100 = "mod100"  # smart humidifier
-TYPE_MOD150 = "mod150"  # smart humidifier
-TYPE_NAME_MAP[CLASS_MOD] = "Smart Humidifier"
-
-CLASS_MSG = "msg"
-TYPE_NAME_MAP[CLASS_MSG] = "Smart Garage Door"
-
-CLASS_MRS = "mrs"
-TYPE_NAME_MAP[CLASS_MRS] = "Smart Roller Shutter"
-
+TYPE_NAME_MAP["mts"] = "Smart Thermostat"
+#
+# Hub subdevices
+#
 # do not register class 'ms' since it is rather
 # unusual naming and could issue collissions with mss or msl
 # just set the known type
-TYPE_MS100 = "ms100"  # Smart temp/humidity sensor over Hub
-TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
-
 TYPE_HP110A = "hp110"
 TYPE_NAME_MAP[TYPE_HP110A] = "Smart Cherub Baby Machine"
 
 TYPE_GS559 = "gs559"
 TYPE_NAME_MAP[TYPE_GS559] = "Smart Smoke Alarm"
+
+TYPE_MS100 = "ms100"  # Smart temp/humidity sensor over Hub
+TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
 
 TYPE_MS200 = "ms200"
 TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"
