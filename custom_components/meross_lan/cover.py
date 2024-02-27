@@ -882,6 +882,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
         self._transition_cancel()
         manager = self.manager
         channel = self.channel
+        """ REMOVE: looks like the mrs100 doesn't love set_position in multiple req
         if (manager.multiple_max >= 3) and (
             responses := await manager.async_multiple_requests_ack(
                 (
@@ -936,6 +937,7 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     # at any rate, we'll monitor the state
                     await self._async_transition_callback()
                 return True
+        """
 
         # in case the ns_multiple didn't succesfully kick-in we'll
         # fallback to the legacy procedure
@@ -1005,12 +1007,13 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             # detecting a device reporting 'good' positions
             self._position_native_isgood = True
             self._position_native = None
+            self.is_closed = False
             self.extra_state_attributes.pop(EXTRA_ATTR_POSITION_NATIVE, None)
             self.supported_features |= CoverEntityFeature.SET_POSITION
             self.current_cover_position = position
-            self.is_closed = False
         else:
             self._position_native = position
+            self.is_closed = position == mc.ROLLERSHUTTER_POSITION_CLOSED
             self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
             if self.current_cover_position is None:
                 # only happening when we didn't restore state on devices
@@ -1021,7 +1024,6 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                 # emulated state and so we don't touch it
                 self.supported_features |= CoverEntityFeature.SET_POSITION
                 self.current_cover_position = position
-                self.is_closed = position == mc.ROLLERSHUTTER_POSITION_CLOSED
 
         self.flush_state()
 
@@ -1099,7 +1101,9 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._async_transition_callback,
         )
         manager = self.manager
-        if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
+        if (manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active) or (
+            self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE
+        ):
             p_channel_payload = [{mc.KEY_CHANNEL: self.channel}]
             if manager.multiple_max >= 2:
                 await manager.async_multiple_requests_ack(
@@ -1117,13 +1121,13 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
                     )
                 )
             else:
-                await manager.async_http_request(
+                await manager.async_request(
                     mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
                     mc.METHOD_GET,
                     {mc.KEY_STATE: p_channel_payload},
                 )
                 if self._position_native_isgood:
-                    await manager.async_http_request(
+                    await manager.async_request(
                         mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
                         mc.METHOD_GET,
                         {mc.KEY_POSITION: p_channel_payload},
