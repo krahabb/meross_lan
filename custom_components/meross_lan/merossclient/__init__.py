@@ -296,6 +296,13 @@ class KeyToNameSpaceMap(dict):
 KEY_TO_NAMESPACE = KeyToNameSpaceMap()
 
 
+def is_hub_namespace(namespace: str):
+    match namespace.split("."):
+        case (_, "Hub", *args):
+            return True
+    return False
+
+
 def get_default_payload(namespace: str) -> MerossPayloadType:
     """
     when we query a device 'namespace' with a GET method the request payload

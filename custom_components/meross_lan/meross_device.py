@@ -59,6 +59,7 @@ from .merossclient import (
     get_message_uuid,
     get_port_safe,
     is_device_online,
+    is_hub_namespace,
     json_dumps,
     request_get,
     request_push,
@@ -2089,16 +2090,26 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         if response and (
                             response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
                         ):
+                            if is_hub_namespace(ability):
+                                # for Hub namespaces there's nothing more guessable
+                                continue
                             key_namespace = NAMESPACE_TO_KEY[ability]
-                            request_payload = request[2][key_namespace]
+                            # we're not sure our key_namespace is correct (euristics!)
                             response_payload = response[mc.KEY_PAYLOAD].get(
                                 key_namespace
                             )
-                            if not response_payload and not request_payload:
+                            if response_payload:
+                                # our euristic query hit something..loop next
+                                continue
+                            request_payload = request[2][key_namespace]
+                            if request_payload:
+                                # we've already issued a channel-like GET
+                                continue
+                            
+                            if isinstance(response_payload, list):
                                 # the namespace might need a channel index in the request
-                                if isinstance(response_payload, list):
-                                    request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]
-                                    await self.async_http_request(*request)
+                                request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]
+                                await self.async_http_request(*request)
                         else:
                             # METHOD_GET doesnt work. Try PUSH
                             await self.async_http_request(*request_push(ability))
@@ -2140,7 +2151,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         key_namespace = NAMESPACE_TO_KEY[ability]
                         request_payload = request[2][key_namespace]
                         response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
-                        if not response_payload and not request_payload:
+                        if (
+                            not response_payload
+                            and not request_payload
+                            and not is_hub_namespace(ability)
+                        ):
                             # the namespace might need a channel index in the request
                             if isinstance(response_payload, list):
                                 request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]
