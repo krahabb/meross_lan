@@ -48,6 +48,7 @@ from .helpers.namespaces import (
     DiagnosticPollingStrategy,
     NamespaceHandler,
     PollingStrategy,
+    digest_init_empty,
 )
 from .merossclient import (
     NAMESPACE_TO_KEY,
@@ -66,7 +67,7 @@ from .merossclient import (
 )
 from .merossclient.httpclient import MerossHttpClient, TerminatedException
 from .repairs import IssueSeverity, create_issue, remove_issue
-from .sensor import MLNumericSensor, ProtocolSensor
+from .sensor import ProtocolSensor
 from .update import MLUpdate
 
 if typing.TYPE_CHECKING:
@@ -75,6 +76,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .helpers.namespaces import DigestInitFunc, DigestParseFunc
     from .meross_entity import MerossEntity
     from .meross_profile import MQTTConnection
     from .merossclient import (
@@ -319,6 +321,18 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     Generic protocol handler class managing the physical device stack/state
     """
 
+    DIGEST_INITIALIZERS: Final[dict[str, DigestInitFunc]] = {
+        mc.KEY_TIMERX: digest_init_empty,
+        mc.KEY_TRIGGERX: digest_init_empty,
+    }
+    """
+    Static dict of 'digest initialization function(s)'.
+    This is built on demand during MerossDevice init whenever a digest key
+    is encountered. The 'digest initialization function' is looked up in the
+    related module under meross_lan/devices/digest and then cached into this
+    dict so that lookp/import is only done once. In case the digest key module is
+    missing we'll save a None in this dict to avoid looking-up again.
+    """
     # some namespaces are manageable with a simple single entity instance
     # and this static map provides a list of entities to be built at device
     # init time when the namespace appears in device ability set.
@@ -372,6 +386,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_http_active",  # HTTP is 'online' i.e. reachable
         "_http_lastrequest",
         "_http_lastresponse",
+        "digest_handlers",
         "namespace_handlers",
         "polling_strategies",
         "_unsub_polling_callback",
@@ -420,6 +435,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._http_active: MerossHttpClient | None = None
         self._http_lastrequest = 0
         self._http_lastresponse = 0
+        self.digest_handlers: dict[str, DigestParseFunc] = {}
         self.namespace_handlers: dict[str, NamespaceHandler] = {}
         self.polling_strategies: dict[str, PollingStrategy] = {}
         # TODO: try to cache the system.all payload size in order to avoid the json_dumps
@@ -480,12 +496,24 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     )
                     getattr(module, init_descriptor[1])(self)
 
-        for _key, _digest in descriptor.digest.items():
+        for key_digest, _digest in descriptor.digest.items():
             # _init_xxxx methods provided by mixins
-            _init_method_name = f"_init_{_key}"
+            _init_method_name = f"_init_{key_digest}"
             if _init := getattr(self, _init_method_name, None):
                 with self.exception_warning(_init_method_name):
                     _init(_digest)
+            else:
+                if key_digest not in MerossDevice.DIGEST_INITIALIZERS:
+                    try:
+                        module = import_module(
+                            f".devices.{key_digest}", "custom_components.meross_lan"
+                        )
+                        MerossDevice.DIGEST_INITIALIZERS[key_digest] = getattr(module, "digest_init")
+                    except Exception as exception:
+                        self.log_exception(self.WARNING, exception, "initializing digest key:%s", key_digest)
+                        MerossDevice.DIGEST_INITIALIZERS[key_digest] = digest_init_empty
+                self.digest_handlers[key_digest] = MerossDevice.DIGEST_INITIALIZERS[key_digest](self, _digest)
+
 
     # interface: ConfigEntryManager
     async def entry_update_listener(
@@ -1778,6 +1806,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         for _key, _digest in descr.digest.items():
             if _parse := getattr(self, f"_parse_{_key}", None):
                 _parse(_digest)
+            else:
+                self.digest_handlers[_key](_digest)
+
         # older firmwares (MSS110 with 1.1.28) look like
         # carrying 'control' instead of 'digest'
         if isinstance(p_control := descr.all.get(mc.KEY_CONTROL), dict):

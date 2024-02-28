@@ -132,6 +132,9 @@ class ToggleXMixin(MerossDevice if typing.TYPE_CHECKING else object):
             switch = self._build_outlet(0)
             self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, switch)
 
+    def _init_togglex(self, digest: list):
+        pass
+
     def _parse_togglex(self, digest: list):
         self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLEX]._parse_list(digest)
 

@@ -120,22 +120,3 @@ class FanNamespaceHandler(NamespaceHandler):
                 payload=[{mc.KEY_CHANNEL: 0}],
                 item_count=1,
             )
-
-
-class FanMixin(
-    MerossDevice if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    """
-    Initializes Fan entities for devices exposing "Appliance.Control.Fan" namespace.
-    We have 2 devices supporting this so far and their layout is pretty different:
-    - map100: doesn't carry digest info for Fan (and exposes the fan at channel 0)
-    - mfc100: actually carries "fan" digest key (on channel == 2) plus light and toggles
-    """
-
-    def _init_fan(self, digest: list):
-        """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
-        for channel_digest in digest:
-            MLFan(self, channel_digest[mc.KEY_CHANNEL])
-
-    def _parse_fan(self, digest: list):
-        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_FAN]._parse_list(digest)

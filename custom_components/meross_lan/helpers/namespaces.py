@@ -6,10 +6,21 @@ from .. import const as mlc
 from ..merossclient import NAMESPACE_TO_KEY, const as mc, request_get, request_push
 
 if typing.TYPE_CHECKING:
-    from typing import Callable, Final
+    from typing import Any, Callable, Final
 
     from ..meross_device import MerossDevice
     from ..meross_entity import MerossEntity
+
+    DigestParseFunc = Callable[[dict], None] | Callable[[list], None]
+    DigestInitFunc = Callable[[MerossDevice, Any], DigestParseFunc]
+
+
+def digest_parse_empty(digest: dict | list):
+    pass
+
+
+def digest_init_empty(device: MerossDevice, digest: dict | list):
+    return digest_parse_empty
 
 
 class NamespaceHandler:
