@@ -93,9 +93,9 @@ class HubNamespaceHandler(NamespaceHandler):
     relevant subdevice instance.
     """
 
-    device: typing.Final[MerossDeviceHub]  # type: ignore
+    device: typing.Final[HubMixin]  # type: ignore
 
-    def __init__(self, device: MerossDeviceHub, namespace: str):
+    def __init__(self, device: HubMixin, namespace: str):
         NamespaceHandler.__init__(
             self, device, namespace, handler=self._handle_subdevice
         )
@@ -140,7 +140,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
 
     def __init__(
         self,
-        device: MerossDeviceHub,
+        device: HubMixin,
         namespace: str,
         types: typing.Collection,
         included: bool,
@@ -151,7 +151,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
         self._included = included
         self._count = count
 
-    async def async_poll(self, device: MerossDeviceHub, epoch: float):
+    async def async_poll(self, device: HubMixin, epoch: float):
         if not (device._mqtt_active and self.lastrequest):
             max_queuable = 1
             # for hubs, this payload request might be splitted
@@ -182,7 +182,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
                 ):
                     max_queuable += 1
 
-    async def async_trace(self, device: MerossDeviceHub, protocol: str | None):
+    async def async_trace(self, device: HubMixin, protocol: str | None):
         """
         Used while tracing abilities. In general, we use an euristic 'default'
         query but for some 'well known namespaces' we might be better off querying with
@@ -218,7 +218,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
             yield payload
 
 
-class MerossDeviceHub(MerossDevice):
+class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
     """
     Specialized MerossDevice for smart hub(s) like MSH300
     """
@@ -233,7 +233,7 @@ class MerossDeviceHub(MerossDevice):
         MtsTrackedSensor.PLATFORM: None,
     }
 
-    __slots__ = ("subdevices",)
+    # REMOVE __slots__ = ("subdevices",)
 
     # interface: EntityManager
     def managed_entities(self, platform):
@@ -443,7 +443,7 @@ class MerossSubDevice(MerossDeviceBase):
     it were a full-fledged device but some EntityManager properties
     are overriden in order to manage ConfigEntry setup/unload since
     MerossSubDevice doesn't actively represent one (it delegates this to
-    the owning MerossDeviceHub)
+    the owning Hub)
     """
 
     __slots__ = (
@@ -458,7 +458,7 @@ class MerossSubDevice(MerossDeviceBase):
         "switch_togglex",
     )
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
+    def __init__(self, hub: HubMixin, p_digest: dict, _type: str):
         # this is a very dirty trick/optimization to override some MerossDeviceBase
         # properties/methods that just needs to be forwarded to the hub
         # this way we're short-circuiting that indirection
@@ -504,7 +504,7 @@ class MerossSubDevice(MerossDeviceBase):
         self.async_request = None  # type: ignore
         self.async_request_raw = None  # type: ignore
         self.build_request = None  # type: ignore
-        self.hub: MerossDeviceHub = None  # type: ignore
+        self.hub: HubMixin = None  # type: ignore
         self.sensor_battery: MLNumericSensor = None  # type: ignore
         self.switch_togglex = None
 
@@ -753,7 +753,7 @@ class MS100SubDevice(MerossSubDevice):
         "number_adjust_humidity",
     )
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
         self.sensor_temperature = MLTemperatureSensor(self, self.id)
         self.sensor_humidity = MLHumiditySensor(self, self.id)
@@ -830,9 +830,7 @@ class MTS100SubDevice(MerossSubDevice):
         "sensor_temperature",
     )
 
-    def __init__(
-        self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100
-    ):
+    def __init__(self, hub: HubMixin, p_digest: dict, _type: str = mc.TYPE_MTS100):
         super().__init__(hub, p_digest, _type)
         from .devices.mts100 import Mts100Climate
 
@@ -895,7 +893,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100] = MTS100SubDevice
 
 
 class MTS100V3SubDevice(MTS100SubDevice):
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MTS100V3)
 
     def _parse_mts100v3(self, p_mts100v3: dict):
@@ -908,7 +906,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100V3] = MTS100V3SubDevice
 
 
 class MTS150SubDevice(MTS100SubDevice):
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MTS150)
 
     def _parse_mts150(self, p_mts150: dict):
@@ -950,7 +948,7 @@ class GS559SubDevice(MerossSubDevice):
         "sensor_interConn",
     )
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
         self.sensor_status: MLEnumSensor = self.build_enum_sensor(mc.KEY_STATUS)
         self.sensor_status.translation_key = "smoke_alarm_status"
@@ -992,7 +990,7 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_SMOKEALARM] = GS559SubDevice
 class MS200SubDevice(MerossSubDevice):
     __slots__ = ("binary_sensor_window",)
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS200)
         self.binary_sensor_window = self.build_binary_sensor_window()
 
@@ -1013,7 +1011,7 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_DOORWINDOW] = MS200SubDevice
 class MS400SubDevice(MerossSubDevice):
     __slots__ = ("binary_sensor_waterleak",)
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS400)
         self.binary_sensor_waterleak = self.build_binary_sensor(
             mc.KEY_WATERLEAK, MLBinarySensor.DeviceClass.SAFETY

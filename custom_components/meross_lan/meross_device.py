@@ -387,6 +387,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_diagnostics_build",
         "sensor_protocol",
         "update_firmware",
+        # Hub slots
+        "subdevices",
     )
 
     def __init__(
@@ -2105,7 +2107,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             if request_payload:
                                 # we've already issued a channel-like GET
                                 continue
-                            
+
                             if isinstance(response_payload, list):
                                 # the namespace might need a channel index in the request
                                 request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]

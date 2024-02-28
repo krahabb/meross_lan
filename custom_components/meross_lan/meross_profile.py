@@ -34,7 +34,7 @@ from .helpers import (
     versiontuple,
 )
 from .helpers.manager import ApiProfile, CloudApiClient
-from .meross_device_hub import MerossDeviceHub
+from .meross_device_hub import HubMixin
 from .merossclient import (
     MEROSSDEBUG,
     HostAddress,
@@ -1413,7 +1413,7 @@ class MerossCloudProfile(ApiProfile):
             with self.exception_warning("_process_device_info_new"):
                 device_id = device_info[mc.KEY_UUID]
                 # preserved (old) dict of hub subdevices to process/carry over
-                # for MerossDeviceHub(s)
+                # for Hub(s)
                 sub_device_info_dict: dict[str, SubDeviceInfoType] | None
                 if device_id in device_info_dict:
                     # already known device
@@ -1434,7 +1434,7 @@ class MerossCloudProfile(ApiProfile):
                     # config_entry for device is not loaded
                     continue
 
-                if isinstance(device, MerossDeviceHub):
+                if isinstance(device, HubMixin):
                     if sub_device_info_dict is None:
                         sub_device_info_dict = {}
                     device_info[self.KEY_SUBDEVICE_INFO] = sub_device_info_dict
@@ -1462,7 +1462,7 @@ class MerossCloudProfile(ApiProfile):
 
     async def _process_subdevice_info_new(
         self,
-        hub_device: MerossDeviceHub,
+        hub_device: HubMixin,
         sub_device_info_dict: dict[str, SubDeviceInfoType],
         sub_device_info_list_new: list[SubDeviceInfoType],
     ):

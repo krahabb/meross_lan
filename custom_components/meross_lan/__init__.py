@@ -55,6 +55,7 @@ DIGEST_INITIALIZERS = {
     mc.KEY_DIFFUSER: (".devices.diffuser", "DiffuserMixin"),
     mc.KEY_FAN: (".fan", "FanMixin"),
     mc.KEY_GARAGEDOOR: (".cover", "GarageMixin"),
+    mc.KEY_HUB: (".meross_device_hub", "HubMixin"),
     mc.KEY_LIGHT: (".light", "LightMixin"),
     mc.KEY_THERMOSTAT: (".devices.thermostat", "ThermostatMixin"),
     mc.KEY_SPRAY: (".select", "SprayMixin"),
@@ -528,13 +529,6 @@ class MerossApi(ApiProfile):
         ability = descriptor.ability
         digest = descriptor.digest
 
-        if mc.KEY_HUB in digest:
-            from .meross_device_hub import MerossDeviceHub
-
-            class_base = MerossDeviceHub
-        else:
-            class_base = MerossDevice
-
         mixin_classes = []
         # put Toggle(X) mixin at the top of the class hierarchy
         # since the toggle feature could be related to a more
@@ -567,7 +561,7 @@ class MerossApi(ApiProfile):
         # We must be careful when ordering the mixin and leave MerossDevice as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.
         # see https://github.com/albertogeniola/MerossIot/blob/0.4.X.X/meross_iot/device_factory.py
-        mixin_classes.append(class_base)
+        mixin_classes.append(MerossDevice)
         # build a label to cache the set
         class_name = ""
         for m in mixin_classes:
