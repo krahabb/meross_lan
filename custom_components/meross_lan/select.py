@@ -24,8 +24,6 @@ if typing.TYPE_CHECKING:
     from homeassistant.helpers.typing import EventType
 
     from .climate import MtsClimate
-    from .devices.mod100 import DiffuserMixin
-    from .helpers.manager import EntityManager
     from .meross_device import MerossDevice
 
 
@@ -72,7 +70,7 @@ class MLSpray(MLSelect):
     key_namespace = mc.KEY_SPRAY
     key_value = mc.KEY_MODE
 
-    manager: SprayMixin | DiffuserMixin
+    manager: MerossDevice
 
     _spray_mode_map: dict[object, str]
     """
@@ -84,7 +82,7 @@ class MLSpray(MLSelect):
     __slots__ = ("_spray_mode_map",)
 
     def __init__(
-        self, manager: SprayMixin | DiffuserMixin, channel: object, spraymode_map: dict
+        self, manager: MerossDevice, channel: object, spraymode_map: dict
     ):
         # we could use the shared instance but different device firmwares
         # could bring in unwanted global options...

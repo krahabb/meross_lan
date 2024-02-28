@@ -52,7 +52,7 @@ else:
 
 
 DIGEST_INITIALIZERS = {
-    mc.KEY_DIFFUSER: (".devices.mod100", "DiffuserMixin"),
+    mc.KEY_DIFFUSER: (".devices.diffuser", "DiffuserMixin"),
     mc.KEY_FAN: (".fan", "FanMixin"),
     mc.KEY_GARAGEDOOR: (".cover", "GarageMixin"),
     mc.KEY_LIGHT: (".light", "LightMixin"),
