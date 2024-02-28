@@ -65,12 +65,18 @@ class MLDiffuserLight(MLLightBase):
             if mc.KEY_MODE not in light:
                 light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
 
-        if await self.manager.async_request_light_ack(light):
+        if await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
+            mc.METHOD_SET,
+            {mc.KEY_LIGHT: [light]},
+        ):
             self._parse_light(light)
 
     async def async_turn_off(self, **kwargs):
-        if await self.manager.async_request_light_ack(
-            {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}
+        if await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
+            mc.METHOD_SET,
+            {mc.KEY_LIGHT: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}]},
         ):
             self.update_onoff(0)
 
@@ -88,6 +94,20 @@ class MLDiffuserLight(MLLightBase):
                 self._light_effect_map[mode] = self.effect
                 self.effect_list = list(self._light_effect_map.values())
 
+
+class MLDiffuserSpray(MLSpray):
+
+    namespace = mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY
+
+    manager: DiffuserMixin
+
+    # interface: MLSpray
+    async def async_request_spray_ack(self, payload: dict):
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {self.key_namespace: [payload]},
+        )
 
 class DiffuserMixin(
     MerossDevice if typing.TYPE_CHECKING else object
@@ -113,10 +133,9 @@ class DiffuserMixin(
             light = MLDiffuserLight(self, light_digest)
             self.register_parser(mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT, light)
         for spray_digest in digest.get(mc.KEY_SPRAY, []):
-            spray = MLSpray(
+            MLDiffuserSpray(
                 self, spray_digest[mc.KEY_CHANNEL], DiffuserMixin.SPRAY_MODE_MAP
             )
-            self.register_parser(mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY, spray)
 
         if mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR in self.descriptor.ability:
             # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
@@ -154,17 +173,3 @@ class DiffuserMixin(
         for key in (mc.KEY_HUMIDITY, mc.KEY_TEMPERATURE):
             if key in payload:
                 entities[key].update_native_value(payload[key][mc.KEY_VALUE] / 10)
-
-    async def async_request_light_ack(self, payload):
-        return await self.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
-            mc.METHOD_SET,
-            {mc.KEY_TYPE: self._type, mc.KEY_LIGHT: [payload]},
-        )
-
-    async def async_request_spray_ack(self, payload):
-        return await self.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY,
-            mc.METHOD_SET,
-            {mc.KEY_TYPE: self._type, mc.KEY_SPRAY: [payload]},
-        )

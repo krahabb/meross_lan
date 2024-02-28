@@ -63,6 +63,14 @@ class MLSelect(me.MerossEntity, select.SelectEntity):
 
 
 class MLSpray(MLSelect):
+    """
+    SelectEntity class for Appliance.Control.Spray namespace. This is also
+    slightly customized in MLDiffuserSpray to override namespace mapping and
+    message formatting.
+    """
+    namespace = mc.NS_APPLIANCE_CONTROL_SPRAY
+    key_namespace = mc.KEY_SPRAY
+    key_value = mc.KEY_MODE
 
     manager: SprayMixin | DiffuserMixin
 
@@ -73,9 +81,7 @@ class MLSpray(MLSelect):
     """
     # HA core entity attributes:
 
-    __slots__ = (
-        "_spray_mode_map",
-    )
+    __slots__ = ("_spray_mode_map",)
 
     def __init__(
         self, manager: SprayMixin | DiffuserMixin, channel: object, spraymode_map: dict
@@ -86,6 +92,7 @@ class MLSpray(MLSelect):
         self.current_option = None
         self.options = list(self._spray_mode_map.values())
         super().__init__(manager, channel, mc.KEY_SPRAY)
+        manager.register_parser(self.namespace, self)
 
     # interface: select.SelectEntity
     async def async_select_option(self, option: str):
@@ -96,10 +103,18 @@ class MLSpray(MLSelect):
         else:
             raise NotImplementedError("async_select_option")
 
-        if await self.manager.async_request_spray_ack(
-            {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}
+        if await self.async_request_spray_ack(
+            {self.key_channel: self.channel, self.key_value: mode}
         ):
             self.update_option(option)
+
+    # interface: self
+    async def async_request_spray_ack(self, payload: dict):
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {self.key_namespace: payload},
+        )
 
     def _parse_spray(self, payload: dict):
         """
@@ -131,18 +146,10 @@ class SprayMixin(
     def _init_spray(self, digest: list):
         # spray = [{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]
         for channel_digest in digest:
-            spray = MLSpray(self, channel_digest[mc.KEY_CHANNEL], self.SPRAY_MODE_MAP)
-            self.register_parser(mc.NS_APPLIANCE_CONTROL_SPRAY, spray)
+            MLSpray(self, channel_digest[mc.KEY_CHANNEL], self.SPRAY_MODE_MAP)
 
     def _parse_spray(self, digest: list):
         self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_SPRAY]._parse_list(digest)
-
-    async def async_request_spray_ack(self, payload):
-        return await self.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_SPRAY,
-            mc.METHOD_SET,
-            {mc.KEY_SPRAY: payload},
-        )
 
 
 class MtsTrackedSensor(MLSelect):

@@ -292,7 +292,7 @@ class MLLight(MLLightBase):
         if not self._togglex_switch:
             light[mc.KEY_ONOFF] = 1
 
-        if await self.manager.async_request_light_ack(light):
+        if await self.async_request_light_ack(light):
             self._light = {}  # invalidate so _parse_light will force-flush
             self._parse_light(light)
             if not self.is_on:
@@ -323,13 +323,20 @@ class MLLight(MLLightBase):
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
             if self.manager.descriptor.firmwareVersion == "2.1.2":
-                await self.manager.async_request_light_ack(light)
+                await self.async_request_light_ack(light)
+
+    async def async_request_light_ack(self, payload: dict):
+        return await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_LIGHT,
+            mc.METHOD_SET,
+            {mc.KEY_LIGHT: payload},
+        )
 
     async def async_request_onoff(self, onoff: int):
         if self._togglex_switch:
             await super().async_request_onoff(onoff)
         else:
-            if await self.manager.async_request_light_ack(
+            if await self.async_request_light_ack(
                 {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}
             ):
                 self.update_onoff(onoff)
@@ -457,10 +464,3 @@ class LightMixin(
             for entity in self.entities.values():
                 if isinstance(entity, MLLight):
                     entity.update_effect_map(light_effect_map)
-
-    async def async_request_light_ack(self, payload):
-        return await self.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_LIGHT,
-            mc.METHOD_SET,
-            {mc.KEY_LIGHT: payload},
-        )
