@@ -5,7 +5,7 @@ import typing
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
-from custom_components.meross_lan.meross_device_hub import HubMixin
+from custom_components.meross_lan.devices.hub import HubMixin
 from custom_components.meross_lan.meross_entity import MerossEntity
 from custom_components.meross_lan.merossclient import const as mc
 from emulator import generate_emulators

@@ -25,6 +25,7 @@ from .const import (
     DOMAIN,
     DeviceConfigType,
 )
+from .devices.hub import HubMixin
 from .helpers import (
     ConfigEntriesHelper,
     Loggable,
@@ -34,7 +35,6 @@ from .helpers import (
     versiontuple,
 )
 from .helpers.manager import ApiProfile, CloudApiClient
-from .meross_device_hub import HubMixin
 from .merossclient import (
     MEROSSDEBUG,
     HostAddress,

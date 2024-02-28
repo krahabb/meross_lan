@@ -2,38 +2,38 @@ from __future__ import annotations
 
 import typing
 
-from . import const as mlc, meross_entity as me
-from .binary_sensor import MLBinarySensor
-from .calendar import MtsSchedule
-from .climate import MtsClimate
-from .helpers.namespaces import (
+from .. import const as mlc, meross_entity as me
+from ..binary_sensor import MLBinarySensor
+from ..calendar import MtsSchedule
+from ..climate import MtsClimate
+from ..helpers.namespaces import (
     NamespaceHandler,
     OncePollingStrategy,
     PollingStrategy,
     SmartPollingStrategy,
 )
-from .meross_device import MerossDevice, MerossDeviceBase
-from .merossclient import (
+from ..meross_device import MerossDevice, MerossDeviceBase
+from ..merossclient import (
     const as mc,
     get_productnameuuid,
     is_device_online,
     request_get,
 )
-from .number import MLConfigNumber
-from .select import MtsTrackedSensor
-from .sensor import (
+from ..number import MLConfigNumber
+from ..select import MtsTrackedSensor
+from ..sensor import (
     MLDiagnosticSensor,
     MLEnumSensor,
     MLHumiditySensor,
     MLNumericSensor,
     MLTemperatureSensor,
 )
-from .switch import MLSwitch
+from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from .devices.mts100 import Mts100Climate
-    from .meross_entity import MerossEntity
-    from .merossclient import MerossPayloadType
+    from .mts100 import Mts100Climate
+    from ..meross_entity import MerossEntity
+    from ..merossclient import MerossPayloadType
 
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
@@ -832,7 +832,7 @@ class MTS100SubDevice(MerossSubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict, _type: str = mc.TYPE_MTS100):
         super().__init__(hub, p_digest, _type)
-        from .devices.mts100 import Mts100Climate
+        from .mts100 import Mts100Climate
 
         self.climate = Mts100Climate(self)
         self.sensor_temperature = MLTemperatureSensor(self, self.id)

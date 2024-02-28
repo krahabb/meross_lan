@@ -55,7 +55,7 @@ DIGEST_INITIALIZERS = {
     mc.KEY_DIFFUSER: (".devices.diffuser", "DiffuserMixin"),
     mc.KEY_FAN: (".fan", "FanMixin"),
     mc.KEY_GARAGEDOOR: (".cover", "GarageMixin"),
-    mc.KEY_HUB: (".meross_device_hub", "HubMixin"),
+    mc.KEY_HUB: (".devices.hub", "HubMixin"),
     mc.KEY_LIGHT: (".light", "LightMixin"),
     mc.KEY_THERMOSTAT: (".devices.thermostat", "ThermostatMixin"),
     mc.KEY_SPRAY: (".select", "SprayMixin"),

@@ -10,11 +10,11 @@ from custom_components.meross_lan.cover import (
     MLGarageMultipleConfigNumber,
     MLRollerShutterConfigNumber,
 )
+from custom_components.meross_lan.devices.hub import MLHubSensorAdjustNumber
 from custom_components.meross_lan.devices.mts100 import Mts100AdjustNumber
 from custom_components.meross_lan.devices.screenbrightness import (
     MLScreenBrightnessNumber,
 )
-from custom_components.meross_lan.meross_device_hub import MLHubSensorAdjustNumber
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.number import MLConfigNumber
 

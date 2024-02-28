@@ -10,7 +10,7 @@ from ..number import MtsSetPointNumber, MtsTemperatureNumber
 
 if typing.TYPE_CHECKING:
     from ..binary_sensor import MLBinarySensor
-    from ..meross_device_hub import MTS100SubDevice
+    from .hub import MTS100SubDevice
 
 
 class Mts100AdjustNumber(MtsTemperatureNumber):
