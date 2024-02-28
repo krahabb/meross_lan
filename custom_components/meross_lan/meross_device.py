@@ -919,6 +919,18 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         requests_len,
                         multiple_response_size,
                     )
+                    # Here we reduce the device_response_size_max so that
+                    # next ns_multiple will be less demanding. device_response_size_min
+                    # is another dynamic param representing the biggest payload ever received
+                    self.device_response_size_max = (
+                        self.device_response_size_max
+                        + self.device_response_size_min
+                    ) / 2
+                    self.log(
+                        self.DEBUG,
+                        "Updating device_response_size_max:%d",
+                        self.device_response_size_max,
+                    )
                     for request in multiple_requests:
                         await self.async_request(*request)
                         if not self._online:
@@ -1045,9 +1057,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 )
                 try:
                     response = await http.async_request_message(request)
-                    self.device_response_size_min = max(
-                        self.device_response_size_min, len(response.json())
-                    )
                     break
                 except TerminatedException:
                     return None
@@ -1120,19 +1129,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             # this happens (instead of JSONDecodeError)
                             # on my msl120. I guess the (older) fw behaves
                             # differently than those responding incomplete json.
-                            # the None response will be managed in the caller
-                            # Here we reduce the device_response_size_max so that
-                            # next ns_multiple will be less demanding. device_response_size_min
-                            # is another dynamic param representing the biggest payload ever received
-                            self.device_response_size_max = (
-                                self.device_response_size_max
-                                + self.device_response_size_min
-                            ) / 2
-                            self.log(
-                                self.DEBUG,
-                                "Updating device_response_size_max:%d",
-                                self.device_response_size_max,
-                            )
+                            # the None response will be managed in the caller.
                             return None
 
                     if isinstance(exception, asyncio.TimeoutError):
@@ -1567,6 +1564,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         default (received) message handling entry point
         """
         self.lastresponse = epoch
+        message_size = len(message.json())
+        if message_size > self.device_response_size_min:
+            self.device_response_size_min = message_size
+            if message_size > self.device_response_size_max:
+                self.device_response_size_max = message_size
+
         header = message[mc.KEY_HEADER]
         # we'll use the device timestamp to 'align' our time to the device one
         # this is useful for metered plugs reporting timestamped energy consumption
