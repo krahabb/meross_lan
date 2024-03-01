@@ -35,11 +35,10 @@ class EntityTest(EntityComponentTest):
     ):
         supported_color_modes = entity.supported_color_modes
         supported_features = entity.supported_features
-        assert supported_color_modes
 
         if isinstance(entity, MLDNDLightEntity):
             # special light here with reduced set of features
-            assert supported_color_modes == {ColorMode.ONOFF}
+            assert supported_color_modes == {ColorMode.ONOFF}, "supported_color_modes"
         else:
             ability = self.ability
             if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
@@ -48,17 +47,26 @@ class EntityTest(EntityComponentTest):
             # check the other specialized implementations
             if mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT in ability:
                 assert isinstance(entity, MLDiffuserLight)
-                assert supported_color_modes == {ColorMode.RGB}
+                assert supported_color_modes == {ColorMode.RGB}, "supported_color_modes"
                 assert supported_features == LightEntityFeature.EFFECT
+                assert entity.effect_list == list(mc.DIFFUSER_LIGHT_EFFECT_MAP.values()), "effect_list"
             if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
                 assert isinstance(entity, MLLight)
                 capacity = ability[mc.NS_APPLIANCE_CONTROL_LIGHT][mc.KEY_CAPACITY]
                 if capacity & mc.LIGHT_CAPACITY_RGB:
-                    assert ColorMode.RGB in supported_color_modes
+                    assert ColorMode.RGB in supported_color_modes, "supported_color_modes"
                 if capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
-                    assert ColorMode.COLOR_TEMP in supported_color_modes
+                    assert ColorMode.COLOR_TEMP in supported_color_modes, "supported_color_modes"
+                if capacity & mc.LIGHT_CAPACITY_EFFECT:
+                    assert supported_features == LightEntityFeature.EFFECT
+                    assert entity.effect_list, "effect_list"
             if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
                 assert supported_features == LightEntityFeature.EFFECT
+                assert entity.effect_list, "effect_list"
+            if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
+                assert isinstance(entity, MLLight)
+                assert supported_features == LightEntityFeature.EFFECT
+                assert entity.effect_list == list(mc.HP110A_LIGHT_EFFECT_MAP.values()), "effect_list"
 
     async def async_test_enabled_callback(
         self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity

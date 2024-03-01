@@ -88,19 +88,19 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     to interact with HA api. This dict contains the effect key value
     used in the 'light' payload to the effect name
     """
-    _light_effect_map = {}
+    _light_effect_map: dict = {}
 
     # HA core entity attributes:
     brightness: int | None
     color_mode: ColorMode
     color_temp: int | None
-    effect: str | None = None
-    effect_list: list[str] | None = None
+    effect: str | None
+    effect_list: list[str] | None
     max_mireds: int = MSLANY_MIRED_MAX
     min_mireds: int = MSLANY_MIRED_MIN
     rgb_color: tuple[int, int, int] | None
     supported_color_modes: set[ColorMode]
-    supported_features: LightEntityFeature = LightEntityFeature(0)
+    supported_features: LightEntityFeature
     # TODO: add implementation for temp_kelvin and min-max_kelvin
 
     __slots__ = (
@@ -108,7 +108,10 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         "brightness",
         "color_mode",
         "color_temp",
+        "effect",
+        "effect_list",
         "rgb_color",
+        "supported_features",
     )
 
     def __init__(self, manager: MerossDevice, payload: dict):
@@ -116,7 +119,15 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         self.brightness = None
         self.color_mode = ColorMode.UNKNOWN
         self.color_temp = None
+        self.effect = None
         self.rgb_color = None
+        if self._light_effect_map is MLLightBase._light_effect_map:
+            self.effect_list = None
+            self.supported_features = LightEntityFeature(0)
+        else:
+            self.effect_list = list(self._light_effect_map.values())
+            self.supported_features = LightEntityFeature.EFFECT
+
         super().__init__(manager, payload.get(mc.KEY_CHANNEL, 0))
 
     def set_unavailable(self):
@@ -173,7 +184,7 @@ class MLLight(MLLightBase):
     (identified from devices carrying 'light' node in SYSTEM_ALL payload)
     """
 
-    manager: LightMixin
+    manager: "MerossDevice"
 
     _unrecorded_attributes = frozenset({ATTR_TOGGLEX_MODE})
 
@@ -196,7 +207,7 @@ class MLLight(MLLightBase):
         "supported_color_modes",
     )
 
-    def __init__(self, manager: LightMixin, payload: dict):
+    def __init__(self, manager: "MerossDevice", payload: dict):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
         # with msl120j (fw 3.1.4) I've discovered that any 'light' payload sent will turn on the light
@@ -208,9 +219,11 @@ class MLLight(MLLightBase):
         # also (issue #218) the newer mss560-570 dimmer switches are implemented as 'light' devices with ToggleX
         # api and show a glitch when used this way (ToggleX + Light)
         # State-of-the-art is now to auto-detect (when booting the entity) what is the behavior
-        descr = manager.descriptor
+        descriptor = manager.descriptor
+        ability = descriptor.ability
+
         if get_element_by_key_safe(
-            descr.digest.get(mc.KEY_TOGGLEX),
+            descriptor.digest.get(mc.KEY_TOGGLEX),
             mc.KEY_CHANNEL,
             payload.get(mc.KEY_CHANNEL, 0),
         ):
@@ -226,22 +239,32 @@ class MLLight(MLLightBase):
         """
         capacity is set in abilities when using mc.NS_APPLIANCE_CONTROL_LIGHT
         """
-        self._capacity = descr.ability[mc.NS_APPLIANCE_CONTROL_LIGHT].get(
+        self._capacity = capacity = ability[mc.NS_APPLIANCE_CONTROL_LIGHT].get(
             mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE
         )
-
         self.supported_color_modes = supported_color_modes = set()
-        if self._capacity & mc.LIGHT_CAPACITY_RGB:
+        if capacity & mc.LIGHT_CAPACITY_RGB:
             supported_color_modes.add(ColorMode.RGB)  # type: ignore
-        if self._capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
+        if capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
             supported_color_modes.add(ColorMode.COLOR_TEMP)  # type: ignore
         if not supported_color_modes:
-            if self._capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+            if capacity & mc.LIGHT_CAPACITY_LUMINANCE:
                 supported_color_modes.add(ColorMode.BRIGHTNESS)  # type: ignore
             else:
                 supported_color_modes.add(ColorMode.ONOFF)  # type: ignore
 
+        if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
+            self._light_effect_map = {}
+            SmartPollingStrategy(
+                manager,
+                mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
+                handler=self._handle_Appliance_Control_Light_Effect,
+            )
+        elif mc.NS_APPLIANCE_CONTROL_MP3 in ability:
+            self._light_effect_map = mc.HP110A_LIGHT_EFFECT_MAP
+
         super().__init__(manager, payload)
+
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_LIGHT, self)
 
     async def async_turn_on(self, **kwargs):
@@ -341,20 +364,6 @@ class MLLight(MLLightBase):
             ):
                 self.update_onoff(onoff)
 
-    def update_effect_map(self, light_effect_map: dict):
-        """
-        the list of available effects was changed (context at device level)
-        so we'll just tell HA to update the state
-        """
-        self._light_effect_map = light_effect_map
-        if light_effect_map:
-            self.supported_features |= LightEntityFeature.EFFECT
-            self.effect_list = list(light_effect_map.values())
-        else:
-            self.supported_features &= ~LightEntityFeature.EFFECT
-            self.effect_list = None
-        self.flush_state()
-
     def _inherited_parse_light(self, payload: dict):
         if mc.KEY_CAPACITY in payload:
             # despite of previous parsing, use capacity
@@ -387,6 +396,15 @@ class MLLight(MLLightBase):
                     effects = self._light_effect_map.values()
                     if effect < len(effects):
                         self.effect = effects[effect]  # type: ignore
+
+    def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
+        light_effect_map = {}
+        for p_effect in payload[mc.KEY_EFFECT]:
+            light_effect_map[p_effect[mc.KEY_ID_]] = p_effect[mc.KEY_EFFECTNAME]
+        if self._light_effect_map != light_effect_map:
+            self._light_effect_map = light_effect_map
+            self.effect_list = list(light_effect_map.values())
+            self.flush_state()
 
 
 class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
@@ -430,35 +448,3 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
 
     def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
         self.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
-
-
-class LightMixin(
-    MerossDevice if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    """
-    add to MerossDevice when creating actual device in setup
-    in order to provide NS_APPLIANCE_CONTROL_LIGHT and
-    NS_APPLIANCE_CONTROL_LIGHT_EFFECT capability
-    """
-
-    light_effect_map: dict[object, str] = {}  # map effect.Id to effect.Name
-
-    def __init__(self, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(descriptor, entry)
-
-        if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in descriptor.ability:
-            SmartPollingStrategy(self, mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT)
-
-    def _init_light(self, digest: dict):
-        MLLight(self, digest)
-        return self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT]._parse_generic
-
-    def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
-        light_effect_map = {}
-        for p_effect in payload.get(mc.KEY_EFFECT, []):
-            light_effect_map[p_effect[mc.KEY_ID_]] = p_effect[mc.KEY_EFFECTNAME]
-        if light_effect_map != self.light_effect_map:
-            self.light_effect_map = light_effect_map
-            for entity in self.entities.values():
-                if isinstance(entity, MLLight):
-                    entity.update_effect_map(light_effect_map)

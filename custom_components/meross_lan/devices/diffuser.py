@@ -105,9 +105,7 @@ class MLDiffuserLight(MLLightBase):
 
     _light_effect_map = mc.DIFFUSER_LIGHT_EFFECT_MAP
     # HA core entity attributes:
-    effect_list = list(_light_effect_map.values())
     supported_color_modes = {ColorMode.RGB}
-    supported_features: LightEntityFeature = LightEntityFeature.EFFECT
 
     async def async_turn_on(self, **kwargs):
         light = dict(self._light)

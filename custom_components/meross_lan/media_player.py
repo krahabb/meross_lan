@@ -12,8 +12,7 @@ from homeassistant.components.media_player.const import (
 from . import meross_entity as me
 from .helpers import clamp
 from .helpers.namespaces import PollingStrategy
-from .light import MLLight
-from .merossclient import const as mc  # mEROSS cONST
+from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -72,10 +71,6 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         )
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_MP3, self)
         PollingStrategy(manager, mc.NS_APPLIANCE_CONTROL_MP3)
-        # cherub light entity should be there...
-        light: MLLight = manager.entities.get(0)  # type: ignore
-        if light:
-            light.update_effect_map(mc.HP110A_LIGHT_EFFECT_MAP)
 
     # interface: MerossEntity
     def set_unavailable(self):
