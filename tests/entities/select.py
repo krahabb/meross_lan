@@ -6,8 +6,9 @@ from homeassistant.components.select import (
 )
 
 from custom_components.meross_lan.devices.diffuser import MLDiffuserSpray
+from custom_components.meross_lan.devices.spray import MLSpray
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.select import MLSpray, MtsTrackedSensor
+from custom_components.meross_lan.select import MtsTrackedSensor
 
 from tests.entities import EntityComponentTest
 

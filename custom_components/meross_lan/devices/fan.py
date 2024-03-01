@@ -1,7 +1,7 @@
 import typing
 
-from ..merossclient import const as mc
 from ..fan import MLFan
+from ..merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from ..helpers.namespaces import DigestParseFunc

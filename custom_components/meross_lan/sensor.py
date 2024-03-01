@@ -137,8 +137,16 @@ class MLHumiditySensor(MLNumericSensor):
         manager: me.EntityManager,
         channel: object | None,
         entitykey: str | None = "humidity",
+        *,
+        device_value: int | None = None,
     ):
-        super().__init__(manager, channel, entitykey, sensor.SensorDeviceClass.HUMIDITY)
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            sensor.SensorDeviceClass.HUMIDITY,
+            device_value=device_value,
+        )
 
 
 class MLTemperatureSensor(MLNumericSensor):
@@ -151,9 +159,15 @@ class MLTemperatureSensor(MLNumericSensor):
         manager: me.EntityManager,
         channel: object | None,
         entitykey: str | None = "temperature",
+        *,
+        device_value: int | None = None,
     ):
         super().__init__(
-            manager, channel, entitykey, sensor.SensorDeviceClass.TEMPERATURE
+            manager,
+            channel,
+            entitykey,
+            sensor.SensorDeviceClass.TEMPERATURE,
+            device_value=device_value,
         )
 
 

@@ -33,11 +33,6 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
 
 
-OPTION_SPRAY_MODE_OFF = "off"
-OPTION_SPRAY_MODE_CONTINUOUS = "on"
-OPTION_SPRAY_MODE_ECO = "eco"
-
-
 class MLSelect(me.MerossEntity, select.SelectEntity):
     PLATFORM = select.DOMAIN
 
@@ -58,96 +53,6 @@ class MLSelect(me.MerossEntity, select.SelectEntity):
         if self.current_option != option:
             self.current_option = option
             self.flush_state()
-
-
-class MLSpray(MLSelect):
-    """
-    SelectEntity class for Appliance.Control.Spray namespace. This is also
-    slightly customized in MLDiffuserSpray to override namespace mapping and
-    message formatting.
-    """
-    namespace = mc.NS_APPLIANCE_CONTROL_SPRAY
-    key_namespace = mc.KEY_SPRAY
-    key_value = mc.KEY_MODE
-
-    manager: MerossDevice
-
-    _spray_mode_map: dict[object, str]
-    """
-    a dict containing mappings between meross modes <-> HA select options
-    like { mc.SPRAY_MODE_OFF: OPTION_SPRAY_MODE_OFF }
-    """
-    # HA core entity attributes:
-
-    __slots__ = ("_spray_mode_map",)
-
-    def __init__(
-        self, manager: MerossDevice, channel: object, spraymode_map: dict
-    ):
-        # we could use the shared instance but different device firmwares
-        # could bring in unwanted global options...
-        self._spray_mode_map = dict(spraymode_map)
-        self.current_option = None
-        self.options = list(self._spray_mode_map.values())
-        super().__init__(manager, channel, mc.KEY_SPRAY)
-        manager.register_parser(self.namespace, self)
-
-    # interface: select.SelectEntity
-    async def async_select_option(self, option: str):
-        # reverse lookup the dict
-        for mode, _option in self._spray_mode_map.items():
-            if _option == option:
-                break
-        else:
-            raise NotImplementedError("async_select_option")
-
-        if await self.async_request_spray_ack(
-            {self.key_channel: self.channel, self.key_value: mode}
-        ):
-            self.update_option(option)
-
-    # interface: self
-    async def async_request_spray_ack(self, payload: dict):
-        return await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {self.key_namespace: payload},
-        )
-
-    def _parse_spray(self, payload: dict):
-        """
-        We'll map the mode key to a well-known option for this entity
-        but, since there could be some additions from newer spray devices
-        we'll also eventually add the unknown mode value as a supported mode
-        Keep in mind we're updating a class instance dict so it should affect
-        all of the same-class-entities
-        """
-        mode = payload[mc.KEY_MODE]
-        option = self._spray_mode_map.get(mode)
-        if option is None:
-            # unknown mode value -> auto-learning
-            option = "mode_" + str(mode)
-            self._spray_mode_map[mode] = option
-            self.options = list(self._spray_mode_map.values())
-        self.update_option(option)
-
-
-class SprayMixin(
-    MerossDevice if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    SPRAY_MODE_MAP = {
-        mc.SPRAY_MODE_OFF: OPTION_SPRAY_MODE_OFF,
-        mc.SPRAY_MODE_INTERMITTENT: OPTION_SPRAY_MODE_ECO,
-        mc.SPRAY_MODE_CONTINUOUS: OPTION_SPRAY_MODE_CONTINUOUS,
-    }
-
-    def _init_spray(self, digest: list):
-        # spray = [{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]
-        for channel_digest in digest:
-            MLSpray(self, channel_digest[mc.KEY_CHANNEL], self.SPRAY_MODE_MAP)
-
-    def _parse_spray(self, digest: list):
-        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_SPRAY]._parse_list(digest)
 
 
 class MtsTrackedSensor(MLSelect):
