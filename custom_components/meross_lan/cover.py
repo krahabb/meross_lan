@@ -632,8 +632,7 @@ class GarageMixin(
             MLGarage(self, channel)
             self._polling_payload.append({mc.KEY_CHANNEL: channel})
 
-    def _parse_garageDoor(self, digest: list):
-        self.namespace_handlers[mc.NS_APPLIANCE_GARAGEDOOR_STATE]._parse_list(digest)
+        return self.namespace_handlers[mc.NS_APPLIANCE_GARAGEDOOR_STATE]._parse_list
 
     def _handle_Appliance_GarageDoor_Config(self, header: dict, payload: dict):
         # {"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}

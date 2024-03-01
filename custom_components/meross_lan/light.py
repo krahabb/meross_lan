@@ -451,9 +451,7 @@ class LightMixin(
 
     def _init_light(self, digest: dict):
         MLLight(self, digest)
-
-    def _parse_light(self, digest):
-        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT]._parse_generic(digest)
+        return self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT]._parse_generic
 
     def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
         light_effect_map = {}

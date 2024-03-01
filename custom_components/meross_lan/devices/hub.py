@@ -276,6 +276,8 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
             except Exception as exception:
                 self.log_exception(self.WARNING, exception, "_init_hub")
 
+        return self._parse_hub
+    
     def _parse_hub(self, p_hub: dict):
         # This is usually called inside _parse_all as part of the digest parsing
         # Here we'll check the fresh subdevice list against the actual one and

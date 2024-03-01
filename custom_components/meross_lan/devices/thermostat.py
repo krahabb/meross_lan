@@ -311,6 +311,8 @@ class ThermostatMixin(
                     item_count=len(self._polling_payload),
                 )
 
+        return self._parse_thermostat
+    
     def _parse_thermostat(self, digest: dict):
         """
         Parser for thermostat digest in NS_ALL

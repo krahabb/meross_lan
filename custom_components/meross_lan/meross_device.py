@@ -49,6 +49,7 @@ from .helpers.namespaces import (
     NamespaceHandler,
     PollingStrategy,
     digest_init_empty,
+    digest_parse_empty,
 )
 from .merossclient import (
     NAMESPACE_TO_KEY,
@@ -497,23 +498,35 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     getattr(module, init_descriptor[1])(self)
 
         for key_digest, _digest in descriptor.digest.items():
-            # _init_xxxx methods provided by mixins
-            _init_method_name = f"_init_{key_digest}"
-            if _init := getattr(self, _init_method_name, None):
-                with self.exception_warning(_init_method_name):
-                    _init(_digest)
-            else:
-                if key_digest not in MerossDevice.DIGEST_INITIALIZERS:
+            try:
+                # _init_xxxx methods provided by mixins
+                _init_method_name = f"_init_{key_digest}"
+                if _init := getattr(self, _init_method_name, None):
+                    self.digest_handlers[key_digest] = _init(_digest)
+                else:
                     try:
-                        module = import_module(
-                            f".devices.{key_digest}", "custom_components.meross_lan"
+                        self.digest_handlers[key_digest] = (
+                            MerossDevice.DIGEST_INITIALIZERS[key_digest](self, _digest)
                         )
-                        MerossDevice.DIGEST_INITIALIZERS[key_digest] = getattr(module, "digest_init")
-                    except Exception as exception:
-                        self.log_exception(self.WARNING, exception, "initializing digest key:%s", key_digest)
-                        MerossDevice.DIGEST_INITIALIZERS[key_digest] = digest_init_empty
-                self.digest_handlers[key_digest] = MerossDevice.DIGEST_INITIALIZERS[key_digest](self, _digest)
+                    except KeyError:
+                        try:
+                            module = import_module(
+                                f".devices.{key_digest}", "custom_components.meross_lan"
+                            )
+                            _init = getattr(module, "digest_init")
+                            MerossDevice.DIGEST_INITIALIZERS[key_digest] = _init
+                            self.digest_handlers[key_digest] = _init(self, _digest)
+                        except Exception as exception:
+                            MerossDevice.DIGEST_INITIALIZERS[key_digest] = (
+                                digest_init_empty
+                            )
+                            raise exception
 
+            except Exception as exception:
+                self.log_exception(
+                    self.WARNING, exception, "initializing digest key:%s", key_digest
+                )
+                self.digest_handlers[key_digest] = digest_parse_empty
 
     # interface: ConfigEntryManager
     async def entry_update_listener(
@@ -591,6 +604,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         await super().async_shutdown()
         self.polling_strategies.clear()
         self.namespace_handlers.clear()
+        self.digest_handlers.clear()
         self.sensor_protocol = None  # type: ignore
         self.update_firmware = None
         ApiProfile.devices[self.id] = None
@@ -951,8 +965,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     # next ns_multiple will be less demanding. device_response_size_min
                     # is another dynamic param representing the biggest payload ever received
                     self.device_response_size_max = (
-                        self.device_response_size_max
-                        + self.device_response_size_min
+                        self.device_response_size_max + self.device_response_size_min
                     ) / 2
                     self.log(
                         self.DEBUG,
@@ -1803,18 +1816,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if self.curr_protocol is not self.pref_protocol:
                         self._switch_protocol(self.pref_protocol)
 
-        for _key, _digest in descr.digest.items():
-            if _parse := getattr(self, f"_parse_{_key}", None):
-                _parse(_digest)
-            else:
-                self.digest_handlers[_key](_digest)
-
-        # older firmwares (MSS110 with 1.1.28) look like
-        # carrying 'control' instead of 'digest'
-        if isinstance(p_control := descr.all.get(mc.KEY_CONTROL), dict):
-            for _key, _control in p_control.items():
-                if _parse := getattr(self, f"_parse_{_key}", None):
-                    _parse(_control)
+        for key_digest, _digest in descr.digest.items():
+            self.digest_handlers[key_digest](_digest)
+        else:
+            # older firmwares (MSS110 with 1.1.28) look like
+            # carrying 'control' instead of 'digest'
+            for key_control, _control in descr.all.get(mc.KEY_CONTROL, {}).items():
+                self.digest_handlers[key_control](_control)
 
         if self.needsave:
             # fw update or whatever might have modified the device abilities.

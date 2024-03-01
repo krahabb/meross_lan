@@ -5,7 +5,7 @@ import typing
 from homeassistant.components import switch
 
 from . import meross_entity as me
-from .helpers.namespaces import EntityPollingStrategy
+from .helpers.namespaces import EntityPollingStrategy, digest_parse_empty
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
@@ -133,10 +133,7 @@ class ToggleXMixin(MerossDevice if typing.TYPE_CHECKING else object):
             self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, switch)
 
     def _init_togglex(self, digest: list):
-        pass
-
-    def _parse_togglex(self, digest: list):
-        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLEX]._parse_list(digest)
+        return self.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)._parse_list
 
     def _build_outlet(self, channel: object):
         return MLSwitch(
@@ -153,20 +150,16 @@ class ToggleMixin(MerossDevice if typing.TYPE_CHECKING else object):
         super().__init__(descriptor, entry)
         # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
         # but have 'control' and the toggle payload looks like not carrying 'channel'
-        p_control = descriptor.all.get(mc.KEY_CONTROL)
-        if p_control:
-            p_toggle = p_control.get(mc.KEY_TOGGLE)
-            if isinstance(p_toggle, dict):
-                self._build_outlet(p_toggle.get(mc.KEY_CHANNEL, 0))
+        if isinstance(p_control := descriptor.all.get(mc.KEY_CONTROL), dict):
+            for _key, _control in p_control.items():
+                if _key == mc.KEY_TOGGLE:
+                    self._build_outlet(_control.get(mc.KEY_CHANNEL, 0))
+                    self.digest_handlers[_key] = self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLE]._parse_generic
+                else:
+                    self.digest_handlers[_key] = digest_parse_empty
 
         if not self.entities:
             self._build_outlet(0)
-
-    def _parse_toggle(self, digest):
-        """
-        toggle doesn't have channel (#172)
-        """
-        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLE]._parse_generic(digest)
 
     def _build_outlet(self, channel: object):
         switch = MLSwitch(
