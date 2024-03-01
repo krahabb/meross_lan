@@ -30,11 +30,27 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 # need to be initialized first
 @pytest.fixture(autouse=True)
 def auto_enable(request: pytest.FixtureRequest):
-    if "recorder_mock" in request.fixturenames:
+    """
+    Special initializetion fixture managing recorder mocking.
+    For some tests we need a working recorder but recorder_mock
+    needs to be init before hass.
+    When we don't need it, we'd also want our helpers.get_entity_last_states
+    to not return an exception (since the recorder instance is missing then)
+    """
+    has_recorder = "recorder_mock" in request.fixturenames
+    if has_recorder:
         request.getfixturevalue("recorder_mock")
+
     hass = request.getfixturevalue("hass")
     hass.data.pop("custom_components")
-    yield
+    if has_recorder:
+        yield
+    else:
+        with patch(
+            "custom_components.meross_lan.helpers.get_entity_last_states",
+            return_value=None,
+        ):
+            yield
 
 
 # This fixture is used to prevent HomeAssistant from attempting to create and dismiss persistent

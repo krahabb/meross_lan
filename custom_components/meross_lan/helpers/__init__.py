@@ -321,12 +321,7 @@ class Loggable(abc.ABC):
         try:
             yield
         except Exception as exception:
-            self.log(
-                self.WARNING,
-                f"{exception.__class__.__name__}({str(exception)}) in {msg}",
-                *args,
-                **kwargs,
-            )
+            self.log_exception(self.WARNING, exception, msg, *args, **kwargs)
 
     def __del__(self):
         self.log(self.DEBUG, "destroy")
