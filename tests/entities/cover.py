@@ -4,10 +4,10 @@ from homeassistant.components import cover as haec
 from homeassistant.components.cover import CoverEntity, CoverEntityFeature
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.cover import MLGarage, MLRollerShutter
+from custom_components.meross_lan.cover import MLRollerShutter
+from custom_components.meross_lan.devices.garageDoor import MLGarage
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.switch import MLSwitch
-from emulator.mixins.garagedoor import GarageDoorMixin
 from emulator.mixins.rollershutter import RollerShutterMixin
 
 from tests.entities import EntityComponentTest

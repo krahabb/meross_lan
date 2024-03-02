@@ -5,10 +5,10 @@ from homeassistant.components.number import (
     NumberEntity,
 )
 
-from custom_components.meross_lan.cover import (
+from custom_components.meross_lan.cover import MLRollerShutterConfigNumber
+from custom_components.meross_lan.devices.garageDoor import (
     MLGarageConfigNumber,
     MLGarageMultipleConfigNumber,
-    MLRollerShutterConfigNumber,
 )
 from custom_components.meross_lan.devices.hub import MLHubSensorAdjustNumber
 from custom_components.meross_lan.devices.mts100 import Mts100AdjustNumber

@@ -322,6 +322,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     Generic protocol handler class managing the physical device stack/state
     """
 
+
     DIGEST_INITIALIZERS: Final[dict[str, DigestInitFunc]] = {
         mc.KEY_TIMERX: digest_init_empty,
         mc.KEY_TRIGGERX: digest_init_empty,
@@ -329,11 +330,20 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     """
     Static dict of 'digest initialization function(s)'.
     This is built on demand during MerossDevice init whenever a digest key
-    is encountered. The 'digest initialization function' is looked up in the
-    related module under meross_lan/devices/digest and then cached into this
-    dict so that lookp/import is only done once. In case the digest key module is
-    missing we'll save a None in this dict to avoid looking-up again.
+    is encountered. The 'digest initialization function' is looked up by an algorithm
+    that:
+    - looks-up if the digest key is in DIGEST_INITIALIZERS_LOOKUPS where it'll find
+    the coordinates of the init function for the digest key.
+    - if not configured, the algorithm will try load the module in meross_lan/devices
+    with the same name as the digest key.
+    - if any is not found we'll set a 'digest_init_empty' function in order to not
+    repeat the lookup process. That function will just pass so that the key
+    init/parsing will not harm.
     """
+    DIGEST_INITIALIZERS_LOOKUPS: Final[dict[str, DigestInitFunc]] = {
+    }
+
+
     # some namespaces are manageable with a simple single entity instance
     # and this static map provides a list of entities to be built at device
     # init time when the namespace appears in device ability set.
@@ -387,6 +397,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_http_active",  # HTTP is 'online' i.e. reachable
         "_http_lastrequest",
         "_http_lastresponse",
+        "channels_payloads",
         "digest_handlers",
         "namespace_handlers",
         "polling_strategies",
@@ -436,6 +447,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._http_active: MerossHttpClient | None = None
         self._http_lastrequest = 0
         self._http_lastresponse = 0
+        self.channels_payloads: list[dict] = []
         self.digest_handlers: dict[str, DigestParseFunc] = {}
         self.namespace_handlers: dict[str, NamespaceHandler] = {}
         self.polling_strategies: dict[str, PollingStrategy] = {}

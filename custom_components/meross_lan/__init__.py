@@ -52,7 +52,6 @@ else:
 
 
 DIGEST_INITIALIZERS = {
-    mc.KEY_GARAGEDOOR: (".cover", "GarageMixin"),
     mc.KEY_HUB: (".devices.hub", "HubMixin"),
 }
 
