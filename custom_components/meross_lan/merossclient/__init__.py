@@ -297,10 +297,11 @@ KEY_TO_NAMESPACE = KeyToNameSpaceMap()
 
 
 def is_hub_namespace(namespace: str):
-    match namespace.split("."):
-        case (_, "Hub", *args):
-            return True
-    return False
+    return re.match(r"Appliance\.Hub\.(.*)", namespace)
+
+
+def is_thermostat_namespace(namespace: str):
+    return re.match(r"Appliance\.Control\.Thermostat\.(.*)", namespace)
 
 
 def get_default_payload(namespace: str) -> MerossPayloadType:
