@@ -31,9 +31,9 @@ from ..sensor import (
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from .mts100 import Mts100Climate
+    from ..helpers.namespaces import DigestParseFunc
     from ..meross_entity import MerossEntity
-    from ..merossclient import MerossPayloadType
+    from .mts100 import Mts100Climate
 
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
@@ -233,7 +233,7 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
         MtsTrackedSensor.PLATFORM: None,
     }
 
-    # REMOVE __slots__ = ("subdevices",)
+    subdevices: dict[object, MerossSubDevice]
 
     # interface: EntityManager
     def managed_entities(self, platform):
@@ -264,20 +264,6 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
                 return HubNamespaceHandler(self, namespace)
         return super()._create_handler(namespace)
 
-    def _init_hub(self, digest: dict):
-        self.subdevices: dict[object, MerossSubDevice] = {}
-        for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
-            try:
-                subdevice_id = p_subdevice_digest[mc.KEY_ID]
-                if subdevice_id in self.subdevices:
-                    self.log_duplicated_subdevice(subdevice_id)
-                else:
-                    self._subdevice_build(p_subdevice_digest)
-            except Exception as exception:
-                self.log_exception(self.WARNING, exception, "_init_hub")
-
-        return self._parse_hub
-    
     def _parse_hub(self, p_hub: dict):
         # This is usually called inside _parse_all as part of the digest parsing
         # Here we'll check the fresh subdevice list against the actual one and
@@ -1031,3 +1017,19 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS400] = MS400SubDevice
 # waterLeak devices (mc.TYPE_MS400) are presented as
 # mc.KEY_WATERLEAK in digest(s) so we have to map that too
 WELL_KNOWN_TYPE_MAP[mc.KEY_WATERLEAK] = MS400SubDevice
+
+
+def digest_init(device: "HubMixin", digest) -> "DigestParseFunc":
+
+    device.subdevices = {}
+    for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
+        try:
+            subdevice_id = p_subdevice_digest[mc.KEY_ID]
+            if subdevice_id in device.subdevices:
+                device.log_duplicated_subdevice(subdevice_id)
+            else:
+                device._subdevice_build(p_subdevice_digest)
+        except Exception as exception:
+            device.log_exception(device.WARNING, exception, "_init_hub")
+
+    return device._parse_hub
