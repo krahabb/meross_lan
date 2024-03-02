@@ -3,8 +3,12 @@ from __future__ import annotations
 import typing
 
 from ..binary_sensor import MLBinarySensor
-from ..helpers.namespaces import PollingStrategy, SmartPollingStrategy
-from ..merossclient import const as mc
+from ..helpers.namespaces import (
+    PollingStrategy,
+    SmartPollingStrategy,
+    digest_parse_empty,
+)
+from ..merossclient import NAMESPACE_TO_KEY, const as mc, is_thermostat_namespace
 from ..number import MtsTemperatureNumber
 from ..sensor import MLEnumSensor, MLNumericSensor, MLTemperatureSensor
 from ..switch import MtsConfigSwitch
@@ -14,6 +18,7 @@ from .mts960 import Mts960Climate
 if typing.TYPE_CHECKING:
     from typing import ClassVar, Final
 
+    from ..helpers.namespaces import DigestParseFunc
     from ..meross_device import MerossDevice
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
@@ -217,117 +222,120 @@ class MtsExternalSensorSwitch(MtsConfigSwitch):
         climate.manager.register_parser(mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR, self)
 
 
-class ThermostatMixin(
-    MerossDevice if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    """
-    ThermostatMixin was historically used for mts200 (and the likes) and
-    most of its logic were so implemented in Mts200Climate. We now have a new
-    device (mts960) implementing this ns. The first observed difference lies in
-    the "mode" key (together with "summerMode"-"windowOpened") which is substituted
-    with "modeB" to carry the new device layout. We'll so try to generalize some
-    of the namespace handling to this mixin (which is what it's for) while not
-    breaking the mts200
-    """
+CLIMATE_INITIALIZERS: dict[str, type[MtsThermostatClimate]] = {
+    mc.KEY_MODE: Mts200Climate,
+    mc.KEY_MODEB: Mts960Climate,
+}
+"""Core (climate) entities to initialize in _init_thermostat"""
 
-    AdjustNumberClass = MtsCalibrationNumber
+DIGEST_KEY_TO_NAMESPACE: dict[str, str] = {
+    mc.KEY_MODE: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
+    mc.KEY_MODEB: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
+    mc.KEY_SUMMERMODE: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+    mc.KEY_WINDOWOPENED: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED,
+}
+"""Maps the digest key to the associated namespace handler (used in _parse_thermostat)"""
 
-    CLIMATE_INITIALIZERS: ClassVar[dict[str, type[MtsThermostatClimate]]] = {
-        mc.KEY_MODE: Mts200Climate,
-        mc.KEY_MODEB: Mts960Climate,
-    }
-    """Core (climate) entities to initialize in _init_thermostat"""
+OPTIONAL_NAMESPACES_INITIALIZERS = {
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+}
+"""These namespaces handlers will forward message parsing to the climate entity"""
 
-    DIGEST_KEY_TO_NAMESPACE: ClassVar[dict[str, str]] = {
-        mc.KEY_MODE: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
-        mc.KEY_MODEB: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
-        mc.KEY_SUMMERMODE: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
-        mc.KEY_WINDOWOPENED: mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED,
-    }
-    """Maps the digest key to the associated namespace handler (used in _parse_thermostat)"""
+OPTIONAL_ENTITIES_INITIALIZERS: dict[
+    str, typing.Callable[[MtsThermostatClimate], typing.Any]
+] = {
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: MtsDeadZoneNumber,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: MtsFrostNumber,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: MtsOverheatNumber,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: MtsExternalSensorSwitch,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED: MtsWindowOpened,
+}
+"""Additional entities (linked to the climate one) in case their ns is supported/available"""
 
-    OPTIONAL_NAMESPACES_INITIALIZERS = {
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
-    }
-    """These namespaces handlers will forward message parsing to the climate entity"""
+POLLING_STRATEGY_INITIALIZERS = {
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: SmartPollingStrategy,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: SmartPollingStrategy,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: SmartPollingStrategy,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: PollingStrategy,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: PollingStrategy,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: PollingStrategy,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: PollingStrategy,
+}
+"""
+"Mode", "ModeB","SummerMode","WindowOpened" are carried in digest so we don't poll them
+We're using PollingStrategy for namespaces actually confirmed (by trace/diagnostics)
+to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
+"""
 
-    OPTIONAL_ENTITIES_INITIALIZERS: dict[
-        str, typing.Callable[[MtsThermostatClimate], typing.Any]
-    ] = {
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: MtsDeadZoneNumber,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: MtsFrostNumber,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: MtsOverheatNumber,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: MtsExternalSensorSwitch,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED: MtsWindowOpened,
-    }
-    """Additional entities (linked to the climate one) in case their ns is supported/available"""
 
-    POLLING_STRATEGY_INITIALIZERS = {
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: SmartPollingStrategy,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: SmartPollingStrategy,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: SmartPollingStrategy,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: PollingStrategy,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: PollingStrategy,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: PollingStrategy,
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: PollingStrategy,
-    }
-    """
-    "Mode", "ModeB","SummerMode","WindowOpened" are carried in digest so we don't poll them
-    We're using PollingStrategy for namespaces actually confirmed (by trace/diagnostics)
-    to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
-    """
+def digest_init(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
 
-    # interface: MerossDevice
-    def _init_thermostat(self, digest: dict):
-        ability = self.descriptor.ability
-        self._polling_payload = []
+    ability = device.descriptor.ability
+    _polling_payload = []
 
-        for ns_key, ns_digest in digest.items():
-            if climate_class := self.CLIMATE_INITIALIZERS.get(ns_key):
-                for channel_digest in ns_digest:
-                    channel = channel_digest[mc.KEY_CHANNEL]
-                    climate = climate_class(self, channel)
-                    self.register_parser(climate.namespace, climate)
-                    schedule = climate.schedule
-                    # TODO: the scheduleB parsing might be different than 'classic' schedule
-                    self.register_parser(schedule.namespace, schedule)
-                    for ns in self.OPTIONAL_NAMESPACES_INITIALIZERS:
-                        if ns in ability:
-                            self.register_parser(ns, climate)
+    digest_handlers: dict[str, "DigestParseFunc"] = {}
 
-                    for ns, entity_class in self.OPTIONAL_ENTITIES_INITIALIZERS.items():
-                        if ns in ability:
-                            entity_class(climate)
+    for ns_key, ns_digest in digest.items():
 
-                    self._polling_payload.append({mc.KEY_CHANNEL: channel})
+        try:
+            digest_handlers[ns_key] = device.get_handler(
+                DIGEST_KEY_TO_NAMESPACE[ns_key]
+            )._parse_list
+        except KeyError:
+            # ns_key is still not mapped in DIGEST_KEY_TO_NAMESPACE
+            digest_handlers[ns_key] = digest_parse_empty
+            for namespace in ability.keys():
+                if is_thermostat_namespace(namespace):
+                    key_namespace = NAMESPACE_TO_KEY[namespace]
+                    if key_namespace == ns_key:
+                        digest_handlers[ns_key] = device.get_handler(
+                            namespace
+                        )._parse_list
+                        DIGEST_KEY_TO_NAMESPACE[key_namespace] = namespace
+                        break
 
-        for ns, polling_strategy_class in self.POLLING_STRATEGY_INITIALIZERS.items():
-            if ns in ability:
-                polling_strategy_class(
-                    self,
-                    ns,
-                    payload=self._polling_payload,
-                    item_count=len(self._polling_payload),
-                )
+        if climate_class := CLIMATE_INITIALIZERS.get(ns_key):
+            for channel_digest in ns_digest:
+                channel = channel_digest[mc.KEY_CHANNEL]
+                climate = climate_class(device, channel, MtsCalibrationNumber)
+                device.register_parser(climate.namespace, climate)
+                schedule = climate.schedule
+                # TODO: the scheduleB parsing might be different than 'classic' schedule
+                device.register_parser(schedule.namespace, schedule)
+                for ns in OPTIONAL_NAMESPACES_INITIALIZERS:
+                    if ns in ability:
+                        device.register_parser(ns, climate)
 
-        return self._parse_thermostat
-    
-    def _parse_thermostat(self, digest: dict):
+                for ns, entity_class in OPTIONAL_ENTITIES_INITIALIZERS.items():
+                    if ns in ability:
+                        entity_class(climate)
+
+                _polling_payload.append({mc.KEY_CHANNEL: channel})
+
+    for ns, polling_strategy_class in POLLING_STRATEGY_INITIALIZERS.items():
+        if ns in ability:
+            polling_strategy_class(
+                device,
+                ns,
+                payload=_polling_payload,
+                item_count=len(_polling_payload),
+            )
+
+    def digest_parse(digest: dict):
         """
-        Parser for thermostat digest in NS_ALL
         MTS200 typically carries:
-        "thermostat": {
+        {
             "mode": [...],
             "summerMode": [],
             "windowOpened": []
         }
         MTS960 typically carries:
-        "thermostat": {
+        {
             "modeB": [...]
         }
         """
         for ns_key, ns_digest in digest.items():
-            self.namespace_handlers[self.DIGEST_KEY_TO_NAMESPACE[ns_key]]._parse_list(
-                ns_digest
-            )
+            digest_handlers[ns_key](ns_digest)
+
+    return digest_parse

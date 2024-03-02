@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from ..calendar import MtsSchedule
@@ -8,7 +6,8 @@ from ..merossclient import const as mc
 from ..number import MtsSetPointNumber
 
 if typing.TYPE_CHECKING:
-    from .thermostat import ThermostatMixin
+    from ..meross_device import MerossDevice
+    from ..number import MtsTemperatureNumber
 
 
 class Mts200SetPointNumber(MtsSetPointNumber):
@@ -23,6 +22,7 @@ class Mts200SetPointNumber(MtsSetPointNumber):
 class Mts200Climate(MtsClimate):
     """Climate entity for MTS200 devices"""
 
+    manager: "MerossDevice"
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
     key_namespace = mc.KEY_MODE
 
@@ -55,15 +55,18 @@ class Mts200Climate(MtsClimate):
     # this temp since it's mode is not set to follow a manual set
     MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS200_MODE_TO_TARGETTEMP_MAP
 
-    manager: ThermostatMixin
-
     __slots__ = ("_mts_summermode",)
 
-    def __init__(self, manager: ThermostatMixin, channel: object):
+    def __init__(
+        self,
+        manager: "MerossDevice",
+        channel: object,
+        adjust_number_class: typing.Type["MtsTemperatureNumber"],
+    ):
         super().__init__(
             manager,
             channel,
-            manager.AdjustNumberClass,
+            adjust_number_class,
             Mts200SetPointNumber,
             Mts200Schedule,
         )

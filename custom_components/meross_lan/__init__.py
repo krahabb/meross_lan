@@ -54,7 +54,6 @@ else:
 DIGEST_INITIALIZERS = {
     mc.KEY_GARAGEDOOR: (".cover", "GarageMixin"),
     mc.KEY_HUB: (".devices.hub", "HubMixin"),
-    mc.KEY_THERMOSTAT: (".devices.thermostat", "ThermostatMixin"),
 }
 
 MerossDevice.ENTITY_INITIALIZERS = {
