@@ -21,8 +21,8 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .helpers.namespaces import DigestParseFunc
     from .meross_device import MerossDevice
-    from .merossclient import MerossDeviceDescriptor
 
 ATTR_TOGGLEX_MODE = "togglex_mode"
 #    map light Temperature effective range to HA mired(s):
@@ -448,3 +448,10 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
 
     def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
         self.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
+
+
+def digest_init(device: "MerossDevice", digest) -> "DigestParseFunc":
+    """{ "channel": 0, "capacity": 4 }"""
+
+    MLLight(device, digest)
+    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT]._parse_generic

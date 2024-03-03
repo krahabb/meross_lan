@@ -340,9 +340,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     repeat the lookup process. That function will just pass so that the key
     init/parsing will not harm.
     """
-    DIGEST_INITIALIZERS_LOOKUPS: Final[dict[str, DigestInitFunc]] = {
+    DIGEST_INITIALIZERS_LOOKUPS: Final[dict[str, str]] = {
+        mc.KEY_FAN: ".fan",
+        mc.KEY_LIGHT: ".light",
     }
-
 
     # some namespaces are manageable with a simple single entity instance
     # and this static map provides a list of entities to be built at device
@@ -522,8 +523,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         )
                     except KeyError:
                         try:
+                            module_path = MerossDevice.DIGEST_INITIALIZERS_LOOKUPS.get(key_digest, f".devices.{key_digest}")
                             module = import_module(
-                                f".devices.{key_digest}", "custom_components.meross_lan"
+                                module_path, "custom_components.meross_lan"
                             )
                             _init = getattr(module, "digest_init")
                             MerossDevice.DIGEST_INITIALIZERS[key_digest] = _init
