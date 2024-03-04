@@ -102,14 +102,26 @@ class MLToggle(MLSwitch):
     namespace = mc.NS_APPLIANCE_CONTROL_TOGGLE
     key_namespace = mc.KEY_TOGGLE
 
-    def __init__(self, manager: "MerossDevice", channel: object):
-        super().__init__(manager, channel, None, MLSwitch.DeviceClass.OUTLET)
+    def __init__(self, manager: "MerossDevice"):
+        super().__init__(manager, 0, None, MLSwitch.DeviceClass.OUTLET)
         manager.register_parser(self.namespace, self)
+
+    async def async_request_onoff(self, onoff: int):
+        if await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: {
+                    self.key_value: onoff,
+                }
+            },
+        ):
+            self.update_onoff(onoff)
 
 
 def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
     """{"onoff": 0, "lmTime": 1645391086}"""
-    MLToggle(device, 0)
+    MLToggle(device)
     return device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLE).parse_generic
 
 
