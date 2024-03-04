@@ -10,7 +10,6 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .climate import MtsClimate
     from .helpers.namespaces import DigestParseFunc
     from .meross_device import MerossDevice
 
@@ -31,42 +30,6 @@ class MLSwitch(me.MerossToggle, switch.SwitchEntity):
 
     PLATFORM = switch.DOMAIN
     DeviceClass = switch.SwitchDeviceClass
-
-
-class MtsConfigSwitch(MLSwitch):
-    entity_category = MLSwitch.EntityCategory.CONFIG
-
-    def __init__(
-        self,
-        climate: "MtsClimate",
-        entitykey: str,
-        *,
-        onoff=None,
-        namespace: str,
-    ):
-        super().__init__(
-            climate.manager,
-            climate.channel,
-            entitykey,
-            MLSwitch.DeviceClass.SWITCH,
-            onoff=onoff,
-            namespace=namespace,
-        )
-
-    async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: [
-                    {
-                        self.key_channel: self.channel,
-                        self.key_value: onoff,
-                    }
-                ]
-            },
-        ):
-            self.update_onoff(onoff)
 
 
 class PhysicalLockSwitch(MLSwitch):

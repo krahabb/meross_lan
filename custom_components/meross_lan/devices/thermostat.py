@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from ..binary_sensor import MLBinarySensor
@@ -11,17 +9,52 @@ from ..helpers.namespaces import (
 from ..merossclient import NAMESPACE_TO_KEY, const as mc, is_thermostat_namespace
 from ..number import MtsTemperatureNumber
 from ..sensor import MLEnumSensor, MLNumericSensor, MLTemperatureSensor
-from ..switch import MtsConfigSwitch
+from ..switch import MLSwitch
 from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
 
 if typing.TYPE_CHECKING:
-    from typing import ClassVar, Final
-
+    from ..climate import MtsClimate
     from ..helpers.namespaces import DigestParseFunc
     from ..meross_device import MerossDevice
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
+
+
+class MtsConfigSwitch(MLSwitch):
+    entity_category = MLSwitch.EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        climate: "MtsClimate",
+        entitykey: str,
+        *,
+        onoff=None,
+        namespace: str,
+    ):
+        super().__init__(
+            climate.manager,
+            climate.channel,
+            entitykey,
+            MLSwitch.DeviceClass.SWITCH,
+            onoff=onoff,
+            namespace=namespace,
+        )
+
+    async def async_request_onoff(self, onoff: int):
+        if await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: [
+                    {
+                        self.key_channel: self.channel,
+                        self.key_value: onoff,
+                    }
+                ]
+            },
+        ):
+            self.update_onoff(onoff)
 
 
 class MtsRichTemperatureNumber(MtsTemperatureNumber):
@@ -38,7 +71,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
     """
 
     entitykey: str
-    key_value: Final = mc.KEY_VALUE
+    key_value = mc.KEY_VALUE
 
     __slots__ = (
         "sensor_warning",
@@ -48,8 +81,8 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         "native_step",
     )
 
-    def __init__(self, climate: MtsThermostatClimate, entitykey: str):
-        super().__init__(climate, entitykey)
+    def __init__(self, climate: "MtsThermostatClimate"):
+        super().__init__(climate, self.__class__.key_namespace)
         manager = self.manager
         # preset entity platforms since these might be instantiated later
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
@@ -107,12 +140,12 @@ class MtsCalibrationNumber(MtsRichTemperatureNumber):
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
     key_namespace = mc.KEY_CALIBRATION
 
-    def __init__(self, climate: MtsThermostatClimate):
+    def __init__(self, climate: "MtsThermostatClimate"):
         self.name = "Calibration"
         self.native_max_value = 8
         self.native_min_value = -8
         self.native_step = 0.1
-        super().__init__(climate, mc.KEY_CALIBRATION)
+        super().__init__(climate)
 
 
 class MtsDeadZoneNumber(MtsRichTemperatureNumber):
@@ -126,11 +159,11 @@ class MtsDeadZoneNumber(MtsRichTemperatureNumber):
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE
     key_namespace = mc.KEY_DEADZONE
 
-    def __init__(self, climate: MtsThermostatClimate):
+    def __init__(self, climate: "MtsThermostatClimate"):
         self.native_max_value = 3.5
         self.native_min_value = 0.5
         self.native_step = 0.1
-        super().__init__(climate, self.key_namespace)
+        super().__init__(climate)
 
 
 class MtsFrostNumber(MtsRichTemperatureNumber):
@@ -142,11 +175,11 @@ class MtsFrostNumber(MtsRichTemperatureNumber):
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST
     key_namespace = mc.KEY_FROST
 
-    def __init__(self, climate: MtsThermostatClimate):
+    def __init__(self, climate: "MtsThermostatClimate"):
         self.native_max_value = 15
         self.native_min_value = 5
         self.native_step = climate.target_temperature_step
-        super().__init__(climate, self.key_namespace)
+        super().__init__(climate)
 
 
 class MtsOverheatNumber(MtsRichTemperatureNumber):
@@ -162,18 +195,18 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
 
     __slots__ = ("sensor_external_temperature",)
 
-    def __init__(self, climate: MtsThermostatClimate):
+    def __init__(self, climate: "MtsThermostatClimate"):
         self.name = "Overheat threshold"
         self.native_max_value = 70
         self.native_min_value = 20
         self.native_step = climate.target_temperature_step
-        super().__init__(climate, self.key_namespace)
+        super().__init__(climate)
         self.sensor_external_temperature = MLTemperatureSensor(
             self.manager, self.channel, "external sensor"
         )
 
     async def async_shutdown(self):
-        self.sensor_external_temperature: MLNumericSensor = None  # type: ignore
+        self.sensor_external_temperature: MLTemperatureSensor = None  # type: ignore
         return await super().async_shutdown()
 
     def _parse(self, payload: dict):
@@ -191,7 +224,7 @@ class MtsWindowOpened(MLBinarySensor):
 
     key_value = mc.KEY_STATUS
 
-    def __init__(self, climate: MtsThermostatClimate):
+    def __init__(self, climate: "MtsThermostatClimate"):
         super().__init__(
             climate.manager,
             climate.channel,
@@ -213,7 +246,7 @@ class MtsExternalSensorSwitch(MtsConfigSwitch):
 
     key_value = mc.KEY_MODE
 
-    def __init__(self, climate: MtsThermostatClimate):
+    def __init__(self, climate: "MtsThermostatClimate"):
         super().__init__(
             climate,
             "external sensor mode",
@@ -222,7 +255,7 @@ class MtsExternalSensorSwitch(MtsConfigSwitch):
         climate.manager.register_parser(mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR, self)
 
 
-CLIMATE_INITIALIZERS: dict[str, type[MtsThermostatClimate]] = {
+CLIMATE_INITIALIZERS: dict[str, type["MtsThermostatClimate"]] = {
     mc.KEY_MODE: Mts200Climate,
     mc.KEY_MODEB: Mts960Climate,
 }
@@ -243,7 +276,7 @@ OPTIONAL_NAMESPACES_INITIALIZERS = {
 """These namespaces handlers will forward message parsing to the climate entity"""
 
 OPTIONAL_ENTITIES_INITIALIZERS: dict[
-    str, typing.Callable[[MtsThermostatClimate], typing.Any]
+    str, typing.Callable[["MtsThermostatClimate"], typing.Any]
 ] = {
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: MtsDeadZoneNumber,
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: MtsFrostNumber,
