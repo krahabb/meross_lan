@@ -12,7 +12,7 @@ from custom_components.meross_lan.light import (
     _rgb_to_int,
 )
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.switch import MLSwitch
+from custom_components.meross_lan.switch import MLToggleX
 
 from tests.entities import EntityComponentTest
 
@@ -42,8 +42,8 @@ class EntityTest(EntityComponentTest):
         else:
             ability = self.ability
             if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
-                if MLSwitch in EntityComponentTest.expected_entity_types:
-                    EntityComponentTest.expected_entity_types.remove(MLSwitch)
+                if MLToggleX in EntityComponentTest.expected_entity_types:
+                    EntityComponentTest.expected_entity_types.remove(MLToggleX)
             # check the other specialized implementations
             if mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT in ability:
                 assert isinstance(entity, MLDiffuserLight)

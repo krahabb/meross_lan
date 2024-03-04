@@ -55,33 +55,6 @@ DIGEST_INITIALIZERS = {
     mc.KEY_HUB: (".devices.hub", "HubMixin"),
 }
 
-MerossDevice.ENTITY_INITIALIZERS = {
-    mc.NS_APPLIANCE_CONFIG_OVERTEMP: (".devices.mss", "OverTempEnableSwitch"),
-    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: (
-        ".devices.mss",
-        "ConsumptionConfigNamespaceHandler",
-    ),
-    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (".devices.mss", "ConsumptionXSensor"),
-    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (
-        ".devices.mss",
-        "ElectricityNamespaceHandler",
-    ),
-    mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "FanNamespaceHandler"),
-    mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: (
-        ".sensor",
-        "FilterMaintenanceNamespaceHandler",
-    ),
-    mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
-    mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (".switch", "PhysicalLockSwitch"),
-    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
-        ".devices.screenbrightness",
-        "ScreenBrightnessNamespaceHandler",
-    ),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (".cover", "MLRollerShutter"),
-    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
-    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
-}
-
 
 class HAMQTTConnection(MQTTConnection):
     __slots__ = (
@@ -524,22 +497,6 @@ class MerossApi(ApiProfile):
         digest = descriptor.digest
 
         mixin_classes = []
-        # put Toggle(X) mixin at the top of the class hierarchy
-        # since the toggle feature could be related to a more
-        # specialized entity than switch (see light for example)
-        # this way the __init__ for toggle entity will be called
-        # later and could check if a more specialized entity is
-        # already in place for the very same channel
-        if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
-            from .switch import ToggleXMixin
-
-            mixin_classes.append(ToggleXMixin)
-        elif mc.NS_APPLIANCE_CONTROL_TOGGLE in ability:
-            # toggle is older and superseded by togglex
-            # so no need to handle it in case
-            from .switch import ToggleMixin
-
-            mixin_classes.append(ToggleMixin)
 
         for key_digest in digest:
             if key_digest in DIGEST_INITIALIZERS:

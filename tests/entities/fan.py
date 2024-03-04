@@ -2,7 +2,7 @@ from homeassistant.components import fan as haec
 
 from custom_components.meross_lan.fan import MLFan
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.switch import MLSwitch
+from custom_components.meross_lan.switch import MLToggleX
 
 from tests.entities import EntityComponentTest
 
@@ -20,7 +20,7 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_each_callback(self, entity: MLFan):
         assert entity.speed_count, "speed_count"
-        EntityComponentTest.expected_entity_types.remove(MLSwitch)
+        EntityComponentTest.expected_entity_types.remove(MLToggleX)
 
     async def async_test_enabled_callback(self, entity: MLFan):
         speed_count = entity.speed_count

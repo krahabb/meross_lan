@@ -269,7 +269,7 @@ to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
 """
 
 
-def digest_init(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
+def digest_init_thermostat(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
 
     ability = device.descriptor.ability
     _polling_payload = []
@@ -281,7 +281,7 @@ def digest_init(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
         try:
             digest_handlers[ns_key] = device.get_handler(
                 DIGEST_KEY_TO_NAMESPACE[ns_key]
-            )._parse_list
+            ).parse_list
         except KeyError:
             # ns_key is still not mapped in DIGEST_KEY_TO_NAMESPACE
             digest_handlers[ns_key] = digest_parse_empty
@@ -291,7 +291,7 @@ def digest_init(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
                     if key_namespace == ns_key:
                         digest_handlers[ns_key] = device.get_handler(
                             namespace
-                        )._parse_list
+                        ).parse_list
                         DIGEST_KEY_TO_NAMESPACE[key_namespace] = namespace
                         break
 

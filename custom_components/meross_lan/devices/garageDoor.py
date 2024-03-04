@@ -70,9 +70,12 @@ class MLGarage(MLCover):
             EXTRA_ATTR_TRANSITION_DURATION: self._transition_duration
         }
         super().__init__(manager, channel, MLCover.DeviceClass.GARAGE)
+        ability = manager.descriptor.ability
         manager.register_parser(mc.NS_APPLIANCE_GARAGEDOOR_STATE, self)
+        if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
+            manager.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, self)
         self.binary_sensor_timeout = MLGarageTimeoutBinarySensor(self)
-        if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in manager.descriptor.ability:
+        if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in ability:
             self.number_signalClose = MLGarageMultipleConfigNumber(
                 manager, channel, mc.KEY_SIGNALCLOSE
             )
@@ -645,7 +648,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                     self.number_doorCloseDuration = garage.number_signalClose
 
 
-def digest_init(device: "MerossDevice", digest: list):
+def digest_init_garageDoor(device: "MerossDevice", digest: list):
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
     device.platforms.setdefault(MLSwitch.PLATFORM, None)
     ability = device.descriptor.ability
@@ -665,4 +668,4 @@ def digest_init(device: "MerossDevice", digest: list):
             item_count=len(device.channels_payloads),
         )
 
-    return device.namespace_handlers[mc.NS_APPLIANCE_GARAGEDOOR_STATE]._parse_list
+    return device.namespace_handlers[mc.NS_APPLIANCE_GARAGEDOOR_STATE].parse_list

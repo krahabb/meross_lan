@@ -8,12 +8,12 @@ if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
 
 
-def digest_init(device: "MerossDevice", digest) -> "DigestParseFunc":
+def digest_init_spray(device: "MerossDevice", digest) -> "DigestParseFunc":
     """[{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]"""
     for channel_digest in digest:
         MLSpray(device, channel_digest[mc.KEY_CHANNEL])
 
-    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_SPRAY]._parse_list
+    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_SPRAY].parse_list
 
 
 class MLSpray(MLSelect):

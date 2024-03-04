@@ -77,6 +77,12 @@ class NamespaceHandler:
         self.entities: dict[object, Callable[[dict], None]] = {}
         device.namespace_handlers[namespace] = self
 
+    def register_entity_class(self, entity_class: type[MerossEntity]):
+        assert not self.entity_class, "entity_class already registered"
+        self.entity_class = entity_class
+        self.handler = self._handle_list
+        self.device.platforms.setdefault(entity_class.PLATFORM)
+
     def register_entity(self, entity: MerossEntity):
         # when setting up the entity-dispatching we'll substitute the legacy handler
         # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
@@ -192,7 +198,7 @@ class NamespaceHandler:
                             key, payload, payload[mc.KEY_CHANNEL]
                         )
 
-    def _parse_list(self, digest: list):
+    def parse_list(self, digest: list):
         """twin method for _handle (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
         try:
@@ -204,7 +210,7 @@ class NamespaceHandler:
         except Exception as exception:
             self.handle_exception(exception, "_parse_list", digest)
 
-    def _parse_generic(self, digest: list | dict):
+    def parse_generic(self, digest: list | dict):
         """twin method for _handle (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
         try:

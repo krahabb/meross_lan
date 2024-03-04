@@ -322,16 +322,21 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     Generic protocol handler class managing the physical device stack/state
     """
 
-
     DIGEST_INITIALIZERS: Final[dict[str, DigestInitFunc]] = {
         mc.KEY_TIMERX: digest_init_empty,
         mc.KEY_TRIGGERX: digest_init_empty,
+        mc.KEY_TIMER: digest_init_empty,
+        mc.KEY_TRIGGER: digest_init_empty,
     }
     """
     Static dict of 'digest initialization function(s)'.
-    This is built on demand during MerossDevice init whenever a digest key
-    is encountered. The 'digest initialization function' is looked up by an algorithm
-    that:
+    This is built on demand during MerossDevice init whenever a new digest key
+    is encountered. This static dict in turn is used to setup the MerossDevice instance
+    'digest_handlers' dict which contains a lookup to the digest parsing function when
+    an NS_ALL message is received/parsed.
+    The 'digest initialization function' will (at device init time) parse the digest to
+    setup the dedicated entities for the particular digest key.
+    The definition of this init function is looked up at runtime by an algorithm that:
     - looks-up if the digest key is in DIGEST_INITIALIZERS_LOOKUPS where it'll find
     the coordinates of the init function for the digest key.
     - if not configured, the algorithm will try load the module in meross_lan/devices
@@ -343,13 +348,41 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     DIGEST_INITIALIZERS_LOOKUPS: Final[dict[str, str]] = {
         mc.KEY_FAN: ".fan",
         mc.KEY_LIGHT: ".light",
+        mc.KEY_TOGGLE: ".switch",
+        mc.KEY_TOGGLEX: ".switch",
     }
 
-    # some namespaces are manageable with a simple single entity instance
-    # and this static map provides a list of entities to be built at device
-    # init time when the namespace appears in device ability set.
-    # Those entity initializer should just accept the device instance
-    ENTITY_INITIALIZERS: ClassVar[dict[str, tuple[str, str]]]
+    NAMESPACE_INITIALIZERS: Final[dict[str, tuple[str, str]]] = {
+        mc.NS_APPLIANCE_CONFIG_OVERTEMP: (".devices.mss", "OverTempEnableSwitch"),
+        mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: (
+            ".devices.mss",
+            "ConsumptionConfigNamespaceHandler",
+        ),
+        mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (".devices.mss", "ConsumptionXSensor"),
+        mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (
+            ".devices.mss",
+            "ElectricityNamespaceHandler",
+        ),
+        mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "FanNamespaceHandler"),
+        mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: (
+            ".sensor",
+            "FilterMaintenanceNamespaceHandler",
+        ),
+        mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
+        mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (".switch", "PhysicalLockSwitch"),
+        mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
+            ".devices.screenbrightness",
+            "ScreenBrightnessNamespaceHandler",
+        ),
+        mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (".cover", "MLRollerShutter"),
+        mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
+        mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
+    }
+    """
+    Static dict of namespace initialization functions. This will be looked up
+    and matched against the current device abilities (at device init time) and
+    usually setups a dedicated namespace handler and/or a dedicated entity
+    """
 
     DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
         MLUpdate.PLATFORM: None,
@@ -502,7 +535,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             ent_reg.async_remove(update_firmware_entity_id)
         self.update_firmware = None
 
-        for namespace, init_descriptor in MerossDevice.ENTITY_INITIALIZERS.items():
+        for namespace, init_descriptor in MerossDevice.NAMESPACE_INITIALIZERS.items():
             if namespace in ability:
                 with self.exception_warning("initializing namespace:%s", namespace):
                     module = import_module(
@@ -510,31 +543,33 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     )
                     getattr(module, init_descriptor[1])(self)
 
-        for key_digest, _digest in descriptor.digest.items():
+        for key_digest, _digest in (
+            descriptor.digest.items() or descriptor.control.items()
+        ):
+            # older firmwares (MSS110 with 1.1.28) look like
+            # carrying 'control' instead of 'digest'
             try:
-                # _init_xxxx methods provided by mixins
-                _init_method_name = f"_init_{key_digest}"
-                if _init := getattr(self, _init_method_name, None):
-                    self.digest_handlers[key_digest] = _init(_digest)
-                else:
-                    try:
-                        self.digest_handlers[key_digest] = (
-                            MerossDevice.DIGEST_INITIALIZERS[key_digest](self, _digest)
-                        )
-                    except KeyError:
-                        try:
-                            module_path = MerossDevice.DIGEST_INITIALIZERS_LOOKUPS.get(key_digest, f".devices.{key_digest}")
-                            module = import_module(
-                                module_path, "custom_components.meross_lan"
-                            )
-                            _init = getattr(module, "digest_init")
-                            MerossDevice.DIGEST_INITIALIZERS[key_digest] = _init
-                            self.digest_handlers[key_digest] = _init(self, _digest)
-                        except Exception as exception:
-                            MerossDevice.DIGEST_INITIALIZERS[key_digest] = (
-                                digest_init_empty
-                            )
-                            raise exception
+                self.digest_handlers[key_digest] = MerossDevice.DIGEST_INITIALIZERS[
+                    key_digest
+                ](self, _digest)
+            except KeyError:
+                try:
+                    module_path = MerossDevice.DIGEST_INITIALIZERS_LOOKUPS.get(
+                        key_digest, f".devices.{key_digest}"
+                    )
+                    module = import_module(module_path, "custom_components.meross_lan")
+                    _init = getattr(module, f"digest_init_{key_digest}")
+                    MerossDevice.DIGEST_INITIALIZERS[key_digest] = _init
+                    self.digest_handlers[key_digest] = _init(self, _digest)
+                except Exception as exception:
+                    self.log_exception(
+                        self.WARNING,
+                        exception,
+                        "initializing digest key:%s",
+                        key_digest,
+                    )
+                    MerossDevice.DIGEST_INITIALIZERS[key_digest] = digest_init_empty
+                    self.digest_handlers[key_digest] = digest_parse_empty
 
             except Exception as exception:
                 self.log_exception(
@@ -1830,13 +1865,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if self.curr_protocol is not self.pref_protocol:
                         self._switch_protocol(self.pref_protocol)
 
-        for key_digest, _digest in descr.digest.items():
+        for key_digest, _digest in descr.digest.items() or descr.control.items():
             self.digest_handlers[key_digest](_digest)
-        else:
-            # older firmwares (MSS110 with 1.1.28) look like
-            # carrying 'control' instead of 'digest'
-            for key_control, _control in descr.all.get(mc.KEY_CONTROL, {}).items():
-                self.digest_handlers[key_control](_control)
 
         if self.needsave:
             # fw update or whatever might have modified the device abilities.

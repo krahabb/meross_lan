@@ -1,24 +1,22 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import switch
 
 from . import meross_entity as me
-from .helpers.namespaces import EntityPollingStrategy, digest_parse_empty
-from .merossclient import const as mc  # mEROSS cONST
+from .helpers.namespaces import EntityPollingStrategy
+from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .climate import MtsClimate
+    from .helpers.namespaces import DigestParseFunc
     from .meross_device import MerossDevice
-    from .merossclient import MerossDeviceDescriptor
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, switch.DOMAIN)
 
@@ -40,7 +38,7 @@ class MtsConfigSwitch(MLSwitch):
 
     def __init__(
         self,
-        climate: MtsClimate,
+        climate: "MtsClimate",
         entitykey: str,
         *,
         onoff=None,
@@ -79,7 +77,7 @@ class PhysicalLockSwitch(MLSwitch):
     # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         # right now we expect only 1 entity on channel == 0 (whatever)
         super().__init__(manager, 0, mc.KEY_LOCK, self.DeviceClass.SWITCH)
         manager.register_parser(self.namespace, self)
@@ -99,74 +97,41 @@ class PhysicalLockSwitch(MLSwitch):
             self.update_onoff(onoff)
 
 
-class ToggleXMixin(MerossDevice if typing.TYPE_CHECKING else object):
-    def __init__(self, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(descriptor, entry)
-        # we build switches here after everything else have been
-        # setup since the togglex verb might refer to a more specialized
-        # entity than switches
-        togglex = descriptor.digest.get(mc.KEY_TOGGLEX)
-        if isinstance(togglex, list):
-            for t in togglex:
-                channel = t.get(mc.KEY_CHANNEL)
-                switch = (
-                    self.entities[channel]
-                    if channel in self.entities
-                    else self._build_outlet(channel)
-                )
-                self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, switch)
-        elif isinstance(togglex, dict):
-            channel = togglex.get(mc.KEY_CHANNEL)
-            switch = (
-                self.entities[channel]
-                if channel in self.entities
-                else self._build_outlet(channel)
-            )
-            self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, switch)
-        # This is an euristhic for legacy firmwares or
-        # so when we cannot init any entity from system.all.digest
-        # we then guess we should have at least a switch
-        # edit: I guess ToggleX firmwares and on already support
-        # system.all.digest status broadcast
-        if not self.entities:
-            switch = self._build_outlet(0)
-            self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, switch)
+class MLToggle(MLSwitch):
 
-    def _init_togglex(self, digest: list):
-        return self.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)._parse_list
+    namespace = mc.NS_APPLIANCE_CONTROL_TOGGLE
+    key_namespace = mc.KEY_TOGGLE
 
-    def _build_outlet(self, channel: object):
-        return MLSwitch(
-            self,
-            channel,
-            None,
-            MLSwitch.DeviceClass.OUTLET,
-            namespace=mc.NS_APPLIANCE_CONTROL_TOGGLEX,
-        )
+    def __init__(self, manager: "MerossDevice", channel: object):
+        super().__init__(manager, channel, None, MLSwitch.DeviceClass.OUTLET)
+        manager.register_parser(self.namespace, self)
 
 
-class ToggleMixin(MerossDevice if typing.TYPE_CHECKING else object):
-    def __init__(self, descriptor: MerossDeviceDescriptor, entry):
-        super().__init__(descriptor, entry)
-        # older firmwares (MSS110 with 1.1.28) look like dont really have 'digest'
-        # but have 'control' and the toggle payload looks like not carrying 'channel'
-        if isinstance(p_control := descriptor.all.get(mc.KEY_CONTROL), dict):
-            for _key, _control in p_control.items():
-                if _key == mc.KEY_TOGGLE:
-                    self._build_outlet(_control.get(mc.KEY_CHANNEL, 0))
-                    self.digest_handlers[_key] = self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLE]._parse_generic
-                else:
-                    self.digest_handlers[_key] = digest_parse_empty
+def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
+    """{"onoff": 0, "lmTime": 1645391086}"""
+    MLToggle(device, 0)
+    return device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLE).parse_generic
 
-        if not self.entities:
-            self._build_outlet(0)
 
-    def _build_outlet(self, channel: object):
-        switch = MLSwitch(
-            self,
-            channel,
-            None,
-            MLSwitch.DeviceClass.OUTLET,
-            namespace=mc.NS_APPLIANCE_CONTROL_TOGGLE,
-        )
-        self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLE, switch)
+class MLToggleX(MLSwitch):
+
+    namespace = mc.NS_APPLIANCE_CONTROL_TOGGLEX
+    key_namespace = mc.KEY_TOGGLEX
+
+    def __init__(self, manager: "MerossDevice", channel: object):
+        super().__init__(manager, channel, None, MLSwitch.DeviceClass.OUTLET)
+        manager.register_parser(self.namespace, self)
+
+
+def digest_init_togglex(device: "MerossDevice", digest: list) -> "DigestParseFunc":
+    """[{ "channel": 0, "onoff": 1 }]"""
+    # we don't initialize any switch/ToggleX here since the digest reported channels
+    # might be mapped to more specialized entities:
+    # this is true for lights (MLLight), garageDoor (MLGarage) and fan (MLFan) though
+    # and maybe some more others.
+    # The idea is to let the mc.NS_APPLIANCE_CONTROL_TOGGLEX handler dynamically create
+    # MLToggleX entities when no other (more specialized) entity has registered itself
+    # as a valid handler for the mc.NS_APPLIANCE_CONTROL_TOGGLEX namespace
+    togglex_handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)
+    togglex_handler.register_entity_class(MLToggleX)
+    return togglex_handler.parse_list

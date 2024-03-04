@@ -646,6 +646,7 @@ class MerossDeviceDescriptor:
     all: dict
     ability: dict
     digest: dict
+    control: dict
     system: dict
     hardware: dict
     firmware: dict
@@ -672,6 +673,7 @@ class MerossDeviceDescriptor:
     )
 
     _dynamicattrs = {
+        mc.KEY_CONTROL: lambda _self: _self.all.get(mc.KEY_CONTROL, {}),
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),
         mc.KEY_HARDWARE: lambda _self: _self.system.get(mc.KEY_HARDWARE, {}),
         mc.KEY_FIRMWARE: lambda _self: _self.system.get(mc.KEY_FIRMWARE, {}),

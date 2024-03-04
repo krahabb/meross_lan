@@ -7,7 +7,7 @@ from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.cover import MLRollerShutter
 from custom_components.meross_lan.devices.garageDoor import MLGarage
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.switch import MLSwitch
+from custom_components.meross_lan.switch import MLToggleX
 from emulator.mixins.rollershutter import RollerShutterMixin
 
 from tests.entities import EntityComponentTest
@@ -42,8 +42,8 @@ class EntityTest(EntityComponentTest):
         ability = self.ability
         # check the other specialized implementations
         if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
-            if MLSwitch in EntityComponentTest.expected_entity_types:
-                EntityComponentTest.expected_entity_types.remove(MLSwitch)
+            if MLToggleX in EntityComponentTest.expected_entity_types:
+                EntityComponentTest.expected_entity_types.remove(MLToggleX)
 
         if isinstance(entity, MLGarage):
             assert (

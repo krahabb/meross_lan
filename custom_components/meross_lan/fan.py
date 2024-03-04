@@ -1,14 +1,9 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import fan
 
 from . import meross_entity as me
-from .helpers.namespaces import (
-    NamespaceHandler,
-    PollingStrategy,
-)
+from .helpers.namespaces import NamespaceHandler, PollingStrategy
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
@@ -26,7 +21,11 @@ class MLFan(me.MerossToggle, fan.FanEntity):
     """
 
     PLATFORM = fan.DOMAIN
-    manager: MerossDevice
+    manager: "MerossDevice"
+
+    namespace = mc.NS_APPLIANCE_CONTROL_FAN
+    key_namespace = mc.KEY_FAN
+    key_value = mc.KEY_SPEED
 
     # HA core entity attributes:
     percentage: int | None
@@ -43,13 +42,15 @@ class MLFan(me.MerossToggle, fan.FanEntity):
         "sensor_filtermaintenance",
     )
 
-    def __init__(self, manager: MerossDevice, channel):
+    def __init__(self, manager: "MerossDevice", channel):
         self.percentage = None
         self.speed_count = 0
         self._fan = {}
         self._saved_speed = 1
         super().__init__(manager, channel)
-        manager.register_parser(mc.NS_APPLIANCE_CONTROL_FAN, self)
+        manager.register_parser(self.namespace, self)
+        if mc.NS_APPLIANCE_CONTROL_TOGGLEX in manager.descriptor.ability:
+            manager.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, self)
 
     # interface: MerossToggle
     def set_unavailable(self):
@@ -61,8 +62,6 @@ class MLFan(me.MerossToggle, fan.FanEntity):
         await self.async_request_fan(0)
 
     def _parse_togglex(self, payload: dict):
-        # ToggleXMixin is by default forwarding us this signal but
-        # it's a duplicate of the full state carried in FAN state
         pass
 
     # interface: fan.FanEntity
@@ -79,11 +78,11 @@ class MLFan(me.MerossToggle, fan.FanEntity):
 
     # interface: self
     async def async_request_fan(self, speed: int):
-        payload = {mc.KEY_CHANNEL: self.channel, mc.KEY_SPEED: speed}
+        payload = {self.key_channel: self.channel, self.key_value: speed}
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_FAN,
+            self.namespace,
             mc.METHOD_SET,
-            {mc.KEY_FAN: [payload]},
+            {self.key_namespace: [payload]},
         ):
             self._parse_fan(payload)
 
@@ -105,7 +104,7 @@ class MLFan(me.MerossToggle, fan.FanEntity):
 
 class FanNamespaceHandler(NamespaceHandler):
 
-    def __init__(self, device: MerossDevice):
+    def __init__(self, device: "MerossDevice"):
         super().__init__(
             device,
             mc.NS_APPLIANCE_CONTROL_FAN,
@@ -123,10 +122,10 @@ class FanNamespaceHandler(NamespaceHandler):
             )
 
 
-def digest_init(device: "MerossDevice", digest) -> "DigestParseFunc":
+def digest_init_fan(device: "MerossDevice", digest) -> "DigestParseFunc":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
         MLFan(device, channel_digest[mc.KEY_CHANNEL])
     # mc.NS_APPLIANCE_CONTROL_FAN should already be there since the namespace
     # handlers dict has been initialized before digest
-    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_FAN]._parse_list
+    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_FAN].parse_list

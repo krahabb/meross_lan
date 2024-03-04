@@ -266,6 +266,8 @@ class MLLight(MLLightBase):
         super().__init__(manager, payload)
 
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_LIGHT, self)
+        if self._togglex_switch:
+            manager.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, self)
 
     async def async_turn_on(self, **kwargs):
         if not kwargs:
@@ -413,10 +415,10 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
     through a light feature (presence light or so)
     """
 
+    PLATFORM = light.DOMAIN
     manager: MerossDevice
 
-    PLATFORM = light.DOMAIN
-
+    # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
     entity_category = me.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
@@ -450,8 +452,8 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
         self.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
 
 
-def digest_init(device: "MerossDevice", digest) -> "DigestParseFunc":
+def digest_init_light(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
     """{ "channel": 0, "capacity": 4 }"""
 
     MLLight(device, digest)
-    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT]._parse_generic
+    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT].parse_generic

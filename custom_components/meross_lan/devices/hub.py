@@ -1019,7 +1019,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS400] = MS400SubDevice
 WELL_KNOWN_TYPE_MAP[mc.KEY_WATERLEAK] = MS400SubDevice
 
 
-def digest_init(device: "HubMixin", digest) -> "DigestParseFunc":
+def digest_init_hub(device: "HubMixin", digest) -> "DigestParseFunc":
 
     device.subdevices = {}
     for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:

@@ -7,7 +7,6 @@ from ..light import (
     ATTR_EFFECT,
     ATTR_RGB_COLOR,
     ColorMode,
-    LightEntityFeature,
     MLLightBase,
     _rgb_to_int,
     _sat_1_100,
@@ -29,7 +28,7 @@ DIFFUSER_SENSOR_CLASS_MAP: dict[
 }
 
 
-def digest_init(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
+def digest_init_diffuser(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
     """
     {
         "type": "mod100",
@@ -42,8 +41,7 @@ def digest_init(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
         device, mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT, entity_class=MLDiffuserLight
     )
     for light_digest in digest.get(mc.KEY_LIGHT, []):
-        light = MLDiffuserLight(device, light_digest)
-        diffuser_light_handler.register_entity(light)
+        MLDiffuserLight(device, light_digest)
 
     diffuser_spray_handler = NamespaceHandler(
         device, mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY, entity_class=MLDiffuserSpray
@@ -81,8 +79,8 @@ def digest_init(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
             handler=_handle_Appliance_Control_Diffuser_Sensor,
         )
 
-    diffuser_light_parser = diffuser_light_handler._parse_list
-    diffuser_spray_parser = diffuser_spray_handler._parse_list
+    diffuser_light_parser = diffuser_light_handler.parse_list
+    diffuser_spray_parser = diffuser_spray_handler.parse_list
 
     def digest_parse(digest: dict):
         """
@@ -103,9 +101,15 @@ class MLDiffuserLight(MLLightBase):
     light entity for Meross diffuser (MOD100)
     """
 
+    namespace = mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT
+
     _light_effect_map = mc.DIFFUSER_LIGHT_EFFECT_MAP
     # HA core entity attributes:
     supported_color_modes = {ColorMode.RGB}
+
+    def __init__(self, manager: "MerossDevice", payload: dict):
+        super().__init__(manager, payload)
+        manager.register_parser(self.namespace, self)
 
     async def async_turn_on(self, **kwargs):
         light = dict(self._light)
