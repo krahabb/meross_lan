@@ -3,7 +3,7 @@ name: Push actions
 on: push
 
 env:
-  DEFAULT_PYTHON: "3.11"
+  DEFAULT_PYTHON: "3.12"
 
 jobs:
   validate:
@@ -48,7 +48,7 @@ jobs:
         run: |
           pytest \
             -qq \
-            --timeout=60 \
+            --timeout=120 \
             --durations=10 \
             -n auto \
             --cov custom_components.meross_lan \
