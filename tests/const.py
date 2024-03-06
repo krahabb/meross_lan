@@ -197,7 +197,7 @@ MOCK_CLOUDAPI_DEVICE_LATESTVERSION: list[cloudapi.LatestVersionType] = [
         "type": "mss310r",
         "subType": "it",
         "md5": "1708a3fa2163716da05f18c99160c6e7",
-        "url": "http:\/\/bucket-meross-static.meross.com\/production\/upload\/2019\/11\/28\/17\/22\/38\/201911281722388922034.bin",
+        "url": "http://bucket-meross-static.meross.com/production/upload/2019/11/28/17/22/38/201911281722388922034.bin",
         "version": "2.1.4",
         "alias": "",
         "mcu": [],
