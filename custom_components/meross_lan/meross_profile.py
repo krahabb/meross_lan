@@ -18,7 +18,6 @@ from . import const as mlc
 from .const import (
     CONF_CHECK_FIRMWARE_UPDATES,
     CONF_DEVICE_ID,
-    CONF_EMAIL,
     CONF_KEY,
     CONF_PASSWORD,
     CONF_PAYLOAD,
@@ -30,7 +29,6 @@ from .helpers import (
     Loggable,
     datetime_from_epoch,
     schedule_async_callback,
-    schedule_callback,
     versiontuple,
 )
 from .helpers.manager import ApiProfile, CloudApiClient
@@ -57,7 +55,6 @@ if typing.TYPE_CHECKING:
 
     from homeassistant.components import mqtt as ha_mqtt
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
     import paho.mqtt.client as paho_mqtt
 

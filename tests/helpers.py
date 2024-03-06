@@ -7,7 +7,7 @@ import hashlib
 import re
 import time
 from typing import Any, Callable, Coroutine, Final
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import aiohttp
 from freezegun.api import FrozenDateTimeFactory, StepTickTimeFactory, freeze_time
@@ -26,10 +26,7 @@ from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
 from custom_components.meross_lan.config_flow import ConfigFlow
 from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
 from custom_components.meross_lan.helpers import Loggable
-from custom_components.meross_lan.meross_profile import (
-    MerossCloudProfileStoreType,
-    MerossMQTTConnection,
-)
+from custom_components.meross_lan.meross_profile import MerossMQTTConnection
 from custom_components.meross_lan.merossclient import (
     HostAddress,
     cloudapi,
@@ -781,7 +778,6 @@ class CloudApiMocker(contextlib.AbstractContextManager):
                 mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
                 mc.KEY_DATA: tc.MOCK_PROFILE_CREDENTIALS_SIGNIN.copy(),
             }
-        return response
 
     def _v1_device_devlist(self, request: dict):
         assert len(request) == 0

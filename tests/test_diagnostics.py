@@ -1,17 +1,12 @@
 """
     Tests the HA diagnostics and device tracing feature
 """
-import math
-import time
 
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.diagnostics import (
-    async_get_config_entry_diagnostics,
-    async_get_device_diagnostics,
-)
+from custom_components.meross_lan.diagnostics import async_get_device_diagnostics
 from custom_components.meross_lan.merossclient import const as mc
 
 from tests import const as tc, helpers

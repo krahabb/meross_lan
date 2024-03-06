@@ -11,8 +11,7 @@ class EntityTest(EntityComponentTest):
 
     ENTITY_TYPE = haec.FanEntity
 
-    DIGEST_ENTITIES = {
-    }
+    DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
         mc.NS_APPLIANCE_CONTROL_FAN: [MLFan],

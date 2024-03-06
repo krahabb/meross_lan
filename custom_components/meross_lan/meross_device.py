@@ -42,7 +42,7 @@ from .const import (
     PARAM_TRACING_ABILITY_POLL_TIMEOUT,
     DeviceConfigType,
 )
-from .helpers import datetime_from_epoch, schedule_async_callback, schedule_callback
+from .helpers import datetime_from_epoch, schedule_async_callback
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import (
     DiagnosticPollingStrategy,
@@ -66,11 +66,11 @@ from .merossclient import (
 )
 from .merossclient.httpclient import MerossHttpClient, TerminatedException
 from .repairs import IssueSeverity, create_issue, remove_issue
-from .sensor import MLNumericSensor, ProtocolSensor
+from .sensor import ProtocolSensor
 from .update import MLUpdate
 
 if typing.TYPE_CHECKING:
-    from typing import Callable, ClassVar, Final
+    from typing import ClassVar
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -2105,7 +2105,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             if request_payload:
                                 # we've already issued a channel-like GET
                                 continue
-                            
+
                             if isinstance(response_payload, list):
                                 # the namespace might need a channel index in the request
                                 request[2][key_namespace] = [{mc.KEY_CHANNEL: 0}]

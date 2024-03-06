@@ -1,5 +1,4 @@
 from homeassistant.components import media_player as haec  # HA EntityComponent
-from homeassistant.components.media_player import MediaPlayerEntity, MediaPlayerState
 
 from custom_components.meross_lan.media_player import MLMp3Player
 from custom_components.meross_lan.merossclient import const as mc
@@ -9,7 +8,7 @@ from tests.entities import EntityComponentTest
 
 class EntityTest(EntityComponentTest):
 
-    ENTITY_TYPE = MediaPlayerEntity
+    ENTITY_TYPE = haec.MediaPlayerEntity
 
     DIGEST_ENTITIES = {}
 
@@ -18,10 +17,10 @@ class EntityTest(EntityComponentTest):
     }
 
     SERVICE_STATE_MAP = {
-        haec.SERVICE_MEDIA_PLAY: MediaPlayerState.PLAYING,
-        haec.SERVICE_MEDIA_NEXT_TRACK: MediaPlayerState.PLAYING,
-        haec.SERVICE_MEDIA_PREVIOUS_TRACK: MediaPlayerState.PLAYING,
-        haec.SERVICE_MEDIA_STOP: MediaPlayerState.IDLE,
+        haec.SERVICE_MEDIA_PLAY: haec.MediaPlayerState.PLAYING,
+        haec.SERVICE_MEDIA_NEXT_TRACK: haec.MediaPlayerState.PLAYING,
+        haec.SERVICE_MEDIA_PREVIOUS_TRACK: haec.MediaPlayerState.PLAYING,
+        haec.SERVICE_MEDIA_STOP: haec.MediaPlayerState.IDLE,
     }
 
     async def async_test_each_callback(self, entity: MLMp3Player):
@@ -32,12 +31,12 @@ class EntityTest(EntityComponentTest):
             await self.async_service_call_check(service_name, expected_state)
         await self.async_service_call_check(
             haec.SERVICE_VOLUME_MUTE,
-            MediaPlayerState.PLAYING,
+            haec.MediaPlayerState.PLAYING,
             {haec.ATTR_MEDIA_VOLUME_MUTED: False},
         )
         state = await self.async_service_call_check(
             haec.SERVICE_VOLUME_SET,
-            MediaPlayerState.PLAYING,
+            haec.MediaPlayerState.PLAYING,
             {haec.ATTR_MEDIA_VOLUME_LEVEL: 1},
         )
         assert (
@@ -45,7 +44,7 @@ class EntityTest(EntityComponentTest):
         ), haec.ATTR_MEDIA_VOLUME_LEVEL
         state = await self.async_service_call_check(
             haec.SERVICE_VOLUME_SET,
-            MediaPlayerState.PLAYING,
+            haec.MediaPlayerState.PLAYING,
             {haec.ATTR_MEDIA_VOLUME_LEVEL: 0.1},
         )
         assert (

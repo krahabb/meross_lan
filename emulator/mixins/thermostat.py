@@ -116,7 +116,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             channel = p_request_channel[mc.KEY_CHANNEL]
             try:
                 p_digest_channel = get_element_by_key(digest, mc.KEY_CHANNEL, channel)
-            except Exception as exception:
+            except Exception:
                 p_digest_channel = dict(self.MAP_ENTITY_NS_DEFAULT[namespace_key])
                 p_digest_channel[mc.KEY_CHANNEL] = channel
                 p_digest_channel[mc.KEY_VALUE] = (

@@ -1,6 +1,5 @@
 """Test for meross cloud profiles"""
 
-from datetime import timedelta
 from unittest import mock
 
 from homeassistant.core import HomeAssistant

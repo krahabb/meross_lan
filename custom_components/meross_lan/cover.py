@@ -8,9 +8,7 @@ from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
     ATTR_POSITION,
     STATE_CLOSED,
-    STATE_CLOSING,
     STATE_OPEN,
-    STATE_OPENING,
     CoverDeviceClass,
     CoverEntityFeature,
 )
@@ -40,7 +38,6 @@ from .number import MLConfigNumber
 from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from typing import Final
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -1101,9 +1098,9 @@ class MLRollerShutter(me.MerossEntity, cover.CoverEntity):
             self._async_transition_callback,
         )
         manager = self.manager
-        if (manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active) or (
-            self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE
-        ):
+        if (
+            manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active
+        ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
             p_channel_payload = [{mc.KEY_CHANNEL: self.channel}]
             if manager.multiple_max >= 2:
                 await manager.async_multiple_requests_ack(

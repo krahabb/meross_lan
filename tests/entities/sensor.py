@@ -6,7 +6,6 @@ from custom_components.meross_lan.devices.mss import (
 )
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.sensor import (
-    MLDiagnosticSensor,
     MLEnumSensor,
     MLFilterMaintenanceSensor,
     MLHumiditySensor,

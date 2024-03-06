@@ -1231,7 +1231,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                             device_config[mlc.CONF_PAYLOAD] = device_config_update[
                                 mlc.CONF_PAYLOAD
                             ]
-                        except Exception as e:
+                        except Exception:
                             pass
                     hass.async_create_task(
                         hass.config_entries.async_reload(self.config_entry_id)

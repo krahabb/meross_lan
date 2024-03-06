@@ -42,7 +42,7 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
     PLATFORM = sensor.DOMAIN
 
     # HA core entity attributes:
-    native_value: me.StateType | None
+    native_value: sensor.StateType | None
     native_unit_of_measurement: None = None
 
     __slots__ = ("native_value",)
@@ -53,7 +53,7 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
         channel: object | None,
         entitykey: str | None,
         *,
-        native_value: me.StateType = None,
+        native_value: sensor.StateType = None,
     ):
         self.native_value = native_value
         super().__init__(manager, channel, entitykey, sensor.SensorDeviceClass.ENUM)
@@ -62,7 +62,7 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
         self.native_value = None
         super().set_unavailable()
 
-    def update_native_value(self, native_value: me.StateType):
+    def update_native_value(self, native_value: sensor.StateType):
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()

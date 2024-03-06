@@ -298,7 +298,7 @@ KEY_TO_NAMESPACE = KeyToNameSpaceMap()
 
 def is_hub_namespace(namespace: str):
     match namespace.split("."):
-        case (_, "Hub", *args):
+        case (_, "Hub", *_):
             return True
     return False
 
@@ -312,11 +312,11 @@ def get_default_payload(namespace: str) -> MerossPayloadType:
     if namespace in mc.PAYLOAD_GET:
         return mc.PAYLOAD_GET[namespace]
     match namespace.split("."):
-        case (_, "Hub", *args):
+        case (_, "Hub", *_):
             return {NAMESPACE_TO_KEY[namespace]: []}
-        case (_, "RollerShutter", *args):
+        case (_, "RollerShutter", *_):
             return {NAMESPACE_TO_KEY[namespace]: []}
-        case (_, _, "Thermostat", *args):
+        case (_, _, "Thermostat", *_):
             return {NAMESPACE_TO_KEY[namespace]: [{mc.KEY_CHANNEL: 0}]}
     return {NAMESPACE_TO_KEY[namespace]: {}}
 

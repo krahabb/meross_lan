@@ -11,7 +11,6 @@ from functools import partial
 import logging
 from time import gmtime, time
 import typing
-from typing import Callable
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
