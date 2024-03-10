@@ -16,7 +16,13 @@ from homeassistant.exceptions import (
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from . import const as mlc
-from .helpers import LOGGER, ConfigEntriesHelper, Loggable, schedule_async_callback
+from .helpers import (
+    LOGGER,
+    ConfigEntriesHelper,
+    ConfigEntryType,
+    Loggable,
+    schedule_async_callback,
+)
 from .helpers.manager import ApiProfile, ConfigEntryManager
 from .meross_device import MerossDevice
 from .meross_profile import MerossCloudProfile, MerossCloudProfileStore, MQTTConnection
@@ -352,14 +358,11 @@ class MerossApi(ApiProfile):
         self._mqtt_connection: HAMQTTConnection | None = None
 
         for config_entry in hass.config_entries.async_entries(mlc.DOMAIN):
-            unique_id = config_entry.unique_id
-            if (unique_id is None) or (unique_id == mlc.DOMAIN):
-                continue
-            unique_id = unique_id.split(".")
-            if unique_id[0] == "profile":
-                self.profiles[unique_id[1]] = None
-            else:
-                self.devices[unique_id[0]] = None
+            match ConfigEntryType.get_type_and_id(config_entry.unique_id):
+                case (ConfigEntryType.DEVICE, device_id):
+                    self.devices[device_id] = None
+                case (ConfigEntryType.PROFILE, profile_id):
+                    self.profiles[profile_id] = None
 
         async def _async_service_request(service_call: ServiceCall) -> ServiceResponse:
             service_response = {}
@@ -589,95 +592,87 @@ class MerossApi(ApiProfile):
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
-    LOGGER.debug("async_setup_entry { entry_id: %s }", config_entry.entry_id)
+    LOGGER.debug("async_setup_entry (entry_id:%s)", config_entry.entry_id)
 
-    unique_id = config_entry.unique_id
-    assert unique_id, f"unique_id not set in {config_entry.entry_id}"
     api = MerossApi.api or MerossApi.get(hass)
 
-    if unique_id == mlc.DOMAIN:
-        # MQTT Hub entry
-        if not await api.mqtt_connection.async_mqtt_subscribe():
-            raise ConfigEntryNotReady("MQTT unavailable")
-        api.config_entry_id = config_entry.entry_id
-        await api.entry_update_listener(hass, config_entry)
-        await api.async_setup_entry(hass, config_entry)
-        return True
+    match ConfigEntryType.get_type_and_id(config_entry.unique_id):
+        case (ConfigEntryType.DEVICE, device_id):
+            if device_id in api.devices:
+                assert api.devices[device_id] is None, "device already initialized"
+            else:
+                # this could happen when we add profile entries
+                # after boot
+                api.devices[device_id] = None
+            device = api.build_device(device_id, config_entry)
+            try:
+                await device.async_setup_entry(hass, config_entry)
+                api.devices[device_id] = device
+                # this code needs to run after registering api.devices[device_id]
+                # because of race conditions with profile entry loading
+                for profile in api.active_profiles():
+                    if profile.try_link(device):
+                        break
+                else:
+                    api.try_link(device)
+                device.start()
+                return True
+            except Exception as error:
+                await device.async_shutdown()
+                raise ConfigEntryError from error
 
-    unique_id = unique_id.split(".")
-    if unique_id[0] == "profile":
-        # profile entry
-        profile_id = unique_id[1]
-        if profile_id in api.profiles:
-            assert api.profiles[profile_id] is None
-        else:
-            # this could happen when we add profile entries
-            # after boot
-            api.profiles[profile_id] = None
-        profile = MerossCloudProfile(profile_id, config_entry)
-        try:
-            await profile.async_init()
-            await profile.async_setup_entry(hass, config_entry)
-            api.profiles[profile_id] = profile
-            # 'link' the devices already initialized
-            for device in api.active_devices():
-                profile.try_link(device)
+        case (ConfigEntryType.PROFILE, profile_id):
+            if profile_id in api.profiles:
+                assert api.profiles[profile_id] is None
+            else:
+                # this could happen when we add profile entries
+                # after boot
+                api.profiles[profile_id] = None
+            profile = MerossCloudProfile(profile_id, config_entry)
+            try:
+                await profile.async_init()
+                await profile.async_setup_entry(hass, config_entry)
+                api.profiles[profile_id] = profile
+                # 'link' the devices already initialized
+                for device in api.active_devices():
+                    profile.try_link(device)
+                return True
+            except Exception as error:
+                await profile.async_shutdown()
+                raise ConfigEntryError from error
+
+        case (ConfigEntryType.HUB, _):
+            if not await api.mqtt_connection.async_mqtt_subscribe():
+                raise ConfigEntryNotReady("MQTT unavailable")
+            api.config_entry_id = config_entry.entry_id
+            await api.entry_update_listener(hass, config_entry)
+            await api.async_setup_entry(hass, config_entry)
             return True
-        except Exception as error:
-            await profile.async_shutdown()
-            raise ConfigEntryError from error
-
-    # device entry
-    device_id = unique_id[0]
-    if device_id in api.devices:
-        assert api.devices[device_id] is None, "device already initialized"
-    else:
-        # this could happen when we add profile entries
-        # after boot
-        api.devices[device_id] = None
-    device = api.build_device(device_id, config_entry)
-    try:
-        await device.async_setup_entry(hass, config_entry)
-        api.devices[device_id] = device
-        # this code needs to run after registering api.devices[device_id]
-        # because of race conditions with profile entry loading
-        for profile in api.active_profiles():
-            if profile.try_link(device):
-                break
-        else:
-            api.try_link(device)
-        device.start()
-        return True
-    except Exception as error:
-        await device.async_shutdown()
-        raise ConfigEntryError from error
+        
+        case _:
+            raise ConfigEntryError(
+                f"Unknown configuration type (entry_id:{config_entry.entry_id} title:'{config_entry.title}')"
+            )
 
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    LOGGER.debug("async_unload_entry { entry_id: %s }", config_entry.entry_id)
+    LOGGER.debug("async_unload_entry (entry_id:%s)", config_entry.entry_id)
 
     manager = MerossApi.managers[config_entry.entry_id]
     return await manager.async_unload_entry(hass, config_entry)
 
 
-async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry):
-    LOGGER.debug("async_remove_entry { entry_id: %s }", entry.entry_id)
+async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry):
+    LOGGER.debug("async_remove_entry (entry_id:%s)", config_entry.entry_id)
 
-    unique_id = entry.unique_id
-    if unique_id == mlc.DOMAIN:
-        return
+    match ConfigEntryType.get_type_and_id(config_entry.unique_id):
+        case (ConfigEntryType.DEVICE, device_id):
+            MerossApi.devices.pop(device_id)
 
-    assert unique_id
-    unique_id = unique_id.split(".")
-
-    if unique_id[0] == "profile":
-        profile_id = unique_id[1]
-        MerossApi.profiles.pop(profile_id)
-        await MerossCloudProfileStore(profile_id).async_remove()
-        credentials: MerossCloudCredentials = entry.data  # type: ignore
-        await cloudapi.CloudApiClient(
-            credentials=credentials, session=async_get_clientsession(hass)
-        ).async_logout_safe()
-        return
-
-    MerossApi.devices.pop(unique_id[0])
+        case (ConfigEntryType.PROFILE, profile_id):
+            MerossApi.profiles.pop(profile_id)
+            await MerossCloudProfileStore(profile_id).async_remove()
+            credentials: MerossCloudCredentials = config_entry.data  # type: ignore
+            await cloudapi.CloudApiClient(
+                credentials=credentials, session=async_get_clientsession(hass)
+            ).async_logout_safe()

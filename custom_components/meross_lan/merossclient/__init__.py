@@ -196,7 +196,12 @@ class HostAddress:
 
 def get_macaddress_from_uuid(uuid: str):
     """Infers the device mac address from the UUID"""
-    return ":".join(re.findall("..", uuid[-12:]))
+    return ":".join(re.findall("..", uuid[-12:].lower()))
+
+
+def fmt_macaddress(macaddress: str):
+    """internal component macaddress representation (lowercase without dots/colons)"""
+    return macaddress.replace(":", "").lower()
 
 
 def build_message(
@@ -653,6 +658,7 @@ class MerossDeviceDescriptor:
     hardwareVersion: str
     uuid: str
     macAddress: str
+    macAddress_fmt: str
     innerIp: str | None
     userId: str | None
     firmwareVersion: str
@@ -679,8 +685,9 @@ class MerossDeviceDescriptor:
         "hardwareVersion": lambda _self: _self.hardware.get(mc.KEY_VERSION, ""),
         mc.KEY_UUID: lambda _self: _self.hardware.get(mc.KEY_UUID),
         mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(
-            mc.KEY_MACADDRESS, mc.MEROSS_MACADDRESS
+            mc.KEY_MACADDRESS, ""
         ),
+        "macAddress_fmt": lambda _self: fmt_macaddress(_self.macAddress),
         mc.KEY_INNERIP: lambda _self: _self.firmware.get(mc.KEY_INNERIP),
         mc.KEY_USERID: lambda _self: str(_self.firmware.get(mc.KEY_USERID)),
         "firmwareVersion": lambda _self: _self.firmware.get(mc.KEY_VERSION, ""),

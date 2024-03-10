@@ -497,7 +497,10 @@ class MQTTConnection(Loggable):
                     data=None,
                 )
 
-            if config_entry := config_entries_helper.get_config_entry(device_id):
+            if config_entry := (
+                config_entries_helper.get_config_entry(device_id)
+                or config_entries_helper.get_config_entry(device_id[-12:].lower())
+            ):
                 # entry already present...skip discovery
                 self.log(
                     self.INFO,
@@ -1141,8 +1144,8 @@ class MerossCloudProfile(ApiProfile):
             return True
         return False
 
-    def get_device_info(self, device_id: str):
-        return self._data[self.KEY_DEVICE_INFO].get(device_id)
+    def get_device_info(self, uuid: str):
+        return self._data[self.KEY_DEVICE_INFO].get(uuid)
 
     def get_latest_version(self, descriptor: MerossDeviceDescriptor):
         """returns LatestVersionType info if device has an update available"""

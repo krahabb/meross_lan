@@ -7,6 +7,7 @@ import abc
 import asyncio
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from enum import StrEnum
 from functools import partial
 import logging
 from time import gmtime, time
@@ -153,14 +154,42 @@ async def get_entity_last_state_available(
     return None
 
 
+class ConfigEntryType(StrEnum):
+    UNKNOWN = "unknown"
+    DEVICE = "device"
+    PROFILE = "profile"
+    HUB = "hub"
+
+    @staticmethod
+    def get_type_and_id(unique_id: str | None):
+        match (unique_id or ".").split("."):
+            case (mlc.DOMAIN,):
+                return (ConfigEntryType.HUB, None)
+            case (device_id,):
+                return (ConfigEntryType.DEVICE, device_id)
+            case ("profile", profile_id):
+                return (ConfigEntryType.PROFILE, profile_id)
+            case _:
+                return (ConfigEntryType.UNKNOWN, None)
+
+
 class ConfigEntriesHelper:
+    __slots__ = (
+        "config_entries",
+        "_entries",
+        "_async_entry_for_domain_unique_id",
+    )
+
     def __init__(self, hass: HomeAssistant):
         self.config_entries: typing.Final = hass.config_entries
         self._entries = None
-        self._flows = None
+        # added in HA core 2024.2
+        self._async_entry_for_domain_unique_id = getattr(self.config_entries, "async_entry_for_domain_unique_id", None)
 
     def get_config_entry(self, unique_id: str):
         """Gets the configured entry if it exists."""
+        if self._async_entry_for_domain_unique_id:
+            return self._async_entry_for_domain_unique_id(mlc.DOMAIN, unique_id)
         if self._entries is None:
             self._entries = self.config_entries.async_entries(mlc.DOMAIN)
         for config_entry in self._entries:
@@ -170,12 +199,12 @@ class ConfigEntriesHelper:
 
     def get_config_flow(self, unique_id: str):
         """Returns the current flow (in progres) if any."""
-        if self._flows is None:
-            self._flows = self.config_entries.flow.async_progress_by_handler(mlc.DOMAIN)
-        for flow in self._flows:
-            if context := flow.get("context"):
-                if context.get("unique_id") == unique_id:
-                    return flow
+        for progress in self.config_entries.flow.async_progress_by_handler(
+            mlc.DOMAIN,
+            include_uninitialized=True,
+            match_context={"unique_id": unique_id},
+        ):
+            return progress
         return None
 
 

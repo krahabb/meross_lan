@@ -1,4 +1,5 @@
 """Test meross_lan config flow"""
+
 from typing import Final
 from uuid import uuid4
 
@@ -10,10 +11,12 @@ from homeassistant.data_entry_flow import FlowResult, FlowResultType
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import const as mlc
+from custom_components.meross_lan.helpers import ConfigEntriesHelper
 from custom_components.meross_lan.merossclient import (
     build_message,
     cloudapi,
     const as mc,
+    fmt_macaddress,
     json_dumps,
 )
 
@@ -196,6 +199,50 @@ async def test_dhcp_discovery_config_flow(hass: HomeAssistant):
 
     assert result["type"] == FlowResultType.FORM  # type: ignore
     assert result["step_id"] == "device"  # type: ignore
+
+
+async def test_dhcp_ignore_config_flow(hass: HomeAssistant):
+    result = await hass.config_entries.flow.async_init(
+        mlc.DOMAIN,
+        context={"source": config_entries.SOURCE_DHCP},
+        data=DhcpServiceInfo(tc.MOCK_DEVICE_IP, "", tc.MOCK_MACADDRESS),
+    )
+
+    assert result["type"] == FlowResultType.FORM  # type: ignore
+    assert result["step_id"] == "device"  # type: ignore
+
+    entry_unique_id = fmt_macaddress(tc.MOCK_MACADDRESS)
+    result = await hass.config_entries.flow.async_init(
+        mlc.DOMAIN,
+        context={"source": config_entries.SOURCE_IGNORE},
+        data={
+            "unique_id": entry_unique_id,
+            "title": "",
+        },
+    )
+
+    assert not hass.config_entries.flow.async_progress_by_handler(mlc.DOMAIN)
+
+    result = await hass.config_entries.flow.async_init(
+        mlc.DOMAIN,
+        context={"source": config_entries.SOURCE_DHCP},
+        data=DhcpServiceInfo(tc.MOCK_DEVICE_IP, "", tc.MOCK_MACADDRESS),
+    )
+
+    assert result["type"] == FlowResultType.ABORT  # type: ignore
+
+    ignored_entry = ConfigEntriesHelper(hass).get_config_entry(entry_unique_id)
+    assert ignored_entry
+    await hass.config_entries.async_remove(ignored_entry.entry_id)
+    await hass.async_block_till_done()
+
+    has_progress = False
+    for progress in hass.config_entries.flow.async_progress_by_handler(mlc.DOMAIN):
+        assert progress.get("context", {}).get("unique_id") == entry_unique_id
+        assert progress.get("step_id") == "device"
+        has_progress = True
+
+    assert has_progress, "unignored entry did not progress"
 
 
 async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):

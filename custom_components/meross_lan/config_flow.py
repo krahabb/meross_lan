@@ -12,14 +12,14 @@ import typing
 
 from homeassistant import config_entries as ce, const as hac
 from homeassistant.const import CONF_ERROR
-from homeassistant.data_entry_flow import AbortFlow, FlowHandler, callback
+from homeassistant.data_entry_flow import FlowHandler, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
-from .helpers import ConfigEntriesHelper, reverse_lookup
+from .helpers import ConfigEntriesHelper, ConfigEntryType, reverse_lookup
 from .helpers.manager import CloudApiClient
 from .merossclient import (
     HostAddress,
@@ -27,13 +27,14 @@ from .merossclient import (
     MerossKeyError,
     cloudapi,
     const as mc,
+    fmt_macaddress,
     request_get,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
 
 if typing.TYPE_CHECKING:
-    from typing import Final
+    from typing import ClassVar, Final
 
     from homeassistant.components.dhcp import DhcpServiceInfo
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
@@ -539,6 +540,8 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
 
+    DHCP_DISCOVERIES: ClassVar = {}
+
     @staticmethod
     def async_get_options_flow(config_entry):
         return OptionsFlow(config_entry)
@@ -554,6 +557,17 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
             step_id="user",
             menu_options=["profile", "device"],
         )
+
+    async def async_step_unignore(self, user_input):
+        """Rediscover a config entry by it's unique_id."""
+        match ConfigEntryType.get_type_and_id(user_input["unique_id"]):
+            case (ConfigEntryType.DEVICE, mac_address_fmt):
+                if mac_address_fmt in ConfigFlow.DHCP_DISCOVERIES:
+                    return await self.async_step_dhcp(
+                        ConfigFlow.DHCP_DISCOVERIES.pop(mac_address_fmt)
+                    )
+
+        return self.async_abort()
 
     async def async_step_hub(self, user_input=None):
         """configure the MQTT discovery device key"""
@@ -618,113 +632,124 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         api = self.api
         api.log(api.DEBUG, "received dhcp discovery: %s", str(discovery_info))
         host = discovery_info.ip
-        macaddress = discovery_info.macaddress.replace(":", "").lower()
+        macaddress = discovery_info.macaddress
+        macaddress_fmt = fmt_macaddress(macaddress)
         # check if the device is already registered
+        config_entries = self.hass.config_entries
         try:
-            entries = self.hass.config_entries
-            for entry in entries.async_entries(mlc.DOMAIN):
-                entry_data = entry.data
-                entry_descriptor = MerossDeviceDescriptor(
-                    entry_data.get(mlc.CONF_PAYLOAD)
-                )
-                if entry_descriptor.macAddress.replace(":", "").lower() != macaddress:
-                    continue
-                if entry_data.get(mlc.CONF_HOST) != host:
-                    # before updating, check the host ip is 'really' valid
-                    try:
-                        _device_config, _descriptor = await self._async_http_discovery(
-                            host, entry_data.get(mlc.CONF_KEY)
+            for entry in config_entries.async_entries(mlc.DOMAIN):
+                match ConfigEntryType.get_type_and_id(entry.unique_id):
+                    case (ConfigEntryType.DEVICE, device_id):
+                        if device_id[-12:].lower() != macaddress_fmt:
+                            continue
+                        if entry.source == ce.SOURCE_IGNORE:
+                            ConfigFlow.DHCP_DISCOVERIES[macaddress_fmt] = discovery_info
+                            return self.async_abort()
+                        entry_data = entry.data
+                        entry_descriptor = MerossDeviceDescriptor(
+                            entry_data.get(mlc.CONF_PAYLOAD)
                         )
-                        if (
-                            _device_config[mlc.CONF_DEVICE_ID]
-                            == entry_data[mlc.CONF_DEVICE_ID]
-                        ):
-                            data = dict(entry_data)
-                            data.update(_device_config)
-                            data[mlc.CONF_TIMESTAMP] = (
-                                time()
-                            )  # force ConfigEntry update..
-                            entries.async_update_entry(entry, data=data)
-                            api.log(
-                                api.INFO,
-                                "DHCP updated (ip:%s mac:%s) for uuid:%s",
-                                host,
-                                discovery_info.macaddress,
-                                api.loggable_device_id(entry_descriptor.uuid),
-                            )
-                        else:
-                            api.log(
-                                api.WARNING,
-                                "received a DHCP update (ip:%s mac:%s) but the new uuid:%s doesn't match the configured one (uuid:%s)",
-                                host,
-                                discovery_info.macaddress,
-                                api.loggable_device_id(_descriptor.uuid),
-                                api.loggable_device_id(entry_descriptor.uuid),
-                            )
+                        if entry_descriptor.macAddress_fmt != macaddress_fmt:
+                            # This is an error though:the check against device_id[-12:]
+                            # should have identified this...let it be..
+                            continue
 
-                    except Exception as error:
-                        api.log(
-                            api.WARNING,
-                            "DHCP update error %s trying to identify uuid:%s at (ip:%s mac:%s)",
-                            str(error),
-                            api.loggable_device_id(entry_descriptor.uuid),
-                            host,
-                            discovery_info.macaddress,
-                        )
+                        if entry_data.get(mlc.CONF_HOST) != host:
+                            # before updating, check the host ip is 'really' valid
+                            try:
+                                _device_config, _descriptor = (
+                                    await self._async_http_discovery(
+                                        host, entry_data.get(mlc.CONF_KEY)
+                                    )
+                                )
+                                if (
+                                    _device_config[mlc.CONF_DEVICE_ID]
+                                    == entry_data[mlc.CONF_DEVICE_ID]
+                                ):
+                                    data = dict(entry_data)
+                                    data.update(_device_config)
+                                    data[mlc.CONF_TIMESTAMP] = (
+                                        time()
+                                    )  # force ConfigEntry update..
+                                    config_entries.async_update_entry(entry, data=data)
+                                    api.log(
+                                        api.INFO,
+                                        "DHCP updated (ip:%s mac:%s) for uuid:%s",
+                                        host,
+                                        macaddress,
+                                        api.loggable_device_id(entry_descriptor.uuid),
+                                    )
+                                else:
+                                    api.log(
+                                        api.WARNING,
+                                        "received a DHCP update (ip:%s mac:%s) but the new uuid:%s doesn't match the configured one (uuid:%s)",
+                                        host,
+                                        macaddress,
+                                        api.loggable_device_id(_descriptor.uuid),
+                                        api.loggable_device_id(entry_descriptor.uuid),
+                                    )
 
-                return self.async_abort()
-        except Exception as error:
-            api.log(api.WARNING, "DHCP update internal error: %s", str(error))
-        # we'll update the unique_id for the flow when we'll have the device_id
-        # Here this is needed in case we cannot correctly identify the device
-        # via our api and the dhcp integration keeps pushing us discoveries for
-        # the same device
-        # update 2022-12-19: adding mlc.DOMAIN prefix since macaddress alone might be set by other
-        # integrations and that would conflict with our unique_id likely raising issues
-        # on DHCP discovery not working in some configurations
-        await self.async_set_unique_id(mlc.DOMAIN + macaddress, raise_on_progress=True)
+                            except Exception as error:
+                                api.log(
+                                    api.WARNING,
+                                    "DHCP update error %s trying to identify uuid:%s at (ip:%s mac:%s)",
+                                    str(error),
+                                    api.loggable_device_id(entry_descriptor.uuid),
+                                    host,
+                                    macaddress,
+                                )
+                        return self.async_abort()
+
+                    case _:
+                        continue
+
+        except Exception as exception:
+            api.log_exception(api.WARNING, exception, "DHCP update check")
 
         try:
             # try device identification so the user/UI has a good context to start with
-            _device_config = None
             for profile in MerossApi.active_profiles():
                 try:
-                    _device_config, _descriptor = await self._async_http_discovery(
-                        host, profile.key
+                    return await self._async_set_device_config(
+                        True, *await self._async_http_discovery(host, profile.key)
                     )
-                    # deeply check the device is really bounded to the profile
-                    # since the key might luckily be good even tho the profile not
-                    if _descriptor.userId == profile.id:
-                        break
                 except Exception:
                     pass
-                _device_config = None
 
-            if (not _device_config) and (key := api.key):
+            if key := api.key:
                 try:
-                    _device_config, _descriptor = await self._async_http_discovery(
-                        host, key
+                    return await self._async_set_device_config(
+                        True, *await self._async_http_discovery(host, key)
                     )
                 except Exception:
                     pass
 
-            if _device_config:
-                return await self._async_set_device_config(True, _device_config, _descriptor)  # type: ignore
-
-        except AbortFlow:
-            # we might have 'correctly' identified an already configured entry or
-            # pending flow
-            return self.async_abort()
         except Exception as exception:
-            api.log(
+            api.log_exception(
                 api.DEBUG,
-                "%s(%s) identifying meross device (host:%s)",
-                exception.__class__.__name__,
-                str(exception),
+                exception,
+                "identifying meross device (ip:%s host:%s mac:%s)",
                 host,
+                discovery_info.hostname,
+                macaddress,
             )
             # forgive and continue if we cant discover the device...let the user work it out
 
+        for progress in config_entries.flow.async_progress_by_handler(
+            self.handler,
+            include_uninitialized=True,
+        ):
+            if progress["flow_id"] == self.flow_id:
+                continue
+            try:
+                if progress["context"]["unique_id"] == macaddress_fmt:
+                    config_entries.flow.async_abort(progress["flow_id"])
+            except Exception:
+                pass
+
+        await self.async_set_unique_id(macaddress_fmt, raise_on_progress=False)
+        ConfigFlow.DHCP_DISCOVERIES[macaddress_fmt] = discovery_info
+        self._set_flow_title(f"{discovery_info.hostname or host} ({macaddress})")
         self.device_config = {  # type: ignore
             mlc.CONF_HOST: host,
         }
@@ -755,6 +780,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         return await self.async_step_hub()
 
     async def async_step_finalize(self, user_input=None):
+        ConfigFlow.DHCP_DISCOVERIES.pop(self.unique_id[-12:].lower(), None)  # type: ignore
         return self.async_create_entry(
             title=self._title,
             data=self.device_config,
@@ -766,38 +792,55 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         device_config: mlc.DeviceConfigType,
         descriptor: MerossDeviceDescriptor,
     ):
+        uuid = descriptor.uuid
+        mac_address_fmt = descriptor.macAddress_fmt
+        # The approach here is to abort any previous flow for the
+        # same uuid/macaddress and keep flowing only the last (current)
+        flowmanager = self.hass.config_entries.flow
+        for progress in flowmanager.async_progress_by_handler(
+            self.handler,
+            include_uninitialized=True,
+        ):
+            if progress["flow_id"] == self.flow_id:
+                continue
+            try:
+                if progress["context"]["unique_id"] in (uuid, mac_address_fmt):
+                    flowmanager.async_abort(progress["flow_id"])
+            except Exception:
+                pass
+
+        # at this stage (succesful device identification) the flow/entry
+        # unique_id is the full uuid (in contrast with dhcp discovery
+        # setting just the macaddress). This way we can distinguish progress flows
+        # for the same device coming from both DHCP/MQTT with the idea that
+        # progress with just the mac are a bit less complete since we're still
+        # unable to identify the device
+        await self.async_set_unique_id(uuid, raise_on_progress=False)
+
+        self.clone_api_diagnostic_config(device_config)
         self.device_config = device_config
-        self._descriptor = descriptor
-        device_id = descriptor.uuid
+        self.device_placeholders = {
+            "device_type": descriptor.productnametype,
+            "device_id": uuid,
+        }
         if (
             ((profile_id := descriptor.userId) in MerossApi.profiles)
             and (profile := MerossApi.profiles.get(profile_id))
-            and (device_info := profile.get_device_info(device_id))
+            and (device_info := profile.get_device_info(uuid))
         ):
-            devname = device_info.get(mc.KEY_DEVNAME, device_id)
+            devname = device_info.get(mc.KEY_DEVNAME, uuid)
         else:
-            devname = device_id
-        self._title = f"{descriptor.type} - {devname}"
-        self.context["title_placeholders"] = {"name": self._title}
-        self.device_placeholders = {
-            "device_type": descriptor.productnametype,
-            "device_id": device_id,
-        }
-
-        if await self.async_set_unique_id(
-            device_id, raise_on_progress=is_discovery_step
-        ):
-            # entry already configured
-            if is_discovery_step:
-                return self.async_abort()
-
-        self.clone_api_diagnostic_config(device_config)
-
+            devname = uuid
+        self._set_flow_title(f"{descriptor.type} - {devname}")
         return self.async_show_form(
             step_id="finalize",
             data_schema=vol.Schema({}),
             description_placeholders=self.device_placeholders,
         )
+
+    def _set_flow_title(self, flow_title: str):
+        self._title = flow_title
+        self.context["title_placeholders"] = {"name": flow_title}
 
 
 class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
@@ -843,43 +886,45 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         self.repair_issue_id = repair_issue_id
 
     async def async_step_init(self, user_input=None):
-        unique_id = self.config_entry.unique_id
-        if unique_id == mlc.DOMAIN:
-            return await self.async_step_menu("hub")
+        match ConfigEntryType.get_type_and_id(self.config_entry.unique_id):
+            case (ConfigEntryType.DEVICE, device_id):
+                self.device_config = typing.cast(mlc.DeviceConfigType, self.config)
+                if mlc.CONF_TRACE in self.device_config:
+                    self.device_config.pop(mlc.CONF_TRACE)  # totally removed in v5.0
+                self._device_id = device_id
+                assert device_id == self.device_config.get(mlc.CONF_DEVICE_ID)
+                device = MerossApi.devices[device_id]
+                # if config not loaded the device is None
+                self.device_descriptor = (
+                    device.descriptor
+                    if device
+                    else MerossDeviceDescriptor(
+                        self.device_config.get(mlc.CONF_PAYLOAD)
+                    )
+                )
+                self.device_placeholders = {
+                    "device_type": self.device_descriptor.productnametype,
+                    "device_id": device_id,
+                }
+                return await self.async_step_menu("device")
 
-        unique_id = unique_id.split(".")  # type: ignore
-        if unique_id[0] == "profile":
-            self._profile_entry = self.config_entry
-            self.profile_config = self.config  # type: ignore
-            self.profile_placeholders = {
-                "email": self.profile_config.get(mlc.CONF_EMAIL),
-                "placeholder": json.dumps(
-                    {
-                        key: self.profile_config.get(key)
-                        for key in (mc.KEY_USERID_, mlc.CONF_KEY)
-                    },
-                    indent=2,
-                ),
-            }
-            return await self.async_step_menu("profile")
+            case (ConfigEntryType.PROFILE, _):
+                self._profile_entry = self.config_entry
+                self.profile_config = self.config  # type: ignore
+                self.profile_placeholders = {
+                    "email": self.profile_config.get(mlc.CONF_EMAIL),
+                    "placeholder": json.dumps(
+                        {
+                            key: self.profile_config.get(key)
+                            for key in (mc.KEY_USERID_, mlc.CONF_KEY)
+                        },
+                        indent=2,
+                    ),
+                }
+                return await self.async_step_menu("profile")
 
-        self.device_config = typing.cast(mlc.DeviceConfigType, self.config)
-        if mlc.CONF_TRACE in self.device_config:
-            self.device_config.pop(mlc.CONF_TRACE)  # totally removed in v5.0
-        self._device_id = unique_id[0]
-        assert self._device_id == self.device_config.get(mlc.CONF_DEVICE_ID)
-        device = MerossApi.devices[self._device_id]
-        # if config not loaded the device is None
-        self.device_descriptor = (
-            device.descriptor
-            if device
-            else MerossDeviceDescriptor(self.device_config.get(mlc.CONF_PAYLOAD))
-        )
-        self.device_placeholders = {
-            "device_type": self.device_descriptor.productnametype,
-            "device_id": self._device_id,
-        }
-        return await self.async_step_menu("device")
+            case (ConfigEntryType.HUB, _):
+                return await self.async_step_menu("hub")
 
     async def async_step_menu(self, user_input):
         if self.repair_issue_id:
