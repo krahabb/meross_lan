@@ -1,17 +1,12 @@
 """
     Tests the HA diagnostics and device tracing feature
 """
-import math
-import time
 
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.diagnostics import (
-    async_get_config_entry_diagnostics,
-    async_get_device_diagnostics,
-)
+from custom_components.meross_lan.diagnostics import async_get_device_diagnostics
 from custom_components.meross_lan.merossclient import const as mc
 
 from tests import const as tc, helpers
@@ -71,7 +66,9 @@ async def test_mqtthub_tracing(
         await _async_run_tracing(entry_mock, time_mock)
 
 
-async def test_profile_diagnostics(hass: HomeAssistant):
+async def test_profile_diagnostics(
+    hass: HomeAssistant, merossmqtt_mock: helpers.MerossMQTTMocker
+):
     async with helpers.ProfileEntryMocker(hass) as entry_mock:
         await entry_mock.async_test_config_entry_diagnostics()
 
@@ -79,6 +76,7 @@ async def test_profile_diagnostics(hass: HomeAssistant):
 async def test_profile_tracing(
     hass: HomeAssistant,
     hamqtt_mock: helpers.HAMQTTMocker,
+    merossmqtt_mock: helpers.MerossMQTTMocker,
     time_mock: helpers.TimeMocker,
 ):
     async with helpers.ProfileEntryMocker(hass) as entry_mock:

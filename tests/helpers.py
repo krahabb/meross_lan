@@ -7,7 +7,7 @@ import hashlib
 import re
 import time
 from typing import Any, Callable, Coroutine, Final
-from unittest.mock import ANY, MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import aiohttp
 from freezegun.api import FrozenDateTimeFactory, StepTickTimeFactory, freeze_time
@@ -784,7 +784,6 @@ class CloudApiMocker(contextlib.AbstractContextManager):
                 mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
                 mc.KEY_DATA: tc.MOCK_PROFILE_CREDENTIALS_SIGNIN.copy(),
             }
-        return response
 
     def _v1_device_devlist(self, request: dict):
         assert len(request) == 0

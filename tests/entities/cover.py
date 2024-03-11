@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from homeassistant.components import cover as haec
 from homeassistant.components.cover import CoverEntity, CoverEntityFeature
 
@@ -174,7 +172,10 @@ class EntityTest(EntityComponentTest):
                     await time_mock.async_tick(_when - current_epoch)
                     break
                 else:
-                    if target_position in (mc.ROLLERSHUTTER_POSITION_CLOSED, mc.ROLLERSHUTTER_POSITION_OPENED):
+                    if target_position in (
+                        mc.ROLLERSHUTTER_POSITION_CLOSED,
+                        mc.ROLLERSHUTTER_POSITION_OPENED,
+                    ):
                         # this is a special transition type for emulated position covers in meross_lan
                         # since due to expected behavior (not that I really agree with this expectation)
                         # the cover will run a full close/open when asked for 0/100 as target position

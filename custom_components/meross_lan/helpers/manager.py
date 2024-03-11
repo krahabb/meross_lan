@@ -7,7 +7,6 @@ import logging
 import os
 from time import localtime, strftime, time
 import typing
-from typing import Callable
 
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import callback
@@ -41,14 +40,12 @@ from .obfuscate import (
 )
 
 if typing.TYPE_CHECKING:
-    from datetime import tzinfo
     from io import TextIOWrapper
-    from typing import Callable, ClassVar, Coroutine, Final
+    from typing import Callable, ClassVar, Final
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant, State
+    from homeassistant.core import HomeAssistant
 
-    from .. import MerossApi
     from ..meross_device import MerossDevice
     from ..meross_entity import MerossEntity
     from ..meross_profile import MerossCloudProfile, MQTTConnection

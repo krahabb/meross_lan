@@ -1,9 +1,4 @@
-from homeassistant.components.number import (
-    ATTR_VALUE,
-    DOMAIN,
-    SERVICE_SET_VALUE,
-    NumberEntity,
-)
+from homeassistant.components import number as haec
 
 from custom_components.meross_lan.cover import MLRollerShutterConfigNumber
 from custom_components.meross_lan.devices.garageDoor import (
@@ -23,7 +18,7 @@ from tests.entities import EntityComponentTest
 
 class EntityTest(EntityComponentTest):
 
-    ENTITY_TYPE = NumberEntity
+    ENTITY_TYPE = haec.NumberEntity
 
     NAMESPACES_ENTITIES = {
         mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: [MLGarageConfigNumber],
@@ -49,11 +44,11 @@ class EntityTest(EntityComponentTest):
 
     async def async_test_enabled_callback(self, entity: MLConfigNumber):
         states = self.hass_states
-        await self.async_service_call(SERVICE_SET_VALUE, {ATTR_VALUE: entity.max_value})
+        await self.async_service_call(haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.max_value})
         await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
         assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.max_value, "max_value"
-        await self.async_service_call(SERVICE_SET_VALUE, {ATTR_VALUE: entity.min_value})
+        await self.async_service_call(haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.min_value})
         await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
         assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.min_value, "min_value"

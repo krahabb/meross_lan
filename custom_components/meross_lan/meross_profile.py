@@ -18,7 +18,6 @@ from . import const as mlc
 from .const import (
     CONF_CHECK_FIRMWARE_UPDATES,
     CONF_DEVICE_ID,
-    CONF_EMAIL,
     CONF_KEY,
     CONF_PASSWORD,
     CONF_PAYLOAD,
@@ -31,7 +30,6 @@ from .helpers import (
     Loggable,
     datetime_from_epoch,
     schedule_async_callback,
-    schedule_callback,
     versiontuple,
 )
 from .helpers.manager import ApiProfile, CloudApiClient
@@ -57,7 +55,6 @@ if typing.TYPE_CHECKING:
 
     from homeassistant.components import mqtt as ha_mqtt
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
     import paho.mqtt.client as paho_mqtt
 
@@ -500,7 +497,10 @@ class MQTTConnection(Loggable):
                     data=None,
                 )
 
-            if config_entry := config_entries_helper.get_config_entry(device_id):
+            if config_entry := (
+                config_entries_helper.get_config_entry(device_id)
+                or config_entries_helper.get_config_entry(device_id[-12:].lower())
+            ):
                 # entry already present...skip discovery
                 self.log(
                     self.INFO,
@@ -511,7 +511,7 @@ class MQTTConnection(Loggable):
                         if config_entry.disabled_by
                         else "ignored" if config_entry.source == "ignore" else "unknown"
                     ),
-                    timeout=14400,  # type: ignore
+                    timeout=28800,  # type: ignore
                 )
                 return
 
@@ -999,6 +999,11 @@ class MerossCloudProfile(ApiProfile):
                 self.KEY_TOKEN_REQUEST_TIME: 0.0,
             }
 
+        if mc.KEY_MQTTDOMAIN in self.config:
+            broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])  # type: ignore
+            mqttconnection = MerossMQTTConnection(self, broker)
+            mqttconnection.schedule_connect(broker)
+
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
             self._device_info_time + mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT
@@ -1144,8 +1149,8 @@ class MerossCloudProfile(ApiProfile):
             return True
         return False
 
-    def get_device_info(self, device_id: str):
-        return self._data[self.KEY_DEVICE_INFO].get(device_id)
+    def get_device_info(self, uuid: str):
+        return self._data[self.KEY_DEVICE_INFO].get(uuid)
 
     def get_latest_version(self, descriptor: MerossDeviceDescriptor):
         """returns LatestVersionType info if device has an update available"""

@@ -14,7 +14,6 @@ import typing
 
 from homeassistant import const as hac
 from homeassistant.helpers.entity import Entity, EntityCategory
-from homeassistant.helpers.typing import StateType
 
 from .helpers import Loggable
 from .helpers.manager import ApiProfile

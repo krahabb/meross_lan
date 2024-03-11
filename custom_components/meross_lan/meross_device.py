@@ -42,7 +42,7 @@ from .const import (
     PARAM_TRACING_ABILITY_POLL_TIMEOUT,
     DeviceConfigType,
 )
-from .helpers import datetime_from_epoch, schedule_async_callback, schedule_callback
+from .helpers import datetime_from_epoch, schedule_async_callback
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import (
     DiagnosticPollingStrategy,
@@ -72,7 +72,7 @@ from .sensor import ProtocolSensor
 from .update import MLUpdate
 
 if typing.TYPE_CHECKING:
-    from typing import Callable, ClassVar, Final
+    from typing import ClassVar
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -465,7 +465,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.device_debug = {}
-        self.device_response_size_min = 2000
+        self.device_response_size_min = 1000
         self.device_response_size_max = 5000
         self.lastrequest = 0.0
         self.lastresponse = 0.0
@@ -485,10 +485,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.digest_handlers: dict[str, DigestParseFunc] = {}
         self.namespace_handlers: dict[str, NamespaceHandler] = {}
         self.polling_strategies: dict[str, PollingStrategy] = {}
-        # TODO: try to cache the system.all payload size in order to avoid the json_dumps
-        PollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_ALL).response_size = (
-            len(json_dumps(descriptor.all)) + PARAM_HEADER_SIZE
-        )
+        PollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_ALL)
         self._unsub_polling_callback = None
         self._polling_callback_shutdown = None
         self._queued_smartpoll_requests = 0
@@ -1005,7 +1002,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # trying a last resort issue of single requests
                 if self._online:
                     self.log(
-                        self.WARNING,
+                        self.DEBUG,
                         "Appliance.Control.Multiple failed with no response: requests=%d expected size=%d",
                         requests_len,
                         multiple_response_size,
@@ -1169,9 +1166,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if error_pos > response_text_len_safe:
                         # the error happened because of truncated json payload
                         self.device_response_size_max = response_text_len_safe
-                        self.device_response_size_min = min(
-                            self.device_response_size_min, self.device_response_size_max
-                        )
+                        if self.device_response_size_min > response_text_len_safe:
+                            self.device_response_size_min = response_text_len_safe
                         self.log(
                             self.DEBUG,
                             "Updating device_response_size_min:%d device_response_size_max:%d",
@@ -1420,7 +1416,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             epoch + PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
                         )
                         if self.device_timedelta < PARAM_TIMESTAMP_TOLERANCE:
-                            with self.exception_warning("_check_device_timezone"):
+                            with self.exception_warning("_check_device_timerules"):
                                 if self._check_device_timerules():
                                     # timezone trans not good..fix and check again soon
                                     await self.async_config_device_timezone(
@@ -1435,19 +1431,21 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
             else:  # offline
                 ns_all = request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+                ns_all_response = None
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self._http:
-                        await self.async_http_request(*ns_all)
+                        ns_all_response = await self.async_http_request(*ns_all)
                     if self._mqtt_publish and not self._online:
-                        await self.async_mqtt_request(*ns_all)
+                        ns_all_response = await self.async_mqtt_request(*ns_all)
                 elif self.conf_protocol is CONF_PROTOCOL_MQTT:
                     if self._mqtt_publish:
-                        await self.async_mqtt_request(*ns_all)
+                        ns_all_response = await self.async_mqtt_request(*ns_all)
                 else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
                     if self._http:
-                        await self.async_http_request(*ns_all)
+                        ns_all_response = await self.async_http_request(*ns_all)
 
-                if self._online:
+                if ns_all_response:
+                    self.polling_strategies[mc.NS_APPLIANCE_SYSTEM_ALL].response_size = len(ns_all_response.json())
                     await self._async_request_updates(epoch, mc.NS_APPLIANCE_SYSTEM_ALL)
                 else:
                     if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
@@ -2005,11 +2003,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         timestamp = self.device_timestamp
         timerules = []
         if tzname:
-            """
-            we'll look through the list of transition times for current tz
-            and provide the actual (last past daylight) and the next to the
-            appliance so it knows how and when to offset utc to localtime
-            """
+            # we'll look through the list of transition times for current tz
+            # and provide the actual (last past daylight) and the next to the
+            # appliance so it knows how and when to offset utc to localtime
+
+            # brutal patch for missing tz names (AEST #402)
+            _TZ_PATCH = {
+                "AEST": "Australia/Brisbane",
+            }
+            if tzname in _TZ_PATCH:
+                tzname = _TZ_PATCH[tzname]
+
             try:
                 try:
                     import pytz
@@ -2040,14 +2044,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     elif isinstance(tz_local, pytz.tzinfo.StaticTzInfo):
                         timerules = [[0, tz_local.utcoffset(None), 0]]
 
-                except Exception as e:
-                    self.log(
+                except Exception as exception:
+                    self.log_exception(
                         self.WARNING,
-                        "Error(%s) while using pytz to build timezone(%s) ",
-                        str(e),
+                        exception,
+                        "using pytz to build timezone(%s) ",
                         tzname,
                     )
-                    # if pytx fails we'll fall-back to some euristics
+                    # if pytz fails we'll fall-back to some euristics
                     device_tzinfo = ZoneInfo(tzname)
                     device_datetime = datetime_from_epoch(timestamp, device_tzinfo)
                     utcoffset = device_tzinfo.utcoffset(device_datetime)
@@ -2055,11 +2059,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     isdst = device_tzinfo.dst(device_datetime)
                     timerules = [[timestamp, utcoffset, 1 if isdst else 0]]
 
-            except Exception as e:
-                self.log(
+            except Exception as exception:
+                self.log_exception(
                     self.WARNING,
-                    "Error(%s) while building timezone(%s) info for %s",
-                    str(e),
+                    exception,
+                    "building timezone(%s) info for %s",
                     tzname,
                     mc.NS_APPLIANCE_SYSTEM_TIME,
                 )

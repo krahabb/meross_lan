@@ -57,7 +57,7 @@ for entity_domain in (
         # since digest iteslf might be a dict hierarchy (2 levels though)
         if digest_key in DIGEST_ENTITIES:
             container = DIGEST_ENTITIES[digest_key]
-            assert type(container) == type(entity_types)
+            assert type(container) is type(entity_types)
             if isinstance(entity_types, dict):
                 assert isinstance(container, dict)
                 for sub_digest_key, sub_entity_types in entity_types.items():

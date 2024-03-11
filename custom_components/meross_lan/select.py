@@ -14,11 +14,10 @@ from .helpers import get_entity_last_state_available, schedule_callback
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from typing import Final
 
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import Event, HomeAssistant, State
+    from homeassistant.core import HomeAssistant, State
     from homeassistant.helpers.entity_component import EntityComponent
     from homeassistant.helpers.event import EventStateChangedData
     from homeassistant.helpers.typing import EventType

@@ -327,7 +327,7 @@ class MLLight(MLLightBase):
                 # try to learn this at runtime.
                 if self._togglex_mode is None:
                     # we need to learn the device behavior...
-                    if togglex_response := await self.manager.async_request_ack(
+                    if await self.manager.async_request_ack(
                         mc.NS_APPLIANCE_CONTROL_TOGGLEX,
                         mc.METHOD_GET,
                         {mc.KEY_TOGGLEX: [{mc.KEY_CHANNEL: self.channel}]},

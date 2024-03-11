@@ -7,9 +7,7 @@ import typing
 
 from custom_components.meross_lan.merossclient import (
     MerossRequest,
-    build_message,
     const as mc,
-    extract_dict_payloads,
 )
 
 if typing.TYPE_CHECKING:
