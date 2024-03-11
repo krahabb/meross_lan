@@ -511,7 +511,7 @@ class MQTTConnection(Loggable):
                         if config_entry.disabled_by
                         else "ignored" if config_entry.source == "ignore" else "unknown"
                     ),
-                    timeout=14400,  # type: ignore
+                    timeout=28800,  # type: ignore
                 )
                 return
 
@@ -998,6 +998,11 @@ class MerossCloudProfile(ApiProfile):
                 self.KEY_LATEST_VERSION_TIME: 0.0,
                 self.KEY_TOKEN_REQUEST_TIME: 0.0,
             }
+
+        if mc.KEY_MQTTDOMAIN in self.config:
+            broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])  # type: ignore
+            mqttconnection = MerossMQTTConnection(self, broker)
+            mqttconnection.schedule_connect(broker)
 
         # compute the next cloud devlist query and setup the scheduled callback
         next_query_epoch = (
