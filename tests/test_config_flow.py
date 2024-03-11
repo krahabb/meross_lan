@@ -55,6 +55,9 @@ async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
         result = await config_flow.async_configure(result["flow_id"], user_input={})
         assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
 
+        # kick device polling task
+        await hass.async_block_till_done()
+
         data: mlc.DeviceConfigType = result["data"]  # type: ignore
         descriptor = emulator.descriptor
         assert data[mlc.CONF_DEVICE_ID] == descriptor.uuid
@@ -182,12 +185,14 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
         flow_hub["flow_id"], user_input={mlc.CONF_KEY: emulator.key}
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
+
+    # kick device polling task
+    await hass.async_block_till_done()
+
     await _cleanup_config_entry(hass, result)
 
     # TODO: check the device flow after we completed discovery
     assert flow_device is None
-
-    await hass.async_block_till_done()
 
 
 async def test_dhcp_discovery_config_flow(hass: HomeAssistant):
@@ -289,6 +294,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             assert result["type"] == FlowResultType.ABORT  # type: ignore
             assert result["reason"] == "already_configured"  # type: ignore
             # also check the device host got updated with new address
+            await hass.async_block_till_done()
             assert device.host == DHCP_GOOD_HOST, "device host was not updated"
 
         # here we build a different (device uuid) device instance
@@ -316,6 +322,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             assert result["type"] == FlowResultType.ABORT  # type: ignore
             assert result["reason"] == "already_configured"  # type: ignore
             # also check the device host got updated with MOCK_DEVICE_IP
+            await hass.async_block_till_done()
             assert device.host == DHCP_GOOD_HOST, "device host was wrongly updated"
 
 
