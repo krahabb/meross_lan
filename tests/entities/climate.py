@@ -1,8 +1,6 @@
 from homeassistant.components import climate as haec
 from homeassistant.components.climate import (
     ClimateEntity,
-    ClimateEntityFeature,
-    HVACAction,
     HVACMode,
 )
 

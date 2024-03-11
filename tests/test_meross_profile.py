@@ -1,6 +1,5 @@
 """Test for meross cloud profiles"""
 
-from datetime import timedelta
 from unittest import mock
 
 from homeassistant.core import HomeAssistant
@@ -139,6 +138,8 @@ async def test_meross_profile_cloudapi_offline(
         # for discovery of devices. Since the device list was not refreshed
         # we check against our stored list of devices
         expected_connections = set()
+        if mc.KEY_MQTTDOMAIN in profile.config:
+            expected_connections.add(profile.config.get(mc.KEY_MQTTDOMAIN))
         """
         # update 2023-12-08: on entry setup we're not automatically querying
         # the stored device list
@@ -153,8 +154,7 @@ async def test_meross_profile_cloudapi_offline(
         safe_start_calls = []
         for expected_connection in expected_connections:
             broker = HostAddress.build(expected_connection)
-            connection_id = f"{tc.MOCK_PROFILE_ID}:{broker.host}:{broker.port}"
-            mqttconnection = profile.mqttconnections[connection_id]
+            mqttconnection = profile.mqttconnections[str(broker)]
             mqttconnections.remove(mqttconnection)
             safe_start_calls.append(mock.call(mqttconnection, broker))
         assert len(mqttconnections) == 0

@@ -9,15 +9,11 @@ import ssl
 import string
 import threading
 from time import monotonic
-import typing
 from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from . import MEROSSDEBUG, HostAddress, const as mc, get_macaddress_from_uuid
-
-if typing.TYPE_CHECKING:
-    from .cloudapi import MerossCloudCredentials
+from . import MEROSSDEBUG, HostAddress, get_macaddress_from_uuid
 
 
 LOGGER = logging.getLogger(__name__)

@@ -133,7 +133,7 @@ class ToggleXMixin(MerossDevice if typing.TYPE_CHECKING else object):
             self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, switch)
 
     def _parse_togglex(self, digest: list):
-        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLEX]._parse_list(digest)
+        self.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)._parse_list(digest)
 
     def _build_outlet(self, channel: object):
         return MLSwitch(

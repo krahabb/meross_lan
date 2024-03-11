@@ -4,6 +4,11 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+# add support for ffmpeg/libpcap (ms python container lacks these by default)
+apt update
+apt -y install ffmpeg
+apt -y install libpcap-dev
+
 python3 -m pip install --requirement requirements_test.txt
 
 curl -sfL https://raw.githubusercontent.com/lokalise/lokalise-cli-2-go/master/install.sh | sh

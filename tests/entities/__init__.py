@@ -3,8 +3,6 @@ from typing import Any, ClassVar
 from homeassistant.core import HomeAssistant, StateMachine
 from homeassistant.helpers.entity import Entity
 
-from custom_components.meross_lan.meross_device import MerossDevice
-from custom_components.meross_lan.meross_device_hub import MerossSubDevice
 from custom_components.meross_lan.meross_entity import MerossEntity
 
 from tests.helpers import DeviceContext

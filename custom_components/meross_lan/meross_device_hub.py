@@ -33,7 +33,6 @@ from .switch import MLSwitch
 if typing.TYPE_CHECKING:
     from .devices.mts100 import Mts100Climate
     from .meross_entity import MerossEntity
-    from .merossclient import MerossPayloadType
 
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
@@ -51,6 +50,12 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
     key_channel = mc.KEY_ID
 
     device_scale = 10
+
+    __slots__ = (
+        "native_max_value",
+        "native_min_value",
+        "native_step",
+    )
 
     def __init__(
         self,
@@ -260,7 +265,7 @@ class MerossDeviceHub(MerossDevice):
                 return NamespaceHandler(
                     self, namespace, handler=self._handle_Appliance_Hub_SubdeviceList
                 )
-            case (_, "Hub", *args):
+            case (_, "Hub", *_):
                 return HubNamespaceHandler(self, namespace)
         return super()._create_handler(namespace)
 

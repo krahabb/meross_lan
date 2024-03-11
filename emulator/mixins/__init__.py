@@ -378,7 +378,7 @@ class MerossEmulator:
         """Extracts the legacy 'control' key from NS_ALL (previous to 'digest' introduction)."""
         p_control = self.descriptor.all.get(mc.KEY_CONTROL)
         if p_control is None:
-            raise Exception(f"'control' key not present")
+            raise Exception("'control' key not present")
         if key not in p_control:
             raise Exception(f"'{key}' not present in 'control' key")
         return p_control[key]

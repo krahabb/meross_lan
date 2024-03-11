@@ -6,7 +6,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
 from custom_components.meross_lan.meross_device_hub import MerossDeviceHub
-from custom_components.meross_lan.meross_entity import MerossEntity
 from custom_components.meross_lan.merossclient import const as mc
 from emulator import generate_emulators
 
@@ -57,7 +56,7 @@ for entity_domain in (
         # since digest iteslf might be a dict hierarchy (2 levels though)
         if digest_key in DIGEST_ENTITIES:
             container = DIGEST_ENTITIES[digest_key]
-            assert type(container) == type(entity_types)
+            assert type(container) is type(entity_types)
             if isinstance(entity_types, dict):
                 assert isinstance(container, dict)
                 for sub_digest_key, sub_entity_types in entity_types.items():

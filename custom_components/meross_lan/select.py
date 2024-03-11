@@ -14,18 +14,16 @@ from .helpers import get_entity_last_state_available, schedule_callback
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from typing import Final
 
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import Event, HomeAssistant, State
+    from homeassistant.core import HomeAssistant, State
     from homeassistant.helpers.entity_component import EntityComponent
     from homeassistant.helpers.event import EventStateChangedData
     from homeassistant.helpers.typing import EventType
 
     from .climate import MtsClimate
     from .devices.mod100 import DiffuserMixin
-    from .helpers.manager import EntityManager
     from .meross_device import MerossDevice
 
 
@@ -73,9 +71,7 @@ class MLSpray(MLSelect):
     """
     # HA core entity attributes:
 
-    __slots__ = (
-        "_spray_mode_map",
-    )
+    __slots__ = ("_spray_mode_map",)
 
     def __init__(
         self, manager: SprayMixin | DiffuserMixin, channel: object, spraymode_map: dict

@@ -1,0 +1,777 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2024.3.0",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.12.2",
+    "docker": true,
+    "arch": "aarch64",
+    "timezone": "Europe/Madrid",
+    "os_name": "Linux",
+    "os_version": "6.1.73-haos-raspi",
+    "supervisor": "2024.02.1",
+    "host_os": "Home Assistant OS 12.0",
+    "docker_version": "24.0.7",
+    "chassis": "embedded",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "rpi_gpio_pwm": {
+      "version": "2022.8.5",
+      "requirements": [
+        "gpiozero==1.6.2",
+        "pigpio==1.78"
+      ]
+    },
+    "meross_lan": {
+      "version": "5.0.1",
+      "requirements": []
+    },
+    "visonic": {
+      "version": "0.8.5.2",
+      "requirements": [
+        "pyserial_asyncio==0.6"
+      ]
+    },
+    "balance_neto": {
+      "version": "0.1.0",
+      "requirements": []
+    },
+    "edata": {
+      "version": "2023.06.3",
+      "requirements": [
+        "e-data==1.1.5",
+        "python-dateutil>=2.8.2"
+      ]
+    },
+    "garmin_connect": {
+      "version": "0.2.19",
+      "requirements": [
+        "garminconnect==0.2.12",
+        "tzlocal"
+      ]
+    },
+    "tuya_local": {
+      "version": "2024.2.1",
+      "requirements": [
+        "tinytuya==1.13.1"
+      ]
+    },
+    "alexa_media": {
+      "version": "4.9.2",
+      "requirements": [
+        "alexapy==1.27.10",
+        "packaging>=20.3",
+        "wrapt>=1.14.0"
+      ]
+    },
+    "ham_radio_propagation": {
+      "version": "1.1.6",
+      "requirements": [
+        "xmltodict==0.13.0"
+      ]
+    },
+    "hacs": {
+      "version": "1.34.0",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "sonoff": {
+      "version": "3.6.0",
+      "requirements": [
+        "pycryptodome>=3.6.6"
+      ]
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "5.0.1",
+    "is_built_in": false
+  },
+  "data": {
+    "host": "###########2",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "mrs100",
+            "subType": "un",
+            "version": "6.0.0",
+            "chipType": "rtl8710cf",
+            "uuid": "###############################9",
+            "macAddress": "################2"
+          },
+          "firmware": {
+            "version": "6.6.6",
+            "compileTime": "2022/04/14-14:28:57",
+            "encrypt": 1,
+            "wifiMac": "################1",
+            "innerIp": "###########2",
+            "server": "###################1",
+            "port": "@1",
+            "userId": "@1"
+          },
+          "time": {
+            "timestamp": 1709248777,
+            "timezone": "Europe/Madrid",
+            "timeRule": [
+              [
+                1679792400,
+                7200,
+                1
+              ],
+              [
+                1698541200,
+                3600,
+                0
+              ],
+              [
+                1711846800,
+                7200,
+                1
+              ],
+              [
+                1729990800,
+                3600,
+                0
+              ],
+              [
+                1743296400,
+                7200,
+                1
+              ],
+              [
+                1761440400,
+                3600,
+                0
+              ],
+              [
+                1774746000,
+                7200,
+                1
+              ],
+              [
+                1792890000,
+                3600,
+                0
+              ],
+              [
+                1806195600,
+                7200,
+                1
+              ],
+              [
+                1824944400,
+                3600,
+                0
+              ],
+              [
+                1837645200,
+                7200,
+                1
+              ],
+              [
+                1856394000,
+                3600,
+                0
+              ],
+              [
+                1869094800,
+                7200,
+                1
+              ],
+              [
+                1887843600,
+                3600,
+                0
+              ],
+              [
+                1901149200,
+                7200,
+                1
+              ],
+              [
+                1919293200,
+                3600,
+                0
+              ],
+              [
+                1932598800,
+                7200,
+                1
+              ],
+              [
+                1950742800,
+                3600,
+                0
+              ],
+              [
+                1964048400,
+                7200,
+                1
+              ],
+              [
+                1982797200,
+                3600,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "59EaR4ZYgLf3Lap2",
+            "who": 1
+          }
+        },
+        "digest": {
+          "togglex": [],
+          "triggerx": [],
+          "timerx": []
+        }
+      },
+      "payloadVersion": 1,
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Info": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 5
+        },
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Control.ToggleX": {},
+        "Appliance.Control.TimerX": {
+          "sunOffsetSupport": 1
+        },
+        "Appliance.Control.TriggerX": {},
+        "Appliance.RollerShutter.Position": {},
+        "Appliance.RollerShutter.State": {},
+        "Appliance.RollerShutter.Config": {},
+        "Appliance.RollerShutter.Adjust": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.Digest.TimerX": {}
+      }
+    },
+    "key": "###############################0",
+    "device_id": "###############################9",
+    "timestamp": 1709248777.5059407,
+    "device": {
+      "class": "ToggleXMixinMerossDevice",
+      "conf_protocol": "auto",
+      "pref_protocol": "http",
+      "curr_protocol": "http",
+      "MQTT": {
+        "cloud_profile": false,
+        "locally_active": false,
+        "mqtt_connection": true,
+        "mqtt_connected": false,
+        "mqtt_publish": false,
+        "mqtt_active": false
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "polling_period": 30,
+      "polling_strategies": {
+        "Appliance.System.All": 1709888572.4229648,
+        "Appliance.RollerShutter.Adjust": 1709887561.0763974,
+        "Appliance.RollerShutter.Config": 1709888572.4229648,
+        "Appliance.RollerShutter.Position": 1709888572.4229648,
+        "Appliance.RollerShutter.State": 1709888572.4229648,
+        "Appliance.System.DNDMode": 1709888572.4229648,
+        "Appliance.System.Runtime": 1709888289.635511,
+        "Appliance.System.Debug": 0
+      },
+      "device_response_size_min": 2452,
+      "device_response_size_max": 2452.0
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2024/03/08 - 10:02:59",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "mrs100",
+              "subType": "un",
+              "version": "6.0.0",
+              "chipType": "rtl8710cf",
+              "uuid": "###############################9",
+              "macAddress": "################2"
+            },
+            "firmware": {
+              "version": "6.6.6",
+              "compileTime": "2022/04/14-14:28:57",
+              "encrypt": 1,
+              "wifiMac": "################1",
+              "innerIp": "###########2",
+              "server": "###################1",
+              "port": "@1",
+              "userId": "@1"
+            },
+            "time": {
+              "timestamp": 1709888571,
+              "timezone": "Europe/Madrid",
+              "timeRule": [
+                [
+                  1679792400,
+                  7200,
+                  1
+                ],
+                [
+                  1698541200,
+                  3600,
+                  0
+                ],
+                [
+                  1711846800,
+                  7200,
+                  1
+                ],
+                [
+                  1729990800,
+                  3600,
+                  0
+                ],
+                [
+                  1743296400,
+                  7200,
+                  1
+                ],
+                [
+                  1761440400,
+                  3600,
+                  0
+                ],
+                [
+                  1774746000,
+                  7200,
+                  1
+                ],
+                [
+                  1792890000,
+                  3600,
+                  0
+                ],
+                [
+                  1806195600,
+                  7200,
+                  1
+                ],
+                [
+                  1824944400,
+                  3600,
+                  0
+                ],
+                [
+                  1837645200,
+                  7200,
+                  1
+                ],
+                [
+                  1856394000,
+                  3600,
+                  0
+                ],
+                [
+                  1869094800,
+                  7200,
+                  1
+                ],
+                [
+                  1887843600,
+                  3600,
+                  0
+                ],
+                [
+                  1901149200,
+                  7200,
+                  1
+                ],
+                [
+                  1919293200,
+                  3600,
+                  0
+                ],
+                [
+                  1932598800,
+                  7200,
+                  1
+                ],
+                [
+                  1950742800,
+                  3600,
+                  0
+                ],
+                [
+                  1964048400,
+                  7200,
+                  1
+                ],
+                [
+                  1982797200,
+                  3600,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "59EaR4ZYgLf3Lap2",
+              "who": 1
+            }
+          },
+          "digest": {
+            "togglex": [],
+            "triggerx": [],
+            "timerx": []
+          }
+        }
+      ],
+      [
+        "2024/03/08 - 10:02:59",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 5
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.ToggleX": {},
+          "Appliance.Control.TimerX": {
+            "sunOffsetSupport": 1
+          },
+          "Appliance.Control.TriggerX": {},
+          "Appliance.RollerShutter.Position": {},
+          "Appliance.RollerShutter.State": {},
+          "Appliance.RollerShutter.Config": {},
+          "Appliance.RollerShutter.Adjust": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.Digest.TimerX": {}
+        }
+      ],
+      [
+        "2024/03/08 - 10:02:59",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": {}
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {}
+          }
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "6.6.6",
+              "sysUpTime": "177h51m57s",
+              "localTimeOffset": 3600,
+              "localTime": "Fri Mar  8 10:02:59 2024",
+              "suncalc": "7:7;19:13"
+            },
+            "network": {
+              "linkStatus": "connected",
+              "signal": 86,
+              "ssid": "#########0",
+              "gatewayMac": "################0",
+              "innerIp": "###########2",
+              "wifiDisconnectCount": 1,
+              "wifiDisconnectDetail": {
+                "totalCount": 1,
+                "detials": [
+                  {
+                    "sysUptime": 369,
+                    "timestamp": 0
+                  }
+                ]
+              }
+            },
+            "cloud": {
+              "activeServer": "###################1",
+              "mainServer": "###################1",
+              "mainPort": "@1",
+              "secondServer": "###################1",
+              "secondPort": "@1",
+              "userId": "@1",
+              "sysConnectTime": "Thu Feb 29 23:17:15 2024",
+              "sysOnlineTime": "177h45m44s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 86
+          }
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ToggleX",
+        {
+          "channel": 0
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.ToggleX payload:{'channel': 0}"
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": []
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Position",
+        {
+          "position": [
+            {
+              "channel": 0,
+              "position": 100
+            }
+          ]
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.State",
+        {
+          "state": []
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.State",
+        {
+          "state": [
+            {
+              "channel": 0,
+              "state": 0,
+              "stoppedBy": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.RollerShutter.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "autoAdjust": 1,
+              "lmTime": 1709248777,
+              "signalOpen": 49700,
+              "signalClose": 44700
+            }
+          ]
+        }
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.RollerShutter.Adjust",
+        {}
+      ],
+      [
+        "2024/03/08 - 10:03:00",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.RollerShutter.Adjust",
+        {
+          "adjust": [
+            {
+              "channel": 0,
+              "status": 0
+            }
+          ]
+        }
+      ]
+    ]
+  }
+}

@@ -4,7 +4,6 @@ import typing
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..helpers import reverse_lookup
 from ..merossclient import const as mc
 from ..number import MtsSetPointNumber, MtsTemperatureNumber
 
@@ -239,6 +238,7 @@ class Mts100Climate(MtsClimate):
     def update_scheduleb_mode(self, mode):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
         self.schedule._schedule_entry_count = mode
+
 
 class Mts100SetPointNumber(MtsSetPointNumber):
     """
