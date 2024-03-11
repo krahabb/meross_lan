@@ -1917,11 +1917,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         timestamp = self.device_timestamp
         timerules = []
         if tzname:
-            """
-            we'll look through the list of transition times for current tz
-            and provide the actual (last past daylight) and the next to the
-            appliance so it knows how and when to offset utc to localtime
-            """
+            # we'll look through the list of transition times for current tz
+            # and provide the actual (last past daylight) and the next to the
+            # appliance so it knows how and when to offset utc to localtime
+
+            # brutal patch for missing tz names (AEST #402)
+            _TZ_PATCH = {
+                "AEST": "Australia/Brisbane",
+            }
+            if tzname in _TZ_PATCH:
+                tzname = _TZ_PATCH[tzname]
+
             try:
                 try:
                     import pytz
@@ -1952,14 +1958,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     elif isinstance(tz_local, pytz.tzinfo.StaticTzInfo):
                         timerules = [[0, tz_local.utcoffset(None), 0]]
 
-                except Exception as e:
-                    self.log(
+                except Exception as exception:
+                    self.log_exception(
                         self.WARNING,
-                        "Error(%s) while using pytz to build timezone(%s) ",
-                        str(e),
+                        exception,
+                        "using pytz to build timezone(%s) ",
                         tzname,
                     )
-                    # if pytx fails we'll fall-back to some euristics
+                    # if pytz fails we'll fall-back to some euristics
                     device_tzinfo = ZoneInfo(tzname)
                     device_datetime = datetime_from_epoch(timestamp, device_tzinfo)
                     utcoffset = device_tzinfo.utcoffset(device_datetime)
@@ -1967,11 +1973,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     isdst = device_tzinfo.dst(device_datetime)
                     timerules = [[timestamp, utcoffset, 1 if isdst else 0]]
 
-            except Exception as e:
-                self.log(
+            except Exception as exception:
+                self.log_exception(
                     self.WARNING,
-                    "Error(%s) while building timezone(%s) info for %s",
-                    str(e),
+                    exception,
+                    "building timezone(%s) info for %s",
                     tzname,
                     mc.NS_APPLIANCE_SYSTEM_TIME,
                 )
