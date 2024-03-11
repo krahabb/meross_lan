@@ -30,6 +30,12 @@
         "port": 5678
       },
       "justMyCode": false,
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "."
+        }
+      ]
     },
     {
       // Example of attaching to my production server
