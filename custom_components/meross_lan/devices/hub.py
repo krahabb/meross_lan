@@ -52,6 +52,12 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
 
     device_scale = 10
 
+    __slots__ = (
+        "native_max_value",
+        "native_min_value",
+        "native_step",
+    )
+
     def __init__(
         self,
         manager: MerossSubDevice,

@@ -57,7 +57,12 @@ class MLCover(me.MerossEntity, cover.CoverEntity):
         "_transition_end_unsub",
     )
 
-    def __init__(self, manager: "MerossDevice", channel: object | None, device_class: MLCover.DeviceClass):
+    def __init__(
+        self,
+        manager: "MerossDevice",
+        channel: object | None,
+        device_class: MLCover.DeviceClass,
+    ):
         self.is_closed = None
         self.is_closing = False
         self.is_opening = False
@@ -91,7 +96,6 @@ class MLCover(me.MerossEntity, cover.CoverEntity):
             self._transition_unsub = None
 
 
-
 class MLRollerShutter(MLCover):
     """
     MRS100 SHUTTER ENTITY
@@ -119,7 +123,9 @@ class MLRollerShutter(MLCover):
     def __init__(self, manager: MerossDevice):
         self.current_cover_position = None
         self.supported_features = (
-            MLCover.EntityFeature.OPEN | MLCover.EntityFeature.CLOSE | MLCover.EntityFeature.STOP
+            MLCover.EntityFeature.OPEN
+            | MLCover.EntityFeature.CLOSE
+            | MLCover.EntityFeature.STOP
         )
         self.extra_state_attributes = {}
         self._mrs_state = None
@@ -186,8 +192,12 @@ class MLRollerShutter(MLCover):
                             EXTRA_ATTR_POSITION_NATIVE
                         ]
                         if cover.ATTR_CURRENT_POSITION in _attr:
-                            self.current_cover_position = _attr[cover.ATTR_CURRENT_POSITION]
-                            self.supported_features |= MLCover.EntityFeature.SET_POSITION
+                            self.current_cover_position = _attr[
+                                cover.ATTR_CURRENT_POSITION
+                            ]
+                            self.supported_features |= (
+                                MLCover.EntityFeature.SET_POSITION
+                            )
 
     async def async_open_cover(self, **kwargs):
         await self.async_request_position(mc.ROLLERSHUTTER_POSITION_OPENED)
@@ -448,9 +458,6 @@ class MLRollerShutter(MLCover):
             self._async_transition_callback,
         )
         manager = self.manager
-        if (
-            manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active
-        ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
         if (
             manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active
         ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
