@@ -16,6 +16,6 @@
         "tests"
     ],
     "[python]": {
-        "editor.defaultFormatter": "ms-python.vscode-pylance"
+        "editor.defaultFormatter": "ms-python.black-formatter"
     }
 }
