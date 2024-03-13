@@ -71,11 +71,17 @@ def _sat_1_100(value):
 
 class MLLightBase(me.MerossToggle, light.LightEntity):
     """
-    base 'abstract' class for meross light entities
+    base 'abstract' class for meross light entities handling
+    either
+    NS_APPLIANCE_CONTROL_LIGHT -> specialized in MLLight
+    NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT -> specialized in MLDiffuserLight
     """
 
     PLATFORM = light.DOMAIN
     manager: "MerossDevice"
+
+    namespace: typing.ClassVar[str]
+    key_namespace = mc.KEY_LIGHT
 
     """
     internal copy of the actual meross light state
@@ -127,6 +133,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
             self.supported_features = LightEntityFeature.EFFECT
 
         super().__init__(manager, payload.get(mc.KEY_CHANNEL))
+        manager.register_parser(self.namespace, self)
 
     def set_unavailable(self):
         self._light = {}
@@ -179,13 +186,13 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
 class MLLight(MLLightBase):
     """
     light entity for Meross bulbs and any device supporting light api
-    (identified from devices carrying 'light' node in SYSTEM_ALL payload)
+    identified from devices carrying 'light' node in SYSTEM_ALL payload and/or
+    NS_APPLIANCE_CONTROL_LIGHT in abilities
     """
 
     manager: "MerossDevice"
 
-    namespace = mc.NS_APPLIANCE_SYSTEM_DNDMODE
-    key_namespace = mc.KEY_DNDMODE
+    namespace = mc.NS_APPLIANCE_CONTROL_LIGHT
 
     _unrecorded_attributes = frozenset({ATTR_TOGGLEX_MODE})
 
@@ -263,7 +270,6 @@ class MLLight(MLLightBase):
             self._light_effect_map = mc.HP110A_LIGHT_EFFECT_MAP
 
         super().__init__(manager, payload)
-        manager.register_parser(mc.NS_APPLIANCE_CONTROL_LIGHT, self)
         if self._togglex_switch:
             manager.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, self)
 

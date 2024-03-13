@@ -104,20 +104,21 @@ class MLDiffuserLight(MLLightBase):
     namespace = mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT
 
     _light_effect_map = mc.DIFFUSER_LIGHT_EFFECT_MAP
+
     # HA core entity attributes:
     supported_color_modes = {ColorMode.RGB}
 
-    def __init__(self, manager: "MerossDevice", payload: dict):
-        super().__init__(manager, payload)
-        manager.register_parser(self.namespace, self)
-
     async def async_turn_on(self, **kwargs):
+        if not kwargs:
+            await self.async_request_onoff(1)
+            return
+
         light = dict(self._light)
-        light[mc.KEY_CHANNEL] = self.channel
         light[mc.KEY_ONOFF] = 1
 
         if ATTR_RGB_COLOR in kwargs:
             light[mc.KEY_RGB] = _rgb_to_int(kwargs[ATTR_RGB_COLOR])
+            light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
 
         # Brightness must always be set in payload
         if ATTR_BRIGHTNESS in kwargs:
@@ -129,27 +130,13 @@ class MLDiffuserLight(MLLightBase):
             mode = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
             if mode is not None:
                 light[mc.KEY_MODE] = mode
-            else:
-                if mc.KEY_MODE not in light:
-                    light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
-        else:
-            if mc.KEY_MODE not in light:
-                light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
 
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
+            self.namespace,
             mc.METHOD_SET,
-            {mc.KEY_LIGHT: [light]},
+            {self.key_namespace: [light]},
         ):
             self._parse_light(light)
-
-    async def async_turn_off(self, **kwargs):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
-            mc.METHOD_SET,
-            {mc.KEY_LIGHT: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}]},
-        ):
-            self.update_onoff(0)
 
     def _inherited_parse_light(self, payload: dict):
         if mc.KEY_MODE in payload:
