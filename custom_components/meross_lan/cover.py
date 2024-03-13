@@ -15,18 +15,16 @@ from .merossclient import const as mc
 from .number import MLConfigNumber
 
 if typing.TYPE_CHECKING:
+    import asyncio
+
     from .meross_device import MerossDevice
 
 
 # rollershutter extra attributes
-EXTRA_ATTR_DURATION_OPEN = "duration_open"
-EXTRA_ATTR_DURATION_CLOSE = "duration_close"
 EXTRA_ATTR_POSITION_NATIVE = "position_native"
 
 
-async def async_setup_entry(
-    hass, config_entry, async_add_devices
-):
+async def async_setup_entry(hass, config_entry, async_add_devices):
     me.platform_setup_entry(hass, config_entry, async_add_devices, cover.DOMAIN)
 
 
@@ -61,8 +59,8 @@ class MLCover(me.MerossEntity, cover.CoverEntity):
         self.is_closed = None
         self.is_closing = False
         self.is_opening = False
-        self._transition_unsub = None
-        self._transition_end_unsub = None
+        self._transition_unsub: "asyncio.TimerHandle | None" = None
+        self._transition_end_unsub: "asyncio.TimerHandle | None" = None
         super().__init__(manager, channel, None, device_class)
 
     # interface: MerossEntity
@@ -107,8 +105,6 @@ class MLRollerShutter(MLCover):
         "number_signalOpen",
         "number_signalClose",
         "_mrs_state",
-        "_signalOpen",
-        "_signalClose",
         "_position_native",
         "_position_native_isgood",
         "_position_start",
@@ -124,8 +120,6 @@ class MLRollerShutter(MLCover):
         )
         self.extra_state_attributes = {}
         self._mrs_state = None
-        self._signalOpen: int = 30000  # msec to fully open (config'd on device)
-        self._signalClose: int = 30000  # msec to fully close (config'd on device)
         self._position_native = None  # as reported by the device
         self._position_start = 0  # set when when we're controlling a timed position
         self._position_starttime = 0  # epoch of transition start
@@ -168,16 +162,6 @@ class MLRollerShutter(MLCover):
                 self.hass, self.entity_id
             ):
                 _attr = last_state.attributes  # type: ignore
-                if EXTRA_ATTR_DURATION_OPEN in _attr:
-                    self._signalOpen = _attr[EXTRA_ATTR_DURATION_OPEN]
-                    self.extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = (
-                        self._signalOpen
-                    )
-                if EXTRA_ATTR_DURATION_CLOSE in _attr:
-                    self._signalClose = _attr[EXTRA_ATTR_DURATION_CLOSE]
-                    self.extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = (
-                        self._signalClose
-                    )
                 if not self._position_native_isgood:
                     # at this stage, the euristic on fw version doesn't say anything
                     if EXTRA_ATTR_POSITION_NATIVE in _attr:
@@ -219,10 +203,16 @@ class MLRollerShutter(MLCover):
                     "Cannot estimate command direction. Please use open_cover or close_cover"
                 )
             if position > current_position:
-                timeout = ((position - current_position) * self._signalOpen) / 100000
+                timeout = (
+                    (position - current_position)
+                    * (self.number_signalOpen.device_value or 30000)
+                ) / 100000
                 position = mc.ROLLERSHUTTER_POSITION_OPENED
             elif position < current_position:
-                timeout = ((current_position - position) * self._signalClose) / 100000
+                timeout = (
+                    (current_position - position)
+                    * (self.number_signalClose.device_value or 30000)
+                ) / 100000
                 position = mc.ROLLERSHUTTER_POSITION_CLOSED
             else:
                 return  # No-Op
@@ -325,13 +315,9 @@ class MLRollerShutter(MLCover):
     def _parse_config(self, payload: dict):
         # payload = {"channel": 0, "signalOpen": 50000, "signalClose": 50000}
         if mc.KEY_SIGNALOPEN in payload:
-            self._signalOpen = payload[mc.KEY_SIGNALOPEN]
-            self.number_signalOpen.update_device_value(self._signalOpen)
-            self.extra_state_attributes[EXTRA_ATTR_DURATION_OPEN] = self._signalOpen
+            self.number_signalOpen.update_device_value(payload[mc.KEY_SIGNALOPEN])
         if mc.KEY_SIGNALCLOSE in payload:
-            self._signalClose = payload[mc.KEY_SIGNALCLOSE]
-            self.number_signalClose.update_device_value(self._signalClose)
-            self.extra_state_attributes[EXTRA_ATTR_DURATION_CLOSE] = self._signalClose
+            self.number_signalClose.update_device_value(payload[mc.KEY_SIGNALCLOSE])
 
     def _parse_position(self, payload: dict):
         """
@@ -386,7 +372,8 @@ class MLRollerShutter(MLCover):
             if self.is_opening:
                 self.current_cover_position = round(
                     self._position_start
-                    + ((epoch - self._position_starttime) * 100000) / self._signalOpen
+                    + ((epoch - self._position_starttime) * 100000)
+                    / (self.number_signalOpen.device_value or 30000)
                 )
                 if self.current_cover_position > mc.ROLLERSHUTTER_POSITION_OPENED:
                     self.current_cover_position = mc.ROLLERSHUTTER_POSITION_OPENED
@@ -394,7 +381,8 @@ class MLRollerShutter(MLCover):
             elif self.is_closing:
                 self.current_cover_position = round(
                     self._position_start
-                    - ((epoch - self._position_starttime) * 100000) / self._signalClose
+                    - ((epoch - self._position_starttime) * 100000)
+                    / (self.number_signalClose.device_value or 30000)
                 )
                 if self.current_cover_position < mc.ROLLERSHUTTER_POSITION_CLOSED:
                     self.current_cover_position = mc.ROLLERSHUTTER_POSITION_CLOSED
@@ -496,6 +484,9 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
     Helper entity to configure MRS open/close duration
     """
 
+    namespace = mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG
+    key_namespace = mc.KEY_CONFIG
+
     device_scale = 1000
 
     # HA core entity attributes:
@@ -507,26 +498,10 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
 
     __slots__ = ("_cover",)
 
-    def __init__(self, cover: MLRollerShutter, key: str):
+    def __init__(self, cover: "MLRollerShutter", key: str):
         self._cover = cover
         self.key_value = key
         self.name = key
         super().__init__(
             cover.manager, cover.channel, f"config_{key}", self.DEVICE_CLASS_DURATION
         )
-
-    async def async_request(self, device_value):
-        config = {
-            mc.KEY_CHANNEL: self.channel,
-            mc.KEY_SIGNALOPEN: self._cover._signalOpen,
-            mc.KEY_SIGNALCLOSE: self._cover._signalClose,
-        }
-        config[self.key_value] = device_value
-        if response := await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG,
-            mc.METHOD_SET,
-            {mc.KEY_CONFIG: [config]},
-        ):
-            self._cover._parse_config(config)
-
-        return response

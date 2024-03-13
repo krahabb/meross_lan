@@ -56,8 +56,8 @@ class EntityTest(EntityComponentTest):
                 | CoverEntityFeature.CLOSE
                 | CoverEntityFeature.STOP
             )
-            assert entity._signalClose == RollerShutterMixin.SIGNALCLOSE
-            assert entity._signalOpen == RollerShutterMixin.SIGNALOPEN
+            assert entity.number_signalClose.device_value == RollerShutterMixin.SIGNALCLOSE
+            assert entity.number_signalOpen.device_value == RollerShutterMixin.SIGNALOPEN
 
     async def async_test_enabled_callback(self, entity: CoverEntity):
         states = self.hass_states
