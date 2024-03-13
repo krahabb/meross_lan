@@ -2,8 +2,6 @@
     A collection of utilities to help managing the Meross device protocol
 """
 
-from __future__ import annotations
-
 import asyncio
 from dataclasses import dataclass
 from hashlib import md5
@@ -159,7 +157,7 @@ class MerossKeyError(MerossProtocolError):
     reported by device
     """
 
-    def __init__(self, response: MerossResponse):
+    def __init__(self, response: "MerossResponse"):
         super().__init__(response, "Invalid key")
 
 
@@ -169,7 +167,7 @@ class MerossSignatureError(MerossProtocolError):
     when validating the received header
     """
 
-    def __init__(self, response: MerossResponse):
+    def __init__(self, response: "MerossResponse"):
         super().__init__(response, "Signature error")
 
 
@@ -490,7 +488,7 @@ def get_mts_digest(p_subdevice_digest: dict) -> dict | None:
     return None
 
 
-def check_message_strict(message: MerossResponse | None):
+def check_message_strict(message: "MerossResponse | None"):
     """
     Does a formal check of the message structure also raising a
     typed exception if formally correct but carrying a protocol error

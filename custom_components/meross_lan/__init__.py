@@ -1,7 +1,5 @@
 """The Meross IoT local LAN integration."""
 
-from __future__ import annotations
-
 from importlib import import_module
 from time import time
 import typing
@@ -41,7 +39,6 @@ from .merossclient import (
 from .merossclient.httpclient import MerossHttpClient
 
 if typing.TYPE_CHECKING:
-    from typing import Callable
 
     from homeassistant.components.mqtt import async_publish as mqtt_async_publish
     from homeassistant.config_entries import ConfigEntry
@@ -71,15 +68,15 @@ class HAMQTTConnection(MQTTConnection):
         "_unsub_random_disconnect",
     )
 
-    def __init__(self, api: MerossApi):
+    def __init__(self, api: "MerossApi"):
         super().__init__(
             api,
             HostAddress("homeassistant", 0),
             mc.TOPIC_RESPONSE.format(mlc.DOMAIN),
         )
-        self._unsub_mqtt_subscribe: Callable | None = None
-        self._unsub_mqtt_disconnected: Callable | None = None
-        self._unsub_mqtt_connected: Callable | None = None
+        self._unsub_mqtt_subscribe: typing.Callable | None = None
+        self._unsub_mqtt_disconnected: typing.Callable | None = None
+        self._unsub_mqtt_connected: typing.Callable | None = None
         self._mqtt_subscribing = False  # guard for asynchronous mqtt sub registration
         if MEROSSDEBUG:
             # TODO : check bug in hass shutdown
@@ -119,7 +116,7 @@ class HAMQTTConnection(MQTTConnection):
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: MerossMessage,
+        request: "MerossMessage",
     ) -> tuple[str, int]:
         await mqtt_async_publish(
             MerossApi.hass, mc.TOPIC_REQUEST.format(device_id), request.json()
@@ -196,8 +193,8 @@ class HAMQTTConnection(MQTTConnection):
     async def _handle_Appliance_Control_Bind(
         self: MQTTConnection,
         device_id: str,
-        header: MerossHeaderType,
-        payload: MerossPayloadType,
+        header: "MerossHeaderType",
+        payload: "MerossPayloadType",
     ):
         # this transaction appears when a device (firstly)
         # connects to an MQTT broker and tries to 'register'
@@ -238,8 +235,8 @@ class HAMQTTConnection(MQTTConnection):
     async def _handle_Appliance_Control_ConsumptionConfig(
         self: MQTTConnection,
         device_id: str,
-        header: MerossHeaderType,
-        payload: MerossPayloadType,
+        header: "MerossHeaderType",
+        payload: "MerossPayloadType",
     ):
         # this message is published by mss switches
         # and it appears newer mss315 could abort their connection
@@ -255,8 +252,8 @@ class HAMQTTConnection(MQTTConnection):
     async def _handle_Appliance_System_Clock(
         self: MQTTConnection,
         device_id: str,
-        header: MerossHeaderType,
-        payload: MerossPayloadType,
+        header: "MerossHeaderType",
+        payload: "MerossPayloadType",
     ):
         # this is part of initial flow over MQTT
         # we'll try to set the correct time in order to avoid
@@ -295,7 +292,7 @@ class MerossApi(ApiProfile):
     )
 
     @staticmethod
-    def get(hass: HomeAssistant) -> MerossApi:
+    def get(hass: "HomeAssistant") -> "MerossApi":
         """
         Set up the MerossApi component.
         'Our' truth singleton is saved in hass.data[DOMAIN] and
@@ -332,7 +329,7 @@ class MerossApi(ApiProfile):
                 case (ConfigEntryType.PROFILE, profile_id):
                     self.profiles[profile_id] = None
 
-        async def _async_service_request(service_call: ServiceCall) -> ServiceResponse:
+        async def _async_service_request(service_call: "ServiceCall") -> "ServiceResponse":
             service_response = {}
             device_id = service_call.data.get(mlc.CONF_DEVICE_ID)
             host = service_call.data.get(mlc.CONF_HOST)
@@ -469,7 +466,7 @@ class MerossApi(ApiProfile):
         await super().async_shutdown()
         self._mqtt_connection = None
 
-    def build_device(self, device_id: str, config_entry: ConfigEntry) -> MerossDevice:
+    def build_device(self, device_id: str, config_entry: "ConfigEntry") -> "MerossDevice":
         """
         scans device descriptor to build a 'slightly' specialized MerossDevice
         The base MerossDevice class is a bulk 'do it all' implementation
@@ -536,7 +533,7 @@ class MerossApi(ApiProfile):
         return mqtt_connection
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
+async def async_setup_entry(hass: "HomeAssistant", config_entry: "ConfigEntry"):
     LOGGER.debug("async_setup_entry (entry_id:%s)", config_entry.entry_id)
 
     api = MerossApi.api or MerossApi.get(hass)
@@ -593,21 +590,21 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
             await api.entry_update_listener(hass, config_entry)
             await api.async_setup_entry(hass, config_entry)
             return True
-        
+
         case _:
             raise ConfigEntryError(
                 f"Unknown configuration type (entry_id:{config_entry.entry_id} title:'{config_entry.title}')"
             )
 
 
-async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: "HomeAssistant", config_entry: "ConfigEntry") -> bool:
     LOGGER.debug("async_unload_entry (entry_id:%s)", config_entry.entry_id)
 
     manager = MerossApi.managers[config_entry.entry_id]
     return await manager.async_unload_entry(hass, config_entry)
 
 
-async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry):
+async def async_remove_entry(hass: "HomeAssistant", config_entry: "ConfigEntry"):
     LOGGER.debug("async_remove_entry (entry_id:%s)", config_entry.entry_id)
 
     match ConfigEntryType.get_type_and_id(config_entry.unique_id):
@@ -617,7 +614,7 @@ async def async_remove_entry(hass: HomeAssistant, config_entry: ConfigEntry):
         case (ConfigEntryType.PROFILE, profile_id):
             MerossApi.profiles.pop(profile_id)
             await MerossCloudProfileStore(profile_id).async_remove()
-            credentials: MerossCloudCredentials = config_entry.data  # type: ignore
+            credentials: "MerossCloudCredentials" = config_entry.data  # type: ignore
             await cloudapi.CloudApiClient(
                 credentials=credentials, session=async_get_clientsession(hass)
             ).async_logout_safe()

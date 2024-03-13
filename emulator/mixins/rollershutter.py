@@ -1,7 +1,5 @@
 """"""
 
-from __future__ import annotations
-
 import asyncio
 from time import time
 import typing
@@ -11,7 +9,6 @@ from custom_components.meross_lan.merossclient import const as mc, extract_dict_
 from emulator.mixins import MerossEmulatorDescriptor
 
 if typing.TYPE_CHECKING:
-    from typing import Final
 
     from .. import MerossEmulator
 
@@ -23,24 +20,24 @@ _DURATION_SCALE = _SIGNAL_SCALE * (
 
 class _Transition:
 
-    duration: Final
+    duration: typing.Final
 
     def __init__(
         self,
-        emulator: RollerShutterMixin,
+        emulator: "RollerShutterMixin",
         channel: int,
         p_position: dict,
         position_end: int,
     ) -> None:
         assert channel not in emulator._transitions
-        self.time_begin: Final = time()
-        self.emulator: Final = emulator
-        self.has_native_position: Final = emulator.has_native_position
-        self.channel: Final = channel
-        self.p_position: Final = p_position
-        self.position_begin: Final = p_position[mc.KEY_POSITION]
-        self.position_end: Final = position_end
-        self.p_state: Final = emulator.get_namespace_state(
+        self.time_begin: typing.Final = time()
+        self.emulator: typing.Final = emulator
+        self.has_native_position: typing.Final = emulator.has_native_position
+        self.channel: typing.Final = channel
+        self.p_position: typing.Final = p_position
+        self.position_begin: typing.Final = p_position[mc.KEY_POSITION]
+        self.position_end: typing.Final = position_end
+        self.p_state: typing.Final = emulator.get_namespace_state(
             mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, channel
         )
         p_config = emulator.get_namespace_state(
@@ -61,7 +58,7 @@ class _Transition:
                     * p_config[mc.KEY_SIGNALCLOSE]
                     / _DURATION_SCALE
                 )
-            self.speed: Final = (position_end - self.position_begin) / self.duration
+            self.speed: typing.Final = (position_end - self.position_begin) / self.duration
         else:
             if position_end == mc.ROLLERSHUTTER_POSITION_OPENED:
                 # when opening we'll set the position opened at the start of the transition

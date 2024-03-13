@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import binary_sensor

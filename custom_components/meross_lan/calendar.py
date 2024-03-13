@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import dataclasses
 from datetime import datetime, timedelta
 import re
@@ -21,8 +19,6 @@ from .helpers import clamp
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
-    from typing import ClassVar, Final
-
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -30,7 +26,7 @@ if typing.TYPE_CHECKING:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, calendar.DOMAIN)
 
@@ -95,12 +91,12 @@ class MtsScheduleEntry:
 
 class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
     PLATFORM = calendar.DOMAIN
-    manager: MerossDeviceBase
+    manager: "MerossDeviceBase"
 
     # set in descendants class def
-    namespace: ClassVar[str]
-    key_namespace: ClassVar[str]
-    key_channel: ClassVar[str]
+    namespace: typing.ClassVar[str]
+    key_namespace: typing.ClassVar[str]
+    key_channel: typing.ClassVar[str]
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
@@ -110,7 +106,7 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         | calendar.CalendarEntityFeature.UPDATE_EVENT
     )
 
-    climate: Final[MtsClimate]
+    climate: typing.Final[MtsClimate]
     _native_schedule: MtsScheduleNativeType | None
     _schedule: MtsScheduleNativeType | None
 

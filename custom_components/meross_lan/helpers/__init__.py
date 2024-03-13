@@ -1,7 +1,6 @@
 """
     Helpers!
 """
-from __future__ import annotations
 
 import abc
 import asyncio
@@ -22,7 +21,7 @@ from .. import const as mlc
 
 if typing.TYPE_CHECKING:
     from datetime import tzinfo
-    from typing import Callable, Coroutine, Final
+    from typing import Callable, Coroutine
 
     from homeassistant.core import HomeAssistant, State
 
@@ -69,7 +68,7 @@ def utcdatetime_from_epoch(epoch):
     return datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
 
 
-def datetime_from_epoch(epoch, tz: tzinfo | None = None):
+def datetime_from_epoch(epoch, tz: "tzinfo | None" = None):
     """
     converts an epoch (UTC seconds) in a non-naive datetime.
     Faster than datetime.fromtimestamp with less checks
@@ -85,7 +84,7 @@ def datetime_from_epoch(epoch, tz: tzinfo | None = None):
 
 
 def schedule_async_callback(
-    hass: HomeAssistant, delay: float, target: Callable[..., Coroutine], *args
+    hass: "HomeAssistant", delay: float, target: "Callable[..., Coroutine]", *args
 ) -> asyncio.TimerHandle:
     @callback
     def _callback(_target, *_args):
@@ -95,14 +94,14 @@ def schedule_async_callback(
 
 
 def schedule_callback(
-    hass: HomeAssistant, delay: float, target: Callable, *args
+    hass: "HomeAssistant", delay: float, target: "Callable", *args
 ) -> asyncio.TimerHandle:
     return hass.loop.call_later(delay, target, *args)
 
 
 async def get_entity_last_states(
-    hass: HomeAssistant, number_of_states: int, entity_id: str
-) -> list[State] | None:
+    hass: "HomeAssistant", number_of_states: int, entity_id: str
+) -> list["State"] | None:
     """
     recover the last known good state from recorder in order to
     restore transient state information when restarting HA
@@ -133,15 +132,15 @@ async def get_entity_last_states(
         raise Exception("Cannot find history.get_last_state_changes api")
 
 
-async def get_entity_last_state(hass: HomeAssistant, entity_id: str) -> State | None:
+async def get_entity_last_state(hass: "HomeAssistant", entity_id: str) -> "State | None":
     if states := await get_entity_last_states(hass, 1, entity_id):
         return states[0]
     return None
 
 
 async def get_entity_last_state_available(
-    hass: HomeAssistant, entity_id: str
-) -> State | None:
+    hass: "HomeAssistant", entity_id: str
+) -> "State | None":
     """
     if the device/entity was disconnected before restarting and we need
     the last good reading from the device, we need to skip the last
@@ -180,11 +179,13 @@ class ConfigEntriesHelper:
         "_async_entry_for_domain_unique_id",
     )
 
-    def __init__(self, hass: HomeAssistant):
+    def __init__(self, hass: "HomeAssistant"):
         self.config_entries: typing.Final = hass.config_entries
         self._entries = None
         # added in HA core 2024.2
-        self._async_entry_for_domain_unique_id = getattr(self.config_entries, "async_entry_for_domain_unique_id", None)
+        self._async_entry_for_domain_unique_id = getattr(
+            self.config_entries, "async_entry_for_domain_unique_id", None
+        )
 
     def get_config_entry(self, unique_id: str):
         """Gets the configured entry if it exists."""
@@ -295,9 +296,9 @@ class Loggable(abc.ABC):
     CRITICAL = mlc.CONF_LOGGING_CRITICAL
 
     # hass, api: set when initializing MerossApi
-    hass: typing.ClassVar[HomeAssistant] = None  # type: ignore
+    hass: typing.ClassVar["HomeAssistant"] = None  # type: ignore
     """Cached HomeAssistant instance (Boom!)"""
-    api: typing.ClassVar[MerossApi] = None  # type: ignore
+    api: typing.ClassVar["MerossApi"] = None  # type: ignore
     """Cached MerossApi instance (Boom!)"""
 
     @staticmethod
@@ -318,9 +319,9 @@ class Loggable(abc.ABC):
         self,
         id,
         *,
-        logger: Loggable | logging.Logger = LOGGER,
+        logger: "Loggable | logging.Logger" = LOGGER,
     ):
-        self.id: Final = id
+        self.id: typing.Final = id
         self.logger = logger
         self.configure_logger()
         self.log(self.DEBUG, "init")

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from .. import const as mlc, meross_entity as me
@@ -60,7 +58,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
 
     def __init__(
         self,
-        manager: MerossSubDevice,
+        manager: "MerossSubDevice",
         key: str,
         device_class: MLConfigNumber.DeviceClass,
         min_value: float,
@@ -99,9 +97,9 @@ class HubNamespaceHandler(NamespaceHandler):
     relevant subdevice instance.
     """
 
-    device: typing.Final[HubMixin]  # type: ignore
+    device: "HubMixin"
 
-    def __init__(self, device: HubMixin, namespace: str):
+    def __init__(self, device: "HubMixin", namespace: str):
         NamespaceHandler.__init__(
             self, device, namespace, handler=self._handle_subdevice
         )
@@ -146,7 +144,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
 
     def __init__(
         self,
-        device: HubMixin,
+        device: "HubMixin",
         namespace: str,
         types: typing.Collection,
         included: bool,
@@ -157,7 +155,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
         self._included = included
         self._count = count
 
-    async def async_poll(self, device: HubMixin, epoch: float):
+    async def async_poll(self, device: "HubMixin", epoch: float):
         if not (device._mqtt_active and self.lastrequest):
             max_queuable = 1
             # for hubs, this payload request might be splitted
@@ -188,7 +186,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
                 ):
                     max_queuable += 1
 
-    async def async_trace(self, device: HubMixin, protocol: str | None):
+    async def async_trace(self, device: "HubMixin", protocol: str | None):
         """
         Used while tracing abilities. In general, we use an euristic 'default'
         query but for some 'well known namespaces' we might be better off querying with
@@ -203,7 +201,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
             self.adjust_size(len(p))
             await super().async_trace(device, protocol)
 
-    def _build_subdevices_payload(self, subdevices: typing.Collection[MerossSubDevice]):
+    def _build_subdevices_payload(self, subdevices: "typing.Collection[MerossSubDevice]"):
         """
         This generator helps dealing with hubs hosting an high number
         of subdevices: when queried, the response payload might became huge
@@ -239,7 +237,7 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
         MtsTrackedSensor.PLATFORM: None,
     }
 
-    subdevices: dict[object, MerossSubDevice]
+    subdevices: dict[object, "MerossSubDevice"]
 
     # interface: EntityManager
     def managed_entities(self, platform):
@@ -481,7 +479,7 @@ class MerossSubDevice(MerossDeviceBase):
         self.switch_togglex: MLSwitch | None = None
 
     # interface: EntityManager
-    def generate_unique_id(self, entity: MerossEntity):
+    def generate_unique_id(self, entity: "MerossEntity"):
         """
         flexible policy in order to generate unique_ids for entities:
         This is an helper needed to better control migrations in code
@@ -834,8 +832,8 @@ class MTS100SubDevice(MerossSubDevice):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.climate: Mts100Climate = None  # type: ignore
-        self.sensor_temperature: MLNumericSensor = None  # type: ignore
+        self.climate: "Mts100Climate" = None  # type: ignore
+        self.sensor_temperature: "MLNumericSensor" = None  # type: ignore
 
     def _parse_all(self, p_all: dict):
         self._parse_online(p_all.get(mc.KEY_ONLINE, {}))

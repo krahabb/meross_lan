@@ -8,8 +8,6 @@
  versioning
 """
 
-from __future__ import annotations
-
 import typing
 
 from homeassistant import const as hac
@@ -20,8 +18,6 @@ from .helpers.manager import ApiProfile
 from .merossclient import NAMESPACE_TO_KEY, const as mc
 
 if typing.TYPE_CHECKING:
-    from typing import ClassVar, Final
-
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -39,11 +35,11 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     class MyCustomSwitch(MerossEntity, Switch)
     """
 
-    PLATFORM: ClassVar[str]
+    PLATFORM: typing.ClassVar[str]
 
     EntityCategory = EntityCategory
 
-    is_diagnostic: ClassVar[bool] = False
+    is_diagnostic: typing.ClassVar[bool] = False
     """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
     # These 'placeholder' definitions support generalization of
@@ -62,11 +58,11 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     # HA core entity attributes:
     # These are constants throughout our model
-    force_update: Final[bool] = False
-    has_entity_name: Final[bool] = True
-    should_poll: Final[bool] = False
+    force_update: typing.Final[bool] = False
+    has_entity_name: typing.Final[bool] = True
+    should_poll: typing.Final[bool] = False
     # These may be customized here and there per class
-    _attr_available: ClassVar[bool] = False
+    _attr_available: typing.ClassVar[bool] = False
     # These may be customized here and there per class or instance
     assumed_state: bool = False
     entity_category: EntityCategory | None = None
@@ -76,7 +72,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     translation_key: str | None = None
     # These are actually per instance
     available: bool
-    device_class: Final[object | str | None]
+    device_class: typing.Final[object | str | None]
     name: str | None
     suggested_object_id: str | None
     unique_id: str
@@ -99,7 +95,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     def __init__(
         self,
-        manager: EntityManager,
+        manager: "EntityManager",
         channel: object | None,
         entitykey: str | None = None,
         device_class: object | str | None = None,
@@ -128,7 +124,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.manager = manager
         self.channel = channel
         self.entitykey = entitykey
-        self.namespace_handlers: set[NamespaceHandler] = set()
+        self.namespace_handlers: set["NamespaceHandler"] = set()
         self.available = self._attr_available or manager.online
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
@@ -175,7 +171,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         for handler in set(self.namespace_handlers):
             handler.unregister(self)
         self.manager.entities.pop(self.id)
-        self.manager: EntityManager = None  # type: ignore
+        self.manager: "EntityManager" = None  # type: ignore
 
     def flush_state(self):
         """Actually commits a state change to HA."""
@@ -220,9 +216,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 class MerossNumericEntity(MerossEntity):
     """Common base class for (numeric) sensors and numbers."""
 
-    UNIT_PERCENTAGE: Final = hac.PERCENTAGE
+    UNIT_PERCENTAGE: typing.Final = hac.PERCENTAGE
 
-    DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[object | None, str | None]]
+    DEVICECLASS_TO_UNIT_MAP: typing.ClassVar[dict[object | None, str | None]]
     """To be init in derived classes with their DeviceClass own types"""
     device_scale: int | float = 1
     """Used to scale the device value when converting to/from native value"""
@@ -241,7 +237,7 @@ class MerossNumericEntity(MerossEntity):
 
     def __init__(
         self,
-        manager: EntityManager,
+        manager: "EntityManager",
         channel: object,
         entitykey: str | None = None,
         device_class: object | None = None,
@@ -295,7 +291,7 @@ class MerossBinaryEntity(MerossEntity):
 
     def __init__(
         self,
-        manager: MerossDeviceBase,
+        manager: "MerossDeviceBase",
         channel: object,
         entitykey: str | None = None,
         device_class: object | None = None,
@@ -326,11 +322,11 @@ class MerossToggle(MerossBinaryEntity):
     effective switches or the likes (light for example)
     """
 
-    manager: MerossDeviceBase
+    manager: "MerossDeviceBase"
 
     def __init__(
         self,
-        manager: MerossDeviceBase,
+        manager: "MerossDeviceBase",
         channel: object,
         entitykey: str | None = None,
         device_class: object | None = None,
@@ -387,7 +383,7 @@ class MerossToggle(MerossBinaryEntity):
 # helper functions to 'commonize' platform setup
 #
 def platform_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices, platform: str
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices, platform: str
 ):
     manager = ApiProfile.managers[config_entry.entry_id]
     manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components.repairs import ConfirmRepairFlow
@@ -75,7 +73,7 @@ class SimpleRepairFlow(ConfirmRepairFlow):
 
 
 async def async_create_fix_flow(
-    hass: HomeAssistant,
+    hass: "HomeAssistant",
     issue_id: str,
     data: dict[str, str | int | float | None] | None,
 ):

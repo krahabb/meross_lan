@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import media_player
@@ -22,7 +20,7 @@ if typing.TYPE_CHECKING:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, media_player.DOMAIN)
 
@@ -30,7 +28,7 @@ async def async_setup_entry(
 class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
     PLATFORM = media_player.DOMAIN
 
-    manager: MerossDevice
+    manager: "MerossDevice"
 
     # HA core entity attributes:
     is_volume_muted: bool | None
@@ -59,7 +57,7 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         "_mp3",
     )
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         self._mp3 = {}
         self.is_volume_muted = None
         self.media_title = None

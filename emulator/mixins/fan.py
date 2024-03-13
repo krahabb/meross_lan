@@ -1,6 +1,5 @@
 """"""
 
-from __future__ import annotations
 from random import randint
 
 import typing
@@ -15,7 +14,7 @@ if typing.TYPE_CHECKING:
 
 
 class FanMixin(MerossEmulator if typing.TYPE_CHECKING else object):
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key):
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
         self.update_namespace_state(

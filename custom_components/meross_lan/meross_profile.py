@@ -2,8 +2,6 @@
     meross_lan module interface to access Meross Cloud services
 """
 
-from __future__ import annotations
-
 import abc
 import asyncio
 from contextlib import asynccontextmanager
@@ -51,7 +49,6 @@ from .repairs import IssueSeverity, create_issue, remove_issue
 from .sensor import MLDiagnosticSensor
 
 if typing.TYPE_CHECKING:
-    from typing import Final
 
     from homeassistant.components import mqtt as ha_mqtt
     from homeassistant.config_entries import ConfigEntry
@@ -75,14 +72,14 @@ if typing.TYPE_CHECKING:
     )
 
     UuidType = str
-    DeviceInfoDictType = dict[UuidType, DeviceInfoType]
+    DeviceInfoDictType = dict[UuidType, "DeviceInfoType"]
 
 
 class ConnectionSensor(MLDiagnosticSensor):
-    STATE_DISCONNECTED: Final = "disconnected"
-    STATE_CONNECTED: Final = "connected"
-    STATE_QUEUING: Final = "queuing"
-    STATE_DROPPING: Final = "dropping"
+    STATE_DISCONNECTED: typing.Final = "disconnected"
+    STATE_CONNECTED: typing.Final = "connected"
+    STATE_QUEUING: typing.Final = "queuing"
+    STATE_DROPPING: typing.Final = "dropping"
 
     class AttrDictType(typing.TypedDict):
         devices: dict[str, str]
@@ -92,12 +89,12 @@ class ConnectionSensor(MLDiagnosticSensor):
         queued: int
         queue_length: int
 
-    ATTR_DEVICES: Final = "devices"
-    ATTR_RECEIVED: Final = "received"
-    ATTR_PUBLISHED: Final = "published"
-    ATTR_DROPPED: Final = "dropped"
-    ATTR_QUEUED: Final = "queued"
-    ATTR_QUEUE_LENGTH: Final = "queue_length"
+    ATTR_DEVICES: typing.Final = "devices"
+    ATTR_RECEIVED: typing.Final = "received"
+    ATTR_PUBLISHED: typing.Final = "published"
+    ATTR_DROPPED: typing.Final = "dropped"
+    ATTR_QUEUED: typing.Final = "queued"
+    ATTR_QUEUE_LENGTH: typing.Final = "queue_length"
 
     manager: ApiProfile
 
@@ -114,7 +111,7 @@ class ConnectionSensor(MLDiagnosticSensor):
 
     __slots__ = ("connection",)
 
-    def __init__(self, connection: MQTTConnection):
+    def __init__(self, connection: "MQTTConnection"):
         self.connection = connection
         self.extra_state_attributes = {
             ConnectionSensor.ATTR_DEVICES: {
@@ -193,9 +190,9 @@ class _MQTTTransaction:
 
     def __init__(
         self,
-        mqtt_connection: MQTTConnection,
+        mqtt_connection: "MQTTConnection",
         device_id: str,
-        request: MerossMessage,
+        request: "MerossMessage",
     ):
         self.mqtt_connection = mqtt_connection
         self.device_id = device_id
@@ -203,7 +200,7 @@ class _MQTTTransaction:
         self.messageid = request.messageid
         self.method = request.method
         self.request_time = time()
-        self.response_future: asyncio.Future[MerossResponse] = (
+        self.response_future: "asyncio.Future[MerossResponse]" = (
             asyncio.get_running_loop().create_future()
         )
         mqtt_connection._mqtt_transactions[request.messageid] = self
@@ -244,12 +241,12 @@ class MQTTConnection(Loggable):
     SESSION_HANDLERS: typing.Mapping[
         str,
         typing.Callable[
-            [MQTTConnection, str, MerossHeaderType, MerossPayloadType],
+            ["MQTTConnection", str, "MerossHeaderType", "MerossPayloadType"],
             typing.Awaitable[bool],
         ],
     ] = {}
 
-    broker: HostAddress
+    broker: "HostAddress"
 
     __slots__ = (
         "profile",
@@ -265,18 +262,18 @@ class MQTTConnection(Loggable):
 
     def __init__(
         self,
-        profile: MerossCloudProfile | MerossApi,
-        broker: HostAddress,
+        profile: "MerossCloudProfile | MerossApi",
+        broker: "HostAddress",
         topic_response: str,
     ):
-        self.profile: Final = profile
+        self.profile: typing.Final = profile
         self.broker = broker
-        self.topic_response: Final = topic_response
-        self.mqttdevices: Final[dict[str, MerossDevice]] = {}
-        self.mqttdiscovering: Final[set[str]] = set()
+        self.topic_response: typing.Final = topic_response
+        self.mqttdevices: typing.Final[dict[str, "MerossDevice"]] = {}
+        self.mqttdiscovering: typing.Final[set[str]] = set()
         self.namespace_handlers = self.SESSION_HANDLERS
-        self.sensor_connection: ConnectionSensor | None = None
-        self._mqtt_transactions: Final[dict[str, _MQTTTransaction]] = {}
+        self.sensor_connection: "ConnectionSensor | None" = None
+        self._mqtt_transactions: typing.Final[dict[str, "_MQTTTransaction"]] = {}
         self._mqtt_is_connected = False
         super().__init__(
             str(broker),
@@ -325,14 +322,14 @@ class MQTTConnection(Loggable):
     def mqtt_is_connected(self):
         return self._mqtt_is_connected
 
-    def attach(self, device: MerossDevice):
+    def attach(self, device: "MerossDevice"):
         assert device.id not in self.mqttdevices
         device.mqtt_attached(self)
         self.mqttdevices[device.id] = device
         if sensor_connection := self.sensor_connection:
             sensor_connection.update_devices()
 
-    def detach(self, device: MerossDevice):
+    def detach(self, device: "MerossDevice"):
         device_id = device.id
         assert device_id in self.mqttdevices
         for mqtt_transaction in list(self._mqtt_transactions.values()):
@@ -347,7 +344,7 @@ class MQTTConnection(Loggable):
     def mqtt_publish(
         self,
         device_id: str,
-        request: MerossMessage,
+        request: "MerossMessage",
     ):
         return self.hass.async_create_task(self.async_mqtt_publish(device_id, request))
 
@@ -355,7 +352,7 @@ class MQTTConnection(Loggable):
     async def async_mqtt_publish(
         self,
         device_id: str,
-        request: MerossMessage,
+        request: "MerossMessage",
     ) -> MerossResponse | None:
         if request.method in mc.METHOD_ACK_MAP.keys():
             transaction = _MQTTTransaction(self, device_id, request)
@@ -400,7 +397,8 @@ class MQTTConnection(Loggable):
 
     @typing.final
     async def async_mqtt_message(
-        self, mqtt_msg: ha_mqtt.ReceiveMessage | paho_mqtt.MQTTMessage | MqttServiceInfo
+        self,
+        mqtt_msg: "ha_mqtt.ReceiveMessage | paho_mqtt.MQTTMessage | MqttServiceInfo",
     ):
         with self.exception_warning("async_mqtt_message"):
             if sensor_connection := self.sensor_connection:
@@ -575,7 +573,7 @@ class MQTTConnection(Loggable):
 
         try:
             response = check_message_strict(response)
-            multiple_response: list[MerossMessageType] = response[mc.KEY_PAYLOAD][
+            multiple_response: list["MerossMessageType"] = response[mc.KEY_PAYLOAD][
                 mc.KEY_MULTIPLE
             ]
             # this syntax ensures both the responses are the expected ones
@@ -672,7 +670,7 @@ class MQTTConnection(Loggable):
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: MerossMessage,
+        request: "MerossMessage",
     ) -> tuple[str, int]:
         """
         Actually sends the message to the transport. On return gives
@@ -707,7 +705,7 @@ class MQTTConnection(Loggable):
             sensor_connection.inc_counter(ConnectionSensor.ATTR_PUBLISHED)
 
     async def _handle_Appliance_System_Online(
-        self, device_id: str, header: MerossHeaderType, payload: MerossPayloadType
+        self, device_id: str, header: "MerossHeaderType", payload: "MerossPayloadType"
     ):
         """
         This is likely sent by the session management layer on the Meross brokers
@@ -757,7 +755,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         "_unsub_random_disconnect",
     )
 
-    def __init__(self, profile: MerossCloudProfile, broker: HostAddress):
+    def __init__(self, profile: "MerossCloudProfile", broker: "HostAddress"):
         hass = self.hass
         MerossMQTTAppClient.__init__(
             self, profile.key, profile.userid, app_id=profile.app_id, loop=hass.loop
@@ -796,7 +794,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         await MerossMQTTAppClient.async_shutdown(self)
         await MQTTConnection.async_shutdown(self)
 
-    async def entry_update_listener(self, profile: MerossCloudProfile):
+    async def entry_update_listener(self, profile: "MerossCloudProfile"):
         await MQTTConnection.entry_update_listener(self, profile)
         if profile.isEnabledFor(profile.VERBOSE):
             self.enable_logger(self)  # type: ignore (Loggable is duck-compatible with Logger)
@@ -810,7 +808,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     async def _async_mqtt_publish(
         self,
         device_id: str,
-        request: MerossMessage,
+        request: "MerossMessage",
     ) -> tuple[str, int]:
         return await self.hass.async_add_executor_job(self._publish, device_id, request)
 
@@ -839,7 +837,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             sensor_connection.flush_state()
 
     # interface: self
-    def _publish(self, device_id: str, request: MerossMessage) -> tuple[str, int]:
+    def _publish(self, device_id: str, request: "MerossMessage") -> tuple[str, int]:
         """
         this function runs in an executor
         Beware when calling HA api's (like when we want to update sensors)
@@ -897,9 +895,9 @@ MerossMQTTConnection.SESSION_HANDLERS = {
 class MerossCloudProfileStoreType(typing.TypedDict):
     appId: str
     # TODO credentials: typing.NotRequired[MerossCloudCredentials]
-    deviceInfo: DeviceInfoDictType
+    deviceInfo: "DeviceInfoDictType"
     deviceInfoTime: float
-    latestVersion: list[LatestVersionType]
+    latestVersion: list["LatestVersionType"]
     latestVersionTime: float
     token: str | None  # TODO remove
     tokenRequestTime: float
@@ -922,16 +920,16 @@ class MerossCloudProfile(ApiProfile):
     and/or to manage cloud mqtt connection(s)
     """
 
-    KEY_APP_ID: Final = "appId"
-    KEY_DEVICE_INFO: Final = "deviceInfo"
-    KEY_DEVICE_INFO_TIME: Final = "deviceInfoTime"
-    KEY_SUBDEVICE_INFO: Final = "__subDeviceInfo"
-    KEY_LATEST_VERSION: Final = "latestVersion"
-    KEY_LATEST_VERSION_TIME: Final = "latestVersionTime"
-    KEY_TOKEN_REQUEST_TIME: Final = "tokenRequestTime"
+    KEY_APP_ID: typing.Final = "appId"
+    KEY_DEVICE_INFO: typing.Final = "deviceInfo"
+    KEY_DEVICE_INFO_TIME: typing.Final = "deviceInfoTime"
+    KEY_SUBDEVICE_INFO: typing.Final = "__subDeviceInfo"
+    KEY_LATEST_VERSION: typing.Final = "latestVersion"
+    KEY_LATEST_VERSION_TIME: typing.Final = "latestVersionTime"
+    KEY_TOKEN_REQUEST_TIME: typing.Final = "tokenRequestTime"
 
-    config: ProfileConfigType
-    _data: MerossCloudProfileStoreType
+    config: "ProfileConfigType"
+    _data: "MerossCloudProfileStoreType"
 
     __slots__ = (
         "apiclient",
@@ -941,7 +939,7 @@ class MerossCloudProfile(ApiProfile):
         "_device_info_time",
     )
 
-    def __init__(self, profile_id: str, config_entry: ConfigEntry):
+    def __init__(self, profile_id: str, config_entry: "ConfigEntry"):
         ApiProfile.__init__(self, profile_id, config_entry)
         # state of the art for credentials is that they're mixed in
         # into the config_entry.data but this is prone to issues and confusing
@@ -1054,7 +1052,7 @@ class MerossCloudProfile(ApiProfile):
         await super().async_shutdown()
 
     # interface: ConfigEntryManager
-    async def entry_update_listener(self, hass, config_entry: ConfigEntry):
+    async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
         config = config_entry.data
         await self.async_update_credentials(config)  # type: ignore
         await super().entry_update_listener(hass, config_entry)
@@ -1063,7 +1061,7 @@ class MerossCloudProfile(ApiProfile):
         return f"profile_{self.loggable_profile_id(self.id)}"
 
     # interface: ApiProfile
-    def attach_mqtt(self, device: MerossDevice):
+    def attach_mqtt(self, device: "MerossDevice"):
         with self.exception_warning("attach_mqtt"):
             mqttconnection = self._get_mqttconnection(device.mqtt_broker)
             mqttconnection.attach(device)
@@ -1083,7 +1081,7 @@ class MerossCloudProfile(ApiProfile):
     def userid(self):
         return self.config[mc.KEY_USERID_]
 
-    def device_is_registered(self, descriptor: MerossDeviceDescriptor):
+    def device_is_registered(self, descriptor: "MerossDeviceDescriptor"):
         """extensive check that the device is 'really' binded to the profile"""
         # this check, in a 'goldylock' scenario whould be pretty simple:
         # check that the device userId matches the profile Id since they represent
@@ -1121,7 +1119,7 @@ class MerossCloudProfile(ApiProfile):
         # no way
         return False
 
-    def try_link(self, device: MerossDevice):
+    def try_link(self, device: "MerossDevice"):
         """
         Device linking to a cloud profile sets the environment for
         the device MQTT attachment/connection. This process uses a lot
@@ -1152,7 +1150,7 @@ class MerossCloudProfile(ApiProfile):
     def get_device_info(self, uuid: str):
         return self._data[self.KEY_DEVICE_INFO].get(uuid)
 
-    def get_latest_version(self, descriptor: MerossDeviceDescriptor):
+    def get_latest_version(self, descriptor: "MerossDeviceDescriptor"):
         """returns LatestVersionType info if device has an update available"""
         _type = descriptor.type
         _version = versiontuple(descriptor.firmwareVersion)
@@ -1177,7 +1175,7 @@ class MerossCloudProfile(ApiProfile):
                     return None
         return None
 
-    async def async_update_credentials(self, credentials: MerossCloudCredentials):
+    async def async_update_credentials(self, credentials: "MerossCloudCredentials"):
         with self.exception_warning("async_update_credentials"):
             remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED, self.id)
             curr_credentials = self.apiclient.credentials
@@ -1409,17 +1407,17 @@ class MerossCloudProfile(ApiProfile):
         return None
 
     async def _process_device_info_new(
-        self, device_info_list_new: list[DeviceInfoType]
+        self, device_info_list_new: list["DeviceInfoType"]
     ):
         device_info_dict = self._data[self.KEY_DEVICE_INFO]
         device_info_removed = {device_id for device_id in device_info_dict.keys()}
-        device_info_unknown: list[DeviceInfoType] = []
+        device_info_unknown: list["DeviceInfoType"] = []
         for device_info in device_info_list_new:
             with self.exception_warning("_process_device_info_new"):
                 device_id = device_info[mc.KEY_UUID]
                 # preserved (old) dict of hub subdevices to process/carry over
                 # for Hub(s)
-                sub_device_info_dict: dict[str, SubDeviceInfoType] | None
+                sub_device_info_dict: dict[str, "SubDeviceInfoType"] | None
                 if device_id in device_info_dict:
                     # already known device
                     device_info_removed.remove(device_id)
@@ -1467,14 +1465,14 @@ class MerossCloudProfile(ApiProfile):
 
     async def _process_subdevice_info_new(
         self,
-        hub_device: HubMixin,
-        sub_device_info_dict: dict[str, SubDeviceInfoType],
-        sub_device_info_list_new: list[SubDeviceInfoType],
+        hub_device: "HubMixin",
+        sub_device_info_dict: dict[str, "SubDeviceInfoType"],
+        sub_device_info_list_new: list["SubDeviceInfoType"],
     ):
         sub_device_info_removed = {
             subdeviceid for subdeviceid in sub_device_info_dict.keys()
         }
-        sub_device_info_unknown: list[SubDeviceInfoType] = []
+        sub_device_info_unknown: list["SubDeviceInfoType"] = []
 
         for sub_device_info in sub_device_info_list_new:
             with self.exception_warning("_process_subdevice_info_new"):
@@ -1499,7 +1497,7 @@ class MerossCloudProfile(ApiProfile):
             pass
 
     async def _process_device_info_unknown(
-        self, device_info_unknown: list[DeviceInfoType]
+        self, device_info_unknown: list["DeviceInfoType"]
     ):
         if not self.allow_mqtt_publish:
             self.log(

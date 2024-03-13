@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import abc
 import asyncio
 import bisect
@@ -72,7 +70,6 @@ from .sensor import ProtocolSensor
 from .update import MLUpdate
 
 if typing.TYPE_CHECKING:
-    from typing import ClassVar
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -144,7 +141,7 @@ class MerossDeviceBase(EntityManager):
 
     deviceentry_id: dict[str, set[tuple[str, str]]]
     # device info dict from meross cloud api
-    device_info: DeviceInfoType | SubDeviceInfoType | None
+    device_info: "DeviceInfoType | SubDeviceInfoType | None"
 
     __slots__ = (
         "device_info",
@@ -221,7 +218,7 @@ class MerossDeviceBase(EntityManager):
                 self._device_registry_entry = weakref.ref(_device_registry_entry)
         return _device_registry_entry
 
-    def update_device_info(self, device_info: DeviceInfoType | SubDeviceInfoType):
+    def update_device_info(self, device_info: "DeviceInfoType | SubDeviceInfoType"):
         self.device_info = device_info
         if _device_registry_entry := self.device_registry_entry:
             name = (
@@ -237,13 +234,13 @@ class MerossDeviceBase(EntityManager):
         self,
         namespace: str,
         method: str,
-        payload: MerossPayloadType,
+        payload: "MerossPayloadType",
     ) -> MerossRequest:
         raise NotImplementedError("build_request")
 
     async def async_request_raw(
         self,
-        request: MerossRequest,
+        request: "MerossRequest",
     ) -> MerossResponse | None:
         raise NotImplementedError("async_request_raw")
 
@@ -251,7 +248,7 @@ class MerossDeviceBase(EntityManager):
         self,
         namespace: str,
         method: str,
-        payload: MerossPayloadType,
+        payload: "MerossPayloadType",
     ) -> MerossResponse | None:
         raise NotImplementedError("async_request")
 
@@ -259,7 +256,7 @@ class MerossDeviceBase(EntityManager):
         self,
         namespace: str,
         method: str,
-        payload: MerossPayloadType,
+        payload: "MerossPayloadType",
     ) -> MerossResponse | None:
         response = await self.async_request(namespace, method, payload)
         return (
@@ -268,7 +265,7 @@ class MerossDeviceBase(EntityManager):
             else None
         )
 
-    def request(self, request_tuple: MerossRequestType):
+    def request(self, request_tuple: "MerossRequestType"):
         return self.hass.async_create_task(self.async_request(*request_tuple))
 
     @property
@@ -312,7 +309,7 @@ class SystemDebugPollingStrategy(PollingStrategy):
     but we should
     """
 
-    async def async_poll(self, device: MerossDevice, epoch: float):
+    async def async_poll(self, device: "MerossDevice", epoch: float):
         if not device._mqtt_active:
             await device.async_request_poll(self)
 
@@ -322,7 +319,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     Generic protocol handler class managing the physical device stack/state
     """
 
-    DIGEST_INITIALIZERS: Final[dict[str, DigestInitFunc]] = {
+    DIGEST_INITIALIZERS: typing.Final[dict[str, "DigestInitFunc"]] = {
         mc.KEY_TIMERX: digest_init_empty,
         mc.KEY_TRIGGERX: digest_init_empty,
         mc.KEY_TIMER: digest_init_empty,
@@ -345,14 +342,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     repeat the lookup process. That function will just pass so that the key
     init/parsing will not harm.
     """
-    DIGEST_INITIALIZERS_LOOKUPS: Final[dict[str, str]] = {
+    DIGEST_INITIALIZERS_LOOKUPS: typing.Final[dict[str, str]] = {
         mc.KEY_FAN: ".fan",
         mc.KEY_LIGHT: ".light",
         mc.KEY_TOGGLE: ".switch",
         mc.KEY_TOGGLEX: ".switch",
     }
 
-    NAMESPACE_INITIALIZERS: Final[dict[str, tuple[str, str]]] = {
+    NAMESPACE_INITIALIZERS: typing.Final[dict[str, tuple[str, str]]] = {
         mc.NS_APPLIANCE_CONFIG_OVERTEMP: (".devices.mss", "OverTempEnableSwitch"),
         mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: (
             ".devices.mss",
@@ -454,8 +451,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def __init__(
         self,
-        descriptor: MerossDeviceDescriptor,
-        config_entry: ConfigEntry,
+        descriptor: "MerossDeviceDescriptor",
+        config_entry: "ConfigEntry",
     ):
         self.descriptor = descriptor
         self.needsave = False
@@ -471,20 +468,20 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.lastresponse = 0.0
         self._topic_response = mc.MANUFACTURER
         self._profile: ApiProfile | None = None
-        self._mqtt_connection: MQTTConnection | None = None
-        self._mqtt_connected: MQTTConnection | None = None
-        self._mqtt_publish: MQTTConnection | None = None
-        self._mqtt_active: MQTTConnection | None = None
+        self._mqtt_connection: "MQTTConnection | None" = None
+        self._mqtt_connected: "MQTTConnection | None" = None
+        self._mqtt_publish: "MQTTConnection | None" = None
+        self._mqtt_active: "MQTTConnection | None" = None
         self._mqtt_lastrequest = 0
         self._mqtt_lastresponse = 0
-        self._http: MerossHttpClient | None = None
-        self._http_active: MerossHttpClient | None = None
+        self._http: "MerossHttpClient | None" = None
+        self._http_active: "MerossHttpClient | None" = None
         self._http_lastrequest = 0
         self._http_lastresponse = 0
         self.channels_payloads: list[dict] = []
-        self.digest_handlers: dict[str, DigestParseFunc] = {}
-        self.namespace_handlers: dict[str, NamespaceHandler] = {}
-        self.polling_strategies: dict[str, PollingStrategy] = {}
+        self.digest_handlers: dict[str, "DigestParseFunc"] = {}
+        self.namespace_handlers: dict[str, "NamespaceHandler"] = {}
+        self.polling_strategies: dict[str, "PollingStrategy"] = {}
         PollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_ALL)
         self._unsub_polling_callback = None
         self._polling_callback_shutdown = None
@@ -494,7 +491,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             mc.NS_APPLIANCE_CONTROL_MULTIPLE, {}
         ).get("maxCmdNum", 0)
         self._multiple_len = self.multiple_max
-        self._multiple_requests: list[MerossRequestType] = []
+        self._multiple_requests: list["MerossRequestType"] = []
         self._multiple_response_size = PARAM_HEADER_SIZE
 
         self._tzinfo = None
@@ -576,7 +573,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     # interface: ConfigEntryManager
     async def entry_update_listener(
-        self, hass: HomeAssistant, config_entry: ConfigEntry
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
         await super().entry_update_listener(hass, config_entry)
         self._update_config()
@@ -659,7 +656,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         namespace: str,
         method: str,
-        payload: MerossPayloadType,
+        payload: "MerossPayloadType",
     ) -> MerossRequest:
         return MerossRequest(self.key, namespace, method, payload, self._topic_response)
 
@@ -705,7 +702,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         namespace: str,
         method: str,
-        payload: MerossPayloadType,
+        payload: "MerossPayloadType",
     ) -> MerossResponse | None:
         return await self.async_request_raw(
             MerossRequest(self.key, namespace, method, payload, self._topic_response)
@@ -822,11 +819,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def register_parser(
         self,
         namespace: str,
-        entity: MerossEntity,
+        entity: "MerossEntity",
     ):
         self.get_handler(namespace).register_entity(entity)
 
-    def unregister_parser(self, namespace: str, entity: MerossEntity):
+    def unregister_parser(self, namespace: str, entity: "MerossEntity"):
         try:
             self.namespace_handlers[namespace].unregister(entity)
         except KeyError:
@@ -935,8 +932,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         return await self.async_request(*request_push(mc.NS_APPLIANCE_CONTROL_UNBIND))
 
     async def async_multiple_requests_ack(
-        self, requests: typing.Collection[MerossRequestType], auto_handle: bool = True
-    ) -> list[MerossMessageType] | None:
+        self, requests: typing.Collection["MerossRequestType"], auto_handle: bool = True
+    ) -> list["MerossMessageType"] | None:
         """Send requests in a single NS_APPLIANCE_CONTROL_MULTIPLE message.
         If the whole request is succesful (might be partial if the device response
         overflown somehow (see JSON patching in HTTP request api)
@@ -1035,7 +1032,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     multiple_response_size,
                     len(response.json()),
                 )
-            message: MerossMessageType
+            message: "MerossMessageType"
             if responses_len == requests_len:
                 # faster shortcut
                 for message in multiple_responses:
@@ -1064,7 +1061,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     async def async_mqtt_request_raw(
         self,
-        request: MerossMessage,
+        request: "MerossMessage",
     ) -> MerossResponse | None:
         if not self._mqtt_publish:
             # even if we're smart enough to not call async_mqtt_request when no mqtt
@@ -1088,7 +1085,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         namespace: str,
         method: str,
-        payload: MerossPayloadType,
+        payload: "MerossPayloadType",
     ):
         return await self.async_mqtt_request_raw(
             MerossRequest(self.key, namespace, method, payload, self._topic_response)
@@ -1104,7 +1101,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         namespace: str,
         method: str,
-        payload: MerossPayloadType,
+        payload: "MerossPayloadType",
     ):
         return self.hass.async_create_task(
             self.async_mqtt_request(namespace, method, payload)
@@ -1255,7 +1252,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         namespace: str,
         method: str,
-        payload: MerossPayloadType,
+        payload: "MerossPayloadType",
     ):
         return await self.async_http_request_raw(
             MerossRequest(self.key, namespace, method, payload, self._topic_response)
@@ -1462,7 +1459,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 )
             self.log(self.DEBUG, "Polling end")
 
-    def mqtt_receive(self, message: MerossResponse):
+    def mqtt_receive(self, message: "MerossResponse"):
         assert self._mqtt_connected
         self._mqtt_lastresponse = epoch = time()
         self._trace_or_log(epoch, message, CONF_PROTOCOL_MQTT, self.TRACE_RX)
@@ -1475,7 +1472,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self._switch_protocol(CONF_PROTOCOL_MQTT)
         self._receive(epoch, message)
 
-    def mqtt_attached(self, mqtt_connection: MQTTConnection):
+    def mqtt_attached(self, mqtt_connection: "MQTTConnection"):
         assert self.conf_protocol is not CONF_PROTOCOL_HTTP
         self.log(
             self.DEBUG,
@@ -1714,8 +1711,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def _handle(
         self,
-        header: MerossHeaderType,
-        payload: MerossPayloadType,
+        header: "MerossHeaderType",
+        payload: "MerossPayloadType",
     ):
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
@@ -2133,7 +2130,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             return True
         return False
 
-    def update_latest_version(self, latest_version: LatestVersionType):
+    def update_latest_version(self, latest_version: "LatestVersionType"):
         if update_firmware := self.update_firmware:
             update_firmware.installed_version = self.descriptor.firmwareVersion
             update_firmware.latest_version = latest_version.get(mc.KEY_VERSION)
@@ -2272,7 +2269,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def _trace_or_log(
         self,
         epoch: float,
-        message: MerossMessage,
+        message: "MerossMessage",
         protocol: str,
         rxtx: str,
     ):

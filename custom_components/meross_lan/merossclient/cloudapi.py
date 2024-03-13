@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 from base64 import b64encode
 from hashlib import md5
@@ -122,7 +120,7 @@ class DeviceInfoType(typing.TypedDict, total=False):
     domain: str  # optionally formatted as host:port
     reservedDomain: str  # optionally formatted as host:port
     hardwareCapabilities: list
-    __subDeviceInfo: dict[str, SubDeviceInfoType]  # this key is not from meross api
+    __subDeviceInfo: dict[str, "SubDeviceInfoType"]  # this key is not from meross api
 
 
 class LatestVersionType(typing.TypedDict, total=False):

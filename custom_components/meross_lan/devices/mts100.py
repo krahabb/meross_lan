@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from ..calendar import MtsSchedule
@@ -24,7 +22,7 @@ class Mts100AdjustNumber(MtsTemperatureNumber):
     native_min_value = -5
     native_step = 0.5
 
-    def __init__(self, climate: Mts100Climate):
+    def __init__(self, climate: "Mts100Climate"):
         self.name = "Adjust temperature"
         super().__init__(
             climate,
@@ -54,11 +52,11 @@ class Mts100Climate(MtsClimate):
     # this temp since it's mode is not set to follow a manual set
     MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS100_MODE_TO_CURRENTSET_MAP
 
-    manager: MTS100SubDevice
+    manager: "MTS100SubDevice"
 
     __slots__ = ("binary_sensor_window",)
 
-    def __init__(self, manager: MTS100SubDevice):
+    def __init__(self, manager: "MTS100SubDevice"):
         self.extra_state_attributes = {}
         super().__init__(
             manager,
@@ -72,7 +70,7 @@ class Mts100Climate(MtsClimate):
     # interface: MtsClimate
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.binary_sensor_window: MLBinarySensor = None  # type: ignore
+        self.binary_sensor_window: "MLBinarySensor" = None  # type: ignore
 
     def flush_state(self):
         if self._mts_onoff:

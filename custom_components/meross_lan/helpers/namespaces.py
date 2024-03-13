@@ -1,25 +1,22 @@
-from __future__ import annotations
-
 import typing
 
 from .. import const as mlc
 from ..merossclient import NAMESPACE_TO_KEY, const as mc, request_get, request_push
 
 if typing.TYPE_CHECKING:
-    from typing import Any, Callable, Final
 
     from ..meross_device import MerossDevice
     from ..meross_entity import MerossEntity
 
-    DigestParseFunc = Callable[[dict], None] | Callable[[list], None]
-    DigestInitFunc = Callable[[MerossDevice, Any], DigestParseFunc]
+    DigestParseFunc = typing.Callable[[dict], None] | typing.Callable[[list], None]
+    DigestInitFunc = typing.Callable[[MerossDevice, typing.Any], DigestParseFunc]
 
 
 def digest_parse_empty(digest: dict | list):
     pass
 
 
-def digest_init_empty(device: MerossDevice, digest: dict | list):
+def digest_init_empty(device: "MerossDevice", digest: dict | list):
     return digest_parse_empty
 
 
@@ -52,17 +49,17 @@ class NamespaceHandler:
 
     def __init__(
         self,
-        device: MerossDevice,
+        device: "MerossDevice",
         namespace: str,
         *,
-        handler: Callable[[dict, dict], None] | None = None,
-        entity_class: type[MerossEntity] | None = None,
+        handler: typing.Callable[[dict, dict], None] | None = None,
+        entity_class: type["MerossEntity"] | None = None,
     ):
         assert (
             namespace not in device.namespace_handlers
         ), "namespace already registered"
-        self.device: typing.Final = device
-        self.namespace: typing.Final = namespace
+        self.device = device
+        self.namespace = namespace
         self.key_namespace = NAMESPACE_TO_KEY[namespace]
         if entity_class:
             self.entity_class = entity_class
@@ -74,16 +71,16 @@ class NamespaceHandler:
                 device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
             )
         self.lastrequest = 0
-        self.entities: dict[object, Callable[[dict], None]] = {}
+        self.entities: dict[object, typing.Callable[[dict], None]] = {}
         device.namespace_handlers[namespace] = self
 
-    def register_entity_class(self, entity_class: type[MerossEntity]):
+    def register_entity_class(self, entity_class: type["MerossEntity"]):
         assert not self.entity_class, "entity_class already registered"
         self.entity_class = entity_class
         self.handler = self._handle_list
         self.device.platforms.setdefault(entity_class.PLATFORM)
 
-    def register_entity(self, entity: MerossEntity):
+    def register_entity(self, entity: "MerossEntity"):
         # when setting up the entity-dispatching we'll substitute the legacy handler
         # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
         # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
@@ -101,7 +98,7 @@ class NamespaceHandler:
         entity.namespace_handlers.add(self)
         self.handler = self._handle_list
 
-    def unregister(self, entity: MerossEntity):
+    def unregister(self, entity: "MerossEntity"):
         if self.entities.pop(entity.channel, None):
             entity.namespace_handlers.remove(self)
 
@@ -285,7 +282,7 @@ class VoidNamespaceHandler(NamespaceHandler):
     just provides an empty handler and so suppresses any log too (for unknown namespaces)
     done by the base default handling."""
 
-    def __init__(self, device: MerossDevice, namespace: str):
+    def __init__(self, device: "MerossDevice", namespace: str):
         super().__init__(device, namespace, handler=self._handle_void)
 
     def _handle_void(self, header: dict, payload: dict):
@@ -317,15 +314,15 @@ class PollingStrategy:
 
     def __init__(
         self,
-        device: MerossDevice,
+        device: "MerossDevice",
         namespace: str,
         *,
         payload=None,
         item_count: int = 0,
-        handler: Callable[[dict, dict], None] | None = None,
+        handler: typing.Callable[[dict, dict], None] | None = None,
     ):
         assert namespace not in device.polling_strategies
-        self.namespace: Final = namespace
+        self.namespace: typing.Final = namespace
         self.key_namespace = NAMESPACE_TO_KEY[namespace]
         self.lastrequest = 0
         if _conf := mlc.POLLING_STRATEGY_CONF.get(namespace):
@@ -369,7 +366,7 @@ class PollingStrategy:
     def increment_size(self):
         self.response_size += self.response_item_size
 
-    async def async_poll(self, device: MerossDevice, epoch: float):
+    async def async_poll(self, device: "MerossDevice", epoch: float):
         """
         This is a basic 'default' policy:
         - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
@@ -383,7 +380,7 @@ class PollingStrategy:
             self.lastrequest = epoch
             await device.async_request_poll(self)
 
-    async def async_trace(self, device: MerossDevice, protocol: str | None):
+    async def async_trace(self, device: "MerossDevice", protocol: str | None):
         """
         Used while tracing abilities. In general, we use an euristic 'default'
         query but for some 'well known namespaces' we might be better off querying with
@@ -406,7 +403,7 @@ class SmartPollingStrategy(PollingStrategy):
     if this 'pass' is already crowded (see device.async_request_smartpoll)
     """
 
-    async def async_poll(self, device: MerossDevice, epoch: float):
+    async def async_poll(self, device: "MerossDevice", epoch: float):
         if (epoch - self.lastrequest) >= self.polling_period:
             await device.async_request_smartpoll(self, epoch)
 
@@ -416,17 +413,17 @@ class EntityPollingStrategy(SmartPollingStrategy):
 
     def __init__(
         self,
-        device: MerossDevice,
+        device: "MerossDevice",
         namespace: str,
-        entity: MerossEntity,
+        entity: "MerossEntity",
         *,
         item_count: int = 0,
-        handler: Callable[[dict, dict], None] | None = None,
+        handler: typing.Callable[[dict, dict], None] | None = None,
     ):
         self.entity = entity
         super().__init__(device, namespace, item_count=item_count, handler=handler)
 
-    async def async_poll(self, device: MerossDevice, epoch: float):
+    async def async_poll(self, device: "MerossDevice", epoch: float):
         """
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
         the state of this paylod so we'll skip the smartpoll should the entity be disabled
@@ -441,7 +438,7 @@ class OncePollingStrategy(SmartPollingStrategy):
     need to be requested once (after onlining that is).
     """
 
-    async def async_poll(self, device: MerossDevice, epoch: float):
+    async def async_poll(self, device: "MerossDevice", epoch: float):
         """
         Same as SmartPollingStrategy (don't overwhelm the cloud mqtt)
         """

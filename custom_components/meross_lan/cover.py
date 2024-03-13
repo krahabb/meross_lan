@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import cover
@@ -17,9 +15,6 @@ from .merossclient import const as mc
 from .number import MLConfigNumber
 
 if typing.TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
-
     from .meross_device import MerossDevice
 
 
@@ -30,7 +25,7 @@ EXTRA_ATTR_POSITION_NATIVE = "position_native"
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass, config_entry, async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, cover.DOMAIN)
 
@@ -42,7 +37,7 @@ class MLCover(me.MerossEntity, cover.CoverEntity):
     DeviceClass = cover.CoverDeviceClass
     EntityFeature = cover.CoverEntityFeature
 
-    manager: MerossDevice
+    manager: "MerossDevice"
 
     # HA core entity attributes:
     is_closed: bool | None
@@ -61,7 +56,7 @@ class MLCover(me.MerossEntity, cover.CoverEntity):
         self,
         manager: "MerossDevice",
         channel: object | None,
-        device_class: MLCover.DeviceClass,
+        device_class: "MLCover.DeviceClass",
     ):
         self.is_closed = None
         self.is_closing = False
@@ -120,7 +115,7 @@ class MLRollerShutter(MLCover):
         "_position_starttime",
     )
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         self.current_cover_position = None
         self.supported_features = (
             MLCover.EntityFeature.OPEN

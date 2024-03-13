@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from ..helpers.namespaces import NamespaceHandler, SmartPollingStrategy
@@ -11,7 +9,7 @@ if typing.TYPE_CHECKING:
 
 
 class MLScreenBrightnessNumber(MLConfigNumber):
-    manager: MerossDevice
+    manager: "MerossDevice"
 
     namespace = mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
     key_namespace = mc.KEY_BRIGHTNESS
@@ -22,7 +20,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     native_min_value = 0
     native_step = 12.5
 
-    def __init__(self, manager: MerossDevice, key: str):
+    def __init__(self, manager: "MerossDevice", key: str):
         self.key_value = key
         self.name = f"Screen brightness ({key})"
         super().__init__(
@@ -46,7 +44,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
         "number_brightness_standby",
     )
 
-    def __init__(self, device: MerossDevice):
+    def __init__(self, device: "MerossDevice"):
         super().__init__(
             device,
             mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,

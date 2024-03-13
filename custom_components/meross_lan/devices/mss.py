@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime, timedelta
 from time import time
 import typing
@@ -21,8 +19,6 @@ from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from typing import Final
-
     from ..meross_device import MerossDevice
 
 
@@ -46,7 +42,7 @@ class EnergyEstimateSensor(MLNumericSensor):
         "sensor_consumptionx",
     )
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         self._estimate = 0.0
         self._reset_unsub = None
         # depending on init order we might not have this ready now...
@@ -153,7 +149,7 @@ class ElectricityNamespaceHandler(NamespaceHandler):
         "_electricity_lastepoch",
     )
 
-    def __init__(self, device: MerossDevice):
+    def __init__(self, device: "MerossDevice"):
         super().__init__(
             device,
             mc.NS_APPLIANCE_CONTROL_ELECTRICITY,
@@ -196,10 +192,10 @@ class ElectricityNamespaceHandler(NamespaceHandler):
 
 
 class ConsumptionXSensor(MLNumericSensor):
-    ATTR_OFFSET: Final = "offset"
-    ATTR_RESET_TS: Final = "reset_ts"
+    ATTR_OFFSET: typing.Final = "offset"
+    ATTR_RESET_TS: typing.Final = "reset_ts"
 
-    manager: MerossDevice
+    manager: "MerossDevice"
 
     __slots__ = (
         "offset",
@@ -212,7 +208,7 @@ class ConsumptionXSensor(MLNumericSensor):
         "_tomorrow_midnight_epoch",
     )
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         self.offset: int = 0
         self.reset_ts: int = 0
         self.energy_estimate: float = 0.0
@@ -441,7 +437,7 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
     """Suppress processing Appliance.Control.ConsumptionConfig since
     it is already processed at the MQTTConnection message handling."""
 
-    def __init__(self, device: MerossDevice):
+    def __init__(self, device: "MerossDevice"):
         super().__init__(device, mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG)
 
 
@@ -456,7 +452,7 @@ class OverTempEnableSwitch(MLSwitch):
 
     __slots__ = ("sensor_overtemp_type",)
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         super().__init__(
             manager, None, "config_overtemp_enable", self.DeviceClass.SWITCH
         )

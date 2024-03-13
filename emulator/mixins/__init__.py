@@ -1,6 +1,4 @@
-from __future__ import annotations
 import asyncio
-
 import threading
 from time import time
 import typing
@@ -203,7 +201,7 @@ class MerossEmulator:
             )
         return response
 
-    def handle_connect(self, client: mqtt.Client):
+    def handle_connect(self, client: "mqtt.Client"):
         with self.lock:
             self.mqtt = client
             self.update_epoch()
@@ -225,7 +223,7 @@ class MerossEmulator:
             )
             client.publish(self.topic_response, json_dumps(message_bind_set))
 
-    def handle_disconnect(self, client: mqtt.Client):
+    def handle_disconnect(self, client: "mqtt.Client"):
         with self.lock:
             self.mqtt = None
 

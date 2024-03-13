@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from time import time
 import typing
 
@@ -23,11 +21,10 @@ if typing.TYPE_CHECKING:
     from homeassistant.helpers.typing import EventType
 
     from .climate import MtsClimate
-    from .meross_device import MerossDevice
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
 
@@ -65,7 +62,7 @@ class MtsTrackedSensor(MLSelect):
     TRACKING_DEADTIME = 60
     """minimum delay (dead-time) between trying to adjust the climate entity"""
 
-    climate: MtsClimate
+    climate: "MtsClimate"
 
     # HA core entity attributes:
     _attr_available = True
@@ -83,7 +80,7 @@ class MtsTrackedSensor(MLSelect):
 
     def __init__(
         self,
-        climate: MtsClimate,
+        climate: "MtsClimate",
     ):
         self.current_option = hac.STATE_OFF
         self.options = []
@@ -239,7 +236,7 @@ class MtsTrackedSensor(MLSelect):
     @callback
     def _setup_tracking_entities(self, *_):
         self.options = [hac.STATE_OFF]
-        component: EntityComponent[SensorEntity] = self.hass.data["sensor"]
+        component: "EntityComponent[SensorEntity]" = self.hass.data["sensor"]
         for entity in component.entities:
             um = entity.native_unit_of_measurement
             if um in (hac.UnitOfTemperature.CELSIUS, hac.UnitOfTemperature.FAHRENHEIT):
@@ -262,7 +259,7 @@ class MtsTrackedSensor(MLSelect):
         ):
 
             @callback
-            def _tracking_callback(event: EventType[EventStateChangedData]):
+            def _tracking_callback(event: "EventType[EventStateChangedData]"):
                 with self.exception_warning("processing state update event"):
                     self._tracking_update(event.data.get("new_state"))
 
@@ -278,7 +275,7 @@ class MtsTrackedSensor(MLSelect):
             self._tracking_state = None
             self._delayed_tracking_reset(0)
 
-    def _tracking_update(self, tracked_state: State | None):
+    def _tracking_update(self, tracked_state: "State | None"):
         self._tracking_state = tracked_state
         self.check_tracking()
 

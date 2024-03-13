@@ -2,12 +2,9 @@
     Implementation for an async (aiohttp.ClientSession) http client
     for Meross devices.
 """
-from __future__ import annotations
-
 import asyncio
 import logging
 import typing
-
 import aiohttp
 import async_timeout
 from yarl import URL
@@ -103,7 +100,7 @@ class MerossHttpClient:
         while self._terminate_guard:
             await asyncio.sleep(0.5)
 
-    async def async_request_message(self, request: MerossMessage) -> MerossResponse:
+    async def async_request_message(self, request: "MerossMessage") -> "MerossResponse":
         self._check_terminated()
         logger = self._logger
         logid = None

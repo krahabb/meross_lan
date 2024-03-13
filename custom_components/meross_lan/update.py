@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import update
@@ -20,7 +18,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
 class MLUpdate(me.MerossEntity, update.UpdateEntity):
     PLATFORM = update.DOMAIN
     DeviceClass = update.UpdateDeviceClass
-    manager: MerossDevice
+    manager: "MerossDevice"
     # HA core entity attributes:
     _attr_available = True
     entity_category = me.EntityCategory.DIAGNOSTIC
@@ -34,7 +32,7 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
         "release_summary",
     )
 
-    def __init__(self, manager: MerossDevice, latest_version: LatestVersionType):
+    def __init__(self, manager: "MerossDevice", latest_version: LatestVersionType):
         self.installed_version = manager.descriptor.firmwareVersion
         self.latest_version = latest_version.get(mc.KEY_VERSION)
         self.release_summary = latest_version.get(mc.KEY_DESCRIPTION)

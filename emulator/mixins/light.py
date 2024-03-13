@@ -1,7 +1,5 @@
 """"""
 
-from __future__ import annotations
-
 import typing
 
 from custom_components.meross_lan.merossclient import (
@@ -15,7 +13,7 @@ if typing.TYPE_CHECKING:
 
 
 class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key):
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
         if get_element_by_key_safe(

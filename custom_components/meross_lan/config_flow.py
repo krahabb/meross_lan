@@ -1,7 +1,5 @@
 """Config flow for Meross LAN integration."""
 
-from __future__ import annotations
-
 import asyncio
 from contextlib import contextmanager
 from enum import StrEnum
@@ -34,8 +32,6 @@ from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
 
 if typing.TYPE_CHECKING:
-    from typing import ClassVar, Final
-
     from homeassistant.components.dhcp import DhcpServiceInfo
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
 
@@ -540,7 +536,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
 class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
     """Handle a config flow for Meross IoT local LAN."""
 
-    DHCP_DISCOVERIES: ClassVar = {}
+    DHCP_DISCOVERIES: typing.ClassVar = {}
 
     @staticmethod
     def async_get_options_flow(config_entry):
@@ -627,7 +623,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
             MerossDeviceDescriptor(discovery_info[mlc.CONF_PAYLOAD]),
         )
 
-    async def async_step_dhcp(self, discovery_info: DhcpServiceInfo):
+    async def async_step_dhcp(self, discovery_info: "DhcpServiceInfo"):
         """Handle a flow initialized by DHCP discovery."""
         api = self.api
         api.log(api.DEBUG, "received dhcp discovery: %s", str(discovery_info))
@@ -755,7 +751,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
         }
         return await self.async_step_device()
 
-    async def async_step_mqtt(self, discovery_info: MqttServiceInfo):
+    async def async_step_mqtt(self, discovery_info: "MqttServiceInfo"):
         """manage the MQTT discovery flow"""
         # this entry should only ever called once after startup
         # when HA thinks we're interested in discovery.
@@ -880,8 +876,8 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         config_entry: ce.ConfigEntry,
         repair_issue_id: str | None = None,
     ):
-        self.config_entry: Final = config_entry
-        self.config_entry_id: Final = config_entry.entry_id
+        self.config_entry: typing.Final = config_entry
+        self.config_entry_id: typing.Final = config_entry.entry_id
         self.config = dict(self.config_entry.data)  # type: ignore
         self.repair_issue_id = repair_issue_id
 

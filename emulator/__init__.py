@@ -14,8 +14,6 @@
     set of emulators from all the traces stored in a path.
 """
 
-from __future__ import annotations
-
 import os
 
 from aiohttp import web

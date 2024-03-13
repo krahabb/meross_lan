@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import number
@@ -14,12 +12,11 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .climate import MtsClimate
-    from .helpers.manager import EntityManager
-    from .meross_device import MerossDevice
+    from .meross_device import MerossDeviceBase
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
@@ -40,7 +37,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
 
     DEBOUNCE_DELAY = 1
 
-    manager: MerossDevice
+    manager: "MerossDeviceBase"
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
@@ -53,7 +50,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
 
     def __init__(
         self,
-        manager: EntityManager,
+        manager: "MerossDeviceBase",
         channel: object | None,
         entitykey: str | None = None,
         device_class: DeviceClass | str | None = None,
@@ -68,7 +65,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
             entitykey,
             device_class,
             device_value=device_value,
-            native_unit_of_measurement=native_unit_of_measurement
+            native_unit_of_measurement=native_unit_of_measurement,
         )
 
     async def async_shutdown(self):
@@ -135,7 +132,7 @@ class MtsTemperatureNumber(MLConfigNumber):
         "device_scale",
     )
 
-    def __init__(self, climate: MtsClimate, entitykey: str):
+    def __init__(self, climate: "MtsClimate", entitykey: str):
         self.climate = climate
         self.device_scale = climate.device_scale
         super().__init__(
@@ -157,7 +154,7 @@ class MtsSetPointNumber(MtsTemperatureNumber):
 
     __slots__ = ("icon",)
 
-    def __init__(self, climate: MtsClimate, preset_mode: str):
+    def __init__(self, climate: "MtsClimate", preset_mode: str):
         self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
             reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
         ]
