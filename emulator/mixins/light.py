@@ -36,13 +36,12 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         # various firmwares: some supports onoff in light payload some use the togglex
         p_digest = self.descriptor.digest
         p_light = payload[mc.KEY_LIGHT]
-        channel = p_light.get(mc.KEY_CHANNEL, 0)
         # generally speaking set_light always turns on, unless the payload carries onoff = 0 and
         # the device is not using togglex
         if self._togglex_switch:
             p_light.pop(mc.KEY_ONOFF, None)
             if not self._togglex_mode:
-                p_digest[mc.KEY_TOGGLEX][channel][mc.KEY_ONOFF] = 1
+                p_digest[mc.KEY_TOGGLEX][p_light[mc.KEY_CHANNEL]][mc.KEY_ONOFF] = 1
         else:
             p_light[mc.KEY_ONOFF] = p_light.get(mc.KEY_ONOFF, 1)
         update_dict_strict(p_digest[mc.KEY_LIGHT], p_light)

@@ -41,21 +41,6 @@ class MtsConfigSwitch(MLSwitch):
             namespace=namespace,
         )
 
-    async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: [
-                    {
-                        self.key_channel: self.channel,
-                        self.key_value: onoff,
-                    }
-                ]
-            },
-        ):
-            self.update_onoff(onoff)
-
 
 class MtsRichTemperatureNumber(MtsTemperatureNumber):
     """

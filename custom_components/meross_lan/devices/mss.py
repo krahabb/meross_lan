@@ -447,6 +447,10 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
 
 class OverTempEnableSwitch(MLSwitch):
 
+    namespace = mc.NS_APPLIANCE_CONFIG_OVERTEMP
+    key_namespace = mc.KEY_OVERTEMP
+    key_value = mc.KEY_ENABLE
+
     # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
 
@@ -470,14 +474,6 @@ class OverTempEnableSwitch(MLSwitch):
     async def async_shutdown(self):
         await super().async_shutdown()
         self.sensor_overtemp_type = None  # type: ignore
-
-    async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONFIG_OVERTEMP,
-            mc.METHOD_SET,
-            {mc.KEY_OVERTEMP: {mc.KEY_ENABLE: onoff}},
-        ):
-            self.update_onoff(onoff)
 
     # interface: self
     def _handle_Appliance_Config_OverTemp(self, header: dict, payload: dict):

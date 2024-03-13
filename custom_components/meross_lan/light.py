@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import light
@@ -35,7 +33,7 @@ MSLANY_MIRED_MAX = 371  # math.ceil(1/(2700/1000000))
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, light.DOMAIN)
 
@@ -77,7 +75,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     """
 
     PLATFORM = light.DOMAIN
-    manager: MerossDevice
+    manager: "MerossDevice"
 
     """
     internal copy of the actual meross light state
@@ -114,7 +112,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         "supported_features",
     )
 
-    def __init__(self, manager: MerossDevice, payload: dict):
+    def __init__(self, manager: "MerossDevice", payload: dict):
         self._light = {}
         self.brightness = None
         self.color_mode = ColorMode.UNKNOWN
@@ -128,7 +126,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
             self.effect_list = list(self._light_effect_map.values())
             self.supported_features = LightEntityFeature.EFFECT
 
-        super().__init__(manager, payload.get(mc.KEY_CHANNEL, 0))
+        super().__init__(manager, payload.get(mc.KEY_CHANNEL))
 
     def set_unavailable(self):
         self._light = {}
@@ -186,6 +184,9 @@ class MLLight(MLLightBase):
 
     manager: "MerossDevice"
 
+    namespace = mc.NS_APPLIANCE_SYSTEM_DNDMODE
+    key_namespace = mc.KEY_DNDMODE
+
     _unrecorded_attributes = frozenset({ATTR_TOGGLEX_MODE})
 
     _capacity: int
@@ -225,13 +226,11 @@ class MLLight(MLLightBase):
         if get_element_by_key_safe(
             descriptor.digest.get(mc.KEY_TOGGLEX),
             mc.KEY_CHANNEL,
-            payload.get(mc.KEY_CHANNEL, 0),
+            payload.get(mc.KEY_CHANNEL),
         ):
             self._togglex_switch = True
             self._togglex_mode = None
             self.extra_state_attributes = {ATTR_TOGGLEX_MODE: None}
-            self.namespace = mc.NS_APPLIANCE_CONTROL_TOGGLEX
-            self.key_namespace = mc.KEY_TOGGLEX
         else:
             self._togglex_switch = False
             self._togglex_mode = False
@@ -264,7 +263,6 @@ class MLLight(MLLightBase):
             self._light_effect_map = mc.HP110A_LIGHT_EFFECT_MAP
 
         super().__init__(manager, payload)
-
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_LIGHT, self)
         if self._togglex_switch:
             manager.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, self)
@@ -359,7 +357,17 @@ class MLLight(MLLightBase):
 
     async def async_request_onoff(self, onoff: int):
         if self._togglex_switch:
-            await super().async_request_onoff(onoff)
+            if await self.manager.async_request_ack(
+                mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+                mc.METHOD_SET,
+                {
+                    mc.KEY_TOGGLEX: {
+                        mc.KEY_CHANNEL: self.channel,
+                        mc.KEY_ONOFF: onoff,
+                    }
+                },
+            ):
+                self.update_onoff(onoff)
         else:
             if await self.async_request_light_ack(
                 {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}
@@ -416,18 +424,22 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
     """
 
     PLATFORM = light.DOMAIN
-    manager: MerossDevice
+    manager: "MerossDevice"
+
+    namespace = mc.NS_APPLIANCE_SYSTEM_DNDMODE
+    key_namespace = mc.KEY_DNDMODE
+    key_value = mc.KEY_MODE
 
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
     entity_category = me.EntityCategory.CONFIG
     supported_color_modes: set[ColorMode] = {ColorMode.ONOFF}
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         super().__init__(manager, None, mlc.DND_ID, mc.KEY_DNDMODE)
         EntityPollingStrategy(
             manager,
-            mc.NS_APPLIANCE_SYSTEM_DNDMODE,
+            self.namespace,
             self,
             handler=self._handle_Appliance_System_DNDMode,
         )

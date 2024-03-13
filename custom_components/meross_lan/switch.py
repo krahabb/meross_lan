@@ -46,19 +46,6 @@ class PhysicalLockSwitch(MLSwitch):
         manager.register_parser(self.namespace, self)
         EntityPollingStrategy(manager, self.namespace, self, item_count=1)
 
-    # interface: MerossToggle
-    async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: [
-                    {self.key_channel: self.channel, self.key_value: onoff}
-                ]
-            },
-        ):
-            self.update_onoff(onoff)
-
 
 class MLToggle(MLSwitch):
 
@@ -66,20 +53,11 @@ class MLToggle(MLSwitch):
     key_namespace = mc.KEY_TOGGLE
 
     def __init__(self, manager: "MerossDevice"):
-        super().__init__(manager, 0, None, MLSwitch.DeviceClass.OUTLET)
+        # 2024-03-13: passing entitykey="0" instead of channel in order
+        # to mantain unique_id compatibility with installations but
+        # updating to new toggle entity model (where channel is None for this entity type)
+        super().__init__(manager, None, "0", MLSwitch.DeviceClass.OUTLET)
         manager.register_parser(self.namespace, self)
-
-    async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: {
-                    self.key_value: onoff,
-                }
-            },
-        ):
-            self.update_onoff(onoff)
 
 
 def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
@@ -96,6 +74,19 @@ class MLToggleX(MLSwitch):
     def __init__(self, manager: "MerossDevice", channel: object):
         super().__init__(manager, channel, None, MLSwitch.DeviceClass.OUTLET)
         manager.register_parser(self.namespace, self)
+
+    async def async_request_onoff(self, onoff: int):
+        if await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: {
+                    self.key_channel: self.channel,
+                    self.key_value: onoff,
+                }
+            },
+        ):
+            self.update_onoff(onoff)
 
 
 def digest_init_togglex(device: "MerossDevice", digest: list) -> "DigestParseFunc":

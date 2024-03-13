@@ -338,6 +338,9 @@ class MerossToggle(MerossBinaryEntity):
         onoff=None,
         namespace: str | None = None,
     ):
+        if namespace:
+            self.namespace = namespace
+            self.key_namespace = NAMESPACE_TO_KEY[namespace]
         super().__init__(
             manager,
             channel,
@@ -345,9 +348,6 @@ class MerossToggle(MerossBinaryEntity):
             device_class,
             onoff=onoff,
         )
-        if namespace:
-            self.namespace = namespace
-            self.key_namespace = NAMESPACE_TO_KEY[namespace]
 
     async def async_turn_on(self, **kwargs):
         await self.async_request_onoff(1)
@@ -356,22 +356,31 @@ class MerossToggle(MerossBinaryEntity):
         await self.async_request_onoff(0)
 
     async def async_request_onoff(self, onoff: int):
-        assert self.namespace
-
-        # this is the meross executor code
-        # override for switches not implemented
-        # by a toggle like api
-        if await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: {
-                    self.key_channel: self.channel,
-                    self.key_value: onoff,
-                }
-            },
-        ):
-            self.update_onoff(onoff)
+        if self.channel is None:
+            if await self.manager.async_request_ack(
+                self.namespace,
+                mc.METHOD_SET,
+                {
+                    self.key_namespace: {
+                        self.key_value: onoff,
+                    }
+                },
+            ):
+                self.update_onoff(onoff)
+        else:
+            if await self.manager.async_request_ack(
+                self.namespace,
+                mc.METHOD_SET,
+                {
+                    self.key_namespace: [
+                        {
+                            self.key_channel: self.channel,
+                            self.key_value: onoff,
+                        }
+                    ]
+                },
+            ):
+                self.update_onoff(onoff)
 
 
 #

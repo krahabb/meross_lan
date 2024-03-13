@@ -360,6 +360,10 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
 
     manager: "MerossDevice"
 
+    namespace = mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
+    key_namespace = mc.KEY_CONFIG
+
+    # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
 
     def __init__(
@@ -369,7 +373,6 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
         key: str,
         *,
         onoff=None,
-        namespace=mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
     ):
         self.key_value = key
         self.name = key
@@ -379,23 +382,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
             f"config_{key}",
             self.DeviceClass.SWITCH,
             onoff=onoff,
-            namespace=namespace,
         )
-
-    async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
-            mc.METHOD_SET,
-            {
-                mc.KEY_CONFIG: [
-                    {
-                        mc.KEY_CHANNEL: self.channel,
-                        self.key_value: onoff,
-                    }
-                ]
-            },
-        ):
-            self.update_onoff(onoff)
 
 
 class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
@@ -433,22 +420,16 @@ class MLGarageConfigSwitch(MLGarageMultipleConfigSwitch):
     'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
     """
 
+    namespace = mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
+    key_namespace = mc.KEY_CONFIG
+
     def __init__(self, manager: "MerossDevice", key: str, payload: dict):
         super().__init__(
             manager,
             None,
             key,
             onoff=payload[key],
-            namespace=mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
         )
-
-    async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
-            mc.METHOD_SET,
-            {mc.KEY_CONFIG: {self.key_value: onoff}},
-        ):
-            self.update_onoff(onoff)
 
 
 class MLGarageMultipleConfigNumber(MLConfigNumber):

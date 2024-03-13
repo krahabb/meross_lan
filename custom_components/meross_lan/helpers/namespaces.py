@@ -164,7 +164,7 @@ class NamespaceHandler:
         """
         p_channel = payload[self.key_namespace]
         if isinstance(p_channel, dict):
-            self.entities[p_channel.get(mc.KEY_CHANNEL, 0)](p_channel)
+            self.entities[p_channel.get(mc.KEY_CHANNEL)](p_channel)
         else:
             for p_channel in p_channel:
                 try:
@@ -215,7 +215,7 @@ class NamespaceHandler:
         Used when parsing digest(s) in NS_ALL"""
         try:
             if type(digest) is dict:
-                self.entities[digest.get(mc.KEY_CHANNEL, 0)](digest)
+                self.entities[digest.get(mc.KEY_CHANNEL)](digest)
             else:
                 for channel_digest in digest:
                     try:
