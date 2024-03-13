@@ -1,13 +1,9 @@
 """"""
 
 from random import randint
-
 import typing
 
-from custom_components.meross_lan.merossclient import (
-    MerossRequest,
-    const as mc,
-)
+from custom_components.meross_lan.merossclient import MerossRequest, const as mc
 
 if typing.TYPE_CHECKING:
     from .. import MerossEmulator, MerossEmulatorDescriptor
