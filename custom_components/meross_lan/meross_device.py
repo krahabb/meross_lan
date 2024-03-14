@@ -40,7 +40,7 @@ from .const import (
     PARAM_TRACING_ABILITY_POLL_TIMEOUT,
     DeviceConfigType,
 )
-from .helpers import datetime_from_epoch, schedule_async_callback
+from .helpers import datetime_from_epoch, schedule_async_callback, utcdatetime_from_epoch
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import (
     DiagnosticPollingStrategy,
@@ -2019,7 +2019,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if isinstance(tz_local, pytz.tzinfo.DstTzInfo):
                         idx = bisect.bisect_right(
                             tz_local._utc_transition_times,  # type: ignore
-                            datetime.utcfromtimestamp(timestamp),
+                            utcdatetime_from_epoch(timestamp),
                         )
                         # idx would be the next transition offset index
                         _transition_info = tz_local._transition_info[idx - 1]  # type: ignore
