@@ -501,20 +501,20 @@ DIFFUSER_SPRAY_MODE_FULL = 1
 DIFFUSER_LIGHT_MODE_RAINBOW = 0  # color modes taken from 'homebridge-meross' plugin
 DIFFUSER_LIGHT_MODE_COLOR = 1
 DIFFUSER_LIGHT_MODE_TEMPERATURE = 2
-DIFFUSER_LIGHT_EFFECT_MAP = {
-    DIFFUSER_LIGHT_MODE_RAINBOW: "Rainbow",
-    DIFFUSER_LIGHT_MODE_COLOR: "Color",
-    DIFFUSER_LIGHT_MODE_TEMPERATURE: "Temperature",
-}
+DIFFUSER_LIGHT_MODE_LIST = [
+    "Rainbow",
+    "Color",
+    "Temperature",
+]
 
 # cherub machine
-HP110A_LIGHT_EFFECT_MAP = {
-    0: "Color",
-    1: "Scene 1",
-    2: "Scene 2",
-    3: "Scene 3",
-    4: "Scene 4",
-}
+HP110A_LIGHT_EFFECT_LIST = [
+    "Color",
+    "Scene 1",
+    "Scene 2",
+    "Scene 3",
+    "Scene 4",
+]
 HP110A_MP3_SONG_MIN = 1
 HP110A_MP3_SONG_MAX = 11
 HP110A_MP3_SONG_MAP = {

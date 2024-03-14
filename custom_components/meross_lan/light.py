@@ -92,9 +92,10 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     to interact with HA api. This dict contains the effect key value
     used in the 'light' payload to the effect name
     """
-    _light_effect_map: dict = {}
 
     # HA core entity attributes:
+    _attr_effect_list: list[str] | None = None
+
     brightness: int | None
     color_mode: ColorMode
     color_temp: int | None
@@ -125,11 +126,11 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         self.color_temp = None
         self.effect = None
         self.rgb_color = None
-        if self._light_effect_map is MLLightBase._light_effect_map:
+        if self._attr_effect_list is None:
             self.effect_list = None
             self.supported_features = LightEntityFeature(0)
         else:
-            self.effect_list = list(self._light_effect_map.values())
+            self.effect_list = self._attr_effect_list
             self.supported_features = LightEntityFeature.EFFECT
 
         super().__init__(manager, payload.get(mc.KEY_CHANNEL))
@@ -197,6 +198,7 @@ class MLLight(MLLightBase):
     _unrecorded_attributes = frozenset({ATTR_TOGGLEX_MODE})
 
     _capacity: int
+    _is_hp110: bool
     _togglex_switch: bool
     """
     if True the device supports/needs TOGGLEX namespace to toggle
@@ -210,6 +212,7 @@ class MLLight(MLLightBase):
 
     __slots__ = (
         "_capacity",
+        "_is_hp110",
         "_togglex_switch",
         "_togglex_mode",
         "supported_color_modes",
@@ -259,15 +262,17 @@ class MLLight(MLLightBase):
             else:
                 supported_color_modes.add(ColorMode.ONOFF)  # type: ignore
 
+        self._is_hp110 = False
         if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
-            self._light_effect_map = {}
+            self._attr_effect_list = []
             SmartPollingStrategy(
                 manager,
                 mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
                 handler=self._handle_Appliance_Control_Light_Effect,
             )
         elif mc.NS_APPLIANCE_CONTROL_MP3 in ability:
-            self._light_effect_map = mc.HP110A_LIGHT_EFFECT_MAP
+            self._attr_effect_list = mc.HP110A_LIGHT_EFFECT_LIST
+            self._is_hp110 = True
 
         super().__init__(manager, payload)
         if self._togglex_switch:
@@ -303,17 +308,13 @@ class MLLight(MLLightBase):
             capacity &= ~mc.LIGHT_CAPACITY_RGB
 
         if ATTR_EFFECT in kwargs:
-            effect = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
-            if effect:
-                if isinstance(effect, str) and effect.isdigit():
-                    effect = int(effect)
-                light[mc.KEY_EFFECT] = effect
-                capacity |= mc.LIGHT_CAPACITY_EFFECT
+            light[mc.KEY_EFFECT] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
+            capacity |= mc.LIGHT_CAPACITY_EFFECT
+        else:
+            if self._is_hp110:
+                light[mc.KEY_EFFECT] = 0
             else:
                 light.pop(mc.KEY_EFFECT, None)
-                capacity &= ~mc.LIGHT_CAPACITY_EFFECT
-        else:
-            light.pop(mc.KEY_EFFECT, None)
             capacity &= ~mc.LIGHT_CAPACITY_EFFECT
 
         light[mc.KEY_CAPACITY] = capacity
@@ -393,33 +394,28 @@ class MLLight(MLLightBase):
             elif capacity & mc.LIGHT_CAPACITY_LUMINANCE:
                 self.color_mode = ColorMode.BRIGHTNESS
 
-        self.effect = None
-        if mc.KEY_EFFECT in payload:
-            # here effect might be an int while our map keys might be 'str formatted'
-            # so we'll use a flexible (robust? dumb?) approach here in mapping
-            effect = payload[mc.KEY_EFFECT]
-            if effect in self._light_effect_map:
-                self.effect = self._light_effect_map.get(effect)
-            elif isinstance(effect, int):
-                for key, value in self._light_effect_map.items():
-                    if isinstance(key, str) and key.isdigit():
-                        if int(key) == effect:
-                            self.effect = value
-                            break
-                else:
-                    # we didnt find the effect even with effectId int casting
-                    # so we hope it's positional....
-                    effects = self._light_effect_map.values()
-                    if effect < len(effects):
-                        self.effect = effects[effect]  # type: ignore
+            if capacity & mc.LIGHT_CAPACITY_EFFECT:
+                try:
+                    self.effect = self.effect_list[payload[mc.KEY_EFFECT]]  # type: ignore
+                except Exception:
+                    # due to transient conditions this might happen now and then..
+                    self.effect = None
+            else:
+                self.effect = None
 
     def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
-        light_effect_map = {}
+        effect_list = []
+        effect = None
         for p_effect in payload[mc.KEY_EFFECT]:
-            light_effect_map[p_effect[mc.KEY_ID_]] = p_effect[mc.KEY_EFFECTNAME]
-        if self._light_effect_map != light_effect_map:
-            self._light_effect_map = light_effect_map
-            self.effect_list = list(light_effect_map.values())
+            if p_effect[mc.KEY_ENABLE]:
+                effect = p_effect[mc.KEY_EFFECTNAME]
+                effect_list.append(effect)
+            else:
+                effect_list.append(p_effect[mc.KEY_EFFECTNAME])
+
+        if (self.effect_list != effect_list) or (self.effect != effect):
+            self.effect_list = effect_list
+            self.effect = effect
             self.flush_state()
 
 

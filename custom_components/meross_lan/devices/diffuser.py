@@ -1,6 +1,5 @@
 import typing
 
-from ..helpers import reverse_lookup
 from ..helpers.namespaces import NamespaceHandler, PollingStrategy
 from ..light import (
     ATTR_BRIGHTNESS,
@@ -103,9 +102,8 @@ class MLDiffuserLight(MLLightBase):
 
     namespace = mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT
 
-    _light_effect_map = mc.DIFFUSER_LIGHT_EFFECT_MAP
-
     # HA core entity attributes:
+    _attr_effect_list = mc.DIFFUSER_LIGHT_MODE_LIST
     supported_color_modes = {ColorMode.RGB}
 
     async def async_turn_on(self, **kwargs):
@@ -127,9 +125,7 @@ class MLDiffuserLight(MLLightBase):
             light[mc.KEY_LUMINANCE] = 100
 
         if ATTR_EFFECT in kwargs:
-            mode = reverse_lookup(self._light_effect_map, kwargs[ATTR_EFFECT])
-            if mode is not None:
-                light[mc.KEY_MODE] = mode
+            light[mc.KEY_MODE] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
 
         if await self.manager.async_request_ack(
             self.namespace,
@@ -142,15 +138,16 @@ class MLDiffuserLight(MLLightBase):
         if mc.KEY_MODE in payload:
             # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
             mode = payload[mc.KEY_MODE]
-            self.effect = self._light_effect_map.get(mode)
-            if self.effect is None:
-                # we're missing the effect for this mode so the device firmware
-                # is newer than our knowledge. Lets make a copy of our _light_effect_map
-                # which is by design a class instance
-                self.effect = "mode_" + str(mode)
-                self._light_effect_map = dict(self._light_effect_map)
-                self._light_effect_map[mode] = self.effect
-                self.effect_list = list(self._light_effect_map.values())
+            if mode == mc.DIFFUSER_LIGHT_MODE_COLOR:
+                self.effect = None
+            else:
+                try:
+                    self.effect = self.effect_list[mode]  # type: ignore
+                except Exception as exception:
+                    self.log_exception(
+                        self.WARNING, exception, "parsing light mode", timeout=86400
+                    )
+                    self.effect = None
 
 
 class MLDiffuserSpray(MLSpray):

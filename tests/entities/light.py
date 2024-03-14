@@ -49,7 +49,7 @@ class EntityTest(EntityComponentTest):
                 assert isinstance(entity, MLDiffuserLight)
                 assert supported_color_modes == {ColorMode.RGB}, "supported_color_modes"
                 assert supported_features == LightEntityFeature.EFFECT
-                assert entity.effect_list == list(mc.DIFFUSER_LIGHT_EFFECT_MAP.values()), "effect_list"
+                assert entity.effect_list == mc.DIFFUSER_LIGHT_MODE_LIST, "effect_list"
             if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
                 assert isinstance(entity, MLLight)
                 capacity = ability[mc.NS_APPLIANCE_CONTROL_LIGHT][mc.KEY_CAPACITY]
@@ -66,7 +66,7 @@ class EntityTest(EntityComponentTest):
             if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
                 assert isinstance(entity, MLLight)
                 assert supported_features == LightEntityFeature.EFFECT
-                assert entity.effect_list == list(mc.HP110A_LIGHT_EFFECT_MAP.values()), "effect_list"
+                assert entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST, "effect_list"
 
     async def async_test_enabled_callback(
         self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity
