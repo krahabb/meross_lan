@@ -198,7 +198,8 @@ class MLLight(MLLightBase):
     _unrecorded_attributes = frozenset({ATTR_TOGGLEX_MODE})
 
     _capacity: int
-    _is_hp110: bool
+    _effect_command_mode: bool | None
+    _effect_payload: list | None
     _togglex_switch: bool
     """
     if True the device supports/needs TOGGLEX namespace to toggle
@@ -212,7 +213,8 @@ class MLLight(MLLightBase):
 
     __slots__ = (
         "_capacity",
-        "_is_hp110",
+        "_effect_command_mode",
+        "_effect_payload",
         "_togglex_switch",
         "_togglex_mode",
         "supported_color_modes",
@@ -262,8 +264,18 @@ class MLLight(MLLightBase):
             else:
                 supported_color_modes.add(ColorMode.ONOFF)  # type: ignore
 
-        self._is_hp110 = False
+        # _effect_command_mode is a flag indicating if we have to use a special
+        # processing in order to set the effect (there are issues about this)
+        # _effect_command_mode = None instructs the code to do a check and try
+        # to identify the device behavior.
+        # _effect_command_mode = True will use Appliance.Control.Light.Effect
+        # to try activate the effect but it could be very dangerous (I'm scared
+        # this could delete the whole effects memory of the device).
+        # This feature is on hold at the moment waiting for further ideas.
+        self._effect_command_mode = False
         if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
+            # enable this to (dangerously) start playing: self._effect_command_mode = None
+            self._effect_payload = []
             self._attr_effect_list = []
             SmartPollingStrategy(
                 manager,
@@ -272,7 +284,6 @@ class MLLight(MLLightBase):
             )
         elif mc.NS_APPLIANCE_CONTROL_MP3 in ability:
             self._attr_effect_list = mc.HP110A_LIGHT_EFFECT_LIST
-            self._is_hp110 = True
 
         super().__init__(manager, payload)
         if self._togglex_switch:
@@ -308,10 +319,12 @@ class MLLight(MLLightBase):
             capacity &= ~mc.LIGHT_CAPACITY_RGB
 
         if ATTR_EFFECT in kwargs:
+            _effect_command_mode = self._effect_command_mode
             light[mc.KEY_EFFECT] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
             capacity |= mc.LIGHT_CAPACITY_EFFECT
         else:
-            if self._is_hp110:
+            _effect_command_mode = False
+            if self.effect_list is mc.HP110A_LIGHT_EFFECT_LIST:
                 light[mc.KEY_EFFECT] = 0
             else:
                 light.pop(mc.KEY_EFFECT, None)
@@ -349,6 +362,35 @@ class MLLight(MLLightBase):
                 if self._togglex_mode:
                     # previous test showed that we need TOGGLEX
                     await self.async_request_onoff(1)
+
+            if _effect_command_mode is None:
+                # we need to auto-detect the behavior of the command to set the effect
+                if await self.manager.async_request_ack(
+                    mc.NS_APPLIANCE_CONTROL_LIGHT,
+                    mc.METHOD_GET,
+                    {mc.KEY_LIGHT: {}},
+                ):
+                    self._effect_command_mode = _effect_command_mode = (
+                        self._light.get(mc.KEY_EFFECT) != light[mc.KEY_EFFECT]
+                    )
+
+            if _effect_command_mode:
+                # since the light payload is not able to set the effect
+                # we're trying a new way.
+                with self.exception_warning("setting effect"):
+                    p_effect = self._effect_payload[light[mc.KEY_EFFECT]]  # type: ignore
+                    await self.manager.async_request(
+                        mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
+                        mc.METHOD_SET,
+                        {
+                            mc.KEY_EFFECT: [
+                                {
+                                    mc.KEY_ID_: p_effect[mc.KEY_ID_],
+                                    mc.KEY_ENABLE: 1,
+                                }
+                            ]
+                        },
+                    )
 
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
@@ -404,9 +446,10 @@ class MLLight(MLLightBase):
                 self.effect = None
 
     def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
+        self._effect_payload = payload[mc.KEY_EFFECT]
         effect_list = []
         effect = None
-        for p_effect in payload[mc.KEY_EFFECT]:
+        for p_effect in self._effect_payload:
             if p_effect[mc.KEY_ENABLE]:
                 effect = p_effect[mc.KEY_EFFECTNAME]
                 effect_list.append(effect)
