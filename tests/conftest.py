@@ -18,7 +18,10 @@
 from unittest.mock import patch
 
 import pytest
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
+from pytest_homeassistant_custom_component.test_util.aiohttp import (
+    AiohttpClientMocker,
+    mock_aiohttp_client,
+)
 
 from . import helpers
 
@@ -78,6 +81,30 @@ def disable_entity_registry_update():
 
     MLGarageDoorEnableSwitch.update_onoff = MLGarageMultipleConfigSwitch.update_onoff
     yield
+
+
+@pytest.fixture()
+def aioclient_mock(hass):
+    """This fixture overrides the test library 'aioclient_mock' in order to
+    (also) add patching for the dedicated aiohttp.ClientSession in our http client
+    because the default HA api is not able to provide the needed features."""
+
+    with mock_aiohttp_client() as aioclient_mocker:
+
+        from custom_components.meross_lan.merossclient.httpclient import (
+            MerossHttpClient,
+        )
+
+        def create_session():
+            if not MerossHttpClient._SESSION:
+                MerossHttpClient._SESSION = aioclient_mocker.create_session(hass.loop)
+            return MerossHttpClient._SESSION
+
+        with patch(
+            "custom_components.meross_lan.merossclient.httpclient.MerossHttpClient._get_or_create_client_session",
+            side_effect=create_session,
+        ):
+            yield aioclient_mocker
 
 
 @pytest.fixture()

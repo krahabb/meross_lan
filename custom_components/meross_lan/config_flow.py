@@ -14,7 +14,6 @@ from homeassistant import config_entries as ce, const as hac
 from homeassistant.const import CONF_ERROR
 from homeassistant.data_entry_flow import FlowHandler, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
@@ -441,7 +440,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
             self._httpclient = _httpclient = MerossHttpClient(
                 host,
                 key,
-                async_get_clientsession(self.hass),
+                None,
                 api,  # type: ignore (api almost duck-compatible with logging.Logger)
                 api.VERBOSE,
             )

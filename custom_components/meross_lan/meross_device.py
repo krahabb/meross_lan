@@ -11,10 +11,9 @@ import typing
 import weakref
 from zoneinfo import ZoneInfo
 
-from aiohttp import ServerDisconnectedError
+import aiohttp
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
@@ -1039,7 +1038,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     self.TRACE_TX,
                 )
                 try:
-                    response = await http.async_request_message(request)
+                    response = await http.async_request_raw(request.json())
                     self.device_response_size_min = max(
                         self.device_response_size_min, len(response.json())
                     )
@@ -1104,13 +1103,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                                 ProtocolSensor.ATTR_HTTP
                             )
                     elif namespace is mc.NS_APPLIANCE_CONTROL_UNBIND:
-                        if isinstance(exception, ServerDisconnectedError):
+                        if isinstance(exception, aiohttp.ServerDisconnectedError):
                             # this is expected when issuing the UNBIND
                             # so this is an indication we're dead
                             self._set_offline()
                             return None
                     elif namespace is mc.NS_APPLIANCE_CONTROL_MULTIPLE:
-                        if isinstance(exception, ServerDisconnectedError):
+                        if isinstance(exception, aiohttp.ServerDisconnectedError):
                             # this happens (instead of JSONDecodeError)
                             # on my msl120. I guess the (older) fw behaves
                             # differently than those responding incomplete json.
@@ -1129,8 +1128,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             )
                             return None
 
-                    if isinstance(exception, asyncio.TimeoutError):
+                    if isinstance(exception, asyncio.TimeoutError) or isinstance(
+                        exception, aiohttp.ServerTimeoutError
+                    ):
                         return None
+
+                # for any other exception we could guess the device
+                # is stalling a bit so we just wait a bit before re-issuing
+                await asyncio.sleep(0.5)
             else:
                 return None
 
@@ -1326,7 +1331,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         self._timezone_next_check = (
                             epoch + PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
                         )
-                        if self.device_timedelta < PARAM_TIMESTAMP_TOLERANCE:
+                        if abs(self.device_timedelta) < PARAM_TIMESTAMP_TOLERANCE:
                             with self.exception_warning("_check_device_timerules"):
                                 if self._check_device_timerules():
                                     # timezone trans not good..fix and check again soon
@@ -1356,7 +1361,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         ns_all_response = await self.async_http_request(*ns_all)
 
                 if ns_all_response:
-                    self.polling_strategies[mc.NS_APPLIANCE_SYSTEM_ALL].response_size = len(ns_all_response.json())
+                    self.polling_strategies[
+                        mc.NS_APPLIANCE_SYSTEM_ALL
+                    ].response_size = len(ns_all_response.json())
                     await self._async_request_updates(epoch, mc.NS_APPLIANCE_SYSTEM_ALL)
                 else:
                     if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
@@ -1503,11 +1510,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
         else:
             if host := self.host:
-                self._http = MerossHttpClient(
-                    host,
-                    self.key,
-                    async_get_clientsession(self.hass),
-                )
+                self._http = MerossHttpClient(host, self.key)
 
         if conf_protocol is CONF_PROTOCOL_AUTO:
             # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
@@ -1570,21 +1573,19 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
         # we'll always be a bit late in processing
         self.device_timestamp = header[mc.KEY_TIMESTAMP]
-        device_timedelta = epoch - self.device_timestamp
-        if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-            if (
-                abs(self.device_timedelta - device_timedelta)
-                > PARAM_TIMESTAMP_TOLERANCE
-            ):
-                # big step so we're not averaging
-                self.device_timedelta = device_timedelta
-            else:  # average the sampled timedelta
-                self.device_timedelta = (
-                    4 * self.device_timedelta + device_timedelta
-                ) / 5
-            self._config_device_timestamp(epoch)
-        else:
-            self.device_timedelta = 0
+        self.device_timedelta = (
+            9 * self.device_timedelta + (epoch - self.device_timestamp)
+        ) / 10
+        if abs(self.device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
+            if not self._config_device_timestamp(epoch):
+                if (epoch - self.device_timedelta_log_epoch) > 604800:  # 1 week lockout
+                    self.device_timedelta_log_epoch = epoch
+                    self.log(
+                        self.WARNING,
+                        "Incorrect timestamp: %d seconds behind HA (%d on average)",
+                        int(epoch - self.device_timestamp),
+                        int(self.device_timedelta),
+                    )
 
         if self.isEnabledFor(self.DEBUG):
             # it appears sometimes the devices
@@ -1746,11 +1747,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 if _http := self._http:
                     _http.host = host
                 else:
-                    self._http = MerossHttpClient(
-                        host,
-                        self.key,
-                        async_get_clientsession(self.hass),
-                    )
+                    self._http = MerossHttpClient(host, self.key)
 
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             if self._mqtt_active:
@@ -1814,18 +1811,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # the procedure too often
                 self.mqtt_request(*request_push(mc.NS_APPLIANCE_SYSTEM_CLOCK))
                 self.device_timedelta_config_epoch = epoch
-                return
+                return True
             if last_config_delay < 30:
                 # 30 sec 'deadzone' where we allow the timestamp
                 # transaction to complete (should really be like few seconds)
-                return
-        if (epoch - self.device_timedelta_log_epoch) > 604800:  # 1 week lockout
-            self.device_timedelta_log_epoch = epoch
-            self.log(
-                self.WARNING,
-                "Incorrect timestamp: %d seconds behind HA",
-                int(self.device_timedelta),
-            )
+                return True
+        return False
 
     def _check_device_timerules(self) -> bool:
         """

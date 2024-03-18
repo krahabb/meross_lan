@@ -232,7 +232,7 @@
                 "step": {
                     "profile": {
                         "title": "Meross クラウドプロファイル",
-                        "description": "Meross アカウントに登録して接続する",
+                        "description": "Meross {email} アカウントに登録して接続する\n{placeholder}",
                         "data": {
                             "email": "メロスログイン",
                             "password": "メロスパスワード",
