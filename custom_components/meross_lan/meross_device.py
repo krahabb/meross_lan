@@ -1331,7 +1331,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         self._timezone_next_check = (
                             epoch + PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
                         )
-                        if self.device_timedelta < PARAM_TIMESTAMP_TOLERANCE:
+                        if abs(self.device_timedelta) < PARAM_TIMESTAMP_TOLERANCE:
                             with self.exception_warning("_check_device_timerules"):
                                 if self._check_device_timerules():
                                     # timezone trans not good..fix and check again soon
@@ -1573,21 +1573,19 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # We ignore delays below PARAM_TIMESTAMP_TOLERANCE since
         # we'll always be a bit late in processing
         self.device_timestamp = header[mc.KEY_TIMESTAMP]
-        device_timedelta = epoch - self.device_timestamp
-        if abs(device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
-            if (
-                abs(self.device_timedelta - device_timedelta)
-                > PARAM_TIMESTAMP_TOLERANCE
-            ):
-                # big step so we're not averaging
-                self.device_timedelta = device_timedelta
-            else:  # average the sampled timedelta
-                self.device_timedelta = (
-                    4 * self.device_timedelta + device_timedelta
-                ) / 5
-            self._config_device_timestamp(epoch)
-        else:
-            self.device_timedelta = 0
+        self.device_timedelta = (
+            9 * self.device_timedelta + (epoch - self.device_timestamp)
+        ) / 10
+        if abs(self.device_timedelta) > PARAM_TIMESTAMP_TOLERANCE:
+            if not self._config_device_timestamp(epoch):
+                if (epoch - self.device_timedelta_log_epoch) > 604800:  # 1 week lockout
+                    self.device_timedelta_log_epoch = epoch
+                    self.log(
+                        self.WARNING,
+                        "Incorrect timestamp: %d seconds behind HA (%d on average)",
+                        int(epoch - self.device_timestamp),
+                        int(self.device_timedelta),
+                    )
 
         if self.isEnabledFor(self.DEBUG):
             # it appears sometimes the devices
@@ -1813,18 +1811,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # the procedure too often
                 self.mqtt_request(*request_push(mc.NS_APPLIANCE_SYSTEM_CLOCK))
                 self.device_timedelta_config_epoch = epoch
-                return
+                return True
             if last_config_delay < 30:
                 # 30 sec 'deadzone' where we allow the timestamp
                 # transaction to complete (should really be like few seconds)
-                return
-        if (epoch - self.device_timedelta_log_epoch) > 604800:  # 1 week lockout
-            self.device_timedelta_log_epoch = epoch
-            self.log(
-                self.WARNING,
-                "Incorrect timestamp: %d seconds behind HA",
-                int(self.device_timedelta),
-            )
+                return True
+        return False
 
     def _check_device_timerules(self) -> bool:
         """
