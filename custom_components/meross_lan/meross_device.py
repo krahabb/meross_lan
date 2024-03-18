@@ -11,10 +11,9 @@ import typing
 import weakref
 from zoneinfo import ZoneInfo
 
-from aiohttp import ServerDisconnectedError
+import aiohttp
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
@@ -1039,7 +1038,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     self.TRACE_TX,
                 )
                 try:
-                    response = await http.async_request_message(request)
+                    response = await http.async_request_raw(request.json())
                     self.device_response_size_min = max(
                         self.device_response_size_min, len(response.json())
                     )
@@ -1104,13 +1103,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                                 ProtocolSensor.ATTR_HTTP
                             )
                     elif namespace is mc.NS_APPLIANCE_CONTROL_UNBIND:
-                        if isinstance(exception, ServerDisconnectedError):
+                        if isinstance(exception, aiohttp.ServerDisconnectedError):
                             # this is expected when issuing the UNBIND
                             # so this is an indication we're dead
                             self._set_offline()
                             return None
                     elif namespace is mc.NS_APPLIANCE_CONTROL_MULTIPLE:
-                        if isinstance(exception, ServerDisconnectedError):
+                        if isinstance(exception, aiohttp.ServerDisconnectedError):
                             # this happens (instead of JSONDecodeError)
                             # on my msl120. I guess the (older) fw behaves
                             # differently than those responding incomplete json.
@@ -1129,8 +1128,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             )
                             return None
 
-                    if isinstance(exception, asyncio.TimeoutError):
+                    if isinstance(exception, asyncio.TimeoutError) or isinstance(
+                        exception, aiohttp.ServerTimeoutError
+                    ):
                         return None
+
+                # for any other exception we could guess the device
+                # is stalling a bit so we just wait a bit before re-issuing
+                await asyncio.sleep(0.5)
             else:
                 return None
 
@@ -1356,7 +1361,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         ns_all_response = await self.async_http_request(*ns_all)
 
                 if ns_all_response:
-                    self.polling_strategies[mc.NS_APPLIANCE_SYSTEM_ALL].response_size = len(ns_all_response.json())
+                    self.polling_strategies[
+                        mc.NS_APPLIANCE_SYSTEM_ALL
+                    ].response_size = len(ns_all_response.json())
                     await self._async_request_updates(epoch, mc.NS_APPLIANCE_SYSTEM_ALL)
                 else:
                     if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
@@ -1503,11 +1510,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
         else:
             if host := self.host:
-                self._http = MerossHttpClient(
-                    host,
-                    self.key,
-                    async_get_clientsession(self.hass),
-                )
+                self._http = MerossHttpClient(host, self.key)
 
         if conf_protocol is CONF_PROTOCOL_AUTO:
             # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
@@ -1746,11 +1749,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 if _http := self._http:
                     _http.host = host
                 else:
-                    self._http = MerossHttpClient(
-                        host,
-                        self.key,
-                        async_get_clientsession(self.hass),
-                    )
+                    self._http = MerossHttpClient(host, self.key)
 
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             if self._mqtt_active:
