@@ -232,7 +232,7 @@
                 "step": {
                     "profile": {
                         "title": "Meross cloud profile",
-                        "description": "Connectez-vous à votre compte Meross",
+                        "description": "Configurer le compte Meross {email}\n{placeholder}",
                         "data": {
                             "email": "Nom d'utilisateur Meross",
                             "password": "Mot de passe Meross",

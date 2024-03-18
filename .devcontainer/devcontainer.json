@@ -16,6 +16,7 @@
                 "python.analysis.autoSearchPaths": false,
                 "python.formatting.provider": "black",
                 "python.formatting.blackPath": "/usr/local/py-utils/bin/black",
+                "python.experiments.optOutFrom": ["pythonTestAdapter"],
                 "editor.formatOnPaste": false,
                 "editor.formatOnSave": true,
                 "editor.formatOnType": true,

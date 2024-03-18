@@ -232,7 +232,7 @@
                 "step": {
                     "profile": {
                         "title": "Recuperar clave de dispositivo",
-                        "description": "Inicie sesión en su cuenta de Meross para recuperar la clave del dispositivo",
+                        "description": "Cónfiguración de Meross {email} cuenta\n{placeholder}",
                         "data": {
                             "email": "Nombre de usuario de Meross",
                             "password": "Contraseña de Meross",

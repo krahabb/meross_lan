@@ -303,10 +303,6 @@ class MerossApi(ApiProfile):
             Loggable.hass = hass
 
             async def _async_unload_merossapi(_event) -> None:
-                for device in MerossApi.active_devices():
-                    await device.async_shutdown()
-                for profile in MerossApi.active_profiles():
-                    await profile.async_shutdown()
                 await api.async_terminate()
                 Loggable.api = None  # type: ignore
                 Loggable.hass = None  # type: ignore
@@ -411,10 +407,10 @@ class MerossApi(ApiProfile):
                             await MerossHttpClient(
                                 host,
                                 key or self.key,
-                                async_get_clientsession(self.hass),
+                                None,
                                 self,  # type: ignore (self almost duck-compatible with logging.Logger)
                                 self.VERBOSE,
-                            ).async_request_message(request)
+                            ).async_request_raw(request.json())
                             or {}
                         )
                     except Exception as exception:
@@ -463,7 +459,12 @@ class MerossApi(ApiProfile):
     async def async_terminate(self):
         """complete shutdown when HA exits. See self.async_shutdown for differences"""
         self.hass.services.async_remove(mlc.DOMAIN, mlc.SERVICE_REQUEST)
+        for device in MerossApi.active_devices():
+            await device.async_shutdown()
+        for profile in MerossApi.active_profiles():
+            await profile.async_shutdown()
         await super().async_shutdown()
+        await MerossHttpClient.async_shutdown_session()
         self._mqtt_connection = None
 
     def build_device(self, device_id: str, config_entry: "ConfigEntry") -> "MerossDevice":
