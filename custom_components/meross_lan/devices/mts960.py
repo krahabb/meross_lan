@@ -164,10 +164,13 @@ class Mts960Climate(MtsClimate):
                 ]
             },
         ):
-            payload = response[mc.KEY_PAYLOAD]
-            if mc.KEY_MODEB in payload:
-                self._parse(payload[mc.KEY_MODEB][0])
-            else:
+            import debugpy
+            debugpy.breakpoint()
+            
+            try:
+                payload = response[mc.KEY_PAYLOAD][mc.KEY_MODEB]
+                self._parse(payload[0] if isinstance(payload, list) else payload)
+            except KeyError:
                 # optimistic update
                 self.target_temperature = kwargs[self.ATTR_TEMPERATURE]
                 self._mts_mode = mode

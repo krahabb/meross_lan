@@ -93,6 +93,24 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
         return mc.METHOD_SETACK, {}
 
+    def _SET_Appliance_Control_Thermostat_ModeB(self, header, payload):
+        p_digest = self.descriptor.digest
+        p_digest_modeb_list = p_digest[mc.KEY_THERMOSTAT][mc.KEY_MODEB]
+        p_modeb_list = payload[mc.KEY_MODEB]
+        for p_modeb in p_modeb_list:
+            p_digest_modeb = update_dict_strict_by_key(p_digest_modeb_list, p_modeb)
+            if p_digest_modeb[mc.KEY_ONOFF]:
+                p_digest_modeb[mc.KEY_STATE] = (
+                    mc.MTS960_STATE_ON
+                    if p_digest_modeb[mc.KEY_TARGETTEMP]
+                    > p_digest_modeb[mc.KEY_CURRENTTEMP]
+                    else mc.MTS960_STATE_OFF
+                )
+            else:
+                p_digest_modeb[mc.KEY_STATE] = mc.MTS960_STATE_UNKNOWN
+
+        return mc.METHOD_SETACK, {mc.KEY_MODEB: p_digest_modeb}
+
     def _handle_Appliance_Control_Thermostat_Any(self, header, payload):
         """
         {
