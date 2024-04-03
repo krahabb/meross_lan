@@ -164,9 +164,6 @@ class Mts960Climate(MtsClimate):
                 ]
             },
         ):
-            import debugpy
-            debugpy.breakpoint()
-            
             try:
                 payload = response[mc.KEY_PAYLOAD][mc.KEY_MODEB]
                 self._parse(payload[0] if isinstance(payload, list) else payload)
