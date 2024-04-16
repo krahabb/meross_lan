@@ -8,11 +8,13 @@ from zoneinfo import ZoneInfo
 
 from custom_components.meross_lan.merossclient import (
     NAMESPACE_TO_KEY,
+    HostAddress,
     MerossDeviceDescriptor,
     MerossHeaderType,
     MerossMessage,
     MerossMessageType,
     MerossPayloadType,
+    MerossRequest,
     build_message,
     const as mc,
     extract_dict_payloads,
@@ -24,6 +26,7 @@ from custom_components.meross_lan.merossclient import (
     update_dict_strict,
     update_dict_strict_by_key,
 )
+from custom_components.meross_lan.merossclient.mqttclient import MerossMQTTDeviceClient
 
 if typing.TYPE_CHECKING:
     import paho.mqtt.client as mqtt
@@ -32,7 +35,14 @@ if typing.TYPE_CHECKING:
 class MerossEmulatorDescriptor(MerossDeviceDescriptor):
     namespaces: dict
 
-    def __init__(self, tracefile: str, uuid):
+    def __init__(
+        self,
+        tracefile: str,
+        *,
+        uuid: str | None = None,
+        broker: str | None = None,
+        userId: int | None = None,
+    ):
         self.namespaces = {}
         with open(tracefile, "r", encoding="utf8") as f:
             if tracefile.endswith(".json.txt"):
@@ -44,9 +54,20 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         super().__init__(self.namespaces[mc.NS_APPLIANCE_SYSTEM_ABILITY])
         self.update(self.namespaces[mc.NS_APPLIANCE_SYSTEM_ALL])
         # patch system payload with fake ids
-        hardware = self.hardware
-        hardware[mc.KEY_UUID] = uuid
-        hardware[mc.KEY_MACADDRESS] = get_macaddress_from_uuid(uuid)
+        if uuid:
+            hardware = self.hardware
+            hardware[mc.KEY_UUID] = uuid
+            hardware[mc.KEY_MACADDRESS] = get_macaddress_from_uuid(uuid)
+        if broker:
+            broker_address = HostAddress.build(broker)
+            firmware = self.firmware
+            firmware[mc.KEY_SERVER] = broker_address.host
+            firmware[mc.KEY_PORT] = broker_address.port
+            firmware.pop(mc.KEY_SECONDSERVER, None)
+            firmware.pop(mc.KEY_SECONDPORT, None)
+
+        if userId:
+            self.firmware[mc.KEY_USERID] = userId
 
     def _import_tsv(self, f):
         """
@@ -116,11 +137,13 @@ class MerossEmulator:
     __slots__ = (
         "epoch",
         "lock",
+        "loop",
         "key",
         "descriptor",
         "p_dndmode",
         "topic_response",
-        "mqtt",
+        "mqtt_client",
+        "mqtt_connected",
         "_scheduler_unsub",
         "_tzinfo",
         "__dict__",
@@ -128,21 +151,36 @@ class MerossEmulator:
 
     def __init__(self, descriptor: MerossEmulatorDescriptor, key: str):
         self.lock = threading.Lock()
+        self.loop: asyncio.AbstractEventLoop = None  # type: ignore
         self.key = key
         self.descriptor = descriptor
         if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
             self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
-        self.mqtt = None
+        self.mqtt_client: MerossMQTTDeviceClient = None  # type: ignore
+        self.mqtt_connected = None
         self._scheduler_unsub = None
         self._tzinfo: ZoneInfo | None = None
         self.update_epoch()
+
+    async def async_startup(self, *, enable_scheduler: bool, enable_mqtt: bool):
+        """Delayed initialization for async stuff."""
+        self.loop = asyncio.get_event_loop()
+        if enable_scheduler:
+            self._scheduler_unsub = self.loop.call_later(
+                30,
+                self._scheduler,
+            )
+        if enable_mqtt:
+            self._mqtt_setup()
 
     def shutdown(self):
         """cleanup when the emulator is stopped/destroyed"""
         if self._scheduler_unsub:
             self._scheduler_unsub.cancel()
             self._scheduler_unsub = None
+        if self.mqtt_client:
+            self._mqtt_shutdown()
 
     def set_timezone(self, timezone: str):
         # beware when using TZ names: here we expect a IANA zoneinfo key
@@ -186,48 +224,15 @@ class MerossEmulator:
             request = MerossMessage.decode(request)
         request_header = request[mc.KEY_HEADER]
         request_payload = request[mc.KEY_PAYLOAD]
-        print(
-            f"Emulator({self.uuid}) "
-            f"RX: namespace={request_header[mc.KEY_NAMESPACE]} method={request_header[mc.KEY_METHOD]} payload={json_dumps(request_payload)}"
-        )
+        self._log_message("RX", request.json())
         with self.lock:
             # guarantee thread safety by locking the whole message handling
             self.update_epoch()
             response = self._handle_message(request_header, request_payload)
 
         if response:
-            response_header = response[mc.KEY_HEADER]
-            print(
-                f"Emulator({self.uuid}) "
-                f"TX: namespace={response_header[mc.KEY_NAMESPACE]} method={response_header[mc.KEY_METHOD]} payload={json_dumps(response[mc.KEY_PAYLOAD])}"
-            )
+            self._log_message("TX", json_dumps(response))
         return response
-
-    def handle_connect(self, client: mqtt.Client):
-        with self.lock:
-            self.mqtt = client
-            self.update_epoch()
-            # kind of Bind message..we're just interested in validating
-            # the server code in meross_lan (it doesn't really check this
-            # payload)
-            message_bind_set = build_message(
-                mc.NS_APPLIANCE_CONTROL_BIND,
-                mc.METHOD_SET,
-                {
-                    "bind": {
-                        "bindTime": self.epoch,
-                        mc.KEY_HARDWARE: self.descriptor.hardware,
-                        mc.KEY_FIRMWARE: self.descriptor.firmware,
-                    }
-                },
-                self.key,
-                self.topic_response,
-            )
-            client.publish(self.topic_response, json_dumps(message_bind_set))
-
-    def handle_disconnect(self, client: mqtt.Client):
-        with self.lock:
-            self.mqtt = None
 
     def _handle_message(self, header: MerossHeaderType, payload: MerossPayloadType):
         namespace = header[mc.KEY_NAMESPACE]
@@ -251,6 +256,7 @@ class MerossEmulator:
                 )
 
         except Exception as e:
+            self._log_message(e.__class__.__name__, str(e))
             response_method = mc.METHOD_ERROR
             response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
 
@@ -271,7 +277,7 @@ class MerossEmulator:
         state carried through our GETACK messages in the trace
         """
         try:
-            key, p_state = self._get_key_state(namespace)
+            key_namespace, p_state = self._get_key_state(namespace)
         except Exception as exception:
             # when the 'looking for state' euristic fails
             # we might fallback to a static reply should it fit...
@@ -282,10 +288,10 @@ class MerossEmulator:
             ) from exception
 
         if method == mc.METHOD_GET:
-            return mc.METHOD_GETACK, {key: p_state}
+            return mc.METHOD_GETACK, {key_namespace: p_state}
 
         if method == mc.METHOD_SET:
-            p_payload = payload[key]
+            p_payload = payload[key_namespace]
             if isinstance(p_state, list):
                 for p_payload_channel in extract_dict_payloads(p_payload):
                     update_dict_strict_by_key(p_state, p_payload_channel)
@@ -294,10 +300,13 @@ class MerossEmulator:
                     update_dict_strict(p_state, p_payload)
                 else:
                     raise Exception(
-                        f"{p_payload[mc.KEY_CHANNEL]} not present in digest.{key}"
+                        f"{p_payload[mc.KEY_CHANNEL]} not present in digest.{key_namespace}"
                     )
             else:
                 update_dict_strict(p_state, p_payload)
+
+            if self.mqtt_connected:
+                self.mqtt_publish(namespace, {key_namespace: p_state})
 
             return mc.METHOD_SETACK, {}
 
@@ -306,6 +315,44 @@ class MerossEmulator:
                 return mc.METHOD_PUSH, self.descriptor.namespaces[namespace]
 
         raise Exception(f"{method} not supported in emulator for {namespace}")
+
+    def _SET_Appliance_Config_Key(self, header, payload):
+        """
+        When connecting to a Meross cloud broker we're receiving this 'on the fly'
+        so we'll try to accomplish the new config
+        {
+            "key":{
+                "key":"meross_account_key",
+                "userId":"meross_account_id",
+                "gateway":{"host":"some-mqtt.meross.com","secondHost":"some-mqtt.meross.com","redirect":2}
+            }
+        }
+        """
+        p_key = payload[mc.KEY_KEY]
+        self.key = p_key[mc.KEY_KEY]
+        firmware = self.descriptor.firmware
+        firmware[mc.KEY_USERID] = p_key[mc.KEY_USERID]
+        p_gateway = p_key[mc.KEY_GATEWAY]
+        if mc.KEY_HOST in p_gateway:
+            firmware[mc.KEY_SERVER] = p_gateway[mc.KEY_HOST]
+            if mc.KEY_PORT in p_gateway:
+                firmware[mc.KEY_PORT] = p_gateway[mc.KEY_PORT]
+        if mc.KEY_SECONDHOST in p_gateway:
+            firmware[mc.KEY_SECONDSERVER] = p_gateway[mc.KEY_SECONDHOST]
+            if mc.KEY_SECONDPORT in p_gateway:
+                firmware[mc.KEY_SECONDPORT] = p_gateway[mc.KEY_SECONDPORT]
+
+        if self.mqtt_client and (mc.KEY_REDIRECT in p_gateway):
+            match p_gateway[mc.KEY_REDIRECT]:
+                case 1:
+                    # watchout since this might be the mqtt thread context
+                    def _restart_callback():
+                        self._mqtt_shutdown()
+                        self._mqtt_setup()
+
+                    self.loop.call_soon_threadsafe(_restart_callback)
+
+        return mc.METHOD_SETACK, {}
 
     def _SETACK_Appliance_Control_Bind(self, header, payload):
         return None, None
@@ -320,7 +367,7 @@ class MerossEmulator:
         return mc.METHOD_SETACK, {mc.KEY_MULTIPLE: multiple}
 
     def _GET_Appliance_Control_Toggle(self, header, payload):
-        # only acual example of this usage comes from legacy firmwares
+        # only actual example of this usage comes from legacy firmwares
         # carrying state in all->control
         return mc.METHOD_GETACK, {mc.KEY_TOGGLE: self._get_control_key(mc.KEY_TOGGLE)}
 
@@ -338,6 +385,12 @@ class MerossEmulator:
     def _SET_Appliance_System_DNDMode(self, header, payload):
         update_dict_strict(self.p_dndmode, payload)
         return mc.METHOD_SETACK, {}
+
+    def _GET_Appliance_System_Firmware(self, header, payload):
+        return mc.METHOD_GETACK, {mc.KEY_FIRMWARE: self.descriptor.firmware}
+
+    def _GET_Appliance_System_Hardware(self, header, payload):
+        return mc.METHOD_GETACK, {mc.KEY_HARDWARE: self.descriptor.hardware}
 
     def _SET_Appliance_System_Time(self, header, payload):
         self.descriptor.update_time(payload[mc.KEY_TIME])
@@ -383,6 +436,9 @@ class MerossEmulator:
             raise Exception(f"'{key}' not present in 'control' key")
         return p_control[key]
 
+    def _log_message(self, tag: str, message: str):
+        print(f"Emulator({self.uuid}) {tag}: {message}")
+
     def _scheduler(self):
         """Called by asyncio at (almost) regular intervals to trigger
         internal state changes useful for PUSHes. To be called by
@@ -426,3 +482,70 @@ class MerossEmulator:
             }
 
         p_channel_state.update(payload)
+
+    def mqtt_publish(self, namespace: str, payload: dict, method: str = mc.METHOD_PUSH):
+        """
+        Used to async (PUSH) state changes to MQTT: the execution is actually delayed so
+        that any current message parsing/reply completes before publishing this.
+        """
+        # capture context before delaying
+        mqtt_client = self.mqtt_client
+        message = MerossRequest(
+            self.key,
+            namespace,
+            method,
+            payload,
+            mqtt_client.topic_subscribe,
+        ).json()
+
+        def _mqtt_publish():
+            self._log_message("TX(MQTT)", message)
+            mqtt_client.publish(mqtt_client.topic_publish, message)
+
+        self.loop.call_soon_threadsafe(_mqtt_publish)
+
+    def _mqtt_setup(self):
+        self.mqtt_client = mqtt_client = MerossMQTTDeviceClient(
+            self.uuid, key=self.key, userid=self.descriptor.userId or ""
+        )
+        mqtt_client.on_subscribe = self._mqttc_subscribe
+        mqtt_client.on_disconnect = self._mqttc_disconnect
+        mqtt_client.on_message = self._mqttc_message
+        mqtt_client.suppress_exceptions = True
+        mqtt_client.safe_start(self.descriptor.brokers[0])
+
+    def _mqtt_shutdown(self):
+        self.mqtt_client.safe_stop()
+        with self.lock:
+            self.mqtt_client = None  # type: ignore
+            self.mqtt_connected = None
+
+    def _mqttc_subscribe(self, *args):
+        self.mqtt_client._mqttc_subscribe(*args)
+        with self.lock:
+            self.mqtt_connected = self.mqtt_client
+            self.update_epoch()
+            # kind of Bind message..we're just interested in validating
+            # the server code in meross_lan (it doesn't really check this
+            # payload)
+            self.mqtt_publish(
+                mc.NS_APPLIANCE_CONTROL_BIND,
+                {
+                    "bind": {
+                        "bindTime": self.epoch,
+                        mc.KEY_HARDWARE: self.descriptor.hardware,
+                        mc.KEY_FIRMWARE: self.descriptor.firmware,
+                    }
+                },
+                mc.METHOD_SET,
+            )
+
+    def _mqttc_disconnect(self, *args):
+        self.mqtt_client._mqttc_disconnect(*args)
+        with self.lock:
+            self.mqtt_connected = None
+
+    def _mqttc_message(self, client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
+        request = MerossMessage.decode(msg.payload.decode("utf-8"))
+        if response := self.handle(request):
+            client.publish(request[mc.KEY_HEADER][mc.KEY_FROM], json_dumps(response))

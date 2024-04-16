@@ -52,15 +52,20 @@ from aiohttp import web
 # to have the homeassistant.core imported (initialized) before
 # homeassistant.helpers.storage
 from custom_components.meross_lan.merossclient import (
-    MerossMessage,
     const as mc,
-    json_dumps,
 )
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
 
 
-def build_emulator(tracefile, uuid, key) -> MerossEmulator:
+def build_emulator(
+    tracefile,
+    *,
+    key: str,
+    uuid: str,
+    broker: str | None = None,
+    userId: int | None = None,
+) -> MerossEmulator:
     """
     Given a supported 'tracefile' (either a legacy trace .csv or a diagnostic .json)
     parse it and build the appropriate emulator instance with the give 'uuid' and 'key'
@@ -68,7 +73,9 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
     as this appears to be consistent with real devices config
     """
     print(f"Initializing uuid({uuid}):", end="")
-    descriptor = MerossEmulatorDescriptor(tracefile, uuid)
+    descriptor = MerossEmulatorDescriptor(
+        tracefile, uuid=uuid, broker=broker, userId=userId
+    )
     ability = descriptor.ability
     digest = descriptor.digest
     mixin_classes = []
@@ -126,7 +133,14 @@ def build_emulator(tracefile, uuid, key) -> MerossEmulator:
     return emulator
 
 
-def generate_emulators(tracespath: str, defaultuuid: str, defaultkey: str):
+def generate_emulators(
+    tracespath: str,
+    *,
+    key: str,
+    uuid: str,
+    broker: str | None = None,
+    userId: int | None = None,
+):
     """
     This function is a generator.
     Scans the directory for supported files and build all the emulators
@@ -147,18 +161,26 @@ def generate_emulators(tracespath: str, defaultuuid: str, defaultkey: str):
         # filename could be formatted to carry device definitions parameters:
         # format the filename like 'xxxwhatever-Kdevice_key-Udevice_id'
         # this way, parameters will be 'binded' to that trace in an easy way
-        key = defaultkey
-        uuid = None
+        _key = key
+        _uuid = None
+        _broker = broker
+        _userId = userId
         for _f in f[0].split("-"):
             if _f.startswith("K"):
-                key = _f[1:].strip()
+                _key = _f[1:].strip()
             elif _f.startswith("U"):
-                uuid = _f[1:].strip()
-        if uuid is None:
+                _uuid = _f[1:].strip()
+            elif _f.startswith("B"):
+                _broker = _f[1:].strip()
+            elif _f.startswith("A"):
+                _userId = int(_f[1:].strip())
+        if _uuid is None:
             uuidsub = uuidsub + 1
             _uuidsub = str(uuidsub)
-            uuid = defaultuuid[: -len(_uuidsub)] + _uuidsub
-        yield build_emulator(fullpath, uuid, key)
+            _uuid = uuid[: -len(_uuidsub)] + _uuidsub
+        yield build_emulator(
+            fullpath, key=_key, uuid=_uuid, broker=_broker, userId=_userId
+        )
 
 
 def run(argv):
@@ -170,6 +192,7 @@ def run(argv):
     key = ""
     uuid = "01234567890123456789001122334455"
     broker = None
+    userId = None
     tracefilepath = "."
     for arg in argv:
         arg: str
@@ -186,65 +209,35 @@ def run(argv):
 
     def web_post_handler(emulator: MerossEmulator):
         async def _callback(request: web.Request) -> web.Response:
-            if not emulator._scheduler_unsub:
-                # starts internal scheduler once when we're in asyncio environment
-                emulator._scheduler()
             return web.json_response(emulator.handle(await request.text()))
 
         return _callback
 
     if os.path.isdir(tracefilepath):
         emulators = {
-            emulator.descriptor.uuid: emulator
-            for emulator in generate_emulators(tracefilepath, uuid, key)
+            emulator.uuid: emulator
+            for emulator in generate_emulators(
+                tracefilepath, key=key, uuid=uuid, broker=broker, userId=userId
+            )
         }
         for _uuid, emulator in emulators.items():
             app.router.add_post(f"/{_uuid}/config", web_post_handler(emulator))
     else:
-        emulator = build_emulator(tracefilepath, uuid, key)
-        emulators = {emulator.descriptor.uuid: emulator}
+        emulator = build_emulator(
+            tracefilepath, key=key, uuid=uuid, broker=broker, userId=userId
+        )
+        emulators = {emulator.uuid: emulator}
         app.router.add_post("/config", web_post_handler(emulator))
 
-    if broker:
-        import ssl
+    async def _on_startup(app: web.Application):
+        for emulator in emulators.values():
+            await emulator.async_startup(enable_scheduler=True, enable_mqtt=True)
 
-        import paho.mqtt.client as mqtt
+    async def _on_shutdown(app: web.Application):
+        for emulator in emulators.values():
+            emulator.shutdown()
 
-        def _mqttc_connect(client: mqtt.Client, userdata, flags, rc):
-            result, mid = client.subscribe([(mc.TOPIC_REQUEST.format("+"), 1)])
-            if result != mqtt.MQTT_ERR_SUCCESS:
-                print("Failed to subscribe to mqtt topic")
-            for emulator in emulators.values():
-                emulator.handle_connect(client)
-
-        def _mqttc_disconnect(client: mqtt.Client, userdata, rc):
-            for emulator in emulators.values():
-                emulator.handle_disconnect(client)
-
-        def _mqttc_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
-            if msg_uuid := mc.RE_PATTERN_TOPIC_UUID.match(msg.topic):
-                if emulator := emulators.get(msg_uuid.group(1)):
-                    request = MerossMessage.decode(msg.payload.decode("utf-8"))
-                    if response := emulator.handle(request):
-                        client.publish(
-                            request[mc.KEY_HEADER][mc.KEY_FROM], json_dumps(response)
-                        )
-
-        mqtt_client = mqtt.Client("MerossEmulator", protocol=mqtt.MQTTv311)
-        mqtt_client.username_pw_set("emulator")
-        mqtt_client.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
-        mqtt_client.tls_insecure_set(True)
-        mqtt_client.on_connect = _mqttc_connect
-        mqtt_client.on_disconnect = _mqttc_disconnect
-        mqtt_client.on_message = _mqttc_message
-        mqtt_client.suppress_exceptions = True
-        if ":" in broker:
-            broker = broker.split(":")
-            port = int(broker[1])
-            broker = broker[0]
-        else:
-            port = 8883
-        mqtt_client.connect_async(broker, port)
-        mqtt_client.loop_start()
+    app.on_startup.append(_on_startup)
+    app.on_shutdown.append(_on_shutdown)
 
     return app
