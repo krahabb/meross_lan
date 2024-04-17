@@ -33,4 +33,4 @@ class PhysicalLockMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             onoff = p_payload_channel[mc.KEY_ONOFF]
             p_payload_channel[mc.KEY_ONOFF] = 1 - onoff
             if self.mqtt_connected:
-                self.mqtt_publish(mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK, p_payload)
+                self.mqtt_publish_push(mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK, p_payload)

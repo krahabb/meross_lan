@@ -31,7 +31,7 @@ async def test_hamqtt_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMo
     message_bind_set = build_message(
         mc.NS_APPLIANCE_CONTROL_BIND,
         mc.METHOD_SET,
-        {"bind": {}},  # actual payload actually doesn't care
+        {mc.KEY_BIND: {}},  # actual payload actually doesn't care
         key,
         topic_subscribe,
     )

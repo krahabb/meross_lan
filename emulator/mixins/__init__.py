@@ -306,7 +306,7 @@ class MerossEmulator:
                 update_dict_strict(p_state, p_payload)
 
             if self.mqtt_connected:
-                self.mqtt_publish(namespace, {key_namespace: p_state})
+                self.mqtt_publish_push(namespace, {key_namespace: p_state})
 
             return mc.METHOD_SETACK, {}
 
@@ -319,35 +319,54 @@ class MerossEmulator:
     def _SET_Appliance_Config_Key(self, header, payload):
         """
         When connecting to a Meross cloud broker we're receiving this 'on the fly'
-        so we'll try to accomplish the new config
+        so we should try to accomplish the new config
         {
             "key":{
                 "key":"meross_account_key",
                 "userId":"meross_account_id",
-                "gateway":{"host":"some-mqtt.meross.com","secondHost":"some-mqtt.meross.com","redirect":2}
+                "gateway":{
+                    "host":"some-mqtt.meross.com",
+                    "secondHost":"some-mqtt.meross.com",
+                    "redirect":2
+                }
             }
         }
         """
         p_key = payload[mc.KEY_KEY]
-        self.key = p_key[mc.KEY_KEY]
-        firmware = self.descriptor.firmware
-        firmware[mc.KEY_USERID] = p_key[mc.KEY_USERID]
         p_gateway = p_key[mc.KEY_GATEWAY]
-        if mc.KEY_HOST in p_gateway:
-            firmware[mc.KEY_SERVER] = p_gateway[mc.KEY_HOST]
-            if mc.KEY_PORT in p_gateway:
-                firmware[mc.KEY_PORT] = p_gateway[mc.KEY_PORT]
-        if mc.KEY_SECONDHOST in p_gateway:
-            firmware[mc.KEY_SECONDSERVER] = p_gateway[mc.KEY_SECONDHOST]
-            if mc.KEY_SECONDPORT in p_gateway:
-                firmware[mc.KEY_SECONDPORT] = p_gateway[mc.KEY_SECONDPORT]
-
-        if self.mqtt_client and (mc.KEY_REDIRECT in p_gateway):
+        if mc.KEY_REDIRECT in p_gateway:
             match p_gateway[mc.KEY_REDIRECT]:
-                case 1:
-                    # watchout since this might be the mqtt thread context
+                case 2:
+                    # Note: after testing it looks that when connecting to the designated Meross broker (address
+                    # from account api info), it issues this message trying to switch to another broker but, if
+                    # we follow the switch-over, the newly designated broker seems unresponsive to session
+                    # establishment. Ignoring this message instead looks like working and keeping the connection
+                    # to the originally designated broker seems to work with the app able to reach and interact
+                    # with our emulator like if it was the real device.
+                    pass
+                case _:
+                    # Watchout since this might be the mqtt thread context.
+                    # We're then using call_soon_threadsafe to post-pone execution
+                    # in the main/loop thread
                     def _restart_callback():
-                        self._mqtt_shutdown()
+                        if self.mqtt_client:
+                            self._mqtt_shutdown()
+                        with self.lock:  # likely unneed since the mqtt thread is over
+                            firmware = self.descriptor.firmware
+                            if mc.KEY_HOST in p_gateway:
+                                firmware[mc.KEY_SERVER] = p_gateway[mc.KEY_HOST]
+                                if mc.KEY_PORT in p_gateway:
+                                    firmware[mc.KEY_PORT] = p_gateway[mc.KEY_PORT]
+                            if mc.KEY_SECONDHOST in p_gateway:
+                                firmware[mc.KEY_SECONDSERVER] = p_gateway[
+                                    mc.KEY_SECONDHOST
+                                ]
+                                if mc.KEY_SECONDPORT in p_gateway:
+                                    firmware[mc.KEY_SECONDPORT] = p_gateway[
+                                        mc.KEY_SECONDPORT
+                                    ]
+                            firmware[mc.KEY_USERID] = p_key[mc.KEY_USERID]
+                            self.key = p_key[mc.KEY_KEY]
                         self._mqtt_setup()
 
                     self.loop.call_soon_threadsafe(_restart_callback)
@@ -355,6 +374,18 @@ class MerossEmulator:
         return mc.METHOD_SETACK, {}
 
     def _SETACK_Appliance_Control_Bind(self, header, payload):
+        self.mqtt_publish_push(
+            mc.NS_APPLIANCE_SYSTEM_REPORT,
+            {
+                mc.KEY_REPORT: [
+                    {mc.KEY_TYPE: 1, mc.KEY_VALUE: 0, mc.KEY_TIMESTAMP: self.epoch}
+                ]
+            },
+        )
+        self.mqtt_publish_push(
+            mc.NS_APPLIANCE_SYSTEM_TIME,
+            {mc.KEY_TIME: self.descriptor.time},
+        )
         return None, None
 
     def _SET_Appliance_Control_Multiple(self, header, payload):
@@ -391,6 +422,9 @@ class MerossEmulator:
 
     def _GET_Appliance_System_Hardware(self, header, payload):
         return mc.METHOD_GETACK, {mc.KEY_HARDWARE: self.descriptor.hardware}
+
+    def _GET_Appliance_System_Online(self, header, payload):
+        return mc.METHOD_GETACK, {mc.KEY_ONLINE: self.descriptor.all[mc.KEY_ONLINE]}
 
     def _SET_Appliance_System_Time(self, header, payload):
         self.descriptor.update_time(payload[mc.KEY_TIME])
@@ -483,7 +517,7 @@ class MerossEmulator:
 
         p_channel_state.update(payload)
 
-    def mqtt_publish(self, namespace: str, payload: dict, method: str = mc.METHOD_PUSH):
+    def mqtt_publish_push(self, namespace: str, payload: dict):
         """
         Used to async (PUSH) state changes to MQTT: the execution is actually delayed so
         that any current message parsing/reply completes before publishing this.
@@ -493,9 +527,9 @@ class MerossEmulator:
         message = MerossRequest(
             self.key,
             namespace,
-            method,
+            mc.METHOD_PUSH,
             payload,
-            mqtt_client.topic_subscribe,
+            mqtt_client.topic_publish,
         ).json()
 
         def _mqtt_publish():
@@ -521,29 +555,38 @@ class MerossEmulator:
             self.mqtt_connected = None
 
     def _mqttc_subscribe(self, *args):
-        self.mqtt_client._mqttc_subscribe(*args)
+        mqtt_client = self.mqtt_client
+        mqtt_client._mqttc_subscribe(*args)
         with self.lock:
-            self.mqtt_connected = self.mqtt_client
+            self.mqtt_connected = mqtt_client
             self.update_epoch()
-            # kind of Bind message..we're just interested in validating
-            # the server code in meross_lan (it doesn't really check this
-            # payload)
-            self.mqtt_publish(
+            self.descriptor.online[mc.KEY_STATUS] = 1
+            # This is to start a kind of session establishment with
+            # Meross brokers. Check the SETACK reply to follow the state machine
+            message = MerossRequest(
+                self.key,
                 mc.NS_APPLIANCE_CONTROL_BIND,
+                mc.METHOD_SET,
                 {
-                    "bind": {
-                        "bindTime": self.epoch,
+                    mc.KEY_BIND: {
+                        mc.KEY_BINDTIME: self.epoch,
+                        mc.KEY_TIME: self.descriptor.time,
                         mc.KEY_HARDWARE: self.descriptor.hardware,
                         mc.KEY_FIRMWARE: self.descriptor.firmware,
                     }
                 },
-                mc.METHOD_SET,
+                mqtt_client.topic_subscribe,
             )
+            message[mc.KEY_HEADER][mc.KEY_TRIGGERSRC] = "DevBoot"
+            message = message.json()
+            self._log_message("TX(MQTT)", message)
+            mqtt_client.publish(mqtt_client.topic_publish, message)
 
     def _mqttc_disconnect(self, *args):
         self.mqtt_client._mqttc_disconnect(*args)
         with self.lock:
             self.mqtt_connected = None
+            self.descriptor.online[mc.KEY_STATUS] = 0
 
     def _mqttc_message(self, client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
         request = MerossMessage.decode(msg.payload.decode("utf-8"))

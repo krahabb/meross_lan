@@ -49,6 +49,6 @@ class FanMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 p_payload_channel[mc.KEY_LIFE] = life - lifedec
                 p_payload_channel[mc.KEY_LMTIME] = self.epoch
                 if self.mqtt_connected:
-                    self.mqtt_publish(
+                    self.mqtt_publish_push(
                         mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE, p_payload
                     )

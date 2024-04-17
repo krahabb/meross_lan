@@ -54,7 +54,7 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 if not p_digest_togglex.get(mc.KEY_ONOFF):
                     p_digest_togglex[mc.KEY_ONOFF] = 1
                     if self.mqtt_connected:
-                        self.mqtt_publish(
+                        self.mqtt_publish_push(
                             mc.NS_APPLIANCE_CONTROL_TOGGLEX,
                             {mc.KEY_TOGGLEX: p_digest_togglex},
                         )
@@ -63,7 +63,7 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         update_dict_strict(p_digest_light, p_light)
 
         if self.mqtt_connected and (p_digest_light != p_digest_light_saved):
-            self.mqtt_publish(
+            self.mqtt_publish_push(
                 mc.NS_APPLIANCE_CONTROL_LIGHT, {mc.KEY_LIGHT: p_digest_light}
             )
 
@@ -119,6 +119,8 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 p_light[mc.KEY_CAPACITY] | mc.LIGHT_CAPACITY_EFFECT
             )
         if self.mqtt_connected and (p_light != p_light_saved):
-            self.mqtt_publish(mc.NS_APPLIANCE_CONTROL_LIGHT, {mc.KEY_LIGHT: p_light})
+            self.mqtt_publish_push(
+                mc.NS_APPLIANCE_CONTROL_LIGHT, {mc.KEY_LIGHT: p_light}
+            )
 
         return mc.METHOD_SETACK, {}

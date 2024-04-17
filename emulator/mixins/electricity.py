@@ -114,7 +114,7 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         # kind of Bind message..we're just interested in validating
         # the server code in meross_lan (it doesn't really check this
         # payload)
-        self.mqtt_publish(
+        self.mqtt_publish_push(
             mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
             {
                 mc.KEY_CONFIG: {

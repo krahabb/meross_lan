@@ -653,6 +653,7 @@ class MerossDeviceDescriptor:
     system: dict
     hardware: dict
     firmware: dict
+    online: dict
     type: str
     subType: str
     hardwareVersion: str
@@ -679,6 +680,7 @@ class MerossDeviceDescriptor:
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),
         mc.KEY_HARDWARE: lambda _self: _self.system.get(mc.KEY_HARDWARE, {}),
         mc.KEY_FIRMWARE: lambda _self: _self.system.get(mc.KEY_FIRMWARE, {}),
+        mc.KEY_ONLINE: lambda _self: _self.system.get(mc.KEY_ONLINE, {}),
         mc.KEY_TYPE: lambda _self: _self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER),
         mc.KEY_SUBTYPE: lambda _self: _self.hardware.get(mc.KEY_SUBTYPE, ""),
         "hardwareVersion": lambda _self: _self.hardware.get(mc.KEY_VERSION, ""),
