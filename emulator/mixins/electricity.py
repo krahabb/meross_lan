@@ -106,14 +106,13 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         # "Asia/Baku" GMT + 4
         self.set_timezone("Asia/Baku")
 
-    def handle_connect(self, client):
-        super().handle_connect(client)
+    def _mqttc_subscribe(self, *args):
+        super()._mqttc_subscribe(*args)
         # kind of Bind message..we're just interested in validating
         # the server code in meross_lan (it doesn't really check this
         # payload)
-        message_consumptionconfig = build_message(
+        self.mqtt_publish_push(
             mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
-            mc.METHOD_PUSH,
             {
                 mc.KEY_CONFIG: {
                     "voltageRatio": 188,
@@ -122,10 +121,7 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                     "powerRatio": 0,
                 }
             },
-            self.key,
-            self.topic_response,
         )
-        client.publish(self.topic_response, json_dumps(message_consumptionconfig))
 
     def _PUSH_Appliance_Control_ConsumptionConfig(self, header, payload):
         return None, None
@@ -175,9 +171,11 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 {
                     mc.KEY_DATE: date_value,
                     mc.KEY_TIME: self.epoch,
-                    mc.KEY_VALUE: energy + consumptionx_last[mc.KEY_VALUE]
-                    if self.BUG_RESET
-                    else 0,
+                    mc.KEY_VALUE: (
+                        energy + consumptionx_last[mc.KEY_VALUE]
+                        if self.BUG_RESET
+                        else 0
+                    ),
                 }
             )
 

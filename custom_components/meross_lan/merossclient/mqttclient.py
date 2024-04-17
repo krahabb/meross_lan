@@ -383,7 +383,7 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         userid: represents the user account id (any integer number in str form)
         macaddress: xx:xx:xx:xx:xx:xx (lowercase)
         """
-        self.topic_command = f"/appliance/{uuid}/publish"
+        self.topic_publish = f"/appliance/{uuid}/publish"
         self.topic_subscribe = f"/appliance/{uuid}/subscribe"
         characters = string.ascii_letters + string.digits
         super().__init__(

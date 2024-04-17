@@ -362,14 +362,21 @@ class ProfileEntryMocker(ConfigEntryMocker):
 
 
 def build_emulator(
-    model: str, *, device_id=tc.MOCK_DEVICE_UUID, key=tc.MOCK_KEY
+    model: str,
+    *,
+    key: str = tc.MOCK_KEY,
+    uuid: str = tc.MOCK_DEVICE_UUID,
+    broker: str | None = None,
+    userId: int | None = None,
 ) -> MerossEmulator:
     # Watchout: this call will not use the uuid and key set
     # in the filename, just DEFAULT_UUID and DEFAULT_KEY
     return emulator_build_emulator(
         tc.EMULATOR_TRACES_PATH + tc.EMULATOR_TRACES_MAP[model],
-        device_id,
-        key,
+        key=key,
+        uuid=uuid,
+        broker=broker,
+        userId=userId,
     )
 
 
@@ -413,30 +420,10 @@ def build_emulator_for_profile(
         # no error if we can't match a device in the profile
         # just provide a default
         model = mc.TYPE_MSS310
-    emulator = emulator_build_emulator(
-        tc.EMULATOR_TRACES_PATH + tc.EMULATOR_TRACES_MAP[model],
-        device_id,
-        key,
+
+    return build_emulator(
+        model, key=key, uuid=device_id, broker=domain, userId=int(userid)
     )
-
-    fw = emulator.descriptor.firmware
-    fw[mc.KEY_USERID] = int(userid)
-
-    if domain:
-        broker = HostAddress.build(domain)
-        fw[mc.KEY_SERVER] = broker.host
-        fw[mc.KEY_PORT] = broker.port
-
-    if reservedDomain:
-        if domain == reservedDomain:
-            fw.pop(mc.KEY_SECONDSERVER, None)
-            fw.pop(mc.KEY_SECONDPORT, None)
-        else:
-            broker = HostAddress.build(reservedDomain)
-            fw[mc.KEY_SECONDSERVER] = broker.host
-            fw[mc.KEY_SECONDPORT] = broker.port
-
-    return emulator
 
 
 def build_emulator_config_entry(

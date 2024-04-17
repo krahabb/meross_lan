@@ -904,7 +904,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         mc.KEY_PORT: broker.port,
                         mc.KEY_SECONDHOST: broker.host,
                         mc.KEY_SECONDPORT: broker.port,
-                        "redirect": 1,
+                        mc.KEY_REDIRECT: 1,
                     },
                     mc.KEY_KEY: key,
                     mc.KEY_USERID: userid,

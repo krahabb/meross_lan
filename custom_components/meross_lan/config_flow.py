@@ -468,9 +468,11 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         self, device_id: str, key: str | None, descriptor: MerossDeviceDescriptor | None
     ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
         mqttconnections: list[MQTTConnection] = []
+        if key is None:
+            key = ""
         if descriptor:
             for profile in MerossApi.active_profiles():
-                if profile.device_is_registered(descriptor):
+                if profile.device_is_registered(key, descriptor):
                     if profile.allow_mqtt_publish:
                         mqttconnections = await profile.get_or_create_mqttconnections(
                             device_id

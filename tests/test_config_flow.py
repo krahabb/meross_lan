@@ -146,15 +146,14 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
     Test the initial discovery process i.e. meross_lan
     not configured yet
     """
-    emulator = helpers.build_emulator(mc.TYPE_MSS310)
-    emulator.key = ""  # patch the key so the default hub key will work
-    device_id = emulator.descriptor.uuid
+    device_id = tc.MOCK_DEVICE_UUID
+    key = ""
     topic = mc.TOPIC_RESPONSE.format(device_id)
     payload = build_message(
         mc.NS_APPLIANCE_CONTROL_TOGGLEX,
         mc.METHOD_PUSH,
         {mc.KEY_TOGGLEX: {mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 0}},
-        emulator.key,
+        key,
         mc.TOPIC_REQUEST.format(device_id),
     )
 
@@ -178,7 +177,7 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
     assert flow_hub
     assert flow_hub["step_id"] == "hub"  # type: ignore
     result = await hass.config_entries.flow.async_configure(
-        flow_hub["flow_id"], user_input={mlc.CONF_KEY: emulator.key}
+        flow_hub["flow_id"], user_input={mlc.CONF_KEY: key}
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
 
@@ -268,7 +267,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
 
         # here we build a 'clone' of the configured device
         emulator_dhcp = helpers.build_emulator(
-            device_type, device_id=device.id, key=device.key
+            device_type, key=device.key, uuid=device.id
         )
         assert (
             emulator_dhcp.descriptor.macAddress == device.descriptor.macAddress
@@ -296,7 +295,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
         # here we build a different (device uuid) device instance
         BOGUS_DEVICE_ID: Final = uuid4().hex
         emulator_dhcp = helpers.build_emulator(
-            device_type, device_id=BOGUS_DEVICE_ID, key=device.key
+            device_type, key=device.key, uuid=BOGUS_DEVICE_ID
         )
         assert (
             emulator_dhcp.descriptor.macAddress != device.descriptor.macAddress

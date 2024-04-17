@@ -92,7 +92,7 @@ async def test_entities(
     EntityComponentTest.hass_service_call = hass.services.async_call
 
     for emulator in generate_emulators(
-        tc.EMULATOR_TRACES_PATH, tc.MOCK_DEVICE_UUID, tc.MOCK_KEY
+        tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
     ):
         descriptor = emulator.descriptor
         EntityComponentTest.ability = ability = descriptor.ability

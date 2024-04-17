@@ -1081,7 +1081,7 @@ class MerossCloudProfile(ApiProfile):
     def userid(self):
         return self.config[mc.KEY_USERID_]
 
-    def device_is_registered(self, descriptor: "MerossDeviceDescriptor"):
+    def device_is_registered(self, key: str, descriptor: "MerossDeviceDescriptor"):
         """extensive check that the device is 'really' binded to the profile"""
         # this check, in a 'goldylock' scenario whould be pretty simple:
         # check that the device userId matches the profile Id since they represent
@@ -1089,9 +1089,16 @@ class MerossCloudProfile(ApiProfile):
         # in the device become 'untrustable' since you could set any value while pairing.
         # We'll then apply a 'best-effort' approach to verify if the device is (still)
         # binded by veryifing multiple conditions
-        if descriptor.userId != self.id:
+        if (key != self.key) or (descriptor.userId != self.userid):
             # of course they need to match!
             return False
+
+        device_brokers = descriptor.brokers
+        if mqtt_domain := self.config.get(mc.KEY_MQTTDOMAIN):
+            broker = HostAddress.build(mqtt_domain)
+            if broker in device_brokers:
+                return True
+
         uuid = descriptor.uuid
         if uuid not in self._data[self.KEY_DEVICE_INFO]:
             # the cloud profile doesn't know anything of this device.
@@ -1103,7 +1110,6 @@ class MerossCloudProfile(ApiProfile):
         # now it appears the device belongs to the profile, but since the device could
         # be mqtt-rebinded at any time without unregistering from the cloud profile
         # we also have to check consistency in the device configured brokers
-        device_brokers = descriptor.brokers
         device_info = self._data[self.KEY_DEVICE_INFO][uuid]
         if domain := device_info.get(mc.KEY_DOMAIN):
             broker = HostAddress.build(domain)
@@ -1262,21 +1268,24 @@ class MerossCloudProfile(ApiProfile):
         cannot be established (like broker is down any network issue)
         """
         mqttconnections: list[MQTTConnection] = []
-        device_info = self.get_device_info(device_id)
-        if device_info:
-            if domain := device_info.get(mc.KEY_DOMAIN):
-                mqttconnection = await self._async_get_mqttconnection(
-                    HostAddress.build(domain)
-                )
-                if mqttconnection:
-                    mqttconnections.append(mqttconnection)
-            if reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN):
-                if reserveddomain != domain:
-                    mqttconnection = await self._async_get_mqttconnection(
-                        HostAddress.build(reserveddomain)
-                    )
-                    if mqttconnection:
-                        mqttconnections.append(mqttconnection)
+
+        async def _add_connection(domain: str | None):
+            if not domain:
+                return
+            broker = HostAddress.build(domain)
+            for mqttconnection in mqttconnections:
+                if mqttconnection.broker == broker:
+                    return
+            mqttconnection = await self._async_get_mqttconnection(broker)
+            if mqttconnection:
+                mqttconnections.append(mqttconnection)
+
+        await _add_connection(self.config.get(mc.KEY_MQTTDOMAIN))
+
+        if device_info := self.get_device_info(device_id):
+            await _add_connection(device_info.get(mc.KEY_DOMAIN))
+            await _add_connection(device_info.get(mc.KEY_RESERVEDDOMAIN))
+
         return mqttconnections
 
     def _get_mqttconnection(self, broker: HostAddress) -> MerossMQTTConnection:
