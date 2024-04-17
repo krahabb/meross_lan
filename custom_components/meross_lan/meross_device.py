@@ -814,7 +814,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         mc.KEY_PORT: broker.port,
                         mc.KEY_SECONDHOST: broker.host,
                         mc.KEY_SECONDPORT: broker.port,
-                        "redirect": 1,
+                        mc.KEY_REDIRECT: 1,
                     },
                     mc.KEY_KEY: key,
                     mc.KEY_USERID: userid,
@@ -1273,24 +1273,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         try:
             self.log(self.DEBUG, "Polling begin")
             epoch = time()
-
-            if self._online:
-                # evaluate device availability by checking lastrequest got answered in less than polling_period
-                if (self.lastresponse > self.lastrequest) or (
-                    (epoch - self.lastrequest) < (self.polling_period - 2)
-                ):
-                    pass
-                # when we 'fall' offline while on MQTT eventually retrigger HTTP.
-                # the reverse is not needed since we switch HTTP -> MQTT right-away
-                # when HTTP fails (see async_request)
-                elif (self.conf_protocol is CONF_PROTOCOL_AUTO) and (
-                    self.curr_protocol is not CONF_PROTOCOL_HTTP
-                ):
-                    self._switch_protocol(CONF_PROTOCOL_HTTP)
-                else:
-                    self._set_offline()
-                    return
-
+            # We're 'strictly' online when the device 'was' online and last request
+            # got succesfully replied.
+            # When last request(s) somewhat failed we'll probe NS_ALL befgore stating it is really
+            # unreachable. This kind of probing is the same done when the device is (definitely)
+            # offline.
+            if self._online and (
+                (self.lastresponse > self.lastrequest)
+                or ((epoch - self.lastrequest) < (self.polling_period - 2))
+            ):
                 # when mqtt is working as a fallback for HTTP
                 # we should periodically check if http comes back
                 # in case our self.pref_protocol is HTTP.
@@ -1301,13 +1292,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     and (self.pref_protocol is CONF_PROTOCOL_HTTP)
                     and ((epoch - self._http_lastrequest) > PARAM_HEARTBEAT_PERIOD)
                 ):
-                    await self.async_http_request(
+                    if await self.async_http_request(
                         *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
-                    )
+                    ):
+                        namespace = mc.NS_APPLIANCE_SYSTEM_ALL
                     # going on, should the http come online, the next
                     # async_request_updates will be 'smart' again, skipping
                     # state updates coming through mqtt (since we're still
-                    # connected) but now requesting over http as preferred
+                    # connected) but now requesting over http as preferred.
+                    # Also, we're forcibly passing namespace = NS_ALL to
+                    # tell the self._async_request_updates we've already polled that
 
                 if self.mqtt_locallyactive:
                     # implement an heartbeat since mqtt might
@@ -1345,26 +1339,37 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
                 await self._async_request_updates(epoch, namespace)
 
-            else:  # offline
-                ns_all = request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+            else:  # offline or 'likely' offline (failed last request)
                 ns_all_response = None
                 if self.conf_protocol is CONF_PROTOCOL_AUTO:
                     if self._http:
-                        ns_all_response = await self.async_http_request(*ns_all)
+                        ns_all_response = await self.async_http_request(
+                            *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+                        )
                     if self._mqtt_publish and not self._online:
-                        ns_all_response = await self.async_mqtt_request(*ns_all)
+                        ns_all_response = await self.async_mqtt_request(
+                            *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+                        )
                 elif self.conf_protocol is CONF_PROTOCOL_MQTT:
                     if self._mqtt_publish:
-                        ns_all_response = await self.async_mqtt_request(*ns_all)
+                        ns_all_response = await self.async_mqtt_request(
+                            *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+                        )
                 else:  # self.conf_protocol is CONF_PROTOCOL_HTTP:
                     if self._http:
-                        ns_all_response = await self.async_http_request(*ns_all)
+                        ns_all_response = await self.async_http_request(
+                            *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+                        )
 
                 if ns_all_response:
-                    self.polling_strategies[
+                    ns_all_strategy = self.polling_strategies[
                         mc.NS_APPLIANCE_SYSTEM_ALL
-                    ].response_size = len(ns_all_response.json())
+                    ]
+                    ns_all_strategy.lastrequest = epoch
+                    ns_all_strategy.response_size = len(ns_all_response.json())
                     await self._async_request_updates(epoch, mc.NS_APPLIANCE_SYSTEM_ALL)
+                elif self._online:
+                    self._set_offline()
                 else:
                     if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
                         self._polling_delay += self.polling_period

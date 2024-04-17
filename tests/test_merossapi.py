@@ -1,4 +1,5 @@
 """Test the core MerossApi class"""
+
 from time import time
 from unittest.mock import ANY
 
@@ -20,9 +21,8 @@ async def test_hamqtt_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMo
     check the local broker session management handles the device transactions
     when they connect to the HA broker
     """
-    emulator = helpers.build_emulator(mc.TYPE_MSS310)
-    emulator.key = ""  # patch the key so the default hub key will work
-    device_id = emulator.descriptor.uuid
+    device_id = tc.MOCK_DEVICE_UUID
+    key = ""
     topic_publish = mc.TOPIC_RESPONSE.format(device_id)
     topic_subscribe = mc.TOPIC_REQUEST.format(device_id)
     #
@@ -31,8 +31,8 @@ async def test_hamqtt_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMo
     message_bind_set = build_message(
         mc.NS_APPLIANCE_CONTROL_BIND,
         mc.METHOD_SET,
-        {"bind": {}},  # actual payload actually doesn't care
-        emulator.key,
+        {mc.KEY_BIND: {}},  # actual payload actually doesn't care
+        key,
         topic_subscribe,
     )
     # since nothing is (yet) built at the moment, we expect this message
@@ -63,7 +63,7 @@ async def test_hamqtt_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMo
         mc.NS_APPLIANCE_SYSTEM_CLOCK,
         mc.METHOD_PUSH,
         {"clock": {"timestamp": int(time())}},
-        emulator.key,
+        key,
         topic_publish,
     )
     async_fire_mqtt_message(hass, topic_publish, json_dumps(message_clock_push))
@@ -91,13 +91,15 @@ async def test_hamqtt_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMo
                 "powerRatio": 0,
             }
         },
-        emulator.key,
+        key,
         topic_publish,
     )
     async_fire_mqtt_message(hass, topic_publish, json_dumps(message_consumption_push))
     await hass.async_block_till_done()
     # check the PUSH was replied
-    header_consumption_reply = helpers.DictMatcher(message_consumption_push[mc.KEY_HEADER])
+    header_consumption_reply = helpers.DictMatcher(
+        message_consumption_push[mc.KEY_HEADER]
+    )
     header_consumption_reply[mc.KEY_TRIGGERSRC] = "CloudControl"
     header_consumption_reply[mc.KEY_FROM] = topic_publish
     hamqtt_mock.async_publish_mock.assert_any_call(

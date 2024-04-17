@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import attr
 import logging
 import socket
 import sys
@@ -158,9 +159,26 @@ class MerossHttpClient:
                 logger = None
             if MEROSSDEBUG:
                 MEROSSDEBUG.http_random_timeout()
-            response = await self._session.post(
-                url=self._requesturl, data=request_json, timeout=self.timeout
-            )
+
+            # since device HTTP service sometimes timeouts with no apparent
+            # reason we're using an increasing timeout loop to try recover
+            # when this timeout is transient. This will lead to a total timeout
+            # (for the caller) exceeding the value(s) actually set in self.timeout
+            _connect_timeout_max = self.timeout.connect or self.timeout.total or 5
+            _connect_timeout = 1
+            while True:
+                try:
+                    response = await self._session.post(
+                        url=self._requesturl, data=request_json, timeout=attr.evolve(self.timeout, connect=_connect_timeout)
+                    )
+                    break
+                except aiohttp.ServerTimeoutError as exception:
+                    self._check_terminated()
+                    if _connect_timeout < _connect_timeout_max:
+                        _connect_timeout = _connect_timeout * 2
+                    else:
+                        raise exception
+
             self._check_terminated()
             response.raise_for_status()
             response_json = await response.text()

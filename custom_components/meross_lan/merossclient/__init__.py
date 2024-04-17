@@ -653,6 +653,7 @@ class MerossDeviceDescriptor:
     system: dict
     hardware: dict
     firmware: dict
+    online: dict
     type: str
     subType: str
     hardwareVersion: str
@@ -672,7 +673,6 @@ class MerossDeviceDescriptor:
         "all",
         "ability",
         "digest",
-        "_brokers",
         "__dict__",
     )
 
@@ -680,13 +680,12 @@ class MerossDeviceDescriptor:
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),
         mc.KEY_HARDWARE: lambda _self: _self.system.get(mc.KEY_HARDWARE, {}),
         mc.KEY_FIRMWARE: lambda _self: _self.system.get(mc.KEY_FIRMWARE, {}),
+        mc.KEY_ONLINE: lambda _self: _self.system.get(mc.KEY_ONLINE, {}),
         mc.KEY_TYPE: lambda _self: _self.hardware.get(mc.KEY_TYPE, mc.MANUFACTURER),
         mc.KEY_SUBTYPE: lambda _self: _self.hardware.get(mc.KEY_SUBTYPE, ""),
         "hardwareVersion": lambda _self: _self.hardware.get(mc.KEY_VERSION, ""),
         mc.KEY_UUID: lambda _self: _self.hardware.get(mc.KEY_UUID),
-        mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(
-            mc.KEY_MACADDRESS, ""
-        ),
+        mc.KEY_MACADDRESS: lambda _self: _self.hardware.get(mc.KEY_MACADDRESS, ""),
         "macAddress_fmt": lambda _self: fmt_macaddress(_self.macAddress),
         mc.KEY_INNERIP: lambda _self: _self.firmware.get(mc.KEY_INNERIP),
         mc.KEY_USERID: lambda _self: str(_self.firmware.get(mc.KEY_USERID)),
@@ -707,7 +706,6 @@ class MerossDeviceDescriptor:
             self.all = payload.get(mc.KEY_ALL, {})
             self.ability = payload.get(mc.KEY_ABILITY, {})
             self.digest = self.all.get(mc.KEY_DIGEST, {})
-        self._brokers = None
 
     def __getattr__(self, name):
         value = MerossDeviceDescriptor._dynamicattrs[name](self)
@@ -720,7 +718,6 @@ class MerossDeviceDescriptor:
         """
         self.all = payload.get(mc.KEY_ALL, self.all)
         self.digest = self.all.get(mc.KEY_DIGEST, {})
-        self._brokers = None
         for key in MerossDeviceDescriptor._dynamicattrs.keys():
             # don't use hasattr() or so to inspect else the whole
             # dynamic attrs logic gets f...d
@@ -737,14 +734,12 @@ class MerossDeviceDescriptor:
     @property
     def brokers(self) -> list[HostAddress]:
         """list of configured brokers in the device"""
-        _brokers: list[HostAddress] | None
-        _brokers = self._brokers
-        if _brokers is None:
-            self._brokers = _brokers = []
-            fw = self.firmware
-            if server := fw.get(mc.KEY_SERVER):
-                _brokers.append(HostAddress(server, get_port_safe(fw, mc.KEY_PORT)))
-            if second_server := fw.get(mc.KEY_SECONDSERVER):
+        _brokers: list[HostAddress] = []
+        fw = self.firmware
+        if server := fw.get(mc.KEY_SERVER):
+            _brokers.append(HostAddress(server, get_port_safe(fw, mc.KEY_PORT)))
+        if second_server := fw.get(mc.KEY_SECONDSERVER):
+            if second_server != server:
                 _brokers.append(
                     HostAddress(second_server, get_port_safe(fw, mc.KEY_SECONDPORT))
                 )
