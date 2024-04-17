@@ -196,10 +196,10 @@ class MLGarage(MLCover):
                     )
                     # check the timeout 1 sec after expected to account
                     # for delays in communication
-                    self._transition_end_unsub = schedule_callback(
+                    self._transition_end_unsub = schedule_async_callback(
                         self.hass,
                         (timeout or self._transition_duration) + 1,  # type: ignore
-                        self._transition_end_callback,
+                        self._async_transition_end_callback,
                     )
 
                 self.flush_state()
@@ -276,13 +276,13 @@ class MLGarage(MLCover):
                 *request_get(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
             )
 
-    @callback
-    def _transition_end_callback(self):
+    async def _async_transition_end_callback(self):
         """
         checks the transition did finish as per the timeout(s)
         """
         self._transition_end_unsub = None
-        if self.is_closing:
+        was_closing = self.is_closing
+        if was_closing:
             # when closing we expect this callback not to be called since
             # the transition should be terminated by '_set_open' provided it gets
             # called on time (on polling this is not guaranteed).
@@ -292,20 +292,34 @@ class MLGarage(MLCover):
             if self._transition_duration < (time() - self._transition_start):  # type: ignore
                 self._update_transition_duration(self._transition_duration + 1)
 
-        if self.is_closing == self.is_closed:
-            self.binary_sensor_timeout.update_ok()
-        else:
-            self.binary_sensor_timeout.update_timeout(
-                MLCover.ENTITY_COMPONENT.STATE_CLOSED
-                if self.is_closing
-                else MLCover.ENTITY_COMPONENT.STATE_OPEN
-            )
-
         self.is_closing = False
         self.is_opening = False
-        self.flush_state()
-
         self._transition_start = None
+
+        if was_closing != self.is_closed:
+            # looks like on MQTT we don't receive a PUSHed state update? (#415)
+            if await self.manager.async_request_ack(
+                *request_get(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+            ):
+                # the request/response parse already flushed the state
+                if was_closing == self.is_closed:
+                    self.binary_sensor_timeout.update_ok()
+                else:
+                    self.binary_sensor_timeout.update_timeout(
+                        MLCover.ENTITY_COMPONENT.STATE_CLOSED
+                        if was_closing
+                        else MLCover.ENTITY_COMPONENT.STATE_OPEN
+                    )
+            else:
+                self.flush_state()
+                self.binary_sensor_timeout.update_timeout(
+                    MLCover.ENTITY_COMPONENT.STATE_CLOSED
+                    if was_closing
+                    else MLCover.ENTITY_COMPONENT.STATE_OPEN
+                )
+        else:
+            self.flush_state()
+            self.binary_sensor_timeout.update_ok()
 
     def _update_transition_duration(self, transition_duration):
         self._transition_duration = clamp(
