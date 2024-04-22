@@ -984,7 +984,7 @@ class MerossCloudProfile(ApiProfile):
                 # to just setup the issue registry in case we're
                 # not configured to automatically refresh
                 self.apiclient.credentials = None
-                await self._async_token_missing(True)
+                await self.async_token_refresh()
         else:
             self._device_info_time = 0.0
             self._data: MerossCloudProfileStoreType = {
@@ -1320,22 +1320,12 @@ class MerossCloudProfile(ApiProfile):
             )
             return None
 
-    async def _async_token_missing(self, should_raise_issue: bool):
+    async def async_token_refresh(self):
         """
         Called when the stored token is dropped (expired) or when needed.
         Tries silently (re)login or raises an issue.
         """
-        with self.exception_warning("_async_token_missing"):
-            config = self.config
-            if (mlc.CONF_PASSWORD not in config) or (config.get(mlc.CONF_MFA_CODE)):
-                if should_raise_issue:
-                    create_issue(
-                        mlc.ISSUE_CLOUD_TOKEN_EXPIRED,
-                        self.id,
-                        severity=IssueSeverity.WARNING,
-                        translation_placeholders={"email": config.get(mc.KEY_EMAIL)},
-                    )
-                return None
+        try:
             data = self._data
             if (_time := time()) < data[
                 self.KEY_TOKEN_REQUEST_TIME
@@ -1343,6 +1333,11 @@ class MerossCloudProfile(ApiProfile):
                 return None
             data[self.KEY_TOKEN_REQUEST_TIME] = _time
             self._schedule_save_store()
+            config = self.config
+            if mlc.CONF_PASSWORD not in config:
+                raise Exception("Missing profile password")
+            if config.get(mlc.CONF_MFA_CODE):
+                raise Exception("MFA required")
             credentials = await self.apiclient.async_token_refresh(
                 config[CONF_PASSWORD], config
             )
@@ -1350,7 +1345,7 @@ class MerossCloudProfile(ApiProfile):
             # and not trigger any side effects. No need to re-trigger _schedule_save_store
             # since it should still be pending...
             data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
-            self.log(self.INFO, "Cloud api token was automatically refreshed")
+            self.log(self.INFO, "Meross api token was automatically refreshed")
             helper = ConfigEntriesHelper(self.hass)
             profile_entry = helper.get_config_entry(f"profile.{self.id}")
             if profile_entry:
@@ -1363,8 +1358,15 @@ class MerossCloudProfile(ApiProfile):
                     data=profile_config,
                 )
             return credentials
-
-        return None
+        except Exception as exception:
+            self.log_exception(self.WARNING, exception, "Meross api token auto-refresh")
+            create_issue(
+                mlc.ISSUE_CLOUD_TOKEN_EXPIRED,
+                self.id,
+                severity=IssueSeverity.WARNING,
+                translation_placeholders={"email": config.get(mc.KEY_EMAIL)},
+            )
+            return None
 
     @asynccontextmanager
     async def _async_credentials_manager(self, msg: str, *args, **kwargs):
@@ -1373,17 +1375,17 @@ class MerossCloudProfile(ApiProfile):
             # it just yields the current one or tries it's best to recover a fresh
             # token with a guard to avoid issuing too many requests...
             credentials = self.apiclient.credentials or (
-                await self._async_token_missing(False)
+                await self.async_token_refresh()
             )
             if not credentials:
                 self.log(self.WARNING, f"{msg} cancelled: missing cloudapi token")
             yield credentials
         except CloudApiError as clouderror:
+            self.log_exception(self.WARNING, clouderror, msg)
             if clouderror.apistatus in APISTATUS_TOKEN_ERRORS:
                 self.apiclient.credentials = None
                 if self._data.pop(mc.KEY_TOKEN, None):  # type: ignore
-                    await self._async_token_missing(True)
-            self.log_exception(self.WARNING, clouderror, msg)
+                    await self.async_token_refresh()
         except Exception as exception:
             self.log_exception(self.WARNING, exception, msg)
 
