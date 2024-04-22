@@ -1066,7 +1066,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                                 api.loggable_device_id(self._device_id),
                             )
 
-                        await hass.config_entries.async_reload(
+                        hass.config_entries.async_schedule_reload(
                             self.config_entry.entry_id
                         )
                     # return None in data so the async_update_entry is not called for the
@@ -1136,9 +1136,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 )
                 state[mlc.CONF_TRACE] = user_input[mlc.CONF_TRACE]
                 # taskerize the reload so the entry get updated first
-                self.hass.async_create_task(
-                    self.hass.config_entries.async_reload(self.config_entry_id)
-                )
+                self.hass.config_entries.async_schedule_reload(self.config_entry_id)
             return self.finish_options_flow(config)
 
         config_schema = {
@@ -1275,9 +1273,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                             ]
                         except Exception:
                             pass
-                    hass.async_create_task(
-                        hass.config_entries.async_reload(self.config_entry_id)
-                    )
+                    hass.config_entries.async_schedule_reload(self.config_entry_id)
                     hass.config_entries.async_update_entry(
                         self.config_entry, data=device_config
                     )

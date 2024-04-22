@@ -85,7 +85,6 @@ class EntityManager(Loggable):
         "_trace_data",
         "_unsub_trace_endtime",
         "_unsub_entry_update_listener",
-        "_unsub_entry_reload_scheduler",
     )
 
     def __init__(
@@ -192,7 +191,6 @@ class ConfigEntryManager(EntityManager):
         self._trace_data: list | None = None
         self._unsub_trace_endtime: "asyncio.TimerHandle | None" = None
         self._unsub_entry_update_listener = None
-        self._unsub_entry_reload_scheduler: "asyncio.TimerHandle | None" = None
         super().__init__(id, config_entry_id=config_entry_id, **kwargs)
 
     async def async_shutdown(self):
@@ -205,7 +203,6 @@ class ConfigEntryManager(EntityManager):
         usually referred to inside the polling /parsing code)
         """
         self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
-        self.unschedule_entry_reload()
         await super().async_shutdown()
         await self.async_destroy_diagnostic_entities()
         if self.is_tracing:
@@ -277,7 +274,6 @@ class ConfigEntryManager(EntityManager):
         ):
             return False
         self.unlisten_entry_update()
-        self.unschedule_entry_reload()
         ApiProfile.managers.pop(self.config_entry_id)
         self.platforms = {}
         self.config = {}
@@ -291,21 +287,7 @@ class ConfigEntryManager(EntityManager):
             self._unsub_entry_update_listener = None
 
     def schedule_entry_reload(self):
-        """Schedules a reload (in 15 sec) of the config_entry performing a full re-initialization"""
-        self.unschedule_entry_reload()
-
-        async def _async_entry_reload():
-            self._unsub_entry_reload_scheduler = None
-            await self.hass.config_entries.async_reload(self.config_entry_id)
-
-        self._unsub_entry_reload_scheduler = schedule_async_callback(
-            self.hass, 15, _async_entry_reload
-        )
-
-    def unschedule_entry_reload(self):
-        if self._unsub_entry_reload_scheduler:
-            self._unsub_entry_reload_scheduler.cancel()
-            self._unsub_entry_reload_scheduler = None
+        self.hass.config_entries.async_schedule_reload(self.config_entry_id)
 
     async def entry_update_listener(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
