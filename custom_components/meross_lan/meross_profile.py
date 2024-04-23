@@ -1053,9 +1053,30 @@ class MerossCloudProfile(ApiProfile):
 
     # interface: ConfigEntryManager
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
-        config = config_entry.data
-        await self.async_update_credentials(config)  # type: ignore
-        await super().entry_update_listener(hass, config_entry)
+        config: ProfileConfigType = config_entry.data  # type: ignore
+        remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED, self.id)
+        curr_credentials = self.apiclient.credentials
+        if not curr_credentials or (
+            curr_credentials[mc.KEY_TOKEN] != config[mc.KEY_TOKEN]
+        ):
+            with self.exception_warning("updating CloudApiClient credentials"):
+                self.log(self.DEBUG, "Updating credentials with new token")
+                if curr_credentials:
+                    await self.apiclient.async_logout_safe()
+                self.apiclient.credentials = config
+                self._data[mc.KEY_TOKEN] = config[mc.KEY_TOKEN]
+                await self._store.async_save(self._data)
+
+        if self.config.get(mc.KEY_MQTTDOMAIN) != config.get(mc.KEY_MQTTDOMAIN):
+            self.schedule_entry_reload()
+        else:
+            await super().entry_update_listener(hass, config_entry)
+            # the 'async_check_query_devices' will only occur if we didn't refresh
+            # on our polling schedule for whatever reason (invalid token -
+            # no connection - whatsoever) so, having a fresh token and likely
+            # good connectivity we're going to retrigger that
+            if self.need_query_device_info():
+                await self.async_query_device_info()
 
     def get_logger_name(self) -> str:
         return f"profile_{self.loggable_profile_id(self.id)}"
@@ -1180,26 +1201,6 @@ class MerossCloudProfile(ApiProfile):
                 else:
                     return None
         return None
-
-    async def async_update_credentials(self, credentials: "MerossCloudCredentials"):
-        with self.exception_warning("async_update_credentials"):
-            remove_issue(mlc.ISSUE_CLOUD_TOKEN_EXPIRED, self.id)
-            curr_credentials = self.apiclient.credentials
-            if not curr_credentials or (
-                curr_credentials[mc.KEY_TOKEN] != credentials[mc.KEY_TOKEN]
-            ):
-                self.log(self.DEBUG, "Updating credentials with new token")
-                if curr_credentials:
-                    await self.apiclient.async_logout_safe()
-                self.apiclient.credentials = credentials
-                self._data[mc.KEY_TOKEN] = credentials[mc.KEY_TOKEN]
-                self._schedule_save_store()
-                # the 'async_check_query_devices' will only occur if we didn't refresh
-                # on our polling schedule for whatever reason (invalid token -
-                # no connection - whatsoever) so, having a fresh token and likely
-                # good connectivity we're going to retrigger that
-                if self.need_query_device_info():
-                    await self.async_query_device_info()
 
     async def async_query_device_info(self):
         async with self._async_credentials_manager(
@@ -1352,7 +1353,7 @@ class MerossCloudProfile(ApiProfile):
                 # weird enough if this isnt true...
                 profile_config = dict(profile_entry.data)
                 profile_config.update(credentials)
-                # watchout: this will in turn call async_update_credentials
+                # watchout: this will in turn call self.entry_update_listener
                 helper.config_entries.async_update_entry(
                     profile_entry,
                     data=profile_config,
