@@ -1129,6 +1129,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
             )
             config[mlc.CONF_OBFUSCATE] = user_input[mlc.CONF_OBFUSCATE]
             config[mlc.CONF_TRACE_TIMEOUT] = user_input.get(mlc.CONF_TRACE_TIMEOUT)
+            self.hass.config_entries.async_update_entry(self.config_entry, data=config)
             if user_input[mlc.CONF_TRACE]:
                 # only reload and start tracing if the user wish so
                 state = MerossApi.managers_transient_state.setdefault(
@@ -1137,7 +1138,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 state[mlc.CONF_TRACE] = user_input[mlc.CONF_TRACE]
                 # taskerize the reload so the entry get updated first
                 self.hass.config_entries.async_schedule_reload(self.config_entry_id)
-            return self.finish_options_flow(config)
+            return self.async_create_entry(data=None)  # type: ignore
 
         config_schema = {
             vol.Required(
@@ -1273,7 +1274,6 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                             ]
                         except Exception:
                             pass
-                    hass.config_entries.async_schedule_reload(self.config_entry_id)
                     hass.config_entries.async_update_entry(
                         self.config_entry, data=device_config
                     )
@@ -1314,6 +1314,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         )
 
     async def async_step_bind_finalize(self, user_input=None):
+        self.hass.config_entries.async_schedule_reload(self.config_entry_id)
         return self.async_create_entry(data=None)  # type: ignore
 
     async def async_step_unbind(self, user_input=None):
