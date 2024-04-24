@@ -11,10 +11,7 @@ from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from . import MEROSSDEBUG, HostAddress, get_macaddress_from_uuid
-
-
-LOGGER = logging.getLogger(__name__)
+from . import HostAddress, get_macaddress_from_uuid
 
 
 def generate_app_id():
@@ -87,8 +84,6 @@ class _MerossMQTTClient(mqtt.Client):
             self.on_disconnect = self._mqttc_disconnect
         self.on_connect = self._mqttc_connect
         self.suppress_exceptions = True
-        if MEROSSDEBUG and MEROSSDEBUG.mqtt_client_log_enable:
-            self.enable_logger(LOGGER)
 
     async def async_shutdown(self):
         await self.async_disconnect()
