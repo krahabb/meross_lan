@@ -55,36 +55,6 @@ try:
         cloudapi_device_devlist = data.get("Device_devList")
         cloudapi_device_latestversion = data.get("Device_latestVersion")
 
-        cloud_profiles = [
-            {
-                mc.KEY_USERID_: "10000",
-                mc.KEY_EMAIL: "100@meross.com",
-                mc.KEY_KEY: "key1",
-            },
-            {
-                mc.KEY_USERID_: "20000",
-                mc.KEY_EMAIL: "200@meross.com",
-                mc.KEY_KEY: "key2",
-            },
-            {
-                mc.KEY_USERID_: "30000",
-                mc.KEY_EMAIL: "300@meross.com",
-                mc.KEY_KEY: "key3",
-            },
-            {
-                mc.KEY_USERID_: "40000",
-                mc.KEY_EMAIL: "400@meross.com",
-                mc.KEY_KEY: "key4",
-            },
-            {
-                mc.KEY_USERID_: "50000",
-                mc.KEY_EMAIL: "500@meross.com",
-                mc.KEY_KEY: "key5",
-            },
-        ]
-
-        mqtt_client_log_enable = False
-
         mqtt_connect_probability = 50
 
         @staticmethod
@@ -98,7 +68,6 @@ try:
             return randint(0, 99) < MEROSSDEBUG.mqtt_disconnect_probability
 
         # MerossHTTPClient debug patching
-        http_client_log_enable = True
         http_disc_end = 0
         http_disc_duration = 25
         http_disc_probability = 0
@@ -381,6 +350,23 @@ def get_port_safe(p_dict: dict, key: str) -> int:
         return mc.MQTT_DEFAULT_PORT
 
 
+def get_active_broker(p_debug: dict):
+    """
+    Parses the "debug" dict coming from NS_SYSTEM_DEBUG and returns
+    current MQTT active broker
+    """
+    p_cloud = p_debug[mc.KEY_CLOUD]
+    active_server: str = p_cloud[mc.KEY_ACTIVESERVER]
+    if active_server == p_cloud[mc.KEY_MAINSERVER]:
+        return HostAddress(active_server, get_port_safe(p_cloud, mc.KEY_MAINPORT))
+    elif active_server == p_cloud[mc.KEY_SECONDSERVER]:
+        return HostAddress(active_server, get_port_safe(p_cloud, mc.KEY_SECONDPORT))
+    else:
+        raise Exception(
+            "Unable to detect active MQTT broker from current device debug info"
+        )
+
+
 def get_element_by_key(payload: list, key: str, value: object) -> dict:
     """
     scans the payload(list) looking for the first item matching
@@ -566,7 +552,8 @@ class MerossRequest(MerossMessage):
         self.method = method
         self.messageid = uuid4().hex
         self.payload = get_default_payload(namespace) if payload is None else payload
-        timestamp = int(time())
+        epoch = time()
+        timestamp = int(epoch)
         super().__init__(
             {
                 mc.KEY_HEADER: {
@@ -576,7 +563,7 @@ class MerossRequest(MerossMessage):
                     mc.KEY_PAYLOADVERSION: 1,
                     mc.KEY_FROM: from_,
                     mc.KEY_TIMESTAMP: timestamp,
-                    mc.KEY_TIMESTAMPMS: 0,
+                    mc.KEY_TIMESTAMPMS: int((epoch - timestamp) * 1000),
                     mc.KEY_SIGN: get_message_signature(self.messageid, key, timestamp),
                 },
                 mc.KEY_PAYLOAD: self.payload,
@@ -731,6 +718,20 @@ class MerossDeviceDescriptor:
         self.system[mc.KEY_TIME] = p_time
         self.time = p_time
         self.timezone = p_time.get(mc.KEY_TIMEZONE)
+
+    @property
+    def main_broker(self) -> HostAddress:
+        """list of configured brokers in the device"""
+        fw = self.firmware
+        return HostAddress(fw[mc.KEY_SERVER], get_port_safe(fw, mc.KEY_PORT))
+
+    @property
+    def alt_broker(self) -> HostAddress:
+        """list of configured brokers in the device"""
+        fw = self.firmware
+        return HostAddress(
+            fw[mc.KEY_SECONDSERVER], get_port_safe(fw, mc.KEY_SECONDPORT)
+        )
 
     @property
     def brokers(self) -> list[HostAddress]:

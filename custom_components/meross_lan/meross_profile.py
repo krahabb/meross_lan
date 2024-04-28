@@ -39,6 +39,7 @@ from .merossclient import (
     MerossResponse,
     check_message_strict,
     const as mc,
+    get_active_broker,
     get_message_uuid,
     get_replykey,
     request_get,
@@ -435,46 +436,45 @@ class MQTTConnection(Loggable):
                         # session management has already taken care of everything
                         return
 
-            if device := ApiProfile.devices.get(device_id):
-                if device._mqtt_connection == self:
-                    device.mqtt_receive(message)
-                    return
-                # we have the device loaded but somehow it is not 'mqtt binded' here.
-                # Either it's configuration is CONF_PROTOCOL_HTTP or it is paired to
-                # another profile. In this case we could automagically fix this (see later)
-                if device._profile != profile:
-                    # It could happen (I guess) when devices 'switch' broker while the
-                    # integration was already loaded so not really often
-                    if profile.try_link(device):
+            try:
+                self.mqttdevices[device_id].mqtt_receive(message)
+                return
+            except KeyError:
+                # device is not binded to this MQTTConnection
+                if device := ApiProfile.devices.get(device_id):
+                    # check among current loaded devices if they could be re-binded
+                    if device.conf_protocol is mlc.CONF_PROTOCOL_HTTP:
                         self.log(
-                            self.INFO,
-                            "Device uuid:%s has been automatically re-linked to this profile",
-                            profile.loggable_device_id(device_id),
-                        )
-                        # keep checking MQTT proto is allowed at the device level
-                        if device._mqtt_connection == self:
-                            device.mqtt_receive(message)
-                            return
-                        # else..keep going so we log the '...HTTP_ONLY..'
-                    else:
-                        # this is not really expected and deserves a warning but is expected
-                        # when you (re)bind a device and it still is connected to the old broker
-                        # until reboot
-                        self.log(
-                            self.WARNING,
-                            "Device uuid:%s cannot be registered for MQTT handling on this profile",
+                            self.DEBUG,
+                            "Dropping MQTT message for device uuid:%s since it is configured for HTTP only",
                             profile.loggable_device_id(device_id),
                             timeout=14400,
                         )
                         return
+                    if device._profile == profile:
+                        self.attach(device)
+                    else:
+                        if (device.key != profile.key) or (
+                            device.descriptor.userId != profile.id
+                        ):
+                            # this is not really expected and deserves a warning but is expected
+                            # when you (re)bind a device and it still is connected to the old broker
+                            # until reboot
+                            self.log(
+                                self.WARNING,
+                                "Received MQTT message for device uuid:%s which cannot be registered for MQTT handling on this profile",
+                                profile.loggable_device_id(device_id),
+                                timeout=14400,
+                            )
+                            return
+                        profile.link(device)
+                        # profile.link will attach to the mqtt broker known to the device cfg..
+                        # we'll ensure that (in case device cfg is stale) we're correctly binded here
+                        if device._mqtt_connection != self:
+                            self.attach(device)
 
-                self.log(
-                    self.DEBUG,
-                    "Device uuid:%s not registered for MQTT handling. It is likely HTTP_ONLY",
-                    profile.loggable_device_id(device_id),
-                    timeout=14400,
-                )
-                return
+                    device.mqtt_receive(message)
+                    return
 
             # the device is not configured: proceed to discovery in case
             if device_id in self.mqttdiscovering:
@@ -1083,11 +1083,51 @@ class MerossCloudProfile(ApiProfile):
 
     # interface: ApiProfile
     def attach_mqtt(self, device: "MerossDevice"):
-        with self.exception_warning("attach_mqtt"):
-            mqttconnection = self._get_mqttconnection(device.mqtt_broker)
-            mqttconnection.attach(device)
-            if mqttconnection.state_inactive:
-                mqttconnection.schedule_connect(mqttconnection.broker)
+        descr = device.descriptor
+        try:
+            if device.online:
+                if device.device_debug:
+                    try:
+                        broker = get_active_broker(device.device_debug)
+                    except Exception:
+                        broker = descr.main_broker
+                else:
+                    broker = descr.main_broker
+            else:
+                # decide which broker to connect to based off the most recent info
+                device_info = self._data[self.KEY_DEVICE_INFO][device.id]
+                timestamp_fw = descr.time.get(mc.KEY_TIMESTAMP, 0)
+                timestamp_di = self._data[self.KEY_DEVICE_INFO_TIME]
+                if timestamp_fw > timestamp_di:
+                    broker = descr.main_broker
+                else:
+                    if domain := device_info.get(mc.KEY_DOMAIN):
+                        broker = HostAddress.build(domain)
+                    elif reserveddomain := device_info.get(mc.KEY_RESERVEDDOMAIN):
+                        broker = HostAddress.build(reserveddomain)
+                    else:
+                        raise Exception(
+                            "Unable to detect MQTT broker from current cloud device info"
+                        )
+
+        except Exception as exception:
+            self.log_exception(
+                self.WARNING,
+                exception,
+                "attach_mqtt for device uuid:%s (%s)",
+                self.loggable_device_id(device.id),
+                device.name,
+            )
+            try:
+                # fallback if we have the KEY_MQTTDOMAIN
+                broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])
+            except:
+                return
+
+        mqttconnection = self._get_mqttconnection(broker)
+        mqttconnection.attach(device)
+        if mqttconnection.state_inactive:
+            mqttconnection.schedule_connect(broker)
 
     # interface: self
     @property
@@ -1146,7 +1186,7 @@ class MerossCloudProfile(ApiProfile):
         # no way
         return False
 
-    def try_link(self, device: "MerossDevice"):
+    def link(self, device: "MerossDevice"):
         """
         Device linking to a cloud profile sets the environment for
         the device MQTT attachment/connection. This process uses a lot
@@ -1164,15 +1204,11 @@ class MerossCloudProfile(ApiProfile):
         Presence in the device_info db might be unreliable since the query is only
         done once in 24 hours and thus, the db being out of sync
         """
-        if (device.key != self.key) or (device.descriptor.userId != self.userid):
-            return False
-        if super().try_link(device):
-            if device_info := self._data[self.KEY_DEVICE_INFO].get(device.id):
-                device.update_device_info(device_info)
-            if latest_version := self.get_latest_version(device.descriptor):
-                device.update_latest_version(latest_version)
-            return True
-        return False
+        super().link(device)
+        if device_info := self._data[self.KEY_DEVICE_INFO].get(device.id):
+            device.update_device_info(device_info)
+        if latest_version := self.get_latest_version(device.descriptor):
+            device.update_latest_version(latest_version)
 
     def get_device_info(self, uuid: str):
         return self._data[self.KEY_DEVICE_INFO].get(uuid)

@@ -39,7 +39,11 @@ from .const import (
     PARAM_TRACING_ABILITY_POLL_TIMEOUT,
     DeviceConfigType,
 )
-from .helpers import datetime_from_epoch, schedule_async_callback, utcdatetime_from_epoch
+from .helpers import (
+    datetime_from_epoch,
+    schedule_async_callback,
+    utcdatetime_from_epoch,
+)
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import (
     DiagnosticPollingStrategy,
@@ -54,6 +58,7 @@ from .merossclient import (
     MerossRequest,
     MerossResponse,
     const as mc,
+    get_active_broker,
     get_message_signature,
     get_message_uuid,
     get_port_safe,
@@ -296,23 +301,6 @@ class MerossDeviceBase(EntityManager):
             entity.set_unavailable()
 
 
-class SystemDebugPollingStrategy(PollingStrategy):
-    """
-    Polling strategy for NS_APPLIANCE_SYSTEM_DEBUG. This
-    query, beside carrying some device info, is only useful for us
-    in order to see if the device reports it is mqtt-connected
-    and allows us to update the MQTT connection state. The whole
-    polling strategy is only added at runtime when the device has
-    a corresponding cloud profile and conf_protocol is CONF_PROTOCOL_AUTO
-    it will then kick in only if we're not (yet) mqtt connected
-    but we should
-    """
-
-    async def async_poll(self, device: "MerossDevice", epoch: float):
-        if not device._mqtt_active:
-            await device.async_request_poll(self)
-
-
 class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     """
     Generic protocol handler class managing the physical device stack/state
@@ -460,7 +448,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
-        self.device_debug = {}
+        self.device_debug = None
         self.device_response_size_min = 1000
         self.device_response_size_max = 5000
         self.lastrequest = 0.0
@@ -576,7 +564,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     ):
         await super().entry_update_listener(hass, config_entry)
         self._update_config()
-        self._check_protocol()
+        self._check_protocol_ext()
 
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
@@ -625,8 +613,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
         # disconnect transports first so that any pending request
         # is invalidated and this shortens the eventual polling loop
-        if self._mqtt_connection:
-            self._mqtt_connection.detach(self)
         if self._profile:
             self._profile.unlink(self)
         if self._http:
@@ -760,6 +746,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         super()._set_offline()
         self._polling_delay = self.polling_period
         self._mqtt_active = self._http_active = None
+        self.device_debug = None
         for strategy in self.polling_strategies.values():
             strategy.lastrequest = 0
 
@@ -778,29 +765,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         at the moment the MerossApi MQTTConnection doesn't allow disabling it
         """
         return self._mqtt_active and not self._mqtt_active.is_cloud_connection
-
-    @property
-    def mqtt_broker(self) -> HostAddress:
-        # deciding which broker to connect to might prove to be hard
-        # since devices might fail-over the mqtt connection between 2 hosts
-        if p_debug := self.device_debug:
-            # we have 'current' connection info so this should be very trustable
-            with self.exception_warning(
-                "mqtt_broker - parsing current brokers info", timeout=10
-            ):
-                p_cloud = p_debug[mc.KEY_CLOUD]
-                active_server = p_cloud[mc.KEY_ACTIVESERVER]
-                if active_server == p_cloud[mc.KEY_MAINSERVER]:
-                    return HostAddress(
-                        str(active_server), get_port_safe(p_cloud, mc.KEY_MAINPORT)
-                    )
-                elif active_server == p_cloud[mc.KEY_SECONDSERVER]:
-                    return HostAddress(
-                        str(active_server), get_port_safe(p_cloud, mc.KEY_SECONDPORT)
-                    )
-
-        fw = self.descriptor.firmware
-        return HostAddress(str(fw[mc.KEY_SERVER]), get_port_safe(fw, mc.KEY_PORT))
 
     def get_device_datetime(self, epoch):
         """
@@ -832,7 +796,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # called by async_setup_entry after the entities have been registered
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
-        self._check_protocol()
+        self._check_protocol_ext()
         self._unsub_polling_callback = schedule_async_callback(
             self.hass, 0, self._async_polling_callback, None
         )
@@ -1400,6 +1364,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
                         ):
                             self._mqtt_active = None
+                            self.device_debug = None
                             self.sensor_protocol.update_attr_inactive(
                                 ProtocolSensor.ATTR_MQTT
                             )
@@ -1489,6 +1454,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def mqtt_attached(self, mqtt_connection: "MQTTConnection"):
         assert self.conf_protocol is not CONF_PROTOCOL_HTTP
+        if self._mqtt_connection:
+            self._mqtt_connection.detach(self)
         self.log(
             self.DEBUG,
             "mqtt_attached to %s",
@@ -1544,6 +1511,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self.loggable_broker(self._mqtt_connection.broker),
         )
         self._mqtt_connected = self._mqtt_publish = self._mqtt_active = None
+        self.device_debug = None
         if self.curr_protocol is CONF_PROTOCOL_MQTT:
             if self.conf_protocol is CONF_PROTOCOL_AUTO:
                 self._switch_protocol(CONF_PROTOCOL_HTTP)
@@ -1559,36 +1527,49 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def profile_linked(self, profile: ApiProfile):
         if self._profile is not profile:
+            if self._profile:
+                self._profile.unlink(self)
+            self._profile = profile
             self.log(
                 self.DEBUG,
                 "linked to profile:%s",
                 self.loggable_profile_id(profile.id),
             )
-            if self._mqtt_connection:
-                self._mqtt_connection.detach(self)
-            if self._profile:
-                self._profile.unlink(self)
-            self._profile = profile
             self._check_protocol()
 
     def profile_unlinked(self):
         assert self._profile
+        if self._mqtt_connection:
+            self._mqtt_connection.detach(self)
         self.log(
             self.DEBUG,
             "unlinked from profile:%s",
             self.loggable_profile_id(self._profile.id),
         )
-        if self._mqtt_connection:
-            self._mqtt_connection.detach(self)
         self._profile = None
+
+    def _check_protocol_ext(self):
+        userId = self.descriptor.userId
+        if userId in ApiProfile.profiles:
+            profile = ApiProfile.profiles[userId]
+            if profile and (profile.key != self.key):
+                profile = ApiProfile.api
+        else:
+            profile = ApiProfile.api
+        _profile = self._profile
+        if _profile != profile:
+            if _profile:
+                _profile.unlink(self)
+            if profile:
+                profile.link(self)
+                # _check_protocol already called
+                return
+        self._check_protocol()
 
     def _check_protocol(self):
         """called whenever the configuration or the profile linking changes to fix protocol transports"""
         conf_protocol = self.conf_protocol
-        _profile = self._profile
-        _mqtt_connection = self._mqtt_connection
         _http = self._http
-
         if conf_protocol is CONF_PROTOCOL_MQTT:
             if _http:
                 _http.terminate()
@@ -1606,6 +1587,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if host := self.host:
                 self._http = MerossHttpClient(host, self.key)
 
+        _profile = self._profile
         if conf_protocol is CONF_PROTOCOL_AUTO:
             # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
             # and eventually fallback (curr_protocol) until some good news allow us
@@ -1624,18 +1606,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if self.curr_protocol is not conf_protocol:
                 self._switch_protocol(conf_protocol)
 
-        if self.conf_protocol is CONF_PROTOCOL_HTTP:
+        _mqtt_connection = self._mqtt_connection
+        if conf_protocol is CONF_PROTOCOL_HTTP:
             # strictly HTTP so detach MQTT in case
             if _mqtt_connection:
                 _mqtt_connection.detach(self)
-            self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
         else:
-            if _profile and (self.conf_protocol is CONF_PROTOCOL_AUTO):
-                if mc.NS_APPLIANCE_SYSTEM_DEBUG not in self.polling_strategies:
-                    SystemDebugPollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_DEBUG)
-            else:
-                self.polling_strategies.pop(mc.NS_APPLIANCE_SYSTEM_DEBUG, None)
-
             if _mqtt_connection:
                 if _mqtt_connection.profile == _profile:
                     return
@@ -1643,17 +1619,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
             if _profile:
                 _profile.attach_mqtt(self)
-            else:
-                # this could cause 1 level recursion by
-                # calling profile_linked. In general, devices
-                # are attached right when loaded (by default they're attached to MerossApi
-                # if no CloudProfile matches). Whenever a Cloud profile appears, it can
-                # steal the device from another ApiProfile (and this should be safe).
-                # but when a cloud profile is unloaded, it unlinks its devices which will
-                # rest without an ApiProfile. This is still to be fixed but at least,
-                # whenever we refresh the device config, this kind of 'failover' will
-                # definitely bind the device to the local broker if no better option
-                self.api.try_link(self)
 
     def _receive(self, epoch: float, message: MerossResponse):
         """
@@ -1852,18 +1817,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             if self._mqtt_active:
                 if not is_device_online(descr.system):
+                    self.device_debug = None
                     self._mqtt_active = None
                     self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_MQTT)
-            elif (_mqtt_connected := self._mqtt_connected) and is_device_online(
-                descr.system
-            ):
-                if _mqtt_connected.broker.host == self.mqtt_broker.host:
-                    self._mqtt_active = _mqtt_connected
-                    self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
-                    # this code path actually only happens when we're working on HTTP so we
-                    # skip/optimize the checks (but still on the safe side)
-                    if self.curr_protocol is not self.pref_protocol:
-                        self._switch_protocol(self.pref_protocol)
+            elif is_device_online(descr.system):
+                if not self.device_debug:
+                    self.request(request_get(mc.NS_APPLIANCE_SYSTEM_DEBUG))
 
         for key_digest, _digest in descr.digest.items() or descr.control.items():
             self.digest_handlers[key_digest](_digest)
@@ -1878,7 +1837,22 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         pass
 
     def _handle_Appliance_System_Debug(self, header: dict, payload: dict):
-        self.device_debug = payload[mc.KEY_DEBUG]
+        # this ns is queried when we're HTTP connected and the device reports it is
+        # also MQTT connected but meross_lan has no confirmation (_mqtt_active == None)
+        # we're then going to inspect the device reported broker and see if
+        # our config allow to connect
+        self.device_debug = p_debug = payload[mc.KEY_DEBUG]
+        broker = get_active_broker(p_debug)
+        mqtt_connection = self._mqtt_connection
+        if mqtt_connection:
+            if mqtt_connection.broker.host == broker.host:
+                if self._mqtt_connected and not self._mqtt_active:
+                    self._mqtt_active = mqtt_connection
+                    self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
+                    if self.curr_protocol is not self.pref_protocol:
+                        self._switch_protocol(self.pref_protocol)
+                return
+            mqtt_connection.detach(self)
 
     def _handle_Appliance_System_Online(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager

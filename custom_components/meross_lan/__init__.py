@@ -452,7 +452,7 @@ class MerossApi(ApiProfile):
     def allow_mqtt_publish(self):
         return True  # MerossApi still doesnt support configuring entry for this
 
-    def attach_mqtt(self, device: MerossDevice):
+    def attach_mqtt(self, device: "MerossDevice"):
         self.mqtt_connection.attach(device)
 
     # interface: self
@@ -553,11 +553,6 @@ async def async_setup_entry(hass: "HomeAssistant", config_entry: "ConfigEntry"):
                 api.devices[device_id] = device
                 # this code needs to run after registering api.devices[device_id]
                 # because of race conditions with profile entry loading
-                for profile in api.active_profiles():
-                    if profile.try_link(device):
-                        break
-                else:
-                    api.try_link(device)
                 device.start()
                 return True
             except Exception as error:
@@ -578,7 +573,10 @@ async def async_setup_entry(hass: "HomeAssistant", config_entry: "ConfigEntry"):
                 api.profiles[profile_id] = profile
                 # 'link' the devices already initialized
                 for device in api.active_devices():
-                    profile.try_link(device)
+                    if (device.key == profile.key) and (
+                        device.descriptor.userId == profile_id
+                    ):
+                        profile.link(device)
                 return True
             except Exception as error:
                 await profile.async_shutdown()

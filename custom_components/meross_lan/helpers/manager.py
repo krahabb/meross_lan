@@ -9,7 +9,7 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import LOGGER, Loggable, getLogger, schedule_async_callback, schedule_callback
+from . import LOGGER, Loggable, getLogger, schedule_callback
 from ..const import (
     CONF_ALLOW_MQTT_PUBLISH,
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
@@ -575,13 +575,11 @@ class ApiProfile(ConfigEntryManager):
     def allow_mqtt_publish(self):
         return self.config.get(CONF_ALLOW_MQTT_PUBLISH)
 
-    def try_link(self, device: "MerossDevice"):
+    def link(self, device: "MerossDevice"):
         device_id = device.id
-        if device_id not in self.linkeddevices:
-            device.profile_linked(self)
-            self.linkeddevices[device_id] = device
-            return True
-        return False
+        assert device_id not in self.linkeddevices
+        device.profile_linked(self)
+        self.linkeddevices[device_id] = device
 
     def unlink(self, device: "MerossDevice"):
         device_id = device.id
