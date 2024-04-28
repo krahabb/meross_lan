@@ -541,60 +541,12 @@ class MQTTConnection(Loggable):
         Sends an ns_all and ns_ability GET requests encapsulated in an ns_multiple
         to speed up things. Raises exception in case of error
         """
-        self.log(
-            self.DEBUG,
-            "Initiating 1-step identification for uuid:%s",
-            self.profile.loggable_device_id(device_id),
-        )
         topic_response = self.topic_response
-        response = await self.async_mqtt_publish(
-            device_id,
-            MerossRequest(
-                key,
-                mc.NS_APPLIANCE_CONTROL_MULTIPLE,
-                mc.METHOD_SET,
-                {
-                    mc.KEY_MULTIPLE: [
-                        MerossRequest(
-                            key,
-                            *request_get(mc.NS_APPLIANCE_SYSTEM_ALL),
-                            topic_response,
-                        ),
-                        MerossRequest(
-                            key,
-                            *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY),
-                            topic_response,
-                        ),
-                    ]
-                },
-                topic_response,
-            ),
-        )
-
-        try:
-            response = check_message_strict(response)
-            multiple_response: list["MerossMessageType"] = response[mc.KEY_PAYLOAD][
-                mc.KEY_MULTIPLE
-            ]
-            # this syntax ensures both the responses are the expected ones
-            return {
-                CONF_DEVICE_ID: device_id,
-                CONF_PAYLOAD: {
-                    mc.KEY_ALL: multiple_response[0][mc.KEY_PAYLOAD][mc.KEY_ALL],
-                    mc.KEY_ABILITY: multiple_response[1][mc.KEY_PAYLOAD][
-                        mc.KEY_ABILITY
-                    ],
-                },
-                CONF_KEY: key,
-            }
-        except MerossKeyError as error:
-            # no point in attempting 2-steps identification
-            raise error
-        except Exception as exception:
+        if False:
+            # 1-step identification disabled since it proves a bit unreliable on my msl320
             self.log(
                 self.DEBUG,
-                "Identification error('%s') for uuid:%s. Falling back to 2-steps procedure",
-                str(exception),
+                "Initiating 1-step identification for uuid:%s",
                 self.profile.loggable_device_id(device_id),
             )
             try:
@@ -603,40 +555,92 @@ class MQTTConnection(Loggable):
                         device_id,
                         MerossRequest(
                             key,
-                            *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                            mc.NS_APPLIANCE_CONTROL_MULTIPLE,
+                            mc.METHOD_SET,
+                            {
+                                mc.KEY_MULTIPLE: [
+                                    MerossRequest(
+                                        key,
+                                        *request_get(mc.NS_APPLIANCE_SYSTEM_ALL),
+                                        topic_response,
+                                    ),
+                                    MerossRequest(
+                                        key,
+                                        *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                                        topic_response,
+                                    ),
+                                ]
+                            },
                             topic_response,
                         ),
                     )
                 )
-                ability = response[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
+                multiple_response: list["MerossMessageType"] = response[mc.KEY_PAYLOAD][
+                    mc.KEY_MULTIPLE
+                ]
+                # this syntax ensures both the responses are the expected ones
+                return {
+                    CONF_DEVICE_ID: device_id,
+                    CONF_PAYLOAD: {
+                        mc.KEY_ALL: multiple_response[0][mc.KEY_PAYLOAD][mc.KEY_ALL],
+                        mc.KEY_ABILITY: multiple_response[1][mc.KEY_PAYLOAD][
+                            mc.KEY_ABILITY
+                        ],
+                    },
+                    CONF_KEY: key,
+                }
             except MerossKeyError as error:
+                # no point in attempting 2-steps identification
                 raise error
             except Exception as exception:
-                raise Exception("Unable to identify abilities") from exception
-            try:
-                response = check_message_strict(
-                    await self.async_mqtt_publish(
-                        device_id,
-                        MerossRequest(
-                            key,
-                            *request_get(mc.NS_APPLIANCE_SYSTEM_ALL),
-                            topic_response,
-                        ),
-                    )
+                self.log(
+                    self.DEBUG,
+                    "Identification error('%s') for uuid:%s. Falling back to 2-steps procedure",
+                    str(exception),
+                    self.profile.loggable_device_id(device_id),
                 )
-                all = response[mc.KEY_PAYLOAD][mc.KEY_ALL]
-            except MerossKeyError as error:
-                raise error
-            except Exception as exception:
-                raise Exception("Unable to identify device (all)") from exception
-            return {
-                CONF_DEVICE_ID: device_id,
-                CONF_PAYLOAD: {
-                    mc.KEY_ALL: all,
-                    mc.KEY_ABILITY: ability,
-                },
-                CONF_KEY: key,
-            }
+
+        try:
+            response = check_message_strict(
+                await self.async_mqtt_publish(
+                    device_id,
+                    MerossRequest(
+                        key,
+                        *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                        topic_response,
+                    ),
+                )
+            )
+            ability = response[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
+        except MerossKeyError as error:
+            raise error
+        except Exception as exception:
+            raise Exception("Unable to identify abilities") from exception
+
+        try:
+            response = check_message_strict(
+                await self.async_mqtt_publish(
+                    device_id,
+                    MerossRequest(
+                        key,
+                        *request_get(mc.NS_APPLIANCE_SYSTEM_ALL),
+                        topic_response,
+                    ),
+                )
+            )
+            all = response[mc.KEY_PAYLOAD][mc.KEY_ALL]
+        except MerossKeyError as error:
+            raise error
+        except Exception as exception:
+            raise Exception("Unable to identify device (all)") from exception
+        return {
+            CONF_DEVICE_ID: device_id,
+            CONF_PAYLOAD: {
+                mc.KEY_ALL: all,
+                mc.KEY_ABILITY: ability,
+            },
+            CONF_KEY: key,
+        }
 
     async def async_try_discovery(self, device_id: str):
         """
@@ -1141,50 +1145,6 @@ class MerossCloudProfile(ApiProfile):
     @property
     def userid(self):
         return self.config[mc.KEY_USERID_]
-
-    def device_is_registered(self, key: str, descriptor: "MerossDeviceDescriptor"):
-        """extensive check that the device is 'really' binded to the profile"""
-        # this check, in a 'goldylock' scenario whould be pretty simple:
-        # check that the device userId matches the profile Id since they represent
-        # the same info. But when we rebind devices in the wild, the userId
-        # in the device become 'untrustable' since you could set any value while pairing.
-        # We'll then apply a 'best-effort' approach to verify if the device is (still)
-        # binded by veryifing multiple conditions
-        if (key != self.key) or (descriptor.userId != self.userid):
-            # of course they need to match!
-            return False
-
-        device_brokers = descriptor.brokers
-        if mqtt_domain := self.config.get(mc.KEY_MQTTDOMAIN):
-            broker = HostAddress.build(mqtt_domain)
-            if broker in device_brokers:
-                return True
-
-        uuid = descriptor.uuid
-        if uuid not in self._data[self.KEY_DEVICE_INFO]:
-            # the cloud profile doesn't know anything of this device.
-            # it is for sure not binded (or we haven't fresh device_info)
-            # TODO: think about it because our cloud profile device_info only
-            # gets refreshed in 24h. This would fail the logic if the device is added in HA
-            # before we update the info (when the user initially binds it?)
-            return False
-        # now it appears the device belongs to the profile, but since the device could
-        # be mqtt-rebinded at any time without unregistering from the cloud profile
-        # we also have to check consistency in the device configured brokers
-        device_info = self._data[self.KEY_DEVICE_INFO][uuid]
-        if domain := device_info.get(mc.KEY_DOMAIN):
-            broker = HostAddress.build(domain)
-            if broker in device_brokers:
-                return True
-        if reserved_domain := device_info.get(mc.KEY_RESERVEDDOMAIN):
-            if reserved_domain == domain:
-                # already checked
-                return False
-            broker = HostAddress.build(reserved_domain)
-            if broker in device_brokers:
-                return True
-        # no way
-        return False
 
     def link(self, device: "MerossDevice"):
         """

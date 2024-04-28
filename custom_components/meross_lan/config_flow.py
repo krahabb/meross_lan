@@ -471,21 +471,20 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
         if key is None:
             key = ""
         if descriptor:
-            for profile in MerossApi.active_profiles():
-                if profile.device_is_registered(key, descriptor):
-                    if profile.allow_mqtt_publish:
-                        mqttconnections = await profile.get_or_create_mqttconnections(
-                            device_id
-                        )
-                        if not mqttconnections:
-                            raise Exception(
-                                f"Meross cloud profile ({profile.config[mc.KEY_EMAIL]}) brokers are unavailable at the moment"
-                            )
-                    else:
+            profile = MerossApi.profiles.get(descriptor.userId)  # type: ignore
+            if profile and (profile.key == key):
+                if profile.allow_mqtt_publish:
+                    mqttconnections = await profile.get_or_create_mqttconnections(
+                        device_id
+                    )
+                    if not mqttconnections:
                         raise Exception(
-                            f"Meross cloud profile ({profile.config[mc.KEY_EMAIL]}) doesn't allow MQTT publishing"
+                            f"Meross cloud profile ({profile.config[mc.KEY_EMAIL]}) brokers are unavailable at the moment"
                         )
-                    break
+                else:
+                    raise Exception(
+                        f"Meross cloud profile ({profile.config[mc.KEY_EMAIL]}) doesn't allow MQTT publishing"
+                    )
 
         if not mqttconnections:
             # this means the device is not Meross cloud binded or the profile
