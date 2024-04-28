@@ -94,8 +94,6 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     """
 
     # HA core entity attributes:
-    _attr_effect_list: list[str] | None = None
-
     brightness: int | None
     color_mode: ColorMode
     color_temp: int | None
@@ -119,18 +117,23 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         "supported_features",
     )
 
-    def __init__(self, manager: "MerossDevice", payload: dict):
+    def __init__(
+        self,
+        manager: "MerossDevice",
+        payload: dict,
+        effect_list: list[str] | None = None,
+    ):
         self._light = {}
         self.brightness = None
         self.color_mode = ColorMode.UNKNOWN
         self.color_temp = None
         self.effect = None
         self.rgb_color = None
-        if self._attr_effect_list is None:
+        if effect_list is None:
             self.effect_list = None
             self.supported_features = LightEntityFeature(0)
         else:
-            self.effect_list = self._attr_effect_list
+            self.effect_list = effect_list
             self.supported_features = LightEntityFeature.EFFECT
 
         super().__init__(manager, payload.get(mc.KEY_CHANNEL))
@@ -198,8 +201,6 @@ class MLLight(MLLightBase):
     _unrecorded_attributes = frozenset({ATTR_TOGGLEX_MODE})
 
     _capacity: int
-    _effect_command_mode: bool | None
-    _effect_payload: list | None
     _togglex_switch: bool
     """
     if True the device supports/needs TOGGLEX namespace to toggle
@@ -213,14 +214,17 @@ class MLLight(MLLightBase):
 
     __slots__ = (
         "_capacity",
-        "_effect_command_mode",
-        "_effect_payload",
         "_togglex_switch",
         "_togglex_mode",
         "supported_color_modes",
     )
 
-    def __init__(self, manager: "MerossDevice", payload: dict):
+    def __init__(
+        self,
+        manager: "MerossDevice",
+        payload: dict,
+        effect_list: list[str] | None = None,
+    ):
         # we'll use the (eventual) togglex payload to
         # see if we have to toggle the light by togglex or so
         # with msl120j (fw 3.1.4) I've discovered that any 'light' payload sent will turn on the light
@@ -264,28 +268,7 @@ class MLLight(MLLightBase):
             else:
                 supported_color_modes.add(ColorMode.ONOFF)  # type: ignore
 
-        # _effect_command_mode is a flag indicating if we have to use a special
-        # processing in order to set the effect (there are issues about this)
-        # _effect_command_mode = None instructs the code to do a check and try
-        # to identify the device behavior.
-        # _effect_command_mode = True will use Appliance.Control.Light.Effect
-        # to try activate the effect but it could be very dangerous (I'm scared
-        # this could delete the whole effects memory of the device).
-        # This feature is on hold at the moment waiting for further ideas.
-        self._effect_command_mode = False
-        if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
-            # enable this to (dangerously) start playing: self._effect_command_mode = None
-            self._effect_payload = []
-            self._attr_effect_list = []
-            SmartPollingStrategy(
-                manager,
-                mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
-                handler=self._handle_Appliance_Control_Light_Effect,
-            )
-        elif mc.NS_APPLIANCE_CONTROL_MP3 in ability:
-            self._attr_effect_list = mc.HP110A_LIGHT_EFFECT_LIST
-
-        super().__init__(manager, payload)
+        super().__init__(manager, payload, effect_list)
         if self._togglex_switch:
             manager.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, self)
 
@@ -319,15 +302,10 @@ class MLLight(MLLightBase):
             capacity &= ~mc.LIGHT_CAPACITY_RGB
 
         if ATTR_EFFECT in kwargs:
-            _effect_command_mode = self._effect_command_mode
             light[mc.KEY_EFFECT] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
             capacity |= mc.LIGHT_CAPACITY_EFFECT
         else:
-            _effect_command_mode = False
-            if self.effect_list is mc.HP110A_LIGHT_EFFECT_LIST:
-                light[mc.KEY_EFFECT] = 0
-            else:
-                light.pop(mc.KEY_EFFECT, None)
+            light.pop(mc.KEY_EFFECT, None)
             capacity &= ~mc.LIGHT_CAPACITY_EFFECT
 
         light[mc.KEY_CAPACITY] = capacity
@@ -338,59 +316,7 @@ class MLLight(MLLightBase):
         if await self.async_request_light_ack(light):
             self._light = {}  # invalidate so _parse_light will force-flush
             self._parse_light(light)
-            if not self.is_on:
-                # In general, the LIGHT payload with LUMINANCE set should rightly
-                # turn on the light, but this is not true for every model/fw.
-                # Since devices exposing TOGGLEX have different behaviors we'll
-                # try to learn this at runtime.
-                if self._togglex_mode is None:
-                    # we need to learn the device behavior...
-                    if await self.manager.async_request_ack(
-                        mc.NS_APPLIANCE_CONTROL_TOGGLEX,
-                        mc.METHOD_GET,
-                        {mc.KEY_TOGGLEX: [{mc.KEY_CHANNEL: self.channel}]},
-                    ):
-                        # various kind of lights here might respond with either an array or a
-                        # simple dict since the "togglex" namespace used to be hybrid and still is.
-                        # This led to #357 but the resolution is to just bypass parsing since
-                        # the device message pipe has already processed the response with
-                        # all its (working) euristics after returning from async_request_ack
-                        self._togglex_mode = not self.is_on
-                        self.extra_state_attributes = {
-                            ATTR_TOGGLEX_MODE: self._togglex_mode
-                        }
-                if self._togglex_mode:
-                    # previous test showed that we need TOGGLEX
-                    await self.async_request_onoff(1)
-
-            if _effect_command_mode is None:
-                # we need to auto-detect the behavior of the command to set the effect
-                if await self.manager.async_request_ack(
-                    mc.NS_APPLIANCE_CONTROL_LIGHT,
-                    mc.METHOD_GET,
-                    {mc.KEY_LIGHT: {}},
-                ):
-                    self._effect_command_mode = _effect_command_mode = (
-                        self._light.get(mc.KEY_EFFECT) != light[mc.KEY_EFFECT]
-                    )
-
-            if _effect_command_mode:
-                # since the light payload is not able to set the effect
-                # we're trying a new way.
-                with self.exception_warning("setting effect"):
-                    p_effect = self._effect_payload[light[mc.KEY_EFFECT]]  # type: ignore
-                    await self.manager.async_request(
-                        mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
-                        mc.METHOD_SET,
-                        {
-                            mc.KEY_EFFECT: [
-                                {
-                                    mc.KEY_ID_: p_effect[mc.KEY_ID_],
-                                    mc.KEY_ENABLE: 1,
-                                }
-                            ]
-                        },
-                    )
+            await self._async_ensure_on()
 
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP in kwargs:
@@ -423,6 +349,35 @@ class MLLight(MLLightBase):
             ):
                 self.update_onoff(onoff)
 
+    async def _async_ensure_on(self):
+        """
+        Ensure the light is really on after sending a light/effect payload
+        """
+        if not self.is_on:
+            # In general, the LIGHT payload with LUMINANCE set should rightly
+            # turn on the light, but this is not true for every model/fw.
+            # Since devices exposing TOGGLEX have different behaviors we'll
+            # try to learn this at runtime.
+            if self._togglex_mode is None:
+                # we need to learn the device behavior...
+                if await self.manager.async_request_ack(
+                    mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+                    mc.METHOD_GET,
+                    {mc.KEY_TOGGLEX: [{mc.KEY_CHANNEL: self.channel}]},
+                ):
+                    # various kind of lights here might respond with either an array or a
+                    # simple dict since the "togglex" namespace used to be hybrid and still is.
+                    # This led to #357 but the resolution is to just bypass parsing since
+                    # the device message pipe has already processed the response with
+                    # all its (working) euristics after returning from async_request_ack
+                    self._togglex_mode = not self.is_on
+                    self.extra_state_attributes = {
+                        ATTR_TOGGLEX_MODE: self._togglex_mode
+                    }
+            if self._togglex_mode:
+                # previous test showed that we need TOGGLEX
+                await self.async_request_onoff(1)
+
     def _inherited_parse_light(self, payload: dict):
         if mc.KEY_CAPACITY in payload:
             # despite of previous parsing, use capacity
@@ -445,21 +400,172 @@ class MLLight(MLLightBase):
             else:
                 self.effect = None
 
-    def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
-        self._effect_payload = payload[mc.KEY_EFFECT]
-        effect_list = []
-        effect = None
-        for p_effect in self._effect_payload:
-            if p_effect[mc.KEY_ENABLE]:
-                effect = p_effect[mc.KEY_EFFECTNAME]
-                effect_list.append(effect)
-            else:
-                effect_list.append(p_effect[mc.KEY_EFFECTNAME])
 
-        if (self.effect_list != effect_list) or (self.effect != effect):
-            self.effect_list = effect_list
-            self.effect = effect
+class MLLightEffect(MLLight):
+    """
+    Specialized light entity for devices supporting Appliance.Control.Light.Effect.
+    """
+
+    __slots__ = (
+        "_light_effect",
+        "_light_effect_list",
+    )
+
+    def __init__(self, manager: "MerossDevice", payload: dict):
+        self._light_effect: dict | None = None
+        self._light_effect_list: list[dict] = []
+        super().__init__(manager, payload, [])
+
+        SmartPollingStrategy(
+            manager,
+            mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
+            handler=self._handle_Appliance_Control_Light_Effect,
+        )
+
+    """
+    async def async_turn_on(self, **kwargs):
+        if ATTR_EFFECT in kwargs:
+            effect_index = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
+            if effect_index == 0: # light.EFFECT_OFF
+                effect_index = self._light.get(mc.KEY_EFFECT)
+                if self.
+                pass
+            else:
+                effect_index -= 1
+                light_effect = self._light_effect_list[effect_index]
+                light_effect[mc.KEY_ENABLE] = 1
+                if await self.manager.async_request_ack(
+                    mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
+                    mc.METHOD_SET,
+                    {mc.KEY_EFFECT: [light_effect]},
+                ):
+                    self._light_effect = light_effect
+                    self.effect = light_effect[mc.KEY_EFFECTNAME]
+                    self._light[mc.KEY_EFFECT] = effect_index
+                    self._light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_EFFECT
+                    self.flush_state()
+                    await self._async_ensure_on()
+                else:
+                    light_effect[mc.KEY_ENABLE] = 0
+            return
+
+        await super().async_turn_on(**kwargs)
+
+    def _parse_light(self, payload: dict):
+        if self._light != payload:
+            self._light = payload
+
+            capacity = payload[mc.KEY_CAPACITY]
+            if capacity & mc.LIGHT_CAPACITY_RGB:
+                self.color_mode = ColorMode.RGB
+            elif capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
+                self.color_mode = ColorMode.COLOR_TEMP
+            elif capacity & mc.LIGHT_CAPACITY_LUMINANCE:
+                self.color_mode = ColorMode.BRIGHTNESS
+
+            if capacity & mc.LIGHT_CAPACITY_EFFECT:
+                effect_index = payload[mc.KEY_EFFECT]
+                try:
+                    light_effect = self._light_effect_list[effect_index]
+                except IndexError:
+                    # our _light_effect_list is stale
+                    light_effect = None
+                    self.manager.polling_strategies[mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT].lastrequest = 0
+            else:
+                light_effect = None
+
+            if self._light_effect != light_effect:
+                if self._light_effect:
+                    self._light_effect[mc.KEY_ENABLE] = 0
+                if light_effect:
+                    light_effect[mc.KEY_ENABLE] = 1
+                    self.effect = light_effect[mc.KEY_EFFECTNAME]
+                    self.color_mode = ColorMode.BRIGHTNESS
+                else:
+                    self.effect = None
+                self._light_effect = light_effect
+
+
+
+
+            self.color_mode = ColorMode.UNKNOWN
+
+            if mc.KEY_LUMINANCE in payload:
+                self.color_mode = ColorMode.BRIGHTNESS
+                self.brightness = payload[mc.KEY_LUMINANCE] * 255 // 100
+            else:
+                self.brightness = None
+
+            if mc.KEY_TEMPERATURE in payload:
+                self.color_mode = ColorMode.COLOR_TEMP
+                self.color_temp = ((100 - payload[mc.KEY_TEMPERATURE]) / 99) * (
+                    self.max_mireds - self.min_mireds
+                ) + self.min_mireds
+            else:
+                self.color_temp = None
+
+            if mc.KEY_RGB in payload:
+                self.color_mode = ColorMode.RGB
+                self.rgb_color = _int_to_rgb(payload[mc.KEY_RGB])
+            else:
+                self.rgb_color = None
+
+            self._inherited_parse_light(payload)
             self.flush_state()
+    """
+
+    def _handle_Appliance_Control_Light_Effect(self, header: dict, payload: dict):
+        """
+        {
+            "effect": [
+                {
+                    "Id": "0000000000000000",
+                    "effectName": "Night",
+                    "iconName": "light_effect_icon_night",
+                    "enable": 0,
+                    "mode": 0,
+                    "speed": 10,
+                    "member": [{"temperature": 1, "luminance": 30}, {{"rgb": 1, "luminance": 30}],
+                },
+            ]
+        }
+        """
+
+        light_effect_list = payload[mc.KEY_EFFECT]
+        if self._light_effect_list != light_effect_list:
+            self._light_effect_list = light_effect_list
+            self._light_effect = effect = None
+            self.effect_list = effect_list = [light.EFFECT_OFF]
+            effect_index = 0
+            for light_effect in light_effect_list:
+                if light_effect[mc.KEY_ENABLE]:
+                    self._light_effect = light_effect
+                    effect = light_effect[mc.KEY_EFFECTNAME]
+                    effect_list.append(effect)
+                    self._light[mc.KEY_EFFECT] = effect_index
+                else:
+                    effect_list.append(light_effect[mc.KEY_EFFECTNAME])
+                effect_index += 1
+            """
+            self.effect = effect
+            capacity = self._light[mc.KEY_CAPACITY]
+            if effect:
+                self._light[mc.KEY_CAPACITY] = capacity | mc.LIGHT_CAPACITY_EFFECT
+            else:
+                self._light[mc.KEY_CAPACITY] = capacity & ~mc.LIGHT_CAPACITY_EFFECT
+                self._light.pop(mc.KEY_EFFECT, None)
+            """
+            self.flush_state()
+
+
+class MLLightMp3(MLLight):
+    """
+    Specialized light entity for devices supporting Appliance.Control.Mp3
+    Actually this is should be an HP110.
+    """
+
+    def __init__(self, manager: "MerossDevice", payload: dict):
+        super().__init__(manager, payload, mc.HP110A_LIGHT_EFFECT_LIST)
 
 
 class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
@@ -512,5 +618,12 @@ class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
 def digest_init_light(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
     """{ "channel": 0, "capacity": 4 }"""
 
-    MLLight(device, digest)
+    ability = device.descriptor.ability
+    if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
+        MLLightEffect(device, digest)
+    elif mc.NS_APPLIANCE_CONTROL_MP3 in ability:
+        MLLightMp3(device, digest)
+    else:
+        MLLight(device, digest)
+
     return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT].parse_generic

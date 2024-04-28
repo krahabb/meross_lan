@@ -8,6 +8,8 @@ from custom_components.meross_lan.light import (
     MLDNDLightEntity,
     MLLight,
     MLLightBase,
+    MLLightMp3,
+    MLLightEffect,
     _int_to_rgb,
     _rgb_to_int,
 )
@@ -60,13 +62,20 @@ class EntityTest(EntityComponentTest):
                 if capacity & mc.LIGHT_CAPACITY_EFFECT:
                     assert supported_features == LightEntityFeature.EFFECT
                     assert entity.effect_list, "effect_list"
-            if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
-                assert supported_features == LightEntityFeature.EFFECT
-                assert entity.effect_list, "effect_list"
-            if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
-                assert isinstance(entity, MLLight)
-                assert supported_features == LightEntityFeature.EFFECT
-                assert entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST, "effect_list"
+                if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
+                    assert isinstance(entity, MLLightEffect)
+                    assert supported_features == LightEntityFeature.EFFECT
+                    assert entity.effect_list, "effect_list"
+                    # need to manually remove MLLight since actual type is MLLightEffect
+                    # and the general code in _async_test_entities cannot handle this case
+                    EntityComponentTest.expected_entity_types.remove(MLLight)
+                if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
+                    assert isinstance(entity, MLLightMp3)
+                    assert supported_features == LightEntityFeature.EFFECT
+                    assert entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST, "effect_list"
+                    # need to manually remove MLLight since actual type is MLLightMp3
+                    # and the general code in _async_test_entities cannot handle this case
+                    EntityComponentTest.expected_entity_types.remove(MLLight)
 
     async def async_test_enabled_callback(
         self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity

@@ -103,8 +103,10 @@ class MLDiffuserLight(MLLightBase):
     namespace = mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT
 
     # HA core entity attributes:
-    _attr_effect_list = mc.DIFFUSER_LIGHT_MODE_LIST
     supported_color_modes = {ColorMode.RGB}
+
+    def __init__(self, manager: "MerossDevice", payload: dict):
+        super().__init__(manager, payload, mc.DIFFUSER_LIGHT_MODE_LIST)
 
     async def async_turn_on(self, **kwargs):
         if not kwargs:
