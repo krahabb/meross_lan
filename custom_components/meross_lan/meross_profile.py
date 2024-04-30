@@ -45,7 +45,11 @@ from .merossclient import (
     request_get,
 )
 from .merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
-from .merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
+from .merossclient.mqttclient import (
+    MerossMQTTAppClient,
+    MerossMQTTRateLimitException,
+    generate_app_id,
+)
 from .repairs import IssueSeverity, create_issue, remove_issue
 from .sensor import MLDiagnosticSensor
 
@@ -79,7 +83,6 @@ if typing.TYPE_CHECKING:
 class ConnectionSensor(MLDiagnosticSensor):
     STATE_DISCONNECTED: typing.Final = "disconnected"
     STATE_CONNECTED: typing.Final = "connected"
-    STATE_QUEUING: typing.Final = "queuing"
     STATE_DROPPING: typing.Final = "dropping"
 
     class AttrDictType(typing.TypedDict):
@@ -87,15 +90,11 @@ class ConnectionSensor(MLDiagnosticSensor):
         received: int
         published: int
         dropped: int
-        queued: int
-        queue_length: int
 
     ATTR_DEVICES: typing.Final = "devices"
     ATTR_RECEIVED: typing.Final = "received"
     ATTR_PUBLISHED: typing.Final = "published"
     ATTR_DROPPED: typing.Final = "dropped"
-    ATTR_QUEUED: typing.Final = "queued"
-    ATTR_QUEUE_LENGTH: typing.Final = "queue_length"
 
     manager: ApiProfile
 
@@ -106,7 +105,6 @@ class ConnectionSensor(MLDiagnosticSensor):
     options: list[str] = [
         STATE_DISCONNECTED,
         STATE_CONNECTED,
-        STATE_QUEUING,
         STATE_DROPPING,
     ]
 
@@ -121,8 +119,6 @@ class ConnectionSensor(MLDiagnosticSensor):
             ConnectionSensor.ATTR_RECEIVED: 0,
             ConnectionSensor.ATTR_PUBLISHED: 0,
             ConnectionSensor.ATTR_DROPPED: 0,
-            ConnectionSensor.ATTR_QUEUED: 0,
-            ConnectionSensor.ATTR_QUEUE_LENGTH: 0,
         }
         super().__init__(
             connection.profile,
@@ -164,13 +160,6 @@ class ConnectionSensor(MLDiagnosticSensor):
     def inc_counter_with_state(self, attr_name: str, state: str):
         self.extra_state_attributes[attr_name] += 1
         self.native_value = state
-        self.flush_state()
-
-    def inc_queued(self, queue_length: int):
-        attrs = self.extra_state_attributes
-        attrs[ConnectionSensor.ATTR_QUEUED] += 1
-        attrs[ConnectionSensor.ATTR_QUEUE_LENGTH] = queue_length
-        self.native_value = ConnectionSensor.STATE_QUEUING
         self.flush_state()
 
 
@@ -233,7 +222,6 @@ class MQTTConnection(Loggable):
     """
 
     _MQTT_DROP = "DROP"
-    _MQTT_QUEUE = "QUEUE"
     _MQTT_PUBLISH = "PUBLISH"
     _MQTT_RECV = "RECV"
 
@@ -316,10 +304,6 @@ class MQTTConnection(Loggable):
         raise NotImplementedError()
 
     @property
-    def allow_mqtt_publish(self):
-        return self.profile.allow_mqtt_publish
-
-    @property
     def mqtt_is_connected(self):
         return self._mqtt_is_connected
 
@@ -361,13 +345,12 @@ class MQTTConnection(Loggable):
             transaction = None
         try:
             self.profile.trace_or_log(self, device_id, request, ApiProfile.TRACE_TX)
-            _mqtt_tx_code, timeout = await self._async_mqtt_publish(device_id, request)
+            await self._async_mqtt_publish(device_id, request)
             if transaction:
-                if _mqtt_tx_code is self._MQTT_DROP:
-                    transaction.cancel()
-                    return None
                 try:
-                    return await asyncio.wait_for(transaction.response_future, timeout)
+                    return await asyncio.wait_for(
+                        transaction.response_future, self.DEFAULT_RESPONSE_TIMEOUT
+                    )
                 except Exception as exception:
                     self.log_exception(
                         self.DEBUG,
@@ -378,22 +361,36 @@ class MQTTConnection(Loggable):
                         self.profile.loggable_device_id(device_id),
                         request.messageid,
                     )
-                    return None
                 finally:
                     self._mqtt_transactions.pop(transaction.messageid, None)
+            return None
+
+        except MerossMQTTRateLimitException:
+            if sensor_connection := self.sensor_connection:
+                sensor_connection.inc_counter_with_state(
+                    ConnectionSensor.ATTR_DROPPED,
+                    ConnectionSensor.STATE_DROPPING,
+                )
+            self.log(
+                self.WARNING,
+                "MQTT publish rate-limit exceeded for device uuid:%s",
+                self.profile.loggable_device_id(device_id),
+            )
 
         except Exception as exception:
             self.log_exception(
-                self.DEBUG,
+                self.WARNING,
                 exception,
                 "async_mqtt_publish %s %s (uuid:%s messageId:%s)",
                 request.method,
                 request.namespace,
                 self.profile.loggable_device_id(device_id),
                 request.messageid,
+                timeout=14400,
             )
-            if transaction:
-                transaction.cancel()
+
+        if transaction:
+            transaction.cancel()
         return None
 
     @typing.final
@@ -446,9 +443,8 @@ class MQTTConnection(Loggable):
                     if device.conf_protocol is mlc.CONF_PROTOCOL_HTTP:
                         self.log(
                             self.DEBUG,
-                            "Dropping MQTT message for device uuid:%s since it is configured for HTTP only",
+                            "Dropping MQTT received message for device uuid:%s since it is configured for HTTP only",
                             profile.loggable_device_id(device_id),
-                            timeout=14400,
                         )
                         return
                     if device._profile == profile:
@@ -675,7 +671,7 @@ class MQTTConnection(Loggable):
         self,
         device_id: str,
         request: "MerossMessage",
-    ) -> tuple[str, int]:
+    ):
         """
         Actually sends the message to the transport. On return gives
         (status_code, timeout) with the expected timeout-to-reply depending
@@ -733,11 +729,6 @@ class MQTTConnection(Loggable):
 
 
 class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
-    _MSG_PRIORITY_MAP = {
-        mc.METHOD_SET: True,
-        mc.METHOD_PUSH: False,
-        mc.METHOD_GET: None,
-    }
 
     # here we're acrobatically slottizing MerossMQTTAppClient
     # since it cannot be slotted itself leading to multiple inheritance
@@ -749,20 +740,20 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         "_tasks",
         "_lock_state",
         "_lock_queue",
-        "_rl_lastpublish",
-        "_rl_qeque",
-        "_rl_queue_length",
         "_rl_dropped",
-        "_rl_avgperiod",
+        "_rl2_queues",
         "_stateext",
         "_subscribe_topics",
         "_unsub_random_disconnect",
     )
 
     def __init__(self, profile: "MerossCloudProfile", broker: "HostAddress"):
-        hass = self.hass
         MerossMQTTAppClient.__init__(
-            self, profile.key, profile.userid, app_id=profile.app_id, loop=hass.loop
+            self,
+            profile.key,
+            profile.userid,
+            app_id=profile.app_id,
+            loop=self.hass.loop,
         )
         MQTTConnection.__init__(self, profile, broker, self.topic_command)
         if profile.isEnabledFor(profile.VERBOSE):
@@ -781,11 +772,11 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                         self.log(self.DEBUG, "Random disconnect")
                         await self.async_disconnect()
                 self._unsub_random_disconnect = schedule_async_callback(
-                    hass, 60, _async_random_disconnect
+                    self.hass, 60, _async_random_disconnect
                 )
 
             self._unsub_random_disconnect = schedule_async_callback(
-                hass, 60, _async_random_disconnect
+                self.hass, 60, _async_random_disconnect
             )
         else:
             self._unsub_random_disconnect = None
@@ -813,8 +804,10 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
         self,
         device_id: str,
         request: "MerossMessage",
-    ) -> tuple[str, int]:
-        return await self.hass.async_add_executor_job(self._publish, device_id, request)
+    ):
+        return await self.hass.async_add_executor_job(
+            self.rl2_publish, device_id, request
+        )
 
     @callback
     def _mqtt_connected(self):
@@ -824,71 +817,13 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     @callback
     def _mqtt_published(self):
         if sensor_connection := self.sensor_connection:
-            queue_length = self.rl_queue_length
-            # queue_length and dropped are exactly calculated
-            # inside our MerossMQTTClient so we'll update/force
-            # the sensor with 'real' values here..just to be sure
-            # this is especially true for 'dropped' since
-            # the client itself could drop packets at any time
-            # from its (de)queue
             attrs = sensor_connection.extra_state_attributes
-            attrs[ConnectionSensor.ATTR_QUEUE_LENGTH] = queue_length
             attrs[ConnectionSensor.ATTR_DROPPED] = self.rl_dropped
             attrs[ConnectionSensor.ATTR_PUBLISHED] += 1
-            if self.mqtt_is_connected and not queue_length:
+            if self.mqtt_is_connected:
                 # enforce the state eventually cancelling queued, dropped...
                 sensor_connection.native_value = ConnectionSensor.STATE_CONNECTED
             sensor_connection.flush_state()
-
-    # interface: self
-    def _publish(self, device_id: str, request: "MerossMessage") -> tuple[str, int]:
-        """
-        this function runs in an executor
-        Beware when calling HA api's (like when we want to update sensors)
-        """
-        if not self.allow_mqtt_publish:
-            raise Exception("MQTT publishing is not allowed for this profile")
-
-        ret = self.rl_publish(
-            mc.TOPIC_REQUEST.format(device_id),
-            request.json(),
-            MerossMQTTConnection._MSG_PRIORITY_MAP[request.method],
-        )
-        if ret is False:
-            if sensor_connection := self.sensor_connection:
-                self.hass.loop.call_soon_threadsafe(
-                    sensor_connection.inc_counter_with_state,
-                    ConnectionSensor.ATTR_DROPPED,
-                    ConnectionSensor.STATE_DROPPING,
-                )
-            self.log(
-                self.DEBUG,
-                "MQTT DROP %s %s (uuid:%s messageId:%s)",
-                request.method,
-                request.namespace,
-                self.profile.loggable_device_id(device_id),
-                request.messageid,
-            )
-            return (self._MQTT_DROP, 0)
-        if ret is True:
-            if sensor_connection := self.sensor_connection:
-                self.hass.loop.call_soon_threadsafe(
-                    sensor_connection.inc_queued,
-                    self.rl_queue_length,
-                )
-            self.log(
-                self.DEBUG,
-                "MQTT QUEUE %s %s (uuid:%s messageId:%s)",
-                request.method,
-                request.namespace,
-                self.profile.loggable_device_id(device_id),
-                request.messageid,
-            )
-            return (
-                self._MQTT_QUEUE,
-                self.rl_queue_duration + self.DEFAULT_RESPONSE_TIMEOUT,
-            )
-        return (self._MQTT_PUBLISH, self.DEFAULT_RESPONSE_TIMEOUT)
 
 
 MerossMQTTConnection.SESSION_HANDLERS = {

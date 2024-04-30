@@ -1,21 +1,58 @@
 import asyncio
 from collections import deque
 from hashlib import md5
-import logging
 import random
 import ssl
 import string
 import threading
 from time import monotonic
+import typing
 from uuid import uuid4
 
 import paho.mqtt.client as mqtt
 
-from . import HostAddress, get_macaddress_from_uuid
+from . import HostAddress, const as mc, get_macaddress_from_uuid
+
+if typing.TYPE_CHECKING:
+    from . import MerossMessage
 
 
 def generate_app_id():
     return md5(uuid4().hex.encode("utf-8")).hexdigest()
+
+
+class MerossMQTTRateLimitException(Exception):
+
+    pass
+
+
+class _MQTTRateLimiter:
+    """
+    MQTT publishing rate-limiter x device (in order to prevent Meross account ban):
+    The algorithm tries to limit the rate of publish to
+    less than MAXQUEUE over a period of DURATION for every single device.
+    If a new publish request is submitted when more than MAXQUEUE
+    messages have been sent over DURATION, it gets discarded.
+    This algorithm has been put in place in 5.1.0 upgrading the previous
+    'hard' rate-limiting which set the rate-limiting x connection (so all of
+    the devices shared the same timings). Also, the previous algorithm was
+    attempting queueing the messages in order to lower the publish rate over
+    quick burst but this seemed to lead to message rejection at the device
+    (at least on a recent msl320) and my guess is the device is trying to prevent
+    message spoofing by rejecting messages too old in time (a few seconds for that msl320)
+    """
+
+    DURATION = 60
+    MAXQUEUE = 6
+
+    __slots__ = (
+        "dropped",
+        "t_queue",
+    )
+
+    def __init__(self) -> None:
+        self.dropped = 0
+        self.t_queue = deque()
 
 
 class _MerossMQTTClient(mqtt.Client):
@@ -32,18 +69,6 @@ class _MerossMQTTClient(mqtt.Client):
     STATE_DISCONNECTING = "disconnecting"
     STATE_DISCONNECTED = "disconnected"
 
-    # Meross cloud traffic need to be rate-limited in order to prevent banning.
-    # Here the policy is pretty simple:
-    # the trasmission rate is limited by RATELIMITER_MINDELAY which poses a minimum
-    # interval between successive publish. When a message is published with
-    # priority == True it is queued in front of any other 'non priority' mesage.
-    # RATELIMITER_MAXQUEUE_PRIORITY sets a maximum number of priority messages
-    # to be queued: when overflow occurs, older priority messages are discarded
-    RATELIMITER_MINDELAY = 12
-    RATELIMITER_MAXQUEUE = 5
-    RATELIMITER_MAXQUEUE_PRIORITY = 0
-    RATELIMITER_AVGPERIOD_DERATE = 0.1
-
     def __init__(
         self,
         client_id: str,
@@ -56,11 +81,8 @@ class _MerossMQTTClient(mqtt.Client):
         """synchronize connect/disconnect (not contended by the mqtt thread)"""
         self._lock_queue = threading.Lock()
         """synchronize access to the transmit queue. Might be contended by the mqtt thread"""
-        self._rl_lastpublish = monotonic() - self.RATELIMITER_MINDELAY
-        self._rl_qeque: deque[tuple[str, str, bool | None]] = deque()
-        self._rl_queue_length = 0
         self._rl_dropped = 0
-        self._rl_avgperiod = 0.0
+        self._rl2_queues: dict[str, _MQTTRateLimiter] = {}
         self._stateext = self.STATE_DISCONNECTED
         self._subscribe_error = None
         self._subscribe_topics = subscribe_topics
@@ -93,14 +115,6 @@ class _MerossMQTTClient(mqtt.Client):
     @property
     def rl_dropped(self):
         return self._rl_dropped
-
-    @property
-    def rl_queue_length(self):
-        return self._rl_queue_length
-
-    @property
-    def rl_queue_duration(self):
-        return self._rl_queue_length * self.RATELIMITER_MINDELAY
 
     @property
     def stateext(self):
@@ -162,93 +176,37 @@ class _MerossMQTTClient(mqtt.Client):
             self.loop_stop()
             self._stateext = self.STATE_DISCONNECTED
 
-    def rl_publish(
-        self, topic: str, payload: str, priority: bool | None = None
-    ) -> mqtt.MQTTMessageInfo | bool:
+    def rl2_publish(self, uuid: str, request: "MerossMessage"):
         with self._lock_queue:
-            queuelen = len(self._rl_qeque)
-            if queuelen == 0:
-                now = monotonic()
-                period = now - self._rl_lastpublish
-                if period > self.RATELIMITER_MINDELAY:
-                    self._rl_lastpublish = now
-                    self._rl_avgperiod += self.RATELIMITER_AVGPERIOD_DERATE * (
-                        period - self._rl_avgperiod
-                    )
-                    return mqtt.Client.publish(self, topic, payload)
 
-            if priority is None:
-                if queuelen >= self.RATELIMITER_MAXQUEUE:
-                    # TODO: log dropped message
+            try:
+                _rl2 = self._rl2_queues[uuid]
+            except KeyError:
+                self._rl2_queues[uuid] = _rl2 = _MQTTRateLimiter()
+
+            t_now = monotonic()
+            # implementing a rate-limiter trying to keep the send rate to lower than
+            # 1 MQTT publish every 10 seconds (on average x device). This is accomplished
+            # by keeping the count (and times) of sent messages in the last minute
+            t_duration_back = t_now - _MQTTRateLimiter.DURATION
+            t_queue = _rl2.t_queue
+            t_queue_len = len(t_queue)
+            while t_queue_len:
+                if t_queue[0] < t_duration_back:
+                    t_queue.popleft()
+                    t_queue_len -= 1
+                elif t_queue_len >= _MQTTRateLimiter.MAXQUEUE:
                     self._rl_dropped += 1
-                    return False
-                _queue_pos = queuelen
-
-            elif priority:
-                # priority messages are typically SET commands and we want them to be sent
-                # asap. As far as this goes we cannot really queue a lot of these
-                # else we'd loose responsivity. Moreover, device level meross_lan code
-                # would 'timeout' a SET request without a timely response so, actual policy is to not
-                # queue too many of these (we'll eventually discard the older ones)
-                _queue_pos = 0
-                for topic_payload_priority in self._rl_qeque:
-                    if not topic_payload_priority[2]:
-                        break
-                    if _queue_pos == self.RATELIMITER_MAXQUEUE_PRIORITY:
-                        # discard older 'priority' msg
-                        self._rl_qeque.popleft()
-                        self._rl_dropped += 1
-                        queuelen -= 1
-                        break
-                    _queue_pos += 1
-
-            else:
-                # priority == False are still prioritized but less than priority == True
-                # so they'll be queued in front of priority == None
-                # actual meross_lan uses this priority for PUSH messages (not a real reason to do so)
-                # also, we're not typically sending PUSH messages over cloud MQTT....
-                _queue_pos = 0
-                for topic_payload_priority in self._rl_qeque:
-                    if topic_payload_priority[2] is None:
-                        break
-                    if _queue_pos == self.RATELIMITER_MAXQUEUE_PRIORITY:
-                        # discard older 'priority' msg
-                        self._rl_qeque.popleft()
-                        self._rl_dropped += 1
-                        queuelen -= 1
-                        break
-                    _queue_pos += 1
-
-            self._rl_qeque.insert(_queue_pos, (topic, payload, priority))
-            self._rl_queue_length = queuelen + 1
-            return True
-
-    def loop_misc(self):
-        ret = super().loop_misc()
-        if (ret == mqtt.MQTT_ERR_SUCCESS) and self._rl_queue_length:
-            if self._lock_queue.acquire(False):
-                topic_payload_priority = None
-                try:
-                    queuelen = len(self._rl_qeque)
-                    if queuelen > 0:
-                        now = monotonic()
-                        period = now - self._rl_lastpublish
-                        if period > self.RATELIMITER_MINDELAY:
-                            topic_payload_priority = self._rl_qeque.popleft()
-                            self._rl_lastpublish = now
-                            self._rl_avgperiod += self.RATELIMITER_AVGPERIOD_DERATE * (
-                                period - self._rl_avgperiod
-                            )
-                            self._rl_queue_length = queuelen - 1
-                    else:
-                        self._rl_queue_length = 0
-                finally:
-                    self._lock_queue.release()
-                    if topic_payload_priority:
-                        super().publish(
-                            topic_payload_priority[0], topic_payload_priority[1]
-                        )
-        return ret
+                    _rl2.dropped += 1
+                    raise MerossMQTTRateLimitException()
+                else:
+                    break
+            t_queue.append(t_now)
+            return mqtt.Client.publish(
+                self,
+                mc.TOPIC_REQUEST.format(uuid),
+                request.json(),
+            )
 
     def _mqtt_connected(self):
         """
@@ -291,9 +249,6 @@ class _MerossMQTTClient(mqtt.Client):
         pass
 
     def _mqttc_connect(self, client: mqtt.Client, userdata, rc, other):
-        with self._lock_queue:
-            self._rl_qeque.clear()
-            self._rl_queue_length = 0
         client.subscribe(self._subscribe_topics)
 
     def _mqttc_subscribe(self, client, userdata, mid, granted_qos):

@@ -61,7 +61,6 @@ from .merossclient import (
     get_active_broker,
     get_message_signature,
     get_message_uuid,
-    get_port_safe,
     is_device_online,
     is_hub_namespace,
     json_dumps,
@@ -233,20 +232,6 @@ class MerossDeviceBase(EntityManager):
                 self.get_device_registry().async_update_device(
                     _device_registry_entry.id, name=name
                 )
-
-    def build_request(
-        self,
-        namespace: str,
-        method: str,
-        payload: "MerossPayloadType",
-    ) -> MerossRequest:
-        raise NotImplementedError("build_request")
-
-    async def async_request_raw(
-        self,
-        request: "MerossRequest",
-    ) -> MerossResponse | None:
-        raise NotImplementedError("async_request_raw")
 
     async def async_request(
         self,
@@ -637,14 +622,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.update_firmware = None
         ApiProfile.devices[self.id] = None
 
-    def build_request(
-        self,
-        namespace: str,
-        method: str,
-        payload: "MerossPayloadType",
-    ) -> MerossRequest:
-        return MerossRequest(self.key, namespace, method, payload, self._topic_response)
-
     async def async_request_raw(
         self,
         request: MerossRequest,
@@ -654,6 +631,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         callback will be called on successful replies and actually implemented
         only when HTTPing SET requests. On MQTT we rely on async PUSH and SETACK to manage
         confirmation/status updates
+        TODO: remove this. This is a 'legacy' api superseeded by async_request to better manage message
+        signature. It is left for meross_lan.request service implementation but should be removed
+        since very 'fragile'
         """
         self.lastrequest = time()
         mqttfailed = False
@@ -689,9 +669,38 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         method: str,
         payload: "MerossPayloadType",
     ) -> MerossResponse | None:
-        return await self.async_request_raw(
-            MerossRequest(self.key, namespace, method, payload, self._topic_response)
-        )
+        """
+        route the request through MQTT or HTTP to the physical device according to
+        current protocol. When switching transport the message is recomputed to
+        avoid reusing the same (old) timestamps and messageids
+        """
+        self.lastrequest = time()
+        mqttfailed = False
+        if self.curr_protocol is CONF_PROTOCOL_MQTT:
+            if self._mqtt_publish:
+                if response := await self.async_mqtt_request(
+                    namespace, method, payload
+                ):
+                    return response
+                mqttfailed = True
+            # MQTT not connected or not allowing publishing
+            if self.conf_protocol is CONF_PROTOCOL_MQTT:
+                return None
+            # protocol is AUTO
+            self._switch_protocol(CONF_PROTOCOL_HTTP)
+
+        # curr_protocol is HTTP
+        if response := await self.async_http_request(namespace, method, payload):
+            return response
+
+        if (
+            self._mqtt_active  # device is connected to broker
+            and self._mqtt_publish  # profile allows publishing
+            and not mqttfailed  # we've already tried mqtt
+        ):
+            return await self.async_mqtt_request(namespace, method, payload)
+
+        return None
 
     @property
     def tz(self) -> tzinfo:
@@ -1054,12 +1063,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             MerossRequest(self.key, namespace, method, payload, self._topic_response)
         )
 
-    def mqtt_request_raw(
-        self,
-        request: MerossRequest,
-    ):
-        return self.hass.async_create_task(self.async_mqtt_request_raw(request))
-
     def mqtt_request(
         self,
         namespace: str,
@@ -1328,7 +1331,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             epoch = time()
             # We're 'strictly' online when the device 'was' online and last request
             # got succesfully replied.
-            # When last request(s) somewhat failed we'll probe NS_ALL befgore stating it is really
+            # When last request(s) somewhat failed we'll probe NS_ALL before stating it is really
             # unreachable. This kind of probing is the same done when the device is (definitely)
             # offline.
             if self._online and (
@@ -1486,7 +1489,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self.loggable_broker(_mqtt_connection.broker),
         )
         self._mqtt_connected = _mqtt_connection
-        if _mqtt_connection.allow_mqtt_publish:
+        if _mqtt_connection.profile.allow_mqtt_publish:
             self._mqtt_publish = _mqtt_connection
             if not self._online and self._unsub_polling_callback:
                 # reschedule immediately
@@ -1494,7 +1497,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self._unsub_polling_callback = schedule_async_callback(
                     self.hass, 0, self._async_polling_callback, None
                 )
-
         elif self.conf_protocol is CONF_PROTOCOL_MQTT:
             self.log(
                 self.WARNING,

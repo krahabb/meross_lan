@@ -201,7 +201,9 @@ class HubChunkedPollingStrategy(PollingStrategy):
             self.adjust_size(len(p))
             await super().async_trace(device, protocol)
 
-    def _build_subdevices_payload(self, subdevices: "typing.Collection[MerossSubDevice]"):
+    def _build_subdevices_payload(
+        self, subdevices: "typing.Collection[MerossSubDevice]"
+    ):
         """
         This generator helps dealing with hubs hosting an high number
         of subdevices: when queried, the response payload might became huge
@@ -439,8 +441,6 @@ class MerossSubDevice(MerossDeviceBase):
     """
 
     __slots__ = (
-        "build_request",
-        "async_request_raw",
         "async_request",
         "check_device_timezone",
         "hub",
@@ -454,8 +454,6 @@ class MerossSubDevice(MerossDeviceBase):
         # this is a very dirty trick/optimization to override some MerossDeviceBase
         # properties/methods that just needs to be forwarded to the hub
         # this way we're short-circuiting that indirection
-        self.build_request = hub.build_request
-        self.async_request_raw = hub.async_request_raw
         self.async_request = hub.async_request
         self.check_device_timezone = hub.check_device_timezone
         # these properties are needed to be in place before base class init
@@ -494,8 +492,6 @@ class MerossSubDevice(MerossDeviceBase):
         await super().async_shutdown()
         self.check_device_timezone = None  # type: ignore
         self.async_request = None  # type: ignore
-        self.async_request_raw = None  # type: ignore
-        self.build_request = None  # type: ignore
         self.hub: HubMixin = None  # type: ignore
         self.sensor_battery: MLNumericSensor = None  # type: ignore
         self.switch_togglex = None
