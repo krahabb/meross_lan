@@ -552,8 +552,7 @@ class MerossRequest(MerossMessage):
         self.method = method
         self.messageid = uuid4().hex
         self.payload = get_default_payload(namespace) if payload is None else payload
-        epoch = time()
-        timestamp = int(epoch)
+        timestamp = int(time())
         super().__init__(
             {
                 mc.KEY_HEADER: {
@@ -563,7 +562,7 @@ class MerossRequest(MerossMessage):
                     mc.KEY_PAYLOADVERSION: 1,
                     mc.KEY_FROM: from_,
                     mc.KEY_TIMESTAMP: timestamp,
-                    mc.KEY_TIMESTAMPMS: int((epoch - timestamp) * 1000),
+                    mc.KEY_TIMESTAMPMS: 0,
                     mc.KEY_SIGN: get_message_signature(self.messageid, key, timestamp),
                 },
                 mc.KEY_PAYLOAD: self.payload,

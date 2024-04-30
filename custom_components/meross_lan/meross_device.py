@@ -651,7 +651,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._switch_protocol(CONF_PROTOCOL_HTTP)
 
         # curr_protocol is HTTP
-        if response := await self.async_http_request_raw(request, attempts=3):
+        if response := await self.async_http_request_raw(request):
             return response
 
         if (
@@ -1074,9 +1074,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         )
 
     async def async_http_request_raw(
-        self,
-        request: MerossRequest,
-        attempts: int = 1,
+        self, request: MerossRequest
     ) -> MerossResponse | None:
         if not (http := self._http):
             # even if we're smart enough to not call async_http_request_raw when no http
@@ -1087,141 +1085,107 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
             return None
 
-        method = request.method
-        namespace = request.namespace
-        with self.exception_warning(
-            "async_http_request %s %s",
-            method,
-            namespace,
-            timeout=14400,
-        ):
-            for attempt in range(attempts):
-                # since we get 'random' connection errors, this is a retry attempts loop
-                # until we get it done. We'd want to break out early on specific events tho (Timeouts)
-                self._http_lastrequest = time()
-                self._trace_or_log(
-                    self._http_lastrequest,
-                    request,
-                    CONF_PROTOCOL_HTTP,
-                    self.TRACE_TX,
-                )
-                try:
-                    response = await http.async_request_raw(request.json())
-                    self.device_response_size_min = max(
-                        self.device_response_size_min, len(response.json())
-                    )
-                    break
-                except TerminatedException:
-                    return None
-                except JSONDecodeError as jsonerror:
-                    # this could happen when the response carries a truncated payload
-                    # and might be due to an 'hard' limit in the capacity of the
-                    # device http output buffer (when the response is too long)
-                    self.log(
-                        self.DEBUG,
-                        "HTTP ERROR %s %s (messageId:%s JSONDecodeError:%s attempt:%d)",
-                        method,
-                        namespace,
-                        request.messageid,
-                        str(jsonerror),
-                        attempt,
-                    )
-                    response_text = jsonerror.doc
-                    response_text_len_safe = int(len(response_text) * 0.9)
-                    error_pos = jsonerror.pos
-                    if error_pos > response_text_len_safe:
-                        # the error happened because of truncated json payload
-                        self.device_response_size_max = response_text_len_safe
-                        if self.device_response_size_min > response_text_len_safe:
-                            self.device_response_size_min = response_text_len_safe
-                        self.log(
-                            self.DEBUG,
-                            "Updating device_response_size_min:%d device_response_size_max:%d",
-                            self.device_response_size_min,
-                            self.device_response_size_max,
-                        )
-                        if namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
-                            # try to recover by discarding the incomplete
-                            # message at the end
-                            trunc_pos = response_text.rfind(',{"header":')
-                            if trunc_pos != -1:
-                                response_text = response_text[0:trunc_pos] + "]}}"
-                                response = MerossResponse(response_text)
-                                break
+        self._http_lastrequest = time()
+        self._trace_or_log(
+            self._http_lastrequest,
+            request,
+            CONF_PROTOCOL_HTTP,
+            self.TRACE_TX,
+        )
+        try:
+            response = await http.async_request_raw(request.json())
+            self.device_response_size_min = max(
+                self.device_response_size_min, len(response.json())
+            )
+        except TerminatedException:
+            return None
+        except JSONDecodeError as jsonerror:
+            # this could happen when the response carries a truncated payload
+            # and might be due to an 'hard' limit in the capacity of the
+            # device http output buffer (when the response is too long)
+            self.log(
+                self.DEBUG,
+                "HTTP ERROR %s %s (messageId:%s JSONDecodeError:%s)",
+                request.method,
+                request.namespace,
+                request.messageid,
+                str(jsonerror),
+            )
+            response_text = jsonerror.doc
+            response_text_len_safe = int(len(response_text) * 0.9)
+            if jsonerror.pos < response_text_len_safe:
+                # if the error is too early in the payload...
+                return None
+            # the error happened because of truncated json payload
+            self.device_response_size_max = response_text_len_safe
+            if self.device_response_size_min > response_text_len_safe:
+                self.device_response_size_min = response_text_len_safe
+            self.log(
+                self.DEBUG,
+                "Updating device_response_size_min:%d device_response_size_max:%d",
+                self.device_response_size_min,
+                self.device_response_size_max,
+            )
+            if request.namespace is not mc.NS_APPLIANCE_CONTROL_MULTIPLE:
+                return None
+            # try to recover NS_MULTIPLE by discarding the incomplete
+            # message at the end
+            trunc_pos = response_text.rfind(',{"header":')
+            if trunc_pos == -1:
+                return None
+            response_text = response_text[0:trunc_pos] + "]}}"
+            response = MerossResponse(response_text)
 
-                    return None
-                except Exception as exception:
-                    self.log(
-                        self.DEBUG,
-                        "HTTP ERROR %s %s (messageId:%s %s:%s attempt:%d)",
-                        method,
-                        namespace,
-                        request.messageid,
-                        exception.__class__.__name__,
-                        str(exception),
-                        attempt,
-                    )
-                    if not self._online:
-                        return None
-
-                    if namespace is mc.NS_APPLIANCE_SYSTEM_ALL:
-                        if self._http_active:
-                            self._http_active = None
-                            self.sensor_protocol.update_attr_inactive(
-                                ProtocolSensor.ATTR_HTTP
-                            )
-                    elif namespace is mc.NS_APPLIANCE_CONTROL_UNBIND:
-                        if isinstance(exception, aiohttp.ServerDisconnectedError):
-                            # this is expected when issuing the UNBIND
-                            # so this is an indication we're dead
-                            self._set_offline()
-                            return None
-                    elif namespace is mc.NS_APPLIANCE_CONTROL_MULTIPLE:
-                        if isinstance(exception, aiohttp.ServerDisconnectedError):
-                            # this happens (instead of JSONDecodeError)
-                            # on my msl120. I guess the (older) fw behaves
-                            # differently than those responding incomplete json.
-                            # the None response will be managed in the caller.
-                            return None
-
-                    if isinstance(exception, asyncio.TimeoutError) or isinstance(
-                        exception, aiohttp.ServerTimeoutError
-                    ):
-                        return None
-
-                # for any other exception we could guess the device
-                # is stalling a bit so we just wait a bit before re-issuing
-                await asyncio.sleep(0.5)
-            else:
+        except Exception as exception:
+            namespace = request.namespace
+            self.log(
+                self.DEBUG,
+                "HTTP ERROR %s %s (messageId:%s %s:%s)",
+                request.method,
+                namespace,
+                request.messageid,
+                exception.__class__.__name__,
+                str(exception),
+            )
+            if not self._online:
                 return None
 
-            # add a sanity check here since we have some issues (#341)
-            # that might be related to misconfigured devices where the
-            # host address points to a different device than configured.
-            # Our current device.id in fact points (or should) to the uuid discovered
-            # in configuration but if by chance the device changes ip and we miss
-            # the dynamic change (eitehr dhcp not working or HA down while dhcp updating)
-            # we might end up with our configured host pointing to a different device
-            # and this might (unluckily) be another Meross with the same key
-            # so it could rightly respond here. This shouldnt happen over MQTT
-            # since the device.id is being taken care of by the routing mechanism
-            if self._check_uuid_mismatch(get_message_uuid(response[mc.KEY_HEADER])):
-                return None
+            if namespace is mc.NS_APPLIANCE_SYSTEM_ALL:
+                if self._http_active:
+                    self._http_active = None
+                    self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
+            elif namespace is mc.NS_APPLIANCE_CONTROL_UNBIND:
+                if isinstance(exception, aiohttp.ServerDisconnectedError):
+                    # this is expected when issuing the UNBIND
+                    # so this is an indication we're dead
+                    self._set_offline()
 
-            self._http_lastresponse = epoch = time()
-            self._trace_or_log(epoch, response, CONF_PROTOCOL_HTTP, self.TRACE_RX)
-            if not self._http_active:
-                self._http_active = http
-                self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_HTTP)
-            if self.curr_protocol is not CONF_PROTOCOL_HTTP:
-                if (self.pref_protocol is CONF_PROTOCOL_HTTP) or (
-                    not self._mqtt_active
-                ):
-                    self._switch_protocol(CONF_PROTOCOL_HTTP)
-            self._receive(epoch, response)
-            return response
+            return None
 
-        return None
+        epoch = time()
+        self._trace_or_log(epoch, response, CONF_PROTOCOL_HTTP, self.TRACE_RX)
+        # add a sanity check here since we have some issues (#341)
+        # that might be related to misconfigured devices where the
+        # host address points to a different device than configured.
+        # Our current device.id in fact points (or should) to the uuid discovered
+        # in configuration but if by chance the device changes ip and we miss
+        # the dynamic change (eitehr dhcp not working or HA down while dhcp updating)
+        # we might end up with our configured host pointing to a different device
+        # and this might (unluckily) be another Meross with the same key
+        # so it could rightly respond here. This shouldnt happen over MQTT
+        # since the device.id is being taken care of by the routing mechanism
+        if self._check_uuid_mismatch(get_message_uuid(response[mc.KEY_HEADER])):
+            return None
+
+        self._http_lastresponse = epoch
+        if not self._http_active:
+            self._http_active = http
+            self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_HTTP)
+        if self.curr_protocol is not CONF_PROTOCOL_HTTP:
+            if (self.pref_protocol is CONF_PROTOCOL_HTTP) or (not self._mqtt_active):
+                self._switch_protocol(CONF_PROTOCOL_HTTP)
+        self._receive(epoch, response)
+        return response
 
     async def async_http_request(
         self,
