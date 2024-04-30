@@ -3,14 +3,13 @@
     for Meross devices.
 """
 import asyncio
-import attr
 import logging
 import socket
 import sys
 import typing
 
 import aiohttp
-
+import attr
 from yarl import URL
 
 from . import (
