@@ -6,6 +6,7 @@
   "config_flow": true,
   "dhcp": [
     {"hostname": "*", "macaddress": "48E1E9*"},
+    {"hostname": "*", "macaddress": "C4E7AE*"},
     {"hostname": "*", "macaddress": "34298F1*"},
     {"registered_devices": true}
   ],
