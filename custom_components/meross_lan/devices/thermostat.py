@@ -1,22 +1,17 @@
 import typing
 
 from ..binary_sensor import MLBinarySensor
-from ..helpers.namespaces import (
-    PollingStrategy,
-    SmartPollingStrategy,
-    digest_parse_empty,
-)
+from ..helpers.namespaces import PollingStrategy, SmartPollingStrategy
 from ..merossclient import NAMESPACE_TO_KEY, const as mc, is_thermostat_namespace
 from ..number import MtsTemperatureNumber
-from ..sensor import MLEnumSensor, MLNumericSensor, MLTemperatureSensor
+from ..sensor import MLEnumSensor, MLTemperatureSensor
 from ..switch import MLSwitch
 from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
 
 if typing.TYPE_CHECKING:
     from ..climate import MtsClimate
-    from ..helpers.namespaces import DigestParseFunc
-    from ..meross_device import MerossDevice
+    from ..meross_device import DigestParseFunc, MerossDevice
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
 
@@ -55,6 +50,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
     """
 
+    manager: "MerossDevice"
     entitykey: str
     key_value = mc.KEY_VALUE
 
@@ -71,7 +67,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         manager = self.manager
         # preset entity platforms since these might be instantiated later
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
-        manager.platforms.setdefault(MLNumericSensor.PLATFORM)
+        manager.platforms.setdefault(MLEnumSensor.PLATFORM)
         self.sensor_warning = None
         self.switch = None
         manager.register_parser(self.namespace, self)
@@ -302,7 +298,7 @@ def digest_init_thermostat(device: "MerossDevice", digest: dict) -> "DigestParse
             ).parse_list
         except KeyError:
             # ns_key is still not mapped in DIGEST_KEY_TO_NAMESPACE
-            digest_handlers[ns_key] = digest_parse_empty
+            digest_handlers[ns_key] = device.digest_parse_empty
             for namespace in ability.keys():
                 if is_thermostat_namespace(namespace):
                     key_namespace = NAMESPACE_TO_KEY[namespace]

@@ -29,7 +29,7 @@ from ..sensor import (
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..helpers.namespaces import DigestParseFunc
+    from ..meross_device import DigestParseFunc
     from ..meross_entity import MerossEntity
     from .mts100 import Mts100Climate
 

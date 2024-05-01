@@ -4,8 +4,7 @@ from ..merossclient import const as mc
 from ..select import MLSelect
 
 if typing.TYPE_CHECKING:
-    from ..helpers.namespaces import DigestParseFunc
-    from ..meross_device import MerossDevice
+    from ..meross_device import DigestParseFunc, MerossDevice
 
 
 def digest_init_spray(device: "MerossDevice", digest) -> "DigestParseFunc":

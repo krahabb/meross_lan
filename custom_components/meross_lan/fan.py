@@ -7,8 +7,7 @@ from .helpers.namespaces import NamespaceHandler, PollingStrategy
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
-    from .helpers.namespaces import DigestParseFunc
-    from .meross_device import MerossDevice
+    from .meross_device import DigestParseFunc, MerossDevice
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):

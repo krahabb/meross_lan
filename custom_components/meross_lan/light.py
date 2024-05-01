@@ -19,8 +19,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.namespaces import DigestParseFunc
-    from .meross_device import MerossDevice
+    from .meross_device import DigestParseFunc, MerossDevice
 
 ATTR_TOGGLEX_MODE = "togglex_mode"
 #    map light Temperature effective range to HA mired(s):

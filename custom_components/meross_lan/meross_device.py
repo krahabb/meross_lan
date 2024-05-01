@@ -2,7 +2,6 @@ import abc
 import asyncio
 import bisect
 from datetime import datetime, timezone, tzinfo
-from importlib import import_module
 from json import JSONDecodeError
 from time import time
 import typing
@@ -40,6 +39,7 @@ from .const import (
     DeviceConfigType,
 )
 from .helpers import (
+    async_import_module,
     datetime_from_epoch,
     schedule_async_callback,
     utcdatetime_from_epoch,
@@ -49,8 +49,6 @@ from .helpers.namespaces import (
     DiagnosticPollingStrategy,
     NamespaceHandler,
     PollingStrategy,
-    digest_init_empty,
-    digest_parse_empty,
 )
 from .merossclient import (
     NAMESPACE_TO_KEY,
@@ -77,7 +75,6 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.namespaces import DigestInitFunc, DigestParseFunc
     from .meross_entity import MerossEntity
     from .meross_profile import MQTTConnection
     from .merossclient import (
@@ -93,6 +90,11 @@ if typing.TYPE_CHECKING:
         LatestVersionType,
         SubDeviceInfoType,
     )
+
+    DigestParseFunc = typing.Callable[[dict], None] | typing.Callable[[list], None]
+    DigestInitFunc = typing.Callable[["MerossDevice", typing.Any], DigestParseFunc]
+    NamespaceInitFunc = typing.Callable[["MerossDevice"], None]
+
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
 # this list will be excluded from enumeration since it's redundant/exposing sensitive info
@@ -291,11 +293,27 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     Generic protocol handler class managing the physical device stack/state
     """
 
-    DIGEST_INITIALIZERS: typing.Final[dict[str, "DigestInitFunc"]] = {
-        mc.KEY_TIMERX: digest_init_empty,
-        mc.KEY_TRIGGERX: digest_init_empty,
+    @staticmethod
+    def digest_parse_empty(digest: dict | list):
+        pass
+
+    @staticmethod
+    def digest_init_empty(device: "MerossDevice", digest: dict | list):
+        return MerossDevice.digest_parse_empty
+
+    @staticmethod
+    def namespace_init_empty(device: "MerossDevice"):
+        pass
+
+    DIGEST_INIT: typing.Final[dict[str, typing.Any]] = {
+        mc.KEY_FAN: ".fan",
+        mc.KEY_LIGHT: ".light",
         mc.KEY_TIMER: digest_init_empty,
+        mc.KEY_TIMERX: digest_init_empty,
+        mc.KEY_TOGGLE: ".switch",
+        mc.KEY_TOGGLEX: ".switch",
         mc.KEY_TRIGGER: digest_init_empty,
+        mc.KEY_TRIGGERX: digest_init_empty,
     }
     """
     Static dict of 'digest initialization function(s)'.
@@ -306,22 +324,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     The 'digest initialization function' will (at device init time) parse the digest to
     setup the dedicated entities for the particular digest key.
     The definition of this init function is looked up at runtime by an algorithm that:
-    - looks-up if the digest key is in DIGEST_INITIALIZERS_LOOKUPS where it'll find
-    the coordinates of the init function for the digest key.
+    - looks-up if the digest key is in DIGEST_INITIALIZERS where it'll find either the
+    function or the (str) module coordinates of the init function for the digest key.
     - if not configured, the algorithm will try load the module in meross_lan/devices
     with the same name as the digest key.
     - if any is not found we'll set a 'digest_init_empty' function in order to not
     repeat the lookup process. That function will just pass so that the key
     init/parsing will not harm.
     """
-    DIGEST_INITIALIZERS_LOOKUPS: typing.Final[dict[str, str]] = {
-        mc.KEY_FAN: ".fan",
-        mc.KEY_LIGHT: ".light",
-        mc.KEY_TOGGLE: ".switch",
-        mc.KEY_TOGGLEX: ".switch",
-    }
 
-    NAMESPACE_INITIALIZERS: typing.Final[dict[str, tuple[str, str]]] = {
+    NAMESPACE_INIT: typing.Final[dict[str, typing.Any]] = {
         mc.NS_APPLIANCE_CONFIG_OVERTEMP: (".devices.mss", "OverTempEnableSwitch"),
         mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: (
             ".devices.mss",
@@ -350,7 +362,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     """
     Static dict of namespace initialization functions. This will be looked up
     and matched against the current device abilities (at device init time) and
-    usually setups a dedicated namespace handler and/or a dedicated entity
+    usually setups a dedicated namespace handler and/or a dedicated entity.
+    As far as the initialization functions are looked up in related modules,
+    they'll be cached in the dict
     """
 
     DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
@@ -488,6 +502,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._update_config()
 
         self.sensor_protocol = ProtocolSensor(self)
+        self.update_firmware = None
 
         # the update entity will only be instantiated 'on demand' since
         # we might not have this for devices not related to a cloud profile
@@ -499,15 +514,37 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         )
         if update_firmware_entity_id:
             ent_reg.async_remove(update_firmware_entity_id)
-        self.update_firmware = None
 
-        for namespace, init_descriptor in MerossDevice.NAMESPACE_INITIALIZERS.items():
-            if namespace in ability:
-                with self.exception_warning("initializing namespace:%s", namespace):
-                    module = import_module(
-                        init_descriptor[0], "custom_components.meross_lan"
-                    )
-                    getattr(module, init_descriptor[1])(self)
+    async def async_init(self):
+        descriptor = self.descriptor
+        for namespace in MerossDevice.NAMESPACE_INIT:
+            if namespace not in descriptor.ability:
+                continue
+            try:
+                try:
+                    MerossDevice.NAMESPACE_INIT[namespace](self)
+                except TypeError:
+                    try:
+                        _init_descriptor = MerossDevice.NAMESPACE_INIT[namespace]
+                        _init_func = getattr(
+                            await async_import_module(_init_descriptor[0]),
+                            _init_descriptor[1],
+                        )
+                    except Exception as exception:
+                        self.log_exception(
+                            self.WARNING,
+                            exception,
+                            "loading namespace initializer for %s",
+                            namespace,
+                        )
+                        _init_func = MerossDevice.namespace_init_empty
+                    MerossDevice.NAMESPACE_INIT[namespace] = _init_func
+                    _init_func(self)
+
+            except Exception as exception:
+                self.log_exception(
+                    self.WARNING, exception, "initializing namespace %s", namespace
+                )
 
         for key_digest, _digest in (
             descriptor.digest.items() or descriptor.control.items()
@@ -515,33 +552,37 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # older firmwares (MSS110 with 1.1.28) look like
             # carrying 'control' instead of 'digest'
             try:
-                self.digest_handlers[key_digest] = MerossDevice.DIGEST_INITIALIZERS[
-                    key_digest
-                ](self, _digest)
-            except KeyError:
                 try:
-                    module_path = MerossDevice.DIGEST_INITIALIZERS_LOOKUPS.get(
-                        key_digest, f".devices.{key_digest}"
-                    )
-                    module = import_module(module_path, "custom_components.meross_lan")
-                    _init = getattr(module, f"digest_init_{key_digest}")
-                    MerossDevice.DIGEST_INITIALIZERS[key_digest] = _init
-                    self.digest_handlers[key_digest] = _init(self, _digest)
-                except Exception as exception:
-                    self.log_exception(
-                        self.WARNING,
-                        exception,
-                        "initializing digest key:%s",
-                        key_digest,
-                    )
-                    MerossDevice.DIGEST_INITIALIZERS[key_digest] = digest_init_empty
-                    self.digest_handlers[key_digest] = digest_parse_empty
+                    self.digest_handlers[key_digest] = MerossDevice.DIGEST_INIT[
+                        key_digest
+                    ](self, _digest)
+                except (KeyError, TypeError):
+                    # KeyError: key is unknown to our code (fallback to lookup ".devices.{key_digest}")
+                    # TypeError: key is a string containing the module path
+                    try:
+                        _module_path = MerossDevice.DIGEST_INIT.get(
+                            key_digest, f".devices.{key_digest}"
+                        )
+                        _init_func = getattr(
+                            await async_import_module(_module_path),
+                            f"digest_init_{key_digest}",
+                        )
+                    except Exception as exception:
+                        self.log_exception(
+                            self.WARNING,
+                            exception,
+                            "loading digest initializer for key '%s'",
+                            key_digest,
+                        )
+                        _init_func = MerossDevice.digest_init_empty
+                    MerossDevice.DIGEST_INIT[key_digest] = _init_func
+                    self.digest_handlers[key_digest] = _init_func(self, _digest)
 
             except Exception as exception:
                 self.log_exception(
-                    self.WARNING, exception, "initializing digest key:%s", key_digest
+                    self.WARNING, exception, "initializing digest key '%s'", key_digest
                 )
-                self.digest_handlers[key_digest] = digest_parse_empty
+                self.digest_handlers[key_digest] = MerossDevice.digest_parse_empty
 
     # interface: ConfigEntryManager
     async def entry_update_listener(

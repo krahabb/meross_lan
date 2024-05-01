@@ -23,7 +23,6 @@ from ..number import MLConfigNumber
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..helpers.namespaces import DigestParseFunc
     from ..meross_device import MerossDevice
 
 # garagedoor extra attributes

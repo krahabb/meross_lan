@@ -10,8 +10,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.namespaces import DigestParseFunc
-    from .meross_device import MerossDevice
+    from .meross_device import DigestParseFunc, MerossDevice
 
 
 async def async_setup_entry(

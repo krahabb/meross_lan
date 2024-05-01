@@ -1,6 +1,5 @@
 """The Meross IoT local LAN integration."""
 
-from importlib import import_module
 from time import time
 import typing
 
@@ -19,6 +18,7 @@ from .helpers import (
     ConfigEntriesHelper,
     ConfigEntryType,
     Loggable,
+    async_import_module,
     schedule_async_callback,
 )
 from .helpers.manager import ApiProfile, ConfigEntryManager
@@ -54,7 +54,7 @@ else:
     mqtt_async_publish = None
 
 
-DIGEST_INITIALIZERS = {
+MIXIN_DIGEST_INIT = {
     mc.KEY_HUB: (".devices.hub", "HubMixin"),
 }
 
@@ -324,7 +324,9 @@ class MerossApi(ApiProfile):
                 case (ConfigEntryType.PROFILE, profile_id):
                     self.profiles[profile_id] = None
 
-        async def _async_service_request(service_call: "ServiceCall") -> "ServiceResponse":
+        async def _async_service_request(
+            service_call: "ServiceCall",
+        ) -> "ServiceResponse":
             service_response = {}
             device_id = service_call.data.get(mlc.CONF_DEVICE_ID)
             host = service_call.data.get(mlc.CONF_HOST)
@@ -466,7 +468,9 @@ class MerossApi(ApiProfile):
         await MerossHttpClient.async_shutdown_session()
         self._mqtt_connection = None
 
-    def build_device(self, device_id: str, config_entry: "ConfigEntry") -> "MerossDevice":
+    async def async_build_device(
+        self, device_id: str, config_entry: "ConfigEntry"
+    ) -> "MerossDevice":
         """
         scans device descriptor to build a 'slightly' specialized MerossDevice
         The base MerossDevice class is a bulk 'do it all' implementation
@@ -499,15 +503,21 @@ class MerossApi(ApiProfile):
         mixin_classes = []
 
         for key_digest in digest:
-            if key_digest in DIGEST_INITIALIZERS:
-                init_descriptor = DIGEST_INITIALIZERS[key_digest]
+            if key_digest not in MIXIN_DIGEST_INIT:
+                continue
+            _mixin_or_descriptor = MIXIN_DIGEST_INIT[key_digest]
+            if isinstance(_mixin_or_descriptor, tuple):
                 with self.exception_warning(
                     "initializing digest(%s) mixin", key_digest
                 ):
-                    module = import_module(
-                        init_descriptor[0], "custom_components.meross_lan"
+                    _mixin_or_descriptor = getattr(
+                        await async_import_module(_mixin_or_descriptor[0]),
+                        _mixin_or_descriptor[1],
                     )
-                    mixin_classes.append(getattr(module, init_descriptor[1]))
+                    MIXIN_DIGEST_INIT[key_digest] = _mixin_or_descriptor
+                    mixin_classes.append(_mixin_or_descriptor)
+            else:
+                mixin_classes.append(_mixin_or_descriptor)
 
         # We must be careful when ordering the mixin and leave MerossDevice as last class.
         # Messing up with that will cause MRO to not resolve inheritance correctly.
@@ -546,8 +556,9 @@ async def async_setup_entry(hass: "HomeAssistant", config_entry: "ConfigEntry"):
                 # this could happen when we add profile entries
                 # after boot
                 api.devices[device_id] = None
-            device = api.build_device(device_id, config_entry)
+            device = await api.async_build_device(device_id, config_entry)
             try:
+                await device.async_init()
                 await device.async_setup_entry(hass, config_entry)
                 api.devices[device_id] = device
                 # this code needs to run after registering api.devices[device_id]
@@ -595,7 +606,9 @@ async def async_setup_entry(hass: "HomeAssistant", config_entry: "ConfigEntry"):
             )
 
 
-async def async_unload_entry(hass: "HomeAssistant", config_entry: "ConfigEntry") -> bool:
+async def async_unload_entry(
+    hass: "HomeAssistant", config_entry: "ConfigEntry"
+) -> bool:
     LOGGER.debug("async_unload_entry (entry_id:%s)", config_entry.entry_id)
 
     manager = MerossApi.managers[config_entry.entry_id]

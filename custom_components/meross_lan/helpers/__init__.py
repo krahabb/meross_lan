@@ -8,7 +8,9 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from enum import StrEnum
 from functools import partial
+import importlib
 import logging
+import sys
 from time import gmtime, time
 import typing
 
@@ -85,7 +87,7 @@ def datetime_from_epoch(epoch, tz: "tzinfo | None" = None):
 
 def schedule_async_callback(
     hass: "HomeAssistant", delay: float, target: "Callable[..., Coroutine]", *args
-) -> asyncio.TimerHandle:
+) -> "asyncio.TimerHandle":
     @callback
     def _callback(_target, *_args):
         hass.async_create_task(_target(*_args))
@@ -95,7 +97,7 @@ def schedule_async_callback(
 
 def schedule_callback(
     hass: "HomeAssistant", delay: float, target: "Callable", *args
-) -> asyncio.TimerHandle:
+) -> "asyncio.TimerHandle":
     return hass.loop.call_later(delay, target, *args)
 
 
@@ -132,7 +134,9 @@ async def get_entity_last_states(
         raise Exception("Cannot find history.get_last_state_changes api")
 
 
-async def get_entity_last_state(hass: "HomeAssistant", entity_id: str) -> "State | None":
+async def get_entity_last_state(
+    hass: "HomeAssistant", entity_id: str
+) -> "State | None":
     if states := await get_entity_last_states(hass, 1, entity_id):
         return states[0]
     return None
@@ -151,6 +155,23 @@ async def get_entity_last_state_available(
             if state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}:
                 return state
     return None
+
+
+_import_module_lock = asyncio.Lock()
+
+
+async def async_import_module(name: str):
+    async with _import_module_lock:
+        # check the module was not asyncronously loaded when waiting the lock
+        module_path = "custom_components.meross_lan" + name
+        if module_path in sys.modules:
+            return sys.modules[module_path]
+        else:
+            return await Loggable.hass.async_add_executor_job(
+                importlib.import_module,
+                name,
+                "custom_components.meross_lan",
+            )
 
 
 class ConfigEntryType(StrEnum):

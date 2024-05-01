@@ -15,8 +15,7 @@ from ..sensor import MLHumiditySensor, MLTemperatureSensor
 from .spray import MLSpray
 
 if typing.TYPE_CHECKING:
-    from ..helpers.namespaces import DigestParseFunc
-    from ..meross_device import MerossDevice
+    from ..meross_device import DigestParseFunc, MerossDevice
 
 
 DIFFUSER_SENSOR_CLASS_MAP: dict[

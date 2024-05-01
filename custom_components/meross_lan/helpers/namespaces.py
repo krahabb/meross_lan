@@ -8,17 +8,6 @@ if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
     from ..meross_entity import MerossEntity
 
-    DigestParseFunc = typing.Callable[[dict], None] | typing.Callable[[list], None]
-    DigestInitFunc = typing.Callable[[MerossDevice, typing.Any], DigestParseFunc]
-
-
-def digest_parse_empty(digest: dict | list):
-    pass
-
-
-def digest_init_empty(device: "MerossDevice", digest: dict | list):
-    return digest_parse_empty
-
 
 class NamespaceHandler:
     """
