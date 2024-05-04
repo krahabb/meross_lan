@@ -1,6 +1,6 @@
+from time import time
 import typing
 
-from homeassistant.core import callback
 from homeassistant.helpers import entity_registry
 from homeassistant.util.dt import now
 
@@ -11,12 +11,7 @@ from ..const import (
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
 from ..cover import MLCover
-from ..helpers import (
-    clamp,
-    get_entity_last_state_available,
-    schedule_async_callback,
-    schedule_callback,
-)
+from ..helpers import clamp, get_entity_last_state_available, schedule_async_callback
 from ..helpers.namespaces import NamespaceHandler, SmartPollingStrategy
 from ..merossclient import const as mc, request_get
 from ..number import MLConfigNumber
@@ -64,7 +59,7 @@ class MLGarage(MLCover):
             PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
             + PARAM_GARAGEDOOR_TRANSITION_MINDURATION
         ) / 2
-        self._transition_start = None
+        self._transition_start = 0.0
         self.extra_state_attributes = {
             EXTRA_ATTR_TRANSITION_DURATION: self._transition_duration
         }
@@ -264,7 +259,7 @@ class MLGarage(MLCover):
     def _transition_cancel(self):
         self.is_closing = False
         self.is_opening = False
-        self._transition_start = None
+        self._transition_start = 0.0
         super()._transition_cancel()
 
     async def _async_transition_callback(self):
@@ -288,12 +283,12 @@ class MLGarage(MLCover):
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
             # or the garage didnt close at all
-            if self._transition_duration < (time() - self._transition_start):  # type: ignore
+            if self._transition_duration < (time() - self._transition_start):
                 self._update_transition_duration(self._transition_duration + 1)
 
         self.is_closing = False
         self.is_opening = False
-        self._transition_start = None
+        self._transition_start = 0.0
 
         if was_closing != self.is_closed:
             # looks like on MQTT we don't receive a PUSHed state update? (#415)
