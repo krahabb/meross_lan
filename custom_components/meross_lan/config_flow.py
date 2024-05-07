@@ -10,7 +10,6 @@ import typing
 
 from homeassistant import config_entries as ce, const as hac
 from homeassistant.const import CONF_ERROR
-from homeassistant.data_entry_flow import FlowHandler, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.selector import selector
 import voluptuous as vol
@@ -68,7 +67,7 @@ class FlowError(Exception):
         self.key = key
 
 
-class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
+class MerossFlowHandlerMixin(ce.ConfigEntryBaseFlow if typing.TYPE_CHECKING else object):
     """Mixin providing commons for Config and Option flows"""
 
     VERSION = 1
@@ -111,7 +110,7 @@ class MerossFlowHandlerMixin(FlowHandler if typing.TYPE_CHECKING else object):
     def api(self):
         return MerossApi.get(self.hass)
 
-    @callback
+    @ce.callback
     def async_abort(self, *, reason: str = "already_configured"):
         return super().async_abort(reason=reason)
 
