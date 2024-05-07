@@ -113,9 +113,10 @@ class NamespaceHandler:
         try:
             for p_channel in payload[self.key_namespace]:
                 try:
-                    self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+                    _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
                 except KeyError as key_error:
-                    self._try_create_entity(key_error)(p_channel)
+                    _parse = self._try_create_entity(key_error)
+                _parse(p_channel)
         except TypeError:
             # this might be expected: the payload is not a list
             self.handler = self._handle_dict
@@ -130,15 +131,17 @@ class NamespaceHandler:
         """
         try:
             p_channel = payload[self.key_namespace]
-            try:
-                self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
-            except KeyError as key_error:
-                self._try_create_entity(key_error)(p_channel)
         except TypeError:
             # this might be expected: the payload is not a dict
             # final fallback to the safe _handle_generic
             self.handler = self._handle_generic
             self._handle_generic(header, payload)
+            return
+        try:
+            _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+        except KeyError as key_error:
+            _parse = self._try_create_entity(key_error)
+        _parse(p_channel)
 
     def _handle_generic(self, header, payload):
         """
@@ -154,9 +157,10 @@ class NamespaceHandler:
         else:
             for p_channel in p_channel:
                 try:
-                    self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+                    _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
                 except KeyError as key_error:
-                    self._try_create_entity(key_error)(p_channel)
+                    _parse = self._try_create_entity(key_error)
+                _parse(p_channel)
 
     def _handle_undefined(self, header: dict, payload: dict):
         device = self.device
@@ -188,11 +192,12 @@ class NamespaceHandler:
         """twin method for _handle (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
         try:
-            for channel_digest in digest:
+            for p_channel in digest:
                 try:
-                    self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
+                    _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
                 except KeyError as key_error:
-                    self._try_create_entity(key_error)(channel_digest)
+                    _parse = self._try_create_entity(key_error)
+                _parse(p_channel)
         except Exception as exception:
             self.handle_exception(exception, "_parse_list", digest)
 
@@ -203,11 +208,12 @@ class NamespaceHandler:
             if type(digest) is dict:
                 self.entities[digest.get(mc.KEY_CHANNEL)](digest)
             else:
-                for channel_digest in digest:
+                for p_channel in digest:
                     try:
-                        self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
+                        _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
                     except KeyError as key_error:
-                        self._try_create_entity(key_error)(channel_digest)
+                        _parse = self._try_create_entity(key_error)
+                    _parse(p_channel)
 
         except Exception as exception:
             self.handle_exception(exception, "_parse_generic", digest)
