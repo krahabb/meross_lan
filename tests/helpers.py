@@ -1,4 +1,4 @@
-from asyncio import Future, run_coroutine_threadsafe
+import asyncio
 import base64
 import contextlib
 from copy import deepcopy
@@ -152,7 +152,7 @@ class TimeMocker(contextlib.AbstractContextManager):
         super().__init__()
         self.hass = hass
         self._freeze_time = freeze_time(time_to_freeze)
-        self._warp_task: Future | None = None
+        self._warp_task: asyncio.Future | None = None
         self._warp_run = False
         hass.loop.slow_callback_duration = 2.1
 
@@ -237,7 +237,7 @@ class TimeMocker(contextlib.AbstractContextManager):
             count = 0
             while self._warp_run:
                 _time = self.time()
-                run_coroutine_threadsafe(self.async_tick(tick), self.hass.loop)
+                asyncio.run_coroutine_threadsafe(self.async_tick(tick), self.hass.loop)
                 while _time == self.time():
                     time.sleep(0.01)
                 count += 1
@@ -865,19 +865,25 @@ MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
 
 class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
-    def __init__(self):
+    def __init__(self, hass: HomeAssistant):
+        self.hass = hass
         self.async_publish_patcher = patch(
             "homeassistant.components.mqtt.async_publish"
         )
 
     async def __aenter__(self):
-        """Return `self` upon entering the runtime context."""
         self.async_publish_mock = self.async_publish_patcher.start()
         self.async_publish_mock.side_effect = self._async_publish
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         self.async_publish_patcher.stop()
+        api: MerossApi = self.hass.data[mlc.DOMAIN]
+        if api and api._mqtt_connection:
+            from homeassistant.components.mqtt.client import UNSUBSCRIBE_COOLDOWN
+            await api._mqtt_connection.async_mqtt_unsubscribe()
+            await asyncio.sleep(UNSUBSCRIBE_COOLDOWN)
+
         return None
 
     async def _async_publish(

@@ -34,7 +34,7 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 @pytest.fixture(autouse=True)
 def auto_enable(request: pytest.FixtureRequest):
     """
-    Special initializetion fixture managing recorder mocking.
+    Special initialization fixture managing recorder mocking.
     For some tests we need a working recorder but recorder_mock
     needs to be init before hass.
     When we don't need it, we'd also want our helpers.get_entity_last_states
@@ -129,8 +129,8 @@ def cloudapi_mock(aioclient_mock: AiohttpClientMocker):
 
 
 @pytest.fixture()
-async def hamqtt_mock(mqtt_mock):
-    async with helpers.HAMQTTMocker() as _hamqtt_mock:
+async def hamqtt_mock(hass, mqtt_mock):
+    async with helpers.HAMQTTMocker(hass) as _hamqtt_mock:
         yield _hamqtt_mock
 
 
