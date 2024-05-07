@@ -8,10 +8,10 @@ from custom_components.meross_lan.light import (
     MLDNDLightEntity,
     MLLight,
     MLLightBase,
-    MLLightMp3,
     MLLightEffect,
-    _int_to_rgb,
-    _rgb_to_int,
+    MLLightMp3,
+    native_to_rgb,
+    rgb_to_native,
 )
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.switch import MLToggleX
@@ -54,11 +54,18 @@ class EntityTest(EntityComponentTest):
                 assert entity.effect_list == mc.DIFFUSER_LIGHT_MODE_LIST, "effect_list"
             if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
                 assert isinstance(entity, MLLight)
+                # need to manually remove MLLight since actual is rather polymorphic
+                # and the general code in _async_test_entities cannot handle this case
+                EntityComponentTest.expected_entity_types.remove(MLLight)
                 capacity = ability[mc.NS_APPLIANCE_CONTROL_LIGHT][mc.KEY_CAPACITY]
                 if capacity & mc.LIGHT_CAPACITY_RGB:
-                    assert ColorMode.RGB in supported_color_modes, "supported_color_modes"
+                    assert (
+                        ColorMode.RGB in supported_color_modes
+                    ), "supported_color_modes"
                 if capacity & mc.LIGHT_CAPACITY_TEMPERATURE:
-                    assert ColorMode.COLOR_TEMP in supported_color_modes, "supported_color_modes"
+                    assert (
+                        ColorMode.COLOR_TEMP in supported_color_modes
+                    ), "supported_color_modes"
                 if capacity & mc.LIGHT_CAPACITY_EFFECT:
                     assert supported_features == LightEntityFeature.EFFECT
                     assert entity.effect_list, "effect_list"
@@ -66,16 +73,12 @@ class EntityTest(EntityComponentTest):
                     assert isinstance(entity, MLLightEffect)
                     assert supported_features == LightEntityFeature.EFFECT
                     assert entity.effect_list, "effect_list"
-                    # need to manually remove MLLight since actual type is MLLightEffect
-                    # and the general code in _async_test_entities cannot handle this case
-                    EntityComponentTest.expected_entity_types.remove(MLLight)
                 if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
                     assert isinstance(entity, MLLightMp3)
                     assert supported_features == LightEntityFeature.EFFECT
-                    assert entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST, "effect_list"
-                    # need to manually remove MLLight since actual type is MLLightMp3
-                    # and the general code in _async_test_entities cannot handle this case
-                    EntityComponentTest.expected_entity_types.remove(MLLight)
+                    assert (
+                        entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST
+                    ), "effect_list"
 
     async def async_test_enabled_callback(
         self, entity: MLLight | MLDiffuserLight | MLDNDLightEntity
@@ -93,7 +96,7 @@ class EntityTest(EntityComponentTest):
                 haec.SERVICE_TURN_ON, hac.STATE_ON, {haec.ATTR_BRIGHTNESS: 1}
             )
             assert (
-                state.attributes[haec.ATTR_BRIGHTNESS] == (255 // 100)
+                state.attributes[haec.ATTR_BRIGHTNESS] == 1
                 and entity._light[mc.KEY_LUMINANCE] == 1
             )
             state = await self.async_service_call_check(
@@ -106,12 +109,12 @@ class EntityTest(EntityComponentTest):
 
         if ColorMode.RGB in supported_color_modes:
             rgb_tuple = (255, 0, 0)
-            rgb_meross = _rgb_to_int(rgb_tuple)
+            rgb_meross = rgb_to_native(rgb_tuple)
             state = await self.async_service_call_check(
                 haec.SERVICE_TURN_ON, hac.STATE_ON, {haec.ATTR_RGB_COLOR: rgb_tuple}
             )
             assert (
-                state.attributes[haec.ATTR_RGB_COLOR] == _int_to_rgb(rgb_meross)
+                state.attributes[haec.ATTR_RGB_COLOR] == native_to_rgb(rgb_meross)
                 and entity._light[mc.KEY_RGB] == rgb_meross
             )
 
