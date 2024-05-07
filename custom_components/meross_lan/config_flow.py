@@ -67,7 +67,9 @@ class FlowError(Exception):
         self.key = key
 
 
-class MerossFlowHandlerMixin(ce.ConfigEntryBaseFlow if typing.TYPE_CHECKING else object):
+class MerossFlowHandlerMixin(
+    ce.ConfigEntryBaseFlow if typing.TYPE_CHECKING else object
+):
     """Mixin providing commons for Config and Option flows"""
 
     VERSION = 1
@@ -985,12 +987,12 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                         except Exception as e:
                             inner_exception = e
                     if _conf_protocol is not mlc.CONF_PROTOCOL_MQTT:
-                        if _host:
+                        if _try_host := (_host or self.device_descriptor.innerIp):
                             try:
                                 (
                                     device_config_update,
                                     descriptor_update,
-                                ) = await self._async_http_discovery(_host, _key)
+                                ) = await self._async_http_discovery(_try_host, _key)
                             except Exception as e:
                                 inner_exception = e
 
@@ -1098,7 +1100,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         # setup device specific config right before last option
         if device:
             try:
-                device.entry_option_setup(config_schema)
+                await device.async_entry_option_setup(config_schema)
             except Exception:
                 pass  # forgive any error
 

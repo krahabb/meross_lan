@@ -852,7 +852,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         )
         self.state = ManagerState.STARTED
 
-    def entry_option_setup(self, config_schema: dict):
+    async def async_entry_option_setup(self, config_schema: dict):
         """
         called when setting up an OptionsFlowHandler to expose
         configurable device preoperties which are stored at the device level
@@ -862,22 +862,27 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if mc.NS_APPLIANCE_SYSTEM_TIME in self.descriptor.ability:
             global TIMEZONES_SET
             if TIMEZONES_SET is None:
-                try:
-                    import zoneinfo
 
-                    TIMEZONES_SET = zoneinfo.available_timezones()
-                except Exception:
-                    pass
-                if TIMEZONES_SET:
-                    TIMEZONES_SET = vol.In(sorted(TIMEZONES_SET))
-                else:
+                def _load():
+                    try:
+                        import zoneinfo
+
+                        tzs = zoneinfo.available_timezones()
+                        return vol.In(sorted(tzs))
+                    except Exception:
+                        pass
+
                     # if error or empty try fallback to pytz if avail
                     try:
-                        from pytz import common_timezones
+                        import pytz
 
-                        TIMEZONES_SET = vol.In(sorted(common_timezones))
+                        return vol.In(sorted(pytz.common_timezones))
                     except Exception:
-                        TIMEZONES_SET = str
+                        pass
+                    return str
+
+                TIMEZONES_SET = await self.hass.async_add_executor_job(_load)
+
             config_schema[
                 vol.Optional(
                     mc.KEY_TIMEZONE,
