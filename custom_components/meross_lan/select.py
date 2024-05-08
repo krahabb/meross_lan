@@ -15,10 +15,9 @@ if typing.TYPE_CHECKING:
 
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant, State
+    from homeassistant.core import Event, HomeAssistant, State
     from homeassistant.helpers.entity_component import EntityComponent
     from homeassistant.helpers.event import EventStateChangedData
-    from homeassistant.helpers.typing import EventType
 
     from .climate import MtsClimate
 
@@ -259,7 +258,7 @@ class MtsTrackedSensor(MLSelect):
         ):
 
             @callback
-            def _tracking_callback(event: "EventType[EventStateChangedData]"):
+            def _tracking_callback(event: "Event[EventStateChangedData]"):
                 with self.exception_warning("processing state update event"):
                     self._tracking_update(event.data.get("new_state"))
 
