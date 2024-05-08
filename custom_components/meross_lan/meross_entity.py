@@ -296,9 +296,9 @@ class MerossBinaryEntity(MerossEntity):
         entitykey: str | None = None,
         device_class: object | None = None,
         *,
-        onoff=None,
+        device_value=None,
     ):
-        self.is_on = onoff
+        self.is_on = device_value
         super().__init__(manager, channel, entitykey, device_class)
 
     def set_unavailable(self):
@@ -331,7 +331,7 @@ class MerossToggle(MerossBinaryEntity):
         entitykey: str | None = None,
         device_class: object | None = None,
         *,
-        onoff=None,
+        device_value=None,
         namespace: str | None = None,
     ):
         if namespace:
@@ -342,7 +342,7 @@ class MerossToggle(MerossBinaryEntity):
             channel,
             entitykey,
             device_class,
-            onoff=onoff,
+            device_value=device_value,
         )
 
     async def async_turn_on(self, **kwargs):

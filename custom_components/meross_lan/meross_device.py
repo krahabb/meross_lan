@@ -414,7 +414,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_http_active",  # HTTP is 'online' i.e. reachable
         "_http_lastrequest",
         "_http_lastresponse",
-        "channels_payloads",
         "digest_handlers",
         "namespace_handlers",
         "polling_strategies",
@@ -464,7 +463,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._http_active: "MerossHttpClient | None" = None
         self._http_lastrequest = 0
         self._http_lastresponse = 0
-        self.channels_payloads: list[dict] = []
         self.digest_handlers: dict[str, "DigestParseFunc"] = {}
         self.namespace_handlers: dict[str, "NamespaceHandler"] = {}
         self.polling_strategies: dict[str, "PollingStrategy"] = {}

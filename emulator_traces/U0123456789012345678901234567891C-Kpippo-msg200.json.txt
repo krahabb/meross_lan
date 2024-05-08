@@ -1,0 +1,939 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2024.5.0",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.12.2",
+    "docker": true,
+    "arch": "aarch64",
+    "timezone": "America/New_York",
+    "os_name": "Linux",
+    "os_version": "6.1.73-haos-raspi",
+    "supervisor": "2024.04.4",
+    "host_os": "Home Assistant OS 12.2",
+    "docker_version": "25.0.5",
+    "chassis": "embedded",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "njspc_ha": {
+      "documentation": "https://github.com/Crewski/njsPC-HA",
+      "version": "0.4.3",
+      "requirements": [
+        "python-socketio[asyncio_client]"
+      ]
+    },
+    "hacs": {
+      "documentation": "https://hacs.xyz/docs/configuration/start",
+      "version": "1.34.0",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "infinitive": {
+      "documentation": "https://github.com/mww012/ha_customcomponents",
+      "version": "0.0.6",
+      "requirements": [
+        "pyinfinitive==0.0.5"
+      ]
+    },
+    "meross_lan": {
+      "documentation": "https://github.com/krahabb/meross_lan",
+      "version": "5.0.4",
+      "requirements": []
+    },
+    "browser_mod": {
+      "documentation": "https://github.com/thomasloven/hass-browser_mod/blob/master/README.md",
+      "version": "2.3.0",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "5.0.4",
+    "is_built_in": false
+  },
+  "data": {
+    "host": "###########0",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "msg200",
+            "subType": "us",
+            "version": "4.0.0",
+            "chipType": "MT7686",
+            "uuid": "###############################0",
+            "macAddress": "################0"
+          },
+          "firmware": {
+            "version": "4.2.8",
+            "homekitVersion": "2.0.1",
+            "compileTime": "Nov 26 2021 15:47:15",
+            "encrypt": 1,
+            "wifiMac": "################0",
+            "innerIp": "###########0",
+            "server": "###################0",
+            "port": "@0",
+            "userId": "@0"
+          },
+          "time": {
+            "timestamp": 1713043238,
+            "timezone": "America/New_York",
+            "timeRule": [
+              [
+                1699164000,
+                -18000,
+                0
+              ],
+              [
+                1710054000,
+                -14400,
+                1
+              ],
+              [
+                1730613600,
+                -18000,
+                0
+              ],
+              [
+                1741503600,
+                -14400,
+                1
+              ],
+              [
+                1762063200,
+                -18000,
+                0
+              ],
+              [
+                1772953200,
+                -14400,
+                1
+              ],
+              [
+                1793512800,
+                -18000,
+                0
+              ],
+              [
+                1805007600,
+                -14400,
+                1
+              ],
+              [
+                1825567200,
+                -18000,
+                0
+              ],
+              [
+                1836457200,
+                -14400,
+                1
+              ],
+              [
+                1857016800,
+                -18000,
+                0
+              ],
+              [
+                1867906800,
+                -14400,
+                1
+              ],
+              [
+                1888466400,
+                -18000,
+                0
+              ],
+              [
+                1899356400,
+                -14400,
+                1
+              ],
+              [
+                1919916000,
+                -18000,
+                0
+              ],
+              [
+                1930806000,
+                -14400,
+                1
+              ],
+              [
+                1951365600,
+                -18000,
+                0
+              ],
+              [
+                1962860400,
+                -14400,
+                1
+              ],
+              [
+                1983420000,
+                -18000,
+                0
+              ],
+              [
+                1994310000,
+                -14400,
+                1
+              ]
+            ]
+          },
+          "online": {
+            "status": 0,
+            "bindId": "GCRtlngRL46dlOR3",
+            "who": 1
+          }
+        },
+        "digest": {
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 0,
+              "lmTime": 0
+            },
+            {
+              "channel": 1,
+              "onoff": 0,
+              "lmTime": 0
+            },
+            {
+              "channel": 2,
+              "onoff": 0,
+              "lmTime": 0
+            },
+            {
+              "channel": 3,
+              "onoff": 0,
+              "lmTime": 0
+            }
+          ],
+          "triggerx": [
+            {
+              "channel": 1,
+              "id": "2222222222222222",
+              "count": 1
+            },
+            {
+              "channel": 2,
+              "id": "3333333333333333",
+              "count": 1
+            },
+            {
+              "channel": 3,
+              "id": "4444444444444444",
+              "count": 2
+            }
+          ],
+          "timerx": [],
+          "garageDoor": [
+            {
+              "channel": 1,
+              "doorEnable": 1,
+              "open": 0,
+              "lmTime": 0
+            },
+            {
+              "channel": 2,
+              "doorEnable": 1,
+              "open": 0,
+              "lmTime": 0
+            },
+            {
+              "channel": 3,
+              "doorEnable": 0,
+              "open": 1,
+              "lmTime": 0
+            }
+          ]
+        }
+      },
+      "payloadVersion": 1,
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Info": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 5
+        },
+        "Appliance.Control.ToggleX": {},
+        "Appliance.Control.TimerX": {
+          "sunOffsetSupport": 1,
+          "notify": [
+            "Appliance.GarageDoor.State"
+          ]
+        },
+        "Appliance.Control.TriggerX": {
+          "notify": [
+            "Appliance.GarageDoor.State"
+          ]
+        },
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.GarageDoor.State": {},
+        "Appliance.GarageDoor.MultipleConfig": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.Digest.TimerX": {}
+      }
+    },
+    "key": "###############################0",
+    "device_id": "###############################0",
+    "timestamp": 1713043239.1415892,
+    "device": {
+      "class": "ToggleXMixinGarageMixinMerossDevice",
+      "conf_protocol": "auto",
+      "pref_protocol": "http",
+      "curr_protocol": "http",
+      "MQTT": {
+        "cloud_profile": true,
+        "locally_active": false,
+        "mqtt_connection": true,
+        "mqtt_connected": true,
+        "mqtt_publish": false,
+        "mqtt_active": true
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "polling_period": 30,
+      "polling_strategies": {
+        "Appliance.System.All": 1714610376.2235072,
+        "Appliance.System.DNDMode": 1714610556.5898845,
+        "Appliance.System.Runtime": 1714610376.2235072,
+        "Appliance.GarageDoor.MultipleConfig": 1714610556.5898845,
+        "Appliance.System.Debug": 0
+      },
+      "device_response_size_min": 1754,
+      "device_response_size_max": 5000
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "msg200",
+              "subType": "us",
+              "version": "4.0.0",
+              "chipType": "MT7686",
+              "uuid": "###############################0",
+              "macAddress": "################0"
+            },
+            "firmware": {
+              "version": "4.2.8",
+              "homekitVersion": "2.0.1",
+              "compileTime": "Nov 26 2021 15:47:15",
+              "encrypt": 1,
+              "wifiMac": "################0",
+              "innerIp": "###########0",
+              "server": "###################0",
+              "port": "@0",
+              "userId": "@0"
+            },
+            "time": {
+              "timestamp": 1714610375,
+              "timezone": "America/New_York",
+              "timeRule": [
+                [
+                  1699164000,
+                  -18000,
+                  0
+                ],
+                [
+                  1710054000,
+                  -14400,
+                  1
+                ],
+                [
+                  1730613600,
+                  -18000,
+                  0
+                ],
+                [
+                  1741503600,
+                  -14400,
+                  1
+                ],
+                [
+                  1762063200,
+                  -18000,
+                  0
+                ],
+                [
+                  1772953200,
+                  -14400,
+                  1
+                ],
+                [
+                  1793512800,
+                  -18000,
+                  0
+                ],
+                [
+                  1805007600,
+                  -14400,
+                  1
+                ],
+                [
+                  1825567200,
+                  -18000,
+                  0
+                ],
+                [
+                  1836457200,
+                  -14400,
+                  1
+                ],
+                [
+                  1857016800,
+                  -18000,
+                  0
+                ],
+                [
+                  1867906800,
+                  -14400,
+                  1
+                ],
+                [
+                  1888466400,
+                  -18000,
+                  0
+                ],
+                [
+                  1899356400,
+                  -14400,
+                  1
+                ],
+                [
+                  1919916000,
+                  -18000,
+                  0
+                ],
+                [
+                  1930806000,
+                  -14400,
+                  1
+                ],
+                [
+                  1951365600,
+                  -18000,
+                  0
+                ],
+                [
+                  1962860400,
+                  -14400,
+                  1
+                ],
+                [
+                  1983420000,
+                  -18000,
+                  0
+                ],
+                [
+                  1994310000,
+                  -14400,
+                  1
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "GCRtlngRL46dlOR3",
+              "who": 1
+            }
+          },
+          "digest": {
+            "togglex": [
+              {
+                "channel": 0,
+                "onoff": 0,
+                "lmTime": 0
+              },
+              {
+                "channel": 1,
+                "onoff": 0,
+                "lmTime": 0
+              },
+              {
+                "channel": 2,
+                "onoff": 0,
+                "lmTime": 0
+              },
+              {
+                "channel": 3,
+                "onoff": 0,
+                "lmTime": 0
+              }
+            ],
+            "triggerx": [
+              {
+                "channel": 1,
+                "id": "2222222222222222",
+                "count": 1
+              },
+              {
+                "channel": 2,
+                "id": "3333333333333333",
+                "count": 1
+              },
+              {
+                "channel": 3,
+                "id": "4444444444444444",
+                "count": 2
+              }
+            ],
+            "timerx": [],
+            "garageDoor": [
+              {
+                "channel": 1,
+                "doorEnable": 1,
+                "open": 0,
+                "lmTime": 0
+              },
+              {
+                "channel": 2,
+                "doorEnable": 1,
+                "open": 0,
+                "lmTime": 0
+              },
+              {
+                "channel": 3,
+                "doorEnable": 0,
+                "open": 1,
+                "lmTime": 0
+              }
+            ]
+          }
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 5
+          },
+          "Appliance.Control.ToggleX": {},
+          "Appliance.Control.TimerX": {
+            "sunOffsetSupport": 1,
+            "notify": [
+              "Appliance.GarageDoor.State"
+            ]
+          },
+          "Appliance.Control.TriggerX": {
+            "notify": [
+              "Appliance.GarageDoor.State"
+            ]
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.GarageDoor.State": {},
+          "Appliance.GarageDoor.MultipleConfig": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.Digest.TimerX": {}
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": {}
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {
+              "model": "MSG200",
+              "sn": "##############0",
+              "category": 2,
+              "setupId": "###0",
+              "setupCode": "#########0",
+              "uuid": "###################################1",
+              "token": "###############################################################################################################################################################################################################################################################################################################################################################################################################################################################################0"
+            }
+          }
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "4.2.8",
+              "sysUpTime": "323h22m33s",
+              "localTimeOffset": -14400,
+              "localTime": "Wed May  1 20:43:02 2024",
+              "suncalc": "5:59;19:56"
+            },
+            "network": {
+              "linkStatus": "connected",
+              "signal": 100,
+              "ssid": "#####0",
+              "gatewayMac": "################0",
+              "innerIp": "###########0",
+              "wifiDisconnectCount": 4,
+              "wifiDisconnectDetail": {
+                "totalCount": 4,
+                "detials": [
+                  {
+                    "sysUptime": 2701,
+                    "timestamp": 1713043069
+                  },
+                  {
+                    "sysUptime": 2732,
+                    "timestamp": 1713043100
+                  },
+                  {
+                    "sysUptime": 2740,
+                    "timestamp": 1713043108
+                  },
+                  {
+                    "sysUptime": 2845,
+                    "timestamp": 1713043213
+                  }
+                ]
+              }
+            },
+            "cloud": {
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "###################0",
+              "secondPort": "@0",
+              "userId": "@0",
+              "sysConnectTime": "Wed May  1 12:00:31 2024",
+              "sysOnlineTime": "12h42m31s",
+              "sysDisconnectCount": 14,
+              "iotDisconnectDetail": {
+                "totalCount": 14,
+                "detials": [
+                  {
+                    "sysUptime": 303,
+                    "timestamp": 1713040669
+                  },
+                  {
+                    "sysUptime": 2701,
+                    "timestamp": 1713043069
+                  },
+                  {
+                    "sysUptime": 129775,
+                    "timestamp": 1713171703
+                  },
+                  {
+                    "sysUptime": 259313,
+                    "timestamp": 1713302802
+                  },
+                  {
+                    "sysUptime": 388920,
+                    "timestamp": 1713433970
+                  },
+                  {
+                    "sysUptime": 388988,
+                    "timestamp": 1713565199
+                  },
+                  {
+                    "sysUptime": 518587,
+                    "timestamp": 1713696359
+                  },
+                  {
+                    "sysUptime": 648162,
+                    "timestamp": 1713958658
+                  },
+                  {
+                    "sysUptime": 777737,
+                    "timestamp": 1714089795
+                  },
+                  {
+                    "sysUptime": 777790,
+                    "timestamp": 1714221009
+                  },
+                  {
+                    "sysUptime": 907332,
+                    "timestamp": 1714352112
+                  },
+                  {
+                    "sysUptime": 1036973,
+                    "timestamp": 1714483314
+                  },
+                  {
+                    "sysUptime": 1117033,
+                    "timestamp": 1714563429
+                  },
+                  {
+                    "sysUptime": 1118417,
+                    "timestamp": 1714564815
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ToggleX",
+        {
+          "channel": 0,
+          "togglex": {
+            "channel": 0,
+            "onoff": 0,
+            "lmTime": 0
+          }
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.State",
+        {
+          "state": {}
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.State",
+        {
+          "state": [
+            {
+              "channel": 1,
+              "doorEnable": 1,
+              "open": 0,
+              "lmTime": 0
+            },
+            {
+              "channel": 2,
+              "doorEnable": 1,
+              "open": 0,
+              "lmTime": 0
+            },
+            {
+              "channel": 3,
+              "doorEnable": 0,
+              "open": 1,
+              "lmTime": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.GarageDoor.MultipleConfig",
+        {
+          "config": [
+            {
+              "channel": 1
+            },
+            {
+              "channel": 2
+            },
+            {
+              "channel": 3
+            }
+          ]
+        }
+      ],
+      [
+        "2024/05/01 - 20:43:02",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.GarageDoor.MultipleConfig",
+        {
+          "config": [
+            {
+              "channel": 1,
+              "doorEnable": 1,
+              "timestamp": 0,
+              "timestampMs": 0,
+              "doorCloseDuration": 15000,
+              "doorOpenDuration": 15000,
+              "signalClose": 3000,
+              "signalOpen": 3000,
+              "buzzerEnable": 0
+            },
+            {
+              "channel": 2,
+              "doorEnable": 1,
+              "timestamp": 0,
+              "timestampMs": 0,
+              "doorCloseDuration": 15000,
+              "doorOpenDuration": 15000,
+              "signalClose": 2000,
+              "signalOpen": 2000,
+              "buzzerEnable": 0
+            },
+            {
+              "channel": 3,
+              "doorEnable": 0,
+              "timestamp": 1699806127,
+              "timestampMs": 267,
+              "doorCloseDuration": 15000,
+              "doorOpenDuration": 15000,
+              "signalClose": 2000,
+              "signalOpen": 2000,
+              "buzzerEnable": 0
+            }
+          ]
+        }
+      ]
+    ]
+  }
+}

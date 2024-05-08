@@ -24,7 +24,7 @@ class MtsConfigSwitch(MLSwitch):
         climate: "MtsClimate",
         entitykey: str,
         *,
-        onoff=None,
+        device_value=None,
         namespace: str,
     ):
         super().__init__(
@@ -32,7 +32,7 @@ class MtsConfigSwitch(MLSwitch):
             climate.channel,
             entitykey,
             MLSwitch.DeviceClass.SWITCH,
-            onoff=onoff,
+            device_value=device_value,
             namespace=namespace,
         )
 
@@ -94,7 +94,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
                 self.switch = MtsConfigSwitch(
                     self.climate,
                     f"{self.entitykey}_switch",
-                    onoff=payload[mc.KEY_ONOFF],
+                    device_value=payload[mc.KEY_ONOFF],
                     namespace=self.namespace,
                 )
         if mc.KEY_WARNING in payload:
