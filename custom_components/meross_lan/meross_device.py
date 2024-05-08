@@ -1835,6 +1835,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             elif is_device_online(descr.system):
                 if not self.device_debug:
                     self.request(request_get(mc.NS_APPLIANCE_SYSTEM_DEBUG))
+            else:
+                self.device_debug = None
 
         for key_digest, _digest in descr.digest.items() or descr.control.items():
             self.digest_handlers[key_digest](_digest)
