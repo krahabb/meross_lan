@@ -31,6 +31,7 @@ from ..switch import MLSwitch
 if typing.TYPE_CHECKING:
     from ..meross_device import DigestParseFunc
     from ..meross_entity import MerossEntity
+    from ..merossclient.cloudapi import SubDeviceInfoType
     from .mts100 import Mts100Climate
 
 
@@ -446,6 +447,7 @@ class MerossSubDevice(MerossDeviceBase):
         "hub",
         "type",
         "p_digest",
+        "sub_device_info",
         "sensor_battery",
         "switch_togglex",
     )
@@ -460,6 +462,7 @@ class MerossSubDevice(MerossDeviceBase):
         self.hub = hub
         self.type = _type
         self.p_digest = p_digest
+        self.sub_device_info = None
         id = p_digest[mc.KEY_ID]
         super().__init__(
             id,
@@ -499,9 +502,6 @@ class MerossSubDevice(MerossDeviceBase):
     @property
     def tz(self):
         return self.hub.tz
-
-    def _get_device_info_name_key(self) -> str:
-        return mc.KEY_SUBDEVICENAME
 
     def _get_internal_name(self) -> str:
         return get_productnameuuid(self.type, self.id)
@@ -544,6 +544,17 @@ class MerossSubDevice(MerossDeviceBase):
             str(MLBinarySensor.DeviceClass.WINDOW),
             MLBinarySensor.DeviceClass.WINDOW,
         )
+
+    def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType"):
+        self.sub_device_info = sub_device_info
+        if _device_registry_entry := self.device_registry_entry:
+            name = (
+                sub_device_info.get(mc.KEY_SUBDEVICENAME) or self._get_internal_name()
+            )
+            if name != _device_registry_entry.name:
+                self.get_device_registry().async_update_device(
+                    _device_registry_entry.id, name=name
+                )
 
     def _parse(self, key: str, payload: dict):
         with self.exception_warning("_parse(%s, %s)", key, str(payload), timeout=14400):

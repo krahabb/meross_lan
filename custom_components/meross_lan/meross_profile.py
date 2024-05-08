@@ -1426,7 +1426,7 @@ class MerossCloudProfile(ApiProfile):
 
                 sub_device_info_dict[subdeviceid] = sub_device_info
                 if subdevice := hub_device.subdevices.get(subdeviceid):
-                    subdevice.update_device_info(sub_device_info)
+                    subdevice.update_sub_device_info(sub_device_info)
                 else:
                     sub_device_info_unknown.append(sub_device_info)
 

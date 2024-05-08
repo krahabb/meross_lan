@@ -88,7 +88,6 @@ if typing.TYPE_CHECKING:
     from .merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
-        SubDeviceInfoType,
     )
 
     DigestParseFunc = typing.Callable[[dict], None] | typing.Callable[[list], None]
@@ -145,11 +144,8 @@ class MerossDeviceBase(EntityManager):
     """
 
     deviceentry_id: dict[str, set[tuple[str, str]]]
-    # device info dict from meross cloud api
-    device_info: "DeviceInfoType | SubDeviceInfoType | None"
 
     __slots__ = (
-        "device_info",
         "_online",
         "_device_registry_entry",
     )
@@ -173,7 +169,6 @@ class MerossDeviceBase(EntityManager):
             deviceentry_id={"identifiers": {(DOMAIN, id)}},
             **kwargs,
         )
-        self.device_info = None
         self._online = False
         self._device_registry_entry = None
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
@@ -223,18 +218,6 @@ class MerossDeviceBase(EntityManager):
                 self._device_registry_entry = weakref.ref(_device_registry_entry)
         return _device_registry_entry
 
-    def update_device_info(self, device_info: "DeviceInfoType | SubDeviceInfoType"):
-        self.device_info = device_info
-        if _device_registry_entry := self.device_registry_entry:
-            name = (
-                device_info.get(self._get_device_info_name_key())
-                or self._get_internal_name()
-            )
-            if name != _device_registry_entry.name:
-                self.get_device_registry().async_update_device(
-                    _device_registry_entry.id, name=name
-                )
-
     async def async_request(
         self,
         namespace: str,
@@ -266,10 +249,6 @@ class MerossDeviceBase(EntityManager):
 
     def check_device_timezone(self):
         raise NotImplementedError("check_device_timezone")
-
-    @abc.abstractmethod
-    def _get_device_info_name_key(self) -> str:
-        return ""
 
     @abc.abstractmethod
     def _get_internal_name(self) -> str:
@@ -393,6 +372,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "curr_protocol",
         "descriptor",
         "needsave",
+        "device_info",
         "device_timestamp",
         "device_timedelta",
         "device_timedelta_log_epoch",
@@ -442,6 +422,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.descriptor = descriptor
         self.needsave = False
         self.curr_protocol = CONF_PROTOCOL_AUTO
+        self.device_info = None
         self.device_timestamp = 0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
@@ -783,9 +764,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             severity=IssueSeverity.WARNING,
             translation_placeholders={"device_name": self.name},
         )
-
-    def _get_device_info_name_key(self) -> str:
-        return mc.KEY_DEVNAME
 
     def _get_internal_name(self) -> str:
         return self.descriptor.productname
@@ -2114,6 +2092,34 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
             return True
         return False
+
+    def update_device_info(self, device_info: "DeviceInfoType"):
+        self.device_info = device_info
+        if _device_registry_entry := self.device_registry_entry:
+            name = device_info.get(mc.KEY_DEVNAME) or self._get_internal_name()
+            if name != _device_registry_entry.name:
+                self.get_device_registry().async_update_device(
+                    _device_registry_entry.id, name=name
+                )
+        channel = -1
+        async_update_entity = self.get_entity_registry().async_update_entity
+        for device_info_channel in device_info.get("channels", []):
+            # we assume the device_info.channels struct are mapped
+            # to what we consider 'default' entities for the device
+            # (i.e. MLGarage for garageDoor devices, MLToggle for
+            # plain toggle devices, and so on).
+            # also, the list looks like eventually containing empty dicts
+            # for non-existent channel ids
+            channel += 1
+            try:
+                if name := device_info_channel.get(mc.KEY_DEVNAME):
+                    entity = self.entities[channel]
+                    if (registry_entry := entity.registry_entry) and (
+                        name != registry_entry.name
+                    ):
+                        async_update_entity(registry_entry.entity_id, name=name)
+            except Exception:
+                pass
 
     def update_latest_version(self, latest_version: "LatestVersionType"):
         if update_firmware := self.update_firmware:

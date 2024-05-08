@@ -98,6 +98,12 @@ class MerossCloudCredentials(typing.TypedDict):
     mfaLockExpire: typing.NotRequired[int]
 
 
+class DeviceInfoChannelType(typing.TypedDict):
+    type: typing.NotRequired[str]
+    devName: typing.NotRequired[str]
+    devIconId: typing.NotRequired[str]
+
+
 class DeviceInfoType(typing.TypedDict, total=False):
     """
     Device info as recovered from meross cloud api "/Device/devList"
@@ -110,7 +116,8 @@ class DeviceInfoType(typing.TypedDict, total=False):
     bindTime: int
     deviceType: str
     subType: str
-    channels: list
+    # channels might be empty or contain empty dicts
+    channels: list[DeviceInfoChannelType]
     region: str
     fmwareVersion: str
     hdwareVersion: str
@@ -139,7 +146,7 @@ class LatestVersionType(typing.TypedDict, total=False):
     description: str
 
 
-class SubDeviceInfoType(typing.TypedDict, total=False):
+class SubDeviceInfoType(typing.TypedDict):
     """
     (Hub) SubDevice info as recovered from meross cloud api "/Hub/getSubDevices"
     """
