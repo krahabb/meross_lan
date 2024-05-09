@@ -127,4 +127,4 @@ def digest_init_fan(device: "MerossDevice", digest) -> "DigestParseFunc":
         MLFan(device, channel_digest[mc.KEY_CHANNEL])
     # mc.NS_APPLIANCE_CONTROL_FAN should already be there since the namespace
     # handlers dict has been initialized before digest
-    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_FAN].parse_list
+    return device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN).parse_list

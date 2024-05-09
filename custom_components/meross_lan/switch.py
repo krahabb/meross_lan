@@ -4,7 +4,7 @@ from homeassistant.components import switch
 
 from . import meross_entity as me
 from .helpers.namespaces import EntityPollingStrategy
-from .merossclient import const as mc
+from .merossclient import const as mc, extract_dict_payloads
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -88,15 +88,55 @@ class MLToggleX(MLSwitch):
             self.update_onoff(onoff)
 
 
-def digest_init_togglex(device: "MerossDevice", digest: list) -> "DigestParseFunc":
+class MLToggleX_(MLToggleX):
+    """
+    Special 'disabled' ToggleX used when the device exposes other specialized entities
+    together with some 'unmapped' ToggleX channels. The policy is to now create these
+    plain switches too but, since they're likely 'no use' let them initially disabled.
+    """
+
+    # HA core entity attributes:
+    entity_registry_enabled_default = False
+
+
+def digest_init_togglex(device: "MerossDevice", togglex_digest: list) -> "DigestParseFunc":
     """[{ "channel": 0, "onoff": 1 }]"""
-    # we don't initialize any switch/ToggleX here since the digest reported channels
+    # We don't initialize every switch/ToggleX here since the digest reported channels
     # might be mapped to more specialized entities:
     # this is true for lights (MLLight), garageDoor (MLGarage) and fan (MLFan) though
     # and maybe some more others.
-    # The idea is to let the mc.NS_APPLIANCE_CONTROL_TOGGLEX handler dynamically create
-    # MLToggleX entities when no other (more specialized) entity has registered itself
-    # as a valid handler for the mc.NS_APPLIANCE_CONTROL_TOGGLEX namespace
+    # In general, it is not very clear how and when these ToggleX entities are really needed
+    # so we have some euristics in place to fix 'this and that'.
+    # The general rule is to let the togglex namespace/channel be managed by the
+    # aforementioned specialized entity, while, if no channel match exists, create a disabled
+    # (by default) switch entity. When  switches are really switches (like mssXXX series) instead,
+    # we'll setup proper MLToggleX (this is detected by the fact no specialized entity exists in
+    # device definition)
+
+    channels = {digest[mc.KEY_CHANNEL] for digest in togglex_digest}
+
+    digest = device.descriptor.digest
+
+    for key_digest in (mc.KEY_FAN, mc.KEY_GARAGEDOOR, mc.KEY_LIGHT):
+        if key_digest in digest:
+            for digest_channel in extract_dict_payloads(digest[key_digest]):
+                channel = digest_channel.get(mc.KEY_CHANNEL)
+                if channel in channels:
+                    channels.remove(channel)
+
+    # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
+    if (mc.NS_APPLIANCE_CONTROL_FAN in device.descriptor.ability) and (mc.KEY_FAN not in digest):
+        if 0 in channels:
+            channels.remove(0)
+
+    if len(channels) == len(togglex_digest):
+        # no exotic device style..just plain switches
+        for channel in channels:
+            MLToggleX(device, channel)
+    else:
+        for channel in channels:
+            MLToggleX_(device, channel)
+
     togglex_handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)
-    togglex_handler.register_entity_class(MLToggleX)
+    togglex_handler.register_entity_class(MLToggleX_)
     return togglex_handler.parse_list

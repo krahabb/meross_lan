@@ -5,9 +5,9 @@ from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
 from custom_components.meross_lan.devices.thermostat import MtsExternalSensorSwitch
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.switch import (
-    MLSwitch,
     MLToggle,
     MLToggleX,
+    MLToggleX_,
     PhysicalLockSwitch,
 )
 
@@ -32,7 +32,8 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: haec.SwitchEntity):
-        pass
+        if isinstance(entity, MLToggleX) and type(entity) is MLToggleX_:
+            EntityComponentTest.expected_entity_types.remove(MLToggleX)
 
     async def async_test_enabled_callback(self, entity: haec.SwitchEntity):
         await self.async_service_call_check(haec.SERVICE_TURN_ON, STATE_ON)
