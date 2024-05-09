@@ -311,8 +311,7 @@ class MLGarage(MLCover):
         super().__init__(manager, channel, MLCover.DeviceClass.GARAGE)
         ability = manager.descriptor.ability
         manager.register_parser(mc.NS_APPLIANCE_GARAGEDOOR_STATE, self)
-        if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
-            manager.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, self)
+        manager.register_togglex_channel(self)
         self.binary_sensor_timeout = MLGarageTimeoutBinarySensor(self)
         if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in ability:
             # historically, when MultipleConfig appeared, these used to be

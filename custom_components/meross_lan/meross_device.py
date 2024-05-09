@@ -563,6 +563,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 )
                 self.digest_handlers[key_digest] = MerossDevice.digest_parse_empty
 
+    def start(self):
+        # called by async_setup_entry after the entities have been registered
+        # here we'll register mqtt listening (in case) and start polling after
+        # the states have been eventually restored (some entities need this)
+        self._check_protocol_ext()
+        self._unsub_polling_callback = schedule_async_callback(
+            self.hass, 0, self._async_polling_callback, None
+        )
+        self.state = ManagerState.STARTED
+
     # interface: ConfigEntryManager
     async def entry_update_listener(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
@@ -818,15 +828,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         except KeyError:
             pass
 
-    def start(self):
-        # called by async_setup_entry after the entities have been registered
-        # here we'll register mqtt listening (in case) and start polling after
-        # the states have been eventually restored (some entities need this)
-        self._check_protocol_ext()
-        self._unsub_polling_callback = schedule_async_callback(
-            self.hass, 0, self._async_polling_callback, None
-        )
-        self.state = ManagerState.STARTED
+    def register_togglex_channel(self, entity: "MerossEntity"):
+        """
+        Checks if entity has an associated ToggleX behavior and eventually
+        registers it
+        """
+        for togglex_digest in self.descriptor.digest.get(mc.KEY_TOGGLEX, []):
+            if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
+                self.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, entity)
+                return True
+        return False
 
     async def async_entry_option_setup(self, config_schema: dict):
         """

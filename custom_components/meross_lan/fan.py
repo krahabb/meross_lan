@@ -38,18 +38,17 @@ class MLFan(me.MerossToggle, fan.FanEntity):
         "speed_count",
         "_fan",
         "_saved_speed",  # used to restore previous speed when turning on/off
-        "sensor_filtermaintenance",
+        "_togglex",
     )
 
     def __init__(self, manager: "MerossDevice", channel):
         self.percentage = None
-        self.speed_count = 0
+        self.speed_count = 1  # safe default: auto-inc when 'fan' payload updates
         self._fan = {}
         self._saved_speed = 1
         super().__init__(manager, channel)
         manager.register_parser(self.namespace, self)
-        if mc.NS_APPLIANCE_CONTROL_TOGGLEX in manager.descriptor.ability:
-            manager.register_parser(mc.NS_APPLIANCE_CONTROL_TOGGLEX, self)
+        self._togglex = manager.register_togglex_channel(self)
 
     # interface: MerossToggle
     def set_unavailable(self):
@@ -57,11 +56,14 @@ class MLFan(me.MerossToggle, fan.FanEntity):
         self.percentage = None
         super().set_unavailable()
 
-    async def async_turn_off(self):
-        await self.async_request_fan(0)
-
-    def _parse_togglex(self, payload: dict):
-        pass
+    def update_onoff(self, onoff):
+        if self.is_on != onoff:
+            self.is_on = onoff
+            if onoff:
+                self.percentage = round(self._saved_speed * 100 / self.speed_count)
+            else:
+                self.percentage = 0
+            self.flush_state()
 
     # interface: fan.FanEntity
     async def async_set_percentage(self, percentage: int) -> None:
@@ -70,10 +72,18 @@ class MLFan(me.MerossToggle, fan.FanEntity):
     async def async_turn_on(
         self, percentage: int | None = None, preset_mode: str | None = None, **kwargs
     ):
+        if self._togglex and not self.is_on:
+            await self.async_request_togglex(1)
         if percentage:
-            await self.async_set_percentage(percentage)
+            await self.async_request_fan(round(percentage * self.speed_count / 100))
         else:
             await self.async_request_fan(self._saved_speed)
+
+    async def async_turn_off(self, **kwargs):
+        if self._togglex:
+            await self.async_request_togglex(0)
+        else:
+            await self.async_request_fan(0)
 
     # interface: self
     async def async_request_fan(self, speed: int):
@@ -84,6 +94,19 @@ class MLFan(me.MerossToggle, fan.FanEntity):
             {self.key_namespace: [payload]},
         ):
             self._parse_fan(payload)
+
+    async def async_request_togglex(self, onoff: int):
+        if await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+            mc.METHOD_SET,
+            {
+                mc.KEY_TOGGLEX: {
+                    mc.KEY_CHANNEL: self.channel,
+                    mc.KEY_ONOFF: onoff,
+                }
+            },
+        ):
+            self.update_onoff(onoff)
 
     def _parse_fan(self, payload: dict):
         """payload = {"channel": 0, "speed": 3, "maxSpeed": 4}"""
@@ -96,9 +119,14 @@ class MLFan(me.MerossToggle, fan.FanEntity):
                 self._saved_speed = speed
             else:
                 self.is_on = False
-            self.speed_count = maxspeed = payload[mc.KEY_MAXSPEED]
-            self.percentage = round(speed * 100 / maxspeed)
+            self.speed_count = max(
+                payload.get(mc.KEY_MAXSPEED, self.speed_count), speed
+            )
+            self.percentage = round(speed * 100 / self.speed_count)
             self.flush_state()
+
+    def _parse_togglex(self, payload: dict):
+        self.update_onoff(payload[mc.KEY_ONOFF])
 
 
 class FanNamespaceHandler(NamespaceHandler):
