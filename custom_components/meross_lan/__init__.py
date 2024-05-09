@@ -341,10 +341,14 @@ class MerossApi(ApiProfile):
             method = service_call.data.get(mc.KEY_METHOD, mc.METHOD_GET)
             key = service_call.data.get(mlc.CONF_KEY)
             if mc.KEY_PAYLOAD in service_call.data:
-                try:
-                    payload = json_loads(service_call.data[mc.KEY_PAYLOAD])
-                except Exception as e:
-                    raise HomeAssistantError("Payload is not a valid JSON") from e
+                payload = service_call.data[mc.KEY_PAYLOAD]
+                if type(payload) is str:
+                    try:
+                        payload = json_loads(payload)
+                    except Exception as e:
+                        raise HomeAssistantError("Payload is not a valid JSON") from e
+                elif type(payload) is not dict:
+                    raise HomeAssistantError("Payload is not a valid dictionary")
             elif method == mc.METHOD_GET:
                 payload = get_default_payload(namespace)
             else:
