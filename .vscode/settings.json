@@ -4,6 +4,7 @@
     },
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.diagnosticSeverityOverrides": {
+        "reportPrivateImportUsage": "none",
         "reportShadowedImports": "none"
     },
     "python.analysis.extraPaths": [
