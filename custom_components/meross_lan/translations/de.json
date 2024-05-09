@@ -246,7 +246,7 @@
             }
         },
         "device_identity_mismatch": {
-            "title": "Falsche Identität für das Gerät '{device_name}' erhalten",
+            "title": "Falsche Identität für das Gerät {device_name} erhalten",
             "fix_flow": {
                 "step": {
                     "device": {

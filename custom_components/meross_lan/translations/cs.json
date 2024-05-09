@@ -246,7 +246,7 @@
             }
         },
         "device_identity_mismatch": {
-            "title": "Přijata neodpovídající identita zařízení '{device_name}'",
+            "title": "Přijata neodpovídající identita zařízení {device_name}",
             "fix_flow": {
                 "step": {
                     "device": {
