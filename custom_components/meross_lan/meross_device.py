@@ -953,7 +953,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             mc.METHOD_SET,
             {
                 mc.KEY_MULTIPLE: [
-                    MerossRequest(self.key, *request, self._topic_response)
+                    {
+                        mc.KEY_HEADER: {
+                            mc.KEY_METHOD: request[1],
+                            mc.KEY_NAMESPACE: request[0],
+                        },
+                        mc.KEY_PAYLOAD: request[2],
+                    }
                     for request in requests
                 ]
             },
@@ -987,7 +993,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     mc.METHOD_SET,
                     {
                         mc.KEY_MULTIPLE: [
-                            MerossRequest(self.key, *request, self._topic_response)
+                            {
+                                mc.KEY_HEADER: {
+                                    mc.KEY_METHOD: request[1],
+                                    mc.KEY_NAMESPACE: request[0],
+                                },
+                                mc.KEY_PAYLOAD: request[2],
+                            }
                             for request in multiple_requests
                         ]
                     },
@@ -1714,6 +1726,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         try:
             handler = self.namespace_handlers[namespace]
         except KeyError:
+            if not namespace:
+                # this weird error appears in an ns_multiple response missing
+                # the expected namespace key for "Appliance.Control.Runtime"
+                self.log(
+                    self.WARNING,
+                    "Protocol error: received empty namespace for payload:%s",
+                    str(self.loggable_dict(payload)),
+                    timeout=14400,
+                )
+                return
             handler = self._create_handler(namespace)
 
         handler.lastrequest = self.lastresponse  # type: ignore
