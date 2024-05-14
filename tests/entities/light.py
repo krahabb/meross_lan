@@ -46,14 +46,15 @@ class EntityTest(EntityComponentTest):
             # check the other specialized implementations
             if mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT in ability:
                 assert isinstance(entity, MLDiffuserLight)
-                assert supported_color_modes == {ColorMode.RGB}, "supported_color_modes"
-                assert supported_features == LightEntityFeature.EFFECT
+                assert ColorMode.RGB in supported_color_modes, "supported_color_modes"
+                assert LightEntityFeature.EFFECT in supported_features
                 assert entity.effect_list == mc.DIFFUSER_LIGHT_MODE_LIST, "effect_list"
             if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
                 assert isinstance(entity, MLLight)
                 # need to manually remove MLLight since actual is rather polymorphic
                 # and the general code in _async_test_entities cannot handle this case
-                EntityComponentTest.expected_entity_types.remove(MLLight)
+                if type(entity) is not MLLight:
+                    EntityComponentTest.expected_entity_types.remove(MLLight)
                 capacity = ability[mc.NS_APPLIANCE_CONTROL_LIGHT][mc.KEY_CAPACITY]
                 if capacity & mc.LIGHT_CAPACITY_RGB:
                     assert (
@@ -64,15 +65,15 @@ class EntityTest(EntityComponentTest):
                         ColorMode.COLOR_TEMP in supported_color_modes
                     ), "supported_color_modes"
                 if capacity & mc.LIGHT_CAPACITY_EFFECT:
-                    assert supported_features == LightEntityFeature.EFFECT
+                    assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
                 if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
                     assert isinstance(entity, MLLightEffect)
-                    assert supported_features == LightEntityFeature.EFFECT
+                    assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
                 if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
                     assert isinstance(entity, MLLightMp3)
-                    assert supported_features == LightEntityFeature.EFFECT
+                    assert LightEntityFeature.EFFECT in supported_features
                     assert (
                         entity.effect_list == mc.HP110A_LIGHT_EFFECT_LIST
                     ), "effect_list"
@@ -88,23 +89,12 @@ class EntityTest(EntityComponentTest):
         assert isinstance(entity, MLLightBase)
         supported_color_modes = entity.supported_color_modes
 
+        check_brightness = False
         if ColorMode.BRIGHTNESS in supported_color_modes:
-            state = await self.async_service_call_check(
-                haec.SERVICE_TURN_ON, hac.STATE_ON, {haec.ATTR_BRIGHTNESS: 1}
-            )
-            assert (
-                state.attributes[haec.ATTR_BRIGHTNESS] == 1
-                and entity._light[mc.KEY_LUMINANCE] == 1
-            )
-            state = await self.async_service_call_check(
-                haec.SERVICE_TURN_ON, hac.STATE_ON, {haec.ATTR_BRIGHTNESS: 255}
-            )
-            assert (
-                state.attributes[haec.ATTR_BRIGHTNESS] == 255
-                and entity._light[mc.KEY_LUMINANCE] == 100
-            )
+            check_brightness = True
 
         if ColorMode.RGB in supported_color_modes:
+            check_brightness = True
             rgb_tuple = (255, 0, 0)
             rgb_meross = rgb_to_native(rgb_tuple)
             state = await self.async_service_call_check(
@@ -113,23 +103,40 @@ class EntityTest(EntityComponentTest):
             assert (
                 state.attributes[haec.ATTR_RGB_COLOR] == native_to_rgb(rgb_meross)
                 and entity._light[mc.KEY_RGB] == rgb_meross
-            )
+            ), "rgb_to_native"
 
         if ColorMode.COLOR_TEMP in supported_color_modes:
-            MIREDS_TO_MEROSS_TEMP = {
-                entity.min_mireds: 100,
-                entity.max_mireds: 1,
+            check_brightness = True
+            KELVIN_TO_TEMPERATURE = {
+                entity.min_color_temp_kelvin: 1,
+                entity.max_color_temp_kelvin: 100,
             }
-            for temp_mired, temp_meross in MIREDS_TO_MEROSS_TEMP.items():
+            for kelvin, temperature in KELVIN_TO_TEMPERATURE.items():
                 state = await self.async_service_call_check(
                     haec.SERVICE_TURN_ON,
                     hac.STATE_ON,
-                    {haec.ATTR_COLOR_TEMP: temp_mired},
+                    {haec.ATTR_COLOR_TEMP_KELVIN: kelvin},
                 )
                 assert (
-                    state.attributes[haec.ATTR_COLOR_TEMP] == temp_mired
-                    and entity._light[mc.KEY_TEMPERATURE] == temp_meross
+                    state.attributes[haec.ATTR_COLOR_TEMP_KELVIN] == kelvin
+                    and entity._light[mc.KEY_TEMPERATURE] == temperature
+                ), "kelvin_to_native"
+
+        if check_brightness:
+            BRIGHTNESS_TO_LUMINANCE = {
+                3: 1,
+                255: 100,
+            }
+            for brightness, luminance in BRIGHTNESS_TO_LUMINANCE.items():
+                state = await self.async_service_call_check(
+                    haec.SERVICE_TURN_ON,
+                    hac.STATE_ON,
+                    {haec.ATTR_BRIGHTNESS: brightness},
                 )
+                assert (
+                    state.attributes[haec.ATTR_BRIGHTNESS] == brightness
+                    and entity._light[mc.KEY_LUMINANCE] == luminance
+                ), "brightness_to_native"
 
     async def async_test_disabled_callback(
         self,

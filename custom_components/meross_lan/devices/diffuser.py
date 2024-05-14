@@ -3,11 +3,17 @@ import typing
 from ..helpers.namespaces import NamespaceHandler, PollingStrategy
 from ..light import (
     ATTR_BRIGHTNESS,
+    ATTR_COLOR_TEMP_KELVIN,
     ATTR_EFFECT,
     ATTR_RGB_COLOR,
+    MSL_LUMINANCE_MAX,
     ColorMode,
     MLLightBase,
     brightness_to_native,
+    kelvin_to_native,
+    native_to_brightness,
+    native_to_kelvin,
+    native_to_rgb,
     rgb_to_native,
 )
 from ..merossclient import const as mc
@@ -101,15 +107,59 @@ class MLDiffuserLight(MLLightBase):
 
     namespace = mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT
 
-    # HA core entity attributes:
-    supported_color_modes = {ColorMode.RGB}
+    def __init__(self, manager: "MerossDevice", digest: dict):
 
-    def __init__(self, manager: "MerossDevice", payload: dict):
-        super().__init__(manager, payload, mc.DIFFUSER_LIGHT_MODE_LIST)
+        self.supported_color_modes = supported_color_modes = set()
+        if mc.KEY_RGB in digest:
+            supported_color_modes.add(ColorMode.RGB)
+        if mc.KEY_TEMPERATURE in digest:
+            supported_color_modes.add(ColorMode.COLOR_TEMP)
+        if not supported_color_modes:
+            if mc.KEY_LUMINANCE in digest:
+                supported_color_modes.add(ColorMode.BRIGHTNESS)
+            else:
+                supported_color_modes.add(ColorMode.ONOFF)
+
+        super().__init__(manager, digest, mc.DIFFUSER_LIGHT_MODE_LIST)
 
     # interface: MLLightBase
-    async def async_turn_on(self, **kwargs):
+    async def async_request_light_ack(self, _light: dict):
+        return await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
+            mc.METHOD_SET,
+            {mc.KEY_LIGHT: [_light]},
+        )
 
+    def _flush_light(self, _light: dict):
+        # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
+        try:
+            self.effect = None
+            self.is_on = _light[mc.KEY_ONOFF]
+            self.brightness = native_to_brightness(_light[mc.KEY_LUMINANCE])
+            mode = _light[mc.KEY_MODE]
+            if mode == mc.DIFFUSER_LIGHT_MODE_COLOR:
+                self.rgb_color = native_to_rgb(_light[mc.KEY_RGB])
+                self.color_mode = ColorMode.RGB
+            elif mode == mc.DIFFUSER_LIGHT_MODE_TEMPERATURE:
+                self.color_temp_kelvin = native_to_kelvin(_light[mc.KEY_TEMPERATURE])
+                self.color_mode = ColorMode.COLOR_TEMP
+            else:
+                self.color_mode = ColorMode.ONOFF
+                self.effect = self.effect_list[mode]  # type: ignore
+        except Exception as exception:
+            self.log_exception(
+                self.WARNING,
+                exception,
+                "parsing light (%s)",
+                str(_light),
+                timeout=86400,
+            )
+        finally:
+            self._light = _light
+            self.flush_state()
+
+    # interface: LightEntity
+    async def async_turn_on(self, **kwargs):
         _light = dict(self._light)
         _light[mc.KEY_ONOFF] = 1
 
@@ -117,47 +167,30 @@ class MLDiffuserLight(MLLightBase):
         if ATTR_BRIGHTNESS in kwargs:
             _light[mc.KEY_LUMINANCE] = brightness_to_native(kwargs[ATTR_BRIGHTNESS])
         elif not _light.get(mc.KEY_LUMINANCE, 0):
-            _light[mc.KEY_LUMINANCE] = 100
-
-        if ATTR_RGB_COLOR in kwargs:
-            _light[mc.KEY_RGB] = rgb_to_native(kwargs[ATTR_RGB_COLOR])
-            _light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
+            _light[mc.KEY_LUMINANCE] = MSL_LUMINANCE_MAX
 
         if ATTR_EFFECT in kwargs:
             _light[mc.KEY_MODE] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
 
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
-            mc.METHOD_SET,
-            {mc.KEY_LIGHT: [_light]},
-        ):
+        elif ATTR_RGB_COLOR in kwargs:
+            _light[mc.KEY_RGB] = rgb_to_native(kwargs[ATTR_RGB_COLOR])
+            _light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
+
+        elif ATTR_COLOR_TEMP_KELVIN in kwargs:
+            _light[mc.KEY_TEMPERATURE] = kelvin_to_native(
+                kwargs[ATTR_COLOR_TEMP_KELVIN]
+            )
+            _light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_TEMPERATURE
+
+        if await self.async_request_light_ack(_light):
             self._flush_light(_light)
 
     async def async_turn_off(self, **kwargs):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
-            mc.METHOD_SET,
-            {mc.KEY_LIGHT: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}]},
+        if await self.async_request_light_ack(
+            {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: 0}
         ):
             self._light[mc.KEY_ONOFF] = 0
             self.update_onoff(0)
-
-    def _flush_light(self, _light: dict):
-        # taken from https://github.com/bwp91/homebridge-meross/blob/latest/lib/device/diffuser.js
-        mode = _light[mc.KEY_MODE]
-        if mode == mc.DIFFUSER_LIGHT_MODE_COLOR:
-            self.color_mode = ColorMode.RGB
-            self.effect = None
-        else:
-            self.color_mode = ColorMode.BRIGHTNESS
-            try:
-                self.effect = self.effect_list[mode]  # type: ignore
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING, exception, "parsing light mode", timeout=86400
-                )
-                self.effect = None
-        super()._flush_light(_light)
 
 
 class MLDiffuserSpray(MLSpray):
