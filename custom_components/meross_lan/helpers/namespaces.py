@@ -129,18 +129,17 @@ class NamespaceHandler:
         This handler si optimized for dict payloads:
         "payload": { "key_namespace": {"channel":...., ...} }
         """
+        p_channel = payload[self.key_namespace]
         try:
-            p_channel = payload[self.key_namespace]
+            _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+        except KeyError as key_error:
+            _parse = self._try_create_entity(key_error)
         except TypeError:
             # this might be expected: the payload is not a dict
             # final fallback to the safe _handle_generic
             self.handler = self._handle_generic
             self._handle_generic(header, payload)
             return
-        try:
-            _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
-        except KeyError as key_error:
-            _parse = self._try_create_entity(key_error)
         _parse(p_channel)
 
     def _handle_generic(self, header, payload):
@@ -152,8 +151,12 @@ class NamespaceHandler:
         which will default forwarding to channel == 0
         """
         p_channel = payload[self.key_namespace]
-        if isinstance(p_channel, dict):
-            self.entities[p_channel.get(mc.KEY_CHANNEL)](p_channel)
+        if type(p_channel) is dict:
+            try:
+                _parse = self.entities[p_channel.get(mc.KEY_CHANNEL)]
+            except KeyError as key_error:
+                _parse = self._try_create_entity(key_error)
+            _parse(p_channel)
         else:
             for p_channel in p_channel:
                 try:
