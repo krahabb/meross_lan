@@ -5,11 +5,7 @@ from homeassistant.exceptions import InvalidStateError
 
 from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
-from .helpers import (
-    get_entity_last_state_available,
-    schedule_async_callback,
-    versiontuple,
-)
+from .helpers import schedule_async_callback, versiontuple
 from .helpers.namespaces import PollingStrategy, SmartPollingStrategy
 from .merossclient import const as mc
 from .number import MLConfigNumber
@@ -158,9 +154,7 @@ class MLRollerShutter(MLCover):
         if it happens it wasn't updated too far in time
         """
         with self.exception_warning("restoring previous state"):
-            if last_state := await get_entity_last_state_available(
-                self.hass, self.entity_id
-            ):
+            if last_state := await self.get_last_state_available():
                 _attr = last_state.attributes  # type: ignore
                 if not self._position_native_isgood:
                     # at this stage, the euristic on fw version doesn't say anything

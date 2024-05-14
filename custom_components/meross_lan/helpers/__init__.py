@@ -7,14 +7,12 @@ import asyncio
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from enum import StrEnum
-from functools import partial
 import importlib
 import logging
 import sys
 from time import gmtime, time
 import typing
 
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.util import dt as dt_util
@@ -25,7 +23,7 @@ if typing.TYPE_CHECKING:
     from datetime import tzinfo
     from typing import Callable, Coroutine
 
-    from homeassistant.core import HomeAssistant, State
+    from homeassistant.core import HomeAssistant
 
     from .. import MerossApi
 
@@ -99,62 +97,6 @@ def schedule_callback(
     hass: "HomeAssistant", delay: float, target: "Callable", *args
 ) -> "asyncio.TimerHandle":
     return hass.loop.call_later(delay, target, *args)
-
-
-async def get_entity_last_states(
-    hass: "HomeAssistant", number_of_states: int, entity_id: str
-) -> list["State"] | None:
-    """
-    recover the last known good state from recorder in order to
-    restore transient state information when restarting HA
-    """
-    from homeassistant.components.recorder import history
-
-    if hasattr(history, "get_state"):  # removed in 2022.6.x
-        return history.get_state(hass, dt_util.utcnow(), entity_id)  # type: ignore
-
-    elif hasattr(history, "get_last_state_changes"):
-        """
-        get_instance too is relatively new: I hope it was in place when
-        get_last_state_changes was added
-        """
-        from homeassistant.components.recorder import get_instance
-
-        _last_state = await get_instance(hass).async_add_executor_job(
-            partial(
-                history.get_last_state_changes,
-                hass,
-                number_of_states,
-                entity_id,
-            )
-        )
-        return _last_state.get(entity_id)
-
-    else:
-        raise Exception("Cannot find history.get_last_state_changes api")
-
-
-async def get_entity_last_state(
-    hass: "HomeAssistant", entity_id: str
-) -> "State | None":
-    if states := await get_entity_last_states(hass, 1, entity_id):
-        return states[0]
-    return None
-
-
-async def get_entity_last_state_available(
-    hass: "HomeAssistant", entity_id: str
-) -> "State | None":
-    """
-    if the device/entity was disconnected before restarting and we need
-    the last good reading from the device, we need to skip the last
-    state since it is 'unavailable'
-    """
-    if states := await get_entity_last_states(hass, 2, entity_id):
-        for state in reversed(states):
-            if state.state not in {STATE_UNKNOWN, STATE_UNAVAILABLE}:
-                return state
-    return None
 
 
 _import_module_lock = asyncio.Lock()

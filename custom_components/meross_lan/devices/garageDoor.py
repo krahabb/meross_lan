@@ -11,7 +11,7 @@ from ..const import (
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
 from ..cover import MLCover
-from ..helpers import clamp, get_entity_last_state_available, schedule_async_callback
+from ..helpers import clamp, schedule_async_callback
 from ..helpers.namespaces import NamespaceHandler, SmartPollingStrategy
 from ..merossclient import const as mc, request_get
 from ..number import MLConfigNumber
@@ -260,10 +260,8 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
         with self.exception_warning("restoring previous state"):
-            if last_state := await get_entity_last_state_available(
-                self.hass, self.entity_id
-            ):
-                self.native_value = float(last_state.state)  # type: ignore
+            if last_state := await self.get_last_state_available():
+                self.native_value = float(last_state.state)
 
     async def async_set_native_value(self, value: float):
         self.update_native_value(value)
@@ -343,10 +341,8 @@ class MLGarage(MLCover):
         we're trying to recover the '_transition_duration' from previous state
         """
         with self.exception_warning("restoring previous state"):
-            if last_state := await get_entity_last_state_available(
-                self.hass, self.entity_id
-            ):
-                _attr = last_state.attributes  # type: ignore
+            if last_state := await self.get_last_state_available():
+                _attr = last_state.attributes
                 if EXTRA_ATTR_TRANSITION_DURATION in _attr:
                     # restore anyway besides PARAM_RESTORESTATE_TIMEOUT
                     # since this is no harm and unlikely to change

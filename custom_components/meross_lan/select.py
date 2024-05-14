@@ -8,7 +8,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
 from . import meross_entity as me
-from .helpers import get_entity_last_state_available, schedule_callback
+from .helpers import schedule_callback
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
@@ -109,9 +109,7 @@ class MtsTrackedSensor(MLSelect):
 
         if self.current_option is hac.STATE_OFF:
             with self.exception_warning("restoring previous state"):
-                if last_state := await get_entity_last_state_available(
-                    hass, self.entity_id
-                ):
+                if last_state := await self.get_last_state_available():
                     self.current_option = last_state.state
 
         if hass.state == CoreState.running:

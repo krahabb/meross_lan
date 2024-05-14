@@ -8,9 +8,17 @@
  versioning
 """
 
+from functools import partial
 import typing
 
 from homeassistant import const as hac
+
+try:
+    from homeassistant.components.recorder import get_instance as r_get_instance
+    from homeassistant.components.recorder.history import get_last_state_changes
+except ImportError:
+    get_last_state_changes = None
+
 from homeassistant.helpers.entity import Entity, EntityCategory
 
 from .helpers import Loggable
@@ -192,6 +200,32 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         when implementing diagnostic sensors calls but, at runtime, it would be an error to
         call such an implementation for an entity which is not a diagnostic sensor."""
         raise NotImplementedError("Called update_native_value on wrong class type")
+
+    async def get_last_state_available(self):
+        """
+        Recover the last known good state from recorder in order to
+        restore transient state information when restarting HA.
+        If the device/entity was disconnected before restarting and we need
+        the last good reading from the device, we need to skip the last
+        state since it is 'unavailable'
+        """
+
+        if not get_last_state_changes:
+            raise Exception("Cannot find history.get_last_state_changes api")
+
+        _last_state = await r_get_instance(self.hass).async_add_executor_job(
+            partial(
+                get_last_state_changes,
+                self.hass,
+                2,
+                self.entity_id,
+            )
+        )
+        if states := _last_state.get(self.entity_id):
+            for state in reversed(states):
+                if state.state not in (hac.STATE_UNKNOWN, hac.STATE_UNAVAILABLE):
+                    return state
+        return None
 
     def _generate_unique_id(self):
         return self.manager.generate_unique_id(self)

@@ -15,7 +15,7 @@ from homeassistant.components.light import (
 import homeassistant.util.color as color_util
 
 from . import const as mlc, meross_entity as me
-from .helpers import get_entity_last_state_available, schedule_async_callback
+from .helpers import schedule_async_callback
 from .helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
 from .merossclient import const as mc, request_get
 from .switch import MLSwitch

@@ -50,7 +50,7 @@ def auto_enable(request: pytest.FixtureRequest):
         yield
     else:
         with patch(
-            "custom_components.meross_lan.helpers.get_entity_last_states",
+            "custom_components.meross_lan.meross_entity.MerossEntity.get_last_state_available",
             return_value=None,
         ):
             yield

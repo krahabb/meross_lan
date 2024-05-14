@@ -7,7 +7,6 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
-from ..helpers import get_entity_last_state_available
 from ..helpers.namespaces import (
     EntityPollingStrategy,
     NamespaceHandler,
@@ -78,7 +77,7 @@ class EnergyEstimateSensor(MLNumericSensor):
             return
 
         with self.exception_warning("restoring previous state"):
-            state = await get_entity_last_state_available(self.hass, self.entity_id)
+            state = await self.get_last_state_available()
             if state is None:
                 return
             if state.last_updated < dt_util.start_of_local_day():
@@ -259,7 +258,7 @@ class ConsumptionXSensor(MLNumericSensor):
             return
 
         with self.exception_warning("restoring previous state"):
-            state = await get_entity_last_state_available(self.hass, self.entity_id)
+            state = await self.get_last_state_available()
             if state is None:
                 return
             # check if the restored sample is fresh enough i.e. it was
