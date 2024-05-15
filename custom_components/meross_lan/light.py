@@ -185,11 +185,7 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     # internal copy of the actual meross light state
     _light: dict
 
-    # msl320cp (msl320 pro) has a weird rgb parameter carrying both rgb and white
-    # that needs a bit of funny processing
-    _rgbw_patch: bool
-
-    T_RESOLUTION: typing.Final = 0.2
+    T_RESOLUTION_MIN: typing.Final = 0.2
     _t_unsub: asyncio.TimerHandle | None
     _t_begin: float
     _t_end: float
@@ -219,7 +215,6 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
 
     __slots__ = (
         "_light",
-        "_rgbw_patch",
         "_rgb_to_native",
         "_native_to_rgb",
         "_t_unsub",
@@ -253,13 +248,8 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         effect_list: list[str] | None = None,
     ):
         self._light = {}
-        self._rgbw_patch = manager.descriptor.type.startswith(mc.TYPE_MSL320_PRO)
-        if self._rgbw_patch:
-            self._rgb_to_native = rgbw_patch_to_native
-            self._native_to_rgb = native_to_rgbw_patch
-        else:
-            self._rgb_to_native = rgb_to_native
-            self._native_to_rgb = native_to_rgb
+        self._rgb_to_native = rgb_to_native
+        self._native_to_rgb = native_to_rgb
         self._t_unsub = None
         self.brightness = None
         self.color_mode = ColorMode.UNKNOWN
@@ -310,10 +300,120 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         if self._light != payload:
             self._flush_light(payload)
 
+    def _transition_setup(self, _light: dict, kwargs: dict) -> float | None:
+        self._t_duration = _t_duration = kwargs[ATTR_TRANSITION]
+        self._t_begin = monotonic()
+        self._t_end = self._t_begin + _t_duration
+
+        if self.is_on:
+            self._t_luminance_begin = _light[mc.KEY_LUMINANCE]
+        else:
+            self._t_luminance_begin = MSL_LUMINANCE_MIN
+        if ATTR_BRIGHTNESS in kwargs:
+            self._t_luminance_end = brightness_to_native(kwargs[ATTR_BRIGHTNESS])
+        else:
+            self._t_luminance_end = _light[mc.KEY_LUMINANCE]
+        self._t_luminance_r = (
+            self._t_luminance_end - self._t_luminance_begin
+        ) / _t_duration
+        _light[mc.KEY_LUMINANCE] = self._t_luminance_begin
+        _t_ratio_max = abs(self._t_luminance_r)
+
+        if ATTR_RGB_COLOR in kwargs:
+            self._t_rgb_end = _t_rgb_end = kwargs[ATTR_RGB_COLOR]
+            self._t_rgb_begin = _t_rgb_begin = self.rgb_color or (1, 1, 1)
+            self._t_rgb_r = (
+                (_t_rgb_end[0] - _t_rgb_begin[0]) / _t_duration,
+                (_t_rgb_end[1] - _t_rgb_begin[1]) / _t_duration,
+                (_t_rgb_end[2] - _t_rgb_begin[2]) / _t_duration,
+            )
+            _light[mc.KEY_RGB] = self._rgb_to_native(_t_rgb_begin)
+            _t_ratio_max = max(_t_ratio_max, max((abs(c) for c in self._t_rgb_r)))
+        else:
+            self._t_rgb_end = None
+
+        if ATTR_COLOR_TEMP_KELVIN in kwargs:
+            self._t_temp_end = kelvin_to_native(kwargs[ATTR_COLOR_TEMP_KELVIN])
+            self._t_temp_begin = _light.get(
+                mc.KEY_TEMPERATURE, (MSL_TEMPERATURE_MAX + MSL_TEMPERATURE_MIN) // 2
+            )
+            self._t_temp_r = (self._t_temp_end - self._t_temp_begin) / _t_duration
+            _light[mc.KEY_TEMPERATURE] = self._t_temp_begin
+            _t_ratio_max = max(_t_ratio_max, abs(self._t_temp_r))
+        else:
+            self._t_temp_end = None
+
+        if _t_ratio_max:
+            # we now setup an update period (resolution)
+            # for the transition according to its highest dynamic
+            self._t_resolution = max(1 / _t_ratio_max, MLLightBase.T_RESOLUTION_MIN)
+            return _t_duration
+        else:
+            return None  # no meaningful transition
+
     def _transition_cancel(self):
         # assert self._t_unsub
         self._t_unsub.cancel()  # type: ignore
         self._t_unsub = None
+
+    def _transition_schedule(self, t_duration: float):
+        """
+        Calculates the next scheduled time based off remaining transition duration
+        in order to evenly spread the calls. This call also takes care of reducing
+        the call frequency in case we're on cloud MQTT
+        """
+        if self.manager.mqtt_cloudactive:
+            # 'saturate' the resolution of the callback
+            _t_resolution = max(10, self._t_resolution)
+        else:
+            _t_resolution = self._t_resolution
+        # now 'spread' the resolution over the remaining duration
+        _t_resolution = t_duration / (round(t_duration / _t_resolution) or 1)
+        self._t_unsub = schedule_async_callback(
+            self.hass, _t_resolution, self._async_transition
+        )
+
+    async def _async_transition(self):
+        self._t_unsub = None
+        if not self.is_on:
+            return
+        t_now = monotonic()
+        _light = dict(self._light)
+        if t_now >= (self._t_end - self._t_resolution):
+            _light[mc.KEY_LUMINANCE] = self._t_luminance_end
+            if self._t_rgb_end:
+                _light[mc.KEY_RGB] = self._rgb_to_native(self._t_rgb_end)
+            elif self._t_temp_end:
+                _light[mc.KEY_TEMPERATURE] = self._t_temp_end
+        else:
+            t_time = t_now - self._t_begin
+            _light[mc.KEY_LUMINANCE] = round(
+                self._t_luminance_begin + self._t_luminance_r * t_time
+            )
+            if self._t_rgb_end:
+                _t_rgb_begin = self._t_rgb_begin
+                _t_rgb_r = self._t_rgb_r
+                _light[mc.KEY_RGB] = self._rgb_to_native(
+                    (
+                        round(_t_rgb_begin[0] + _t_rgb_r[0] * t_time),
+                        round(_t_rgb_begin[1] + _t_rgb_r[1] * t_time),
+                        round(_t_rgb_begin[2] + _t_rgb_r[2] * t_time),
+                    )
+                )
+            elif self._t_temp_end:
+                _light[mc.KEY_TEMPERATURE] = round(
+                    self._t_temp_begin + self._t_temp_r * t_time
+                )
+            self._transition_schedule(self._t_end - t_now)
+
+        if _light == self._light:
+            # Our time resolution might be too fast to produce
+            # visible effects in light payload so we're skipping
+            # sending redundant light commands
+            return
+
+        if await self.async_request_light_ack(_light):
+            self._flush_light(_light)
 
 
 class MLLight(MLLightBase):
@@ -465,72 +565,26 @@ class MLLight(MLLightBase):
             await self.async_request_onoff(1)
             return
 
-        _t_duration = 0  # in case of transition
         _light = dict(self._light)
 
-        if ATTR_EFFECT in kwargs:
-            _light[mc.KEY_EFFECT] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
-            _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_EFFECT
-        elif ATTR_TRANSITION in kwargs:
-            self._t_duration = _t_duration = kwargs[ATTR_TRANSITION]
-            self._t_begin = monotonic()
-            self._t_end = self._t_begin + _t_duration
-
-            if self.is_on:
-                self._t_luminance_begin = _light[mc.KEY_LUMINANCE]
-            else:
-                self._t_luminance_begin = MSL_LUMINANCE_MIN
-            if ATTR_BRIGHTNESS in kwargs:
-                self._t_luminance_end = brightness_to_native(kwargs[ATTR_BRIGHTNESS])
-            else:
-                self._t_luminance_end = _light[mc.KEY_LUMINANCE]
-            self._t_luminance_r = (
-                self._t_luminance_end - self._t_luminance_begin
-            ) / _t_duration
-            _light[mc.KEY_LUMINANCE] = self._t_luminance_begin
-            _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_LUMINANCE
-            _t_ratio_max = abs(self._t_luminance_r)
-
-            if ATTR_RGB_COLOR in kwargs:
-                self._t_rgb_end = _t_rgb_end = kwargs[ATTR_RGB_COLOR]
-                self._t_rgb_begin = _t_rgb_begin = self.rgb_color or (1, 1, 1)
-                self._t_rgb_r = (
-                    (_t_rgb_end[0] - _t_rgb_begin[0]) / _t_duration,
-                    (_t_rgb_end[1] - _t_rgb_begin[1]) / _t_duration,
-                    (_t_rgb_end[2] - _t_rgb_begin[2]) / _t_duration,
-                )
-                _light[mc.KEY_RGB] = self._rgb_to_native(_t_rgb_begin)
+        if ATTR_TRANSITION in kwargs:
+            _t_duration = self._transition_setup(_light, kwargs)
+            if self._t_rgb_end:
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_RGB_LUMINANCE
-                _t_ratio_max = max(_t_ratio_max, max((abs(c) for c in self._t_rgb_r)))
-            else:
-                self._t_rgb_end = None
-
-            if ATTR_COLOR_TEMP_KELVIN in kwargs:
-                self._t_temp_end = kelvin_to_native(kwargs[ATTR_COLOR_TEMP_KELVIN])
-                self._t_temp_begin = _light.get(
-                    mc.KEY_TEMPERATURE, (MSL_TEMPERATURE_MAX + MSL_TEMPERATURE_MIN) // 2
-                )
-                self._t_temp_r = (self._t_temp_end - self._t_temp_begin) / _t_duration
-                _light[mc.KEY_TEMPERATURE] = self._t_temp_begin
+            elif self._t_temp_end:
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_TEMPERATURE_LUMINANCE
-                _t_ratio_max = max(_t_ratio_max, abs(self._t_temp_r))
             else:
-                self._t_temp_end = None
-
-            if _t_ratio_max:
-                # we now setup an update period (resolution)
-                # for the transition according to its highest dynamic
-                self._t_resolution = max(1 / _t_ratio_max, MLLightBase.T_RESOLUTION)
-            else:
-                _t_duration = 0  # no meaningful transition
-
+                _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_LUMINANCE
         else:
+            _t_duration = None
             if ATTR_BRIGHTNESS in kwargs:
                 _light[mc.KEY_LUMINANCE] = brightness_to_native(kwargs[ATTR_BRIGHTNESS])
             elif not _light.get(mc.KEY_LUMINANCE, 0):
                 _light[mc.KEY_LUMINANCE] = MSL_LUMINANCE_MAX
-
-            if ATTR_RGB_COLOR in kwargs:
+            if ATTR_EFFECT in kwargs:
+                _light[mc.KEY_EFFECT] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
+                _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_EFFECT
+            elif ATTR_RGB_COLOR in kwargs:
                 _light[mc.KEY_RGB] = self._rgb_to_native(kwargs[ATTR_RGB_COLOR])
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_RGB_LUMINANCE
             elif ATTR_COLOR_TEMP_KELVIN in kwargs:
@@ -543,17 +597,12 @@ class MLLight(MLLightBase):
 
         if await self.async_request_light_on_flush(_light):
             if _t_duration:
-                self._schedule_next_transition(_t_duration)
+                self._transition_schedule(_t_duration)
 
         # 87: @nao-pon bulbs need a 'double' send when setting Temp
         if ATTR_COLOR_TEMP_KELVIN in kwargs:
             if self.manager.descriptor.firmwareVersion == "2.1.2":
                 await self.async_request_light_ack(_light)
-
-    async def async_turn_off(self, **kwargs):
-        if self._t_unsub:
-            self._transition_cancel()
-        await self.async_request_onoff(0)
 
     # interface: self
     async def async_request_light_on_flush(self, _light: dict):
@@ -607,59 +656,6 @@ class MLLight(MLLightBase):
 
         return False
 
-    def _schedule_next_transition(self, t_duration: float):
-        """
-        Calculates the next scheduled time based off remaining transition duration
-        in order to evenly spread the calls. This call also takes care of reducing
-        the call frequency in case we're on cloud MQTT
-        """
-        if self.manager.mqtt_cloudactive:
-            # 'saturate' the resolution of the callback
-            _t_resolution = max(10, self._t_resolution)
-        else:
-            _t_resolution = self._t_resolution
-        # now 'spread' the resolution over the remaining duration
-        _t_resolution = t_duration / (round(t_duration / _t_resolution) or 1)
-        self._t_unsub = schedule_async_callback(
-            self.hass, _t_resolution, self._async_transition
-        )
-
-    async def _async_transition(self):
-        self._t_unsub = None
-        if not self.is_on:
-            return
-        t_now = monotonic()
-        _light = dict(self._light)
-        if t_now >= (self._t_end - self._t_resolution):
-            _light[mc.KEY_LUMINANCE] = self._t_luminance_end
-            if self._t_rgb_end:
-                _light[mc.KEY_RGB] = self._rgb_to_native(self._t_rgb_end)
-            elif self._t_temp_end:
-                _light[mc.KEY_TEMPERATURE] = self._t_temp_end
-        else:
-            t_time = t_now - self._t_begin
-            _light[mc.KEY_LUMINANCE] = round(
-                self._t_luminance_begin + self._t_luminance_r * t_time
-            )
-            if self._t_rgb_end:
-                _t_rgb_begin = self._t_rgb_begin
-                _t_rgb_r = self._t_rgb_r
-                _light[mc.KEY_RGB] = self._rgb_to_native(
-                    (
-                        round(_t_rgb_begin[0] + _t_rgb_r[0] * t_time),
-                        round(_t_rgb_begin[1] + _t_rgb_r[1] * t_time),
-                        round(_t_rgb_begin[2] + _t_rgb_r[2] * t_time),
-                    )
-                )
-            elif self._t_temp_end:
-                _light[mc.KEY_TEMPERATURE] = round(
-                    self._t_temp_begin + self._t_temp_r * t_time
-                )
-            self._schedule_next_transition(self._t_end - t_now)
-        # light should already be on...
-        if await self.async_request_light_ack(_light):
-            self._flush_light(_light)
-
 
 class MLLightEffect(MLLight):
     """
@@ -680,6 +676,10 @@ class MLLightEffect(MLLight):
             mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
             handler=self._handle_Appliance_Control_Light_Effect,
         )
+        if manager.descriptor.type.startswith(mc.TYPE_MSL320_PRO):
+            # special rgb channels mgmt here
+            self._rgb_to_native = rgbw_patch_to_native
+            self._native_to_rgb = native_to_rgbw_patch
 
     # interface: MLLight
     def _flush_light_effect(self, _light: dict):

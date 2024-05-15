@@ -3,16 +3,14 @@ import typing
 from ..helpers.namespaces import NamespaceHandler, PollingStrategy
 from ..light import (
     ATTR_BRIGHTNESS,
-    ATTR_COLOR_TEMP_KELVIN,
     ATTR_EFFECT,
     ATTR_RGB_COLOR,
+    ATTR_TRANSITION,
     MSL_LUMINANCE_MAX,
     ColorMode,
     MLLightBase,
     brightness_to_native,
-    kelvin_to_native,
     native_to_brightness,
-    native_to_kelvin,
     native_to_rgb,
     rgb_to_native,
 )
@@ -109,16 +107,7 @@ class MLDiffuserLight(MLLightBase):
 
     def __init__(self, manager: "MerossDevice", digest: dict):
 
-        self.supported_color_modes = supported_color_modes = set()
-        if mc.KEY_RGB in digest:
-            supported_color_modes.add(ColorMode.RGB)
-        if mc.KEY_TEMPERATURE in digest:
-            supported_color_modes.add(ColorMode.COLOR_TEMP)
-        if not supported_color_modes:
-            if mc.KEY_LUMINANCE in digest:
-                supported_color_modes.add(ColorMode.BRIGHTNESS)
-            else:
-                supported_color_modes.add(ColorMode.ONOFF)
+        self.supported_color_modes = {ColorMode.RGB}
 
         super().__init__(manager, digest, mc.DIFFUSER_LIGHT_MODE_LIST)
 
@@ -136,15 +125,12 @@ class MLDiffuserLight(MLLightBase):
             self.effect = None
             self.is_on = _light[mc.KEY_ONOFF]
             self.brightness = native_to_brightness(_light[mc.KEY_LUMINANCE])
+            self.rgb_color = native_to_rgb(_light[mc.KEY_RGB])
             mode = _light[mc.KEY_MODE]
             if mode == mc.DIFFUSER_LIGHT_MODE_COLOR:
-                self.rgb_color = native_to_rgb(_light[mc.KEY_RGB])
                 self.color_mode = ColorMode.RGB
-            elif mode == mc.DIFFUSER_LIGHT_MODE_TEMPERATURE:
-                self.color_temp_kelvin = native_to_kelvin(_light[mc.KEY_TEMPERATURE])
-                self.color_mode = ColorMode.COLOR_TEMP
             else:
-                self.color_mode = ColorMode.ONOFF
+                self.color_mode = ColorMode.BRIGHTNESS
                 self.effect = self.effect_list[mode]  # type: ignore
         except Exception as exception:
             self.log_exception(
@@ -160,30 +146,34 @@ class MLDiffuserLight(MLLightBase):
 
     # interface: LightEntity
     async def async_turn_on(self, **kwargs):
+        if self._t_unsub:
+            self._transition_cancel()
+
         _light = dict(self._light)
         _light[mc.KEY_ONOFF] = 1
 
-        # Brightness must always be set in payload
-        if ATTR_BRIGHTNESS in kwargs:
-            _light[mc.KEY_LUMINANCE] = brightness_to_native(kwargs[ATTR_BRIGHTNESS])
-        elif not _light.get(mc.KEY_LUMINANCE, 0):
-            _light[mc.KEY_LUMINANCE] = MSL_LUMINANCE_MAX
-
-        if ATTR_EFFECT in kwargs:
-            _light[mc.KEY_MODE] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
-
-        elif ATTR_RGB_COLOR in kwargs:
-            _light[mc.KEY_RGB] = rgb_to_native(kwargs[ATTR_RGB_COLOR])
-            _light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
-
-        elif ATTR_COLOR_TEMP_KELVIN in kwargs:
-            _light[mc.KEY_TEMPERATURE] = kelvin_to_native(
-                kwargs[ATTR_COLOR_TEMP_KELVIN]
-            )
-            _light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_TEMPERATURE
+        if ATTR_TRANSITION in kwargs:
+            _t_duration = self._transition_setup(_light, kwargs)
+            if self._t_rgb_end:
+                _light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
+            elif self._t_temp_end:
+                _light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_TEMPERATURE
+        else:
+            _t_duration = None
+            if ATTR_BRIGHTNESS in kwargs:
+                _light[mc.KEY_LUMINANCE] = brightness_to_native(kwargs[ATTR_BRIGHTNESS])
+            elif not _light.get(mc.KEY_LUMINANCE, 0):
+                _light[mc.KEY_LUMINANCE] = MSL_LUMINANCE_MAX
+            if ATTR_EFFECT in kwargs:
+                _light[mc.KEY_MODE] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
+            elif ATTR_RGB_COLOR in kwargs:
+                _light[mc.KEY_RGB] = rgb_to_native(kwargs[ATTR_RGB_COLOR])
+                _light[mc.KEY_MODE] = mc.DIFFUSER_LIGHT_MODE_COLOR
 
         if await self.async_request_light_ack(_light):
             self._flush_light(_light)
+            if _t_duration:
+                self._transition_schedule(_t_duration)
 
     async def async_turn_off(self, **kwargs):
         if await self.async_request_light_ack(
