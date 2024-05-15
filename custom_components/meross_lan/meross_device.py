@@ -795,6 +795,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         return self.config.get(CONF_HOST) or self.descriptor.innerIp
 
     @property
+    def mqtt_cloudactive(self):
+        """
+        reports if the device is actively paired to a private (non-meross) MQTT
+        in order to decide if we can/should send over a local MQTT with good
+        chances of success.
+        we should also check if the _mqtt_connection is 'publishable' but
+        at the moment the MerossApi MQTTConnection doesn't allow disabling it
+        """
+        return self._mqtt_active and self._mqtt_active.is_cloud_connection
+
+    @property
     def mqtt_locallyactive(self):
         """
         reports if the device is actively paired to a private (non-meross) MQTT
