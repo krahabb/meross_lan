@@ -219,7 +219,6 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
     rgb_color: tuple[int, int, int] | None
     supported_color_modes: set[ColorMode]
     supported_features: LightEntityFeature
-    # TODO: add implementation for temp_kelvin and min-max_kelvin
 
     __slots__ = (
         "_light",
