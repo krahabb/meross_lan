@@ -984,11 +984,11 @@ class MerossCloudProfile(ApiProfile):
         )
 
     async def async_shutdown(self):
-        ApiProfile.profiles[self.id] = None
         if self._unsub_polling_query_device_info:
             self._unsub_polling_query_device_info.cancel()
             self._unsub_polling_query_device_info = None
         await super().async_shutdown()
+        ApiProfile.profiles[self.id] = None
 
     # interface: ConfigEntryManager
     async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
@@ -1059,7 +1059,7 @@ class MerossCloudProfile(ApiProfile):
             )
             try:
                 # fallback if we have the KEY_MQTTDOMAIN
-                broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])
+                broker = HostAddress.build(self.config[mc.KEY_MQTTDOMAIN])  # type: ignore
             except:
                 return
 
