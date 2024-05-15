@@ -228,22 +228,18 @@ class MerossEmulator:
             self.update_epoch()
 
             if get_replykey(request_header, self.key) is not self.key:
-                response_method = mc.METHOD_ERROR
-                response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}}
-            else:
-                response_method, response_payload = self._handle_message(
-                    request_header, request_payload
+                response = build_message(
+                    request_header[mc.KEY_NAMESPACE],
+                    mc.METHOD_ERROR,
+                    {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}},
+                    self.key,
+                    self.topic_response,
+                    request_header[mc.KEY_MESSAGEID],
                 )
+            else:
+                response = self._handle_message(request_header, request_payload)
 
-        if response_method:
-            response = build_message(
-                request_header[mc.KEY_NAMESPACE],
-                response_method,
-                response_payload,
-                self.key,
-                self.topic_response,
-                request_header[mc.KEY_MESSAGEID],
-            )
+        if response:
             self._log_message("TX", json_dumps(response))
             return response
 
@@ -271,7 +267,18 @@ class MerossEmulator:
             response_method = mc.METHOD_ERROR
             response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
 
-        return response_method, response_payload
+        if response_method:
+            response = build_message(
+                header[mc.KEY_NAMESPACE],
+                response_method,
+                response_payload,
+                self.key,
+                self.topic_response,
+                header[mc.KEY_MESSAGEID],
+            )
+            return response
+
+        return None
 
     def _handler_default(self, method: str, namespace: str, payload: dict):
         """
@@ -394,18 +401,8 @@ class MerossEmulator:
     def _SET_Appliance_Control_Multiple(self, header, payload):
         multiple = []
         for message in payload[mc.KEY_MULTIPLE]:
-            request_header = message[mc.KEY_HEADER]
-            response_method, response_payload = self._handle_message(
-                request_header, message[mc.KEY_PAYLOAD]
-            )
             multiple.append(
-                {
-                    mc.KEY_HEADER: {
-                        mc.KEY_METHOD: response_method,
-                        mc.KEY_NAMESPACE: request_header[mc.KEY_NAMESPACE],
-                    },
-                    mc.KEY_PAYLOAD: response_payload,
-                }
+                self._handle_message(message[mc.KEY_HEADER], message[mc.KEY_PAYLOAD])
             )
         return mc.METHOD_SETACK, {mc.KEY_MULTIPLE: multiple}
 

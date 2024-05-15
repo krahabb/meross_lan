@@ -5,6 +5,7 @@ from datetime import datetime, timezone, tzinfo
 from json import JSONDecodeError
 from time import time
 import typing
+from uuid import uuid4
 import weakref
 from zoneinfo import ZoneInfo
 
@@ -313,16 +314,18 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     """
 
     NAMESPACE_INIT: typing.Final[dict[str, typing.Any]] = {
+        mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
+        mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
         mc.NS_APPLIANCE_CONFIG_OVERTEMP: (".devices.mss", "OverTempEnableSwitch"),
         mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: (
             ".devices.mss",
             "ConsumptionConfigNamespaceHandler",
         ),
-        mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (".devices.mss", "ConsumptionXSensor"),
         mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (
             ".devices.mss",
             "ElectricityNamespaceHandler",
         ),
+        mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (".devices.mss", "ConsumptionXSensor"),
         mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "FanNamespaceHandler"),
         mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: (
             ".sensor",
@@ -335,15 +338,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             "ScreenBrightnessNamespaceHandler",
         ),
         mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (".cover", "MLRollerShutter"),
-        mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
-        mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
     }
     """
     Static dict of namespace initialization functions. This will be looked up
     and matched against the current device abilities (at device init time) and
     usually setups a dedicated namespace handler and/or a dedicated entity.
     As far as the initialization functions are looked up in related modules,
-    they'll be cached in the dict
+    they'll be cached in the dict.
+    Namespace handlers will be initialized in the order as they appear in the dict
+    and this could have consequences in the order of polls
     """
 
     DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
@@ -955,6 +958,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 mc.KEY_MULTIPLE: [
                     {
                         mc.KEY_HEADER: {
+                            mc.KEY_MESSAGEID: uuid4().hex,
                             mc.KEY_METHOD: request[1],
                             mc.KEY_NAMESPACE: request[0],
                         },
@@ -995,6 +999,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         mc.KEY_MULTIPLE: [
                             {
                                 mc.KEY_HEADER: {
+                                    mc.KEY_MESSAGEID: uuid4().hex,
                                     mc.KEY_METHOD: request[1],
                                     mc.KEY_NAMESPACE: request[0],
                                 },
@@ -1139,9 +1144,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         )
         try:
             response = await http.async_request_raw(request.json())
-            self.device_response_size_min = max(
-                self.device_response_size_min, len(response.json())
-            )
         except TerminatedException:
             return None
         except JSONDecodeError as jsonerror:
