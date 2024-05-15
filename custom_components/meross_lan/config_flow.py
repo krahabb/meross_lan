@@ -15,7 +15,12 @@ from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
-from .helpers import ConfigEntriesHelper, ConfigEntryType, reverse_lookup
+from .helpers import (
+    ConfigEntriesHelper,
+    ConfigEntryType,
+    reverse_lookup,
+    schedule_callback,
+)
 from .helpers.manager import CloudApiClient
 from .merossclient import (
     HostAddress,
@@ -171,7 +176,9 @@ class MerossFlowHandlerMixin(
                 config[mlc.CONF_OBFUSCATE] = api_config[mlc.CONF_OBFUSCATE]
 
     def finish_options_flow(
-        self, config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType
+        self,
+        config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType,
+        reload: bool = False,
     ):
         """Used in OptionsFlow to terminate and exit (with save)."""
         raise NotImplementedError()
@@ -236,7 +243,7 @@ class MerossFlowHandlerMixin(
                     try:
                         credentials = await cloudapiclient.async_signin(
                             profile_config[mlc.CONF_EMAIL],
-                            profile_config[mlc.CONF_PASSWORD],
+                            profile_config[mlc.CONF_PASSWORD],  # type: ignore
                             region=user_input.get(mlc.CONF_CLOUD_REGION),
                             domain=profile_config.get(mc.KEY_DOMAIN),
                             mfa_code=user_input.get(mlc.CONF_MFA_CODE),
@@ -739,7 +746,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
             if progress["flow_id"] == self.flow_id:
                 continue
             try:
-                if progress["context"]["unique_id"] == macaddress_fmt:
+                if progress["context"]["unique_id"] == macaddress_fmt:  # type: ignore
                     config_entries.flow.async_abort(progress["flow_id"])
             except Exception:
                 pass
@@ -801,7 +808,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
             if progress["flow_id"] == self.flow_id:
                 continue
             try:
-                if progress["context"]["unique_id"] in (uuid, mac_address_fmt):
+                if progress["context"]["unique_id"] in (uuid, mac_address_fmt):  # type: ignore
                     flowmanager.async_abort(progress["flow_id"])
             except Exception:
                 pass
@@ -1012,12 +1019,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                     # cleanup keys which might wrongly have been persisted
                     device_config.pop(mlc.CONF_CLOUD_KEY, None)
                     device_config.pop(mc.KEY_TIMEZONE, None)
-                    # we're not following HA 'etiquette' and we're just updating the
-                    # config_entry data with this dirty trick
-                    hass = self.hass
-                    hass.config_entries.async_update_entry(
-                        self.config_entry, data=device_config
-                    )
+
                     if self.config_entry.state == ce.ConfigEntryState.SETUP_ERROR:
                         api = self.api
                         try:  # to fix the device registry in case it was corrupted by #341
@@ -1065,14 +1067,9 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                                 descriptor_update.productmodel,
                                 api.loggable_device_id(self._device_id),
                             )
+                        return self.finish_options_flow(device_config, True)
 
-                        hass.config_entries.async_schedule_reload(
-                            self.config_entry.entry_id
-                        )
-                    # return None in data so the async_update_entry is not called for the
-                    # options to be updated. This will offend the type-checker tho and
-                    # it appears as a very dirty trick to HA: beware!
-                    return self.async_create_entry(data=None)  # type: ignore
+                    return self.finish_options_flow(device_config)
 
                 except MerossKeyError:
                     return await self.async_step_keyerror()
@@ -1129,16 +1126,14 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
             )
             config[mlc.CONF_OBFUSCATE] = user_input[mlc.CONF_OBFUSCATE]
             config[mlc.CONF_TRACE_TIMEOUT] = user_input.get(mlc.CONF_TRACE_TIMEOUT)
-            self.hass.config_entries.async_update_entry(self.config_entry, data=config)
             if user_input[mlc.CONF_TRACE]:
                 # only reload and start tracing if the user wish so
                 state = MerossApi.managers_transient_state.setdefault(
                     self.config_entry_id, {}
                 )
                 state[mlc.CONF_TRACE] = user_input[mlc.CONF_TRACE]
-                # taskerize the reload so the entry get updated first
-                self.hass.config_entries.async_schedule_reload(self.config_entry_id)
-            return self.async_create_entry(data=None)  # type: ignore
+                return self.finish_options_flow(config, True)
+            return self.finish_options_flow(config)
 
         config_schema = {
             vol.Required(
@@ -1362,8 +1357,12 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         )
 
     def finish_options_flow(
-        self, config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType
+        self,
+        config: mlc.DeviceConfigType | mlc.ProfileConfigType | mlc.HubConfigType,
+        reload: bool = False,
     ):
         """Used in OptionsFlow to terminate and exit (with save)."""
         self.hass.config_entries.async_update_entry(self.config_entry, data=config)
+        if reload:
+            self.hass.config_entries.async_schedule_reload(self.config_entry_id)
         return self.async_create_entry(data=None)  # type: ignore

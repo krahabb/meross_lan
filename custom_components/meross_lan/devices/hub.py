@@ -305,7 +305,9 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
                     subdevice.name,
                     subdevice_id,
                 )
-            self.schedule_entry_reload()
+            # needsave=True might need some time querying abilities before
+            # actually saving. We'll let some time to complete
+            self.schedule_entry_reload(5)
 
     # interface: self
     def log_duplicated_subdevice(self, subdevice_id: str):

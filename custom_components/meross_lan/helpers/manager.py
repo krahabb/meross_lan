@@ -84,6 +84,7 @@ class EntityManager(Loggable):
         "_trace_future",
         "_trace_data",
         "_unsub_trace_endtime",
+        "_unsub_entry_reload",
         "_unsub_entry_update_listener",
     )
 
@@ -190,6 +191,7 @@ class ConfigEntryManager(EntityManager):
         self._trace_future: "asyncio.Future | None" = None
         self._trace_data: list | None = None
         self._unsub_trace_endtime: "asyncio.TimerHandle | None" = None
+        self._unsub_entry_reload = None
         self._unsub_entry_update_listener = None
         super().__init__(id, config_entry_id=config_entry_id, **kwargs)
 
@@ -202,7 +204,7 @@ class ConfigEntryManager(EntityManager):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-        self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
+        self._cleanup_subscriptions()  # extra-safety cleanup: shouldnt be loaded/listened at this point
         await super().async_shutdown()
         await self.async_destroy_diagnostic_entities()
         if self.is_tracing:
@@ -241,6 +243,20 @@ class ConfigEntryManager(EntityManager):
     def create_diagnostic_entities(self):
         return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
 
+    def schedule_async_callback(
+        self, delay: float, target: "typing.Callable[..., typing.Coroutine]", *args
+    ) -> "asyncio.TimerHandle":
+        @callback
+        def _callback(_target, *_args):
+            self.hass.async_create_task(_target(*_args))
+
+        return self.hass.loop.call_later(delay, _callback, target, *args)
+
+    def schedule_callback(
+        self, delay: float, target: "typing.Callable", *args
+    ) -> "asyncio.TimerHandle":
+        return self.hass.loop.call_later(delay, target, *args)
+
     async def async_setup_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
@@ -273,21 +289,27 @@ class ConfigEntryManager(EntityManager):
             config_entry, self.platforms.keys()
         ):
             return False
-        self.unlisten_entry_update()
-        ApiProfile.managers.pop(self.config_entry_id)
+        self._cleanup_subscriptions()
         self.platforms = {}
         self.config = {}
         await self.async_shutdown()
         self.state = ManagerState.INIT
+        ApiProfile.managers.pop(self.config_entry_id)
         return True
 
-    def unlisten_entry_update(self):
-        if self._unsub_entry_update_listener:
-            self._unsub_entry_update_listener()
-            self._unsub_entry_update_listener = None
-
-    def schedule_entry_reload(self):
-        self.hass.config_entries.async_schedule_reload(self.config_entry_id)
+    def schedule_entry_reload(self, delay: float = 0):
+        """
+        Schedule the reload in a delayed task (using 'call_later').
+        config_entries.async_schedule_reload is now 'eager' and
+        it might execute synchronously leading to unintended semantics.
+        """
+        if self._unsub_entry_reload:
+            self._unsub_entry_reload.cancel()
+        self._unsub_entry_reload = self.schedule_callback(
+            delay,
+            self.hass.config_entries.async_schedule_reload,
+            self.config_entry_id,
+        )
 
     async def entry_update_listener(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
@@ -473,6 +495,14 @@ class ConfigEntryManager(EntityManager):
         except Exception as exception:
             self.trace_close()
             self.log_exception(self.WARNING, exception, "appending trace log")
+
+    def _cleanup_subscriptions(self):
+        if self._unsub_entry_update_listener:
+            self._unsub_entry_update_listener()
+            self._unsub_entry_update_listener = None
+        if self._unsub_entry_reload:
+            self._unsub_entry_reload.cancel()
+            self._unsub_entry_reload = None
 
 
 class ApiProfile(ConfigEntryManager):
