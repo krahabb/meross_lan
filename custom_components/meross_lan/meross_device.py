@@ -677,8 +677,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # MQTT not connected or not allowing publishing
             if self.conf_protocol is CONF_PROTOCOL_MQTT:
                 return None
-            # protocol is AUTO
-            self._switch_protocol(CONF_PROTOCOL_HTTP)
 
         # curr_protocol is HTTP
         if response := await self.async_http_request_raw(request):
@@ -716,10 +714,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # MQTT not connected or not allowing publishing
             if self.conf_protocol is CONF_PROTOCOL_MQTT:
                 return None
-            # protocol is AUTO
-            self._switch_protocol(CONF_PROTOCOL_HTTP)
 
-        # curr_protocol is HTTP
+        # curr_protocol is HTTP or mqtt failed somehow
         if response := await self.async_http_request(namespace, method, payload):
             return response
 
