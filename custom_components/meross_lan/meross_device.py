@@ -396,6 +396,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_http_lastresponse",
         "digest_handlers",
         "namespace_handlers",
+        "namespace_pushes",
         "polling_strategies",
         "_unsub_polling_callback",
         "_polling_callback_shutdown",
@@ -446,6 +447,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._http_lastresponse = 0
         self.digest_handlers: dict[str, "DigestParseFunc"] = {}
         self.namespace_handlers: dict[str, "NamespaceHandler"] = {}
+        self.namespace_pushes: dict[str, dict] = {}
         self.polling_strategies: dict[str, "PollingStrategy"] = {}
         PollingStrategy(self, mc.NS_APPLIANCE_SYSTEM_ALL)
         self._unsub_polling_callback = None
@@ -1713,7 +1715,18 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     ):
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
-        if method == mc.METHOD_ERROR:
+        if method == mc.METHOD_GETACK:
+            pass
+        elif method == mc.METHOD_SETACK:
+            # SETACK generally doesn't carry any state/info so it is
+            # no use parsing..moreover, our callbacks system is full
+            # in place so we have no need to further process
+            return
+        elif method == mc.METHOD_PUSH:
+            # we're saving for diagnostic purposes so we have knowledge of
+            # which data the device pushes asynchronously
+            self.namespace_pushes[namespace] = payload
+        elif method == mc.METHOD_ERROR:
             if payload.get(mc.KEY_ERROR) == mc.ERROR_INVALIDKEY:
                 self.log(
                     self.WARNING,
@@ -1728,11 +1741,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     str(self.loggable_dict(payload)),
                     timeout=14400,
                 )
-            return
-        elif method == mc.METHOD_SETACK:
-            # SETACK generally doesn't carry any state/info so it is
-            # no use parsing..moreover, our callbacks system is full
-            # in place so we have no need to further process
             return
 
         try:
