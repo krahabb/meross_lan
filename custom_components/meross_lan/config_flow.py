@@ -198,11 +198,13 @@ class MerossFlowHandlerMixin(
         but I've found no way to tell HA UI to accempt an empty string unless
         I set the key declaration as vol.Optional() = str
         """
-        user_input.pop(CONF_ERROR, None)  # just in case it was added to the schema
         config.update(user_input)
         for key in nullable_keys:
             if key not in user_input:
                 config.pop(key, None)
+        # just in case it was added to the schema.
+        # this also fixes 'dirty' configurations already stored.
+        config.pop(CONF_ERROR, None)
 
     async def async_step_profile(self, user_input=None):
         """configure a Meross cloud profile"""
