@@ -123,11 +123,17 @@ class MLRollerShutter(MLCover):
         # flag indicating the device position is reliable (#227)
         # this will anyway be set in case we 'decode' a meaningful device position
         try:
-            if versiontuple(descriptor.firmwareVersion) >= versiontuple("6.6.6"):
+            fw_version = versiontuple(descriptor.firmwareVersion)
+            if fw_version >= (6, 6, 6):
                 self._position_native_isgood = True
                 self.supported_features |= MLCover.EntityFeature.SET_POSITION
             else:
                 self._position_native_isgood = False
+                if fw_version <= (2, 1, 4):
+                    # trying to detect if ns_multiple is offending
+                    # 2.1.4 devices (#419)
+                    manager.disable_multiple()
+
         except Exception:
             self._position_native_isgood = False
         super().__init__(manager, 0, MLCover.DeviceClass.SHUTTER)
@@ -135,6 +141,7 @@ class MLRollerShutter(MLCover):
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         if mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST in descriptor.ability:
             manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST, self)
+            # unknown use: actually the polling period is set on a very high timeout
             SmartPollingStrategy(
                 manager, mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST, item_count=1
             )
@@ -220,9 +227,13 @@ class MLRollerShutter(MLCover):
 
     async def async_request_position(self, position: int):
         self._transition_cancel()
+        """
+        TODO: looks like the mrs100 doesn't love set_position in multiple req.
+        update 16-05-2024: it might be the problem lies in the payloads sent as
+        lists. The mrs100 is under investigation following #419 and #321.
+
         manager = self.manager
         channel = self.channel
-        """ REMOVE: looks like the mrs100 doesn't love set_position in multiple req
         if (manager.multiple_max >= 3) and (
             responses := await manager.async_multiple_requests_ack(
                 (
@@ -281,12 +292,12 @@ class MLRollerShutter(MLCover):
 
         # in case the ns_multiple didn't succesfully kick-in we'll
         # fallback to the legacy procedure
-        if await manager.async_request_ack(
+        if await self.manager.async_request_ack(
             mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
             mc.METHOD_SET,
             {
                 mc.KEY_POSITION: {
-                    mc.KEY_CHANNEL: channel,
+                    mc.KEY_CHANNEL: self.channel,
                     mc.KEY_POSITION: position,
                 }
             },
@@ -438,7 +449,7 @@ class MLRollerShutter(MLCover):
         if (
             manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active
         ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
-            p_channel_payload = [{mc.KEY_CHANNEL: self.channel}]
+            p_channel_payload = []
             if manager.multiple_max >= 2:
                 await manager.async_multiple_requests_ack(
                     (
@@ -473,7 +484,7 @@ class MLRollerShutter(MLCover):
         await self.async_stop_cover()
 
 
-class MLRollerShutterConfigNumber(MLConfigNumber):
+class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
     """
     Helper entity to configure MRS open/close duration
     """
@@ -497,5 +508,8 @@ class MLRollerShutterConfigNumber(MLConfigNumber):
         self.key_value = key
         self.name = key
         super().__init__(
-            cover.manager, cover.channel, f"config_{key}", self.DEVICE_CLASS_DURATION
+            cover.manager,
+            cover.channel,
+            f"config_{key}",
+            MLConfigNumber.DEVICE_CLASS_DURATION,
         )

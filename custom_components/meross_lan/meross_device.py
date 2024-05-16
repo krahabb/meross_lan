@@ -451,10 +451,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._unsub_polling_callback = None
         self._polling_callback_shutdown = None
         self._queued_smartpoll_requests = 0
-        ability: typing.Final = descriptor.ability
-        self.multiple_max: typing.Final[int] = ability.get(
-            mc.NS_APPLIANCE_CONTROL_MULTIPLE, {}
-        ).get("maxCmdNum", 0)
+        ability = descriptor.ability
+        self.multiple_max: int = ability.get(mc.NS_APPLIANCE_CONTROL_MULTIPLE, {}).get(
+            "maxCmdNum", 0
+        )
         self._multiple_len = self.multiple_max
         self._multiple_requests: list["MerossRequestType"] = []
         self._multiple_response_size = PARAM_HEADER_SIZE
@@ -946,6 +946,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
         # else go with whatever transport: the device will reset it's configuration
         return await self.async_request(*request_push(mc.NS_APPLIANCE_CONTROL_UNBIND))
+
+    def disable_multiple(self):
+        self.multiple_max = 0
+        self._multiple_len = 0
+        self._multiple_requests: list["MerossRequestType"] = []
+        self._multiple_response_size = PARAM_HEADER_SIZE
 
     async def async_multiple_requests_ack(
         self, requests: typing.Collection["MerossRequestType"], auto_handle: bool = True
