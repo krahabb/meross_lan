@@ -53,13 +53,23 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
     def set_unavailable(self):
         pass
 
-    def update_ok(self):
-        self.extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TIMEOUT, None)
-        self.extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TARGET, None)
+    def update_ok(self, was_closing):
+        extra_state_attributes = self.extra_state_attributes
+        if extra_state_attributes.get(EXTRA_ATTR_TRANSITION_TARGET) == (
+            MLCover.ENTITY_COMPONENT.STATE_CLOSED
+            if was_closing
+            else MLCover.ENTITY_COMPONENT.STATE_OPEN
+        ):
+            extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TIMEOUT, None)
+            extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TARGET, None)
         self.update_onoff(False)
 
-    def update_timeout(self, target_state):
-        self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TARGET] = target_state
+    def update_timeout(self, was_closing):
+        self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TARGET] = (
+            MLCover.ENTITY_COMPONENT.STATE_CLOSED
+            if was_closing
+            else MLCover.ENTITY_COMPONENT.STATE_OPEN
+        )
         self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TIMEOUT] = now().isoformat()
         self.is_on = True
         self.flush_state()
@@ -448,15 +458,22 @@ class MLGarage(MLCover):
             "lmTime": 0
         }
         """
+        if (mc.KEY_DOORENABLE in payload) and (
+            self._config.get(mc.KEY_DOORENABLE) != payload[mc.KEY_DOORENABLE]
+        ):
+            self._parse_config({mc.KEY_DOORENABLE: payload[mc.KEY_DOORENABLE]})
+
         is_closed = not payload[mc.KEY_OPEN]
-        if self._transition_start:
-            if self.is_closed == is_closed:
+        if self.is_closed == is_closed:
+            if self._transition_start and not self._transition_unsub:
                 # keep monitoring the transition in less than 1 sec
-                if not self._transition_unsub:
-                    self._transition_unsub = schedule_async_callback(
-                        self.hass, 0.9, self._async_transition_callback
-                    )
-                return
+                self._transition_unsub = schedule_async_callback(
+                    self.hass, 0.9, self._async_transition_callback
+                )
+            return
+
+        # door open state changed
+        if self._transition_start:
             # We're "in transition" and the physical contact has reached the target.
             # we can monitor the (sampled) exact time when the garage closes to
             # estimate the transition_duration and dynamically update it since
@@ -471,15 +488,11 @@ class MLGarage(MLCover):
                 self._update_transition_duration(
                     int((4 * self._transition_duration + transition_duration) / 5)
                 )
-                self._transition_cancel()
+            self._transition_cancel()
+            self.binary_sensor_timeout.update_ok(is_closed)
 
-        if self.is_closed != is_closed:
-            self.is_closed = is_closed
-            self.flush_state()
-
-        if mc.KEY_DOORENABLE in payload:
-            if self._config.get(mc.KEY_DOORENABLE) != payload[mc.KEY_DOORENABLE]:
-                self._parse_config({mc.KEY_DOORENABLE: payload[mc.KEY_DOORENABLE]})
+        self.is_closed = is_closed
+        self.flush_state()
 
     def _parse_config(self, payload: dict):
         """
@@ -576,23 +589,15 @@ class MLGarage(MLCover):
             ):
                 # the request/response parse already flushed the state
                 if was_closing == self.is_closed:
-                    self.binary_sensor_timeout.update_ok()
+                    self.binary_sensor_timeout.update_ok(was_closing)
                 else:
-                    self.binary_sensor_timeout.update_timeout(
-                        MLCover.ENTITY_COMPONENT.STATE_CLOSED
-                        if was_closing
-                        else MLCover.ENTITY_COMPONENT.STATE_OPEN
-                    )
+                    self.binary_sensor_timeout.update_timeout(was_closing)
             else:
                 self.flush_state()
-                self.binary_sensor_timeout.update_timeout(
-                    MLCover.ENTITY_COMPONENT.STATE_CLOSED
-                    if was_closing
-                    else MLCover.ENTITY_COMPONENT.STATE_OPEN
-                )
+                self.binary_sensor_timeout.update_timeout(was_closing)
         else:
             self.flush_state()
-            self.binary_sensor_timeout.update_ok()
+            self.binary_sensor_timeout.update_ok(was_closing)
 
     def _update_transition_duration(self, transition_duration):
         self._transition_duration = clamp(

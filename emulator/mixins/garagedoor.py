@@ -27,13 +27,20 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return mc.METHOD_SETACK, {}
 
     def _SET_Appliance_GarageDoor_MultipleConfig(self, header, payload):
-        p_config = self.descriptor.namespaces[
+        p_config: list = self.descriptor.namespaces[
             mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
         ][mc.KEY_CONFIG]
+        p_state: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]
         for p_payload_channel in payload[mc.KEY_CONFIG]:
             """{"channel":3,"doorEnable":0,"timestamp":1699130748,"timestampMs":663,"signalClose":10000,"signalOpen":10000,"buzzerEnable":1}"""
             p_config_channel = update_dict_strict_by_key(p_config, p_payload_channel)
             p_config_channel[mc.KEY_TIMESTAMP] = self.epoch
+            p_state_channel = get_element_by_key(
+                p_state, mc.KEY_CHANNEL, p_payload_channel[mc.KEY_CHANNEL]
+            )
+            if (mc.KEY_DOORENABLE in p_state_channel) and (mc.KEY_DOORENABLE in p_payload_channel):
+                p_state_channel[mc.KEY_DOORENABLE] = p_payload_channel[mc.KEY_DOORENABLE]
+
         return mc.METHOD_SETACK, {}
 
     def _GET_Appliance_GarageDoor_State(self, header, payload):
@@ -51,15 +58,15 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         request_channel = p_request[mc.KEY_CHANNEL]
         request_open = p_request[mc.KEY_OPEN]
 
-        p_state = get_element_by_key(
+        p_state_channel = get_element_by_key(
             self.descriptor.digest[mc.KEY_GARAGEDOOR], mc.KEY_CHANNEL, request_channel
         )
 
-        p_response = dict(p_state)
-        if request_open != p_state[mc.KEY_OPEN]:
+        p_response = dict(p_state_channel)
+        if request_open != p_state_channel[mc.KEY_OPEN]:
 
             def _state_update_callback():
-                p_state[mc.KEY_OPEN] = request_open
+                p_state_channel[mc.KEY_OPEN] = request_open
 
             asyncio.get_event_loop().call_later(
                 self.OPENDURATION if request_open else self.CLOSEDURATION,
