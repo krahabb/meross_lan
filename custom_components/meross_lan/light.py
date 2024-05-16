@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import asyncio
 from time import monotonic
 import typing
@@ -18,7 +19,6 @@ from . import const as mlc, meross_entity as me
 from .helpers import schedule_async_callback
 from .helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
 from .merossclient import const as mc, request_get
-from .switch import MLSwitch
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -164,7 +164,7 @@ def native_to_kelvin(temperature: int):
     )
 
 
-class MLLightBase(me.MerossToggle, light.LightEntity):
+class MLLightBase(me.MerossBinaryEntity, light.LightEntity):
     """
     base 'abstract' class for meross light entities handling
     either
@@ -283,6 +283,16 @@ class MLLightBase(me.MerossToggle, light.LightEntity):
         self.effect = None
         self.rgb_color = None
         super().set_unavailable()
+
+    @abstractmethod
+    async def async_turn_on(self, **kwargs):
+        # this is an error since we're not using me.MerossToggle api
+        raise NotImplementedError("'async_turn_on' needs to be overriden")
+
+    @abstractmethod
+    async def async_turn_off(self, **kwargs):
+        # this is an error since we're not using me.MerossToggle api
+        raise NotImplementedError("'async_turn_off' needs to be overriden")
 
     # interface: self
     async def async_request_light_ack(self, payload: dict):
@@ -483,29 +493,6 @@ class MLLight(MLLightBase):
         self._togglex_auto = None if self._togglex else False
 
     # interface: MLLightBase
-    async def async_request_onoff(self, onoff: int):
-        if self._togglex:
-            if await self.manager.async_request_ack(
-                mc.NS_APPLIANCE_CONTROL_TOGGLEX,
-                mc.METHOD_SET,
-                {
-                    mc.KEY_TOGGLEX: {
-                        mc.KEY_CHANNEL: self.channel,
-                        mc.KEY_ONOFF: onoff,
-                    }
-                },
-            ):
-                self.update_onoff(onoff)
-        else:
-            if await self.async_request_light_ack(
-                {
-                    mc.KEY_CHANNEL: self.channel,
-                    mc.KEY_ONOFF: onoff,
-                }
-            ):
-                self._light[mc.KEY_ONOFF] = onoff
-                self.update_onoff(onoff)
-
     def _flush_light(self, _light: dict):
         try:
             if mc.KEY_ONOFF in _light:
@@ -604,7 +591,33 @@ class MLLight(MLLightBase):
             if self.manager.descriptor.firmwareVersion == "2.1.2":
                 await self.async_request_light_ack(_light)
 
+    async def async_turn_off(self, **kwargs):
+        await self.async_request_onoff(0)
+
     # interface: self
+    async def async_request_onoff(self, onoff: int):
+        if self._togglex:
+            if await self.manager.async_request_ack(
+                mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+                mc.METHOD_SET,
+                {
+                    mc.KEY_TOGGLEX: {
+                        mc.KEY_CHANNEL: self.channel,
+                        mc.KEY_ONOFF: onoff,
+                    }
+                },
+            ):
+                self.update_onoff(onoff)
+        else:
+            if await self.async_request_light_ack(
+                {
+                    mc.KEY_CHANNEL: self.channel,
+                    mc.KEY_ONOFF: onoff,
+                }
+            ):
+                self._light[mc.KEY_ONOFF] = onoff
+                self.update_onoff(onoff)
+
     async def async_request_light_on_flush(self, _light: dict):
         if mc.KEY_ONOFF in _light:
             _light[mc.KEY_ONOFF] = 1
@@ -817,7 +830,7 @@ class MLLightMp3(MLLight):
         super().__init__(manager, payload, mc.HP110A_LIGHT_EFFECT_LIST)
 
 
-class MLDNDLightEntity(me.MerossToggle, light.LightEntity):
+class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)

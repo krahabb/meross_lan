@@ -6,7 +6,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
-from .. import const as mlc
+from .. import const as mlc, meross_entity as me
 from ..helpers.namespaces import (
     EntityPollingStrategy,
     NamespaceHandler,
@@ -440,20 +440,20 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
         super().__init__(device, mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG)
 
 
-class OverTempEnableSwitch(MLSwitch):
+class OverTempEnableSwitch(me.MENoChannelMixin, MLSwitch):
 
     namespace = mc.NS_APPLIANCE_CONFIG_OVERTEMP
     key_namespace = mc.KEY_OVERTEMP
     key_value = mc.KEY_ENABLE
 
     # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = me.EntityCategory.CONFIG
 
     __slots__ = ("sensor_overtemp_type",)
 
     def __init__(self, manager: "MerossDevice"):
         super().__init__(
-            manager, None, "config_overtemp_enable", self.DeviceClass.SWITCH
+            manager, None, "config_overtemp_enable", MLSwitch.DeviceClass.SWITCH
         )
         self.sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
             manager, None, "config_overtemp_type"

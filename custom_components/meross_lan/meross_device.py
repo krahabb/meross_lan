@@ -86,10 +86,7 @@ if typing.TYPE_CHECKING:
         MerossPayloadType,
         MerossRequestType,
     )
-    from .merossclient.cloudapi import (
-        DeviceInfoType,
-        LatestVersionType,
-    )
+    from .merossclient.cloudapi import DeviceInfoType, LatestVersionType
 
     DigestParseFunc = typing.Callable[[dict], None] | typing.Callable[[list], None]
     DigestInitFunc = typing.Callable[["MerossDevice", typing.Any], DigestParseFunc]

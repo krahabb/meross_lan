@@ -4,7 +4,7 @@ from homeassistant.components import fan
 
 from . import meross_entity as me
 from .helpers.namespaces import NamespaceHandler, PollingStrategy
-from .merossclient import const as mc  # mEROSS cONST
+from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from .meross_device import DigestParseFunc, MerossDevice
@@ -14,7 +14,7 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
     me.platform_setup_entry(hass, config_entry, async_add_devices, fan.DOMAIN)
 
 
-class MLFan(me.MerossToggle, fan.FanEntity):
+class MLFan(me.MerossBinaryEntity, fan.FanEntity):
     """
     Fan entity for map100 Air Purifier (or any device implementing Appliance.Control.Fan)
     """

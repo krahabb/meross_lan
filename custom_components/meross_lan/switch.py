@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import typing
 
 from homeassistant.components import switch
@@ -10,7 +11,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import DigestParseFunc, MerossDevice
+    from .meross_device import DigestParseFunc, MerossDevice, MerossDeviceBase
 
 
 async def async_setup_entry(
@@ -19,19 +20,49 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, switch.DOMAIN)
 
 
-class MLSwitch(me.MerossToggle, switch.SwitchEntity):
+class MLSwitch(me.MerossBinaryEntity, switch.SwitchEntity):
     """
     Generic HA switch: could either be a physical outlet or another 'logical' setting
     (see various config switches)
-    Switches are sometimes polymorphic and their message dispatching is not 'set in stone'
+    Switches are sometimes hybrid and their message dispatching is not 'set in stone'
     since the status updates are likely managed in higher level implementations or so.
     """
 
     PLATFORM = switch.DOMAIN
     DeviceClass = switch.SwitchDeviceClass
+    manager: "MerossDeviceBase"
+
+    def __init__(
+        self,
+        manager: "MerossDeviceBase",
+        channel: object,
+        entitykey: str | None = None,
+        device_class: object | None = None,
+        *,
+        device_value=None,
+    ):
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            device_class,
+            device_value=device_value,
+        )
+
+    @abstractmethod
+    async def async_request_value(self, device_value):
+        raise NotImplementedError("'async_request_value' needs to be overriden")
+
+    async def async_turn_on(self, **kwargs):
+        if await self.async_request_value(1):
+            self.update_onoff(1)
+
+    async def async_turn_off(self, **kwargs):
+        if await self.async_request_value(0):
+            self.update_onoff(0)
 
 
-class PhysicalLockSwitch(MLSwitch):
+class PhysicalLockSwitch(me.MEDictChannelMixin, MLSwitch):
 
     namespace = mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK
     key_namespace = mc.KEY_LOCK
@@ -46,7 +77,7 @@ class PhysicalLockSwitch(MLSwitch):
         EntityPollingStrategy(manager, self.namespace, self, item_count=1)
 
 
-class MLToggle(MLSwitch):
+class MLToggle(me.MENoChannelMixin, MLSwitch):
 
     namespace = mc.NS_APPLIANCE_CONTROL_TOGGLE
     key_namespace = mc.KEY_TOGGLE
@@ -65,7 +96,7 @@ def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestParseFunc
     return device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLE).parse_generic
 
 
-class MLToggleX(MLSwitch):
+class MLToggleX(me.MEDictChannelMixin, MLSwitch):
 
     namespace = mc.NS_APPLIANCE_CONTROL_TOGGLEX
     key_namespace = mc.KEY_TOGGLEX
@@ -73,19 +104,6 @@ class MLToggleX(MLSwitch):
     def __init__(self, manager: "MerossDevice", channel: object):
         super().__init__(manager, channel, None, MLSwitch.DeviceClass.OUTLET)
         manager.register_parser(self.namespace, self)
-
-    async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: {
-                    self.key_channel: self.channel,
-                    self.key_value: onoff,
-                }
-            },
-        ):
-            self.update_onoff(onoff)
 
 
 class MLToggleX_(MLToggleX):
@@ -99,7 +117,9 @@ class MLToggleX_(MLToggleX):
     entity_registry_enabled_default = False
 
 
-def digest_init_togglex(device: "MerossDevice", togglex_digest: list) -> "DigestParseFunc":
+def digest_init_togglex(
+    device: "MerossDevice", togglex_digest: list
+) -> "DigestParseFunc":
     """[{ "channel": 0, "onoff": 1 }]"""
     # We don't initialize every switch/ToggleX here since the digest reported channels
     # might be mapped to more specialized entities:
@@ -125,7 +145,9 @@ def digest_init_togglex(device: "MerossDevice", togglex_digest: list) -> "Digest
                     channels.remove(channel)
 
     # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
-    if (mc.NS_APPLIANCE_CONTROL_FAN in device.descriptor.ability) and (mc.KEY_FAN not in digest):
+    if (mc.NS_APPLIANCE_CONTROL_FAN in device.descriptor.ability) and (
+        mc.KEY_FAN not in digest
+    ):
         if 0 in channels:
             channels.remove(0)
 

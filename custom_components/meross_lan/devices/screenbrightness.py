@@ -33,7 +33,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     async def async_set_native_value(self, value: float):
         """Override base async_set_native_value since it would round
         the value to an int (common device native type)."""
-        if await self.async_request(value):
+        if await self.async_request_value(value):
             self.update_device_value(value)
 
 

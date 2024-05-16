@@ -1,5 +1,6 @@
 import typing
 
+from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
 from ..helpers.namespaces import PollingStrategy, SmartPollingStrategy
 from ..merossclient import NAMESPACE_TO_KEY, const as mc, is_thermostat_namespace
@@ -16,8 +17,10 @@ if typing.TYPE_CHECKING:
     MtsThermostatClimate = Mts200Climate | Mts960Climate
 
 
-class MtsConfigSwitch(MLSwitch):
-    entity_category = MLSwitch.EntityCategory.CONFIG
+class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
+
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -27,13 +30,15 @@ class MtsConfigSwitch(MLSwitch):
         device_value=None,
         namespace: str,
     ):
+        self.namespace = namespace
+        self.key_namespace = NAMESPACE_TO_KEY[namespace]
+
         super().__init__(
             climate.manager,
             climate.channel,
             entitykey,
             MLSwitch.DeviceClass.SWITCH,
             device_value=device_value,
-            namespace=namespace,
         )
 
 

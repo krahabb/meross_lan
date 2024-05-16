@@ -23,7 +23,7 @@ from homeassistant.helpers.entity import Entity, EntityCategory
 
 from .helpers import Loggable
 from .helpers.manager import ApiProfile
-from .merossclient import NAMESPACE_TO_KEY, const as mc
+from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -199,7 +199,15 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         """This is a 'debug' friendly definition. It is needed to help static type checking
         when implementing diagnostic sensors calls but, at runtime, it would be an error to
         call such an implementation for an entity which is not a diagnostic sensor."""
-        raise NotImplementedError("Called update_native_value on wrong class type")
+        raise NotImplementedError("Called 'update_native_value' on wrong entity type")
+
+    async def async_request_value(self, device_value):
+        """Sends the actual request to the device. This needs to be overloaded in entities
+        actually supporting the method SET on their namespace. Since the syntax for the payload
+        is almost generalized we have some defaults implementations based on mixins ready to be
+        included in actual entity implementation
+        """
+        raise NotImplementedError("Called 'async_request_value' on wrong entity type")
 
     async def get_last_state_available(self):
         """
@@ -244,6 +252,71 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
             "Handler undefined for payload:(%s)",
             str(payload),
             timeout=14400,
+        )
+
+
+class MENoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Implementation for protocol method 'SET' on entities/namespaces not backed by a channel.
+    Actual examples: Appliance.Control.Toggle, Appliance.GarageDoor.Config, and so on..
+    """
+
+    manager: "MerossDeviceBase"
+
+    # interface: MerossEntity
+    async def async_request_value(self, device_value):
+        """sends the actual request to the device. this is likely to be overloaded"""
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {self.key_namespace: {self.key_value: device_value}},
+        )
+
+
+class MEDictChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
+    where the command payload must be enclosed in a plain dict (without enclosing list).
+    Actual examples: Appliance.Control.ToggleX, Appliance.RollerShutter.Config, and so on..
+    """
+
+    manager: "MerossDeviceBase"
+
+    # interface: MerossEntity
+    async def async_request_value(self, device_value):
+        """sends the actual request to the device. this is likely to be overloaded"""
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: {
+                    self.key_channel: self.channel,
+                    self.key_value: device_value,
+                }
+            },
+        )
+
+
+class MEListChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
+    where the command payload must be enclosed in a list
+    Actual examples: Appliance.Control.ToggleX and so on..
+    """
+
+    manager: "MerossDeviceBase"
+
+    # interface: MerossEntity
+    async def async_request_value(self, device_value):
+        """sends the actual request to the device. this is likely to be overloaded"""
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: [
+                    {self.key_channel: self.channel, self.key_value: device_value}
+                ]
+            },
         )
 
 
@@ -348,69 +421,6 @@ class MerossBinaryEntity(MerossEntity):
         """Default parsing for toggles and binary sensors. Set the proper
         key_value in class/instance definition to make it work."""
         self.update_onoff(payload[self.key_value])
-
-
-class MerossToggle(MerossBinaryEntity):
-    """
-    Base toggle-like behavior used as a base class for
-    effective switches or the likes (light for example)
-    """
-
-    manager: "MerossDeviceBase"
-
-    def __init__(
-        self,
-        manager: "MerossDeviceBase",
-        channel: object,
-        entitykey: str | None = None,
-        device_class: object | None = None,
-        *,
-        device_value=None,
-        namespace: str | None = None,
-    ):
-        if namespace:
-            self.namespace = namespace
-            self.key_namespace = NAMESPACE_TO_KEY[namespace]
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            device_class,
-            device_value=device_value,
-        )
-
-    async def async_turn_on(self, **kwargs):
-        await self.async_request_onoff(1)
-
-    async def async_turn_off(self, **kwargs):
-        await self.async_request_onoff(0)
-
-    async def async_request_onoff(self, onoff: int):
-        if self.channel is None:
-            if await self.manager.async_request_ack(
-                self.namespace,
-                mc.METHOD_SET,
-                {
-                    self.key_namespace: {
-                        self.key_value: onoff,
-                    }
-                },
-            ):
-                self.update_onoff(onoff)
-        else:
-            if await self.manager.async_request_ack(
-                self.namespace,
-                mc.METHOD_SET,
-                {
-                    self.key_namespace: [
-                        {
-                            self.key_channel: self.channel,
-                            self.key_value: onoff,
-                        }
-                    ]
-                },
-            ):
-                self.update_onoff(onoff)
 
 
 #

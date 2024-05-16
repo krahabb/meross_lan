@@ -81,14 +81,23 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
             device_class,
         )
 
-    async def async_request(self, device_value):
+    async def async_request_value(self, device_value):
         # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
         # the issued value as a 'delta' to the current configured value i.e.
         # 'new adjust value' = 'current adjust value' + 'issued adjust value'
         # Since the native HA interface async_set_native_value wants to set
         # the 'new adjust value' we have to issue the difference against the
         # currently configured one
-        return await super().async_request(device_value - self.device_value)
+        return await super().async_request_value(device_value - self.device_value)
+
+
+class MLHubToggle(me.MEListChannelMixin, MLSwitch):
+    namespace = mc.NS_APPLIANCE_HUB_TOGGLEX
+    key_namespace = mc.KEY_TOGGLEX
+    key_channel = mc.KEY_ID
+
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.CONFIG
 
 
 class HubNamespaceHandler(NamespaceHandler):
@@ -717,16 +726,13 @@ class MerossSubDevice(MerossDeviceBase):
         if switch_togglex := self.switch_togglex:
             switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])
         else:
-            self.switch_togglex = switch_togglex = MLSwitch(
+            self.switch_togglex = switch_togglex = MLHubToggle(
                 self,
                 self.id,
                 None,
                 MLSwitch.DeviceClass.SWITCH,
                 device_value=p_togglex[mc.KEY_ONOFF],
-                namespace=mc.NS_APPLIANCE_HUB_TOGGLEX,
             )
-            switch_togglex.entity_category = me.EntityCategory.CONFIG
-            switch_togglex.key_channel = mc.KEY_ID
 
     def _parse_version(self, p_version: dict):
         """{"id": "00000000", "hardware": "1.1.5", "firmware": "5.1.8"}"""

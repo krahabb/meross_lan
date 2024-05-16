@@ -4,6 +4,7 @@ import typing
 from homeassistant.helpers import entity_registry
 from homeassistant.util.dt import now
 
+from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
 from ..const import (
     CONF_PROTOCOL_HTTP,
@@ -64,7 +65,7 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
         self.flush_state()
 
 
-class MLGarageMultipleConfigSwitch(MLSwitch):
+class MLGarageMultipleConfigSwitch(me.MEListChannelMixin, MLSwitch):
     """
     switch entity to manage MSG configuration (buzzer, enable)
     'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
@@ -76,7 +77,7 @@ class MLGarageMultipleConfigSwitch(MLSwitch):
     key_namespace = mc.KEY_CONFIG
 
     # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = me.EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -145,7 +146,7 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
                         registry_update_entity(entry.entity_id, disabled_by=disabler)
 
 
-class MLGarageConfigSwitch(MLGarageMultipleConfigSwitch):
+class MLGarageConfigSwitch(me.MENoChannelMixin, MLGarageMultipleConfigSwitch):
     """
     switch entity to manage MSG configuration (buzzer)
     'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
@@ -210,7 +211,7 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
         )
 
 
-class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
+class MLGarageConfigNumber(me.MENoChannelMixin, MLGarageMultipleConfigNumber):
     """
     number entity to manage MSG configuration (open/close timeout and the likes)
     'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
@@ -220,13 +221,6 @@ class MLGarageConfigNumber(MLGarageMultipleConfigNumber):
 
     def __init__(self, manager: "MerossDevice", key: str, payload: dict):
         super().__init__(manager, None, key, device_value=payload[key])
-
-    async def async_request(self, device_value):
-        return await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
-            mc.METHOD_SET,
-            {mc.KEY_CONFIG: {self.key_value: device_value}},
-        )
 
 
 class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):

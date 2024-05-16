@@ -94,7 +94,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
         )
 
     # interface: self
-    async def async_request(self, device_value):
+    async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
         return await self.manager.async_request_ack(
             self.namespace,
@@ -108,7 +108,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
 
     async def _async_request_debounce(self, device_value):
         self._async_request_debounce_unsub = None
-        if await self.async_request(device_value):
+        if await self.async_request_value(device_value):
             self.update_device_value(device_value)
         else:
             # restore the last good known device value
@@ -177,8 +177,8 @@ class MtsSetPointNumber(MtsTemperatureNumber):
     def native_step(self):
         return self.climate.target_temperature_step
 
-    async def async_request(self, device_value):
-        if response := await super().async_request(device_value):
+    async def async_request_value(self, device_value):
+        if response := await super().async_request_value(device_value):
             # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
             # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
             # make sure the climate state is consistent and all the correct roundings
