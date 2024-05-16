@@ -26,6 +26,9 @@ class MLSwitch(me.MerossBinaryEntity, switch.SwitchEntity):
     (see various config switches)
     Switches are sometimes hybrid and their message dispatching is not 'set in stone'
     since the status updates are likely managed in higher level implementations or so.
+    This class needs to be mixed in with any of the me.MENoChannelMixin,
+    me.MEDictChannelMixin, MEListChannelMixin in order to actually define the
+    implementation of the protocol message payload for 'SET' commands
     """
 
     PLATFORM = switch.DOMAIN

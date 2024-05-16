@@ -21,7 +21,16 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
 
-class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
+class MLConfigNumber(me.MEListChannelMixin, me.MerossNumericEntity, number.NumberEntity):
+    """
+    Base class for any configurable parameter in the device. This works much-like
+    MLSwitch by refining the 'async_request_value' api in order to send the command.
+    Contrary to MLSwitch (which is abstract), this has a default implementation for
+    payloads sent in a list through me.MEListChannelMixin since this looks to be
+    widely adopted (thermostats and the likes) but some care needs to be taken for
+    some namespaces not supporting channels (i.e. Appliance.GarageDoor.Config) or
+    not understanding the list payload (likely all the RollerShutter stuff)
+    """
     PLATFORM = number.DOMAIN
     DeviceClass = number.NumberDeviceClass
 
@@ -94,18 +103,6 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
         )
 
     # interface: self
-    async def async_request_value(self, device_value):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        return await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: [
-                    {self.key_channel: self.channel, self.key_value: device_value}
-                ]
-            },
-        )
-
     async def _async_request_debounce(self, device_value):
         self._async_request_debounce_unsub = None
         if await self.async_request_value(device_value):
