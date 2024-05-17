@@ -7,7 +7,6 @@ from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.switch import (
     MLToggle,
     MLToggleX,
-    MLToggleX_,
     PhysicalLockSwitch,
 )
 
@@ -32,8 +31,7 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: haec.SwitchEntity):
-        if isinstance(entity, MLToggleX) and type(entity) is MLToggleX_:
-            EntityComponentTest.expected_entity_types.remove(MLToggleX)
+        pass
 
     async def async_test_enabled_callback(self, entity: haec.SwitchEntity):
         await self.async_service_call_check(haec.SERVICE_TURN_ON, STATE_ON)

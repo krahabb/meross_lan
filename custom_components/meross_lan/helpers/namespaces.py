@@ -9,6 +9,17 @@ if typing.TYPE_CHECKING:
     from ..meross_entity import MerossEntity
 
 
+class EntityDisablerMixin:
+    """
+    Special 'disabler' mixin used when the device pushes a message for a 'not yet'
+    known entity/channel. The namespace handler will then dynamically mixin this
+    disabler into the entity instance class initialization
+    """
+
+    # HA core entity attributes:
+    entity_registry_enabled_default = False
+
+
 class NamespaceHandler:
     """
     This is the root class for somewhat dynamic namespace handlers.
@@ -51,9 +62,7 @@ class NamespaceHandler:
         self.namespace = namespace
         self.key_namespace = NAMESPACE_TO_KEY[namespace]
         if entity_class:
-            self.entity_class = entity_class
-            self.handler = self._handle_list
-            self.device.platforms.setdefault(entity_class.PLATFORM)
+            self.register_entity_class(entity_class)
         else:
             self.entity_class = None
             self.handler = handler or getattr(
@@ -64,8 +73,9 @@ class NamespaceHandler:
         device.namespace_handlers[namespace] = self
 
     def register_entity_class(self, entity_class: type["MerossEntity"]):
-        assert not self.entity_class, "entity_class already registered"
-        self.entity_class = entity_class
+        self.entity_class = type(
+            entity_class.__name__, (EntityDisablerMixin, entity_class), {}
+        )
         self.handler = self._handle_list
         self.device.platforms.setdefault(entity_class.PLATFORM)
 
@@ -281,7 +291,7 @@ class VoidNamespaceHandler(NamespaceHandler):
     done by the base default handling."""
 
     def __init__(self, device: "MerossDevice", namespace: str):
-        super().__init__(device, namespace, handler=self._handle_void)
+        NamespaceHandler.__init__(self, device, namespace, handler=self._handle_void)
 
     def _handle_void(self, header: dict, payload: dict):
         pass

@@ -45,7 +45,8 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
     )
 
     def __init__(self, device: "MerossDevice"):
-        super().__init__(
+        NamespaceHandler.__init__(
+            self,
             device,
             mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
             handler=self._handle_Appliance_Control_Screen_Brightness,

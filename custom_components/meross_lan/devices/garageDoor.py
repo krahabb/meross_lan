@@ -629,7 +629,8 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
         self.switch_buzzerEnable = None  # type: ignore
         self.number_doorOpenDuration = None  # type: ignore
         self.number_doorCloseDuration = None  # type: ignore
-        super().__init__(
+        NamespaceHandler.__init__(
+            self,
             device,
             mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
             handler=self._handle_Appliance_GarageDoor_Config,
@@ -742,4 +743,10 @@ def digest_init_garageDoor(device: "MerossDevice", digest: list):
             item_count=len(channels_payloads),
         )
 
-    return device.namespace_handlers[mc.NS_APPLIANCE_GARAGEDOOR_STATE].parse_list
+    # We have notice (#428) that the msg200 pushes a strange garage door state
+    # over channel 0 which is not in the list of channels exposed in digest.
+    # We so prepare the handler to eventually build an MLGarage instance
+    # even though it's behavior is unknown at the moment.
+    garageDoor_handler = device.get_handler(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+    garageDoor_handler.register_entity_class(MLGarage)
+    return garageDoor_handler.parse_list

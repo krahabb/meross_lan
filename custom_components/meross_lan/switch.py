@@ -109,17 +109,6 @@ class MLToggleX(me.MEDictChannelMixin, MLSwitch):
         manager.register_parser(self.namespace, self)
 
 
-class MLToggleX_(MLToggleX):
-    """
-    Special 'disabled' ToggleX used when the device exposes other specialized entities
-    together with some 'unmapped' ToggleX channels. The policy is to now create these
-    plain switches too but, since they're likely 'no use' let them initially disabled.
-    """
-
-    # HA core entity attributes:
-    entity_registry_enabled_default = False
-
-
 def digest_init_togglex(
     device: "MerossDevice", togglex_digest: list
 ) -> "DigestParseFunc":
@@ -154,14 +143,9 @@ def digest_init_togglex(
         if 0 in channels:
             channels.remove(0)
 
-    if len(channels) == len(togglex_digest):
-        # no exotic device style..just plain switches
-        for channel in channels:
-            MLToggleX(device, channel)
-    else:
-        for channel in channels:
-            MLToggleX_(device, channel)
+    for channel in channels:
+        MLToggleX(device, channel)
 
     togglex_handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)
-    togglex_handler.register_entity_class(MLToggleX_)
+    togglex_handler.register_entity_class(MLToggleX)
     return togglex_handler.parse_list

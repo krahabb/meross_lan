@@ -320,9 +320,11 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
 class FilterMaintenanceNamespaceHandler(NamespaceHandler):
 
     def __init__(self, device: "MerossDevice"):
-        super().__init__(
+        NamespaceHandler.__init__(
+            self,
             device,
             mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
             entity_class=MLFilterMaintenanceSensor,
         )
         SmartPollingStrategy(device, mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE)
+        MLFilterMaintenanceSensor(device, 0)
