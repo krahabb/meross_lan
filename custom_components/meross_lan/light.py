@@ -372,7 +372,7 @@ class MLLightBase(me.MerossBinaryEntity, light.LightEntity):
         in order to evenly spread the calls. This call also takes care of reducing
         the call frequency in case we're on cloud MQTT
         """
-        if self.manager.mqtt_cloudactive:
+        if self.manager.meross_binded:
             # 'saturate' the resolution of the callback
             _t_resolution = max(10, self._t_resolution)
         else:
