@@ -1314,10 +1314,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         """
         self._queued_smartpoll_requests = 0
         for _strategy in self.polling_strategies.values():
+            if namespace == _strategy.namespace:
+                continue
+            await _strategy.async_poll(self, epoch)
             if not self._online:
                 break  # do not return: do the flush first!
-            if namespace != _strategy.namespace:
-                await _strategy.async_poll(self, epoch)
         # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_multiple_requests_flush()
 
