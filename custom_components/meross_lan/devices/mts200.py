@@ -48,11 +48,6 @@ class Mts200Climate(MtsClimate):
         mc.MTS200_SUMMERMODE_COOL: MtsClimate.HVACAction.COOLING,
         mc.MTS200_SUMMERMODE_HEAT: MtsClimate.HVACAction.HEATING,
     }
-    # when setting target temp we'll set an appropriate payload key
-    # for the mts200 depending on current 'preset' mode.
-    # if mts200 is in any of 'off', 'auto' we just set the 'custom'
-    # target temp but of course the valve will not follow
-    # this temp since it's mode is not set to follow a manual set
     MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS200_MODE_TO_TARGETTEMP_MAP
 
     __slots__ = ("_mts_summermode",)
@@ -107,60 +102,33 @@ class Mts200Climate(MtsClimate):
         await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        key = (
-            self.MTS_MODE_TO_TEMPERATUREKEY_MAP.get(self._mts_mode) or mc.KEY_MANUALTEMP
-        )
-        mode = mc.MTS200_MODE_MANUAL if key is mc.KEY_MANUALTEMP else self._mts_mode
-        if response := await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
-            mc.METHOD_SET,
+        key = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(self._mts_mode) or mc.KEY_MANUALTEMP
+        await self._async_request_mode(
             {
-                mc.KEY_MODE: [
-                    {
-                        mc.KEY_CHANNEL: self.channel,
-                        mc.KEY_MODE: mode,
-                        mc.KEY_ONOFF: 1,
-                        key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale),
-                    }
-                ]
-            },
-        ):
-            payload = response[mc.KEY_PAYLOAD]
-            if mc.KEY_MODE in payload:
-                self._parse(payload[mc.KEY_MODE][0])
-            else:
-                # optimistic update
-                self.target_temperature = kwargs[self.ATTR_TEMPERATURE]
-                self._mts_mode = mode
-                self._mts_onoff = 1
-                self.flush_state()
+                mc.KEY_CHANNEL: self.channel,
+                mc.KEY_MODE: (
+                    mc.MTS200_MODE_MANUAL
+                    if key is mc.KEY_MANUALTEMP
+                    else self._mts_mode
+                ),
+                mc.KEY_ONOFF: 1,
+                key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale),
+            }
+        )
 
     async def async_request_mode(self, mode: int):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
-            mc.METHOD_SET,
+        await self._async_request_mode(
             {
-                mc.KEY_MODE: [
-                    {
-                        mc.KEY_CHANNEL: self.channel,
-                        mc.KEY_MODE: mode,
-                        mc.KEY_ONOFF: 1,
-                    }
-                ]
-            },
-        ):
-            self._mts_mode = mode
-            self._mts_onoff = 1
-            self.flush_state()
+                mc.KEY_CHANNEL: self.channel,
+                mc.KEY_MODE: mode,
+                mc.KEY_ONOFF: 1,
+            }
+        )
 
     async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
-            mc.METHOD_SET,
-            {mc.KEY_MODE: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}]},
-        ):
-            self._mts_onoff = onoff
-            self.flush_state()
+        await self._async_request_mode(
+            {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}
+        )
 
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
@@ -181,6 +149,24 @@ class Mts200Climate(MtsClimate):
             self._mts_summermode = summermode
             self.flush_state()
 
+    async def _async_request_mode(self, p_mode: dict):
+        if response := await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
+            mc.METHOD_SET,
+            {mc.KEY_MODE: [p_mode]},
+        ):
+            try:
+                payload = response[mc.KEY_PAYLOAD][mc.KEY_MODE]
+                self._parse(payload[0] if isinstance(payload, list) else payload)
+            except KeyError:
+                # optimistic update
+                payload = self._mts_payload | p_mode
+                if mc.KEY_MODE in p_mode:
+                    key_temp = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(p_mode[mc.KEY_MODE])
+                    if key_temp in payload:
+                        payload[mc.KEY_TARGETTEMP] = payload[key_temp]
+                self._parse(payload)
+
     # message handlers
     def _parse(self, payload: dict):
         """{
@@ -199,6 +185,9 @@ class Mts200Climate(MtsClimate):
             "max": 350,
             "lmTime": 1642425303
         }"""
+        if self._mts_payload == payload:
+            return
+        self._mts_payload = payload
         if mc.KEY_MODE in payload:
             self._mts_mode = payload[mc.KEY_MODE]
         if mc.KEY_ONOFF in payload:
@@ -214,14 +203,14 @@ class Mts200Climate(MtsClimate):
             self.min_temp = payload[mc.KEY_MIN] / self.device_scale
         if mc.KEY_MAX in payload:
             self.max_temp = payload[mc.KEY_MAX] / self.device_scale
-        if mc.KEY_HEATTEMP in payload:
-            self.number_comfort_temperature.update_device_value(
-                payload[mc.KEY_HEATTEMP]
-            )
-        if mc.KEY_COOLTEMP in payload:
-            self.number_sleep_temperature.update_device_value(payload[mc.KEY_COOLTEMP])
-        if mc.KEY_ECOTEMP in payload:
-            self.number_away_temperature.update_device_value(payload[mc.KEY_ECOTEMP])
+
+        for (
+            key_temp,
+            number_preset_temperature,
+        ) in self.number_preset_temperature.items():
+            if key_temp in payload:
+                number_preset_temperature.update_device_value(payload[key_temp])
+
         self.flush_state()
 
     def _parse_holdAction(self, payload: dict):
