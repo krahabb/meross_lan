@@ -246,7 +246,7 @@
             }
         },
         "device_identity_mismatch": {
-            "title": "Received mismatched identity for device '{device_name}'",
+            "title": "Received mismatched identity for device {device_name}",
             "fix_flow": {
                 "step": {
                     "device": {

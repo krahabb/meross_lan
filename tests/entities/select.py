@@ -1,7 +1,9 @@
 from homeassistant.components import select as haec
 
+from custom_components.meross_lan.devices.diffuser import MLDiffuserSpray
+from custom_components.meross_lan.devices.spray import MLSpray
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.select import MLSpray, MtsTrackedSensor
+from custom_components.meross_lan.select import MtsTrackedSensor
 
 from tests.entities import EntityComponentTest
 
@@ -16,7 +18,7 @@ class EntityTest(EntityComponentTest):
             mc.KEY_MODEB: [MtsTrackedSensor],
         },
         mc.KEY_SPRAY: [MLSpray],
-        mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [MLSpray]},
+        mc.KEY_DIFFUSER: {mc.KEY_SPRAY: [MLDiffuserSpray]},
     }
 
     HUB_SUBDEVICES_ENTITIES = {

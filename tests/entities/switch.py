@@ -4,7 +4,11 @@ from homeassistant.helpers.entity import STATE_OFF, STATE_ON
 from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
 from custom_components.meross_lan.devices.thermostat import MtsExternalSensorSwitch
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.switch import MLSwitch, PhysicalLockSwitch
+from custom_components.meross_lan.switch import (
+    MLToggle,
+    MLToggleX,
+    PhysicalLockSwitch,
+)
 
 from tests.entities import EntityComponentTest
 
@@ -16,14 +20,14 @@ class EntityTest(EntityComponentTest):
     # special care here since light and cover entity could manage the togglex
     # namespace
     DIGEST_ENTITIES = {
-        mc.KEY_TOGGLEX: [MLSwitch],
+        mc.KEY_TOGGLEX: [MLToggleX],
     }
 
     NAMESPACES_ENTITIES = {
         mc.NS_APPLIANCE_CONFIG_OVERTEMP: [OverTempEnableSwitch],
         mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: [PhysicalLockSwitch],
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: [MtsExternalSensorSwitch],
-        mc.NS_APPLIANCE_CONTROL_TOGGLE: [MLSwitch],
+        mc.NS_APPLIANCE_CONTROL_TOGGLE: [MLToggle],
     }
 
     async def async_test_each_callback(self, entity: haec.SwitchEntity):

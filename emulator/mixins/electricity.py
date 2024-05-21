@@ -1,17 +1,11 @@
 """"""
 
-from __future__ import annotations
-
 from datetime import datetime, timezone
 from random import randint
 from time import gmtime
 import typing
 
-from custom_components.meross_lan.merossclient import (
-    build_message,
-    const as mc,
-    json_dumps,
-)
+from custom_components.meross_lan.merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from .. import MerossEmulator, MerossEmulatorDescriptor
@@ -23,7 +17,7 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     _power_set: int | None = None
     power: int
 
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key):
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_electricity = descriptor.namespaces[
             mc.NS_APPLIANCE_CONTROL_ELECTRICITY
@@ -78,7 +72,7 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
     BUG_RESET = True
 
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key):
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_consumptionx = descriptor.namespaces[
             mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX

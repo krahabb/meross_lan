@@ -33,11 +33,27 @@ pytest_plugins = "pytest_homeassistant_custom_component"
 # need to be initialized first
 @pytest.fixture(autouse=True)
 def auto_enable(request: pytest.FixtureRequest):
-    if "recorder_mock" in request.fixturenames:
+    """
+    Special initialization fixture managing recorder mocking.
+    For some tests we need a working recorder but recorder_mock
+    needs to be init before hass.
+    When we don't need it, we'd also want our helpers.get_entity_last_states
+    to not return an exception (since the recorder instance is missing then)
+    """
+    has_recorder = "recorder_mock" in request.fixturenames
+    if has_recorder:
         request.getfixturevalue("recorder_mock")
+
     hass = request.getfixturevalue("hass")
     hass.data.pop("custom_components")
-    yield
+    if has_recorder:
+        yield
+    else:
+        with patch(
+            "custom_components.meross_lan.meross_entity.MerossEntity.get_last_state_available",
+            return_value=None,
+        ):
+            yield
 
 
 # This fixture is used to prevent HomeAssistant from attempting to create and dismiss persistent
@@ -61,7 +77,6 @@ def disable_debug_fixture():
         patch("custom_components.meross_lan.meross_profile.MEROSSDEBUG", None),
         patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None),
         patch("custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None),
-        patch("custom_components.meross_lan.merossclient.mqttclient.MEROSSDEBUG", None),
         patch("custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", None),
     ):
         yield
@@ -74,7 +89,7 @@ def disable_entity_registry_update():
     in our tests to cover this scenario so we totally disable calling into
     the entity registry."""
 
-    from custom_components.meross_lan.cover import (
+    from custom_components.meross_lan.devices.garageDoor import (
         MLGarageDoorEnableSwitch,
         MLGarageMultipleConfigSwitch,
     )
@@ -114,8 +129,8 @@ def cloudapi_mock(aioclient_mock: AiohttpClientMocker):
 
 
 @pytest.fixture()
-async def hamqtt_mock(mqtt_mock):
-    async with helpers.HAMQTTMocker() as _hamqtt_mock:
+async def hamqtt_mock(hass, mqtt_mock):
+    async with helpers.HAMQTTMocker(hass) as _hamqtt_mock:
         yield _hamqtt_mock
 
 

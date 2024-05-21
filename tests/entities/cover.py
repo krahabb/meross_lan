@@ -2,9 +2,9 @@ from homeassistant.components import cover as haec
 from homeassistant.components.cover import CoverEntity, CoverEntityFeature
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.cover import MLGarage, MLRollerShutter
+from custom_components.meross_lan.cover import MLRollerShutter
+from custom_components.meross_lan.devices.garageDoor import MLGarage
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.switch import MLSwitch
 from emulator.mixins.rollershutter import RollerShutterMixin
 
 from tests.entities import EntityComponentTest
@@ -36,17 +36,13 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: CoverEntity):
-        ability = self.ability
-        # check the other specialized implementations
-        if mc.NS_APPLIANCE_CONTROL_TOGGLEX in ability:
-            if MLSwitch in EntityComponentTest.expected_entity_types:
-                EntityComponentTest.expected_entity_types.remove(MLSwitch)
 
         if isinstance(entity, MLGarage):
             assert (
                 entity.supported_features
                 == CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
             )
+            self._check_remove_togglex(entity)
 
         elif isinstance(entity, MLRollerShutter):
             assert (
@@ -55,8 +51,8 @@ class EntityTest(EntityComponentTest):
                 | CoverEntityFeature.CLOSE
                 | CoverEntityFeature.STOP
             )
-            assert entity._signalClose == RollerShutterMixin.SIGNALCLOSE
-            assert entity._signalOpen == RollerShutterMixin.SIGNALOPEN
+            assert entity.number_signalClose.device_value == RollerShutterMixin.SIGNALCLOSE
+            assert entity.number_signalOpen.device_value == RollerShutterMixin.SIGNALOPEN
 
     async def async_test_enabled_callback(self, entity: CoverEntity):
         states = self.hass_states

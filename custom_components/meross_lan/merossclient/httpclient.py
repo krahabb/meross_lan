@@ -3,17 +3,14 @@
     for Meross devices.
 """
 
-from __future__ import annotations
-
 import asyncio
-import attr
 import logging
 import socket
 import sys
 import typing
 
 import aiohttp
-
+import attr
 from yarl import URL
 
 from . import (
@@ -36,7 +33,7 @@ class TerminatedException(Exception):
 class MerossHttpClient:
     SESSION_MAXIMUM_CONNECTIONS: typing.ClassVar = 50
     SESSION_MAXIMUM_CONNECTIONS_PER_HOST: typing.ClassVar = 1
-    SESSION_TIMEOUT: typing.ClassVar = aiohttp.ClientTimeout(total=5)
+    SESSION_TIMEOUT: typing.ClassVar = aiohttp.ClientTimeout(total=10, connect=5)
 
     # Use an 'isolated' and dedicated client session to better manage
     # Meross http specifics following concern from @garysargentpersonal
@@ -169,7 +166,11 @@ class MerossHttpClient:
             while True:
                 try:
                     response = await self._session.post(
-                        url=self._requesturl, data=request_json, timeout=attr.evolve(self.timeout, connect=_connect_timeout)
+                        url=self._requesturl,
+                        data=request_json,
+                        timeout=aiohttp.ClientTimeout(
+                            total=self.timeout.total, connect=_connect_timeout
+                        ),
                     )
                     break
                 except aiohttp.ServerTimeoutError as exception:

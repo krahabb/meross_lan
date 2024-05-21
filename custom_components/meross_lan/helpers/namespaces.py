@@ -1,15 +1,23 @@
-from __future__ import annotations
-
 import typing
 
 from .. import const as mlc
 from ..merossclient import NAMESPACE_TO_KEY, const as mc, request_get, request_push
 
 if typing.TYPE_CHECKING:
-    from typing import Callable, Final
 
     from ..meross_device import MerossDevice
     from ..meross_entity import MerossEntity
+
+
+class EntityDisablerMixin:
+    """
+    Special 'disabler' mixin used when the device pushes a message for a 'not yet'
+    known entity/channel. The namespace handler will then dynamically mixin this
+    disabler into the entity instance class initialization
+    """
+
+    # HA core entity attributes:
+    entity_registry_enabled_default = False
 
 
 class NamespaceHandler:
@@ -41,32 +49,37 @@ class NamespaceHandler:
 
     def __init__(
         self,
-        device: MerossDevice,
+        device: "MerossDevice",
         namespace: str,
         *,
-        handler: Callable[[dict, dict], None] | None = None,
-        entity_class: type[MerossEntity] | None = None,
+        handler: typing.Callable[[dict, dict], None] | None = None,
+        entity_class: type["MerossEntity"] | None = None,
     ):
         assert (
             namespace not in device.namespace_handlers
         ), "namespace already registered"
-        self.device: typing.Final = device
-        self.namespace: typing.Final = namespace
+        self.device = device
+        self.namespace = namespace
         self.key_namespace = NAMESPACE_TO_KEY[namespace]
         if entity_class:
-            self.entity_class = entity_class
-            self.handler = self._handle_list
-            self.device.platforms.setdefault(entity_class.PLATFORM)
+            self.register_entity_class(entity_class)
         else:
             self.entity_class = None
             self.handler = handler or getattr(
                 device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
             )
         self.lastrequest = 0
-        self.entities: dict[object, Callable[[dict], None]] = {}
+        self.entities: dict[object, typing.Callable[[dict], None]] = {}
         device.namespace_handlers[namespace] = self
 
-    def register_entity(self, entity: MerossEntity):
+    def register_entity_class(self, entity_class: type["MerossEntity"]):
+        self.entity_class = type(
+            entity_class.__name__, (EntityDisablerMixin, entity_class), {}
+        )
+        self.handler = self._handle_list
+        self.device.platforms.setdefault(entity_class.PLATFORM)
+
+    def register_entity(self, entity: "MerossEntity"):
         # when setting up the entity-dispatching we'll substitute the legacy handler
         # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
         # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
@@ -84,7 +97,7 @@ class NamespaceHandler:
         entity.namespace_handlers.add(self)
         self.handler = self._handle_list
 
-    def unregister(self, entity: MerossEntity):
+    def unregister(self, entity: "MerossEntity"):
         if self.entities.pop(entity.channel, None):
             entity.namespace_handlers.remove(self)
 
@@ -110,17 +123,10 @@ class NamespaceHandler:
         try:
             for p_channel in payload[self.key_namespace]:
                 try:
-                    self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+                    _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
                 except KeyError as key_error:
-                    channel = key_error.args[0]
-                    if channel != mc.KEY_CHANNEL and self.entity_class:
-                        # ensure key represents a channel and not the "channel" key
-                        # in the p_channel dict
-                        self.entity_class(self.device, channel)
-                        self.entities[channel](p_channel)
-                    else:
-                        raise key_error
-
+                    _parse = self._try_create_entity(key_error)
+                _parse(p_channel)
         except TypeError:
             # this might be expected: the payload is not a list
             self.handler = self._handle_dict
@@ -133,14 +139,18 @@ class NamespaceHandler:
         This handler si optimized for dict payloads:
         "payload": { "key_namespace": {"channel":...., ...} }
         """
+        p_channel = payload[self.key_namespace]
         try:
-            p_channel = payload[self.key_namespace]
-            self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+            _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+        except KeyError as key_error:
+            _parse = self._try_create_entity(key_error)
         except TypeError:
             # this might be expected: the payload is not a dict
             # final fallback to the safe _handle_generic
             self.handler = self._handle_generic
             self._handle_generic(header, payload)
+            return
+        _parse(p_channel)
 
     def _handle_generic(self, header, payload):
         """
@@ -151,11 +161,19 @@ class NamespaceHandler:
         which will default forwarding to channel == 0
         """
         p_channel = payload[self.key_namespace]
-        if isinstance(p_channel, dict):
-            self.entities[p_channel.get(mc.KEY_CHANNEL, 0)](p_channel)
+        if type(p_channel) is dict:
+            try:
+                _parse = self.entities[p_channel.get(mc.KEY_CHANNEL)]
+            except KeyError as key_error:
+                _parse = self._try_create_entity(key_error)
+            _parse(p_channel)
         else:
             for p_channel in p_channel:
-                self.entities[p_channel[mc.KEY_CHANNEL]](p_channel)
+                try:
+                    _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+                except KeyError as key_error:
+                    _parse = self._try_create_entity(key_error)
+                _parse(p_channel)
 
     def _handle_undefined(self, header: dict, payload: dict):
         device = self.device
@@ -183,24 +201,33 @@ class NamespaceHandler:
                             key, payload, payload[mc.KEY_CHANNEL]
                         )
 
-    def _parse_list(self, digest: list):
+    def parse_list(self, digest: list):
         """twin method for _handle (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
         try:
-            for channel_digest in digest:
-                self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
+            for p_channel in digest:
+                try:
+                    _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+                except KeyError as key_error:
+                    _parse = self._try_create_entity(key_error)
+                _parse(p_channel)
         except Exception as exception:
             self.handle_exception(exception, "_parse_list", digest)
 
-    def _parse_generic(self, digest):
+    def parse_generic(self, digest: list | dict):
         """twin method for _handle (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
         try:
-            if isinstance(digest, dict):
-                self.entities[digest.get(mc.KEY_CHANNEL, 0)](digest)
+            if type(digest) is dict:
+                self.entities[digest.get(mc.KEY_CHANNEL)](digest)
             else:
-                for channel_digest in digest:
-                    self.entities[channel_digest[mc.KEY_CHANNEL]](channel_digest)
+                for p_channel in digest:
+                    try:
+                        _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+                    except KeyError as key_error:
+                        _parse = self._try_create_entity(key_error)
+                    _parse(p_channel)
+
         except Exception as exception:
             self.handle_exception(exception, "_parse_generic", digest)
 
@@ -245,6 +272,17 @@ class NamespaceHandler:
     def _parse_undefined_list(self, key: str, payload: list, channel):
         pass
 
+    def _try_create_entity(self, key_error: KeyError):
+        if not self.entity_class:
+            raise key_error
+        channel = key_error.args[0]
+        if channel == mc.KEY_CHANNEL:
+            # ensure key represents a channel and not the "channel" key
+            # in the p_channel dict
+            raise key_error
+        self.entity_class(self.device, channel)
+        return self.entities[channel]
+
 
 class VoidNamespaceHandler(NamespaceHandler):
     """Utility class to manage namespaces which should be 'ignored' i.e. we're aware
@@ -252,8 +290,8 @@ class VoidNamespaceHandler(NamespaceHandler):
     just provides an empty handler and so suppresses any log too (for unknown namespaces)
     done by the base default handling."""
 
-    def __init__(self, device: MerossDevice, namespace: str):
-        super().__init__(device, namespace, handler=self._handle_void)
+    def __init__(self, device: "MerossDevice", namespace: str):
+        NamespaceHandler.__init__(self, device, namespace, handler=self._handle_void)
 
     def _handle_void(self, header: dict, payload: dict):
         pass
@@ -284,15 +322,15 @@ class PollingStrategy:
 
     def __init__(
         self,
-        device: MerossDevice,
+        device: "MerossDevice",
         namespace: str,
         *,
         payload=None,
         item_count: int = 0,
-        handler: Callable[[dict, dict], None] | None = None,
+        handler: typing.Callable[[dict, dict], None] | None = None,
     ):
         assert namespace not in device.polling_strategies
-        self.namespace: Final = namespace
+        self.namespace: typing.Final = namespace
         self.key_namespace = NAMESPACE_TO_KEY[namespace]
         self.lastrequest = 0
         if _conf := mlc.POLLING_STRATEGY_CONF.get(namespace):
@@ -336,7 +374,7 @@ class PollingStrategy:
     def increment_size(self):
         self.response_size += self.response_item_size
 
-    async def async_poll(self, device: MerossDevice, epoch: float):
+    async def async_poll(self, device: "MerossDevice", epoch: float):
         """
         This is a basic 'default' policy:
         - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
@@ -350,7 +388,7 @@ class PollingStrategy:
             self.lastrequest = epoch
             await device.async_request_poll(self)
 
-    async def async_trace(self, device: MerossDevice, protocol: str | None):
+    async def async_trace(self, device: "MerossDevice", protocol: str | None):
         """
         Used while tracing abilities. In general, we use an euristic 'default'
         query but for some 'well known namespaces' we might be better off querying with
@@ -373,7 +411,7 @@ class SmartPollingStrategy(PollingStrategy):
     if this 'pass' is already crowded (see device.async_request_smartpoll)
     """
 
-    async def async_poll(self, device: MerossDevice, epoch: float):
+    async def async_poll(self, device: "MerossDevice", epoch: float):
         if (epoch - self.lastrequest) >= self.polling_period:
             await device.async_request_smartpoll(self, epoch)
 
@@ -383,17 +421,17 @@ class EntityPollingStrategy(SmartPollingStrategy):
 
     def __init__(
         self,
-        device: MerossDevice,
+        device: "MerossDevice",
         namespace: str,
-        entity: MerossEntity,
+        entity: "MerossEntity",
         *,
         item_count: int = 0,
-        handler: Callable[[dict, dict], None] | None = None,
+        handler: typing.Callable[[dict, dict], None] | None = None,
     ):
         self.entity = entity
         super().__init__(device, namespace, item_count=item_count, handler=handler)
 
-    async def async_poll(self, device: MerossDevice, epoch: float):
+    async def async_poll(self, device: "MerossDevice", epoch: float):
         """
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
         the state of this paylod so we'll skip the smartpoll should the entity be disabled
@@ -408,7 +446,7 @@ class OncePollingStrategy(SmartPollingStrategy):
     need to be requested once (after onlining that is).
     """
 
-    async def async_poll(self, device: MerossDevice, epoch: float):
+    async def async_poll(self, device: "MerossDevice", epoch: float):
         """
         Same as SmartPollingStrategy (don't overwhelm the cloud mqtt)
         """

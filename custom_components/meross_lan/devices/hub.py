@@ -1,38 +1,38 @@
-from __future__ import annotations
-
 import typing
 
-from . import const as mlc, meross_entity as me
-from .binary_sensor import MLBinarySensor
-from .calendar import MtsSchedule
-from .climate import MtsClimate
-from .helpers.namespaces import (
+from .. import const as mlc, meross_entity as me
+from ..binary_sensor import MLBinarySensor
+from ..calendar import MtsSchedule
+from ..climate import MtsClimate
+from ..helpers.namespaces import (
     NamespaceHandler,
     OncePollingStrategy,
     PollingStrategy,
     SmartPollingStrategy,
 )
-from .meross_device import MerossDevice, MerossDeviceBase
-from .merossclient import (
+from ..meross_device import MerossDevice, MerossDeviceBase
+from ..merossclient import (
     const as mc,
     get_productnameuuid,
     is_device_online,
     request_get,
 )
-from .number import MLConfigNumber
-from .select import MtsTrackedSensor
-from .sensor import (
+from ..number import MLConfigNumber
+from ..select import MtsTrackedSensor
+from ..sensor import (
     MLDiagnosticSensor,
     MLEnumSensor,
     MLHumiditySensor,
     MLNumericSensor,
     MLTemperatureSensor,
 )
-from .switch import MLSwitch
+from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from .devices.mts100 import Mts100Climate
-    from .meross_entity import MerossEntity
+    from ..meross_device import DigestParseFunc
+    from ..meross_entity import MerossEntity
+    from ..merossclient.cloudapi import SubDeviceInfoType
+    from .mts100 import Mts100Climate
 
 
 WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
@@ -59,7 +59,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
 
     def __init__(
         self,
-        manager: MerossSubDevice,
+        manager: "MerossSubDevice",
         key: str,
         device_class: MLConfigNumber.DeviceClass,
         min_value: float,
@@ -81,14 +81,23 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
             device_class,
         )
 
-    async def async_request(self, device_value):
+    async def async_request_value(self, device_value):
         # the SET command on NS_APPLIANCE_HUB_SENSOR_ADJUST works by applying
         # the issued value as a 'delta' to the current configured value i.e.
         # 'new adjust value' = 'current adjust value' + 'issued adjust value'
         # Since the native HA interface async_set_native_value wants to set
         # the 'new adjust value' we have to issue the difference against the
         # currently configured one
-        return await super().async_request(device_value - self.device_value)
+        return await super().async_request_value(device_value - self.device_value)
+
+
+class MLHubToggle(me.MEListChannelMixin, MLSwitch):
+    namespace = mc.NS_APPLIANCE_HUB_TOGGLEX
+    key_namespace = mc.KEY_TOGGLEX
+    key_channel = mc.KEY_ID
+
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.CONFIG
 
 
 class HubNamespaceHandler(NamespaceHandler):
@@ -98,9 +107,9 @@ class HubNamespaceHandler(NamespaceHandler):
     relevant subdevice instance.
     """
 
-    device: typing.Final[MerossDeviceHub]  # type: ignore
+    device: "HubMixin"
 
-    def __init__(self, device: MerossDeviceHub, namespace: str):
+    def __init__(self, device: "HubMixin", namespace: str):
         NamespaceHandler.__init__(
             self, device, namespace, handler=self._handle_subdevice
         )
@@ -145,7 +154,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
 
     def __init__(
         self,
-        device: MerossDeviceHub,
+        device: "HubMixin",
         namespace: str,
         types: typing.Collection,
         included: bool,
@@ -156,7 +165,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
         self._included = included
         self._count = count
 
-    async def async_poll(self, device: MerossDeviceHub, epoch: float):
+    async def async_poll(self, device: "HubMixin", epoch: float):
         if not (device._mqtt_active and self.lastrequest):
             max_queuable = 1
             # for hubs, this payload request might be splitted
@@ -187,7 +196,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
                 ):
                     max_queuable += 1
 
-    async def async_trace(self, device: MerossDeviceHub, protocol: str | None):
+    async def async_trace(self, device: "HubMixin", protocol: str | None):
         """
         Used while tracing abilities. In general, we use an euristic 'default'
         query but for some 'well known namespaces' we might be better off querying with
@@ -202,7 +211,9 @@ class HubChunkedPollingStrategy(PollingStrategy):
             self.adjust_size(len(p))
             await super().async_trace(device, protocol)
 
-    def _build_subdevices_payload(self, subdevices: typing.Collection[MerossSubDevice]):
+    def _build_subdevices_payload(
+        self, subdevices: "typing.Collection[MerossSubDevice]"
+    ):
         """
         This generator helps dealing with hubs hosting an high number
         of subdevices: when queried, the response payload might became huge
@@ -223,7 +234,7 @@ class HubChunkedPollingStrategy(PollingStrategy):
             yield payload
 
 
-class MerossDeviceHub(MerossDevice):
+class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
     """
     Specialized MerossDevice for smart hub(s) like MSH300
     """
@@ -238,7 +249,7 @@ class MerossDeviceHub(MerossDevice):
         MtsTrackedSensor.PLATFORM: None,
     }
 
-    __slots__ = ("subdevices",)
+    subdevices: dict[object, "MerossSubDevice"]
 
     # interface: EntityManager
     def managed_entities(self, platform):
@@ -265,21 +276,9 @@ class MerossDeviceHub(MerossDevice):
                 return NamespaceHandler(
                     self, namespace, handler=self._handle_Appliance_Hub_SubdeviceList
                 )
-            case (_, "Hub", *_):
+            case (_, "Hub", *args):
                 return HubNamespaceHandler(self, namespace)
         return super()._create_handler(namespace)
-
-    def _init_hub(self, digest: dict):
-        self.subdevices: dict[object, MerossSubDevice] = {}
-        for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
-            try:
-                subdevice_id = p_subdevice_digest[mc.KEY_ID]
-                if subdevice_id in self.subdevices:
-                    self.log_duplicated_subdevice(subdevice_id)
-                else:
-                    self._subdevice_build(p_subdevice_digest)
-            except Exception as exception:
-                self.log_exception(self.WARNING, exception, "_init_hub")
 
     def _parse_hub(self, p_hub: dict):
         # This is usually called inside _parse_all as part of the digest parsing
@@ -315,7 +314,9 @@ class MerossDeviceHub(MerossDevice):
                     subdevice.name,
                     subdevice_id,
                 )
-            self.schedule_entry_reload()
+            # needsave=True might need some time querying abilities before
+            # actually saving. We'll let some time to complete
+            self.schedule_entry_reload(5)
 
     # interface: self
     def log_duplicated_subdevice(self, subdevice_id: str):
@@ -448,33 +449,31 @@ class MerossSubDevice(MerossDeviceBase):
     it were a full-fledged device but some EntityManager properties
     are overriden in order to manage ConfigEntry setup/unload since
     MerossSubDevice doesn't actively represent one (it delegates this to
-    the owning MerossDeviceHub)
+    the owning Hub)
     """
 
     __slots__ = (
-        "build_request",
-        "async_request_raw",
         "async_request",
         "check_device_timezone",
         "hub",
         "type",
         "p_digest",
+        "sub_device_info",
         "sensor_battery",
         "switch_togglex",
     )
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict, _type: str):
+    def __init__(self, hub: HubMixin, p_digest: dict, _type: str):
         # this is a very dirty trick/optimization to override some MerossDeviceBase
         # properties/methods that just needs to be forwarded to the hub
         # this way we're short-circuiting that indirection
-        self.build_request = hub.build_request
-        self.async_request_raw = hub.async_request_raw
         self.async_request = hub.async_request
         self.check_device_timezone = hub.check_device_timezone
         # these properties are needed to be in place before base class init
         self.hub = hub
         self.type = _type
         self.p_digest = p_digest
+        self.sub_device_info = None
         id = p_digest[mc.KEY_ID]
         super().__init__(
             id,
@@ -492,7 +491,7 @@ class MerossSubDevice(MerossDeviceBase):
         self.switch_togglex: MLSwitch | None = None
 
     # interface: EntityManager
-    def generate_unique_id(self, entity: MerossEntity):
+    def generate_unique_id(self, entity: "MerossEntity"):
         """
         flexible policy in order to generate unique_ids for entities:
         This is an helper needed to better control migrations in code
@@ -507,18 +506,13 @@ class MerossSubDevice(MerossDeviceBase):
         await super().async_shutdown()
         self.check_device_timezone = None  # type: ignore
         self.async_request = None  # type: ignore
-        self.async_request_raw = None  # type: ignore
-        self.build_request = None  # type: ignore
-        self.hub: MerossDeviceHub = None  # type: ignore
+        self.hub: HubMixin = None  # type: ignore
         self.sensor_battery: MLNumericSensor = None  # type: ignore
         self.switch_togglex = None
 
     @property
     def tz(self):
         return self.hub.tz
-
-    def _get_device_info_name_key(self) -> str:
-        return mc.KEY_SUBDEVICENAME
 
     def _get_internal_name(self) -> str:
         return get_productnameuuid(self.type, self.id)
@@ -561,6 +555,17 @@ class MerossSubDevice(MerossDeviceBase):
             str(MLBinarySensor.DeviceClass.WINDOW),
             MLBinarySensor.DeviceClass.WINDOW,
         )
+
+    def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType"):
+        self.sub_device_info = sub_device_info
+        if _device_registry_entry := self.device_registry_entry:
+            name = (
+                sub_device_info.get(mc.KEY_SUBDEVICENAME) or self._get_internal_name()
+            )
+            if name != _device_registry_entry.name:
+                self.get_device_registry().async_update_device(
+                    _device_registry_entry.id, name=name
+                )
 
     def _parse(self, key: str, payload: dict):
         with self.exception_warning("_parse(%s, %s)", key, str(payload), timeout=14400):
@@ -721,16 +726,13 @@ class MerossSubDevice(MerossDeviceBase):
         if switch_togglex := self.switch_togglex:
             switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])
         else:
-            self.switch_togglex = switch_togglex = MLSwitch(
+            self.switch_togglex = switch_togglex = MLHubToggle(
                 self,
                 self.id,
                 None,
                 MLSwitch.DeviceClass.SWITCH,
-                onoff=p_togglex[mc.KEY_ONOFF],
-                namespace=mc.NS_APPLIANCE_HUB_TOGGLEX,
+                device_value=p_togglex[mc.KEY_ONOFF],
             )
-            switch_togglex.entity_category = me.EntityCategory.CONFIG
-            switch_togglex.key_channel = mc.KEY_ID
 
     def _parse_version(self, p_version: dict):
         """{"id": "00000000", "hardware": "1.1.5", "firmware": "5.1.8"}"""
@@ -758,7 +760,7 @@ class MS100SubDevice(MerossSubDevice):
         "number_adjust_humidity",
     )
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
         self.sensor_temperature = MLTemperatureSensor(self, self.id)
         self.sensor_humidity = MLHumiditySensor(self, self.id)
@@ -835,11 +837,9 @@ class MTS100SubDevice(MerossSubDevice):
         "sensor_temperature",
     )
 
-    def __init__(
-        self, hub: MerossDeviceHub, p_digest: dict, _type: str = mc.TYPE_MTS100
-    ):
+    def __init__(self, hub: HubMixin, p_digest: dict, _type: str = mc.TYPE_MTS100):
         super().__init__(hub, p_digest, _type)
-        from .devices.mts100 import Mts100Climate
+        from .mts100 import Mts100Climate
 
         self.climate = Mts100Climate(self)
         self.sensor_temperature = MLTemperatureSensor(self, self.id)
@@ -847,8 +847,8 @@ class MTS100SubDevice(MerossSubDevice):
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.climate: Mts100Climate = None  # type: ignore
-        self.sensor_temperature: MLNumericSensor = None  # type: ignore
+        self.climate: "Mts100Climate" = None  # type: ignore
+        self.sensor_temperature: "MLNumericSensor" = None  # type: ignore
 
     def _parse_all(self, p_all: dict):
         self._parse_online(p_all.get(mc.KEY_ONLINE, {}))
@@ -900,7 +900,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100] = MTS100SubDevice
 
 
 class MTS100V3SubDevice(MTS100SubDevice):
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MTS100V3)
 
     def _parse_mts100v3(self, p_mts100v3: dict):
@@ -913,7 +913,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS100V3] = MTS100V3SubDevice
 
 
 class MTS150SubDevice(MTS100SubDevice):
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MTS150)
 
     def _parse_mts150(self, p_mts150: dict):
@@ -955,7 +955,7 @@ class GS559SubDevice(MerossSubDevice):
         "sensor_interConn",
     )
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
         self.sensor_status: MLEnumSensor = self.build_enum_sensor(mc.KEY_STATUS)
         self.sensor_status.translation_key = "smoke_alarm_status"
@@ -997,7 +997,7 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_SMOKEALARM] = GS559SubDevice
 class MS200SubDevice(MerossSubDevice):
     __slots__ = ("binary_sensor_window",)
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS200)
         self.binary_sensor_window = self.build_binary_sensor_window()
 
@@ -1018,7 +1018,7 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_DOORWINDOW] = MS200SubDevice
 class MS400SubDevice(MerossSubDevice):
     __slots__ = ("binary_sensor_waterleak",)
 
-    def __init__(self, hub: MerossDeviceHub, p_digest: dict):
+    def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS400)
         self.binary_sensor_waterleak = self.build_binary_sensor(
             mc.KEY_WATERLEAK, MLBinarySensor.DeviceClass.SAFETY
@@ -1036,3 +1036,19 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS400] = MS400SubDevice
 # waterLeak devices (mc.TYPE_MS400) are presented as
 # mc.KEY_WATERLEAK in digest(s) so we have to map that too
 WELL_KNOWN_TYPE_MAP[mc.KEY_WATERLEAK] = MS400SubDevice
+
+
+def digest_init_hub(device: "HubMixin", digest) -> "DigestParseFunc":
+
+    device.subdevices = {}
+    for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
+        try:
+            subdevice_id = p_subdevice_digest[mc.KEY_ID]
+            if subdevice_id in device.subdevices:
+                device.log_duplicated_subdevice(subdevice_id)
+            else:
+                device._subdevice_build(p_subdevice_digest)
+        except Exception as exception:
+            device.log_exception(device.WARNING, exception, "_init_hub")
+
+    return device._parse_hub

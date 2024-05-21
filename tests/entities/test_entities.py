@@ -5,7 +5,8 @@ import typing
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
-from custom_components.meross_lan.meross_device_hub import MerossDeviceHub
+from custom_components.meross_lan.devices.hub import HubMixin
+from custom_components.meross_lan.meross_entity import MerossEntity
 from custom_components.meross_lan.merossclient import const as mc
 from emulator import generate_emulators
 
@@ -130,7 +131,7 @@ async def test_entities(
                 subdevice_id = p_subdevice[mc.KEY_ID]
                 if subdevice_id in subdevice_ids:
                     # get rid of duplicated ids in digest..they'll be
-                    # discarded in MerossDeviceHub too
+                    # discarded in Hub too
                     # (see trace msh300hk-01234567890123456789012345678916)
                     continue
                 subdevice_ids.add(subdevice_id)
@@ -156,7 +157,7 @@ async def test_entities(
                 device = await device_context.perform_coldstart()
                 await _async_test_entities(device)
                 if ishub:
-                    assert isinstance(device, MerossDeviceHub)
+                    assert isinstance(device, HubMixin)
                     for subdevice in device.subdevices.values():
                         await _async_test_entities(subdevice)
 

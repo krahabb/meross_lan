@@ -4,6 +4,8 @@ from homeassistant.core import HomeAssistant, StateMachine
 from homeassistant.helpers.entity import Entity
 
 from custom_components.meross_lan.meross_entity import MerossEntity
+from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.switch import MLToggleX
 
 from tests.helpers import DeviceContext
 
@@ -74,3 +76,12 @@ class EntityComponentTest:
 
     async def async_test_disabled_callback(self, entity: MerossEntity):
         pass
+
+    def _check_remove_togglex(self, entity: MerossEntity):
+        """
+        Use to remove expected (but not instantiated) MLToggleX entities
+        for those hybrid entities which overtake ToggleX behavior
+        """
+        for togglex_digest in self.digest.get(mc.KEY_TOGGLEX, []):
+            if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
+                EntityComponentTest.expected_entity_types.remove(MLToggleX)

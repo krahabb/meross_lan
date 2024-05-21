@@ -1,7 +1,5 @@
 """"""
 
-from __future__ import annotations
-
 import typing
 
 from custom_components.meross_lan.merossclient import (
@@ -16,13 +14,13 @@ if typing.TYPE_CHECKING:
 
 
 class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key):
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
 
         if get_element_by_key_safe(
             descriptor.digest.get(mc.KEY_TOGGLEX),
             mc.KEY_CHANNEL,
-            0,
+            descriptor.digest[mc.KEY_LIGHT][mc.KEY_CHANNEL],
         ):
             self._togglex_switch = True  # use TOGGLEX to (auto) switch
             self._togglex_mode = (
@@ -44,7 +42,9 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         p_digest_light: dict = p_digest[mc.KEY_LIGHT]
         p_digest_light_saved = dict(p_digest_light)
         p_light: dict = payload[mc.KEY_LIGHT]
-        channel = p_light.get(mc.KEY_CHANNEL, 0)
+        channel = p_light[mc.KEY_CHANNEL]
+        if channel != p_digest_light[mc.KEY_CHANNEL]:
+            raise Exception("wrong request channel")
         # generally speaking set_light always turns on, unless the payload carries onoff = 0 and
         # the device is not using togglex
         if self._togglex_switch:

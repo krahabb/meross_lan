@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from ..calendar import MtsSchedule
@@ -9,7 +7,8 @@ from ..number import MtsSetPointNumber
 from ..sensor import MLDiagnosticSensor
 
 if typing.TYPE_CHECKING:
-    from .thermostat import ThermostatMixin
+    from ..meross_device import MerossDevice
+    from ..number import MtsTemperatureNumber
 
 
 class Mts960FakeSetPointNumber(MtsSetPointNumber):
@@ -25,6 +24,7 @@ class Mts960FakeSetPointNumber(MtsSetPointNumber):
 class Mts960Climate(MtsClimate):
     """Climate entity for MTS960 devices"""
 
+    manager: "MerossDevice"
     namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB
     key_namespace = mc.KEY_MODEB
     device_scale = mc.MTS960_TEMP_SCALE
@@ -98,8 +98,6 @@ class Mts960Climate(MtsClimate):
         mc.KEY_WORKING,
     )
 
-    manager: ThermostatMixin
-
     # HA core entity attributes:
     hvac_modes = [
         MtsClimate.HVACMode.OFF,
@@ -111,11 +109,16 @@ class Mts960Climate(MtsClimate):
 
     __slots__ = ()
 
-    def __init__(self, manager: ThermostatMixin, channel: object):
+    def __init__(
+        self,
+        manager: "MerossDevice",
+        channel: object,
+        adjust_number_class: typing.Type["MtsTemperatureNumber"],
+    ):
         super().__init__(
             manager,
             channel,
-            manager.AdjustNumberClass,
+            adjust_number_class,
             Mts960FakeSetPointNumber,
             Mts960Schedule,
         )

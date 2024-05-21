@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import media_player
@@ -12,8 +10,7 @@ from homeassistant.components.media_player.const import (
 from . import meross_entity as me
 from .helpers import clamp
 from .helpers.namespaces import PollingStrategy
-from .light import MLLight
-from .merossclient import const as mc  # mEROSS cONST
+from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -23,7 +20,7 @@ if typing.TYPE_CHECKING:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, media_player.DOMAIN)
 
@@ -31,7 +28,7 @@ async def async_setup_entry(
 class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
     PLATFORM = media_player.DOMAIN
 
-    manager: MerossDevice
+    manager: "MerossDevice"
 
     # HA core entity attributes:
     is_volume_muted: bool | None
@@ -60,7 +57,7 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         "_mp3",
     )
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         self._mp3 = {}
         self.is_volume_muted = None
         self.media_title = None
@@ -72,10 +69,6 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         )
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_MP3, self)
         PollingStrategy(manager, mc.NS_APPLIANCE_CONTROL_MP3)
-        # cherub light entity should be there...
-        light: MLLight = manager.entities.get(0)  # type: ignore
-        if light:
-            light.update_effect_map(mc.HP110A_LIGHT_EFFECT_MAP)
 
     # interface: MerossEntity
     def set_unavailable(self):

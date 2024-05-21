@@ -8,20 +8,24 @@
  versioning
 """
 
-from __future__ import annotations
-
+from functools import partial
 import typing
 
 from homeassistant import const as hac
+
+try:
+    from homeassistant.components.recorder import get_instance as r_get_instance
+    from homeassistant.components.recorder.history import get_last_state_changes
+except ImportError:
+    get_last_state_changes = None
+
 from homeassistant.helpers.entity import Entity, EntityCategory
 
 from .helpers import Loggable
 from .helpers.manager import ApiProfile
-from .merossclient import NAMESPACE_TO_KEY, const as mc
+from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
-    from typing import ClassVar, Final
-
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -39,11 +43,11 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     class MyCustomSwitch(MerossEntity, Switch)
     """
 
-    PLATFORM: ClassVar[str]
+    PLATFORM: typing.ClassVar[str]
 
     EntityCategory = EntityCategory
 
-    is_diagnostic: ClassVar[bool] = False
+    is_diagnostic: typing.ClassVar[bool] = False
     """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
     # These 'placeholder' definitions support generalization of
@@ -62,11 +66,11 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     # HA core entity attributes:
     # These are constants throughout our model
-    force_update: Final[bool] = False
-    has_entity_name: Final[bool] = True
-    should_poll: Final[bool] = False
+    force_update: typing.Final[bool] = False
+    has_entity_name: typing.Final[bool] = True
+    should_poll: typing.Final[bool] = False
     # These may be customized here and there per class
-    _attr_available: ClassVar[bool] = False
+    _attr_available: typing.ClassVar[bool] = False
     # These may be customized here and there per class or instance
     assumed_state: bool = False
     entity_category: EntityCategory | None = None
@@ -76,7 +80,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     translation_key: str | None = None
     # These are actually per instance
     available: bool
-    device_class: Final[object | str | None]
+    device_class: typing.Final[object | str | None]
     name: str | None
     suggested_object_id: str | None
     unique_id: str
@@ -99,7 +103,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     def __init__(
         self,
-        manager: EntityManager,
+        manager: "EntityManager",
         channel: object | None,
         entitykey: str | None = None,
         device_class: object | str | None = None,
@@ -128,7 +132,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.manager = manager
         self.channel = channel
         self.entitykey = entitykey
-        self.namespace_handlers: set[NamespaceHandler] = set()
+        self.namespace_handlers: set["NamespaceHandler"] = set()
         self.available = self._attr_available or manager.online
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
@@ -175,7 +179,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         for handler in set(self.namespace_handlers):
             handler.unregister(self)
         self.manager.entities.pop(self.id)
-        self.manager: EntityManager = None  # type: ignore
+        self.manager: "EntityManager" = None  # type: ignore
 
     def flush_state(self):
         """Actually commits a state change to HA."""
@@ -195,7 +199,41 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         """This is a 'debug' friendly definition. It is needed to help static type checking
         when implementing diagnostic sensors calls but, at runtime, it would be an error to
         call such an implementation for an entity which is not a diagnostic sensor."""
-        raise NotImplementedError("Called update_native_value on wrong class type")
+        raise NotImplementedError("Called 'update_native_value' on wrong entity type")
+
+    async def async_request_value(self, device_value):
+        """Sends the actual request to the device. This needs to be overloaded in entities
+        actually supporting the method SET on their namespace. Since the syntax for the payload
+        is almost generalized we have some defaults implementations based on mixins ready to be
+        included in actual entity implementation
+        """
+        raise NotImplementedError("Called 'async_request_value' on wrong entity type")
+
+    async def get_last_state_available(self):
+        """
+        Recover the last known good state from recorder in order to
+        restore transient state information when restarting HA.
+        If the device/entity was disconnected before restarting and we need
+        the last good reading from the device, we need to skip the last
+        state since it is 'unavailable'
+        """
+
+        if not get_last_state_changes:
+            raise Exception("Cannot find history.get_last_state_changes api")
+
+        _last_state = await r_get_instance(self.hass).async_add_executor_job(
+            partial(
+                get_last_state_changes,
+                self.hass,
+                2,
+                self.entity_id,
+            )
+        )
+        if states := _last_state.get(self.entity_id):
+            for state in reversed(states):
+                if state.state not in (hac.STATE_UNKNOWN, hac.STATE_UNAVAILABLE):
+                    return state
+        return None
 
     def _generate_unique_id(self):
         return self.manager.generate_unique_id(self)
@@ -217,12 +255,77 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         )
 
 
+class MENoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Implementation for protocol method 'SET' on entities/namespaces not backed by a channel.
+    Actual examples: Appliance.Control.Toggle, Appliance.GarageDoor.Config, and so on..
+    """
+
+    manager: "MerossDeviceBase"
+
+    # interface: MerossEntity
+    async def async_request_value(self, device_value):
+        """sends the actual request to the device. this is likely to be overloaded"""
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {self.key_namespace: {self.key_value: device_value}},
+        )
+
+
+class MEDictChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
+    where the command payload must be enclosed in a plain dict (without enclosing list).
+    Actual examples: Appliance.Control.ToggleX, Appliance.RollerShutter.Config, and so on..
+    """
+
+    manager: "MerossDeviceBase"
+
+    # interface: MerossEntity
+    async def async_request_value(self, device_value):
+        """sends the actual request to the device. this is likely to be overloaded"""
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: {
+                    self.key_channel: self.channel,
+                    self.key_value: device_value,
+                }
+            },
+        )
+
+
+class MEListChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
+    where the command payload must be enclosed in a list
+    Actual examples: Appliance.Control.ToggleX and so on..
+    """
+
+    manager: "MerossDeviceBase"
+
+    # interface: MerossEntity
+    async def async_request_value(self, device_value):
+        """sends the actual request to the device. this is likely to be overloaded"""
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: [
+                    {self.key_channel: self.channel, self.key_value: device_value}
+                ]
+            },
+        )
+
+
 class MerossNumericEntity(MerossEntity):
     """Common base class for (numeric) sensors and numbers."""
 
-    UNIT_PERCENTAGE: Final = hac.PERCENTAGE
+    UNIT_PERCENTAGE: typing.Final = hac.PERCENTAGE
 
-    DEVICECLASS_TO_UNIT_MAP: ClassVar[dict[object | None, str | None]]
+    DEVICECLASS_TO_UNIT_MAP: typing.ClassVar[dict[object | None, str | None]]
     """To be init in derived classes with their DeviceClass own types"""
     device_scale: int | float = 1
     """Used to scale the device value when converting to/from native value"""
@@ -241,7 +344,7 @@ class MerossNumericEntity(MerossEntity):
 
     def __init__(
         self,
-        manager: EntityManager,
+        manager: "EntityManager",
         channel: object,
         entitykey: str | None = None,
         device_class: object | None = None,
@@ -295,14 +398,14 @@ class MerossBinaryEntity(MerossEntity):
 
     def __init__(
         self,
-        manager: MerossDeviceBase,
+        manager: "MerossDeviceBase",
         channel: object,
         entitykey: str | None = None,
         device_class: object | None = None,
         *,
-        onoff=None,
+        device_value=None,
     ):
-        self.is_on = onoff
+        self.is_on = device_value
         super().__init__(manager, channel, entitykey, device_class)
 
     def set_unavailable(self):
@@ -320,65 +423,11 @@ class MerossBinaryEntity(MerossEntity):
         self.update_onoff(payload[self.key_value])
 
 
-class MerossToggle(MerossBinaryEntity):
-    """
-    Base toggle-like behavior used as a base class for
-    effective switches or the likes (light for example)
-    """
-
-    manager: MerossDeviceBase
-
-    def __init__(
-        self,
-        manager: MerossDeviceBase,
-        channel: object,
-        entitykey: str | None = None,
-        device_class: object | None = None,
-        *,
-        onoff=None,
-        namespace: str | None = None,
-    ):
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            device_class,
-            onoff=onoff,
-        )
-        if namespace:
-            self.namespace = namespace
-            self.key_namespace = NAMESPACE_TO_KEY[namespace]
-
-    async def async_turn_on(self, **kwargs):
-        await self.async_request_onoff(1)
-
-    async def async_turn_off(self, **kwargs):
-        await self.async_request_onoff(0)
-
-    async def async_request_onoff(self, onoff: int):
-        assert self.namespace
-
-        # this is the meross executor code
-        # override for switches not implemented
-        # by a toggle like api
-        if await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: {
-                    self.key_channel: self.channel,
-                    self.key_value: onoff,
-                }
-            },
-        ):
-            self.update_onoff(onoff)
-
-
 #
 # helper functions to 'commonize' platform setup
 #
 def platform_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices, platform: str
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices, platform: str
 ):
     manager = ApiProfile.managers[config_entry.entry_id]
     manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)

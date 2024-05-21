@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import number
@@ -14,17 +12,25 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .climate import MtsClimate
-    from .helpers.manager import EntityManager
-    from .meross_device import MerossDevice
+    from .meross_device import MerossDeviceBase
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
 
-class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
+class MLConfigNumber(me.MEListChannelMixin, me.MerossNumericEntity, number.NumberEntity):
+    """
+    Base class for any configurable parameter in the device. This works much-like
+    MLSwitch by refining the 'async_request_value' api in order to send the command.
+    Contrary to MLSwitch (which is abstract), this has a default implementation for
+    payloads sent in a list through me.MEListChannelMixin since this looks to be
+    widely adopted (thermostats and the likes) but some care needs to be taken for
+    some namespaces not supporting channels (i.e. Appliance.GarageDoor.Config) or
+    not understanding the list payload (likely all the RollerShutter stuff)
+    """
     PLATFORM = number.DOMAIN
     DeviceClass = number.NumberDeviceClass
 
@@ -40,7 +46,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
 
     DEBOUNCE_DELAY = 1
 
-    manager: MerossDevice
+    manager: "MerossDeviceBase"
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
@@ -53,7 +59,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
 
     def __init__(
         self,
-        manager: EntityManager,
+        manager: "MerossDeviceBase",
         channel: object | None,
         entitykey: str | None = None,
         device_class: DeviceClass | str | None = None,
@@ -68,7 +74,7 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
             entitykey,
             device_class,
             device_value=device_value,
-            native_unit_of_measurement=native_unit_of_measurement
+            native_unit_of_measurement=native_unit_of_measurement,
         )
 
     async def async_shutdown(self):
@@ -97,21 +103,9 @@ class MLConfigNumber(me.MerossNumericEntity, number.NumberEntity):
         )
 
     # interface: self
-    async def async_request(self, device_value):
-        """sends the actual request to the device. this is likely to be overloaded"""
-        return await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: [
-                    {self.key_channel: self.channel, self.key_value: device_value}
-                ]
-            },
-        )
-
     async def _async_request_debounce(self, device_value):
         self._async_request_debounce_unsub = None
-        if await self.async_request(device_value):
+        if await self.async_request_value(device_value):
             self.update_device_value(device_value)
         else:
             # restore the last good known device value
@@ -135,7 +129,7 @@ class MtsTemperatureNumber(MLConfigNumber):
         "device_scale",
     )
 
-    def __init__(self, climate: MtsClimate, entitykey: str):
+    def __init__(self, climate: "MtsClimate", entitykey: str):
         self.climate = climate
         self.device_scale = climate.device_scale
         super().__init__(
@@ -157,7 +151,7 @@ class MtsSetPointNumber(MtsTemperatureNumber):
 
     __slots__ = ("icon",)
 
-    def __init__(self, climate: MtsClimate, preset_mode: str):
+    def __init__(self, climate: "MtsClimate", preset_mode: str):
         self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
             reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
         ]
@@ -180,8 +174,8 @@ class MtsSetPointNumber(MtsTemperatureNumber):
     def native_step(self):
         return self.climate.target_temperature_step
 
-    async def async_request(self, device_value):
-        if response := await super().async_request(device_value):
+    async def async_request_value(self, device_value):
+        if response := await super().async_request_value(device_value):
             # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
             # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
             # make sure the climate state is consistent and all the correct roundings

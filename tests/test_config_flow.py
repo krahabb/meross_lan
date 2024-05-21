@@ -86,6 +86,14 @@ async def test_profile_config_flow(
     """
     Test cloud profile entry config flow
     """
+    user_input = {
+        mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
+        mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
+        mlc.CONF_SAVE_PASSWORD: False,
+        mlc.CONF_ALLOW_MQTT_PUBLISH: True,
+        mlc.CONF_CHECK_FIRMWARE_UPDATES: True,
+    }
+
     config_flow = hass.config_entries.flow
 
     result = await config_flow.async_init(
@@ -97,12 +105,9 @@ async def test_profile_config_flow(
     # enter wrong profile username/password
     result = await config_flow.async_configure(
         result["flow_id"],
-        user_input={
-            mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
+        user_input=user_input
+        | {
             mlc.CONF_PASSWORD: "",
-            mlc.CONF_SAVE_PASSWORD: False,
-            mlc.CONF_ALLOW_MQTT_PUBLISH: False,
-            mlc.CONF_CHECK_FIRMWARE_UPDATES: False,
         },
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 1
@@ -112,13 +117,7 @@ async def test_profile_config_flow(
     cloudapi_mock.online = False
     result = await config_flow.async_configure(
         result["flow_id"],
-        user_input={
-            mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
-            mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
-            mlc.CONF_SAVE_PASSWORD: False,
-            mlc.CONF_ALLOW_MQTT_PUBLISH: False,
-            mlc.CONF_CHECK_FIRMWARE_UPDATES: False,
-        },
+        user_input=user_input,
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 2
     assert result["type"] == FlowResultType.FORM  # type: ignore
@@ -127,19 +126,16 @@ async def test_profile_config_flow(
     cloudapi_mock.online = True
     result = await config_flow.async_configure(
         result["flow_id"],
-        user_input={
-            mlc.CONF_EMAIL: tc.MOCK_PROFILE_EMAIL,
-            mlc.CONF_PASSWORD: tc.MOCK_PROFILE_PASSWORD,
-            mlc.CONF_SAVE_PASSWORD: False,
-            mlc.CONF_ALLOW_MQTT_PUBLISH: True,
-            mlc.CONF_CHECK_FIRMWARE_UPDATES: True,
-        },
+        user_input=user_input,
     )
     assert cloudapi_mock.api_calls[cloudapi.API_AUTH_SIGNIN_PATH] == 3
     assert result["type"] == FlowResultType.CREATE_ENTRY  # type: ignore
 
-    data: mlc.ProfileConfigType = result["data"]  # type: ignore
-    assert data == tc.MOCK_PROFILE_CONFIG
+    profile_config: mlc.ProfileConfigType = result["data"]  # type: ignore
+    # these are the defaults as set by the config_flow
+    profile_config_expected = dict(tc.MOCK_PROFILE_CONFIG)
+    profile_config_expected.pop(mlc.CONF_OBFUSCATE)
+    assert profile_config == profile_config_expected
 
     # now cleanup the entry
     await _cleanup_config_entry(hass, result)

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import climate
@@ -11,8 +9,6 @@ from .select import MtsTrackedSensor
 from .sensor import UnitOfTemperature
 
 if typing.TYPE_CHECKING:
-    from typing import ClassVar, Final
-
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -22,7 +18,7 @@ if typing.TYPE_CHECKING:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, climate.DOMAIN)
 
@@ -30,40 +26,38 @@ async def async_setup_entry(
 class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PLATFORM = climate.DOMAIN
 
-    ATTR_TEMPERATURE: Final = climate.ATTR_TEMPERATURE
-    TEMP_CELSIUS: Final = UnitOfTemperature.CELSIUS
+    ATTR_TEMPERATURE: typing.Final = climate.ATTR_TEMPERATURE
+    TEMP_CELSIUS: typing.Final = UnitOfTemperature.CELSIUS
 
-    HVACAction: Final = climate.HVACAction
-    HVACMode: Final = climate.HVACMode
+    HVACAction: typing.Final = climate.HVACAction
+    HVACMode: typing.Final = climate.HVACMode
 
-    PRESET_CUSTOM: Final = "custom"
-    PRESET_COMFORT: Final = "comfort"
-    PRESET_SLEEP: Final = "sleep"
-    PRESET_AWAY: Final = "away"
-    PRESET_AUTO: Final = "auto"
+    PRESET_CUSTOM: typing.Final = "custom"
+    PRESET_COMFORT: typing.Final = "comfort"
+    PRESET_SLEEP: typing.Final = "sleep"
+    PRESET_AWAY: typing.Final = "away"
+    PRESET_AUTO: typing.Final = "auto"
 
-    namespace: ClassVar[str]
-    key_namespace: ClassVar[str]
-    device_scale: ClassVar[float] = mc.MTS_TEMP_SCALE
+    device_scale: typing.ClassVar[float] = mc.MTS_TEMP_SCALE
 
-    MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
+    MTS_MODE_TO_PRESET_MAP: typing.ClassVar[dict[int | None, str]]
     """maps device 'mode' value to the HA climate.preset_mode"""
-    MTS_MODE_TO_TEMPERATUREKEY_MAP: ClassVar[dict[int | None, str]]
+    MTS_MODE_TO_TEMPERATUREKEY_MAP: typing.ClassVar[dict[int | None, str]]
     """maps the current mts mode to the name of temperature setpoint key"""
-    PRESET_TO_ICON_MAP: Final = {
+    PRESET_TO_ICON_MAP: typing.Final = {
         PRESET_COMFORT: "mdi:sun-thermometer",
         PRESET_SLEEP: "mdi:power-sleep",
         PRESET_AWAY: "mdi:bag-checked",
     }
     """lookups used in MtsSetpointNumber to map a pretty icon to the setpoint entity"""
 
-    manager: MerossDeviceBase
-    number_adjust_temperature: Final[MtsTemperatureNumber]
-    number_away_temperature: Final[MtsSetPointNumber]
-    number_comfort_temperature: Final[MtsSetPointNumber]
-    number_sleep_temperature: Final[MtsSetPointNumber]
-    schedule: Final[MtsSchedule]
-    select_tracked_sensor: Final[MtsTrackedSensor]
+    manager: "MerossDeviceBase"
+    number_adjust_temperature: typing.Final["MtsTemperatureNumber"]
+    number_away_temperature: typing.Final["MtsSetPointNumber"]
+    number_comfort_temperature: typing.Final["MtsSetPointNumber"]
+    number_sleep_temperature: typing.Final["MtsSetPointNumber"]
+    schedule: typing.Final["MtsSchedule"]
+    select_tracked_sensor: typing.Final["MtsTrackedSensor"]
 
     # HA core entity attributes:
     current_temperature: float | None
@@ -115,11 +109,11 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     def __init__(
         self,
-        manager: MerossDeviceBase,
+        manager: "MerossDeviceBase",
         channel: object,
-        adjust_number_class: typing.Type[MtsTemperatureNumber],
-        preset_number_class: typing.Type[MtsSetPointNumber],
-        calendar_class: typing.Type[MtsSchedule],
+        adjust_number_class: typing.Type["MtsTemperatureNumber"],
+        preset_number_class: typing.Type["MtsSetPointNumber"],
+        calendar_class: typing.Type["MtsSchedule"],
     ):
         self.current_temperature = None
         self.hvac_action = None
@@ -177,7 +171,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     async def async_turn_off(self):
         await self.async_request_onoff(0)
 
-    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
+    async def async_set_hvac_mode(self, hvac_mode: "MtsClimate.HVACMode"):
         raise NotImplementedError()
 
     async def async_set_preset_mode(self, preset_mode: str):

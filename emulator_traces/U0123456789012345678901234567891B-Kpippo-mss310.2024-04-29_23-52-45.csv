@@ -1,0 +1,210 @@
+2024/04/29 - 23:52:45		auto	GETACK	Appliance.System.All	{"system":{"hardware":{"type":"mss310","subType":"us","version":"1.0.0","chipType":"MT7688","uuid":"##############################25","macAddress":"################0"},"firmware":{"version":"1.1.18","compileTime":"2018-12-03 11:15:36","wifiMac":"################0","innerIp":"#########0","server":"###################3","port":"@2","secondServer":"###################3","secondPort":"@2","userId":"@1"},"time":{"timestamp":1713870804,"timezone":"Europe/Dublin","timeRule":[[1667091600,0,0],[1679792400,3600,1],[1698541200,0,0],[1711846800,3600,1],[1729990800,0,0],[1743296400,3600,1],[1761440400,0,0],[1774746000,3600,1],[1792890000,0,0],[1806195600,3600,1],[1824944400,0,0],[1837645200,3600,1],[1856394000,0,0],[1869094800,3600,1],[1887843600,0,0],[1901149200,3600,1],[1919293200,0,0],[1932598800,3600,1],[1950742800,0,0],[1964048400,3600,1]]},"online":{"status":1}},"control":{"toggle":{"onoff":1,"lmTime":1713865630},"trigger":[],"timer":[]}}
+2024/04/29 - 23:52:45		auto	GETACK	Appliance.System.Ability	{"Appliance.Config.Key":{},"Appliance.Config.WifiList":{},"Appliance.Config.Wifi":{},"Appliance.Config.Trace":{},"Appliance.System.Online":{},"Appliance.System.All":{},"Appliance.System.Hardware":{},"Appliance.System.Firmware":{},"Appliance.System.Time":{},"Appliance.System.Clock":{},"Appliance.System.Debug":{},"Appliance.System.Ability":{},"Appliance.System.Runtime":{},"Appliance.System.Report":{},"Appliance.System.Position":{},"Appliance.System.DNDMode":{},"Appliance.Control.Toggle":{},"Appliance.Control.Timer":{"sunOffsetSupport":1},"Appliance.Control.Trigger":{},"Appliance.Control.ConsumptionX":{},"Appliance.Control.Electricity":{},"Appliance.Control.Upgrade":{},"Appliance.Control.Bind":{},"Appliance.Control.Unbind":{}}
+2024/04/29 - 23:52:45		auto	LOG	debug	platform_setup_entry { platform: update }
+2024/04/29 - 23:52:45		auto	LOG	debug	platform_setup_entry { platform: sensor }
+2024/04/29 - 23:52:45		auto	LOG	verbose	ConsumptionXSensor(energy): Added to HomeAssistant
+2024/04/29 - 23:52:45		auto	LOG	debug	platform_setup_entry { platform: light }
+2024/04/29 - 23:52:45		auto	LOG	verbose	MLDNDLightEntity(dnd): Added to HomeAssistant
+2024/04/29 - 23:52:45		auto	LOG	debug	platform_setup_entry { platform: switch }
+2024/04/29 - 23:52:45		auto	LOG	verbose	MLSwitch(0): Added to HomeAssistant
+2024/04/29 - 23:52:45		auto	LOG	verbose	MLNumericSensor(power): Added to HomeAssistant
+2024/04/29 - 23:52:45		auto	LOG	verbose	MLNumericSensor(current): Added to HomeAssistant
+2024/04/29 - 23:52:45		auto	LOG	verbose	MLNumericSensor(voltage): Added to HomeAssistant
+2024/04/29 - 23:52:45		auto	LOG	verbose	MLSignalStrengthSensor(signal_strength): Added to HomeAssistant
+2024/04/29 - 23:52:45		auto	LOG	debug	linked to profile:@1
+2024/04/29 - 23:52:45		auto	LOG	debug	mqtt_attached to ###################3:@2
+2024/04/29 - 23:52:45		auto	LOG	debug	mqtt_connected to ###################3:@2
+2024/04/29 - 23:52:45		auto	LOG	debug	Polling begin
+2024/04/29 - 23:52:45	TX	http	GET	Appliance.System.All	{"all":{}}
+2024/04/29 - 23:52:45	RX	http	GETACK	Appliance.System.All	{"all":{"system":{"hardware":{"type":"mss310","subType":"us","version":"1.0.0","chipType":"MT7688","uuid":"##############################25","macAddress":"################0"},"firmware":{"version":"1.1.18","compileTime":"2018-12-03 11:15:36","wifiMac":"################0","innerIp":"#########0","server":"###################3","port":"@2","secondServer":"###################3","secondPort":"@2","userId":"@1"},"time":{"timestamp":1714431160,"timezone":"Europe/Dublin","timeRule":[[1667091600,0,0],[1679792400,3600,1],[1698541200,0,0],[1711846800,3600,1],[1729990800,0,0],[1743296400,3600,1],[1761440400,0,0],[1774746000,3600,1],[1792890000,0,0],[1806195600,3600,1],[1824944400,0,0],[1837645200,3600,1],[1856394000,0,0],[1869094800,3600,1],[1887843600,0,0],[1901149200,3600,1],[1919293200,0,0],[1932598800,3600,1],[1950742800,0,0],[1964048400,3600,1]]},"online":{"status":1}},"control":{"toggle":{"onoff":1,"lmTime":1714345202},"trigger":[],"timer":[]}}}
+2024/04/29 - 23:52:45		auto	LOG	debug	Switching protocol to http
+2024/04/29 - 23:52:45		auto	LOG	debug	Back online!
+2024/04/29 - 23:52:45	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/29 - 23:52:45	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431030,"value":462},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/29 - 23:52:45		auto	LOG	debug	ConsumptionXSensor(energy): updated midnight epochs: yesterday=1714258800.0 - today=1714345200.0 - tomorrow=1714431600.0
+2024/04/29 - 23:52:45		auto	LOG	debug	ConsumptionXSensor(energy): updating consumption=462
+2024/04/29 - 23:52:45	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:52:46	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":418,"voltage":2387,"power":67379}}
+2024/04/29 - 23:52:46	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:52:46	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:52:46	TX	http	GET	Appliance.System.Runtime	{"runtime":{}}
+2024/04/29 - 23:52:46	RX	http	GETACK	Appliance.System.Runtime	{"runtime":{"signal":86}}
+2024/04/29 - 23:52:46		auto	LOG	debug	Polling end
+2024/04/29 - 23:52:47		auto	LOG	debug	Tracing Appliance.System.Debug ability
+2024/04/29 - 23:52:47	TX	http	GET	Appliance.System.Debug	{"debug":{}}
+2024/04/29 - 23:52:47	RX	http	GETACK	Appliance.System.Debug	{"debug":{"system":{"version":"1.1.18","compileTime":"2018-12-03 11:15:36","sysUpTime":"31h55m5s","memory":"Total 3319k, Free 1615k, Largest free block 1606k","suncalc":"6:53;19:0","localTime":"Mon Apr 29 23:52:42 2024","localTimeOffset":3600},"network":{"linkStatus":0,"signal":83,"wifiDisconnectCount":0,"ssid":"####0","gatewayMac":"################0","innerIp":"#########0"},"cloud":{"activeServer":"###################3","mainServer":"###################3","mainPort":"@2","secondServer":"###################3","secondPort":"@2","userId":"@1","sysConnectTime":"Sun Apr 28 14:54:31 2024","sysOnlineTime":"31h58m11s","sysDisconnectCount":0,"pingTrace":[]}}}
+2024/04/29 - 23:52:49		auto	LOG	debug	Tracing Appliance.System.Runtime ability
+2024/04/29 - 23:52:49	TX	http	GET	Appliance.System.Runtime	{"runtime":{}}
+2024/04/29 - 23:52:49	RX	http	GETACK	Appliance.System.Runtime	{"runtime":{"signal":83}}
+2024/04/29 - 23:52:51		auto	LOG	debug	Tracing Appliance.Control.Toggle ability
+2024/04/29 - 23:52:51	TX	http	GET	Appliance.Control.Toggle	{"toggle":[]}
+2024/04/29 - 23:52:51	RX	http	GETACK	Appliance.Control.Toggle	{"toggle":{"onoff":1,"lmTime":1714345202}}
+2024/04/29 - 23:52:51		auto	LOG	warning	KeyError('channel') in NamespaceHandler(Appliance.Control.Toggle)._handle_dict: payload={'toggle': {'onoff': 1, 'lmTime': 1714345202}}
+2024/04/29 - 23:52:53		auto	LOG	debug	Tracing Appliance.Control.Timer ability
+2024/04/29 - 23:52:53	TX	http	GET	Appliance.Control.Timer	{"timer":{}}
+2024/04/29 - 23:52:54	RX	http	GETACK	Appliance.Control.Timer	{"timer":[]}
+2024/04/29 - 23:52:54		auto	LOG	debug	Handler undefined for method:GETACK namespace:Appliance.Control.Timer payload:{'timer': []}
+2024/04/29 - 23:52:54	TX	http	GET	Appliance.Control.Timer	{"timer":[{"channel":0}]}
+2024/04/29 - 23:52:54	RX	http	GETACK	Appliance.Control.Timer	{"timer":[]}
+2024/04/29 - 23:52:54		auto	LOG	debug	Handler undefined for method:GETACK namespace:Appliance.Control.Timer payload:{'timer': []}
+2024/04/29 - 23:52:56		auto	LOG	debug	Tracing Appliance.Control.Trigger ability
+2024/04/29 - 23:52:56	TX	http	GET	Appliance.Control.Trigger	{"trigger":{}}
+2024/04/29 - 23:52:56	RX	http	GETACK	Appliance.Control.Trigger	{"trigger":[]}
+2024/04/29 - 23:52:56		auto	LOG	debug	Handler undefined for method:GETACK namespace:Appliance.Control.Trigger payload:{'trigger': []}
+2024/04/29 - 23:52:56	TX	http	GET	Appliance.Control.Trigger	{"trigger":[{"channel":0}]}
+2024/04/29 - 23:52:56	RX	http	GETACK	Appliance.Control.Trigger	{"trigger":[]}
+2024/04/29 - 23:52:56		auto	LOG	debug	Handler undefined for method:GETACK namespace:Appliance.Control.Trigger payload:{'trigger': []}
+2024/04/29 - 23:52:58		auto	LOG	debug	Tracing Appliance.Control.ConsumptionX ability
+2024/04/29 - 23:52:58	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/29 - 23:52:58	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431030,"value":462},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/29 - 23:53:00		auto	LOG	debug	Tracing Appliance.Control.Electricity ability
+2024/04/29 - 23:53:00	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:53:00	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":415,"voltage":2387,"power":66100}}
+2024/04/29 - 23:53:02		auto	LOG	debug	Tracing abilities end
+2024/04/29 - 23:53:16		auto	LOG	debug	Polling begin
+2024/04/29 - 23:53:16	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:53:16	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":405,"voltage":2387,"power":68864}}
+2024/04/29 - 23:53:16	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:53:16	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:53:16		auto	LOG	debug	Polling end
+2024/04/29 - 23:53:46		auto	LOG	debug	Polling begin
+2024/04/29 - 23:53:46	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/29 - 23:53:46	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431210,"value":463},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/29 - 23:53:46		auto	LOG	debug	ConsumptionXSensor(energy): updating consumption=463
+2024/04/29 - 23:53:46	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:53:46	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":408,"voltage":2387,"power":69071}}
+2024/04/29 - 23:53:46	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:53:46	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:53:46		auto	LOG	debug	Polling end
+2024/04/29 - 23:54:16		auto	LOG	debug	Polling begin
+2024/04/29 - 23:54:16	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:54:16	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":406,"voltage":2387,"power":68977}}
+2024/04/29 - 23:54:16	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:54:16	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:54:16		auto	LOG	warning	Incorrect timestamp: 5 seconds behind HA (5 on average)
+2024/04/29 - 23:54:16		auto	LOG	debug	Polling end
+2024/04/29 - 23:54:46		auto	LOG	debug	Polling begin
+2024/04/29 - 23:54:46	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/29 - 23:54:47	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431255,"value":464},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/29 - 23:54:47		auto	LOG	debug	ConsumptionXSensor(energy): updating consumption=464
+2024/04/29 - 23:54:47	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:54:47	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":402,"voltage":2387,"power":68582}}
+2024/04/29 - 23:54:47	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:54:47	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:54:47		auto	LOG	debug	Polling end
+2024/04/29 - 23:55:17		auto	LOG	debug	Polling begin
+2024/04/29 - 23:55:17	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:55:17	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":400,"voltage":2387,"power":65273}}
+2024/04/29 - 23:55:17	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:55:17	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:55:17		auto	LOG	debug	Polling end
+2024/04/29 - 23:55:47		auto	LOG	debug	Polling begin
+2024/04/29 - 23:55:47	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/29 - 23:55:47	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431301,"value":465},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/29 - 23:55:47		auto	LOG	debug	ConsumptionXSensor(energy): updating consumption=465
+2024/04/29 - 23:55:47	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:55:47	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":405,"voltage":2387,"power":68131}}
+2024/04/29 - 23:55:47	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:55:47	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:55:47		auto	LOG	debug	Polling end
+2024/04/29 - 23:56:17		auto	LOG	debug	Polling begin
+2024/04/29 - 23:56:17	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:56:17	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":403,"voltage":2387,"power":64521}}
+2024/04/29 - 23:56:17	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:56:17	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:56:17		auto	LOG	debug	Polling end
+2024/04/29 - 23:56:47		auto	LOG	debug	Polling begin
+2024/04/29 - 23:56:47	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/29 - 23:56:48	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431346,"value":466},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/29 - 23:56:48		auto	LOG	debug	ConsumptionXSensor(energy): updating consumption=466
+2024/04/29 - 23:56:48	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:56:48	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":401,"voltage":2387,"power":67322}}
+2024/04/29 - 23:56:48	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:56:48	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:56:48		auto	LOG	debug	Polling end
+2024/04/29 - 23:57:18		auto	LOG	debug	Polling begin
+2024/04/29 - 23:57:18	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:57:18	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":402,"voltage":2387,"power":68244}}
+2024/04/29 - 23:57:18	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:57:18	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:57:18		auto	LOG	debug	Polling end
+2024/04/29 - 23:57:48		auto	LOG	debug	Polling begin
+2024/04/29 - 23:57:48	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/29 - 23:57:48	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431436,"value":467},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/29 - 23:57:48		auto	LOG	debug	ConsumptionXSensor(energy): updating consumption=467
+2024/04/29 - 23:57:48	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:57:48	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":401,"voltage":2387,"power":68262}}
+2024/04/29 - 23:57:48	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:57:48	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:57:48	TX	http	GET	Appliance.System.Runtime	{"runtime":{}}
+2024/04/29 - 23:57:48	RX	http	GETACK	Appliance.System.Runtime	{"runtime":{"signal":83}}
+2024/04/29 - 23:57:48		auto	LOG	debug	Polling end
+2024/04/29 - 23:58:18		auto	LOG	debug	Polling begin
+2024/04/29 - 23:58:18	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:58:19	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":405,"voltage":2387,"power":68526}}
+2024/04/29 - 23:58:19	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:58:19	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:58:19		auto	LOG	debug	Polling end
+2024/04/29 - 23:58:49		auto	LOG	debug	Polling begin
+2024/04/29 - 23:58:49	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/29 - 23:58:49	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431481,"value":468},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/29 - 23:58:49		auto	LOG	debug	ConsumptionXSensor(energy): updating consumption=468
+2024/04/29 - 23:58:49	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:58:49	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":400,"voltage":2387,"power":67774}}
+2024/04/29 - 23:58:49	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:58:49	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:58:49		auto	LOG	debug	Polling end
+2024/04/29 - 23:59:19		auto	LOG	debug	Polling begin
+2024/04/29 - 23:59:19	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:59:19	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":400,"voltage":2387,"power":68432}}
+2024/04/29 - 23:59:19	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:59:19	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:59:19		auto	LOG	debug	Polling end
+2024/04/29 - 23:59:49		auto	LOG	debug	Polling begin
+2024/04/29 - 23:59:49	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/29 - 23:59:49	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431481,"value":468},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/29 - 23:59:49	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/29 - 23:59:49	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":400,"voltage":2387,"power":68356}}
+2024/04/29 - 23:59:49	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/29 - 23:59:49	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/29 - 23:59:49		auto	LOG	debug	Polling end
+2024/04/30 - 00:00:00		auto	LOG	debug	EnergyEstimateSensor(energy_estimate): _reset at 2024-04-30T00:00:00+01:00
+2024/04/30 - 00:00:00		auto	LOG	debug	EnergyEstimateSensor(energy_estimate): _schedule_reset at 2024-05-01T00:00:00+01:00
+2024/04/30 - 00:00:11	RX	mqtt	PUSH	Appliance.Control.Toggle	{"toggle":{"onoff":1,"lmTime":1714431601}}
+2024/04/30 - 00:00:11		auto	LOG	warning	KeyError('channel') in NamespaceHandler(Appliance.Control.Toggle)._handle_dict: payload={'toggle': {'onoff': 1, 'lmTime': 1714431601}}
+2024/04/30 - 00:00:19		auto	LOG	debug	Polling begin
+2024/04/30 - 00:00:19	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/30 - 00:00:20	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":393,"voltage":2387,"power":65875}}
+2024/04/30 - 00:00:20	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/30 - 00:00:20	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/30 - 00:00:20		auto	LOG	debug	Polling end
+2024/04/30 - 00:00:50		auto	LOG	debug	Polling begin
+2024/04/30 - 00:00:50	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/30 - 00:00:50	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431481,"value":468},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/30 - 00:00:50		auto	LOG	debug	ConsumptionXSensor(energy): updated midnight epochs: yesterday=1714345200.0 - today=1714431600.0 - tomorrow=1714518000.0
+2024/04/30 - 00:00:50		auto	LOG	debug	ConsumptionXSensor(energy): no readings available for new day - resetting
+2024/04/30 - 00:00:50	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/30 - 00:00:50	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":392,"voltage":2387,"power":63863}}
+2024/04/30 - 00:00:50	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/30 - 00:00:50	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/30 - 00:00:50		auto	LOG	debug	Polling end
+2024/04/30 - 00:01:20		auto	LOG	debug	Polling begin
+2024/04/30 - 00:01:20	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/30 - 00:01:20	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":63,"voltage":2387,"power":11223}}
+2024/04/30 - 00:01:20	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/30 - 00:01:21	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/30 - 00:01:21		auto	LOG	debug	Polling end
+2024/04/30 - 00:01:51		auto	LOG	debug	Polling begin
+2024/04/30 - 00:01:51	TX	http	GET	Appliance.Control.ConsumptionX	{"consumptionx":[]}
+2024/04/30 - 00:01:51	RX	http	GETACK	Appliance.Control.ConsumptionX	{"consumptionx":[{"date":"2024-04-03","time":1712188549,"value":512},{"date":"2024-04-04","time":1712275145,"value":589},{"date":"2024-04-05","time":1712361597,"value":586},{"date":"2024-04-06","time":1712447796,"value":488},{"date":"2024-04-07","time":1712534342,"value":444},{"date":"2024-04-08","time":1712620776,"value":507},{"date":"2024-04-09","time":1712707067,"value":481},{"date":"2024-04-10","time":1712793406,"value":501},{"date":"2024-04-11","time":1712879968,"value":514},{"date":"2024-04-12","time":1712966202,"value":451},{"date":"2024-04-13","time":1713052744,"value":436},{"date":"2024-04-14","time":1713138962,"value":468},{"date":"2024-04-15","time":1713225524,"value":493},{"date":"2024-04-16","time":1713311968,"value":484},{"date":"2024-04-17","time":1713398367,"value":543},{"date":"2024-04-18","time":1713484644,"value":603},{"date":"2024-04-19","time":1713569613,"value":498},{"date":"2024-04-20","time":1713657301,"value":404},{"date":"2024-04-21","time":1713743693,"value":401},{"date":"2024-04-22","time":1713830188,"value":438},{"date":"2024-04-23","time":1713916781,"value":454},{"date":"2024-04-24","time":1714003147,"value":450},{"date":"2024-04-25","time":1714089385,"value":489},{"date":"2024-04-26","time":1714175979,"value":477},{"date":"2024-04-27","time":1714262304,"value":494},{"date":"2024-04-28","time":1714348596,"value":482},{"date":"2024-04-29","time":1714431481,"value":468},{"date":"2024-03-31","time":1711929509,"value":515},{"date":"2024-04-01","time":1712015927,"value":469},{"date":"2024-04-02","time":1712102207,"value":467}]}
+2024/04/30 - 00:01:51	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/30 - 00:01:51	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":64,"voltage":2387,"power":11148}}
+2024/04/30 - 00:01:51	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/30 - 00:01:51	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/30 - 00:01:51		auto	LOG	debug	Polling end
+2024/04/30 - 00:02:21		auto	LOG	debug	Polling begin
+2024/04/30 - 00:02:21	TX	http	GET	Appliance.Control.Electricity	{"electricity":{}}
+2024/04/30 - 00:02:21	RX	http	GETACK	Appliance.Control.Electricity	{"electricity":{"channel":0,"current":63,"voltage":2387,"power":11242}}
+2024/04/30 - 00:02:21	TX	http	GET	Appliance.System.DNDMode	{"DNDMode":{}}
+2024/04/30 - 00:02:21	RX	http	GETACK	Appliance.System.DNDMode	{"DNDMode":{"mode":0}}
+2024/04/30 - 00:02:21		auto	LOG	debug	Polling end

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime, timedelta
 from time import time
 import typing
@@ -8,8 +6,7 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
-from .. import const as mlc
-from ..helpers import get_entity_last_state_available
+from .. import const as mlc, meross_entity as me
 from ..helpers.namespaces import (
     EntityPollingStrategy,
     NamespaceHandler,
@@ -21,8 +18,6 @@ from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from typing import Final
-
     from ..meross_device import MerossDevice
 
 
@@ -46,7 +41,7 @@ class EnergyEstimateSensor(MLNumericSensor):
         "sensor_consumptionx",
     )
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         self._estimate = 0.0
         self._reset_unsub = None
         # depending on init order we might not have this ready now...
@@ -82,7 +77,7 @@ class EnergyEstimateSensor(MLNumericSensor):
             return
 
         with self.exception_warning("restoring previous state"):
-            state = await get_entity_last_state_available(self.hass, self.entity_id)
+            state = await self.get_last_state_available()
             if state is None:
                 return
             if state.last_updated < dt_util.start_of_local_day():
@@ -153,8 +148,9 @@ class ElectricityNamespaceHandler(NamespaceHandler):
         "_electricity_lastepoch",
     )
 
-    def __init__(self, device: MerossDevice):
-        super().__init__(
+    def __init__(self, device: "MerossDevice"):
+        NamespaceHandler.__init__(
+            self,
             device,
             mc.NS_APPLIANCE_CONTROL_ELECTRICITY,
             handler=self._handle_Appliance_Control_Electricity,
@@ -196,10 +192,10 @@ class ElectricityNamespaceHandler(NamespaceHandler):
 
 
 class ConsumptionXSensor(MLNumericSensor):
-    ATTR_OFFSET: Final = "offset"
-    ATTR_RESET_TS: Final = "reset_ts"
+    ATTR_OFFSET: typing.Final = "offset"
+    ATTR_RESET_TS: typing.Final = "reset_ts"
 
-    manager: MerossDevice
+    manager: "MerossDevice"
 
     __slots__ = (
         "offset",
@@ -212,7 +208,7 @@ class ConsumptionXSensor(MLNumericSensor):
         "_tomorrow_midnight_epoch",
     )
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         self.offset: int = 0
         self.reset_ts: int = 0
         self.energy_estimate: float = 0.0
@@ -263,7 +259,7 @@ class ConsumptionXSensor(MLNumericSensor):
             return
 
         with self.exception_warning("restoring previous state"):
-            state = await get_entity_last_state_available(self.hass, self.entity_id)
+            state = await self.get_last_state_available()
             if state is None:
                 return
             # check if the restored sample is fresh enough i.e. it was
@@ -441,20 +437,24 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
     """Suppress processing Appliance.Control.ConsumptionConfig since
     it is already processed at the MQTTConnection message handling."""
 
-    def __init__(self, device: MerossDevice):
+    def __init__(self, device: "MerossDevice"):
         super().__init__(device, mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG)
 
 
-class OverTempEnableSwitch(MLSwitch):
+class OverTempEnableSwitch(me.MENoChannelMixin, MLSwitch):
+
+    namespace = mc.NS_APPLIANCE_CONFIG_OVERTEMP
+    key_namespace = mc.KEY_OVERTEMP
+    key_value = mc.KEY_ENABLE
 
     # HA core entity attributes:
-    entity_category = MLSwitch.EntityCategory.CONFIG
+    entity_category = me.EntityCategory.CONFIG
 
     __slots__ = ("sensor_overtemp_type",)
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         super().__init__(
-            manager, None, "config_overtemp_enable", self.DeviceClass.SWITCH
+            manager, None, "config_overtemp_enable", MLSwitch.DeviceClass.SWITCH
         )
         self.sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
             manager, None, "config_overtemp_type"
@@ -470,14 +470,6 @@ class OverTempEnableSwitch(MLSwitch):
     async def async_shutdown(self):
         await super().async_shutdown()
         self.sensor_overtemp_type = None  # type: ignore
-
-    async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONFIG_OVERTEMP,
-            mc.METHOD_SET,
-            {mc.KEY_OVERTEMP: {mc.KEY_ENABLE: onoff}},
-        ):
-            self.update_onoff(onoff)
 
     # interface: self
     def _handle_Appliance_Config_OverTemp(self, header: dict, payload: dict):

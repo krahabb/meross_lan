@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import button
@@ -15,7 +13,7 @@ if typing.TYPE_CHECKING:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, button.DOMAIN)
 
@@ -31,7 +29,7 @@ class MLButton(me.MerossEntity, button.ButtonEntity):
 
     def __init__(
         self,
-        manager: EntityManager,
+        manager: "EntityManager",
         channel: object | None,
         entitykey: str | None = None,
         device_class: DeviceClass | None = None,
@@ -63,10 +61,10 @@ class _MLUnbindButton(MLButton):
     other contexts
     """
 
-    manager: MerossDevice
+    manager: "MerossDevice"
 
     def __init__(
         self,
-        manager: MerossDevice,
+        manager: "MerossDevice",
     ):
         super().__init__(manager, None, "unbind", None)

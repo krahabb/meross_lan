@@ -1,6 +1,4 @@
-from __future__ import annotations
 import asyncio
-
 import threading
 from time import time
 import typing
@@ -228,11 +226,24 @@ class MerossEmulator:
         with self.lock:
             # guarantee thread safety by locking the whole message handling
             self.update_epoch()
-            response = self._handle_message(request_header, request_payload)
+
+            if get_replykey(request_header, self.key) is not self.key:
+                response = build_message(
+                    request_header[mc.KEY_NAMESPACE],
+                    mc.METHOD_ERROR,
+                    {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}},
+                    self.key,
+                    self.topic_response,
+                    request_header[mc.KEY_MESSAGEID],
+                )
+            else:
+                response = self._handle_message(request_header, request_payload)
 
         if response:
             self._log_message("TX", json_dumps(response))
-        return response
+            return response
+
+        return None
 
     def _handle_message(self, header: MerossHeaderType, payload: MerossPayloadType):
         namespace = header[mc.KEY_NAMESPACE]
@@ -240,10 +251,6 @@ class MerossEmulator:
         try:
             if namespace not in self.descriptor.ability:
                 raise Exception(f"{namespace} not supported in ability")
-
-            elif get_replykey(header, self.key) is not self.key:
-                response_method = mc.METHOD_ERROR
-                response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: mc.ERROR_INVALIDKEY}}
 
             elif handler := getattr(
                 self, f"_{method}_{namespace.replace('.', '_')}", None
@@ -261,14 +268,17 @@ class MerossEmulator:
             response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
 
         if response_method:
-            return build_message(
-                namespace,
+            response = build_message(
+                header[mc.KEY_NAMESPACE],
                 response_method,
                 response_payload,
                 self.key,
                 self.topic_response,
                 header[mc.KEY_MESSAGEID],
             )
+            return response
+
+        return None
 
     def _handler_default(self, method: str, namespace: str, payload: dict):
         """
@@ -391,10 +401,9 @@ class MerossEmulator:
     def _SET_Appliance_Control_Multiple(self, header, payload):
         multiple = []
         for message in payload[mc.KEY_MULTIPLE]:
-            if response := self._handle_message(
-                message[mc.KEY_HEADER], message[mc.KEY_PAYLOAD]
-            ):
-                multiple.append(response)
+            multiple.append(
+                self._handle_message(message[mc.KEY_HEADER], message[mc.KEY_PAYLOAD])
+            )
         return mc.METHOD_SETACK, {mc.KEY_MULTIPLE: multiple}
 
     def _GET_Appliance_Control_Toggle(self, header, payload):
@@ -409,6 +418,43 @@ class MerossEmulator:
             mc.KEY_ONOFF
         ]
         return mc.METHOD_SETACK, {}
+
+    def _GET_Appliance_System_Debug(self, header, payload):
+        firmware = self.descriptor.firmware
+        return mc.METHOD_GETACK, {
+            mc.KEY_DEBUG: {
+                mc.KEY_SYSTEM: {
+                    mc.KEY_VERSION: firmware.get(mc.KEY_VERSION),
+                    "sysUpTime": "169h52m27s",
+                    "localTimeOffset": 0,
+                    "localTime": "Sun Mar 10 13:19:09 2024",
+                    "suncalc": "6:6;18:13",
+                },
+                mc.KEY_NETWORK: {
+                    "linkStatus": "connected",
+                    mc.KEY_SIGNAL: 70,
+                    "ssid": "######0",
+                    mc.KEY_GATEWAYMAC: firmware.get(mc.KEY_WIFIMAC),
+                    mc.KEY_INNERIP: firmware.get(mc.KEY_INNERIP),
+                    "wifiDisconnectCount": 0,
+                },
+                mc.KEY_CLOUD: {
+                    mc.KEY_ACTIVESERVER: firmware.get(mc.KEY_SERVER),
+                    mc.KEY_MAINSERVER: firmware.get(mc.KEY_SERVER),
+                    mc.KEY_MAINPORT: firmware.get(mc.KEY_PORT),
+                    mc.KEY_SECONDSERVER: firmware.get(
+                        mc.KEY_SECONDSERVER, firmware.get(mc.KEY_SERVER)
+                    ),
+                    mc.KEY_SECONDPORT: firmware.get(
+                        mc.KEY_SECONDPORT, firmware.get(mc.KEY_PORT)
+                    ),
+                    mc.KEY_USERID: firmware.get(mc.KEY_USERID),
+                    "sysConnectTime": "Wed Feb 28 05:39:07 2024",
+                    "sysOnlineTime": "271h40m2s",
+                    "sysDisconnectCount": 2,
+                },
+            }
+        }
 
     def _GET_Appliance_System_DNDMode(self, header, payload):
         return mc.METHOD_GETACK, self.p_dndmode
@@ -546,7 +592,7 @@ class MerossEmulator:
         mqtt_client.on_disconnect = self._mqttc_disconnect
         mqtt_client.on_message = self._mqttc_message
         mqtt_client.suppress_exceptions = True
-        mqtt_client.safe_start(self.descriptor.brokers[0])
+        mqtt_client.safe_start(self.descriptor.main_broker)
 
     def _mqtt_shutdown(self):
         self.mqtt_client.safe_stop()
@@ -560,7 +606,7 @@ class MerossEmulator:
         with self.lock:
             self.mqtt_connected = mqtt_client
             self.update_epoch()
-            self.descriptor.online[mc.KEY_STATUS] = 1
+            self.descriptor.online[mc.KEY_STATUS] = mc.STATUS_ONLINE
             # This is to start a kind of session establishment with
             # Meross brokers. Check the SETACK reply to follow the state machine
             message = MerossRequest(
@@ -586,9 +632,9 @@ class MerossEmulator:
         self.mqtt_client._mqttc_disconnect(*args)
         with self.lock:
             self.mqtt_connected = None
-            self.descriptor.online[mc.KEY_STATUS] = 0
+            self.descriptor.online[mc.KEY_STATUS] = mc.STATUS_NOTONLINE
 
-    def _mqttc_message(self, client: mqtt.Client, userdata, msg: mqtt.MQTTMessage):
+    def _mqttc_message(self, client: "mqtt.Client", userdata, msg: "mqtt.MQTTMessage"):
         request = MerossMessage.decode(msg.payload.decode("utf-8"))
         if response := self.handle(request):
             client.publish(request[mc.KEY_HEADER][mc.KEY_FROM], json_dumps(response))

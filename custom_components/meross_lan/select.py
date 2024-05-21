@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from time import time
 import typing
 
@@ -10,32 +8,24 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
 from . import meross_entity as me
-from .helpers import get_entity_last_state_available, schedule_callback
+from .helpers import schedule_callback
 from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
 
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant, State
+    from homeassistant.core import Event, HomeAssistant, State
     from homeassistant.helpers.entity_component import EntityComponent
     from homeassistant.helpers.event import EventStateChangedData
-    from homeassistant.helpers.typing import EventType
 
     from .climate import MtsClimate
-    from .devices.mod100 import DiffuserMixin
-    from .meross_device import MerossDevice
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
-
-
-OPTION_SPRAY_MODE_OFF = "off"
-OPTION_SPRAY_MODE_CONTINUOUS = "on"
-OPTION_SPRAY_MODE_ECO = "eco"
 
 
 class MLSelect(me.MerossEntity, select.SelectEntity):
@@ -60,87 +50,6 @@ class MLSelect(me.MerossEntity, select.SelectEntity):
             self.flush_state()
 
 
-class MLSpray(MLSelect):
-
-    manager: SprayMixin | DiffuserMixin
-
-    _spray_mode_map: dict[object, str]
-    """
-    a dict containing mappings between meross modes <-> HA select options
-    like { mc.SPRAY_MODE_OFF: OPTION_SPRAY_MODE_OFF }
-    """
-    # HA core entity attributes:
-
-    __slots__ = ("_spray_mode_map",)
-
-    def __init__(
-        self, manager: SprayMixin | DiffuserMixin, channel: object, spraymode_map: dict
-    ):
-        # we could use the shared instance but different device firmwares
-        # could bring in unwanted global options...
-        self._spray_mode_map = dict(spraymode_map)
-        self.current_option = None
-        self.options = list(self._spray_mode_map.values())
-        super().__init__(manager, channel, mc.KEY_SPRAY)
-
-    # interface: select.SelectEntity
-    async def async_select_option(self, option: str):
-        # reverse lookup the dict
-        for mode, _option in self._spray_mode_map.items():
-            if _option == option:
-                break
-        else:
-            raise NotImplementedError("async_select_option")
-
-        if await self.manager.async_request_spray_ack(
-            {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: mode}
-        ):
-            self.update_option(option)
-
-    def _parse_spray(self, payload: dict):
-        """
-        We'll map the mode key to a well-known option for this entity
-        but, since there could be some additions from newer spray devices
-        we'll also eventually add the unknown mode value as a supported mode
-        Keep in mind we're updating a class instance dict so it should affect
-        all of the same-class-entities
-        """
-        mode = payload[mc.KEY_MODE]
-        option = self._spray_mode_map.get(mode)
-        if option is None:
-            # unknown mode value -> auto-learning
-            option = "mode_" + str(mode)
-            self._spray_mode_map[mode] = option
-            self.options = list(self._spray_mode_map.values())
-        self.update_option(option)
-
-
-class SprayMixin(
-    MerossDevice if typing.TYPE_CHECKING else object
-):  # pylint: disable=used-before-assignment
-    SPRAY_MODE_MAP = {
-        mc.SPRAY_MODE_OFF: OPTION_SPRAY_MODE_OFF,
-        mc.SPRAY_MODE_INTERMITTENT: OPTION_SPRAY_MODE_ECO,
-        mc.SPRAY_MODE_CONTINUOUS: OPTION_SPRAY_MODE_CONTINUOUS,
-    }
-
-    def _init_spray(self, digest: list):
-        # spray = [{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]
-        for channel_digest in digest:
-            spray = MLSpray(self, channel_digest[mc.KEY_CHANNEL], self.SPRAY_MODE_MAP)
-            self.register_parser(mc.NS_APPLIANCE_CONTROL_SPRAY, spray)
-
-    def _parse_spray(self, digest: list):
-        self.namespace_handlers[mc.NS_APPLIANCE_CONTROL_SPRAY]._parse_list(digest)
-
-    async def async_request_spray_ack(self, payload):
-        return await self.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_SPRAY,
-            mc.METHOD_SET,
-            {mc.KEY_SPRAY: payload},
-        )
-
-
 class MtsTrackedSensor(MLSelect):
     """
     A select entity used to select among all temperature sensors in HA
@@ -152,7 +61,7 @@ class MtsTrackedSensor(MLSelect):
     TRACKING_DEADTIME = 60
     """minimum delay (dead-time) between trying to adjust the climate entity"""
 
-    climate: MtsClimate
+    climate: "MtsClimate"
 
     # HA core entity attributes:
     _attr_available = True
@@ -170,7 +79,7 @@ class MtsTrackedSensor(MLSelect):
 
     def __init__(
         self,
-        climate: MtsClimate,
+        climate: "MtsClimate",
     ):
         self.current_option = hac.STATE_OFF
         self.options = []
@@ -200,9 +109,7 @@ class MtsTrackedSensor(MLSelect):
 
         if self.current_option is hac.STATE_OFF:
             with self.exception_warning("restoring previous state"):
-                if last_state := await get_entity_last_state_available(
-                    hass, self.entity_id
-                ):
+                if last_state := await self.get_last_state_available():
                     self.current_option = last_state.state
 
         if hass.state == CoreState.running:
@@ -326,7 +233,7 @@ class MtsTrackedSensor(MLSelect):
     @callback
     def _setup_tracking_entities(self, *_):
         self.options = [hac.STATE_OFF]
-        component: EntityComponent[SensorEntity] = self.hass.data["sensor"]
+        component: "EntityComponent[SensorEntity]" = self.hass.data["sensor"]
         for entity in component.entities:
             um = entity.native_unit_of_measurement
             if um in (hac.UnitOfTemperature.CELSIUS, hac.UnitOfTemperature.FAHRENHEIT):
@@ -349,7 +256,7 @@ class MtsTrackedSensor(MLSelect):
         ):
 
             @callback
-            def _tracking_callback(event: EventType[EventStateChangedData]):
+            def _tracking_callback(event: "Event[EventStateChangedData]"):
                 with self.exception_warning("processing state update event"):
                     self._tracking_update(event.data.get("new_state"))
 
@@ -365,7 +272,7 @@ class MtsTrackedSensor(MLSelect):
             self._tracking_state = None
             self._delayed_tracking_reset(0)
 
-    def _tracking_update(self, tracked_state: State | None):
+    def _tracking_update(self, tracked_state: "State | None"):
         self._tracking_state = tracked_state
         self.check_tracking()
 

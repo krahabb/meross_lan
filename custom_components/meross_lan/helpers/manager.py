@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import abc
-import asyncio
 from enum import StrEnum
 import logging
 import os
@@ -12,7 +9,7 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import LOGGER, Loggable, getLogger, schedule_async_callback, schedule_callback
+from . import LOGGER, Loggable, getLogger, schedule_callback
 from ..const import (
     CONF_ALLOW_MQTT_PUBLISH,
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
@@ -40,8 +37,8 @@ from .obfuscate import (
 )
 
 if typing.TYPE_CHECKING:
-    from io import TextIOWrapper
-    from typing import Callable, ClassVar, Final
+    import asyncio
+    import io
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -87,8 +84,8 @@ class EntityManager(Loggable):
         "_trace_future",
         "_trace_data",
         "_unsub_trace_endtime",
+        "_unsub_entry_reload",
         "_unsub_entry_update_listener",
-        "_unsub_entry_reload_scheduler",
     )
 
     def __init__(
@@ -104,7 +101,7 @@ class EntityManager(Loggable):
         # This is a collection of all of the instanced entities
         # they're generally built here during inherited __init__ and will be registered
         # in platforms(s) async_setup_entry with their corresponding platform
-        self.entities: Final[dict[object, MerossEntity]] = {}
+        self.entities: typing.Final[dict[object, "MerossEntity"]] = {}
         self.state = ManagerState.INIT
         super().__init__(id, **kwargs)
 
@@ -135,7 +132,7 @@ class EntityManager(Loggable):
             entity for entity in self.entities.values() if entity.PLATFORM is platform
         ]
 
-    def generate_unique_id(self, entity: MerossEntity):
+    def generate_unique_id(self, entity: "MerossEntity"):
         """
         flexible policy in order to generate unique_ids for entities:
         This is an helper needed to better control migrations in code
@@ -158,7 +155,7 @@ class ConfigEntryManager(EntityManager):
     TRACE_RX = "RX"
     TRACE_TX = "TX"
 
-    DEFAULT_PLATFORMS: typing.ClassVar[dict[str, Callable | None]] = {}
+    DEFAULT_PLATFORMS: typing.ClassVar[dict[str, typing.Callable | None]] = {}
     """Defined at the class level to preset a list of domains for entities
     which could be dynamically added after ConfigEntry loading."""
 
@@ -168,7 +165,7 @@ class ConfigEntryManager(EntityManager):
     def __init__(
         self,
         id: str,
-        config_entry: ConfigEntry | None,
+        config_entry: "ConfigEntry | None",
         **kwargs,
     ):
         if config_entry:
@@ -190,12 +187,12 @@ class ConfigEntryManager(EntityManager):
         # during the corresponding platform async_setup_entry so to be able
         # to dynamically add more entities should they 'pop-up' (Hub only?)
         self.platforms = self.DEFAULT_PLATFORMS.copy()
-        self._trace_file: TextIOWrapper | None = None
-        self._trace_future: asyncio.Future | None = None
+        self._trace_file: "io.TextIOWrapper | None" = None
+        self._trace_future: "asyncio.Future | None" = None
         self._trace_data: list | None = None
-        self._unsub_trace_endtime: asyncio.TimerHandle | None = None
+        self._unsub_trace_endtime: "asyncio.TimerHandle | None" = None
+        self._unsub_entry_reload = None
         self._unsub_entry_update_listener = None
-        self._unsub_entry_reload_scheduler: asyncio.TimerHandle | None = None
         super().__init__(id, config_entry_id=config_entry_id, **kwargs)
 
     async def async_shutdown(self):
@@ -207,8 +204,7 @@ class ConfigEntryManager(EntityManager):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
-        self.unlisten_entry_update()  # extra-safety cleanup: shouldnt be loaded/listened at this point
-        self.unschedule_entry_reload()
+        self._cleanup_subscriptions()  # extra-safety cleanup: shouldnt be loaded/listened at this point
         await super().async_shutdown()
         await self.async_destroy_diagnostic_entities()
         if self.is_tracing:
@@ -247,7 +243,23 @@ class ConfigEntryManager(EntityManager):
     def create_diagnostic_entities(self):
         return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
 
-    async def async_setup_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
+    def schedule_async_callback(
+        self, delay: float, target: "typing.Callable[..., typing.Coroutine]", *args
+    ) -> "asyncio.TimerHandle":
+        @callback
+        def _callback(_target, *_args):
+            self.hass.async_create_task(_target(*_args))
+
+        return self.hass.loop.call_later(delay, _callback, target, *args)
+
+    def schedule_callback(
+        self, delay: float, target: "typing.Callable", *args
+    ) -> "asyncio.TimerHandle":
+        return self.hass.loop.call_later(delay, target, *args)
+
+    async def async_setup_entry(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
+    ):
         assert self.state is ManagerState.INIT
         assert config_entry.entry_id not in ApiProfile.managers
         assert self.config_entry_id == config_entry.entry_id
@@ -270,44 +282,37 @@ class ConfigEntryManager(EntityManager):
         )
         self.state = ManagerState.LOADED
 
-    async def async_unload_entry(self, hass: HomeAssistant, config_entry: ConfigEntry):
+    async def async_unload_entry(
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
+    ):
         if not await hass.config_entries.async_unload_platforms(
             config_entry, self.platforms.keys()
         ):
             return False
-        self.unlisten_entry_update()
-        self.unschedule_entry_reload()
-        ApiProfile.managers.pop(self.config_entry_id)
+        self._cleanup_subscriptions()
         self.platforms = {}
         self.config = {}
         await self.async_shutdown()
         self.state = ManagerState.INIT
+        ApiProfile.managers.pop(self.config_entry_id)
         return True
 
-    def unlisten_entry_update(self):
-        if self._unsub_entry_update_listener:
-            self._unsub_entry_update_listener()
-            self._unsub_entry_update_listener = None
-
-    def schedule_entry_reload(self):
-        """Schedules a reload (in 15 sec) of the config_entry performing a full re-initialization"""
-        self.unschedule_entry_reload()
-
-        async def _async_entry_reload():
-            self._unsub_entry_reload_scheduler = None
-            await self.hass.config_entries.async_reload(self.config_entry_id)
-
-        self._unsub_entry_reload_scheduler = schedule_async_callback(
-            self.hass, 15, _async_entry_reload
+    def schedule_entry_reload(self, delay: float = 0):
+        """
+        Schedule the reload in a delayed task (using 'call_later').
+        config_entries.async_schedule_reload is now 'eager' and
+        it might execute synchronously leading to unintended semantics.
+        """
+        if self._unsub_entry_reload:
+            self._unsub_entry_reload.cancel()
+        self._unsub_entry_reload = self.schedule_callback(
+            delay,
+            self.hass.config_entries.async_schedule_reload,
+            self.config_entry_id,
         )
 
-    def unschedule_entry_reload(self):
-        if self._unsub_entry_reload_scheduler:
-            self._unsub_entry_reload_scheduler.cancel()
-            self._unsub_entry_reload_scheduler = None
-
     async def entry_update_listener(
-        self, hass: HomeAssistant, config_entry: ConfigEntry
+        self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
         config = self.config = config_entry.data
         self.key = config.get(CONF_KEY) or ""
@@ -349,7 +354,7 @@ class ConfigEntryManager(EntityManager):
         """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
         return obfuscated_dict(value) if self.obfuscate else value
 
-    def loggable_broker(self, broker: HostAddress | str):
+    def loggable_broker(self, broker: "HostAddress | str"):
         """Conditionally obfuscate the connection_id (which is a broker address host:port) to send to logging/tracing"""
         return (
             OBFUSCATE_SERVER_MAP.obfuscate(str(broker))
@@ -437,7 +442,7 @@ class ConfigEntryManager(EntityManager):
     def trace(
         self,
         epoch: float,
-        payload: MerossPayloadType,
+        payload: "MerossPayloadType",
         namespace: str,
         method: str = mc.METHOD_GETACK,
         protocol: str = CONF_PROTOCOL_AUTO,
@@ -491,6 +496,14 @@ class ConfigEntryManager(EntityManager):
             self.trace_close()
             self.log_exception(self.WARNING, exception, "appending trace log")
 
+    def _cleanup_subscriptions(self):
+        if self._unsub_entry_update_listener:
+            self._unsub_entry_update_listener()
+            self._unsub_entry_update_listener = None
+        if self._unsub_entry_reload:
+            self._unsub_entry_reload.cancel()
+            self._unsub_entry_reload = None
+
 
 class ApiProfile(ConfigEntryManager):
     """
@@ -502,22 +515,22 @@ class ApiProfile(ConfigEntryManager):
         SENSOR_DOMAIN: None,
     }
 
-    devices: ClassVar[dict[str, MerossDevice | None]] = {}
+    devices: typing.ClassVar[dict[str, "MerossDevice | None"]] = {}
     """
     dict of configured devices. Every device config_entry in the system is mapped here and
     set to the MerossDevice instance if the device is actually active (config_entry loaded)
     or set to None if the config_entry is not loaded (no device instance)
     """
-    profiles: ClassVar[dict[str, MerossCloudProfile | None]] = {}
+    profiles: typing.ClassVar[dict[str, "MerossCloudProfile | None"]] = {}
     """
     dict of configured cloud profiles (behaves as the 'devices' dict).
     """
-    managers: ClassVar[dict[str, ConfigEntryManager]] = {}
+    managers: typing.ClassVar[dict[str, "ConfigEntryManager"]] = {}
     """
     dict of loaded EntityManagers (ApiProfile(s) or devices) and
     matches exactly the loaded config entries.
     """
-    managers_transient_state: ClassVar[dict[str, dict]] = {}
+    managers_transient_state: typing.ClassVar[dict[str, dict]] = {}
     """
     This is actually a temporary memory storage used to mantain some info related to
     an ConfigEntry/EntityManager that we don't want to persist to hass storage (useless overhead)
@@ -550,7 +563,7 @@ class ApiProfile(ConfigEntryManager):
         "mqttconnections",
     )
 
-    def __init__(self, id: str, config_entry: ConfigEntry | None):
+    def __init__(self, id: str, config_entry: "ConfigEntry | None"):
         super().__init__(id, config_entry)
         self.linkeddevices: dict[str, MerossDevice] = {}
         self.mqttconnections: dict[str, MQTTConnection] = {}
@@ -565,7 +578,7 @@ class ApiProfile(ConfigEntryManager):
         self.linkeddevices.clear()
         await super().async_shutdown()
 
-    async def entry_update_listener(self, hass, config_entry: ConfigEntry):
+    async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
         config = config_entry.data
         # the MerossApi always enable (independent of config) mqtt publish
         allow_mqtt_publish = config.get(CONF_ALLOW_MQTT_PUBLISH) or (self is self.api)
@@ -592,29 +605,27 @@ class ApiProfile(ConfigEntryManager):
     def allow_mqtt_publish(self):
         return self.config.get(CONF_ALLOW_MQTT_PUBLISH)
 
-    def try_link(self, device: MerossDevice):
+    def link(self, device: "MerossDevice"):
         device_id = device.id
-        if device_id not in self.linkeddevices:
-            device.profile_linked(self)
-            self.linkeddevices[device_id] = device
-            return True
-        return False
+        assert device_id not in self.linkeddevices
+        device.profile_linked(self)
+        self.linkeddevices[device_id] = device
 
-    def unlink(self, device: MerossDevice):
+    def unlink(self, device: "MerossDevice"):
         device_id = device.id
         assert device_id in self.linkeddevices
         device.profile_unlinked()
         self.linkeddevices.pop(device_id)
 
     @abc.abstractmethod
-    def attach_mqtt(self, device: MerossDevice):
+    def attach_mqtt(self, device: "MerossDevice"):
         pass
 
     def trace_or_log(
         self,
-        connection: MQTTConnection,
+        connection: "MQTTConnection",
         device_id: str,
-        message: MerossMessage,
+        message: "MerossMessage",
         rxtx: str,
     ):
         if self.is_tracing:
@@ -638,9 +649,11 @@ class ApiProfile(ConfigEntryManager):
                 header[mc.KEY_NAMESPACE],
                 self.loggable_device_id(device_id),
                 header[mc.KEY_MESSAGEID],
-                json_dumps(obfuscated_dict(message))
-                if self.obfuscate
-                else message.json(),
+                (
+                    json_dumps(obfuscated_dict(message))
+                    if self.obfuscate
+                    else message.json()
+                ),
             )
         elif self.isEnabledFor(self.DEBUG):
             header = message[mc.KEY_HEADER]
@@ -664,8 +677,8 @@ class CloudApiClient(cloudapi.CloudApiClient, Loggable):
 
     def __init__(
         self,
-        manager: ConfigEntryManager,
-        credentials: cloudapi.MerossCloudCredentials | None = None,
+        manager: "ConfigEntryManager",
+        credentials: "cloudapi.MerossCloudCredentials | None" = None,
     ):
         Loggable.__init__(self, "", logger=manager)
         cloudapi.CloudApiClient.__init__(

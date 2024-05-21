@@ -1,7 +1,5 @@
 """"""
 
-from __future__ import annotations
-
 from random import randint
 import typing
 
@@ -52,7 +50,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         },
     }
 
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key):
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.device_scale = self.MAP_DEVICE_SCALE[descriptor.type]
 

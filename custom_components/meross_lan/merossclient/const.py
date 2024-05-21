@@ -197,6 +197,7 @@ KEY_BIND = "bind"
 KEY_BINDTIME = "bindTime"
 KEY_REPORT = "report"
 KEY_ONLINE = "online"
+KEY_TRIGGER = "trigger"
 KEY_TRIGGERX = "triggerx"
 KEY_TIMER = "timer"
 KEY_TIMERX = "timerx"
@@ -225,6 +226,7 @@ KEY_ONOFF = "onoff"
 KEY_LIGHT = "light"
 KEY_EFFECT = "effect"
 KEY_EFFECTNAME = "effectName"
+KEY_MEMBER = "member"
 KEY_ID_ = "Id"
 KEY_CAPACITY = "capacity"
 KEY_RGB = "rgb"
@@ -504,20 +506,20 @@ DIFFUSER_SPRAY_MODE_FULL = 1
 DIFFUSER_LIGHT_MODE_RAINBOW = 0  # color modes taken from 'homebridge-meross' plugin
 DIFFUSER_LIGHT_MODE_COLOR = 1
 DIFFUSER_LIGHT_MODE_TEMPERATURE = 2
-DIFFUSER_LIGHT_EFFECT_MAP = {
-    DIFFUSER_LIGHT_MODE_RAINBOW: "Rainbow",
-    DIFFUSER_LIGHT_MODE_COLOR: "Color",
-    DIFFUSER_LIGHT_MODE_TEMPERATURE: "Temperature",
-}
+DIFFUSER_LIGHT_MODE_LIST = [
+    "Rainbow",
+    "Color",
+    "Temperature",
+]
 
 # cherub machine
-HP110A_LIGHT_EFFECT_MAP = {
-    0: "Color",
-    1: "Scene 1",
-    2: "Scene 2",
-    3: "Scene 3",
-    4: "Scene 4",
-}
+HP110A_LIGHT_EFFECT_LIST = [
+    "Color",
+    "Scene 1",
+    "Scene 2",
+    "Scene 3",
+    "Scene 4",
+]
 HP110A_MP3_SONG_MIN = 1
 HP110A_MP3_SONG_MAX = 11
 HP110A_MP3_SONG_MAP = {
@@ -567,6 +569,10 @@ TYPE_MSL100 = "msl100"  # smart bulb
 TYPE_NAME_MAP[TYPE_MSL100] = "Smart Bulb"
 TYPE_MSL120 = "msl120"  # smart bulb with color/temp
 TYPE_NAME_MAP[TYPE_MSL120] = "Smart RGB Bulb"
+TYPE_MSL320_PRO = "msl320cp"  # smart led strip pro
+TYPE_NAME_MAP[TYPE_MSL320_PRO] = "Smart RGB Pro Led Strip"
+TYPE_MSL320 = "msl320"  # smart led strip
+TYPE_NAME_MAP[TYPE_MSL320] = "Smart RGB Led Strip"
 TYPE_NAME_MAP["msl"] = "Smart Light"
 
 TYPE_MSS310 = "mss310"  # smart plug with energy meter

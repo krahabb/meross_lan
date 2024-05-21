@@ -1,4 +1,4 @@
-from asyncio import Future, run_coroutine_threadsafe
+import asyncio
 import base64
 import contextlib
 from copy import deepcopy
@@ -26,9 +26,15 @@ from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
 from custom_components.meross_lan.config_flow import ConfigFlow
 from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
 from custom_components.meross_lan.helpers import Loggable
-from custom_components.meross_lan.meross_profile import MerossMQTTConnection
+from custom_components.meross_lan.meross_profile import (
+    MerossCloudProfileStoreType,
+    MerossMQTTConnection,
+    MQTTConnection,
+)
 from custom_components.meross_lan.merossclient import (
     HostAddress,
+    MerossMessage,
+    MerossResponse,
     cloudapi,
     const as mc,
     json_loads,
@@ -146,7 +152,7 @@ class TimeMocker(contextlib.AbstractContextManager):
         super().__init__()
         self.hass = hass
         self._freeze_time = freeze_time(time_to_freeze)
-        self._warp_task: Future | None = None
+        self._warp_task: asyncio.Future | None = None
         self._warp_run = False
         hass.loop.slow_callback_duration = 2.1
 
@@ -231,7 +237,7 @@ class TimeMocker(contextlib.AbstractContextManager):
             count = 0
             while self._warp_run:
                 _time = self.time()
-                run_coroutine_threadsafe(self.async_tick(tick), self.hass.loop)
+                asyncio.run_coroutine_threadsafe(self.async_tick(tick), self.hass.loop)
                 while _time == self.time():
                     time.sleep(0.01)
                 count += 1
@@ -431,7 +437,7 @@ def build_emulator_config_entry(
         if mlc.CONF_KEY in config_data:
             emulator.key = config_data[mlc.CONF_KEY]
 
-    data = {
+    data: mlc.DeviceConfigType = {
         mlc.CONF_DEVICE_ID: emulator.descriptor.uuid,
         mlc.CONF_HOST: str(id(emulator)),
         mlc.CONF_KEY: emulator.key,
@@ -802,6 +808,55 @@ class CloudApiMocker(contextlib.AbstractContextManager):
         return {mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR, mc.KEY_DATA: {}}
 
 
+class MQTTConnectionMocker(contextlib.AbstractContextManager):
+    def __init__(self, hass: HomeAssistant):
+
+        async def _async_mqtt_publish(
+            _self: MQTTConnection, device_id: str, request: MerossMessage
+        ) -> MerossResponse | None:
+            return None
+
+        self.async_mqtt_publish_patcher = patch.object(
+            MQTTConnection,
+            "async_mqtt_publish",
+            autospec=True,
+            side_effect=_async_mqtt_publish,
+        )
+
+        async def _async_identify_device(
+            _self: MQTTConnection, device_id: str, key: str
+        ) -> mlc.DeviceConfigType:
+            # we're expecting a query for an MSH300
+            device_info = tc.MOCK_CLOUDAPI_DEVICE_DEVLIST[1]
+            assert device_info.get(mc.KEY_UUID) == device_id
+            emulator = build_emulator_for_profile(
+                tc.MOCK_PROFILE_CONFIG,
+                model=device_info.get(mc.KEY_DEVICETYPE),
+                device_id=device_id,
+            )
+            device_config = build_emulator_config_entry(emulator)
+            return device_config
+
+        self.async_identify_device_patcher = patch.object(
+            MQTTConnection,
+            "async_identify_device",
+            autospec=True,
+            side_effect=_async_identify_device,
+        )
+
+    def __enter__(self):
+        self.async_mqtt_publish_mock = self.async_mqtt_publish_patcher.start()
+        self.async_identify_device_mock = self.async_identify_device_patcher.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.async_mqtt_publish_mock:
+            self.async_mqtt_publish_patcher.stop()
+        if self.async_identify_device_mock:
+            self.async_identify_device_patcher.stop()
+        return None
+
+
 MqttMockPahoClient = MagicMock
 """MagicMock for `paho.mqtt.client.Client`"""
 MqttMockHAClient = MagicMock
@@ -810,19 +865,25 @@ MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
 
 
 class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
-    def __init__(self):
+    def __init__(self, hass: HomeAssistant):
+        self.hass = hass
         self.async_publish_patcher = patch(
             "homeassistant.components.mqtt.async_publish"
         )
 
     async def __aenter__(self):
-        """Return `self` upon entering the runtime context."""
         self.async_publish_mock = self.async_publish_patcher.start()
         self.async_publish_mock.side_effect = self._async_publish
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         self.async_publish_patcher.stop()
+        api: MerossApi = self.hass.data[mlc.DOMAIN]
+        if api and api._mqtt_connection:
+            from homeassistant.components.mqtt.client import UNSUBSCRIBE_COOLDOWN
+            await api._mqtt_connection.async_mqtt_unsubscribe()
+            await asyncio.sleep(UNSUBSCRIBE_COOLDOWN)
+
         return None
 
     async def _async_publish(
@@ -831,8 +892,10 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
         pass
 
 
-class MerossMQTTMocker(contextlib.AbstractContextManager):
+class MerossMQTTMocker(MQTTConnectionMocker):
     def __init__(self, hass: HomeAssistant):
+        super().__init__(hass)
+
         def _safe_start(_self: MerossMQTTConnection, *args, **kwargs):
             """this runs in an executor"""
             _self._stateext = _self.STATE_CONNECTED
@@ -857,27 +920,14 @@ class MerossMQTTMocker(contextlib.AbstractContextManager):
             side_effect=_safe_stop,
         )
 
-        async def _async_mqtt_publish(_self: MerossMQTTConnection, *args, **kwargs):
-            return None
-
-        self.async_mqtt_publish_patcher = patch.object(
-            MerossMQTTConnection,
-            "async_mqtt_publish",
-            autospec=True,
-            side_effect=_async_mqtt_publish,
-        )
-
     def __enter__(self):
         self.safe_start_mock = self.safe_start_patcher.start()
         self.safe_stop_mock = self.safe_stop_patcher.start()
-        self.async_mqtt_publish_mock = self.async_mqtt_publish_patcher.start()
-        return self
+        return super().__enter__()
 
     def __exit__(self, exc_type, exc_value, traceback):
         if self.safe_start_mock:
             self.safe_start_patcher.stop()
         if self.safe_stop_mock:
             self.safe_stop_patcher.stop()
-        if self.async_mqtt_publish_mock:
-            self.async_mqtt_publish_patcher.stop()
-        return None
+        return super().__exit__(exc_type, exc_value, traceback)

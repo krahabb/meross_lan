@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing
 
 from homeassistant.components import sensor
@@ -20,8 +18,6 @@ from .helpers.namespaces import (
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
-    from typing import Final
-
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -30,7 +26,7 @@ if typing.TYPE_CHECKING:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, config_entry: ConfigEntry, async_add_devices
+    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
 
@@ -49,7 +45,7 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
 
     def __init__(
         self,
-        manager: EntityManager,
+        manager: "EntityManager",
         channel: object | None,
         entitykey: str | None,
         *,
@@ -99,7 +95,7 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
 
     def __init__(
         self,
-        manager: EntityManager,
+        manager: "EntityManager",
         channel: object | None,
         entitykey: str | None,
         device_class: DeviceClass | None = None,
@@ -122,7 +118,7 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
 
     @staticmethod
     def build_for_device(
-        device: MerossDevice, device_class: MLNumericSensor.DeviceClass
+        device: "MerossDevice", device_class: "MLNumericSensor.DeviceClass"
     ):
         return MLNumericSensor(device, None, str(device_class), device_class)
 
@@ -134,11 +130,19 @@ class MLHumiditySensor(MLNumericSensor):
 
     def __init__(
         self,
-        manager: me.EntityManager,
+        manager: "EntityManager",
         channel: object | None,
         entitykey: str | None = "humidity",
+        *,
+        device_value: int | None = None,
     ):
-        super().__init__(manager, channel, entitykey, sensor.SensorDeviceClass.HUMIDITY)
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            sensor.SensorDeviceClass.HUMIDITY,
+            device_value=device_value,
+        )
 
 
 class MLTemperatureSensor(MLNumericSensor):
@@ -148,18 +152,24 @@ class MLTemperatureSensor(MLNumericSensor):
 
     def __init__(
         self,
-        manager: me.EntityManager,
+        manager: "EntityManager",
         channel: object | None,
         entitykey: str | None = "temperature",
+        *,
+        device_value: int | None = None,
     ):
         super().__init__(
-            manager, channel, entitykey, sensor.SensorDeviceClass.TEMPERATURE
+            manager,
+            channel,
+            entitykey,
+            sensor.SensorDeviceClass.TEMPERATURE,
+            device_value=device_value,
         )
 
 
 class MLDiagnosticSensor(MLEnumSensor):
 
-    is_diagnostic: Final = True
+    is_diagnostic: typing.Final = True
 
     # HA core entity attributes:
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
@@ -173,7 +183,7 @@ class ProtocolSensor(MLEnumSensor):
     ATTR_MQTT = mlc.CONF_PROTOCOL_MQTT
     ATTR_MQTT_BROKER = "mqtt_broker"
 
-    manager: MerossDevice
+    manager: "MerossDevice"
 
     # HA core entity attributes:
     _attr_available = True
@@ -192,7 +202,7 @@ class ProtocolSensor(MLEnumSensor):
 
     def __init__(
         self,
-        manager: MerossDevice,
+        manager: "MerossDevice",
     ):
         self.extra_state_attributes = {}
         super().__init__(
@@ -269,7 +279,7 @@ class MLSignalStrengthSensor(MLNumericSensor):
     entity_category = me.EntityCategory.DIAGNOSTIC
     icon = "mdi:wifi"
 
-    def __init__(self, manager: MerossDevice):
+    def __init__(self, manager: "MerossDevice"):
         super().__init__(
             manager,
             None,
@@ -296,7 +306,7 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
     # HA core entity attributes:
     entity_category = me.EntityCategory.DIAGNOSTIC
 
-    def __init__(self, manager: MerossDevice, channel):
+    def __init__(self, manager: "MerossDevice", channel):
         super().__init__(
             manager,
             channel,
@@ -309,10 +319,12 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
 
 class FilterMaintenanceNamespaceHandler(NamespaceHandler):
 
-    def __init__(self, device: MerossDevice):
-        super().__init__(
+    def __init__(self, device: "MerossDevice"):
+        NamespaceHandler.__init__(
+            self,
             device,
             mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
             entity_class=MLFilterMaintenanceSensor,
         )
         SmartPollingStrategy(device, mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE)
+        MLFilterMaintenanceSensor(device, 0)

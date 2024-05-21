@@ -1,8 +1,5 @@
 from homeassistant.components import climate as haec
-from homeassistant.components.climate import (
-    ClimateEntity,
-    HVACMode,
-)
+from homeassistant.components.climate import ClimateEntity, HVACMode
 
 from custom_components.meross_lan.climate import MtsClimate
 from custom_components.meross_lan.devices.mts100 import Mts100Climate

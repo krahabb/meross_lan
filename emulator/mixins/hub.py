@@ -1,7 +1,5 @@
 """"""
 
-from __future__ import annotations
-
 from random import randint
 import typing
 
@@ -16,14 +14,13 @@ from custom_components.meross_lan.merossclient import (
 )
 
 if typing.TYPE_CHECKING:
-    from typing import Any
 
     from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
 class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
-    def __init__(self, descriptor: MerossEmulatorDescriptor, key):
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         # we have to sanitize our structures since it might happen some traces
         # have broken payloads due to errors while tracing but some of these
@@ -188,7 +185,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
     def _get_subdevice_namespace(
         self, subdevice_id: str, namespace: str
-    ) -> dict[str, Any]:
+    ) -> dict[str, typing.Any]:
         """returns the subdevice namespace dict. It will create a default entry if not present
         and the device abilities supports the namespace."""
         namespaces = self.descriptor.namespaces
