@@ -431,11 +431,11 @@ class MLGarage(MLCover):
                     self._transition_unsub = schedule_async_callback(
                         self.hass, 0.9, self._async_transition_callback
                     )
-                    # check the timeout 1 sec after expected to account
+                    # check the timeout after expected to account
                     # for delays in communication
                     self._transition_end_unsub = schedule_async_callback(
                         self.hass,
-                        (timeout or self._transition_duration) + 1,  # type: ignore
+                        (timeout or self._transition_duration),  # type: ignore
                         self._async_transition_end_callback,
                     )
 
@@ -479,7 +479,8 @@ class MLGarage(MLCover):
             # estimate the transition_duration and dynamically update it since
             # during the transition the state will be closed only at the end
             # while during opening the garagedoor contact will open right at the beginning
-            # and so will be unuseful
+            # and so will be unuseful. This is why we're not 'terminating' the transition in
+            # case the garage was opening...(the '_async_transition_end_callback' will then take care).
             # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
             # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
             if is_closed:
@@ -488,7 +489,7 @@ class MLGarage(MLCover):
                 self._update_transition_duration(
                     int((4 * self._transition_duration + transition_duration) / 5)
                 )
-            self._transition_cancel()
+                self._transition_cancel()
             self.binary_sensor_timeout.update_ok(is_closed)
 
         self.is_closed = is_closed
@@ -570,7 +571,7 @@ class MLGarage(MLCover):
         was_closing = self.is_closing
         if was_closing:
             # when closing we expect this callback not to be called since
-            # the transition should be terminated by '_set_open' provided it gets
+            # the transition should be terminated by '_parse_state' provided it gets
             # called on time (on polling this is not guaranteed).
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
