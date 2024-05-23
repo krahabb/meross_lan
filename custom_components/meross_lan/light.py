@@ -16,7 +16,7 @@ from homeassistant.components.light import (
 import homeassistant.util.color as color_util
 
 from . import const as mlc, meross_entity as me
-from .helpers import schedule_async_callback
+from .helpers import clamp, schedule_async_callback
 from .helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
 from .merossclient import const as mc, request_get
 
@@ -153,8 +153,10 @@ MSL_TEMPERATURE_SCALE = (MSL_TEMPERATURE_MAX - MSL_TEMPERATURE_MIN) / (
 
 
 def kelvin_to_native(kelvin: int):
-    return round(
-        MSL_TEMPERATURE_MIN + (kelvin - MSL_KELVIN_MIN) * MSL_TEMPERATURE_SCALE
+    return clamp(
+        round(MSL_TEMPERATURE_MIN + (kelvin - MSL_KELVIN_MIN) * MSL_TEMPERATURE_SCALE),
+        MSL_TEMPERATURE_MIN,
+        MSL_TEMPERATURE_MAX,
     )
 
 
