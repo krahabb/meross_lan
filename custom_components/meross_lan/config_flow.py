@@ -653,7 +653,7 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
                             return self.async_abort()
                         entry_data = entry.data
                         entry_descriptor = MerossDeviceDescriptor(
-                            entry_data.get(mlc.CONF_PAYLOAD)
+                            entry_data[mlc.CONF_PAYLOAD]
                         )
                         if entry_descriptor.macAddress_fmt != macaddress_fmt:
                             # This is an error though:the check against device_id[-12:]
@@ -898,15 +898,13 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 if mlc.CONF_TRACE in self.device_config:
                     self.device_config.pop(mlc.CONF_TRACE)  # totally removed in v5.0
                 self._device_id = device_id
-                assert device_id == self.device_config.get(mlc.CONF_DEVICE_ID)
+                assert device_id == self.device_config[mlc.CONF_DEVICE_ID]
                 device = MerossApi.devices[device_id]
                 # if config not loaded the device is None
                 self.device_descriptor = (
                     device.descriptor
                     if device
-                    else MerossDeviceDescriptor(
-                        self.device_config.get(mlc.CONF_PAYLOAD)
-                    )
+                    else MerossDeviceDescriptor(self.device_config[mlc.CONF_PAYLOAD])
                 )
                 self.device_placeholders = {
                     "device_type": self.device_descriptor.productnametype,

@@ -1,13 +1,13 @@
 import abc
 import asyncio
 import bisect
-from datetime import datetime, timezone, tzinfo
+from datetime import UTC, tzinfo
 from json import JSONDecodeError
 from time import time
 import typing
 from uuid import uuid4
 import weakref
-from zoneinfo import ZoneInfo
+import zoneinfo
 
 import aiohttp
 from homeassistant.core import callback
@@ -41,6 +41,7 @@ from .const import (
 )
 from .helpers import (
     async_import_module,
+    async_load_zoneinfo,
     datetime_from_epoch,
     schedule_async_callback,
     utcdatetime_from_epoch,
@@ -243,7 +244,7 @@ class MerossDeviceBase(EntityManager):
     @property
     @abc.abstractmethod
     def tz(self) -> tzinfo:
-        return None
+        raise NotImplementedError("tz")
 
     def check_device_timezone(self):
         raise NotImplementedError("check_device_timezone")
@@ -358,26 +359,28 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     pref_protocol: str
     curr_protocol: str
     # other default property values
+    tz: tzinfo
     device_timestamp: int
-    _tzinfo: ZoneInfo | None  # smart cache of device tzinfo
     _unsub_polling_callback: asyncio.TimerHandle | None
     sensor_protocol: ProtocolSensor
     update_firmware: MLUpdate | None
 
     __slots__ = (
+        "descriptor",
+        "tz",
         "polling_period",
         "_polling_delay",
         "conf_protocol",
         "pref_protocol",
         "curr_protocol",
-        "descriptor",
         "needsave",
+        "_unsub_entry_update",
+        "device_debug",
         "device_info",
         "device_timestamp",
         "device_timedelta",
         "device_timedelta_log_epoch",
         "device_timedelta_config_epoch",
-        "device_debug",
         "device_response_size_min",
         "device_response_size_max",
         "lastrequest",
@@ -405,7 +408,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_multiple_len",
         "_multiple_requests",
         "_multiple_response_size",
-        "_tzinfo",
         "_timezone_next_check",
         "_unsub_trace_ability_callback",
         "_diagnostics_build",
@@ -421,14 +423,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         config_entry: "ConfigEntry",
     ):
         self.descriptor = descriptor
+        self.tz = UTC
         self.needsave = False
+        self._unsub_entry_update = None
         self.curr_protocol = CONF_PROTOCOL_AUTO
+        self.device_debug = None
         self.device_info = None
         self.device_timestamp = 0
         self.device_timedelta = 0
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
-        self.device_debug = None
         self.device_response_size_min = 1000
         self.device_response_size_max = 5000
         self.lastrequest = 0.0
@@ -460,8 +464,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._multiple_len = self.multiple_max
         self._multiple_requests: list["MerossRequestType"] = []
         self._multiple_response_size = PARAM_HEADER_SIZE
-
-        self._tzinfo = None
         self._timezone_next_check = (
             0 if mc.NS_APPLIANCE_SYSTEM_TIME in ability else PARAM_INFINITE_EPOCH
         )
@@ -498,6 +500,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     async def async_init(self):
         descriptor = self.descriptor
+
+        if tzname := descriptor.timezone:
+            # self.tz defaults to UTC on init
+            try:
+                self.tz = await async_load_zoneinfo(tzname, self)
+            except:
+                pass
+
         for namespace in MerossDevice.NAMESPACE_INIT:
             if namespace not in descriptor.ability:
                 continue
@@ -579,6 +589,21 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     async def entry_update_listener(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
+        ability_old = self.descriptor.ability
+        ability_new = config_entry.data[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
+        if ability_old != ability_new:
+            # too hard to keep-up..reinit the device
+            ability_old = ability_old.keys()
+            ability_new = ability_new.keys()
+            self.log(
+                self.WARNING,
+                "Scheduled device configuration reload since the abilities changed (added:%s - removed:%s)",
+                str(ability_new - ability_old),
+                str(ability_old - ability_new),
+            )
+            self.schedule_entry_reload()
+            return
+
         await super().entry_update_listener(hass, config_entry)
         self._update_config()
         self._check_protocol_ext()
@@ -628,6 +653,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     # interface: MerossDeviceBase
     async def async_shutdown(self):
         remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
+        if self._unsub_entry_update:
+            self._unsub_entry_update.cancel()
+            self._unsub_entry_update = None
         # disconnect transports first so that any pending request
         # is invalidated and this shortens the eventual polling loop
         if self._profile:
@@ -730,26 +758,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         return None
 
-    @property
-    def tz(self) -> tzinfo:
-        tz_name = self.descriptor.timezone
-        if not tz_name:
-            return timezone.utc
-        if self._tzinfo and (self._tzinfo.key == tz_name):
-            return self._tzinfo
-        try:
-            self._tzinfo = ZoneInfo(tz_name)
-            return self._tzinfo
-        except Exception:
-            self.log(
-                self.WARNING,
-                "Unable to load timezone info for %s - check your python environment",
-                tz_name,
-                timeout=14400,
-            )
-            self._tzinfo = None
-        return timezone.utc
-
     def check_device_timezone(self):
         """
         Verifies the device timezone has the same utc offset as HA local timezone.
@@ -758,14 +766,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         what is expected in HA.
         """
         # TODO: check why the emulator keeps raising the issue (at boot) when the TZ is ok
-        tz_name = self.descriptor.timezone
-        if tz_name:
-            ha_now = dt_util.now()
-            device_now = ha_now.astimezone(self.tz)
-            if ha_now.utcoffset() == device_now.utcoffset():
-                remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
-                return
-
+        ha_now = dt_util.now()
+        device_now = ha_now.astimezone(self.tz)
+        if ha_now.utcoffset() == device_now.utcoffset():
+            remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
+            return
         create_issue(
             mlc.ISSUE_DEVICE_TIMEZONE,
             self.id,
@@ -861,6 +866,61 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 return True
         return False
 
+    def schedule_entry_update(self, query_abilities: bool):
+        """
+        Schedule the ConfigEntry update due to self.descriptor changing.
+        """
+        if self._unsub_entry_update:
+            self._unsub_entry_update.cancel()
+        self._unsub_entry_update = self.schedule_async_callback(
+            0,
+            self._async_entry_update,
+            query_abilities,
+        )
+
+    async def _async_entry_update(self, query_abilities: bool):
+        """
+        Called when we detect any meaningful change in the device descriptor
+        that needs to be stored in configuration.
+        We generally update self.descriptor.all whenever we process NS_ALL
+        while abilities are never updated in descriptor this way.
+        When we need to flush the updated NS_ALL we also try refresh the NS_ABILITY
+        from the device so that the subsequent entry_update_listener has a chance
+        to detect if those changed too and eventually reload the device entry.
+        This is in order to detect 'abilities' changes even on the OptionFlow
+        execution which independently queries the device itself.
+        """
+        self._unsub_entry_update = None
+        self.needsave = False
+
+        with self.exception_warning("_async_entry_update"):
+            entries = self.hass.config_entries
+            if entry := entries.async_get_entry(self.config_entry_id):
+                data = dict(entry.data)
+                data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+                data[CONF_PAYLOAD][mc.KEY_ALL] = self.descriptor.all
+                if query_abilities and (
+                    response := await self.async_request(
+                        *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY)
+                    )
+                ):
+                    # fw update or whatever might have modified the device abilities.
+                    # we refresh the abilities list before saving the new config_entry
+                    data[CONF_PAYLOAD][mc.KEY_ABILITY] = response[mc.KEY_PAYLOAD][
+                        mc.KEY_ABILITY
+                    ]
+                entries.async_update_entry(entry, data=data)
+
+        # we also take the time to sync our tz to the device timezone
+        tzname = self.descriptor.timezone
+        if tzname:
+            try:
+                self.tz = await async_load_zoneinfo(tzname, self)
+            except:
+                pass
+        else:
+            self.tz = UTC
+
     async def async_entry_option_setup(self, config_schema: dict):
         """
         called when setting up an OptionsFlowHandler to expose
@@ -873,9 +933,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if TIMEZONES_SET is None:
 
                 def _load():
+                    """
+                    These functions will use low levels imports and HA core 2024.5
+                    complains about executing it in the main loop thread. We'll
+                    so run these in an executor
+                    """
                     try:
-                        import zoneinfo
-
                         tzs = zoneinfo.available_timezones()
                         return vol.In(sorted(tzs))
                     except Exception:
@@ -1793,40 +1856,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         pass
 
     def _handle_Appliance_System_Ability(self, header: dict, payload: dict):
-        # This should only be requested when we want to update a config_entry
-        # (needsave == True) due to a detected fw change or whatever in NS_ALL
-        # Before saving, we're checking the abilities did (or didn't) change too
-        # If abilities were changed since our init (due to a device fw update likely)
-        # we'll reload the config entry because a lot of initialization depends
-        # on this and it's hard to change it 'on the fly'
-        # This is, overall, an async transaction so we're prepared for
-        # this message coming in even when requested from other transactions
-        # like device identification or service (meross_lan.request) invocation
-        descr = self.descriptor
-        oldability = descr.ability
-        newability: dict = payload[mc.KEY_ABILITY]
-        if oldability != newability:
-            self.needsave = True
-            oldabilities = oldability.keys()
-            newabilities = newability.keys()
-            self.log(
-                self.WARNING,
-                "Trying schedule device configuration reload since the abilities changed (added:%s - removed:%s)",
-                str(newabilities - oldabilities),
-                str(oldabilities - newabilities),
-            )
-            self.schedule_entry_reload()
-
-        if self.needsave:
-            self.needsave = False
-            with self.exception_warning("ConfigEntry update"):
-                entries = self.hass.config_entries
-                if entry := entries.async_get_entry(self.config_entry_id):
-                    data = dict(entry.data)
-                    data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
-                    data[CONF_PAYLOAD][mc.KEY_ALL] = descr.all
-                    data[CONF_PAYLOAD][mc.KEY_ABILITY] = newability
-                    entries.async_update_entry(entry, data=data)
+        pass
 
     def _handle_Appliance_System_All(self, header: dict, payload: dict):
         # see issue #341. In case we receive a formally correct response from a
@@ -1852,6 +1882,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         if oldfirmware != descr.firmware:
             self.needsave = True
+            query_abilities = True
             if update_firmware := self.update_firmware:
                 # self.update_firmware is dynamically created only when the cloud api
                 # reports a newer fw
@@ -1868,6 +1899,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     _http.host = host
                 else:
                     self._http = MerossHttpClient(host, self.key)
+        else:
+            query_abilities = False
 
         if self.conf_protocol is CONF_PROTOCOL_AUTO:
             if self._mqtt_active:
@@ -1885,9 +1918,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self.digest_handlers[key_digest](_digest)
 
         if self.needsave:
-            # fw update or whatever might have modified the device abilities.
-            # we refresh the abilities list before saving the new config_entry
-            self.request(request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY))
+            self.schedule_entry_update(query_abilities)
 
     def _handle_Appliance_System_Clock(self, header: dict, payload: dict):
         # already processed by the MQTTConnection session manager
@@ -1920,8 +1951,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         pass
 
     def _handle_Appliance_System_Time(self, header: dict, payload: dict):
-        if header[mc.KEY_METHOD] == mc.METHOD_PUSH:
-            self.descriptor.update_time(payload[mc.KEY_TIME])
+        self.descriptor.update_time(payload[mc.KEY_TIME])
+        self.schedule_entry_update(False)
 
     def _config_device_timestamp(self, epoch):
         if self.mqtt_locallyactive and (
@@ -2027,8 +2058,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     async def async_config_device_timezone(self, tzname: str | None):
         # assert self.mqtt_locallyactive
-        timestamp = self.device_timestamp
-        timerules = []
+        timerules: list[list[int]]
         if tzname:
             # we'll look through the list of transition times for current tz
             # and provide the actual (last past daylight) and the next to the
@@ -2042,49 +2072,64 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 tzname = _TZ_PATCH[tzname]
 
             try:
-                try:
-                    import pytz
+                tz = await async_load_zoneinfo(tzname, self)
+            except:
+                return False
 
-                    tz_local = pytz.timezone(tzname)
-                    if isinstance(tz_local, pytz.tzinfo.DstTzInfo):
-                        idx = bisect.bisect_right(
-                            tz_local._utc_transition_times,  # type: ignore
-                            utcdatetime_from_epoch(timestamp),
-                        )
-                        # idx would be the next transition offset index
-                        _transition_info = tz_local._transition_info[idx - 1]  # type: ignore
-                        timerules.append(
-                            [
-                                int(tz_local._utc_transition_times[idx - 1].timestamp()),  # type: ignore
-                                int(_transition_info[0].total_seconds()),
-                                1 if _transition_info[1].total_seconds() else 0,
-                            ]
-                        )
-                        _transition_info = tz_local._transition_info[idx]  # type: ignore
-                        timerules.append(
-                            [
-                                int(tz_local._utc_transition_times[idx].timestamp()),  # type: ignore
-                                int(_transition_info[0].total_seconds()),
-                                1 if _transition_info[1].total_seconds() else 0,
-                            ]
-                        )
-                    elif isinstance(tz_local, pytz.tzinfo.StaticTzInfo):
-                        timerules = [[0, tz_local.utcoffset(None), 0]]
+            timestamp = self.device_timestamp
 
-                except Exception as exception:
-                    self.log_exception(
-                        self.WARNING,
-                        exception,
-                        "using pytz to build timezone(%s) ",
-                        tzname,
-                    )
+            try:
+
+                def _build_timerules():
+                    try:
+                        import pytz
+
+                        tz_pytz = pytz.timezone(tzname)
+                        if isinstance(tz_pytz, pytz.tzinfo.DstTzInfo):
+                            timerules = []
+                            idx = bisect.bisect_right(
+                                tz_pytz._utc_transition_times,  # type: ignore
+                                utcdatetime_from_epoch(timestamp),
+                            )
+                            # idx would be the next transition offset index
+                            _transition_info = tz_pytz._transition_info[idx - 1]  # type: ignore
+                            timerules.append(
+                                [
+                                    int(tz_pytz._utc_transition_times[idx - 1].timestamp()),  # type: ignore
+                                    int(_transition_info[0].total_seconds()),
+                                    1 if _transition_info[1].total_seconds() else 0,
+                                ]
+                            )
+                            _transition_info = tz_pytz._transition_info[idx]  # type: ignore
+                            timerules.append(
+                                [
+                                    int(tz_pytz._utc_transition_times[idx].timestamp()),  # type: ignore
+                                    int(_transition_info[0].total_seconds()),
+                                    1 if _transition_info[1].total_seconds() else 0,
+                                ]
+                            )
+                            return timerules
+                        elif isinstance(tz_pytz, pytz.tzinfo.StaticTzInfo):
+                            utcoffset = tz_pytz.utcoffset(None)
+                            utcoffset = utcoffset.seconds if utcoffset else 0
+                            return [[timestamp, utcoffset, 0]]
+
+                    except Exception as exception:
+                        self.log_exception(
+                            self.WARNING,
+                            exception,
+                            "using pytz to build timezone(%s) ",
+                            tzname,
+                            timeout=14400,
+                        )
+
                     # if pytz fails we'll fall-back to some euristics
-                    device_tzinfo = ZoneInfo(tzname)
-                    device_datetime = datetime_from_epoch(timestamp, device_tzinfo)
-                    utcoffset = device_tzinfo.utcoffset(device_datetime)
+                    device_datetime = datetime_from_epoch(timestamp, tz)
+                    utcoffset = tz.utcoffset(device_datetime)
                     utcoffset = utcoffset.seconds if utcoffset else 0
-                    isdst = device_tzinfo.dst(device_datetime)
-                    timerules = [[timestamp, utcoffset, 1 if isdst else 0]]
+                    return [[timestamp, utcoffset, 1 if tz.dst(device_datetime) else 0]]
+
+                timerules = await self.hass.async_add_executor_job(_build_timerules)
 
             except Exception as exception:
                 self.log_exception(
@@ -2099,19 +2144,26 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     [timestamp + PARAM_TIMEZONE_CHECK_OK_PERIOD, 0, 1],
                 ]
 
+            p_time = {
+                mc.KEY_TIMEZONE: tzname,
+                mc.KEY_TIMERULE: timerules,
+            }
         else:
-            tzname = ""
+            p_time = {
+                mc.KEY_TIMEZONE: "",
+                mc.KEY_TIMERULE: [],
+            }
 
-        return await self.async_request_ack(
+        if await self.async_request_ack(
             mc.NS_APPLIANCE_SYSTEM_TIME,
             mc.METHOD_SET,
-            payload={
-                mc.KEY_TIME: {
-                    mc.KEY_TIMEZONE: tzname,
-                    mc.KEY_TIMERULE: timerules,
-                }
-            },
-        )
+            payload={mc.KEY_TIME: p_time},
+        ):
+            self.descriptor.update_time(p_time)
+            self.schedule_entry_update(False)
+            return True
+
+        return False
 
     def _switch_protocol(self, protocol):
         self.log(
