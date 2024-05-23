@@ -49,8 +49,10 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
             else:
                 self._import_tsv(f)
 
-        super().__init__(self.namespaces[mc.NS_APPLIANCE_SYSTEM_ABILITY])
-        self.update(self.namespaces[mc.NS_APPLIANCE_SYSTEM_ALL])
+        super().__init__(
+            self.namespaces[mc.NS_APPLIANCE_SYSTEM_ALL]
+            | self.namespaces[mc.NS_APPLIANCE_SYSTEM_ABILITY]
+        )
         # patch system payload with fake ids
         if uuid:
             hardware = self.hardware

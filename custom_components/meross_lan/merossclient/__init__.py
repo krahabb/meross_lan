@@ -656,6 +656,7 @@ class MerossDeviceDescriptor:
     productmodel: str
 
     __slots__ = (
+        "payload",
         "all",
         "ability",
         "digest",
@@ -663,6 +664,9 @@ class MerossDeviceDescriptor:
     )
 
     _dynamicattrs = {
+        mc.KEY_ALL: lambda _self: _self.payload.get(mc.KEY_ALL, {}),
+        mc.KEY_ABILITY: lambda _self: _self.payload.get(mc.KEY_ABILITY, {}),
+        mc.KEY_DIGEST: lambda _self: _self.all.get(mc.KEY_DIGEST, {}),
         mc.KEY_CONTROL: lambda _self: _self.all.get(mc.KEY_CONTROL, {}),
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),
         mc.KEY_HARDWARE: lambda _self: _self.system.get(mc.KEY_HARDWARE, {}),
@@ -684,15 +688,8 @@ class MerossDeviceDescriptor:
         "productmodel": lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, '')}",
     }
 
-    def __init__(self, payload: dict | None):
-        if payload is None:
-            self.all = {}
-            self.ability = {}
-            self.digest = {}
-        else:
-            self.all = payload.get(mc.KEY_ALL, {})
-            self.ability = payload.get(mc.KEY_ABILITY, {})
-            self.digest = self.all.get(mc.KEY_DIGEST, {})
+    def __init__(self, payload: dict):
+        self.payload = payload
 
     def __getattr__(self, name):
         value = MerossDeviceDescriptor._dynamicattrs[name](self)
@@ -703,8 +700,7 @@ class MerossDeviceDescriptor:
         """
         reset the cached pointers
         """
-        self.all = payload.get(mc.KEY_ALL, self.all)
-        self.digest = self.all.get(mc.KEY_DIGEST, {})
+        self.payload |= payload
         for key in MerossDeviceDescriptor._dynamicattrs.keys():
             # don't use hasattr() or so to inspect else the whole
             # dynamic attrs logic gets f...d
@@ -714,9 +710,12 @@ class MerossDeviceDescriptor:
                 pass
 
     def update_time(self, p_time: dict):
-        self.system[mc.KEY_TIME] = p_time
-        self.time = p_time
-        self.timezone = p_time.get(mc.KEY_TIMEZONE)
+        self.system[mc.KEY_TIME] |= p_time
+        for key in (mc.KEY_TIME, mc.KEY_TIMEZONE):
+            try:
+                delattr(self, key)
+            except Exception:
+                pass
 
     @property
     def main_broker(self) -> HostAddress:
