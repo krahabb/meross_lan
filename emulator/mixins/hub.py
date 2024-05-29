@@ -5,7 +5,6 @@ import typing
 
 from custom_components.meross_lan.merossclient import (
     const as mc,
-    extract_dict_payloads,
     get_element_by_key,
     get_element_by_key_safe,
     get_mts_digest,
@@ -299,8 +298,31 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return mc.METHOD_SETACK, {}
 
     def _GET_Appliance_Hub_Sensor_All(self, header, payload):
-        response_payload = self.descriptor.namespaces[mc.NS_APPLIANCE_HUB_SENSOR_ALL]
-        for p_subdevice in response_payload[mc.KEY_ALL]:
+        if p_sensor_request := payload[mc.KEY_ALL]:
+            # if request carries ids
+            p_sensors = self.descriptor.namespaces[mc.NS_APPLIANCE_HUB_SENSOR_ALL][
+                mc.KEY_ALL
+            ]
+            p_sensor_response = []
+            for p_sensor_id in p_sensor_request:
+                subdevice_id = p_sensor_id[mc.KEY_ID]
+                p_sensor_response.append(
+                    get_element_by_key(
+                        p_sensors,
+                        mc.KEY_ID,
+                        subdevice_id,
+                    )
+                )
+            response_payload = {mc.KEY_ALL: p_sensor_response}
+        else:
+            # request full list
+            response_payload = self.descriptor.namespaces[
+                mc.NS_APPLIANCE_HUB_SENSOR_ALL
+            ]
+            p_sensor_response = response_payload[mc.KEY_ALL]
+
+        # randomize a bit current state
+        for p_subdevice in p_sensor_response:
             if mc.KEY_DOORWINDOW in p_subdevice:
                 if randint(0, 4) == 0:
                     p_subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
@@ -316,7 +338,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return mc.METHOD_GETACK, response_payload
 
     def _SET_Appliance_Hub_ToggleX(self, header, payload):
-        for p_togglex in extract_dict_payloads(payload[mc.KEY_TOGGLEX]):
+        for p_togglex in payload[mc.KEY_TOGGLEX]:
             subdevice_id = p_togglex[mc.KEY_ID]
             p_subdevice_digest = self._get_subdevice_digest(subdevice_id)
             if mc.KEY_ONOFF in p_subdevice_digest:
