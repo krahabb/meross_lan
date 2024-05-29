@@ -99,7 +99,7 @@ class NamespaceHandler:
             self.polling_strategy = None
 
         if ns.need_channel:
-            self.polling_request_payload = ns.payload_type()
+            self.polling_request_payload = []
             self.polling_request = (
                 namespace,
                 mc.METHOD_GET,
@@ -151,12 +151,9 @@ class NamespaceHandler:
             entity, f"_parse_{self.key_namespace}", entity._parse
         )
         entity.namespace_handlers.add(self)
-        # TODO: temporary code here while we test the new ns descriptors
-        # we're now trying to see if the (eventual) polling payload need to be 'structured'
-        # based off the actual channels
-        if self.ns.need_channel:
-            polling_request_payload = self.polling_request_payload
-            assert type(polling_request_payload) is list
+
+        polling_request_payload = self.polling_request_payload
+        if polling_request_payload is not None:
             for channel_payload in polling_request_payload:
                 if channel_payload[mc.KEY_CHANNEL] == channel:
                     break
