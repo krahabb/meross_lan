@@ -2214,9 +2214,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 if name := device_info_channel.get(mc.KEY_DEVNAME):
                     entity = self.entities[channel]
                     if (registry_entry := entity.registry_entry) and (
-                        name != registry_entry.name
+                        name != registry_entry.original_name
                     ):
-                        async_update_entity(registry_entry.entity_id, name=name)
+                        async_update_entity(registry_entry.entity_id, original_name=name)
             except Exception:
                 pass
 
