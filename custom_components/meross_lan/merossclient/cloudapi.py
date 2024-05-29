@@ -104,7 +104,7 @@ class DeviceInfoChannelType(typing.TypedDict):
     devIconId: typing.NotRequired[str]
 
 
-class DeviceInfoType(typing.TypedDict, total=False):
+class DeviceInfoType(typing.TypedDict):
     """
     Device info as recovered from meross cloud api "/Device/devList"
     """
