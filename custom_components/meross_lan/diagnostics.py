@@ -34,10 +34,6 @@ async def async_get_config_entry_diagnostics(
                     "pref_protocol": device.pref_protocol,
                     "curr_protocol": device.curr_protocol,
                     "polling_period": device.polling_period,
-                    "polling_strategies": {
-                        strategy.namespace: strategy.lastrequest
-                        for strategy in device.polling_strategies.values()
-                    },
                     "device_response_size_min": device.device_response_size_min,
                     "device_response_size_max": device.device_response_size_max,
                     "MQTT": {
@@ -53,6 +49,18 @@ async def async_get_config_entry_diagnostics(
                     "HTTP": {
                         "http": bool(device._http),
                         "http_active": bool(device._http_active),
+                    },
+                    "namespace_handlers": {
+                        handler.namespace: {
+                            "lastrequest": handler.lastrequest,
+                            "lastresponse": handler.lastresponse,
+                            "polling_strategy": (
+                                handler.polling_strategy.__name__
+                                if handler.polling_strategy
+                                else None
+                            ),
+                        }
+                        for handler in device.namespace_handlers.values()
                     },
                     "namespace_pushes": (
                         obfuscated_dict(device.namespace_pushes)

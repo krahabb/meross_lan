@@ -426,7 +426,7 @@ class ConfigEntryManager(EntityManager):
     def trace_close(self):
         if self._trace_file:
             try:
-                self._trace_file.close()  # type: ignore
+                self._trace_file.close()
             except Exception as exception:
                 self.log_exception(self.WARNING, exception, "closing trace file")
             self._trace_file = None
@@ -638,7 +638,7 @@ class ApiProfile(ConfigEntryManager):
                 CONF_PROTOCOL_MQTT,
                 rxtx,
             )
-        elif self.isEnabledFor(self.VERBOSE):
+        if self.isEnabledFor(self.VERBOSE):
             header = message[mc.KEY_HEADER]
             connection.log(
                 self.VERBOSE,

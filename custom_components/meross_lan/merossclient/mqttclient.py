@@ -42,8 +42,8 @@ class _MQTTRateLimiter:
     message spoofing by rejecting messages too old in time (a few seconds for that msl320)
     """
 
-    DURATION = 60
-    MAXQUEUE = 6
+    DURATION: typing.Final = 60
+    MAXQUEUE: typing.Final = 6
 
     __slots__ = (
         "dropped",
@@ -51,8 +51,8 @@ class _MQTTRateLimiter:
     )
 
     def __init__(self) -> None:
-        self.dropped = 0
-        self.t_queue = deque()
+        self.dropped: int = 0
+        self.t_queue: deque[float] = deque()
 
 
 class _MerossMQTTClient(mqtt.Client):
@@ -176,7 +176,44 @@ class _MerossMQTTClient(mqtt.Client):
             self.loop_stop()
             self._stateext = self.STATE_DISCONNECTED
 
-    def rl2_publish(self, uuid: str, request: "MerossMessage"):
+    def get_rl_safe_delay(self, uuid: str):
+        """
+        Returns the 'safe delay' after which we should not incur rate-limiting.
+        This is useful to 'plan' mqtt send when these could/should be delayed
+        and has a rather stochastic connotation.
+        """
+        with self._lock_queue:
+            try:
+                _rl2 = self._rl2_queues[uuid]
+            except KeyError:
+                # useless maybe but if we're probing this uuid it'll
+                # be likely used again
+                self._rl2_queues[uuid] = _MQTTRateLimiter()
+                return 0.0
+
+            t_now = monotonic()
+            t_duration_back = t_now - _MQTTRateLimiter.DURATION
+            t_queue = _rl2.t_queue
+            t_queue_len = len(t_queue)
+            while t_queue_len:
+                if t_queue[0] <= t_duration_back:
+                    # discard in case
+                    t_queue.popleft()
+                    t_queue_len -= 1
+                    continue
+                if t_queue_len >= _MQTTRateLimiter.MAXQUEUE:
+                    # queue full..any send before expiration
+                    # of oldest send will be dropped
+                    t_oldest_exp = t_queue[0] + _MQTTRateLimiter.DURATION
+                    return t_oldest_exp - t_now  # assert > 0 ?
+                # queue not full but we want to 'weigh-in' the queue length
+                return _MQTTRateLimiter.DURATION / (
+                    _MQTTRateLimiter.MAXQUEUE - t_queue_len
+                )
+            # queue empty
+            return 0.0
+
+    def rl_publish(self, uuid: str, request: "MerossMessage"):
         with self._lock_queue:
 
             try:
@@ -192,15 +229,16 @@ class _MerossMQTTClient(mqtt.Client):
             t_queue = _rl2.t_queue
             t_queue_len = len(t_queue)
             while t_queue_len:
-                if t_queue[0] < t_duration_back:
+                if t_queue[0] <= t_duration_back:
                     t_queue.popleft()
                     t_queue_len -= 1
-                elif t_queue_len >= _MQTTRateLimiter.MAXQUEUE:
+                    continue
+                if t_queue_len >= _MQTTRateLimiter.MAXQUEUE:
                     self._rl_dropped += 1
                     _rl2.dropped += 1
                     raise MerossMQTTRateLimitException()
-                else:
-                    break
+                break
+
             t_queue.append(t_now)
             return mqtt.Client.publish(
                 self,

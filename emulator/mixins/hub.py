@@ -4,12 +4,12 @@ from random import randint
 import typing
 
 from custom_components.meross_lan.merossclient import (
-    NAMESPACE_TO_KEY,
     const as mc,
     extract_dict_payloads,
     get_element_by_key,
     get_element_by_key_safe,
     get_mts_digest,
+    namespaces as mn,
     update_dict_strict,
 )
 
@@ -73,7 +73,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             mc.NS_APPLIANCE_HUB_TOGGLEX,
         ):
             if namespace in ability:
-                key_namespace = NAMESPACE_TO_KEY[namespace]
+                key_namespace = mn.NAMESPACES[namespace].key
                 ns_state[namespace] = namespaces.setdefault(
                     namespace, {key_namespace: []}
                 )[key_namespace]
@@ -158,7 +158,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 # create a default corresponding subdevice ns_state should it be missing
                 if subnamespace in ns_state:
                     # (sub)namespace is supported in abilities so we'll fix/setup it
-                    key_subnamespace = NAMESPACE_TO_KEY[subnamespace]
+                    key_subnamespace = mn.NAMESPACES[subnamespace].key
                     p_subdevice_substate = get_element_by_key_safe(
                         ns_state[subnamespace],
                         mc.KEY_ID,
@@ -191,7 +191,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         namespaces = self.descriptor.namespaces
         if namespace in namespaces:
             subdevices_namespace: list = namespaces[namespace][
-                NAMESPACE_TO_KEY[namespace]
+                mn.NAMESPACES[namespace].key
             ]
             try:
                 return get_element_by_key(
@@ -207,7 +207,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 namespace in self.descriptor.ability
             ), f"{namespace} not available in Hub abilities"
             p_subdevice = {mc.KEY_ID: subdevice_id}
-            namespaces[namespace] = {NAMESPACE_TO_KEY[namespace]: [p_subdevice]}
+            namespaces[namespace] = {mn.NAMESPACES[namespace].key: [p_subdevice]}
         return p_subdevice
 
     def _get_mts100_all(self, subdevice_id: str):
@@ -286,9 +286,15 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 subdevice_id, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
             )
             if mc.KEY_HUMIDITY in p_subdevice:
-                p_subdevice_adjust[mc.KEY_HUMIDITY] = p_subdevice_adjust.get(mc.KEY_HUMIDITY, 0) + p_subdevice[mc.KEY_HUMIDITY]
+                p_subdevice_adjust[mc.KEY_HUMIDITY] = (
+                    p_subdevice_adjust.get(mc.KEY_HUMIDITY, 0)
+                    + p_subdevice[mc.KEY_HUMIDITY]
+                )
             if mc.KEY_TEMPERATURE in p_subdevice:
-                p_subdevice_adjust[mc.KEY_TEMPERATURE] = p_subdevice_adjust.get(mc.KEY_TEMPERATURE, 0) + p_subdevice[mc.KEY_TEMPERATURE]
+                p_subdevice_adjust[mc.KEY_TEMPERATURE] = (
+                    p_subdevice_adjust.get(mc.KEY_TEMPERATURE, 0)
+                    + p_subdevice[mc.KEY_TEMPERATURE]
+                )
 
         return mc.METHOD_SETACK, {}
 

@@ -10,11 +10,7 @@ from homeassistant.const import (
 )
 
 from . import const as mlc, meross_entity as me
-from .helpers.namespaces import (
-    EntityPollingStrategy,
-    NamespaceHandler,
-    SmartPollingStrategy,
-)
+from .helpers.namespaces import EntityNamespaceHandler, NamespaceHandler
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
@@ -275,6 +271,8 @@ class ProtocolSensor(MLEnumSensor):
 
 class MLSignalStrengthSensor(MLNumericSensor):
 
+    namespace = mc.NS_APPLIANCE_SYSTEM_RUNTIME
+
     # HA core entity attributes:
     entity_category = me.EntityCategory.DIAGNOSTIC
     icon = "mdi:wifi"
@@ -286,14 +284,9 @@ class MLSignalStrengthSensor(MLNumericSensor):
             mlc.SIGNALSTRENGTH_ID,
             MLNumericSensor.DeviceClass.POWER_FACTOR,
         )
-        EntityPollingStrategy(
-            manager,
-            mc.NS_APPLIANCE_SYSTEM_RUNTIME,
-            self,
-            handler=self._handle_Appliance_System_Runtime,
-        )
+        EntityNamespaceHandler(self)
 
-    def _handle_Appliance_System_Runtime(self, header: dict, payload: dict):
+    def _handle(self, header: dict, payload: dict):
         self.update_native_value(payload[mc.KEY_RUNTIME][mc.KEY_SIGNAL])
 
 
@@ -326,5 +319,4 @@ class FilterMaintenanceNamespaceHandler(NamespaceHandler):
             mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
             entity_class=MLFilterMaintenanceSensor,
         )
-        SmartPollingStrategy(device, mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE)
         MLFilterMaintenanceSensor(device, 0)

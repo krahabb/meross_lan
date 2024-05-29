@@ -6,7 +6,6 @@ from homeassistant.exceptions import InvalidStateError
 from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
 from .helpers import schedule_async_callback, versiontuple
-from .helpers.namespaces import PollingStrategy, SmartPollingStrategy
 from .merossclient import const as mc
 from .number import MLConfigNumber
 
@@ -140,19 +139,11 @@ class MLRollerShutter(MLCover):
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
         if mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST in descriptor.ability:
-            manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST, self)
             # unknown use: actually the polling period is set on a very high timeout
-            SmartPollingStrategy(
-                manager, mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST, item_count=1
-            )
+            manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST, self)
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, self)
-        SmartPollingStrategy(
-            manager, mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, item_count=1
-        )
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, self)
-        PollingStrategy(manager, mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, item_count=1)
         manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, self)
-        PollingStrategy(manager, mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, item_count=1)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

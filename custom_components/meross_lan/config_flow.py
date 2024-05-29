@@ -15,12 +15,7 @@ from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
-from .helpers import (
-    ConfigEntriesHelper,
-    ConfigEntryType,
-    reverse_lookup,
-    schedule_callback,
-)
+from .helpers import ConfigEntriesHelper, ConfigEntryType, reverse_lookup
 from .helpers.manager import CloudApiClient
 from .merossclient import (
     HostAddress,
@@ -29,7 +24,7 @@ from .merossclient import (
     cloudapi,
     const as mc,
     fmt_macaddress,
-    request_get,
+    namespaces as mn,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
@@ -453,13 +448,13 @@ class MerossFlowHandlerMixin(
 
         payload = (
             await _httpclient.async_request_strict(
-                *request_get(mc.NS_APPLIANCE_SYSTEM_ALL)
+                *mn.Appliance_System_All.request_default
             )
         )[mc.KEY_PAYLOAD]
         payload.update(
             (
                 await _httpclient.async_request_strict(
-                    *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY)
+                    *mn.Appliance_System_Ability.request_default
                 )
             )[mc.KEY_PAYLOAD]
         )

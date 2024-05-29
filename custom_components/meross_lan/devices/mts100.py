@@ -158,7 +158,7 @@ class Mts100Climate(MtsClimate):
             self.current_temperature = payload[mc.KEY_ROOM] / self.device_scale
             self.select_tracked_sensor.check_tracking()
             if mts100.sensor_temperature.update_native_value(self.current_temperature):
-                strategy = mts100.hub.polling_strategies[
+                strategy = mts100.hub.namespace_handlers[
                     mc.NS_APPLIANCE_HUB_MTS100_ADJUST
                 ]
                 if strategy.lastrequest < (mts100.hub.lastresponse - 30):

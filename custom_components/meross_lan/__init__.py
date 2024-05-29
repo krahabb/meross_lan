@@ -33,8 +33,8 @@ from .merossclient import (
     MerossRequest,
     cloudapi,
     const as mc,
-    get_default_payload,
     json_loads,
+    namespaces as mn,
 )
 from .merossclient.httpclient import MerossHttpClient
 
@@ -112,6 +112,9 @@ class HAMQTTConnection(MQTTConnection):
     @property
     def is_cloud_connection(self):
         return False
+
+    def get_rl_safe_delay(self, uuid: str):
+        return 0.0
 
     async def _async_mqtt_publish(
         self,
@@ -350,7 +353,7 @@ class MerossApi(ApiProfile):
                 elif type(payload) is not dict:
                     raise HomeAssistantError("Payload is not a valid dictionary")
             elif method == mc.METHOD_GET:
-                payload = get_default_payload(namespace)
+                payload = mn.NAMESPACES[namespace].payload_get
             else:
                 payload = {}  # likely failing the request...
 
@@ -480,7 +483,7 @@ class MerossApi(ApiProfile):
         The base MerossDevice class is a bulk 'do it all' implementation
         but some devices (i.e. Hub) need a (radically?) different behaviour
         """
-        if device_id != config_entry.data.get(mlc.CONF_DEVICE_ID):
+        if device_id != config_entry.data[mlc.CONF_DEVICE_ID]:
             # shouldnt really happen: it means we have a 'critical' bug in our config entry/flow management
             # or that the config_entry was tampered
             raise ConfigEntryError(
@@ -488,7 +491,7 @@ class MerossApi(ApiProfile):
                 "does not match the configured 'device_id'. "
                 "Please delete the entry and reconfigure it"
             )
-        descriptor = MerossDeviceDescriptor(config_entry.data.get(mlc.CONF_PAYLOAD))
+        descriptor = MerossDeviceDescriptor(config_entry.data[mlc.CONF_PAYLOAD])
         if device_id != descriptor.uuid:
             # this could happen (#341 raised the suspect) if a working device
             # 'suddenly' starts talking with another one and doesn't recognize

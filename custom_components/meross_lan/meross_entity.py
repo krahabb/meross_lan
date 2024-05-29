@@ -249,6 +249,21 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         namespace."""
         self.log(
             self.WARNING,
+            "Parser undefined for payload:(%s)",
+            str(payload),
+            timeout=14400,
+        )
+
+    def _handle(self, header: dict, payload: dict):
+        """
+        Raw handler to be used as a direct callback for NamespaceHandler.
+        Contrary to _parse which is invoked after splitting (x channel) the payload,
+        this is intendend to be used as a direct handler for the full namespace
+        message as an optimization in case the namespace is only mapped to a single entity
+        (See DNDMode)
+        """
+        self.log(
+            self.WARNING,
             "Handler undefined for payload:(%s)",
             str(payload),
             timeout=14400,

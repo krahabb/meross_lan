@@ -1,6 +1,6 @@
 import typing
 
-from ..helpers.namespaces import NamespaceHandler, PollingStrategy
+from ..helpers.namespaces import NamespaceHandler
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -74,10 +74,9 @@ def digest_init_diffuser(device: "MerossDevice", digest: dict) -> "DigestParseFu
                             device, None, device_value=payload[key][mc.KEY_VALUE] / 10
                         )
 
-        PollingStrategy(
+        NamespaceHandler(
             device,
             mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR,
-            item_count=1,
             handler=_handle_Appliance_Control_Diffuser_Sensor,
         )
 

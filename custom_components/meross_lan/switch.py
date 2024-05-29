@@ -4,7 +4,6 @@ import typing
 from homeassistant.components import switch
 
 from . import meross_entity as me
-from .helpers.namespaces import EntityPollingStrategy
 from .merossclient import const as mc, extract_dict_payloads
 
 if typing.TYPE_CHECKING:
@@ -77,7 +76,6 @@ class PhysicalLockSwitch(me.MEDictChannelMixin, MLSwitch):
         # right now we expect only 1 entity on channel == 0 (whatever)
         super().__init__(manager, 0, mc.KEY_LOCK, self.DeviceClass.SWITCH)
         manager.register_parser(self.namespace, self)
-        EntityPollingStrategy(manager, self.namespace, self, item_count=1)
 
 
 class MLToggle(me.MENoChannelMixin, MLSwitch):

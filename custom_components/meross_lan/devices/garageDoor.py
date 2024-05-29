@@ -13,8 +13,8 @@ from ..const import (
 )
 from ..cover import MLCover
 from ..helpers import clamp, schedule_async_callback
-from ..helpers.namespaces import NamespaceHandler, SmartPollingStrategy
-from ..merossclient import const as mc, request_get
+from ..helpers.namespaces import NamespaceHandler
+from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber
 from ..switch import MLSwitch
 
@@ -560,7 +560,7 @@ class MLGarage(MLCover):
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
             await manager.async_http_request(
-                *request_get(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+                *mn.Appliance_GarageDoor_State.request_default
             )
 
     async def _async_transition_end_callback(self):
@@ -586,7 +586,7 @@ class MLGarage(MLCover):
         if was_closing != self.is_closed:
             # looks like on MQTT we don't receive a PUSHed state update? (#415)
             if await self.manager.async_request_ack(
-                *request_get(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+                *mn.Appliance_GarageDoor_State.request_default
             ):
                 # the request/response parse already flushed the state
                 if was_closing == self.is_closed:
@@ -636,7 +636,6 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
             handler=self._handle_Appliance_GarageDoor_Config,
         )
-        SmartPollingStrategy(device, mc.NS_APPLIANCE_GARAGEDOOR_CONFIG)
 
     def _handle_Appliance_GarageDoor_Config(self, header: dict, payload: dict):
         # {"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
@@ -727,22 +726,11 @@ def digest_init_garageDoor(device: "MerossDevice", digest: list):
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
     device.platforms.setdefault(MLSwitch.PLATFORM, None)
     ability = device.descriptor.ability
-    channels_payloads = []
     for channel_digest in digest:
-        channel = channel_digest[mc.KEY_CHANNEL]
-        MLGarage(device, channel)
-        channels_payloads.append({mc.KEY_CHANNEL: channel})
+        MLGarage(device, channel_digest[mc.KEY_CHANNEL])
 
     if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in ability:
         GarageDoorConfigNamespaceHandler(device)
-
-    if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in ability:
-        SmartPollingStrategy(
-            device,
-            mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
-            payload=channels_payloads,
-            item_count=len(channels_payloads),
-        )
 
     # We have notice (#428) that the msg200 pushes a strange garage door state
     # over channel 0 which is not in the list of channels exposed in digest.

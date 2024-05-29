@@ -5,9 +5,9 @@ import typing
 
 from custom_components.meross_lan.helpers import clamp
 from custom_components.meross_lan.merossclient import (
-    NAMESPACE_TO_KEY,
     const as mc,
     get_element_by_key,
+    namespaces as mn,
     update_dict_strict,
     update_dict_strict_by_key,
 )
@@ -121,7 +121,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         }
         """
         namespace = header[mc.KEY_NAMESPACE]
-        namespace_key = NAMESPACE_TO_KEY[namespace]
+        namespace_key = mn.NAMESPACES[namespace].key
         method = header[mc.KEY_METHOD]
 
         digest: list[dict[str, object]] = self.descriptor.namespaces[namespace][

@@ -17,8 +17,8 @@ import homeassistant.util.color as color_util
 
 from . import const as mlc, meross_entity as me
 from .helpers import clamp, schedule_async_callback
-from .helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
-from .merossclient import const as mc, request_get
+from .helpers.namespaces import EntityNamespaceHandler, NamespaceHandler
+from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -686,7 +686,7 @@ class MLLightEffect(MLLight):
     def __init__(self, manager: "MerossDevice", digest: dict):
         self._light_effect_list: list[dict] = []
         super().__init__(manager, digest, [])
-        SmartPollingStrategy(
+        NamespaceHandler(
             manager,
             mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
             handler=self._handle_Appliance_Control_Light_Effect,
@@ -703,7 +703,7 @@ class MLLightEffect(MLLight):
             _light_effect = self._light_effect_list[effect_index]
         except IndexError:
             # our _light_effect_list might be stale
-            self.manager.polling_strategies[
+            self.manager.namespace_handlers[
                 mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT
             ].lastrequest = 0
             return
@@ -819,7 +819,7 @@ class MLLightEffect(MLLight):
             effect_list.append(MLLightBase.EFFECT_OFF)
             # add a 'fake' key so the next update will force-flush
             self._light["_"] = None
-            self.manager.request(request_get(mc.NS_APPLIANCE_CONTROL_LIGHT))
+            self.manager.request(mn.Appliance_Control_Light.request_default)
 
 
 class MLLightMp3(MLLight):
@@ -842,8 +842,6 @@ class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
     manager: "MerossDevice"
 
     namespace = mc.NS_APPLIANCE_SYSTEM_DNDMODE
-    key_namespace = mc.KEY_DNDMODE
-    key_value = mc.KEY_MODE
 
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
@@ -852,12 +850,7 @@ class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
 
     def __init__(self, manager: "MerossDevice"):
         super().__init__(manager, None, mlc.DND_ID, mc.KEY_DNDMODE)
-        EntityPollingStrategy(
-            manager,
-            self.namespace,
-            self,
-            handler=self._handle_Appliance_System_DNDMode,
-        )
+        EntityNamespaceHandler(self)
 
     async def async_turn_on(self, **kwargs):
         if await self.manager.async_request_ack(
@@ -875,7 +868,7 @@ class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
         ):
             self.update_onoff(0)
 
-    def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
+    def _handle(self, header: dict, payload: dict):
         self.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
 
 

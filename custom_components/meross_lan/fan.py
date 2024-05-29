@@ -3,7 +3,7 @@ import typing
 from homeassistant.components import fan
 
 from . import meross_entity as me
-from .helpers.namespaces import NamespaceHandler, PollingStrategy
+from .helpers.namespaces import NamespaceHandler
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
@@ -87,11 +87,11 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
 
     # interface: self
     async def async_request_fan(self, speed: int):
-        payload = {self.key_channel: self.channel, self.key_value: speed}
+        payload = {mc.KEY_CHANNEL: self.channel, mc.KEY_SPEED: speed}
         if await self.manager.async_request_ack(
-            self.namespace,
+            mc.NS_APPLIANCE_CONTROL_FAN,
             mc.METHOD_SET,
-            {self.key_namespace: [payload]},
+            {mc.KEY_FAN: [payload]},
         ):
             self._parse_fan(payload)
 
@@ -142,12 +142,7 @@ class FanNamespaceHandler(NamespaceHandler):
             # actually only map100 (so far)
             MLFan(device, 0)
             # setup a polling strategy since state is not carried in digest
-            PollingStrategy(
-                device,
-                mc.NS_APPLIANCE_CONTROL_FAN,
-                payload=[{mc.KEY_CHANNEL: 0}],
-                item_count=1,
-            )
+            self.polling_strategy = NamespaceHandler.async_poll_default
 
 
 def digest_init_fan(device: "MerossDevice", digest) -> "DigestParseFunc":
