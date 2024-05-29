@@ -58,8 +58,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         p_digest = self.descriptor.digest
         p_digest_mode_list = p_digest[mc.KEY_THERMOSTAT][mc.KEY_MODE]
         p_digest_windowopened_list = []
-        p_mode_list = payload[mc.KEY_MODE]
-        for p_mode in p_mode_list:
+        for p_mode in payload[mc.KEY_MODE]:
             channel = p_mode[mc.KEY_CHANNEL]
             p_digest_mode = update_dict_strict_by_key(p_digest_mode_list, p_mode)
             mode = p_digest_mode[mc.KEY_MODE]
@@ -94,8 +93,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     def _SET_Appliance_Control_Thermostat_ModeB(self, header, payload):
         p_digest = self.descriptor.digest
         p_digest_modeb_list = p_digest[mc.KEY_THERMOSTAT][mc.KEY_MODEB]
-        p_modeb_list = payload[mc.KEY_MODEB]
-        for p_modeb in p_modeb_list:
+        for p_modeb in payload[mc.KEY_MODEB]:
             p_digest_modeb = update_dict_strict_by_key(p_digest_modeb_list, p_modeb)
             if p_digest_modeb[mc.KEY_ONOFF]:
                 p_digest_modeb[mc.KEY_STATE] = (
