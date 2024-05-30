@@ -98,7 +98,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
         for p_subdevice_digest in digest_subdevices:
             subdevice_id = p_subdevice_digest[mc.KEY_ID]
-            # detect first if it0s an mts like or a sensor like
+            # detect first if it's an mts like or a sensor like
             if p_subdevice_digest[mc.KEY_STATUS] == mc.STATUS_ONLINE:
                 p_mts_digest = get_mts_digest(p_subdevice_digest)
                 subdevice_ns = (
@@ -140,7 +140,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 ns_state[subdevice_ns].append(p_subdevice_all)
 
             if subdevice_ns is mc.NS_APPLIANCE_HUB_MTS100_ALL:
-                # this subdevice is an mts like so we'll ensure it's
+                # this subdevice is an mts like so we'll ensure its
                 # 'all' payload (at least) is set. we'll also bind
                 # the child dicts in 'all' to teh corresponding specific
                 # namespace payload for the subdevice id so that the
@@ -225,6 +225,47 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         """returns the subdevice 'all' dict from either the Hub.Sensor.All or Hub.Mts100.All"""
         return self._get_mts100_all(subdevice_id) or self._get_sensor_all(subdevice_id)
 
+    def _handler_default(self, method: str, namespace: str, payload: dict):
+        if method == mc.METHOD_GET:
+            ns = mn.NAMESPACES[namespace]
+            if ns.is_hub:
+                response_payload = self.descriptor.namespaces[namespace]
+                request_subdevices = payload[ns.key]
+                if request_subdevices:
+                    # client asked for defined set of ids
+                    current_subdevices = response_payload[ns.key]
+                    response_subdevices = []
+                    for p_subdevice_id in request_subdevices:
+                        if p_subdevice := get_element_by_key_safe(
+                            current_subdevices,
+                            mc.KEY_ID,
+                            p_subdevice_id[mc.KEY_ID],
+                        ):
+                            response_subdevices.append(p_subdevice)
+                    response_payload = {ns.key: response_subdevices}
+                else:
+                    # client request empty list -> device responds with full set
+                    response_subdevices = response_payload[ns.key]
+
+                # response_subdevices contains the list of subdevices state being returned.
+                # we'll apply some randomization to the state to emulate signals
+                for p_subdevice in response_subdevices:
+                    if mc.KEY_DOORWINDOW in p_subdevice:
+                        if randint(0, 4) == 0:
+                            p_subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
+                        else:
+                            p_subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
+                    elif mc.KEY_SMOKEALARM in p_subdevice:
+                        a = randint(0, 2)
+                        if a == 0:
+                            p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(17, 27)
+                        elif a == 1:
+                            p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
+
+                return mc.METHOD_GETACK, response_payload
+
+        return super()._handler_default(method, namespace, payload)
+
     def _SET_Appliance_Hub_Mts100_Adjust(self, header, payload):
         for p_subdevice in payload[mc.KEY_ADJUST]:
             subdevice_id = p_subdevice[mc.KEY_ID]
@@ -298,46 +339,6 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 )
 
         return mc.METHOD_SETACK, {}
-
-    def _GET_Appliance_Hub_Sensor_All(self, header, payload):
-        if p_sensor_request := payload[mc.KEY_ALL]:
-            # if request carries ids
-            p_sensors = self.descriptor.namespaces[mc.NS_APPLIANCE_HUB_SENSOR_ALL][
-                mc.KEY_ALL
-            ]
-            p_sensor_response = []
-            for p_sensor_id in p_sensor_request:
-                subdevice_id = p_sensor_id[mc.KEY_ID]
-                p_sensor_response.append(
-                    get_element_by_key(
-                        p_sensors,
-                        mc.KEY_ID,
-                        subdevice_id,
-                    )
-                )
-            response_payload = {mc.KEY_ALL: p_sensor_response}
-        else:
-            # request full list
-            response_payload = self.descriptor.namespaces[
-                mc.NS_APPLIANCE_HUB_SENSOR_ALL
-            ]
-            p_sensor_response = response_payload[mc.KEY_ALL]
-
-        # randomize a bit current state
-        for p_subdevice in p_sensor_response:
-            if mc.KEY_DOORWINDOW in p_subdevice:
-                if randint(0, 4) == 0:
-                    p_subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 1
-                else:
-                    p_subdevice[mc.KEY_DOORWINDOW][mc.KEY_STATUS] = 0
-            elif mc.KEY_SMOKEALARM in p_subdevice:
-                a = randint(0, 2)
-                if a == 0:
-                    p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(17, 27)
-                elif a == 1:
-                    p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
-
-        return mc.METHOD_GETACK, response_payload
 
     def _SET_Appliance_Hub_ToggleX(self, header, payload):
         for p_togglex in payload[mc.KEY_TOGGLEX]:

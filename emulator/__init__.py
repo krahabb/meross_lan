@@ -49,9 +49,7 @@ from aiohttp import web
 # so I've changed a bit the import sequence in meross_lan
 # to have the homeassistant.core imported (initialized) before
 # homeassistant.helpers.storage
-from custom_components.meross_lan.merossclient import (
-    const as mc,
-)
+from custom_components.meross_lan.merossclient import const as mc
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
 
