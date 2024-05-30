@@ -207,7 +207,11 @@ def run(argv):
 
     def web_post_handler(emulator: MerossEmulator):
         async def _callback(request: web.Request) -> web.Response:
-            return web.json_response(emulator.handle(await request.text()))
+            return web.Response(
+                status=200,
+                text=emulator.handle(await request.text()),
+                content_type="application/json",
+            )
 
         return _callback
 

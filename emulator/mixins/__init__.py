@@ -134,6 +134,8 @@ class MerossEmulator:
     command carrying the message and so automatically managed too
     """
 
+    MAXIMUM_RESPONSE_SIZE = 3000
+
     __slots__ = (
         "epoch",
         "lock",
@@ -212,7 +214,7 @@ class MerossEmulator:
         """
         self.descriptor.time[mc.KEY_TIMESTAMP] = self.epoch = int(time())
 
-    def handle(self, request: MerossMessage | str) -> MerossMessageType | None:
+    def handle(self, request: MerossMessage | str) -> str | None:
         """
         main message handler entry point: this is called either from web.Request
         for request routed from the web.Application or from the mqtt.Client.
@@ -242,8 +244,17 @@ class MerossEmulator:
                 response = self._handle_message(request_header, request_payload)
 
         if response:
-            self._log_message("TX", json_dumps(response))
-            return response
+            text = json_dumps(response)
+            if len(text) > self.MAXIMUM_RESPONSE_SIZE:
+                # Applying 'overflow' if the response text is too big,
+                # thus emulating the same behavior of hw devices.
+                # These have a ranging 'maximum response size' based on my experience:
+                # - msl120:  2k
+                # - msh300:  4k
+                # - mss310:  2.9k
+                text = text[: self.MAXIMUM_RESPONSE_SIZE]
+            self._log_message("TX", text)
+            return text
 
         return None
 
@@ -646,4 +657,4 @@ class MerossEmulator:
     def _mqttc_message(self, client: "mqtt.Client", userdata, msg: "mqtt.MQTTMessage"):
         request = MerossMessage.decode(msg.payload.decode("utf-8"))
         if response := self.handle(request):
-            client.publish(request[mc.KEY_HEADER][mc.KEY_FROM], json_dumps(response))
+            client.publish(request[mc.KEY_HEADER][mc.KEY_FROM], response)

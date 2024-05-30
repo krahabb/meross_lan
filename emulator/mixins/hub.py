@@ -19,6 +19,8 @@ if typing.TYPE_CHECKING:
 
 class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
+    MAXIMUM_RESPONSE_SIZE = 4000
+
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         # we have to sanitize our structures since it might happen some traces
