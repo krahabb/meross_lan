@@ -124,11 +124,7 @@ class HubNamespaceHandler(NamespaceHandler):
                         subdevices[subdevice_id]._parse(self.key_namespace, p_subdevice)
                     except KeyError:
                         # force a rescan since we discovered a new subdevice
-                        # only if it appears this device is online else it
-                        # would be a waste since we wouldnt have enough info
-                        # to correctly build that
-                        if is_device_online(p_subdevice):
-                            self.device.request(mn.Appliance_System_All.request_default)
+                        hub.namespace_handlers[mc.NS_APPLIANCE_SYSTEM_ALL].lastrequest = 0.0
                     subdevices_parsed.add(subdevice_id)
             except Exception as exception:
                 self.handle_exception(exception, "_handle_subdevice", p_subdevice)
@@ -179,7 +175,11 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
                 # if we're good to go on the first iteration,
                 # we don't want to break this cycle else it
                 # would restart (stateless) at the next polling cycle
-                self.polling_request[2][self.key_namespace] = p
+                self.polling_request = (
+                    self.namespace,
+                    mc.METHOD_GET,
+                    {self.key_namespace: p},
+                )
                 self.polling_response_size_adj(len(p))
                 if await device.async_request_smartpoll(
                     self,
@@ -195,7 +195,11 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         a better structured payload.
         """
         for p in self._build_subdevices_payload(device.subdevices.values()):
-            self.polling_request[2][self.key_namespace] = p
+            self.polling_request = (
+                self.namespace,
+                mc.METHOD_GET,
+                {self.key_namespace: p},
+            )
             self.polling_response_size_adj(len(p))
             await super().async_trace(device, protocol)
 
