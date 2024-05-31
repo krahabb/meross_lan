@@ -44,7 +44,6 @@ from .helpers import (
     async_load_zoneinfo,
     datetime_from_epoch,
     schedule_async_callback,
-    utcdatetime_from_epoch,
 )
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import NamespaceHandler
@@ -2067,9 +2066,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         tz_pytz = pytz.timezone(tzname)
                         if isinstance(tz_pytz, pytz.tzinfo.DstTzInfo):
                             timerules = []
+                            # _utc_transition_times are naive UTC datetimes
                             idx = bisect.bisect_right(
                                 tz_pytz._utc_transition_times,  # type: ignore
-                                utcdatetime_from_epoch(timestamp),
+                                datetime_from_epoch(timestamp, None),
                             )
                             # idx would be the next transition offset index
                             _transition_info = tz_pytz._transition_info[idx - 1]  # type: ignore
@@ -2216,7 +2216,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if (registry_entry := entity.registry_entry) and (
                         name != registry_entry.original_name
                     ):
-                        async_update_entity(registry_entry.entity_id, original_name=name)
+                        async_update_entity(
+                            registry_entry.entity_id, original_name=name
+                        )
             except Exception:
                 pass
 

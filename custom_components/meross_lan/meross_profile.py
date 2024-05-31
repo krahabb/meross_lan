@@ -11,6 +11,7 @@ import typing
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
 from homeassistant.helpers import storage
+from homeassistant.util import dt as dt_util
 
 from . import const as mlc
 from .const import (
@@ -1149,7 +1150,9 @@ class MerossCloudProfile(ApiProfile):
             self.log(
                 self.DEBUG,
                 "Querying device list - last query was at: %s",
-                datetime_from_epoch(self._device_info_time).isoformat(),
+                datetime_from_epoch(
+                    self._device_info_time, dt_util.DEFAULT_TIME_ZONE
+                ).isoformat(),
             )
             self._device_info_time = time()
             device_info_new = await self.apiclient.async_device_devlist()

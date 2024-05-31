@@ -16,7 +16,6 @@ import zoneinfo
 
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry, entity_registry
-from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
 
@@ -59,25 +58,21 @@ def versiontuple(version: str):
     return tuple(map(int, (version.split("."))))
 
 
-def utcdatetime_from_epoch(epoch):
+def datetime_from_epoch(epoch, tz: "tzinfo | None"):
     """
-    converts an epoch (UTC seconds) in a non-naive datetime.
+    converts an epoch (UTC seconds) in a datetime.
     Faster than datetime.fromtimestamp with less checks
-    and no care for milliseconds
-    """
-    y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
-    return datetime(y, m, d, hh, mm, min(ss, 59), 0, UTC)
-
-
-def datetime_from_epoch(epoch, tz: "tzinfo | None" = None):
-    """
-    converts an epoch (UTC seconds) in a non-naive datetime.
-    Faster than datetime.fromtimestamp with less checks
-    and no care for milliseconds
+    and no care for milliseconds.
+    If tz is None it'll return a naive datetime in UTC coordinates
     """
     y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
     utcdt = datetime(y, m, d, hh, mm, min(ss, 59), 0, UTC)
-    return utcdt if tz is UTC else utcdt.astimezone(tz or dt_util.DEFAULT_TIME_ZONE)
+    if tz is UTC:
+        return utcdt
+    elif tz is None:
+        return utcdt.replace(tzinfo=None)
+    else:
+        return utcdt.astimezone(tz)
 
 
 def schedule_async_callback(
