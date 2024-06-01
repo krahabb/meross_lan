@@ -45,22 +45,29 @@ class LightMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         channel = p_light[mc.KEY_CHANNEL]
         if channel != p_digest_light[mc.KEY_CHANNEL]:
             raise Exception("wrong request channel")
+        update_dict_strict(p_digest_light, p_light)
         # generally speaking set_light always turns on, unless the payload carries onoff = 0 and
         # the device is not using togglex
         if self._togglex_switch:
-            p_light.pop(mc.KEY_ONOFF, None)
-            if not self._togglex_mode:
+            if mc.KEY_ONOFF in p_digest_light:
                 p_digest_togglex: dict = p_digest[mc.KEY_TOGGLEX][channel]
-                if not p_digest_togglex.get(mc.KEY_ONOFF):
-                    p_digest_togglex[mc.KEY_ONOFF] = 1
+                if p_digest_togglex[mc.KEY_ONOFF] != p_digest_light[mc.KEY_ONOFF]:
+                    p_digest_togglex[mc.KEY_ONOFF] = p_digest_light[mc.KEY_ONOFF]
                     if self.mqtt_connected:
                         self.mqtt_publish_push(
                             mc.NS_APPLIANCE_CONTROL_TOGGLEX,
                             {mc.KEY_TOGGLEX: p_digest_togglex},
                         )
-        else:
-            p_light[mc.KEY_ONOFF] = p_light.get(mc.KEY_ONOFF, 1)
-        update_dict_strict(p_digest_light, p_light)
+            else:
+                if not self._togglex_mode:
+                    p_digest_togglex: dict = p_digest[mc.KEY_TOGGLEX][channel]
+                    if not p_digest_togglex.get(mc.KEY_ONOFF):
+                        p_digest_togglex[mc.KEY_ONOFF] = 1
+                        if self.mqtt_connected:
+                            self.mqtt_publish_push(
+                                mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+                                {mc.KEY_TOGGLEX: p_digest_togglex},
+                            )
 
         if self.mqtt_connected and (p_digest_light != p_digest_light_saved):
             self.mqtt_publish_push(
