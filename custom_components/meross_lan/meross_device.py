@@ -82,7 +82,8 @@ if typing.TYPE_CHECKING:
     from .merossclient.cloudapi import DeviceInfoType, LatestVersionType
 
     DigestParseFunc = typing.Callable[[dict], None] | typing.Callable[[list], None]
-    DigestInitFunc = typing.Callable[["MerossDevice", typing.Any], DigestParseFunc]
+    DigestInitReturnType = tuple[DigestParseFunc, typing.Iterable[NamespaceHandler]]
+    DigestInitFunc = typing.Callable[["MerossDevice", typing.Any], DigestInitReturnType]
     NamespaceInitFunc = typing.Callable[["MerossDevice"], None]
 
 
@@ -268,8 +269,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         pass
 
     @staticmethod
-    def digest_init_empty(device: "MerossDevice", digest: dict | list):
-        return MerossDevice.digest_parse_empty
+    def digest_init_empty(
+        device: "MerossDevice", digest: dict | list
+    ) -> "DigestInitReturnType":
+        return MerossDevice.digest_parse_empty, ()
 
     @staticmethod
     def namespace_init_empty(device: "MerossDevice"):
@@ -389,9 +392,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_http_active",  # HTTP is 'online' i.e. reachable
         "_http_lastrequest",
         "_http_lastresponse",
-        "digest_handlers",
         "namespace_handlers",
         "namespace_pushes",
+        "digest_handlers",
+        "digest_pollers",
         "_unsub_polling_callback",
         "_polling_callback_shutdown",
         "_queued_smartpoll_requests",
@@ -440,9 +444,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._http_active: "MerossHttpClient | None" = None
         self._http_lastrequest = 0
         self._http_lastresponse = 0
-        self.digest_handlers: dict[str, "DigestParseFunc"] = {}
         self.namespace_handlers: dict[str, "NamespaceHandler"] = {}
         self.namespace_pushes: dict[str, dict] = {}
+        self.digest_handlers: dict[str, "DigestParseFunc"] = {}
+        self.digest_pollers: set["NamespaceHandler"] = set()
         NamespaceHandler(self, mc.NS_APPLIANCE_SYSTEM_ALL)
         self._unsub_polling_callback = None
         self._polling_callback_shutdown = None
@@ -506,10 +511,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     MerossDevice.NAMESPACE_INIT[namespace](self)
                 except TypeError:
                     try:
-                        _init_descriptor = MerossDevice.NAMESPACE_INIT[namespace]
-                        _init_func = getattr(
-                            await async_import_module(_init_descriptor[0]),
-                            _init_descriptor[1],
+                        _ns_init_descriptor = MerossDevice.NAMESPACE_INIT[namespace]
+                        _ns_init_func = getattr(
+                            await async_import_module(_ns_init_descriptor[0]),
+                            _ns_init_descriptor[1],
                         )
                     except Exception as exception:
                         self.log_exception(
@@ -518,9 +523,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             "loading namespace initializer for %s",
                             namespace,
                         )
-                        _init_func = MerossDevice.namespace_init_empty
-                    MerossDevice.NAMESPACE_INIT[namespace] = _init_func
-                    _init_func(self)
+                        _ns_init_func = MerossDevice.namespace_init_empty
+                    MerossDevice.NAMESPACE_INIT[namespace] = _ns_init_func
+                    _ns_init_func(self)
 
             except Exception as exception:
                 self.log_exception(
@@ -534,9 +539,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # carrying 'control' instead of 'digest'
             try:
                 try:
-                    self.digest_handlers[key_digest] = MerossDevice.DIGEST_INIT[
-                        key_digest
-                    ](self, _digest)
+                    self.digest_handlers[key_digest], _digest_pollers = (
+                        MerossDevice.DIGEST_INIT[key_digest](self, _digest)
+                    )
                 except (KeyError, TypeError):
                     # KeyError: key is unknown to our code (fallback to lookup ".devices.{key_digest}")
                     # TypeError: key is a string containing the module path
@@ -544,7 +549,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         _module_path = MerossDevice.DIGEST_INIT.get(
                             key_digest, f".devices.{key_digest}"
                         )
-                        _init_func = getattr(
+                        _digest_init_func: DigestInitFunc = getattr(
                             await async_import_module(_module_path),
                             f"digest_init_{key_digest}",
                         )
@@ -555,9 +560,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             "loading digest initializer for key '%s'",
                             key_digest,
                         )
-                        _init_func = MerossDevice.digest_init_empty
-                    MerossDevice.DIGEST_INIT[key_digest] = _init_func
-                    self.digest_handlers[key_digest] = _init_func(self, _digest)
+                        _digest_init_func = MerossDevice.digest_init_empty
+                    MerossDevice.DIGEST_INIT[key_digest] = _digest_init_func
+                    self.digest_handlers[key_digest], _digest_pollers = (
+                        _digest_init_func(self, _digest)
+                    )
+                self.digest_pollers.update(_digest_pollers)
 
             except Exception as exception:
                 self.log_exception(
@@ -666,6 +674,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         await super().async_shutdown()
         self.namespace_handlers.clear()
         self.digest_handlers.clear()
+        self.digest_pollers.clear()
         self.sensor_protocol = None  # type: ignore
         self.update_firmware = None
         ApiProfile.devices[self.id] = None

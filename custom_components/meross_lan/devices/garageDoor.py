@@ -19,7 +19,7 @@ from ..number import MLConfigNumber
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import MerossDevice
+    from ..meross_device import DigestInitReturnType, MerossDevice
 
 # garagedoor extra attributes
 EXTRA_ATTR_TRANSITION_DURATION = "transition_duration"
@@ -722,7 +722,9 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                     self.number_doorCloseDuration = garage.number_close_timeout
 
 
-def digest_init_garageDoor(device: "MerossDevice", digest: list):
+def digest_init_garageDoor(
+    device: "MerossDevice", digest: list
+) -> "DigestInitReturnType":
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
     device.platforms.setdefault(MLSwitch.PLATFORM, None)
     ability = device.descriptor.ability
@@ -736,6 +738,6 @@ def digest_init_garageDoor(device: "MerossDevice", digest: list):
     # over channel 0 which is not in the list of channels exposed in digest.
     # We so prepare the handler to eventually build an MLGarage instance
     # even though it's behavior is unknown at the moment.
-    garageDoor_handler = device.get_handler(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
-    garageDoor_handler.register_entity_class(MLGarage)
-    return garageDoor_handler.parse_list
+    handler = device.get_handler(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+    handler.register_entity_class(MLGarage)
+    return handler.parse_list, (handler,)

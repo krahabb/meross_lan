@@ -19,7 +19,7 @@ from ..sensor import MLHumiditySensor, MLTemperatureSensor
 from .spray import MLSpray
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import DigestParseFunc, MerossDevice
+    from ..meross_device import DigestInitReturnType, MerossDevice
 
 
 DIFFUSER_SENSOR_CLASS_MAP: dict[
@@ -30,7 +30,9 @@ DIFFUSER_SENSOR_CLASS_MAP: dict[
 }
 
 
-def digest_init_diffuser(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
+def digest_init_diffuser(
+    device: "MerossDevice", digest: dict
+) -> "DigestInitReturnType":
     """
     {
         "type": "mod100",
@@ -94,7 +96,7 @@ def digest_init_diffuser(device: "MerossDevice", digest: dict) -> "DigestParseFu
         diffuser_light_parser(digest.get(mc.KEY_LIGHT, []))
         diffuser_spray_parser(digest.get(mc.KEY_SPRAY, []))
 
-    return digest_parse
+    return digest_parse, (diffuser_light_handler, diffuser_spray_handler)
 
 
 class MLDiffuserLight(MLLightBase):

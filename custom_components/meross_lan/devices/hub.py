@@ -24,7 +24,7 @@ from ..sensor import (
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import DigestParseFunc
+    from ..meross_device import DigestInitReturnType
     from ..meross_entity import MerossEntity
     from ..merossclient.cloudapi import SubDeviceInfoType
     from .mts100 import Mts100Climate
@@ -124,7 +124,9 @@ class HubNamespaceHandler(NamespaceHandler):
                         subdevices[subdevice_id]._parse(self.key_namespace, p_subdevice)
                     except KeyError:
                         # force a rescan since we discovered a new subdevice
-                        hub.namespace_handlers[mc.NS_APPLIANCE_SYSTEM_ALL].lastrequest = 0.0
+                        hub.namespace_handlers[
+                            mc.NS_APPLIANCE_SYSTEM_ALL
+                        ].lastrequest = 0.0
                     subdevices_parsed.add(subdevice_id)
             except Exception as exception:
                 self.handle_exception(exception, "_handle_subdevice", p_subdevice)
@@ -1030,7 +1032,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS400] = MS400SubDevice
 WELL_KNOWN_TYPE_MAP[mc.KEY_WATERLEAK] = MS400SubDevice
 
 
-def digest_init_hub(device: "HubMixin", digest) -> "DigestParseFunc":
+def digest_init_hub(device: "HubMixin", digest) -> "DigestInitReturnType":
 
     device.subdevices = {}
     for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
@@ -1043,4 +1045,4 @@ def digest_init_hub(device: "HubMixin", digest) -> "DigestParseFunc":
         except Exception as exception:
             device.log_exception(device.WARNING, exception, "digest_init_hub")
 
-    return device._parse_hub
+    return device._parse_hub, ()

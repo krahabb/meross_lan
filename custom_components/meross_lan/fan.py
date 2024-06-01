@@ -7,7 +7,7 @@ from .helpers.namespaces import NamespaceHandler
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
-    from .meross_device import DigestParseFunc, MerossDevice
+    from .meross_device import DigestInitReturnType, MerossDevice
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
@@ -145,10 +145,9 @@ class FanNamespaceHandler(NamespaceHandler):
             self.polling_strategy = NamespaceHandler.async_poll_default
 
 
-def digest_init_fan(device: "MerossDevice", digest) -> "DigestParseFunc":
+def digest_init_fan(device: "MerossDevice", digest) -> "DigestInitReturnType":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
         MLFan(device, channel_digest[mc.KEY_CHANNEL])
-    # mc.NS_APPLIANCE_CONTROL_FAN should already be there since the namespace
-    # handlers dict has been initialized before digest
-    return device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN).parse_list
+    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN)
+    return handler.parse_list, (handler,)

@@ -4,15 +4,17 @@ from ..merossclient import const as mc
 from ..select import MLSelect
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import DigestParseFunc, MerossDevice
+    from ..meross_device import DigestInitReturnType, MerossDevice
 
 
-def digest_init_spray(device: "MerossDevice", digest) -> "DigestParseFunc":
+def digest_init_spray(device: "MerossDevice", digest) -> "DigestInitReturnType":
     """[{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]"""
     for channel_digest in digest:
         MLSpray(device, channel_digest[mc.KEY_CHANNEL])
 
-    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_SPRAY].parse_list
+    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_SPRAY)
+    handler.register_entity_class(MLSpray)
+    return handler.parse_list, (handler,)
 
 
 class MLSpray(MLSelect):

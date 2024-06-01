@@ -10,7 +10,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import DigestParseFunc, MerossDevice, MerossDeviceBase
+    from .meross_device import DigestInitReturnType, MerossDevice, MerossDeviceBase
 
 
 async def async_setup_entry(
@@ -91,10 +91,11 @@ class MLToggle(me.MENoChannelMixin, MLSwitch):
         manager.register_parser(self.namespace, self)
 
 
-def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
+def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
     MLToggle(device)
-    return device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLE).parse_generic
+    handler = device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLE]
+    return handler.parse_generic, (handler,)
 
 
 class MLToggleX(me.MEDictChannelMixin, MLSwitch):
@@ -109,7 +110,7 @@ class MLToggleX(me.MEDictChannelMixin, MLSwitch):
 
 def digest_init_togglex(
     device: "MerossDevice", togglex_digest: list
-) -> "DigestParseFunc":
+) -> "DigestInitReturnType":
     """[{ "channel": 0, "onoff": 1 }]"""
     # We don't initialize every switch/ToggleX here since the digest reported channels
     # might be mapped to more specialized entities:
@@ -144,6 +145,6 @@ def digest_init_togglex(
     for channel in channels:
         MLToggleX(device, channel)
 
-    togglex_handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)
-    togglex_handler.register_entity_class(MLToggleX)
-    return togglex_handler.parse_list
+    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)
+    handler.register_entity_class(MLToggleX)
+    return handler.parse_list, (handler,)

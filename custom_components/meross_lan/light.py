@@ -24,7 +24,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import DigestParseFunc, MerossDevice
+    from .meross_device import DigestInitReturnType, MerossDevice
 
 ATTR_TOGGLEX_AUTO = "togglex_auto"
 
@@ -872,7 +872,7 @@ class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
         self.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
 
 
-def digest_init_light(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
+def digest_init_light(device: "MerossDevice", digest: dict) -> "DigestInitReturnType":
     """{ "channel": 0, "capacity": 4 }"""
 
     ability = device.descriptor.ability
@@ -884,4 +884,5 @@ def digest_init_light(device: "MerossDevice", digest: dict) -> "DigestParseFunc"
     else:
         MLLight(device, digest)
 
-    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT].parse_generic
+    handler = device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT]
+    return handler.parse_generic, (handler,)

@@ -210,7 +210,7 @@ class NamespaceHandler:
         """
         p_channel = payload[self.key_namespace]
         try:
-            _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+            _parse = self.entities[p_channel.get(mc.KEY_CHANNEL)]
         except KeyError as key_error:
             _parse = self._try_create_entity(key_error)
         except TypeError:
@@ -350,6 +350,41 @@ class NamespaceHandler:
         self.entity_class(self.device, channel)
         return self.entities[channel]
 
+    async def async_poll_all(self, device: "MerossDevice", epoch: float):
+        """
+        This is a special policy for NS_ALL.
+        It is basically an 'async_poll_default' policy so it kicks-in whenever we poll
+        the state in 'device._async_request_updates' but contrary to 'legacy' behavior
+        where NS_ALL was always polled (unless mqtt active).
+        This will alternate polling NS_ALL to the group of namespaces responsible for
+        the state carried in 'digest'. This is an improvement since NS_ALL, even if carrying
+        the whole state in one query, might be huge (because of the 'time' key) but also because
+        most of its data are pretty static (never or seldom changing) info of the device.
+        This new policy will interleave querying NS_ALL once in a while with smaller direct
+        equivalent queries for the state carried in digest. (If the device doesn't support
+        NS_MULTIPLE, it will likely do more queries though but this is unlikely)
+        """
+        if device._mqtt_active:
+            # on MQTT no need for updates since they're being PUSHed
+            if not self.lastrequest:
+                # just when onlining...
+                self.lastrequest = epoch
+                await device.async_request_poll(self)
+            return
+
+        # here we're missing PUSHed updates so we have to poll...
+        if (epoch - self.lastrequest) > mlc.PARAM_HEARTBEAT_PERIOD:
+            # at start or periodically ask for NS_ALL..plain
+            self.lastrequest = epoch
+            await device.async_request_poll(self)
+            return
+
+        # query specific namespaces instead of NS_ALL since we hope this is
+        # better (less overhead/http sessions) together with ns_multiple packing
+        for digest_poller in device.digest_pollers:
+            digest_poller.lastrequest = epoch
+            await device.async_request_poll(digest_poller)
+
     async def async_poll_default(self, device: "MerossDevice", epoch: float):
         """
         This is a basic 'default' policy:
@@ -472,7 +507,7 @@ responses though
 POLLING_STRATEGY_CONF: dict[
     str, tuple[int, int, int, int, typing.Callable[..., typing.Coroutine] | None]
 ] = {
-    mc.NS_APPLIANCE_SYSTEM_ALL: (0, 0, 1000, 0, NamespaceHandler.async_poll_default),
+    mc.NS_APPLIANCE_SYSTEM_ALL: (0, 0, 1000, 0, NamespaceHandler.async_poll_all),
     mc.NS_APPLIANCE_SYSTEM_DEBUG: (0, 0, 1900, 0, None),
     mc.NS_APPLIANCE_SYSTEM_DNDMODE: (
         0,
@@ -504,7 +539,7 @@ POLLING_STRATEGY_CONF: dict[
     ),
     mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: (
         0,
-        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         100,
         NamespaceHandler.async_poll_default,
