@@ -129,25 +129,20 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
         self.update_onoff(payload[mc.KEY_ONOFF])
 
 
-class FanNamespaceHandler(NamespaceHandler):
-
-    def __init__(self, device: "MerossDevice"):
-        NamespaceHandler.__init__(
-            self,
-            device,
-            mc.NS_APPLIANCE_CONTROL_FAN,
-            entity_class=MLFan,
-        )
-        if mc.KEY_FAN not in device.descriptor.digest:
-            # actually only map100 (so far)
-            MLFan(device, 0)
-            # setup a polling strategy since state is not carried in digest
-            self.polling_strategy = NamespaceHandler.async_poll_default
-
-
 def digest_init_fan(device: "MerossDevice", digest) -> "DigestInitReturnType":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
         MLFan(device, channel_digest[mc.KEY_CHANNEL])
     handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN)
     return handler.parse_list, (handler,)
+
+
+def namespace_init_fan(device: "MerossDevice"):
+    """Special care for NS_FAN since it might have been initialized in digest_init"""
+    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN)
+    handler.register_entity_class(MLFan)
+    if mc.KEY_FAN not in device.descriptor.digest:
+        # actually only map100 (so far)
+        MLFan(device, 0)
+        # setup a polling strategy since state is not carried in digest
+        handler.polling_strategy = NamespaceHandler.async_poll_default
