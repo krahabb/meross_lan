@@ -32,7 +32,7 @@ from .const import (
     DOMAIN,
     PARAM_HEADER_SIZE,
     PARAM_HEARTBEAT_PERIOD,
-    PARAM_INFINITE_EPOCH,
+    PARAM_INFINITE_TIMEOUT,
     PARAM_TIMESTAMP_TOLERANCE,
     PARAM_TIMEZONE_CHECK_NOTOK_PERIOD,
     PARAM_TIMEZONE_CHECK_OK_PERIOD,
@@ -460,7 +460,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._multiple_requests: list["MerossRequestType"] = []
         self._multiple_response_size = PARAM_HEADER_SIZE
         self._timezone_next_check = (
-            0 if mc.NS_APPLIANCE_SYSTEM_TIME in ability else PARAM_INFINITE_EPOCH
+            0 if mc.NS_APPLIANCE_SYSTEM_TIME in ability else PARAM_INFINITE_TIMEOUT
         )
         """Indicates the (next) time we should perform a check (only when localmqtt)
         in order to see if the device has correct timezone/dst configuration"""

@@ -681,12 +681,15 @@ class MLLightEffect(MLLight):
     # HA core entity attributes:
     effect_list: list[str]
 
-    __slots__ = ("_light_effect_list",)
+    __slots__ = (
+        "_light_effect_list",
+        "_light_effect_handler",
+    )
 
     def __init__(self, manager: "MerossDevice", digest: dict):
         self._light_effect_list: list[dict] = []
         super().__init__(manager, digest, [])
-        NamespaceHandler(
+        self._light_effect_handler = NamespaceHandler(
             manager,
             mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
             handler=self._handle_Appliance_Control_Light_Effect,
@@ -696,18 +699,23 @@ class MLLightEffect(MLLight):
             self._rgb_to_native = rgbw_patch_to_native
             self._native_to_rgb = native_to_rgbw_patch
 
+    # interface: MerossBinaryEntity
+    def update_onoff(self, onoff):
+        if self.is_on != onoff:
+            self.is_on = onoff
+            if onoff and (mc.KEY_EFFECT in self._light):
+                self._light_effect_handler.polling_period = 0
+            self.flush_state()
+
     # interface: MLLight
     def _flush_light_effect(self, _light: dict):
         effect_index = _light[mc.KEY_EFFECT]
+        self._light_effect_handler.polling_period = 0
         try:
             _light_effect = self._light_effect_list[effect_index]
         except IndexError:
             # our _light_effect_list might be stale
-            self.manager.namespace_handlers[
-                mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT
-            ].lastrequest = 0
             return
-
         self.effect = _light_effect[mc.KEY_EFFECTNAME]
         try:
             member = _light_effect[mc.KEY_MEMBER]
@@ -718,7 +726,6 @@ class MLLightEffect(MLLight):
         except Exception:
             self.brightness = None
             self.color_mode = ColorMode.ONOFF
-        return
 
     # interface: LightEntity
     async def async_turn_on(self, **kwargs):
@@ -820,6 +827,9 @@ class MLLightEffect(MLLight):
             # add a 'fake' key so the next update will force-flush
             self._light["_"] = None
             self.manager.request(mn.Appliance_Control_Light.request_default)
+
+        if not (self.is_on and (mc.KEY_EFFECT in self._light)):
+            self._light_effect_handler.polling_period = mlc.PARAM_INFINITE_TIMEOUT
 
 
 class MLLightMp3(MLLight):
