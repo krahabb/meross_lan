@@ -3,7 +3,7 @@
 from time import time
 import typing
 
-from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant import const as hac
 from homeassistant.core import HomeAssistant, SupportsResponse, callback
 from homeassistant.exceptions import (
     ConfigEntryError,
@@ -144,12 +144,26 @@ class HAMQTTConnection(MQTTConnection):
                 self._unsub_mqtt_subscribe = await mqtt.async_subscribe(
                     hass, mc.TOPIC_DISCOVERY, self.async_mqtt_message
                 )
-                self._unsub_mqtt_disconnected = mqtt.async_dispatcher_connect(
-                    hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected
-                )
-                self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
-                    hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
-                )
+
+                @callback
+                def _connection_status_callback(connected: bool):
+                    if connected:
+                        self._mqtt_connected()
+                    else:
+                        self._mqtt_disconnected()
+
+                try:
+                    # HA core 2024.6
+                    self._unsub_mqtt_connected = mqtt.async_subscribe_connection_status(
+                        hass, _connection_status_callback
+                    )
+                except:
+                    self._unsub_mqtt_disconnected = mqtt.async_dispatcher_connect(
+                        hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected
+                    )
+                    self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
+                        hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
+                    )
                 if mqtt.is_connected(hass):
                     self._mqtt_connected()
             self._mqtt_subscribing = False
@@ -176,11 +190,11 @@ class HAMQTTConnection(MQTTConnection):
         with self.exception_warning("async_mqtt_subscribe: recovering broker conf"):
             from homeassistant.components import mqtt
 
-            mqtt_data = mqtt.get_mqtt_data(MerossApi.hass)
+            mqtt_data = self.hass.data[mqtt.DATA_MQTT]
             if mqtt_data and mqtt_data.client:
                 conf = mqtt_data.client.conf
                 self.broker.host = conf[mqtt.CONF_BROKER]
-                self.broker.port = conf.get(mqtt.CONF_PORT, mqtt.const.DEFAULT_PORT)
+                self.broker.port = conf.get(hac.CONF_PORT, mqtt.const.DEFAULT_PORT)
                 self.configure_logger()
 
         super()._mqtt_connected()
@@ -311,7 +325,7 @@ class MerossApi(ApiProfile):
                 hass.data.pop(mlc.DOMAIN)
 
             hass.bus.async_listen_once(
-                EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi
+                hac.EVENT_HOMEASSISTANT_STOP, _async_unload_merossapi
             )
         return api
 
