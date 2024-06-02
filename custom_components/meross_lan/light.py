@@ -17,7 +17,11 @@ import homeassistant.util.color as color_util
 
 from . import const as mlc, meross_entity as me
 from .helpers import clamp, schedule_async_callback
-from .helpers.namespaces import EntityNamespaceHandler, NamespaceHandler
+from .helpers.namespaces import (
+    EntityNamespaceHandler,
+    EntityNamespaceMixin,
+    NamespaceHandler,
+)
 from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
@@ -842,7 +846,7 @@ class MLLightMp3(MLLight):
         super().__init__(manager, payload, mc.HP110A_LIGHT_EFFECT_LIST)
 
 
-class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
+class MLDNDLightEntity(EntityNamespaceMixin, me.MerossBinaryEntity, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)

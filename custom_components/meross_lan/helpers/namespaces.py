@@ -462,37 +462,45 @@ class NamespaceHandler:
             await device.async_request(*self.polling_request)
 
 
+class EntityNamespaceMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Special 'polling enabler/disabler' mixin used with entities which are
+    'single instance' for a namespace handler and so they'll disable polling
+    should they're disabled in HA.
+    """
+
+    manager: "MerossDevice"
+
+    async def async_added_to_hass(self):
+        self.manager.get_handler(self.namespace).polling_strategy = (
+            POLLING_STRATEGY_CONF[self.namespace][4]
+        )
+        return await super().async_added_to_hass()
+
+    async def async_will_remove_from_hass(self):
+        self.manager.get_handler(self.namespace).polling_strategy = None
+        return await super().async_will_remove_from_hass()
+
+
 class EntityNamespaceHandler(NamespaceHandler):
     """
     Utility class to manage namespaces which are mapped to a single entity.
     This will acts as an helper in initialization
     """
 
-    __slots__ = (
-        "entity",
-        "_saved_polling_strategy",
-    )
-
-    def __init__(self, entity: "MerossEntity"):
-        self.entity = entity
+    def __init__(self, entity: "EntityNamespaceMixin"):
         NamespaceHandler.__init__(
             self,
-            entity.manager,  # type: ignore
+            entity.manager,
             entity.namespace,
             handler=getattr(
                 entity, f"_handle_{entity.namespace.replace('.', '_')}", entity._handle
             ),
         )
-        self._saved_polling_strategy: PollingStrategyFunc = self.polling_strategy  # type: ignore
-        self.polling_strategy = EntityNamespaceHandler.async_poll_entity
-
-    async def async_poll_entity(self, device: "MerossDevice", epoch: float):
-        """
-        Same as SmartPollingStrategy but we have a 'relevant' entity associated with
-        the state of this paylod so we'll skip the smartpoll should the entity be disabled
-        """
-        if self.entity.enabled:
-            await self._saved_polling_strategy(self, device, epoch)
+        if not entity._hass_connected:
+            # if initially disabled then uninstall default strategy
+            # EntityNamespaceMixin will manage enabling/disabling
+            self.polling_strategy = None
 
 
 class VoidNamespaceHandler(NamespaceHandler):

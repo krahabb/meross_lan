@@ -9,6 +9,7 @@ from homeassistant.util import dt as dt_util
 from .. import const as mlc, meross_entity as me
 from ..helpers.namespaces import (
     EntityNamespaceHandler,
+    EntityNamespaceMixin,
     NamespaceHandler,
     VoidNamespaceHandler,
 )
@@ -189,7 +190,7 @@ class ElectricityNamespaceHandler(NamespaceHandler):
             device.check_device_timezone()
 
 
-class ConsumptionXSensor(MLNumericSensor):
+class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     ATTR_OFFSET: typing.Final = "offset"
     ATTR_RESET_TS: typing.Final = "reset_ts"
 
@@ -434,7 +435,7 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
         super().__init__(device, mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG)
 
 
-class OverTempEnableSwitch(me.MENoChannelMixin, MLSwitch):
+class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
 
     namespace = mc.NS_APPLIANCE_CONFIG_OVERTEMP
     key_namespace = mc.KEY_OVERTEMP

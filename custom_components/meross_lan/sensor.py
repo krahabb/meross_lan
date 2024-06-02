@@ -10,7 +10,11 @@ from homeassistant.const import (
 )
 
 from . import const as mlc, meross_entity as me
-from .helpers.namespaces import EntityNamespaceHandler, NamespaceHandler
+from .helpers.namespaces import (
+    EntityNamespaceHandler,
+    EntityNamespaceMixin,
+    NamespaceHandler,
+)
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
@@ -269,7 +273,7 @@ class ProtocolSensor(MLEnumSensor):
             self.flush_state()
 
 
-class MLSignalStrengthSensor(MLNumericSensor):
+class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
     namespace = mc.NS_APPLIANCE_SYSTEM_RUNTIME
 
