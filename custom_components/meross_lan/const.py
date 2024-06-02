@@ -199,15 +199,10 @@ PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT = 2
 """used when polling the cover state to monitor an ongoing transition"""
 PARAM_CLOUDMQTT_UPDATE_PERIOD = 1795
 """for polled entities over cloud MQTT use 'at least' this"""
-PARAM_RESTORESTATE_TIMEOUT = 300
-"""used when restoring 'calculated' state after HA restart"""
+PARAM_DIAGNOSTIC_UPDATE_PERIOD = 300
+"""read diagnostic sensors only every ... second"""
 PARAM_ENERGY_UPDATE_PERIOD = 55
 """read energy consumption only every ... second"""
-PARAM_SIGNAL_UPDATE_PERIOD = 295
-"""read energy consumption only every ... second"""
-PARAM_HUBBATTERY_UPDATE_PERIOD = 3595
-"""read battery levels only every ... second"""
-PARAM_HUBSENSOR_UPDATE_PERIOD = 55
 PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
 PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT = 5

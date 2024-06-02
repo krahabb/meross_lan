@@ -1,3 +1,4 @@
+import bisect
 import typing
 
 from .. import const as mlc
@@ -7,6 +8,10 @@ if typing.TYPE_CHECKING:
 
     from ..meross_device import MerossDevice
     from ..meross_entity import MerossEntity
+
+PollingStrategyFunc = typing.Callable[
+    ["NamespaceHandler", "MerossDevice", float], typing.Coroutine
+]
 
 
 class EntityDisablerMixin:
@@ -92,7 +97,7 @@ class NamespaceHandler:
         else:
             # these in turn are defaults for dynamically parsed
             # namespaces managed when using create_diagnostic_entities
-            self.polling_period = mlc.PARAM_SIGNAL_UPDATE_PERIOD
+            self.polling_period = mlc.PARAM_DIAGNOSTIC_UPDATE_PERIOD
             self.polling_period_cloud = mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD
             self.polling_response_base_size = mlc.PARAM_HEADER_SIZE
             self.polling_response_item_size = 0
@@ -399,6 +404,25 @@ class NamespaceHandler:
             self.lastrequest = epoch
             await device.async_request_poll(self)
 
+    async def async_poll_lazy(self, device: "MerossDevice", epoch: float):
+        """
+        This strategy is for those namespaces which might be skipped now and then
+        if they don't fit in the current ns_multiple request. Their delaying
+        would be no harm since they typically carry rather unchanging values
+        or data which are not 'critical'. For those namespaces, polling_period
+        is considered the maximum amount of time after which the poll 'has' to
+        be done. If it hasn't elpased then they're eventually packed
+        with the outgoing ns_multiple
+        """
+        if (epoch - self.lastrequest) >= self.polling_period:
+            await device.async_request_smartpoll(self, epoch)
+        else:
+            # insert into the lazypoll_requests ordering by least recently polled
+            def _lazypoll_key(_handler: NamespaceHandler):
+                return _handler.lastrequest - epoch
+
+            bisect.insort(device.lazypoll_requests, self, key=_lazypoll_key)
+
     async def async_poll_smart(self, device: "MerossDevice", epoch: float):
         if (epoch - self.lastrequest) >= self.polling_period:
             await device.async_request_smartpoll(self, epoch)
@@ -444,7 +468,10 @@ class EntityNamespaceHandler(NamespaceHandler):
     This will acts as an helper in initialization
     """
 
-    __slots__ = ("entity",)
+    __slots__ = (
+        "entity",
+        "_saved_polling_strategy",
+    )
 
     def __init__(self, entity: "MerossEntity"):
         self.entity = entity
@@ -456,6 +483,7 @@ class EntityNamespaceHandler(NamespaceHandler):
                 entity, f"_handle_{entity.namespace.replace('.', '_')}", entity._handle
             ),
         )
+        self._saved_polling_strategy: PollingStrategyFunc = self.polling_strategy  # type: ignore
         self.polling_strategy = EntityNamespaceHandler.async_poll_entity
 
     async def async_poll_entity(self, device: "MerossDevice", epoch: float):
@@ -463,8 +491,8 @@ class EntityNamespaceHandler(NamespaceHandler):
         Same as SmartPollingStrategy but we have a 'relevant' entity associated with
         the state of this paylod so we'll skip the smartpoll should the entity be disabled
         """
-        if self.entity.enabled and ((epoch - self.lastrequest) >= self.polling_period):
-            await device.async_request_smartpoll(self, epoch)
+        if self.entity.enabled:
+            await self._saved_polling_strategy(self, device, epoch)
 
 
 class VoidNamespaceHandler(NamespaceHandler):
@@ -505,30 +533,30 @@ as reported in #244 (here the buffer limit was around 4000 chars). From limited 
 responses though
 """
 POLLING_STRATEGY_CONF: dict[
-    str, tuple[int, int, int, int, typing.Callable[..., typing.Coroutine] | None]
+    str, tuple[int, int, int, int, PollingStrategyFunc | None]
 ] = {
     mc.NS_APPLIANCE_SYSTEM_ALL: (0, 0, 1000, 0, NamespaceHandler.async_poll_all),
     mc.NS_APPLIANCE_SYSTEM_DEBUG: (0, 0, 1900, 0, None),
     mc.NS_APPLIANCE_SYSTEM_DNDMODE: (
-        0,
+        300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         320,
         0,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mc.NS_APPLIANCE_SYSTEM_RUNTIME: (
-        mlc.PARAM_SIGNAL_UPDATE_PERIOD,
+        300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         330,
         0,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mc.NS_APPLIANCE_CONFIG_OVERTEMP: (
-        0,
+        300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         340,
         0,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
@@ -538,11 +566,11 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_smart,
     ),
     mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: (
-        0,
+        300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         100,
-        NamespaceHandler.async_poll_default,
+        NamespaceHandler.async_poll_lazy,
     ),
     mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (
         0,
@@ -574,11 +602,11 @@ POLLING_STRATEGY_CONF: dict[
     ),
     mc.NS_APPLIANCE_CONTROL_MP3: (0, 0, 380, 0, NamespaceHandler.async_poll_default),
     mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (
-        0,
+        300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         35,
-        NamespaceHandler.async_poll_default,
+        NamespaceHandler.async_poll_lazy,
     ),
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: (
         0,
@@ -651,7 +679,7 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_smart,
     ),
     mc.NS_APPLIANCE_HUB_BATTERY: (
-        mlc.PARAM_HUBBATTERY_UPDATE_PERIOD,
+        3600,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         40,
