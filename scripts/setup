@@ -8,6 +8,7 @@ cd "$(dirname "$0")/.."
 apt update
 apt -y install ffmpeg
 apt -y install libpcap-dev
+apt -y install libturbojpeg0
 
 python3 -m pip install --requirement requirements_test.txt
 
