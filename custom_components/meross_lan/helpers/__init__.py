@@ -92,23 +92,26 @@ def schedule_callback(
 
 
 _import_module_lock = asyncio.Lock()
+_import_module_cache = {}
 
 
 async def async_import_module(name: str):
-    module_path = "custom_components.meross_lan" + name
-    if module_path in sys.modules:
-        return sys.modules[module_path]
 
-    async with _import_module_lock:
-        # check the module was not asyncronously loaded when waiting the lock
-        if module_path in sys.modules:
-            return sys.modules[module_path]
-
-        return await Loggable.hass.async_add_executor_job(
-            importlib.import_module,
-            name,
-            "custom_components.meross_lan",
-        )
+    try:
+        return _import_module_cache[name]
+    except KeyError:
+        async with _import_module_lock:
+            # check (again) the module was not asyncronously loaded when waiting the lock
+            try:
+                return _import_module_cache[name]
+            except KeyError:
+                module = await Loggable.hass.async_add_executor_job(
+                    importlib.import_module,
+                    name,
+                    "custom_components.meross_lan",
+                )
+                _import_module_cache[name] = module
+                return module
 
 
 _zoneinfo_cache: dict[str, zoneinfo.ZoneInfo] = {}
