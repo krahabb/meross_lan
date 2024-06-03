@@ -2310,7 +2310,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         if ns.is_hub:
                             # for Hub namespaces there's nothing more guessable
                             continue
-                        key_namespace = mn.NAMESPACES[ability].key
+                        key_namespace = ns.key
                         # we're not sure our key_namespace is correct (euristics!)
                         response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
                         if response_payload:
