@@ -11,16 +11,6 @@ if typing.TYPE_CHECKING:
     from ..number import MtsTemperatureNumber
 
 
-class Mts960FakeSetPointNumber(MtsSetPointNumber):
-    """
-    faked placeholder to avoid instantiating MtsSetPointNumbers when
-    not needed (mts960)
-    """
-
-    def __new__(cls, *args):
-        return cls
-
-
 class Mts960Climate(MtsClimate):
     """Climate entity for MTS960 devices"""
 
@@ -119,7 +109,7 @@ class Mts960Climate(MtsClimate):
             manager,
             channel,
             adjust_number_class,
-            Mts960FakeSetPointNumber,
+            None,
             Mts960Schedule,
         )
 
@@ -144,71 +134,57 @@ class Mts960Climate(MtsClimate):
         # trying to preserve the previous mts_mode if it was already
         # among the AUTO(s) else mapping to a 'closest' one (see the lambdas
         # in HVAC_MODE_TO_MTS_MODE)
-        mode = self.HVAC_MODE_TO_MTS_MODE[hvac_mode](self._mts_mode)
-        await self.async_request_mode(mode)
+        await self.async_request_mode(
+            self.HVAC_MODE_TO_MTS_MODE[hvac_mode](self._mts_mode)
+        )
 
     async def async_set_temperature(self, **kwargs):
-        mode = self.MTS_MODE_TO_MTS_MODE_NOAUTO.get(
-            self._mts_mode, self.MTS_MODE_DEFAULT
-        )
-        if response := await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
-            mc.METHOD_SET,
+        await self._async_request_modeb(
             {
-                mc.KEY_MODEB: [
-                    {
-                        mc.KEY_CHANNEL: self.channel,
-                        mc.KEY_MODE: mode,
-                        mc.KEY_ONOFF: 1,
-                        mc.KEY_TARGETTEMP: round(
-                            kwargs[self.ATTR_TEMPERATURE] * self.device_scale
-                        ),
-                    }
-                ]
-            },
-        ):
-            try:
-                payload = response[mc.KEY_PAYLOAD][mc.KEY_MODEB]
-                self._parse(payload[0] if isinstance(payload, list) else payload)
-            except KeyError:
-                # optimistic update
-                self.target_temperature = kwargs[self.ATTR_TEMPERATURE]
-                self._mts_mode = mode
-                self._mts_onoff = 1
-                self.flush_state()
+                mc.KEY_CHANNEL: self.channel,
+                mc.KEY_MODE: self.MTS_MODE_TO_MTS_MODE_NOAUTO.get(
+                    self._mts_mode, self.MTS_MODE_DEFAULT
+                ),
+                mc.KEY_ONOFF: 1,
+                mc.KEY_TARGETTEMP: round(
+                    kwargs[self.ATTR_TEMPERATURE] * self.device_scale
+                ),
+            }
+        )
 
     async def async_request_mode(self, mode: int):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
-            mc.METHOD_SET,
+        await self._async_request_modeb(
             {
-                mc.KEY_MODEB: [
-                    {
-                        mc.KEY_CHANNEL: self.channel,
-                        mc.KEY_MODE: mode,
-                        mc.KEY_ONOFF: 1,
-                    }
-                ]
-            },
-        ):
-            self._mts_mode = mode
-            self._mts_onoff = 1
-            self.flush_state()
+                mc.KEY_CHANNEL: self.channel,
+                mc.KEY_MODE: mode,
+                mc.KEY_ONOFF: 1,
+            }
+        )
 
     async def async_request_onoff(self, onoff: int):
-        if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
-            mc.METHOD_SET,
-            {mc.KEY_MODEB: [{mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}]},
-        ):
-            self._mts_onoff = onoff
-            self.flush_state()
+        await self._async_request_modeb(
+            {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}
+        )
 
     def is_mts_scheduled(self):
         return self._mts_onoff and (
             self._mts_mode
             in (mc.MTS960_MODE_SCHEDULE_HEAT, mc.MTS960_MODE_SCHEDULE_COOL)
         )
+
+    # interface: self
+    async def _async_request_modeb(self, p_modeb: dict):
+        if response := await self.manager.async_request_ack(
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
+            mc.METHOD_SET,
+            {mc.KEY_MODEB: [p_modeb]},
+        ):
+            try:
+                payload = response[mc.KEY_PAYLOAD][mc.KEY_MODEB]
+                self._parse(payload[0] if isinstance(payload, list) else payload)
+            except KeyError:
+                # optimistic update
+                self._parse(self._mts_payload | p_modeb)
 
     # message handlers
     def _parse(self, payload: dict):
@@ -227,6 +203,9 @@ class Mts960Climate(MtsClimate):
         - decode "mode" (likely mapping mts modes like other mts)
         - interpret "working" - "sensorStatus"
         """
+        if self._mts_payload == payload:
+            return
+        self._mts_payload = payload
         if mc.KEY_MODE in payload:
             self._mts_mode = payload[mc.KEY_MODE]
         if mc.KEY_ONOFF in payload:

@@ -16,15 +16,19 @@ from homeassistant.components.light import (
 import homeassistant.util.color as color_util
 
 from . import const as mlc, meross_entity as me
-from .helpers import schedule_async_callback
-from .helpers.namespaces import EntityPollingStrategy, SmartPollingStrategy
-from .merossclient import const as mc, request_get
+from .helpers import clamp, schedule_async_callback
+from .helpers.namespaces import (
+    EntityNamespaceHandler,
+    EntityNamespaceMixin,
+    NamespaceHandler,
+)
+from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import DigestParseFunc, MerossDevice
+    from .meross_device import DigestInitReturnType, MerossDevice
 
 ATTR_TOGGLEX_AUTO = "togglex_auto"
 
@@ -153,8 +157,10 @@ MSL_TEMPERATURE_SCALE = (MSL_TEMPERATURE_MAX - MSL_TEMPERATURE_MIN) / (
 
 
 def kelvin_to_native(kelvin: int):
-    return round(
-        MSL_TEMPERATURE_MIN + (kelvin - MSL_KELVIN_MIN) * MSL_TEMPERATURE_SCALE
+    return clamp(
+        round(MSL_TEMPERATURE_MIN + (kelvin - MSL_KELVIN_MIN) * MSL_TEMPERATURE_SCALE),
+        MSL_TEMPERATURE_MIN,
+        MSL_TEMPERATURE_MAX,
     )
 
 
@@ -679,12 +685,15 @@ class MLLightEffect(MLLight):
     # HA core entity attributes:
     effect_list: list[str]
 
-    __slots__ = ("_light_effect_list",)
+    __slots__ = (
+        "_light_effect_list",
+        "_light_effect_handler",
+    )
 
     def __init__(self, manager: "MerossDevice", digest: dict):
         self._light_effect_list: list[dict] = []
         super().__init__(manager, digest, [])
-        SmartPollingStrategy(
+        self._light_effect_handler = NamespaceHandler(
             manager,
             mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
             handler=self._handle_Appliance_Control_Light_Effect,
@@ -694,18 +703,23 @@ class MLLightEffect(MLLight):
             self._rgb_to_native = rgbw_patch_to_native
             self._native_to_rgb = native_to_rgbw_patch
 
+    # interface: MerossBinaryEntity
+    def update_onoff(self, onoff):
+        if self.is_on != onoff:
+            self.is_on = onoff
+            if onoff and (mc.KEY_EFFECT in self._light):
+                self._light_effect_handler.polling_period = 0
+            self.flush_state()
+
     # interface: MLLight
     def _flush_light_effect(self, _light: dict):
         effect_index = _light[mc.KEY_EFFECT]
+        self._light_effect_handler.polling_period = 0
         try:
             _light_effect = self._light_effect_list[effect_index]
         except IndexError:
             # our _light_effect_list might be stale
-            self.manager.polling_strategies[
-                mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT
-            ].lastrequest = 0
             return
-
         self.effect = _light_effect[mc.KEY_EFFECTNAME]
         try:
             member = _light_effect[mc.KEY_MEMBER]
@@ -716,7 +730,6 @@ class MLLightEffect(MLLight):
         except Exception:
             self.brightness = None
             self.color_mode = ColorMode.ONOFF
-        return
 
     # interface: LightEntity
     async def async_turn_on(self, **kwargs):
@@ -817,7 +830,10 @@ class MLLightEffect(MLLight):
             effect_list.append(MLLightBase.EFFECT_OFF)
             # add a 'fake' key so the next update will force-flush
             self._light["_"] = None
-            self.manager.request(request_get(mc.NS_APPLIANCE_CONTROL_LIGHT))
+            self.manager.request(mn.Appliance_Control_Light.request_default)
+
+        if not (self.is_on and (mc.KEY_EFFECT in self._light)):
+            self._light_effect_handler.polling_period = mlc.PARAM_INFINITE_TIMEOUT
 
 
 class MLLightMp3(MLLight):
@@ -830,7 +846,7 @@ class MLLightMp3(MLLight):
         super().__init__(manager, payload, mc.HP110A_LIGHT_EFFECT_LIST)
 
 
-class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
+class MLDNDLightEntity(EntityNamespaceMixin, me.MerossBinaryEntity, light.LightEntity):
     """
     light entity representing the device DND feature usually implemented
     through a light feature (presence light or so)
@@ -840,8 +856,6 @@ class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
     manager: "MerossDevice"
 
     namespace = mc.NS_APPLIANCE_SYSTEM_DNDMODE
-    key_namespace = mc.KEY_DNDMODE
-    key_value = mc.KEY_MODE
 
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF
@@ -850,12 +864,7 @@ class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
 
     def __init__(self, manager: "MerossDevice"):
         super().__init__(manager, None, mlc.DND_ID, mc.KEY_DNDMODE)
-        EntityPollingStrategy(
-            manager,
-            self.namespace,
-            self,
-            handler=self._handle_Appliance_System_DNDMode,
-        )
+        EntityNamespaceHandler(self)
 
     async def async_turn_on(self, **kwargs):
         if await self.manager.async_request_ack(
@@ -873,11 +882,11 @@ class MLDNDLightEntity(me.MerossBinaryEntity, light.LightEntity):
         ):
             self.update_onoff(0)
 
-    def _handle_Appliance_System_DNDMode(self, header: dict, payload: dict):
+    def _handle(self, header: dict, payload: dict):
         self.update_onoff(not payload[mc.KEY_DNDMODE][mc.KEY_MODE])
 
 
-def digest_init_light(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
+def digest_init_light(device: "MerossDevice", digest: dict) -> "DigestInitReturnType":
     """{ "channel": 0, "capacity": 4 }"""
 
     ability = device.descriptor.ability
@@ -889,4 +898,5 @@ def digest_init_light(device: "MerossDevice", digest: dict) -> "DigestParseFunc"
     else:
         MLLight(device, digest)
 
-    return device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT].parse_generic
+    handler = device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT]
+    return handler.parse_generic, (handler,)

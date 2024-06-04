@@ -4,18 +4,13 @@ from .. import const as mlc, meross_entity as me
 from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..helpers.namespaces import (
-    NamespaceHandler,
-    OncePollingStrategy,
-    PollingStrategy,
-    SmartPollingStrategy,
-)
+from ..helpers.namespaces import NamespaceHandler
 from ..meross_device import MerossDevice, MerossDeviceBase
 from ..merossclient import (
     const as mc,
     get_productnameuuid,
     is_device_online,
-    request_get,
+    namespaces as mn,
 )
 from ..number import MLConfigNumber
 from ..select import MtsTrackedSensor
@@ -29,7 +24,7 @@ from ..sensor import (
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import DigestParseFunc
+    from ..meross_device import DigestInitReturnType
     from ..meross_entity import MerossEntity
     from ..merossclient.cloudapi import SubDeviceInfoType
     from .mts100 import Mts100Climate
@@ -129,17 +124,15 @@ class HubNamespaceHandler(NamespaceHandler):
                         subdevices[subdevice_id]._parse(self.key_namespace, p_subdevice)
                     except KeyError:
                         # force a rescan since we discovered a new subdevice
-                        # only if it appears this device is online else it
-                        # would be a waste since we wouldnt have enough info
-                        # to correctly build that
-                        if is_device_online(p_subdevice):
-                            self.device.request(request_get(mc.NS_APPLIANCE_SYSTEM_ALL))
+                        hub.namespace_handlers[
+                            mc.NS_APPLIANCE_SYSTEM_ALL
+                        ].lastrequest = 0.0
                     subdevices_parsed.add(subdevice_id)
             except Exception as exception:
                 self.handle_exception(exception, "_handle_subdevice", p_subdevice)
 
 
-class HubChunkedPollingStrategy(PollingStrategy):
+class HubChunkedNamespaceHandler(HubNamespaceHandler):
     """
     This is a strategy for polling (general) subdevices state with special care for messages
     possibly generating huge payloads (see #244). We should avoid this
@@ -160,12 +153,13 @@ class HubChunkedPollingStrategy(PollingStrategy):
         included: bool,
         count: int,
     ):
-        PollingStrategy.__init__(self, device, namespace)
+        HubNamespaceHandler.__init__(self, device, namespace)
         self._types = types
         self._included = included
         self._count = count
+        self.polling_strategy = HubChunkedNamespaceHandler.async_poll_chunked
 
-    async def async_poll(self, device: "HubMixin", epoch: float):
+    async def async_poll_chunked(self, device: "HubMixin", epoch: float):
         if not (device._mqtt_active and self.lastrequest):
             max_queuable = 1
             # for hubs, this payload request might be splitted
@@ -183,12 +177,12 @@ class HubChunkedPollingStrategy(PollingStrategy):
                 # if we're good to go on the first iteration,
                 # we don't want to break this cycle else it
                 # would restart (stateless) at the next polling cycle
-                self.request = (
+                self.polling_request = (
                     self.namespace,
                     mc.METHOD_GET,
                     {self.key_namespace: p},
                 )
-                self.adjust_size(len(p))
+                self.polling_response_size_adj(len(p))
                 if await device.async_request_smartpoll(
                     self,
                     epoch,
@@ -203,12 +197,12 @@ class HubChunkedPollingStrategy(PollingStrategy):
         a better structured payload.
         """
         for p in self._build_subdevices_payload(device.subdevices.values()):
-            self.request = (
+            self.polling_request = (
                 self.namespace,
                 mc.METHOD_GET,
                 {self.key_namespace: p},
             )
-            self.adjust_size(len(p))
+            self.polling_response_size_adj(len(p))
             await super().async_trace(device, protocol)
 
     def _build_subdevices_payload(
@@ -373,68 +367,68 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
             except Exception:
                 return None
 
-        polling_strategies = self.polling_strategies
+        namespace_handlers = self.namespace_handlers
         abilities = self.descriptor.ability
         if _type in mc.MTS100_ALL_TYPESET:
-            if (mc.NS_APPLIANCE_HUB_MTS100_ALL not in polling_strategies) and (
+            if (mc.NS_APPLIANCE_HUB_MTS100_ALL not in namespace_handlers) and (
                 mc.NS_APPLIANCE_HUB_MTS100_ALL in abilities
             ):
-                HubChunkedPollingStrategy(
+                HubChunkedNamespaceHandler(
                     self, mc.NS_APPLIANCE_HUB_MTS100_ALL, mc.MTS100_ALL_TYPESET, True, 8
                 )
-            if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB not in polling_strategies) and (
+            if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB not in namespace_handlers) and (
                 mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in abilities
             ):
-                HubChunkedPollingStrategy(
+                HubChunkedNamespaceHandler(
                     self,
                     mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
                     mc.MTS100_ALL_TYPESET,
                     True,
                     4,
                 )
-            if mc.NS_APPLIANCE_HUB_MTS100_ADJUST in polling_strategies:
-                polling_strategies[mc.NS_APPLIANCE_HUB_MTS100_ADJUST].increment_size()
+            if mc.NS_APPLIANCE_HUB_MTS100_ADJUST in namespace_handlers:
+                namespace_handlers[
+                    mc.NS_APPLIANCE_HUB_MTS100_ADJUST
+                ].polling_response_size_inc()
             elif mc.NS_APPLIANCE_HUB_MTS100_ADJUST in abilities:
-                SmartPollingStrategy(
-                    self, mc.NS_APPLIANCE_HUB_MTS100_ADJUST, item_count=1
-                )
+                HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
         else:
-            if (mc.NS_APPLIANCE_HUB_SENSOR_ALL not in polling_strategies) and (
+            if (mc.NS_APPLIANCE_HUB_SENSOR_ALL not in namespace_handlers) and (
                 mc.NS_APPLIANCE_HUB_SENSOR_ALL in abilities
             ):
-                HubChunkedPollingStrategy(
+                HubChunkedNamespaceHandler(
                     self,
                     mc.NS_APPLIANCE_HUB_SENSOR_ALL,
                     mc.MTS100_ALL_TYPESET,
                     False,
                     8,
                 )
-            if mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in polling_strategies:
-                polling_strategies[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST].increment_size()
+            if mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in namespace_handlers:
+                namespace_handlers[
+                    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
+                ].polling_response_size_inc()
             elif mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in abilities:
-                SmartPollingStrategy(
-                    self, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST, item_count=1
-                )
-            if (mc.NS_APPLIANCE_HUB_TOGGLEX not in polling_strategies) and (
+                HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
+            if (mc.NS_APPLIANCE_HUB_TOGGLEX not in namespace_handlers) and (
                 mc.NS_APPLIANCE_HUB_TOGGLEX in abilities
             ):
                 # this is a status message irrelevant for mts100(s) and
                 # other types. If not use an MQTT-PUSH friendly startegy
                 if _type not in (mc.TYPE_MS100,):
-                    PollingStrategy(self, mc.NS_APPLIANCE_HUB_TOGGLEX)
+                    HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_TOGGLEX)
 
-        if mc.NS_APPLIANCE_HUB_TOGGLEX in polling_strategies:
-            polling_strategies[mc.NS_APPLIANCE_HUB_TOGGLEX].increment_size()
-        if mc.NS_APPLIANCE_HUB_BATTERY in polling_strategies:
-            polling_strategies[mc.NS_APPLIANCE_HUB_BATTERY].increment_size()
+        if mc.NS_APPLIANCE_HUB_TOGGLEX in namespace_handlers:
+            namespace_handlers[mc.NS_APPLIANCE_HUB_TOGGLEX].polling_response_size_inc()
+        if mc.NS_APPLIANCE_HUB_BATTERY in namespace_handlers:
+            namespace_handlers[mc.NS_APPLIANCE_HUB_BATTERY].polling_response_size_inc()
         elif mc.NS_APPLIANCE_HUB_BATTERY in abilities:
-            SmartPollingStrategy(self, mc.NS_APPLIANCE_HUB_BATTERY, item_count=1)
-        if mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in polling_strategies:
-            polling_strategies[mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION].increment_size()
+            HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_BATTERY)
+        if mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in namespace_handlers:
+            namespace_handlers[
+                mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION
+            ].polling_response_size_inc()
         elif mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in abilities:
-            OncePollingStrategy(
-                self, mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION, item_count=1
-            )
+            HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION)
 
         if deviceclass := WELL_KNOWN_TYPE_MAP.get(_type):  # type: ignore
             return deviceclass(self, p_subdevice)
@@ -520,7 +514,7 @@ class MerossSubDevice(MerossDeviceBase):
     def _set_online(self):
         super()._set_online()
         # force a re-poll even on MQTT
-        self.hub.polling_strategies[
+        self.hub.namespace_handlers[
             (
                 mc.NS_APPLIANCE_HUB_MTS100_ALL
                 if self.type in mc.MTS100_ALL_TYPESET
@@ -819,7 +813,7 @@ class MS100SubDevice(MerossSubDevice):
         # the adjust sooner than scheduled in case the change
         # was due to an adjustment
         if sensor.update_native_value(device_value / 10):
-            strategy = self.hub.polling_strategies[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST]
+            strategy = self.hub.namespace_handlers[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST]
             if strategy.lastrequest < (self.hub.lastresponse - 30):
                 strategy.lastrequest = 0
 
@@ -1038,7 +1032,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS400] = MS400SubDevice
 WELL_KNOWN_TYPE_MAP[mc.KEY_WATERLEAK] = MS400SubDevice
 
 
-def digest_init_hub(device: "HubMixin", digest) -> "DigestParseFunc":
+def digest_init_hub(device: "HubMixin", digest) -> "DigestInitReturnType":
 
     device.subdevices = {}
     for p_subdevice_digest in digest[mc.KEY_SUBDEVICE]:
@@ -1049,6 +1043,6 @@ def digest_init_hub(device: "HubMixin", digest) -> "DigestParseFunc":
             else:
                 device._subdevice_build(p_subdevice_digest)
         except Exception as exception:
-            device.log_exception(device.WARNING, exception, "_init_hub")
+            device.log_exception(device.WARNING, exception, "digest_init_hub")
 
-    return device._parse_hub
+    return device._parse_hub, ()

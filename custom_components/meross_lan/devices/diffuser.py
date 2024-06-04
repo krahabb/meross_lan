@@ -1,6 +1,6 @@
 import typing
 
-from ..helpers.namespaces import NamespaceHandler, PollingStrategy
+from ..helpers.namespaces import NamespaceHandler
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -19,7 +19,7 @@ from ..sensor import MLHumiditySensor, MLTemperatureSensor
 from .spray import MLSpray
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import DigestParseFunc, MerossDevice
+    from ..meross_device import DigestInitReturnType, MerossDevice
 
 
 DIFFUSER_SENSOR_CLASS_MAP: dict[
@@ -30,7 +30,9 @@ DIFFUSER_SENSOR_CLASS_MAP: dict[
 }
 
 
-def digest_init_diffuser(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
+def digest_init_diffuser(
+    device: "MerossDevice", digest: dict
+) -> "DigestInitReturnType":
     """
     {
         "type": "mod100",
@@ -74,10 +76,9 @@ def digest_init_diffuser(device: "MerossDevice", digest: dict) -> "DigestParseFu
                             device, None, device_value=payload[key][mc.KEY_VALUE] / 10
                         )
 
-        PollingStrategy(
+        NamespaceHandler(
             device,
             mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR,
-            item_count=1,
             handler=_handle_Appliance_Control_Diffuser_Sensor,
         )
 
@@ -95,7 +96,7 @@ def digest_init_diffuser(device: "MerossDevice", digest: dict) -> "DigestParseFu
         diffuser_light_parser(digest.get(mc.KEY_LIGHT, []))
         diffuser_spray_parser(digest.get(mc.KEY_SPRAY, []))
 
-    return digest_parse
+    return digest_parse, (diffuser_light_handler, diffuser_spray_handler)
 
 
 class MLDiffuserLight(MLLightBase):

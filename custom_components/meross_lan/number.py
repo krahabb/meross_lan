@@ -21,7 +21,9 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
 
-class MLConfigNumber(me.MEListChannelMixin, me.MerossNumericEntity, number.NumberEntity):
+class MLConfigNumber(
+    me.MEListChannelMixin, me.MerossNumericEntity, number.NumberEntity
+):
     """
     Base class for any configurable parameter in the device. This works much-like
     MLSwitch by refining the 'async_request_value' api in order to send the command.
@@ -31,6 +33,7 @@ class MLConfigNumber(me.MEListChannelMixin, me.MerossNumericEntity, number.Numbe
     some namespaces not supporting channels (i.e. Appliance.GarageDoor.Config) or
     not understanding the list payload (likely all the RollerShutter stuff)
     """
+
     PLATFORM = number.DOMAIN
     DeviceClass = number.NumberDeviceClass
 
@@ -159,7 +162,7 @@ class MtsSetPointNumber(MtsTemperatureNumber):
         self.name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
         super().__init__(
             climate,
-            f"config_{mc.KEY_TEMPERATURE}_{self.key_value}",
+            f"config_temperature_{self.key_value}",
         )
 
     @property

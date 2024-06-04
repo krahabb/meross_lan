@@ -11,6 +11,7 @@ import typing
 from homeassistant.config_entries import SOURCE_INTEGRATION_DISCOVERY
 from homeassistant.core import callback
 from homeassistant.helpers import storage
+from homeassistant.util import dt as dt_util
 
 from . import const as mlc
 from .const import (
@@ -42,7 +43,7 @@ from .merossclient import (
     get_active_broker,
     get_message_uuid,
     get_replykey,
-    request_get,
+    namespaces as mn,
 )
 from .merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
 from .merossclient.mqttclient import (
@@ -303,6 +304,10 @@ class MQTTConnection(Loggable):
     def is_cloud_connection(self):
         raise NotImplementedError()
 
+    @abc.abstractmethod
+    def get_rl_safe_delay(self, uuid: str):
+        raise NotImplementedError()
+
     @property
     def mqtt_is_connected(self):
         return self._mqtt_is_connected
@@ -557,12 +562,12 @@ class MQTTConnection(Loggable):
                                 mc.KEY_MULTIPLE: [
                                     MerossRequest(
                                         key,
-                                        *request_get(mc.NS_APPLIANCE_SYSTEM_ALL),
+                                        *mn.Appliance_System_All.request_get,
                                         topic_response,
                                     ),
                                     MerossRequest(
                                         key,
-                                        *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                                        *mn.Appliance_System_Ability.request_get,
                                         topic_response,
                                     ),
                                 ]
@@ -602,7 +607,7 @@ class MQTTConnection(Loggable):
                     device_id,
                     MerossRequest(
                         key,
-                        *request_get(mc.NS_APPLIANCE_SYSTEM_ABILITY),
+                        *mn.Appliance_System_Ability.request_get,
                         topic_response,
                     ),
                 )
@@ -619,7 +624,7 @@ class MQTTConnection(Loggable):
                     device_id,
                     MerossRequest(
                         key,
-                        *request_get(mc.NS_APPLIANCE_SYSTEM_ALL),
+                        *mn.Appliance_System_All.request_get,
                         topic_response,
                     ),
                 )
@@ -800,13 +805,16 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
     def is_cloud_connection(self):
         return True
 
+    def get_rl_safe_delay(self, uuid: str):
+        return MerossMQTTAppClient.get_rl_safe_delay(self, uuid)
+
     async def _async_mqtt_publish(
         self,
         device_id: str,
         request: "MerossMessage",
     ):
         return await self.hass.async_add_executor_job(
-            self.rl2_publish, device_id, request
+            self.rl_publish, device_id, request
         )
 
     @callback
@@ -1142,7 +1150,9 @@ class MerossCloudProfile(ApiProfile):
             self.log(
                 self.DEBUG,
                 "Querying device list - last query was at: %s",
-                datetime_from_epoch(self._device_info_time).isoformat(),
+                datetime_from_epoch(
+                    self._device_info_time, dt_util.DEFAULT_TIME_ZONE
+                ).isoformat(),
             )
             self._device_info_time = time()
             device_info_new = await self.apiclient.async_device_devlist()

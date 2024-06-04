@@ -53,9 +53,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     manager: "MerossDeviceBase"
     number_adjust_temperature: typing.Final["MtsTemperatureNumber"]
-    number_away_temperature: typing.Final["MtsSetPointNumber"]
-    number_comfort_temperature: typing.Final["MtsSetPointNumber"]
-    number_sleep_temperature: typing.Final["MtsSetPointNumber"]
+    number_preset_temperature: dict[str, "MtsSetPointNumber"]
     schedule: typing.Final["MtsSchedule"]
     select_tracked_sensor: typing.Final["MtsTrackedSensor"]
 
@@ -97,12 +95,10 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_active",
         "_mts_mode",
         "_mts_onoff",
+        "_mts_payload",
         "_mts_adjust_offset",
-        "_mts_adjusted_temperature",
         "number_adjust_temperature",
-        "number_comfort_temperature",
-        "number_sleep_temperature",
-        "number_away_temperature",
+        "number_preset_temperature",
         "schedule",
         "select_tracked_sensor",
     )
@@ -112,7 +108,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         manager: "MerossDeviceBase",
         channel: object,
         adjust_number_class: typing.Type["MtsTemperatureNumber"],
-        preset_number_class: typing.Type["MtsSetPointNumber"],
+        preset_number_class: typing.Type["MtsSetPointNumber"] | None,
         calendar_class: typing.Type["MtsSchedule"],
     ):
         self.current_temperature = None
@@ -125,17 +121,17 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_active = None
         self._mts_mode: int | None = None
         self._mts_onoff: int | None = None
+        self._mts_payload = {}
         self._mts_adjust_offset = 0
-        self._mts_adjusted_temperature = {}
         super().__init__(manager, channel)
         self.number_adjust_temperature = adjust_number_class(self)  # type: ignore
-        self.number_away_temperature = preset_number_class(self, MtsClimate.PRESET_AWAY)
-        self.number_comfort_temperature = preset_number_class(
-            self, MtsClimate.PRESET_COMFORT
-        )
-        self.number_sleep_temperature = preset_number_class(
-            self, MtsClimate.PRESET_SLEEP
-        )
+        self.number_preset_temperature = {}
+        if preset_number_class:
+            for preset in MtsClimate.PRESET_TO_ICON_MAP.keys():
+                number_preset_temperature = preset_number_class(self, preset)
+                self.number_preset_temperature[number_preset_temperature.key_value] = (
+                    number_preset_temperature
+                )
         self.schedule = calendar_class(self)
         self.select_tracked_sensor = MtsTrackedSensor(self)
 
@@ -144,16 +140,14 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         await super().async_shutdown()
         self.select_tracked_sensor = None  # type: ignore
         self.schedule = None  # type: ignore
-        self.number_sleep_temperature = None  # type: ignore
-        self.number_comfort_temperature = None  # type: ignore
-        self.number_away_temperature = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
+        self.number_preset_temperature = None  # type: ignore
 
     def set_unavailable(self):
         self._mts_active = None
         self._mts_mode = None
         self._mts_onoff = None
-        self._mts_adjusted_temperature = {}
+        self._mts_payload = {}
         self.preset_mode = None
         self.hvac_action = None
         self.hvac_mode = None

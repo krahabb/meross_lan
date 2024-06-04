@@ -1,12 +1,17 @@
+import bisect
 import typing
 
 from .. import const as mlc
-from ..merossclient import NAMESPACE_TO_KEY, const as mc, request_get, request_push
+from ..merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
 
     from ..meross_device import MerossDevice
     from ..meross_entity import MerossEntity
+
+PollingStrategyFunc = typing.Callable[
+    ["NamespaceHandler", "MerossDevice", float], typing.Coroutine
+]
 
 
 class EntityDisablerMixin:
@@ -39,12 +44,22 @@ class NamespaceHandler:
 
     __slots__ = (
         "device",
+        "ns",
         "namespace",
         "key_namespace",
         "lastrequest",
+        "lastresponse",
         "handler",
-        "entity_class",
         "entities",
+        "entity_class",
+        "polling_strategy",
+        "polling_period",
+        "polling_period_cloud",
+        "polling_response_base_size",
+        "polling_response_item_size",
+        "polling_response_size",
+        "polling_request",
+        "polling_request_payload",
     )
 
     def __init__(
@@ -52,25 +67,70 @@ class NamespaceHandler:
         device: "MerossDevice",
         namespace: str,
         *,
-        handler: typing.Callable[[dict, dict], None] | None = None,
         entity_class: type["MerossEntity"] | None = None,
+        handler: typing.Callable[[dict, dict], None] | None = None,
     ):
         assert (
             namespace not in device.namespace_handlers
         ), "namespace already registered"
         self.device = device
+        self.ns = ns = mn.NAMESPACES[namespace]
         self.namespace = namespace
-        self.key_namespace = NAMESPACE_TO_KEY[namespace]
+        self.key_namespace = ns.key
+        self.lastresponse = self.lastrequest = 0.0
+        self.entities: dict[object, typing.Callable[[dict], None]] = {}
         if entity_class:
+            assert not handler
             self.register_entity_class(entity_class)
         else:
             self.entity_class = None
             self.handler = handler or getattr(
                 device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
             )
-        self.lastrequest = 0
-        self.entities: dict[object, typing.Callable[[dict], None]] = {}
+
+        if _conf := POLLING_STRATEGY_CONF.get(namespace):
+            self.polling_period = _conf[0]
+            self.polling_period_cloud = _conf[1]
+            self.polling_response_base_size = _conf[2]
+            self.polling_response_item_size = _conf[3]
+            self.polling_strategy = _conf[4]
+        else:
+            # these in turn are defaults for dynamically parsed
+            # namespaces managed when using create_diagnostic_entities
+            self.polling_period = mlc.PARAM_DIAGNOSTIC_UPDATE_PERIOD
+            self.polling_period_cloud = mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD
+            self.polling_response_base_size = mlc.PARAM_HEADER_SIZE
+            self.polling_response_item_size = 0
+            self.polling_strategy = None
+
+        if ns.need_channel:
+            self.polling_request_payload = []
+            self.polling_request = (
+                namespace,
+                mc.METHOD_GET,
+                {ns.key: self.polling_request_payload},
+            )
+        else:
+            self.polling_request_payload = None
+            self.polling_request = ns.request_default
+
+        # by default we calculate 1 item/channel per payload but we should
+        # refine this whenever needed
+        item_count = 1
+        self.polling_response_size = (
+            self.polling_response_base_size
+            + item_count * self.polling_response_item_size
+        )
         device.namespace_handlers[namespace] = self
+
+    def polling_response_size_adj(self, item_count: int):
+        self.polling_response_size = (
+            self.polling_response_base_size
+            + item_count * self.polling_response_item_size
+        )
+
+    def polling_response_size_inc(self):
+        self.polling_response_size += self.polling_response_item_size
 
     def register_entity_class(self, entity_class: type["MerossEntity"]):
         self.entity_class = type(
@@ -90,11 +150,25 @@ class NamespaceHandler:
         # Thermostat payloads for instance) but many older ones are not, and still
         # either carry dict or, worse, could present themselves in both forms
         # (ToggleX is a well-known example)
-        assert entity.channel not in self.entities, "entity already registered"
-        self.entities[entity.channel] = getattr(
+        channel = entity.channel
+        assert channel not in self.entities, "entity already registered"
+        self.entities[channel] = getattr(
             entity, f"_parse_{self.key_namespace}", entity._parse
         )
         entity.namespace_handlers.add(self)
+
+        polling_request_payload = self.polling_request_payload
+        if polling_request_payload is not None:
+            for channel_payload in polling_request_payload:
+                if channel_payload[mc.KEY_CHANNEL] == channel:
+                    break
+            else:
+                polling_request_payload.append({mc.KEY_CHANNEL: channel})
+                self.polling_response_size = (
+                    self.polling_response_base_size
+                    + len(polling_request_payload) * self.polling_response_item_size
+                )
+
         self.handler = self._handle_list
 
     def unregister(self, entity: "MerossEntity"):
@@ -141,7 +215,7 @@ class NamespaceHandler:
         """
         p_channel = payload[self.key_namespace]
         try:
-            _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+            _parse = self.entities[p_channel.get(mc.KEY_CHANNEL)]
         except KeyError as key_error:
             _parse = self._try_create_entity(key_error)
         except TypeError:
@@ -264,10 +338,8 @@ class NamespaceHandler:
                     entitykey,
                     native_value=subvalue,
                 )
-                # we'll also create a polling strategy on the fly so that
-                # the diagnostic sensors get updated
-                if self.namespace not in device.polling_strategies:
-                    DiagnosticPollingStrategy(device, self.namespace)
+                if not self.polling_strategy:
+                    self.polling_strategy = NamespaceHandler.async_poll_diagnostic
 
     def _parse_undefined_list(self, key: str, payload: list, channel):
         pass
@@ -283,6 +355,153 @@ class NamespaceHandler:
         self.entity_class(self.device, channel)
         return self.entities[channel]
 
+    async def async_poll_all(self, device: "MerossDevice", epoch: float):
+        """
+        This is a special policy for NS_ALL.
+        It is basically an 'async_poll_default' policy so it kicks-in whenever we poll
+        the state in 'device._async_request_updates' but contrary to 'legacy' behavior
+        where NS_ALL was always polled (unless mqtt active).
+        This will alternate polling NS_ALL to the group of namespaces responsible for
+        the state carried in 'digest'. This is an improvement since NS_ALL, even if carrying
+        the whole state in one query, might be huge (because of the 'time' key) but also because
+        most of its data are pretty static (never or seldom changing) info of the device.
+        This new policy will interleave querying NS_ALL once in a while with smaller direct
+        equivalent queries for the state carried in digest. (If the device doesn't support
+        NS_MULTIPLE, it will likely do more queries though but this is unlikely)
+        """
+        if device._mqtt_active:
+            # on MQTT no need for updates since they're being PUSHed
+            if not self.lastrequest:
+                # just when onlining...
+                self.lastrequest = epoch
+                await device.async_request_poll(self)
+            return
+
+        # here we're missing PUSHed updates so we have to poll...
+        if (epoch - self.lastrequest) > mlc.PARAM_HEARTBEAT_PERIOD:
+            # at start or periodically ask for NS_ALL..plain
+            self.lastrequest = epoch
+            await device.async_request_poll(self)
+            return
+
+        # query specific namespaces instead of NS_ALL since we hope this is
+        # better (less overhead/http sessions) together with ns_multiple packing
+        for digest_poller in device.digest_pollers:
+            digest_poller.lastrequest = epoch
+            await device.async_request_poll(digest_poller)
+
+    async def async_poll_default(self, device: "MerossDevice", epoch: float):
+        """
+        This is a basic 'default' policy:
+        - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
+        we expect this namespace to be updated by PUSH(es)
+        - unless the 'lastrequest' is 0 which means we're re-onlining the device and so
+        we like to re-query the full state (even on MQTT)
+        - as an optimization, when onlining we'll skip the request if it's for
+        the same namespace by not calling this strategy (see MerossDevice.async_request_updates)
+        """
+        if not (device._mqtt_active and self.lastrequest):
+            self.lastrequest = epoch
+            await device.async_request_poll(self)
+
+    async def async_poll_lazy(self, device: "MerossDevice", epoch: float):
+        """
+        This strategy is for those namespaces which might be skipped now and then
+        if they don't fit in the current ns_multiple request. Their delaying
+        would be no harm since they typically carry rather unchanging values
+        or data which are not 'critical'. For those namespaces, polling_period
+        is considered the maximum amount of time after which the poll 'has' to
+        be done. If it hasn't elpased then they're eventually packed
+        with the outgoing ns_multiple
+        """
+        if (epoch - self.lastrequest) >= self.polling_period:
+            await device.async_request_smartpoll(self, epoch)
+        else:
+            # insert into the lazypoll_requests ordering by least recently polled
+            def _lazypoll_key(_handler: NamespaceHandler):
+                return _handler.lastrequest - epoch
+
+            bisect.insort(device.lazypoll_requests, self, key=_lazypoll_key)
+
+    async def async_poll_smart(self, device: "MerossDevice", epoch: float):
+        if (epoch - self.lastrequest) >= self.polling_period:
+            await device.async_request_smartpoll(self, epoch)
+
+    async def async_poll_once(self, device: "MerossDevice", epoch: float):
+        """
+        This strategy is for 'constant' namespace data which do not change and only
+        need to be requested once (after onlining that is). When polling use
+        same queueing policy as async_poll_smart (don't overwhelm the cloud mqtt),
+        """
+        if not self.lastrequest:
+            await device.async_request_smartpoll(self, epoch)
+
+    async def async_poll_diagnostic(self, device: "MerossDevice", epoch: float):
+        """
+        This strategy is for namespace polling when diagnostics sensors are detected and
+        installed due to any unknown namespace parsing (see self._parse_undefined_dict).
+        This in turn needs to be removed from polling when diagnostic sensors are disabled.
+        The strategy itself is the same as async_poll_smart; the polling settings
+        (period, payload size, etc) has been defaulted in self.__init__ when the definition
+        for the namespace polling has not been found in POLLING_STRATEGY_CONF
+        """
+        if (epoch - self.lastrequest) >= self.polling_period:
+            await device.async_request_smartpoll(self, epoch)
+
+    async def async_trace(self, device: "MerossDevice", protocol: str | None):
+        """
+        Used while tracing abilities. In general, we use an euristic 'default'
+        query but for some 'well known namespaces' we might be better off querying with
+        a better structured payload.
+        """
+        if protocol is mlc.CONF_PROTOCOL_HTTP:
+            await device.async_http_request(*self.polling_request)
+        elif protocol is mlc.CONF_PROTOCOL_MQTT:
+            await device.async_mqtt_request(*self.polling_request)
+        else:
+            await device.async_request(*self.polling_request)
+
+
+class EntityNamespaceMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Special 'polling enabler/disabler' mixin used with entities which are
+    'single instance' for a namespace handler and so they'll disable polling
+    should they're disabled in HA.
+    """
+
+    manager: "MerossDevice"
+
+    async def async_added_to_hass(self):
+        self.manager.get_handler(self.namespace).polling_strategy = (
+            POLLING_STRATEGY_CONF[self.namespace][4]
+        )
+        return await super().async_added_to_hass()
+
+    async def async_will_remove_from_hass(self):
+        self.manager.get_handler(self.namespace).polling_strategy = None
+        return await super().async_will_remove_from_hass()
+
+
+class EntityNamespaceHandler(NamespaceHandler):
+    """
+    Utility class to manage namespaces which are mapped to a single entity.
+    This will acts as an helper in initialization
+    """
+
+    def __init__(self, entity: "EntityNamespaceMixin"):
+        NamespaceHandler.__init__(
+            self,
+            entity.manager,
+            entity.namespace,
+            handler=getattr(
+                entity, f"_handle_{entity.namespace.replace('.', '_')}", entity._handle
+            ),
+        )
+        if not entity._hass_connected:
+            # if initially disabled then uninstall default strategy
+            # EntityNamespaceMixin will manage enabling/disabling
+            self.polling_strategy = None
+
 
 class VoidNamespaceHandler(NamespaceHandler):
     """Utility class to manage namespaces which should be 'ignored' i.e. we're aware
@@ -297,166 +516,258 @@ class VoidNamespaceHandler(NamespaceHandler):
         pass
 
 
-class PollingStrategy:
-    """
-    These helper class(es) is used to implement 'smart' polling
-    based on current state of device, especially regarding MQTT availability.
-    In fact, on MQTT we can receive almost all of the state through async PUSHES
-    and we so avoid any polling. This is not true for everything (for example it looks
-    in general that configurations are not pushed though). We use the namespace
-    to decide which policy is best for.
-    See 'poll' implementation(s) for the different behaviors
-    """
-
-    __slots__ = (
-        "namespace",
-        "key_namespace",
-        "lastrequest",
-        "polling_period",
-        "polling_period_cloud",
-        "response_base_size",
-        "response_item_size",
-        "response_size",
-        "request",
-    )
-
-    def __init__(
-        self,
-        device: "MerossDevice",
-        namespace: str,
-        *,
-        payload=None,
-        item_count: int = 0,
-        handler: typing.Callable[[dict, dict], None] | None = None,
-    ):
-        assert namespace not in device.polling_strategies
-        self.namespace: typing.Final = namespace
-        self.key_namespace = NAMESPACE_TO_KEY[namespace]
-        self.lastrequest = 0
-        if _conf := mlc.POLLING_STRATEGY_CONF.get(namespace):
-            self.polling_period = _conf[0]
-            self.polling_period_cloud = _conf[1]
-            self.response_base_size = _conf[2]
-            self.response_item_size = _conf[3]
-        else:
-            # these in turn are defaults for dynamically parsed
-            # namespaces managed when using create_diagnostic_entities
-            self.polling_period = mlc.PARAM_SIGNAL_UPDATE_PERIOD
-            self.polling_period_cloud = mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD
-            self.response_base_size = mlc.PARAM_HEADER_SIZE
-            self.response_item_size = 0
-        self.response_size = (
-            self.response_base_size + item_count * self.response_item_size
-        )
-
-        if payload is None:
-            self.request = (
-                request_push(namespace)
-                if namespace in mc.PUSH_ONLY_NAMESPACES
-                else request_get(namespace)
-            )
-        else:
-            self.request = (
-                namespace,
-                mc.METHOD_GET,
-                {self.key_namespace: payload},
-            )
-        device.polling_strategies[namespace] = self
-        if handler:
-            assert namespace not in device.namespace_handlers
-            NamespaceHandler(device, namespace, handler=handler)
-
-    def adjust_size(self, item_count: int):
-        self.response_size = (
-            self.response_base_size + item_count * self.response_item_size
-        )
-
-    def increment_size(self):
-        self.response_size += self.response_item_size
-
-    async def async_poll(self, device: "MerossDevice", epoch: float):
-        """
-        This is a basic 'default' policy:
-        - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
-        we expect this namespace to be updated by PUSH(es)
-        - unless the 'lastrequest' is 0 which means we're re-onlining the device and so
-        we like to re-query the full state (even on MQTT)
-        - as an optimization, when onlining we'll skip the request if it's for
-        the same namespace by not calling this strategy (see MerossDevice.async_request_updates)
-        """
-        if not (device._mqtt_active and self.lastrequest):
-            self.lastrequest = epoch
-            await device.async_request_poll(self)
-
-    async def async_trace(self, device: "MerossDevice", protocol: str | None):
-        """
-        Used while tracing abilities. In general, we use an euristic 'default'
-        query but for some 'well known namespaces' we might be better off querying with
-        a better structured payload.
-        """
-        if protocol is mlc.CONF_PROTOCOL_HTTP:
-            await device.async_http_request(*self.request)
-        elif protocol is mlc.CONF_PROTOCOL_MQTT:
-            await device.async_mqtt_request(*self.request)
-        else:
-            await device.async_request(*self.request)
-
-
-class SmartPollingStrategy(PollingStrategy):
-    """
-    This is a strategy for polling states which are not actively pushed so we should
-    always query them (eventually with a variable timeout depending on the relevant
-    time dynamics of the sensor/state). When using cloud MQTT though we have to be very
-    conservative on traffic so we eventually delay the request onto the next cycle
-    if this 'pass' is already crowded (see device.async_request_smartpoll)
-    """
-
-    async def async_poll(self, device: "MerossDevice", epoch: float):
-        if (epoch - self.lastrequest) >= self.polling_period:
-            await device.async_request_smartpoll(self, epoch)
-
-
-class EntityPollingStrategy(SmartPollingStrategy):
-    __slots__ = ("entity",)
-
-    def __init__(
-        self,
-        device: "MerossDevice",
-        namespace: str,
-        entity: "MerossEntity",
-        *,
-        item_count: int = 0,
-        handler: typing.Callable[[dict, dict], None] | None = None,
-    ):
-        self.entity = entity
-        super().__init__(device, namespace, item_count=item_count, handler=handler)
-
-    async def async_poll(self, device: "MerossDevice", epoch: float):
-        """
-        Same as SmartPollingStrategy but we have a 'relevant' entity associated with
-        the state of this paylod so we'll skip the smartpoll should the entity be disabled
-        """
-        if self.entity.enabled:
-            await super().async_poll(device, epoch)
-
-
-class OncePollingStrategy(SmartPollingStrategy):
-    """
-    This strategy is for 'constant' namespace data which do not change and only
-    need to be requested once (after onlining that is).
-    """
-
-    async def async_poll(self, device: "MerossDevice", epoch: float):
-        """
-        Same as SmartPollingStrategy (don't overwhelm the cloud mqtt)
-        """
-        if not self.lastrequest:
-            await device.async_request_smartpoll(self, epoch)
-
-
-class DiagnosticPollingStrategy(SmartPollingStrategy):
-    """
-    This strategy is for namespace polling when diagnostics sensors are
-    detected and installed due to any unknown namespace parsing.
-    This in turn needs to be removed from polling when diagnostic sensors is disabled
-    """
+"""
+Default timeouts and config parameters for polled namespaces.
+The configuration is set in the tuple as:
+(
+    polling_timeout,
+    polling_timeout_cloud,
+    response_base_size,
+    response_item_size,
+    strategy
+)
+see the NamespaceHandler class for the meaning of these values
+The 'response_size' is a conservative (in excess) estimate of the
+expected response size for the whole message (header itself weights around 300 bytes).
+Some payloads would depend on the number of channels/subdevices available
+and the configured number would just be a base size (minimum) while
+the 'response_item_size' value must be multiplied for the number of channels/subdevices
+and will be used to adjust the actual 'response_size' at runtime in the relative strategy.
+This parameter in turn will be used to split expected huge payload requests/responses
+in Appliance.Control.Multiple since it appears the HTTP interface has an outbound
+message size limit around 3000 chars/bytes (on a legacy mss310) and this would lead to a malformed (truncated)
+response. This issue also appeared on hubs when querying for a big number of subdevices
+as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
+responses though
+"""
+POLLING_STRATEGY_CONF: dict[
+    str, tuple[int, int, int, int, PollingStrategyFunc | None]
+] = {
+    mc.NS_APPLIANCE_SYSTEM_ALL: (0, 0, 1000, 0, NamespaceHandler.async_poll_all),
+    mc.NS_APPLIANCE_SYSTEM_DEBUG: (0, 0, 1900, 0, None),
+    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (
+        300,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        320,
+        0,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (
+        300,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        330,
+        0,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mc.NS_APPLIANCE_CONFIG_OVERTEMP: (
+        300,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        340,
+        0,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (
+        mlc.PARAM_ENERGY_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        320,
+        53,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: (
+        300,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        100,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        430,
+        0,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_CONTROL_FAN: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        20,
+        None,
+    ),
+    mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        35,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        1850,
+        0,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_CONTROL_MP3: (0, 0, 380, 0, NamespaceHandler.async_poll_default),
+    mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (
+        300,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        35,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        140,
+        NamespaceHandler.async_poll_default,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        550,
+        NamespaceHandler.async_poll_default,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        550,
+        NamespaceHandler.async_poll_default,
+    ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_default,
+    ),
+    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        70,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        410,
+        0,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        140,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_HUB_BATTERY: (
+        3600,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_HUB_MTS100_ADJUST: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_HUB_MTS100_ALL: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        350,
+        None,
+    ),
+    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        500,
+        None,
+    ),
+    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        60,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_HUB_SENSOR_ALL: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        250,
+        None,
+    ),
+    mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        55,
+        NamespaceHandler.async_poll_once,
+    ),
+    mc.NS_APPLIANCE_HUB_TOGGLEX: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        35,
+        NamespaceHandler.async_poll_default,
+    ),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        35,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        70,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        50,
+        NamespaceHandler.async_poll_default,
+    ),
+    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_default,
+    ),
+}

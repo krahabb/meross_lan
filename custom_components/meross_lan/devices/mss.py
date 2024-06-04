@@ -8,9 +8,9 @@ from homeassistant.util import dt as dt_util
 
 from .. import const as mlc, meross_entity as me
 from ..helpers.namespaces import (
-    EntityPollingStrategy,
+    EntityNamespaceHandler,
+    EntityNamespaceMixin,
     NamespaceHandler,
-    SmartPollingStrategy,
     VoidNamespaceHandler,
 )
 from ..merossclient import const as mc
@@ -166,7 +166,6 @@ class ElectricityNamespaceHandler(NamespaceHandler):
             device, MLNumericSensor.DeviceClass.VOLTAGE
         )
         self._electricity_lastepoch = 0.0
-        SmartPollingStrategy(device, mc.NS_APPLIANCE_CONTROL_ELECTRICITY)
 
     def _handle_Appliance_Control_Electricity(self, header: dict, payload: dict):
         device = self.device
@@ -191,11 +190,12 @@ class ElectricityNamespaceHandler(NamespaceHandler):
             device.check_device_timezone()
 
 
-class ConsumptionXSensor(MLNumericSensor):
+class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     ATTR_OFFSET: typing.Final = "offset"
     ATTR_RESET_TS: typing.Final = "reset_ts"
 
     manager: "MerossDevice"
+    namespace = mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
 
     __slots__ = (
         "offset",
@@ -229,13 +229,7 @@ class ConsumptionXSensor(MLNumericSensor):
         super().__init__(
             manager, None, str(self.DeviceClass.ENERGY), self.DeviceClass.ENERGY
         )
-        EntityPollingStrategy(
-            manager,
-            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX,
-            self,
-            item_count=30,  # the number of days in the payload: typically sits at 1 month
-            handler=self._handle_Appliance_Control_ConsumptionX,
-        )
+        EntityNamespaceHandler(self).polling_response_size_adj(30)
 
     # interface: MerossEntity
     def set_unavailable(self):
@@ -299,7 +293,7 @@ class ConsumptionXSensor(MLNumericSensor):
             self.flush_state()
             self.log(self.DEBUG, "no readings available for new day - resetting")
 
-    def _handle_Appliance_Control_ConsumptionX(self, header: dict, payload: dict):
+    def _handle(self, header: dict, payload: dict):
         device = self.manager
         # we'll look through the device array values to see
         # data timestamped (in device time) after last midnight
@@ -339,9 +333,11 @@ class ConsumptionXSensor(MLNumericSensor):
         # so our multiple requests are more reliable. If anything
         # goes wrong, the MerossDevice multiple payload managment
         # is smart enough to adapt to wrong estimates
-        device.polling_strategies[mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX].adjust_size(
-            len(payload[mc.KEY_CONSUMPTIONX])
-        )
+        days = payload[mc.KEY_CONSUMPTIONX]
+        days_len = len(days)
+        device.namespace_handlers[
+            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
+        ].polling_response_size_adj(days_len)
         # the days array contains a month worth of data
         # but we're only interested in the last few days (today
         # and maybe yesterday) so we discard a bunch of
@@ -350,20 +346,18 @@ class ConsumptionXSensor(MLNumericSensor):
         # and just for safety since they're unlikely to happen
         # in a normal running environment over few days
         days = [
-            day
-            for day in payload[mc.KEY_CONSUMPTIONX]
-            if day[mc.KEY_TIME] >= self._yesterday_midnight_epoch
+            day for day in days if day[mc.KEY_TIME] >= self._yesterday_midnight_epoch
         ]
-        if (days_len := len(days)) == 0:
-            self.reset_consumption()
-            return
-
-        elif days_len > 1:
+        days_len = len(days)
+        if days_len:
 
             def _get_timestamp(day):
                 return day[mc.KEY_TIME]
 
             days = sorted(days, key=_get_timestamp)
+        else:
+            self.reset_consumption()
+            return
 
         day_last: dict = days[-1]
         day_last_time: int = day_last[mc.KEY_TIME]
@@ -441,7 +435,7 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
         super().__init__(device, mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG)
 
 
-class OverTempEnableSwitch(me.MENoChannelMixin, MLSwitch):
+class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
 
     namespace = mc.NS_APPLIANCE_CONFIG_OVERTEMP
     key_namespace = mc.KEY_OVERTEMP
@@ -459,12 +453,7 @@ class OverTempEnableSwitch(me.MENoChannelMixin, MLSwitch):
         self.sensor_overtemp_type: MLEnumSensor = MLEnumSensor(
             manager, None, "config_overtemp_type"
         )
-        EntityPollingStrategy(
-            manager,
-            mc.NS_APPLIANCE_CONFIG_OVERTEMP,
-            self,
-            handler=self._handle_Appliance_Config_OverTemp,
-        )
+        EntityNamespaceHandler(self)
 
     # interface: MerossToggle
     async def async_shutdown(self):
@@ -472,7 +461,7 @@ class OverTempEnableSwitch(me.MENoChannelMixin, MLSwitch):
         self.sensor_overtemp_type = None  # type: ignore
 
     # interface: self
-    def _handle_Appliance_Config_OverTemp(self, header: dict, payload: dict):
+    def _handle(self, header: dict, payload: dict):
         """{"overTemp": {"enable": 1,"type": 1}}"""
         overtemp = payload[mc.KEY_OVERTEMP]
         if mc.KEY_ENABLE in overtemp:

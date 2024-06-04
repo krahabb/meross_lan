@@ -11,7 +11,7 @@ from time import time
 import typing
 from uuid import uuid4
 
-from . import const as mc
+from . import const as mc, namespaces as mn
 
 MerossHeaderType = typing.TypedDict(
     "MerossHeaderType",
@@ -222,84 +222,6 @@ def build_message_reply(
         mc.KEY_HEADER: header,
         mc.KEY_PAYLOAD: payload,
     }
-
-
-class NameSpaceToKeyMap(dict):
-    """
-    Map a namespace to the main key carrying the asociated payload.
-    This map is incrementally built at runtime (so we don't waste time manually coding this)
-    whenever we use it
-    """
-
-    def __getitem__(self, namespace: str) -> str:
-        try:
-            return super().__getitem__(namespace)
-        except KeyError:
-            if namespace in mc.PAYLOAD_GET:
-                key = next(iter(mc.PAYLOAD_GET[namespace]))
-            else:
-                key = namespace.split(".")[-1]
-                # mainly camelCasing the last split of the namespace
-                # with special care for also the last char which looks
-                # lowercase when it's a X (i.e. ToggleX -> togglex)
-                lastchar = key[-1]
-                if lastchar == "X":
-                    key = "".join((key[0].lower(), key[1:-1], "x"))
-                else:
-                    key = "".join((key[0].lower(), key[1:]))
-
-            NAMESPACE_TO_KEY[namespace] = key
-            KEY_TO_NAMESPACE[key] = namespace
-            return key
-
-
-NAMESPACE_TO_KEY = NameSpaceToKeyMap()
-
-
-class KeyToNameSpaceMap(dict):
-    """
-    Map a key (the main payload carrying key associated with a namespace) to
-    the associated namespace.
-    This map is incrementally built at runtime
-    whenever we use NAMESPACE_TO_KEY
-    """
-
-
-KEY_TO_NAMESPACE = KeyToNameSpaceMap()
-
-
-def is_hub_namespace(namespace: str):
-    return re.match(r"Appliance\.Hub\.(.*)", namespace)
-
-
-def is_thermostat_namespace(namespace: str):
-    return re.match(r"Appliance\.Control\.Thermostat\.(.*)", namespace)
-
-
-def get_default_payload(namespace: str) -> MerossPayloadType:
-    """
-    when we query a device 'namespace' with a GET method the request payload
-    is usually 'well structured' (more or less). We have a dictionary of
-    well-known payloads else we'll use some heuristics
-    """
-    if namespace in mc.PAYLOAD_GET:
-        return mc.PAYLOAD_GET[namespace]
-    match namespace.split("."):
-        case (_, "Hub", *_):
-            return {NAMESPACE_TO_KEY[namespace]: []}
-        case (_, "RollerShutter", *_):
-            return {NAMESPACE_TO_KEY[namespace]: []}
-        case (_, _, "Thermostat", *_):
-            return {NAMESPACE_TO_KEY[namespace]: [{mc.KEY_CHANNEL: 0}]}
-    return {NAMESPACE_TO_KEY[namespace]: {}}
-
-
-def request_get(namespace: str) -> MerossRequestType:
-    return namespace, mc.METHOD_GET, get_default_payload(namespace)
-
-
-def request_push(namespace: str) -> MerossRequestType:
-    return namespace, mc.METHOD_PUSH, {}
 
 
 def get_message_signature(messageid: str, key: str, timestamp):
@@ -551,7 +473,14 @@ class MerossRequest(MerossMessage):
         self.namespace = namespace
         self.method = method
         self.messageid = uuid4().hex
-        self.payload = get_default_payload(namespace) if payload is None else payload
+        if payload is None:
+            if method is mc.METHOD_GET:
+                self.payload = mn.NAMESPACES[namespace].payload_get
+            else:
+                assert method is mc.METHOD_PUSH
+                self.payload = mn.Namespace.DEFAULT_PUSH_PAYLOAD
+        else:
+            self.payload = payload
         timestamp = int(time())
         super().__init__(
             {
@@ -656,6 +585,7 @@ class MerossDeviceDescriptor:
     productmodel: str
 
     __slots__ = (
+        "payload",
         "all",
         "ability",
         "digest",
@@ -663,6 +593,9 @@ class MerossDeviceDescriptor:
     )
 
     _dynamicattrs = {
+        mc.KEY_ALL: lambda _self: _self.payload.get(mc.KEY_ALL, {}),
+        mc.KEY_ABILITY: lambda _self: _self.payload.get(mc.KEY_ABILITY, {}),
+        mc.KEY_DIGEST: lambda _self: _self.all.get(mc.KEY_DIGEST, {}),
         mc.KEY_CONTROL: lambda _self: _self.all.get(mc.KEY_CONTROL, {}),
         mc.KEY_SYSTEM: lambda _self: _self.all.get(mc.KEY_SYSTEM, {}),
         mc.KEY_HARDWARE: lambda _self: _self.system.get(mc.KEY_HARDWARE, {}),
@@ -684,15 +617,8 @@ class MerossDeviceDescriptor:
         "productmodel": lambda _self: f"{_self.type} {_self.hardware.get(mc.KEY_VERSION, '')}",
     }
 
-    def __init__(self, payload: dict | None):
-        if payload is None:
-            self.all = {}
-            self.ability = {}
-            self.digest = {}
-        else:
-            self.all = payload.get(mc.KEY_ALL, {})
-            self.ability = payload.get(mc.KEY_ABILITY, {})
-            self.digest = self.all.get(mc.KEY_DIGEST, {})
+    def __init__(self, payload: dict):
+        self.payload = payload
 
     def __getattr__(self, name):
         value = MerossDeviceDescriptor._dynamicattrs[name](self)
@@ -703,8 +629,7 @@ class MerossDeviceDescriptor:
         """
         reset the cached pointers
         """
-        self.all = payload.get(mc.KEY_ALL, self.all)
-        self.digest = self.all.get(mc.KEY_DIGEST, {})
+        self.payload |= payload
         for key in MerossDeviceDescriptor._dynamicattrs.keys():
             # don't use hasattr() or so to inspect else the whole
             # dynamic attrs logic gets f...d
@@ -714,9 +639,12 @@ class MerossDeviceDescriptor:
                 pass
 
     def update_time(self, p_time: dict):
-        self.system[mc.KEY_TIME] = p_time
-        self.time = p_time
-        self.timezone = p_time.get(mc.KEY_TIMEZONE)
+        self.system[mc.KEY_TIME] |= p_time
+        for key in (mc.KEY_TIME, mc.KEY_TIMEZONE):
+            try:
+                delattr(self, key)
+            except Exception:
+                pass
 
     @property
     def main_broker(self) -> HostAddress:

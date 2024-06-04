@@ -49,9 +49,7 @@ from aiohttp import web
 # so I've changed a bit the import sequence in meross_lan
 # to have the homeassistant.core imported (initialized) before
 # homeassistant.helpers.storage
-from custom_components.meross_lan.merossclient import (
-    const as mc,
-)
+from custom_components.meross_lan.merossclient import const as mc
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
 
@@ -207,7 +205,11 @@ def run(argv):
 
     def web_post_handler(emulator: MerossEmulator):
         async def _callback(request: web.Request) -> web.Response:
-            return web.json_response(emulator.handle(await request.text()))
+            return web.Response(
+                status=200,
+                text=emulator.handle(await request.text()),
+                content_type="application/json",
+            )
 
         return _callback
 

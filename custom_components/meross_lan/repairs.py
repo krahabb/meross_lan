@@ -62,8 +62,10 @@ class SimpleRepairFlow(ConfirmRepairFlow):
     async def async_step_confirm(self, user_input: dict[str, str] | None = None):
         if user_input is not None:
             if (
-                device := ApiProfile.devices.get(self.manager_id)
-            ) and await device.async_config_device_timezone(dt_util.now().tzname()):
+                (device := ApiProfile.devices.get(self.manager_id))
+                and (tzname := getattr(dt_util.DEFAULT_TIME_ZONE, "key", None))
+                and await device.async_config_device_timezone(tzname)
+            ):
                 if self.issue_unique_id in _ISSUE_IDS:
                     _ISSUE_IDS.remove(self.issue_unique_id)
             else:

@@ -5,17 +5,17 @@
 import abc
 import asyncio
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 import importlib
 import logging
 import sys
 from time import gmtime, time
 import typing
+import zoneinfo
 
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry, entity_registry
-from homeassistant.util import dt as dt_util
 
 from .. import const as mlc
 
@@ -58,29 +58,21 @@ def versiontuple(version: str):
     return tuple(map(int, (version.split("."))))
 
 
-def utcdatetime_from_epoch(epoch):
+def datetime_from_epoch(epoch, tz: "tzinfo | None"):
     """
-    converts an epoch (UTC seconds) in a non-naive datetime.
+    converts an epoch (UTC seconds) in a datetime.
     Faster than datetime.fromtimestamp with less checks
-    and no care for milliseconds
+    and no care for milliseconds.
+    If tz is None it'll return a naive datetime in UTC coordinates
     """
     y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
-    return datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
-
-
-def datetime_from_epoch(epoch, tz: "tzinfo | None" = None):
-    """
-    converts an epoch (UTC seconds) in a non-naive datetime.
-    Faster than datetime.fromtimestamp with less checks
-    and no care for milliseconds
-    """
-    y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
-    utcdt = datetime(y, m, d, hh, mm, min(ss, 59), 0, timezone.utc)
-    return (
-        utcdt
-        if tz is timezone.utc
-        else utcdt.astimezone(tz or dt_util.DEFAULT_TIME_ZONE)
-    )
+    utcdt = datetime(y, m, d, hh, mm, min(ss, 59), 0, UTC)
+    if tz is UTC:
+        return utcdt
+    elif tz is None:
+        return utcdt.replace(tzinfo=None)
+    else:
+        return utcdt.astimezone(tz)
 
 
 def schedule_async_callback(
@@ -100,20 +92,57 @@ def schedule_callback(
 
 
 _import_module_lock = asyncio.Lock()
+_import_module_cache = {}
 
 
 async def async_import_module(name: str):
-    async with _import_module_lock:
-        # check the module was not asyncronously loaded when waiting the lock
-        module_path = "custom_components.meross_lan" + name
-        if module_path in sys.modules:
-            return sys.modules[module_path]
-        else:
-            return await Loggable.hass.async_add_executor_job(
-                importlib.import_module,
-                name,
-                "custom_components.meross_lan",
+
+    try:
+        return _import_module_cache[name]
+    except KeyError:
+        async with _import_module_lock:
+            # check (again) the module was not asyncronously loaded when waiting the lock
+            try:
+                return _import_module_cache[name]
+            except KeyError:
+                module = await Loggable.hass.async_add_executor_job(
+                    importlib.import_module,
+                    name,
+                    "custom_components.meross_lan",
+                )
+                _import_module_cache[name] = module
+                return module
+
+
+_zoneinfo_cache: dict[str, zoneinfo.ZoneInfo] = {}
+
+
+async def async_load_zoneinfo(key: str, loggable: "Loggable"):
+    """
+    Creates a ZoneInfo instance from an executor.
+    HA core 2024.5 might complain if ZoneInfo needs to load files (no cache hit)
+    so we have to always demand this to an executor because the 'decision' to
+    load is embedded inside the ZoneInfo initialization.
+    A bit cumbersome though..
+    """
+    try:
+        return _zoneinfo_cache[key]
+    except KeyError:
+        try:
+            _zoneinfo_cache[key] = tz = await Loggable.hass.async_add_executor_job(
+                zoneinfo.ZoneInfo,
+                key,
             )
+            return tz
+        except Exception as exception:
+            loggable.log_exception(
+                loggable.WARNING,
+                exception,
+                "Unable to load timezone(%s) info - check your python environment",
+                key,
+                timeout=14400,
+            )
+            raise exception
 
 
 class ConfigEntryType(StrEnum):

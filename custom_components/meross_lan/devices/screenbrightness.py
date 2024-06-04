@@ -1,6 +1,6 @@
 import typing
 
-from ..helpers.namespaces import NamespaceHandler, SmartPollingStrategy
+from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc
 from ..number import MLConfigNumber
 
@@ -39,6 +39,8 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 
 class ScreenBrightnessNamespaceHandler(NamespaceHandler):
 
+    polling_request_payload: list
+    
     __slots__ = (
         "number_brightness_operation",
         "number_brightness_standby",
@@ -51,17 +53,12 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
             mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
             handler=self._handle_Appliance_Control_Screen_Brightness,
         )
+        self.polling_request_payload.append({mc.KEY_CHANNEL: 0})
         self.number_brightness_operation = MLScreenBrightnessNumber(
             device, mc.KEY_OPERATION
         )
         self.number_brightness_standby = MLScreenBrightnessNumber(
             device, mc.KEY_STANDBY
-        )
-        SmartPollingStrategy(
-            device,
-            mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
-            payload=[{mc.KEY_CHANNEL: 0}],
-            item_count=1,
         )
 
     def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):

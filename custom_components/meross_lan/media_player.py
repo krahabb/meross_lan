@@ -9,7 +9,6 @@ from homeassistant.components.media_player.const import (
 
 from . import meross_entity as me
 from .helpers import clamp
-from .helpers.namespaces import PollingStrategy
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
@@ -68,7 +67,6 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
             manager, 0, mc.KEY_MP3, media_player.MediaPlayerDeviceClass.SPEAKER
         )
         manager.register_parser(mc.NS_APPLIANCE_CONTROL_MP3, self)
-        PollingStrategy(manager, mc.NS_APPLIANCE_CONTROL_MP3)
 
     # interface: MerossEntity
     def set_unavailable(self):

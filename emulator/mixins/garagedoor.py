@@ -16,7 +16,7 @@ if typing.TYPE_CHECKING:
 
 class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
-    OPENDURATION = 10
+    OPENDURATION = 2
     CLOSEDURATION = 10
 
     def _SET_Appliance_GarageDoor_Config(self, header, payload):
@@ -38,8 +38,12 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             p_state_channel = get_element_by_key(
                 p_state, mc.KEY_CHANNEL, p_payload_channel[mc.KEY_CHANNEL]
             )
-            if (mc.KEY_DOORENABLE in p_state_channel) and (mc.KEY_DOORENABLE in p_payload_channel):
-                p_state_channel[mc.KEY_DOORENABLE] = p_payload_channel[mc.KEY_DOORENABLE]
+            if (mc.KEY_DOORENABLE in p_state_channel) and (
+                mc.KEY_DOORENABLE in p_payload_channel
+            ):
+                p_state_channel[mc.KEY_DOORENABLE] = p_payload_channel[
+                    mc.KEY_DOORENABLE
+                ]
 
         return mc.METHOD_SETACK, {}
 

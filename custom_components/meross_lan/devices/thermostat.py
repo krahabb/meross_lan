@@ -2,8 +2,7 @@ import typing
 
 from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
-from ..helpers.namespaces import PollingStrategy, SmartPollingStrategy
-from ..merossclient import NAMESPACE_TO_KEY, const as mc, is_thermostat_namespace
+from ..merossclient import const as mc, namespaces as mn
 from ..number import MtsTemperatureNumber
 from ..sensor import MLEnumSensor, MLTemperatureSensor
 from ..switch import MLSwitch
@@ -12,7 +11,8 @@ from .mts960 import Mts960Climate
 
 if typing.TYPE_CHECKING:
     from ..climate import MtsClimate
-    from ..meross_device import DigestParseFunc, MerossDevice
+    from ..meross_device import DigestInitReturnType, DigestParseFunc, MerossDevice
+    from ..helpers.namespaces import NamespaceHandler
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
 
@@ -31,7 +31,7 @@ class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
         namespace: str,
     ):
         self.namespace = namespace
-        self.key_namespace = NAMESPACE_TO_KEY[namespace]
+        self.key_namespace = mn.NAMESPACES[namespace].key
 
         super().__init__(
             climate.manager,
@@ -272,47 +272,39 @@ OPTIONAL_ENTITIES_INITIALIZERS: dict[
 }
 """Additional entities (linked to the climate one) in case their ns is supported/available"""
 
-POLLING_STRATEGY_INITIALIZERS = {
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: SmartPollingStrategy,
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: SmartPollingStrategy,
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: SmartPollingStrategy,
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: PollingStrategy,
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: PollingStrategy,
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: PollingStrategy,
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: PollingStrategy,
-}
-"""
-"Mode", "ModeB","SummerMode","WindowOpened" are carried in digest so we don't poll them
-We're using PollingStrategy for namespaces actually confirmed (by trace/diagnostics)
-to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
-"""
+# "Mode", "ModeB","SummerMode","WindowOpened" are carried in digest so we don't poll them
+# We're using PollingStrategy for namespaces actually confirmed (by trace/diagnostics)
+# to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
 
 
-def digest_init_thermostat(device: "MerossDevice", digest: dict) -> "DigestParseFunc":
+def digest_init_thermostat(
+    device: "MerossDevice", digest: dict
+) -> "DigestInitReturnType":
 
     ability = device.descriptor.ability
-    _polling_payload = []
 
     digest_handlers: dict[str, "DigestParseFunc"] = {}
+    digest_pollers: set["NamespaceHandler"] = set()
 
     for ns_key, ns_digest in digest.items():
 
         try:
-            digest_handlers[ns_key] = device.get_handler(
-                DIGEST_KEY_TO_NAMESPACE[ns_key]
-            ).parse_list
+            namespace = DIGEST_KEY_TO_NAMESPACE[ns_key]
         except KeyError:
             # ns_key is still not mapped in DIGEST_KEY_TO_NAMESPACE
-            digest_handlers[ns_key] = device.digest_parse_empty
             for namespace in ability.keys():
-                if is_thermostat_namespace(namespace):
-                    key_namespace = NAMESPACE_TO_KEY[namespace]
-                    if key_namespace == ns_key:
-                        digest_handlers[ns_key] = device.get_handler(
-                            namespace
-                        ).parse_list
-                        DIGEST_KEY_TO_NAMESPACE[key_namespace] = namespace
-                        break
+                ns = mn.NAMESPACES[namespace]
+                if ns.is_thermostat and (ns.key == ns_key):
+                    DIGEST_KEY_TO_NAMESPACE[ns_key] = namespace
+                    break
+            else:
+                # ns_key is really unknown..
+                digest_handlers[ns_key] = device.digest_parse_empty
+                continue
+
+        handler = device.get_handler(namespace)
+        digest_handlers[ns_key] = handler.parse_list
+        digest_pollers.add(handler)
 
         if climate_class := CLIMATE_INITIALIZERS.get(ns_key):
             for channel_digest in ns_digest:
@@ -330,17 +322,6 @@ def digest_init_thermostat(device: "MerossDevice", digest: dict) -> "DigestParse
                     if ns in ability:
                         entity_class(climate)
 
-                _polling_payload.append({mc.KEY_CHANNEL: channel})
-
-    for ns, polling_strategy_class in POLLING_STRATEGY_INITIALIZERS.items():
-        if ns in ability:
-            polling_strategy_class(
-                device,
-                ns,
-                payload=_polling_payload,
-                item_count=len(_polling_payload),
-            )
-
     def digest_parse(digest: dict):
         """
         MTS200 typically carries:
@@ -357,4 +338,4 @@ def digest_init_thermostat(device: "MerossDevice", digest: dict) -> "DigestParse
         for ns_key, ns_digest in digest.items():
             digest_handlers[ns_key](ns_digest)
 
-    return digest_parse
+    return digest_parse, digest_pollers

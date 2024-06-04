@@ -6,8 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
 from custom_components.meross_lan.devices.hub import HubMixin
-from custom_components.meross_lan.meross_entity import MerossEntity
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 from emulator import generate_emulators
 
 from tests import const as tc, helpers
@@ -165,6 +164,10 @@ async def test_entities(
                     not expected_entity_types
                 ), f"device({descriptor.type}-{descriptor.uuid}) does not generate {expected_entity_types}"
 
+                assert (
+                    not mn._LIST and not mn._DICT and (len(mn._LIST_C) == 1)
+                ), f"device({descriptor.type}-{descriptor.uuid}) corrupts const data (namespaces)"
+
             except BaseException as e:
                 e.args = (*e.args, EntityComponentTest.entity_id)
                 raise e
@@ -173,9 +176,7 @@ async def test_entities(
                 EntityComponentTest.entity_id = ""
 
 
-async def _async_test_entities(
-    manager: "MerossDeviceBase",
-):
+async def _async_test_entities(manager: "MerossDeviceBase"):
     for entity in manager.entities.values():
 
         if entity.PLATFORM not in COMPONENTS_TESTS:

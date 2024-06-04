@@ -13,13 +13,13 @@ from ..const import (
 )
 from ..cover import MLCover
 from ..helpers import clamp, schedule_async_callback
-from ..helpers.namespaces import NamespaceHandler, SmartPollingStrategy
-from ..merossclient import const as mc, request_get
+from ..helpers.namespaces import NamespaceHandler
+from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import MerossDevice
+    from ..meross_device import DigestInitReturnType, MerossDevice
 
 # garagedoor extra attributes
 EXTRA_ATTR_TRANSITION_DURATION = "transition_duration"
@@ -431,11 +431,11 @@ class MLGarage(MLCover):
                     self._transition_unsub = schedule_async_callback(
                         self.hass, 0.9, self._async_transition_callback
                     )
-                    # check the timeout 1 sec after expected to account
+                    # check the timeout after expected to account
                     # for delays in communication
                     self._transition_end_unsub = schedule_async_callback(
                         self.hass,
-                        (timeout or self._transition_duration) + 1,  # type: ignore
+                        (timeout or self._transition_duration),  # type: ignore
                         self._async_transition_end_callback,
                     )
 
@@ -479,7 +479,8 @@ class MLGarage(MLCover):
             # estimate the transition_duration and dynamically update it since
             # during the transition the state will be closed only at the end
             # while during opening the garagedoor contact will open right at the beginning
-            # and so will be unuseful
+            # and so will be unuseful. This is why we're not 'terminating' the transition in
+            # case the garage was opening...(the '_async_transition_end_callback' will then take care).
             # Also to note: if we're on HTTP this sampled time could happen anyway after the 'real'
             # state switched to 'closed' so we're likely going to measure in exceed of real transition duration
             if is_closed:
@@ -488,7 +489,7 @@ class MLGarage(MLCover):
                 self._update_transition_duration(
                     int((4 * self._transition_duration + transition_duration) / 5)
                 )
-            self._transition_cancel()
+                self._transition_cancel()
             self.binary_sensor_timeout.update_ok(is_closed)
 
         self.is_closed = is_closed
@@ -559,7 +560,7 @@ class MLGarage(MLCover):
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
             await manager.async_http_request(
-                *request_get(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+                *mn.Appliance_GarageDoor_State.request_default
             )
 
     async def _async_transition_end_callback(self):
@@ -570,7 +571,7 @@ class MLGarage(MLCover):
         was_closing = self.is_closing
         if was_closing:
             # when closing we expect this callback not to be called since
-            # the transition should be terminated by '_set_open' provided it gets
+            # the transition should be terminated by '_parse_state' provided it gets
             # called on time (on polling this is not guaranteed).
             # If we're here, we still havent received a proper 'physical close'
             # because our configured closeduration is too short
@@ -585,7 +586,7 @@ class MLGarage(MLCover):
         if was_closing != self.is_closed:
             # looks like on MQTT we don't receive a PUSHed state update? (#415)
             if await self.manager.async_request_ack(
-                *request_get(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+                *mn.Appliance_GarageDoor_State.request_default
             ):
                 # the request/response parse already flushed the state
                 if was_closing == self.is_closed:
@@ -635,7 +636,6 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
             mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
             handler=self._handle_Appliance_GarageDoor_Config,
         )
-        SmartPollingStrategy(device, mc.NS_APPLIANCE_GARAGEDOOR_CONFIG)
 
     def _handle_Appliance_GarageDoor_Config(self, header: dict, payload: dict):
         # {"config": {"signalDuration": 1000, "buzzerEnable": 0, "doorOpenDuration": 30000, "doorCloseDuration": 30000}}
@@ -722,31 +722,22 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                     self.number_doorCloseDuration = garage.number_close_timeout
 
 
-def digest_init_garageDoor(device: "MerossDevice", digest: list):
+def digest_init_garageDoor(
+    device: "MerossDevice", digest: list
+) -> "DigestInitReturnType":
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
     device.platforms.setdefault(MLSwitch.PLATFORM, None)
     ability = device.descriptor.ability
-    channels_payloads = []
     for channel_digest in digest:
-        channel = channel_digest[mc.KEY_CHANNEL]
-        MLGarage(device, channel)
-        channels_payloads.append({mc.KEY_CHANNEL: channel})
+        MLGarage(device, channel_digest[mc.KEY_CHANNEL])
 
     if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in ability:
         GarageDoorConfigNamespaceHandler(device)
-
-    if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in ability:
-        SmartPollingStrategy(
-            device,
-            mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG,
-            payload=channels_payloads,
-            item_count=len(channels_payloads),
-        )
 
     # We have notice (#428) that the msg200 pushes a strange garage door state
     # over channel 0 which is not in the list of channels exposed in digest.
     # We so prepare the handler to eventually build an MLGarage instance
     # even though it's behavior is unknown at the moment.
-    garageDoor_handler = device.get_handler(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
-    garageDoor_handler.register_entity_class(MLGarage)
-    return garageDoor_handler.parse_list
+    handler = device.get_handler(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+    handler.register_entity_class(MLGarage)
+    return handler.parse_list, (handler,)

@@ -5,7 +5,6 @@ import typing
 from zoneinfo import ZoneInfo
 
 from custom_components.meross_lan.merossclient import (
-    NAMESPACE_TO_KEY,
     HostAddress,
     MerossDeviceDescriptor,
     MerossHeaderType,
@@ -21,6 +20,7 @@ from custom_components.meross_lan.merossclient import (
     get_replykey,
     json_dumps,
     json_loads,
+    namespaces as mn,
     update_dict_strict,
     update_dict_strict_by_key,
 )
@@ -49,8 +49,10 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
             else:
                 self._import_tsv(f)
 
-        super().__init__(self.namespaces[mc.NS_APPLIANCE_SYSTEM_ABILITY])
-        self.update(self.namespaces[mc.NS_APPLIANCE_SYSTEM_ALL])
+        super().__init__(
+            self.namespaces[mc.NS_APPLIANCE_SYSTEM_ALL]
+            | self.namespaces[mc.NS_APPLIANCE_SYSTEM_ABILITY]
+        )
         # patch system payload with fake ids
         if uuid:
             hardware = self.hardware
@@ -107,7 +109,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
             if not isinstance(data, dict):
                 data = json_loads(data)
             if protocol == "auto":
-                data = {NAMESPACE_TO_KEY[namespace]: data}
+                data = {mn.NAMESPACES[namespace].key: data}
             self.namespaces[namespace] = data
         elif (
             method == mc.METHOD_SETACK and namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE
@@ -131,6 +133,8 @@ class MerossEmulator:
     If state is not available there it could be looked up in the specific
     command carrying the message and so automatically managed too
     """
+
+    MAXIMUM_RESPONSE_SIZE = 3000
 
     __slots__ = (
         "epoch",
@@ -210,7 +214,7 @@ class MerossEmulator:
         """
         self.descriptor.time[mc.KEY_TIMESTAMP] = self.epoch = int(time())
 
-    def handle(self, request: MerossMessage | str) -> MerossMessageType | None:
+    def handle(self, request: MerossMessage | str) -> str | None:
         """
         main message handler entry point: this is called either from web.Request
         for request routed from the web.Application or from the mqtt.Client.
@@ -240,8 +244,17 @@ class MerossEmulator:
                 response = self._handle_message(request_header, request_payload)
 
         if response:
-            self._log_message("TX", json_dumps(response))
-            return response
+            text = json_dumps(response)
+            if len(text) > self.MAXIMUM_RESPONSE_SIZE:
+                # Applying 'overflow' if the response text is too big,
+                # thus emulating the same behavior of hw devices.
+                # These have a ranging 'maximum response size' based on my experience:
+                # - msl120:  2k
+                # - msh300:  4k
+                # - mss310:  2.9k
+                text = text[: self.MAXIMUM_RESPONSE_SIZE]
+            self._log_message("TX", text)
+            return text
 
         return None
 
@@ -297,32 +310,39 @@ class MerossEmulator:
                 f"{namespace} not supported in emulator ({exception})"
             ) from exception
 
-        if method == mc.METHOD_GET:
-            return mc.METHOD_GETACK, {key_namespace: p_state}
+        ns = mn.NAMESPACES[namespace]
 
-        if method == mc.METHOD_SET:
-            p_payload = payload[key_namespace]
-            if isinstance(p_state, list):
-                for p_payload_channel in extract_dict_payloads(p_payload):
-                    update_dict_strict_by_key(p_state, p_payload_channel)
-            elif mc.KEY_CHANNEL in p_state:
-                if p_state[mc.KEY_CHANNEL] == p_payload[mc.KEY_CHANNEL]:
-                    update_dict_strict(p_state, p_payload)
-                else:
+        match method:
+            case mc.METHOD_GET:
+                if ns.has_get is False:
                     raise Exception(
-                        f"{p_payload[mc.KEY_CHANNEL]} not present in digest.{key_namespace}"
+                        f"{method} not supported in emulator for {namespace}"
                     )
-            else:
-                update_dict_strict(p_state, p_payload)
+                return mc.METHOD_GETACK, {key_namespace: p_state}
 
-            if self.mqtt_connected:
-                self.mqtt_publish_push(namespace, {key_namespace: p_state})
+            case mc.METHOD_SET:
+                p_payload = payload[key_namespace]
+                if isinstance(p_state, list):
+                    for p_payload_channel in extract_dict_payloads(p_payload):
+                        update_dict_strict_by_key(p_state, p_payload_channel)
+                elif mc.KEY_CHANNEL in p_state:
+                    if p_state[mc.KEY_CHANNEL] == p_payload[mc.KEY_CHANNEL]:
+                        update_dict_strict(p_state, p_payload)
+                    else:
+                        raise Exception(
+                            f"{p_payload[mc.KEY_CHANNEL]} not present in digest.{key_namespace}"
+                        )
+                else:
+                    update_dict_strict(p_state, p_payload)
 
-            return mc.METHOD_SETACK, {}
+                if self.mqtt_connected:
+                    self.mqtt_publish_push(namespace, {key_namespace: p_state})
 
-        if method == mc.METHOD_PUSH:
-            if namespace in mc.PUSH_ONLY_NAMESPACES:
-                return mc.METHOD_PUSH, self.descriptor.namespaces[namespace]
+                return mc.METHOD_SETACK, {}
+
+            case mc.METHOD_PUSH:
+                if (ns.has_get is False) and (ns.has_push):
+                    return mc.METHOD_PUSH, self.descriptor.namespaces[namespace]
 
         raise Exception(f"{method} not supported in emulator for {namespace}")
 
@@ -485,7 +505,7 @@ class MerossEmulator:
         For some devices not all state is carried there tho, so we'll inspect the
         GETACK payload for the relevant namespace looking for state there too
         """
-        key = NAMESPACE_TO_KEY[namespace]
+        key = mn.NAMESPACES[namespace].key
 
         match namespace.split("."):
             case (_, "RollerShutter", _):
@@ -533,7 +553,7 @@ class MerossEmulator:
         self, namespace: str, channel, key_channel: str = mc.KEY_CHANNEL
     ) -> dict:
         p_namespace_state = self.descriptor.namespaces[namespace][
-            NAMESPACE_TO_KEY[namespace]
+            mn.NAMESPACES[namespace].key
         ]
         return get_element_by_key(p_namespace_state, key_channel, channel)
 
@@ -545,7 +565,7 @@ class MerossEmulator:
         """
         try:
             p_namespace_state: list = self.descriptor.namespaces[namespace][
-                NAMESPACE_TO_KEY[namespace]
+                mn.NAMESPACES[namespace].key
             ]
             try:
                 p_channel_state = get_element_by_key(
@@ -558,7 +578,7 @@ class MerossEmulator:
             p_channel_state = {key_channel: channel}
             p_namespace_state = [p_channel_state]
             self.descriptor.namespaces[namespace] = {
-                NAMESPACE_TO_KEY[namespace]: p_namespace_state
+                mn.NAMESPACES[namespace].key: p_namespace_state
             }
 
         p_channel_state.update(payload)
@@ -637,4 +657,4 @@ class MerossEmulator:
     def _mqttc_message(self, client: "mqtt.Client", userdata, msg: "mqtt.MQTTMessage"):
         request = MerossMessage.decode(msg.payload.decode("utf-8"))
         if response := self.handle(request):
-            client.publish(request[mc.KEY_HEADER][mc.KEY_FROM], json_dumps(response))
+            client.publish(request[mc.KEY_HEADER][mc.KEY_FROM], response)

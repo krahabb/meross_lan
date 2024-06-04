@@ -494,7 +494,7 @@ class EmulatorContext(contextlib.AbstractContextManager):
         if self.frozen_time:
             # emulate http roundtrip time
             self.frozen_time.tick(timedelta(seconds=tc.MOCK_HTTP_RESPONSE_DELAY))
-        return AiohttpClientMockResponse(method, url, json=response)
+        return AiohttpClientMockResponse(method, url, text=response)
 
 
 class DeviceContext(ConfigEntryMocker):
@@ -881,6 +881,7 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
         api: MerossApi = self.hass.data[mlc.DOMAIN]
         if api and api._mqtt_connection:
             from homeassistant.components.mqtt.client import UNSUBSCRIBE_COOLDOWN
+
             await api._mqtt_connection.async_mqtt_unsubscribe()
             await asyncio.sleep(UNSUBSCRIBE_COOLDOWN)
 

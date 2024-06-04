@@ -179,7 +179,7 @@ ISSUE_DEVICE_TIMEZONE = "device_timezone"
 """raised when a device timezone is not set or is anyway different from HA default"""
 
 # general working/configuration parameters
-PARAM_INFINITE_EPOCH = 2147483647  # inifinite epoch (2038 bug?)
+PARAM_INFINITE_TIMEOUT = 2147483647  # inifinite epoch (2038 bug?)
 """the (infinite) timeout in order to disable timed schedules"""
 PARAM_COLDSTARTPOLL_DELAY = 2
 """(maximum) delay of initial poll after device setup"""
@@ -199,15 +199,10 @@ PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT = 2
 """used when polling the cover state to monitor an ongoing transition"""
 PARAM_CLOUDMQTT_UPDATE_PERIOD = 1795
 """for polled entities over cloud MQTT use 'at least' this"""
-PARAM_RESTORESTATE_TIMEOUT = 300
-"""used when restoring 'calculated' state after HA restart"""
+PARAM_DIAGNOSTIC_UPDATE_PERIOD = 300
+"""read diagnostic sensors only every ... second"""
 PARAM_ENERGY_UPDATE_PERIOD = 55
 """read energy consumption only every ... second"""
-PARAM_SIGNAL_UPDATE_PERIOD = 295
-"""read energy consumption only every ... second"""
-PARAM_HUBBATTERY_UPDATE_PERIOD = 3595
-"""read battery levels only every ... second"""
-PARAM_HUBSENSOR_UPDATE_PERIOD = 55
 PARAM_GARAGEDOOR_TRANSITION_MAXDURATION = 60
 PARAM_GARAGEDOOR_TRANSITION_MINDURATION = 10
 PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT = 5
@@ -222,156 +217,3 @@ PARAM_HEADER_SIZE = 300
 """(rough) estimate of the header part of any response"""
 PARAM_RESPONSE_SIZE_MAX = 3000
 """(rough) estimate of the allowed response size limit before overflow occurs (see #244)"""
-
-"""
-Default timeouts and config parameters for polled namespaces managed
-through PollingStrategy helper classes. For every namespace we
-set the defaults used to initialize these helpers.
-The configuration is set in the tuple as:
-(polling_timeout, polling_timeout_cloud, response_size, additional_size)
-see the PollingStrategy for the meaning of these values
-The 'response_size' is a conservative (in excess) estimate of the
-expected response size for the whole message (header itself weights around 300 bytes).
-Some payloads would depend on the number of channels/subdevices available
-and the configured number would just be a base size (minimum) while
-the 'additional_size' value must be multiplied for the number of channels/subdevices
-and will be used to adjust the actual 'response_size' at runtime in the relative PollingStrategy.
-This parameter in turn will be used to split expected huge payload requests/responses
-in Appliance.Control.Multiple since it appears the HTTP interface has an outbound
-message size limit around 3000 chars/bytes (on a legacy mss310) and this would lead to a malformed (truncated)
-response. This issue also appeared on hubs when querying for a big number of subdevices
-as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
-responses though
-"""
-POLLING_STRATEGY_CONF: dict[str, tuple[int, int, int, int]] = {
-    mc.NS_APPLIANCE_SYSTEM_ALL: (0, 0, 1000, 0),
-    mc.NS_APPLIANCE_SYSTEM_DEBUG: (0, 0, 1900, 0),
-    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 320, 0),
-    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (
-        PARAM_SIGNAL_UPDATE_PERIOD,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        330,
-        0,
-    ),
-    mc.NS_APPLIANCE_CONFIG_OVERTEMP: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 340, 0),
-    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (
-        PARAM_ENERGY_UPDATE_PERIOD,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        320,
-        53,
-    ),
-    mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: (0, 0, PARAM_HEADER_SIZE, 100),
-    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 430, 0),
-    mc.NS_APPLIANCE_CONTROL_FAN: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        20,
-    ),
-    mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: (
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        35,
-    ),
-    mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 1850, 0),
-    mc.NS_APPLIANCE_CONTROL_MP3: (0, 0, 380, 0),
-    mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        35,
-    ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        80,
-    ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        80,
-    ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        80,
-    ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: (0, 0, PARAM_HEADER_SIZE, 140),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: (0, 0, PARAM_HEADER_SIZE, 550),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: (0, 0, PARAM_HEADER_SIZE, 550),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: (0, 0, PARAM_HEADER_SIZE, 40),
-    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        70,
-    ),
-    mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: (0, PARAM_CLOUDMQTT_UPDATE_PERIOD, 410, 0),
-    mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        140,
-    ),
-    mc.NS_APPLIANCE_HUB_BATTERY: (
-        PARAM_HUBBATTERY_UPDATE_PERIOD,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        40,
-    ),
-    mc.NS_APPLIANCE_HUB_MTS100_ADJUST: (
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        40,
-    ),
-    mc.NS_APPLIANCE_HUB_MTS100_ALL: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        350,
-    ),
-    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        500,
-    ),
-    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST: (
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        60,
-    ),
-    mc.NS_APPLIANCE_HUB_SENSOR_ALL: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        250,
-    ),
-    mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        55,
-    ),
-    mc.NS_APPLIANCE_HUB_TOGGLEX: (0, 0, PARAM_HEADER_SIZE, 35),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST: (
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        35,
-    ),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: (
-        0,
-        PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        PARAM_HEADER_SIZE,
-        70,
-    ),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION: (0, 0, PARAM_HEADER_SIZE, 50),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (0, 0, PARAM_HEADER_SIZE, 40),
-}

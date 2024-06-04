@@ -2,3 +2,5 @@ default_config:
 
 # If you need to debug uncommment the line below (doc: https://www.home-assistant.io/integrations/debugpy/)
 debugpy:
+
+script: !include scripts.yaml
