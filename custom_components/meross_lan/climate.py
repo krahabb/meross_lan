@@ -96,6 +96,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_mode",
         "_mts_onoff",
         "_mts_payload",
+        "_mts_working",
         "_mts_adjust_offset",
         "number_adjust_temperature",
         "number_preset_temperature",
@@ -121,6 +122,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_active = None
         self._mts_mode: int | None = None
         self._mts_onoff: int | None = None
+        self._mts_working: int | None = None
         self._mts_payload = {}
         self._mts_adjust_offset = 0
         super().__init__(manager, channel)
@@ -146,6 +148,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     def set_unavailable(self):
         self._mts_active = None
         self._mts_mode = None
+        self._mts_working = None
         self._mts_onoff = None
         self._mts_payload = {}
         self.preset_mode = None
