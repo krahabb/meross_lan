@@ -319,6 +319,7 @@ class MerossFlowHandlerMixin(
                                 domain=mlc.DOMAIN,
                                 title=profile_config[mc.KEY_EMAIL],
                                 data=profile_config,
+                                options={}, # required since 2024.6
                                 source=ce.SOURCE_USER,
                                 unique_id=unique_id,
                             )
