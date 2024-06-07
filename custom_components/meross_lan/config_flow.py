@@ -1305,7 +1305,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         )
 
     async def async_step_bind_finalize(self, user_input=None):
-        self.hass.config_entries.async_schedule_reload(self.config_entry_id)
+        ConfigEntriesHelper(self.hass).schedule_reload(self.config_entry_id)
         return self.async_create_entry(data=None)  # type: ignore
 
     async def async_step_unbind(self, user_input=None):
@@ -1360,5 +1360,5 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         """Used in OptionsFlow to terminate and exit (with save)."""
         self.hass.config_entries.async_update_entry(self.config_entry, data=config)
         if reload:
-            self.hass.config_entries.async_schedule_reload(self.config_entry_id)
+            ConfigEntriesHelper(self.hass).schedule_reload(self.config_entry_id)
         return self.async_create_entry(data=None)  # type: ignore

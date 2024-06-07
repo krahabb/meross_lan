@@ -9,7 +9,7 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import LOGGER, Loggable, getLogger, schedule_callback
+from . import LOGGER, ConfigEntriesHelper, Loggable, getLogger, schedule_callback
 from ..const import (
     CONF_ALLOW_MQTT_PUBLISH,
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
@@ -307,7 +307,7 @@ class ConfigEntryManager(EntityManager):
             self._unsub_entry_reload.cancel()
         self._unsub_entry_reload = self.schedule_callback(
             delay,
-            self.hass.config_entries.async_schedule_reload,
+            ConfigEntriesHelper(self.hass).schedule_reload,
             self.config_entry_id,
         )
 

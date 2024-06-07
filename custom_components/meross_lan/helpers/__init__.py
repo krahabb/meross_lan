@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from enum import StrEnum
 import importlib
 import logging
-import sys
 from time import gmtime, time
 import typing
 import zoneinfo
@@ -165,6 +164,12 @@ class ConfigEntryType(StrEnum):
 
 
 class ConfigEntriesHelper:
+    """
+    Helpers and compatibility layer (among HA cores) for Hass ConfigEntries
+    """
+
+    # TODO: move to a static class model
+    
     __slots__ = (
         "config_entries",
         "_entries",
@@ -199,6 +204,23 @@ class ConfigEntriesHelper:
         ):
             return progress
         return None
+
+    def schedule_reload(self, entry_id: str):
+        """Pre HA core 2024.2 compatibility layer"""
+        _async_schedule_reload = getattr(
+            self.config_entries, "async_schedule_reload", None
+        )
+        if _async_schedule_reload:
+            _async_schedule_reload(entry_id)
+        else:
+            """Schedule a config entry to be reloaded."""
+            if entry := self.config_entries.async_get_entry(entry_id):
+                entry.async_cancel_retry_setup()
+                Loggable.hass.async_create_task(
+                    self.config_entries.async_reload(entry_id),
+                    f"config entry reload {entry.title} {entry.domain} {entry.entry_id}",
+                )
+
 
 
 def getLogger(name):
