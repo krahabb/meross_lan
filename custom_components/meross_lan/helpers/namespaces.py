@@ -184,7 +184,8 @@ class NamespaceHandler:
             self.__class__.__name__,
             self.namespace,
             function_name,
-            device.loggable_any(payload),
+            str(device.loggable_any(payload)),
+            timeout=604800
         )
 
     def _handle_list(self, header, payload):
