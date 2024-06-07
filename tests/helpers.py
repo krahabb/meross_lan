@@ -71,7 +71,11 @@ class MockConfigEntry(MockConfigEntry):
 
 
 async def async_assert_flow_menu_to_step(
-    flow: FlowManager,
+    flow: (
+        FlowManager
+        | config_entries.ConfigEntriesFlowManager
+        | config_entries.OptionsFlowManager
+    ),
     result: FlowResult,
     menu_step_id: str,
     next_step_id: str,

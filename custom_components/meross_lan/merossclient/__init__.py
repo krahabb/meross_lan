@@ -13,6 +13,8 @@ from uuid import uuid4
 
 from . import const as mc, namespaces as mn
 
+MerossNamespaceType = str
+MerossMethodType = str
 MerossHeaderType = typing.TypedDict(
     "MerossHeaderType",
     {
@@ -32,9 +34,8 @@ MerossPayloadType = dict[str, typing.Any]
 MerossMessageType = typing.TypedDict(
     "MerossMessageType", {"header": MerossHeaderType, "payload": MerossPayloadType}
 )
-MerossRequestType = tuple[str, str, MerossPayloadType]
+MerossRequestType = tuple[MerossNamespaceType, MerossMethodType, MerossPayloadType]
 KeyType = typing.Union[MerossHeaderType, str, None]
-ResponseCallbackType = typing.Callable[[bool, dict, dict], None]
 
 
 try:

@@ -98,7 +98,10 @@ class MerossFlowHandlerMixin(
         "host": "",
     }
 
-    profile_placeholders = {}
+    profile_placeholders = {
+        "email": "",
+        "placeholder": "",
+    }
 
     _is_keyerror: bool = False
     _httpclient: MerossHttpClient | None = None
@@ -319,6 +322,7 @@ class MerossFlowHandlerMixin(
                                 domain=mlc.DOMAIN,
                                 title=profile_config[mc.KEY_EMAIL],
                                 data=profile_config,
+                                options={},  # required since 2024.6
                                 source=ce.SOURCE_USER,
                                 unique_id=unique_id,
                             )
@@ -1304,7 +1308,7 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         )
 
     async def async_step_bind_finalize(self, user_input=None):
-        self.hass.config_entries.async_schedule_reload(self.config_entry_id)
+        ConfigEntriesHelper(self.hass).schedule_reload(self.config_entry_id)
         return self.async_create_entry(data=None)  # type: ignore
 
     async def async_step_unbind(self, user_input=None):
@@ -1359,5 +1363,5 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         """Used in OptionsFlow to terminate and exit (with save)."""
         self.hass.config_entries.async_update_entry(self.config_entry, data=config)
         if reload:
-            self.hass.config_entries.async_schedule_reload(self.config_entry_id)
+            ConfigEntriesHelper(self.hass).schedule_reload(self.config_entry_id)
         return self.async_create_entry(data=None)  # type: ignore

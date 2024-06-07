@@ -184,7 +184,8 @@ class NamespaceHandler:
             self.__class__.__name__,
             self.namespace,
             function_name,
-            device.loggable_any(payload),
+            str(device.loggable_any(payload)),
+            timeout=604800
         )
 
     def _handle_list(self, header, payload):
@@ -387,8 +388,12 @@ class NamespaceHandler:
         # query specific namespaces instead of NS_ALL since we hope this is
         # better (less overhead/http sessions) together with ns_multiple packing
         for digest_poller in device.digest_pollers:
-            digest_poller.lastrequest = epoch
-            await device.async_request_poll(digest_poller)
+            if digest_poller.entities:
+                # don't query if digest key/namespace hasn't any entity registered
+                # this also prevents querying a somewhat 'malformed' ToggleX reply
+                # appearing in an mrs100 (#447)
+                digest_poller.lastrequest = epoch
+                await device.async_request_poll(digest_poller)
 
     async def async_poll_default(self, device: "MerossDevice", epoch: float):
         """
