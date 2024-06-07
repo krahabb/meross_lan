@@ -4,12 +4,14 @@ from time import time
 import typing
 from zoneinfo import ZoneInfo
 
+from custom_components.meross_lan import const as mlc
+from custom_components.meross_lan.helpers.manager import ConfigEntryManager
 from custom_components.meross_lan.merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
     MerossHeaderType,
     MerossMessage,
-    MerossMessageType,
+    MerossNamespaceType,
     MerossPayloadType,
     MerossRequest,
     build_message,
@@ -31,7 +33,11 @@ if typing.TYPE_CHECKING:
 
 
 class MerossEmulatorDescriptor(MerossDeviceDescriptor):
-    namespaces: dict
+    namespaces: dict[MerossNamespaceType, MerossPayloadType]
+
+    __slots__ = (
+        "namespaces",
+    )
 
     def __init__(
         self,
@@ -65,7 +71,6 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
             firmware[mc.KEY_PORT] = broker_address.port
             firmware.pop(mc.KEY_SECONDSERVER, None)
             firmware.pop(mc.KEY_SECONDPORT, None)
-
         if userId:
             self.firmware[mc.KEY_USERID] = userId
 
@@ -100,26 +105,26 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         return
 
     def _import_tracerow(self, values: list):
-        # rxtx = values[1]
         protocol = values[-4]
         method = values[-3]
         namespace = values[-2]
         data = values[-1]
-        if method == mc.METHOD_GETACK:
-            if not isinstance(data, dict):
-                data = json_loads(data)
-            if protocol == "auto":
-                data = {mn.NAMESPACES[namespace].key: data}
-            self.namespaces[namespace] = data
-        elif (
-            method == mc.METHOD_SETACK and namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE
-        ):
-            if not isinstance(data, dict):
-                data = json_loads(data)
-            for message in data[mc.KEY_MULTIPLE]:
-                header = message[mc.KEY_HEADER]
-                if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
-                    self.namespaces[header[mc.KEY_NAMESPACE]] = message[mc.KEY_PAYLOAD]
+
+        def _get_data_dict(_data):
+            return _data if type(_data) is dict else json_loads(_data)
+
+        match method:
+            case mc.METHOD_GETACK:
+                self.namespaces[namespace] = {mn.NAMESPACES[namespace].key: _get_data_dict(data)} if protocol == mlc.CONF_PROTOCOL_AUTO else _get_data_dict(data)
+            case mc.METHOD_SETACK:
+                if namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
+                    for message in _get_data_dict(data)[mc.KEY_MULTIPLE]:
+                        header = message[mc.KEY_HEADER]
+                        if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
+                            self.namespaces[header[mc.KEY_NAMESPACE]] = message[
+                                mc.KEY_PAYLOAD
+                            ]
+
 
 
 class MerossEmulator:
@@ -265,11 +270,22 @@ class MerossEmulator:
             if namespace not in self.descriptor.ability:
                 raise Exception(f"{namespace} not supported in ability")
 
+            if namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
+                if method != mc.METHOD_SET:
+                    raise Exception(f"{method} not supported for {namespace}")
+                multiple = []
+                for message in payload[mc.KEY_MULTIPLE]:
+                    multiple.append(
+                        self._handle_message(
+                            message[mc.KEY_HEADER], message[mc.KEY_PAYLOAD]
+                        )
+                    )
+                response_method = mc.METHOD_SETACK
+                response_payload = {mc.KEY_MULTIPLE: multiple}
             elif handler := getattr(
                 self, f"_{method}_{namespace.replace('.', '_')}", None
             ):
                 response_method, response_payload = handler(header, payload)
-
             else:
                 response_method, response_payload = self._handler_default(
                     method, namespace, payload
@@ -417,14 +433,6 @@ class MerossEmulator:
             {mc.KEY_TIME: self.descriptor.time},
         )
         return None, None
-
-    def _SET_Appliance_Control_Multiple(self, header, payload):
-        multiple = []
-        for message in payload[mc.KEY_MULTIPLE]:
-            multiple.append(
-                self._handle_message(message[mc.KEY_HEADER], message[mc.KEY_PAYLOAD])
-            )
-        return mc.METHOD_SETACK, {mc.KEY_MULTIPLE: multiple}
 
     def _GET_Appliance_Control_Toggle(self, header, payload):
         # only actual example of this usage comes from legacy firmwares
