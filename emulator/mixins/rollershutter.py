@@ -143,6 +143,9 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             transition.shutdown()
         super().shutdown()
 
+    def _GET_Appliance_Control_ToggleX(self, header, payload):
+        return mc.METHOD_GETACK, { "channel": 0} # 'strange' format response in #447
+
     def _SET_Appliance_RollerShutter_Position(self, header, payload):
         """payload = { "postion": {"channel": 0, "position": 100}}"""
         for p_request in extract_dict_payloads(payload[mc.KEY_POSITION]):
