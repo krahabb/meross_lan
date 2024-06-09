@@ -111,7 +111,7 @@ class Mts960Climate(MtsClimate):
 
     preset_modes = list(MTS_MODE_TO_PRESET_MAP.values())
 
-    __slots__ = ()
+    __slots__ = ( "_mts_working" )
 
     def __init__(
         self,
@@ -126,6 +126,12 @@ class Mts960Climate(MtsClimate):
             None,
             Mts960Schedule,
         )
+        self._mts_working = None
+
+    def set_unavailable(self):
+        self._mts_working = None
+        super().set_unavailable()
+
 
     def flush_state(self):
         """interface: MtsClimate."""
