@@ -31,13 +31,13 @@ PRESET_MODES: dict[type[MtsClimate], set] = {
         mc.MTS200_MODE_MANUAL,
     },
     Mts960Climate: {
-        mc.MTS960_MODE_HEAT,
-        mc.MTS960_MODE_COOL,
-        mc.MTS960_MODE_CYCLE,
-        mc.MTS960_MODE_COUNTDOWN_ON,
-        mc.MTS960_MODE_COUNTDOWN_OFF,
-        mc.MTS960_MODE_SCHEDULE_HEAT,
-        mc.MTS960_MODE_SCHEDULE_COOL,
+        # mc.MTS960_MODE_HEAT,
+        # mc.MTS960_MODE_COOL,
+        # mc.MTS960_MODE_CYCLE,
+        # mc.MTS960_MODE_COUNTDOWN_ON,
+        # mc.MTS960_MODE_COUNTDOWN_OFF,
+        # mc.MTS960_MODE_SCHEDULE_HEAT,
+        # mc.MTS960_MODE_SCHEDULE_COOL,
     },
 }
 

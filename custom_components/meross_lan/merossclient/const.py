@@ -445,18 +445,21 @@ MTS200_OVERHEAT_WARNING_MAP = {
 }
 
 # inferring the mts960 modes from the manual
-MTS960_MODE_HEAT = 1
-MTS960_MODE_COOL = 2
-MTS960_MODE_CYCLE = 3
-MTS960_MODE_COUNTDOWN_ON = 4
-MTS960_MODE_COUNTDOWN_OFF = 5
-MTS960_MODE_SCHEDULE_HEAT = 6
-MTS960_MODE_SCHEDULE_COOL = 7
+MTS960_MODE_HEAT_COOL = 1
+MTS960_MODE_SCHEDULE = 2
+MTS960_MODE_TIMER = 3
 # mapping the "state" key value to the socket/plug action
 MTS960_STATE_UNKNOWN = 0
 MTS960_STATE_ON = 1
 MTS960_STATE_OFF = 2  # this appears when the plug is off (why not 0?)
-
+#
+MTS960_WORKING_HEAT = 1
+MTS960_WORKING_COOL = 2
+#
+# mapping the "ONOFF" key value to the socket/plug action
+MTS960_ONOFF_UNKNOWN = 0
+MTS960_ONOFF_ON = 1
+MTS960_ONOFF_OFF = 2  # this appears when the plug is off (why not 0?)
 # diffuser mode enums
 DIFFUSER_SPRAY_MODE_OFF = 2  # or 255 ? or 'any' ?
 DIFFUSER_SPRAY_MODE_ECO = 0
