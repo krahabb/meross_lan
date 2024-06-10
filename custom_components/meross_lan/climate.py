@@ -78,7 +78,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         | getattr(climate.ClimateEntityFeature, "TURN_OFF", 0)
         | getattr(climate.ClimateEntityFeature, "TURN_ON", 0)
     )
-    _enable_turn_on_off_backwards_compatibility = False
+    _enable_turn_on_off_backwards_compatibility = False # compatibility flag (see HA core climate)
     target_temperature: float | None
     target_temperature_step: float = 0.5
     temperature_unit: str = TEMP_CELSIUS
@@ -96,7 +96,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_mode",
         "_mts_onoff",
         "_mts_payload",
-        "_mts_adjust_offset",
         "number_adjust_temperature",
         "number_preset_temperature",
         "schedule",
@@ -122,7 +121,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_mode: int | None = None
         self._mts_onoff: int | None = None
         self._mts_payload = {}
-        self._mts_adjust_offset = 0
         super().__init__(manager, channel)
         self.number_adjust_temperature = adjust_number_class(self)  # type: ignore
         self.number_preset_temperature = {}
