@@ -826,23 +826,17 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_TEMPHUM] = MS100SubDevice
 
 
 class MTS100SubDevice(MerossSubDevice):
-    __slots__ = (
-        "climate",
-        "sensor_temperature",
-    )
+    __slots__ = ("climate",)
 
     def __init__(self, hub: HubMixin, p_digest: dict, _type: str = mc.TYPE_MTS100):
         super().__init__(hub, p_digest, _type)
         from .mts100 import Mts100Climate
 
         self.climate = Mts100Climate(self)
-        self.sensor_temperature = MLTemperatureSensor(self, self.id)
-        self.sensor_temperature.entity_registry_enabled_default = False
 
     async def async_shutdown(self):
         await super().async_shutdown()
         self.climate: "Mts100Climate" = None  # type: ignore
-        self.sensor_temperature: "MLNumericSensor" = None  # type: ignore
 
     def _parse_all(self, p_all: dict):
         self._parse_online(p_all.get(mc.KEY_ONLINE, {}))

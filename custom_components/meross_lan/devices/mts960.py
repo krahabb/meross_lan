@@ -3,7 +3,6 @@ import typing
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..merossclient import const as mc
-from ..number import MtsSetPointNumber
 from ..sensor import MLDiagnosticSensor
 from ..helpers import reverse_lookup
 
@@ -51,9 +50,9 @@ class Mts960Climate(MtsClimate):
     }
 
     HVAC_MODE_TO_MTS_MODE = {
-        MtsClimate.HVACMode.OFF: lambda mts_mode: mts_mode
-        if mts_mode is not None
-        else Mts960Climate.MTS_MODE_DEFAULT,
+        MtsClimate.HVACMode.OFF: lambda mts_mode: (
+            mts_mode if mts_mode is not None else Mts960Climate.MTS_MODE_DEFAULT
+        ),
         MtsClimate.HVACMode.HEAT: lambda mts_mode: mc.MTS960_MODE_HEAT_COOL,
         MtsClimate.HVACMode.COOL: lambda mts_mode: mc.MTS960_MODE_HEAT_COOL,
         MtsClimate.HVACMode.AUTO: lambda mts_mode: (
@@ -111,7 +110,7 @@ class Mts960Climate(MtsClimate):
 
     preset_modes = list(MTS_MODE_TO_PRESET_MAP.values())
 
-    __slots__ = ( "_mts_working" )
+    __slots__ = ("_mts_working",)
 
     def __init__(
         self,
@@ -131,7 +130,6 @@ class Mts960Climate(MtsClimate):
     def set_unavailable(self):
         self._mts_working = None
         super().set_unavailable()
-
 
     def flush_state(self):
         """interface: MtsClimate."""
@@ -157,42 +155,55 @@ class Mts960Climate(MtsClimate):
         )
 
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
-        #here special handling is applied to hvac_mode == AUTO,
-        #trying to preserve the previous mts_mode if it was already
-        #among the AUTO(s) else mapping to a 'closest' one (see the lambdas
-        #in HVAC_MODE_TO_MTS_MODE).
+        # here special handling is applied to hvac_mode == AUTO,
+        # trying to preserve the previous mts_mode if it was already
+        # among the AUTO(s) else mapping to a 'closest' one (see the lambdas
+        # in HVAC_MODE_TO_MTS_MODE).
         if hvac_mode == MtsClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
             return
         working = self._mts_working
         mode = self.HVAC_MODE_TO_MTS_MODE[hvac_mode](self._mts_mode)
         if mode == mc.MTS960_MODE_HEAT_COOL:
-            working = self.HVAC_MODE_TO_MTS_WORKING.get(hvac_mode, lambda mts_working: mts_working)(working)
+            working = self.HVAC_MODE_TO_MTS_WORKING.get(
+                hvac_mode, lambda mts_working: mts_working
+            )(working)
 
-        await self._async_request_modeb( {
-             mc.KEY_CHANNEL: self.channel,
-             mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
-             mc.KEY_MODE: mode,
-             mc.KEY_WORKING: working
-        })
+        await self._async_request_modeb(
+            {
+                mc.KEY_CHANNEL: self.channel,
+                mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
+                mc.KEY_MODE: mode,
+                mc.KEY_WORKING: working,
+            }
+        )
 
     async def async_set_temperature(self, **kwargs):
-        await self._async_request_modeb( {
-             mc.KEY_CHANNEL: self.channel,
-             mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
-             mc.KEY_TARGETTEMP: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale),
-        })
+        await self._async_request_modeb(
+            {
+                mc.KEY_CHANNEL: self.channel,
+                mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
+                mc.KEY_TARGETTEMP: round(
+                    kwargs[self.ATTR_TEMPERATURE] * self.device_scale
+                ),
+            }
+        )
 
     async def async_request_mode(self, mode: int):
-        await self._async_request_modeb( {
-             mc.KEY_CHANNEL: self.channel,
-             mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
-             mc.KEY_MODE: mode,
-        })
+        await self._async_request_modeb(
+            {
+                mc.KEY_CHANNEL: self.channel,
+                mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
+                mc.KEY_MODE: mode,
+            }
+        )
 
     async def async_request_onoff(self, onoff: int):
         await self._async_request_modeb(
-            {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: mc.MTS960_ONOFF_ON if onoff else mc.MTS960_ONOFF_OFF }
+            {
+                mc.KEY_CHANNEL: self.channel,
+                mc.KEY_ONOFF: mc.MTS960_ONOFF_ON if onoff else mc.MTS960_ONOFF_OFF,
+            }
         )
 
     def is_mts_scheduled(self):
@@ -213,8 +224,8 @@ class Mts960Climate(MtsClimate):
                     else:
                         self._parse(self._mts_payload | p_modeb)
                 elif isinstance(payload, dict):
-                        self._parse(self._mts_payload | p_modeb | payload)
-            except (KeyError,IndexError):
+                    self._parse(self._mts_payload | p_modeb | payload)
+            except (KeyError, IndexError):
                 # optimistic update
                 self._parse(self._mts_payload | p_modeb)
 
@@ -247,8 +258,9 @@ class Mts960Climate(MtsClimate):
         if mc.KEY_WORKING in payload:
             self._mts_working = payload[mc.KEY_WORKING]
         if mc.KEY_CURRENTTEMP in payload:
-            self.current_temperature = payload[mc.KEY_CURRENTTEMP] / self.device_scale
-            self.select_tracked_sensor.check_tracking()
+            self._update_current_temperature(
+                payload[mc.KEY_CURRENTTEMP] / self.device_scale
+            )
         if mc.KEY_TARGETTEMP in payload:
             self.target_temperature = payload[mc.KEY_TARGETTEMP] / self.device_scale
 

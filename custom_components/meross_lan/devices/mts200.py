@@ -195,8 +195,9 @@ class Mts200Climate(MtsClimate):
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE]
         if mc.KEY_CURRENTTEMP in payload:
-            self.current_temperature = payload[mc.KEY_CURRENTTEMP] / self.device_scale
-            self.select_tracked_sensor.check_tracking()
+            self._update_current_temperature(
+                payload[mc.KEY_CURRENTTEMP] / self.device_scale
+            )
         if mc.KEY_TARGETTEMP in payload:
             self.target_temperature = payload[mc.KEY_TARGETTEMP] / self.device_scale
         if mc.KEY_MIN in payload:
@@ -219,10 +220,7 @@ class Mts200Climate(MtsClimate):
         # The trace shows the log about the missing handler in 4.5.2
         # and it looks like when we receive this, it is a notification
         # the mts is not really changing its setpoint (as per the issue).
-        # We need more info about how to process this. This handler however
-        # will be fully implemented in next major (5.x) since the new Mts200
-        # architecture is too different from current version one and
-        # it would be a mess to merge branches afterway
+        # We need more info about how to process this.
 
     def _parse_summerMode(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""

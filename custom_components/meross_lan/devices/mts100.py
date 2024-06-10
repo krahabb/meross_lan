@@ -154,16 +154,13 @@ class Mts100Climate(MtsClimate):
             return
         self._mts_payload = payload
         if mc.KEY_ROOM in payload:
-            mts100 = self.manager
-            self.current_temperature = payload[mc.KEY_ROOM] / self.device_scale
-            self.select_tracked_sensor.check_tracking()
-            if mts100.sensor_temperature.update_native_value(self.current_temperature):
-                strategy = mts100.hub.namespace_handlers[
-                    mc.NS_APPLIANCE_HUB_MTS100_ADJUST
-                ]
-                if strategy.lastrequest < (mts100.hub.lastresponse - 30):
+            if self._update_current_temperature(
+                payload[mc.KEY_ROOM] / self.device_scale
+            ):
+                hub = self.manager.hub
+                strategy = hub.namespace_handlers[mc.NS_APPLIANCE_HUB_MTS100_ADJUST]
+                if strategy.lastrequest < (hub.lastresponse - 30):
                     strategy.lastrequest = 0
-
         if mc.KEY_CURRENTSET in payload:
             self.target_temperature = payload[mc.KEY_CURRENTSET] / self.device_scale
         if mc.KEY_MIN in payload:

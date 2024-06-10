@@ -6,7 +6,7 @@ from . import meross_entity as me
 from .helpers import reverse_lookup
 from .merossclient import const as mc
 from .select import MtsTrackedSensor
-from .sensor import UnitOfTemperature
+from .sensor import MLTemperatureSensor, UnitOfTemperature
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -78,7 +78,9 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         | getattr(climate.ClimateEntityFeature, "TURN_OFF", 0)
         | getattr(climate.ClimateEntityFeature, "TURN_ON", 0)
     )
-    _enable_turn_on_off_backwards_compatibility = False # compatibility flag (see HA core climate)
+    _enable_turn_on_off_backwards_compatibility = (
+        False  # compatibility flag (see HA core climate)
+    )
     target_temperature: float | None
     target_temperature_step: float = 0.5
     temperature_unit: str = TEMP_CELSIUS
@@ -100,6 +102,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "number_preset_temperature",
         "schedule",
         "select_tracked_sensor",
+        "sensor_current_temperature",
     )
 
     def __init__(
@@ -132,10 +135,13 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
                 )
         self.schedule = calendar_class(self)
         self.select_tracked_sensor = MtsTrackedSensor(self)
+        self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
+        self.sensor_current_temperature.entity_registry_enabled_default = False
 
     # interface: MerossEntity
     async def async_shutdown(self):
         await super().async_shutdown()
+        self.sensor_current_temperature: "MLTemperatureSensor" = None  # type: ignore
         self.select_tracked_sensor = None  # type: ignore
         self.schedule = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
@@ -194,3 +200,14 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         it is not needed anymore since that was due to the legacy message handle/parse engine
         """
         raise NotImplementedError()
+
+    def _update_current_temperature(self, current_temperature: float | int):
+        """
+        Common handler for incoming room temperature value
+        """
+        if self.current_temperature != current_temperature:
+            self.current_temperature = current_temperature
+            self.select_tracked_sensor.check_tracking()
+            self.sensor_current_temperature.update_native_value(current_temperature)
+            return True
+        return False
