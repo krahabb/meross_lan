@@ -185,7 +185,7 @@ class NamespaceHandler:
             self.namespace,
             function_name,
             str(device.loggable_any(payload)),
-            timeout=604800
+            timeout=604800,
         )
 
     def _handle_list(self, header, payload):
@@ -219,7 +219,7 @@ class NamespaceHandler:
             _parse = self.entities[p_channel.get(mc.KEY_CHANNEL)]
         except KeyError as key_error:
             _parse = self._try_create_entity(key_error)
-        except TypeError:
+        except AttributeError:
             # this might be expected: the payload is not a dict
             # final fallback to the safe _handle_generic
             self.handler = self._handle_generic
@@ -233,7 +233,7 @@ class NamespaceHandler:
         the registered entity(es)
         This handler can manage both lists or dicts or even
         payloads without the "channel" key (see namespace Toggle)
-        which will default forwarding to channel == 0
+        which will default forwarding to channel == None
         """
         p_channel = payload[self.key_namespace]
         if type(p_channel) is dict:
@@ -302,7 +302,6 @@ class NamespaceHandler:
                     except KeyError as key_error:
                         _parse = self._try_create_entity(key_error)
                     _parse(p_channel)
-
         except Exception as exception:
             self.handle_exception(exception, "_parse_generic", digest)
 

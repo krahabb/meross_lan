@@ -1,6 +1,7 @@
 """"""
 
 import asyncio
+from random import randint
 import typing
 
 from custom_components.meross_lan.merossclient import (
@@ -51,9 +52,14 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         # return everything...at the moment we always query all
         p_garageDoor: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]
         if len(p_garageDoor) == 1:
-            # un-pack the list since real traces show no list
-            # in this response payloads (we only have msg100 so far..)
-            return mc.METHOD_GETACK, {mc.KEY_STATE: p_garageDoor[0]}
+            # for msg100 we had, historically, just dict payloads
+            # in this ns but now it appears as though some devices/queries
+            # might return a list (#439). We'll introduce this randomness
+            # here to test if meross_lan is able to manage both.
+            if randint(0, 1) == 0:
+                return mc.METHOD_GETACK, {mc.KEY_STATE: p_garageDoor[0]}
+            else:
+                return mc.METHOD_GETACK, {mc.KEY_STATE: p_garageDoor}
         else:
             return mc.METHOD_GETACK, {mc.KEY_STATE: p_garageDoor}
 
