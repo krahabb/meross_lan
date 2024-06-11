@@ -154,6 +154,9 @@ NS_APPLIANCE_CONTROL_SENSOR_HISTORY = "Appliance.Control.Sensor.History"
 NS_APPLIANCE_MCU_FIRMWARE = "Appliance.Mcu.Firmware"
 NS_APPLIANCE_MCU_UPGRADE = "Appliance.Mcu.Upgrade"
 
+NS_APPLIANCE_ENCRYPT_SUITE = 'Appliance.Encrypt.Suite'
+NS_APPLIANCE_ENCRYPT_ECDHE = 'Appliance.Encrypt.ECDHE'
+
 # misc keys for json payloads
 KEY_HEADER = "header"
 KEY_MESSAGEID = "messageId"

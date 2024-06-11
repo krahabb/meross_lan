@@ -51,9 +51,10 @@ from .merossclient import (
     HostAddress,
     MerossRequest,
     MerossResponse,
+    compute_message_encryption_key,
+    compute_message_signature,
     const as mc,
     get_active_broker,
-    get_message_signature,
     get_message_uuid,
     is_device_online,
     json_dumps,
@@ -479,10 +480,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             connections={(dr.CONNECTION_NETWORK_MAC, descriptor.macAddress)},
         )
 
-        self._update_config()
-
         self.sensor_protocol = ProtocolSensor(self)
         self.update_firmware = None
+
+        self._update_config()
 
         # the update entity will only be instantiated 'on demand' since
         # we might not have this for devices not related to a cloud profile
@@ -1683,26 +1684,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def _check_protocol(self):
         """called whenever the configuration or the profile linking changes to fix protocol transports"""
-        conf_protocol = self.conf_protocol
-        _http = self._http
-        if conf_protocol is CONF_PROTOCOL_MQTT:
-            if _http:
-                _http.terminate()
-                self._http = self._http_active = None
-                self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
-        elif _http:
-            if host := self.host:
-                _http.host = host
-                _http.key = self.key
-            else:
-                _http.terminate()
-                self._http = self._http_active = None
-                self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
-        else:
-            if host := self.host:
-                self._http = MerossHttpClient(host, self.key)
-
         _profile = self._profile
+        conf_protocol = self.conf_protocol
         if conf_protocol is CONF_PROTOCOL_AUTO:
             # When using CONF_PROTOCOL_AUTO we try to use our 'preferred' (pref_protocol)
             # and eventually fallback (curr_protocol) until some good news allow us
@@ -1771,7 +1754,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # it appears sometimes the devices
             # send an incorrect signature hash
             # but at the moment this is unlikely to be critical
-            sign = get_message_signature(
+            sign = compute_message_signature(
                 header[mc.KEY_MESSAGEID], self.key, header[mc.KEY_TIMESTAMP]
             )
             if sign != header[mc.KEY_SIGN]:
@@ -2203,6 +2186,29 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if self.polling_period < CONF_POLLING_PERIOD_MIN:
             self.polling_period = CONF_POLLING_PERIOD_MIN
         self._polling_delay = self.polling_period
+
+        _http = self._http
+        host = self.host
+        if (self.conf_protocol is CONF_PROTOCOL_MQTT) or (not host):
+            # no room for http transport...
+            if _http:
+                _http.terminate()
+                self._http = self._http_active = None
+                self.sensor_protocol.update_attr_inactive(ProtocolSensor.ATTR_HTTP)
+        else:
+            # we need http: setup/update
+            if _http:
+                _http.host = host
+                _http.key = self.key
+            else:
+                _http = self._http = MerossHttpClient(host, self.key)
+            _http.set_encryption(
+                compute_message_encryption_key(
+                    self.descriptor.uuid, self.key, self.descriptor.macAddress
+                ).encode("utf-8")
+                if mc.NS_APPLIANCE_ENCRYPT_ECDHE in self.descriptor.ability
+                else None
+            )
 
     def _check_uuid_mismatch(self, response_uuid: str):
         """when detecting a wrong uuid from a response we offline the device"""
