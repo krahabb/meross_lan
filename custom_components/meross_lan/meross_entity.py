@@ -118,17 +118,11 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         entities for the same channel and usually equal to device_class (but might not be)
         - device_class: used by HA to set some soft 'class properties' for the entity
         """
-        assert channel is not None or (
-            entitykey is not None
-        ), "provide at least channel or entitykey (cannot be 'None' together)"
         id = (
             channel
             if entitykey is None
             else entitykey if channel is None else f"{channel}_{entitykey}"
         )
-        assert (
-            manager.entities.get(id) is None
-        ), f"(channel:{channel}, entitykey:{entitykey}) is not unique inside manager.entities"
         self.manager = manager
         self.channel = channel
         self.entitykey = entitykey
@@ -136,6 +130,14 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.available = self._attr_available or manager.online
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
+        # init before raising exceptions so that the Loggable is
+        # setup before any exception is raised
+        if id is None:
+            raise AssertionError(
+                "provide at least channel or entitykey (cannot be 'None' together)"
+            )
+        if id in manager.entities:
+            raise AssertionError(f"id:{id} is not unique inside manager.entities")
         if hasattr(self, "name"):
             name = self.name
         else:
