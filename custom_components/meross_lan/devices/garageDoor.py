@@ -515,9 +515,8 @@ class MLGarage(MLCover):
             if key in MLGarage.CONFIG_KEY_EXCLUDED or (self._config.get(key) == value):
                 continue
             try:
-                entity_id = entity_id_prefix + key
                 try:
-                    entity = entities[entity_id]
+                    entity = entities[f"{entity_id_prefix}{key}"]
                 except KeyError:
                     entity_class = MLGarage.CONFIG_KEY_TO_ENTITY_MAP.get(
                         key, MLGarageMultipleConfigNumber
@@ -739,5 +738,4 @@ def digest_init_garageDoor(
     # We so prepare the handler to eventually build an MLGarage instance
     # even though it's behavior is unknown at the moment.
     handler = device.get_handler(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
-    handler.register_entity_class(MLGarage)
     return handler.parse_list, (handler,)

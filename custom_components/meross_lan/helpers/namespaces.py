@@ -323,19 +323,17 @@ class NamespaceHandler:
                 mc.KEY_LATESTSAMPLETIME,
             }:
                 continue
-            entitykey = f"{key}_{subkey}"
             try:
                 device_entities[
-                    f"{channel}_{entitykey}" if channel is not None else entitykey
+                    f"{channel}_{key}_{subkey}" if channel is not None else f"{key}_{subkey}"
                 ].update_native_value(subvalue)
             except KeyError:
                 from ..sensor import MLDiagnosticSensor
 
-                device = self.device
                 MLDiagnosticSensor(
-                    device,
+                    self.device,
                     channel,
-                    entitykey,
+                    f"{key}_{subkey}",
                     native_value=subvalue,
                 )
                 if not self.polling_strategy:
@@ -344,15 +342,44 @@ class NamespaceHandler:
     def _parse_undefined_list(self, key: str, payload: list, channel):
         pass
 
+    def _parse_stub(self, payload):
+        device = self.device
+        device.log(
+            device.DEBUG,
+            "Parser stub called on namespace:%s payload:%s",
+            self.namespace,
+            str(device.loggable_dict(payload)),
+            timeout=14400,
+        )
+
     def _try_create_entity(self, key_error: KeyError):
-        if not self.entity_class:
-            raise key_error
+        """
+        Handler for when a payload points to a channel
+        actually not registered for parsing.
+        If an entity_class was registered then instantiate that else
+        proceed with a 'stub' in order to just silence (from now on)
+        the exception. This stub might be a dignostic entity if device
+        configured so, or just an empty handler.
+        """
         channel = key_error.args[0]
         if channel == mc.KEY_CHANNEL:
             # ensure key represents a channel and not the "channel" key
             # in the p_channel dict
             raise key_error
-        self.entity_class(self.device, channel)
+
+        if self.entity_class:
+            self.entity_class(self.device, channel)
+        elif self.device.create_diagnostic_entities:
+            from ..sensor import MLDiagnosticSensor
+
+            self.register_entity(MLDiagnosticSensor(
+                self.device,
+                channel,
+                self.key_namespace,
+            ))
+        else:
+            self.entities[channel] = self._parse_stub
+
         return self.entities[channel]
 
     async def async_poll_all(self, device: "MerossDevice", epoch: float):

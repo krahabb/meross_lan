@@ -15,7 +15,7 @@ from .helpers.namespaces import (
     EntityNamespaceMixin,
     NamespaceHandler,
 )
-from .merossclient import const as mc
+from .merossclient import const as mc, json_dumps
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -174,6 +174,14 @@ class MLDiagnosticSensor(MLEnumSensor):
     # HA core entity attributes:
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
+    def _parse(self, payload: dict):
+        """
+        This implementation aims at diagnostic sensors installed in 'well-known'
+        namespace handlers to manage 'unexpected' channels when they eventually
+        pop-up and we (still) have no clue why these channels are pushed (See #428)
+        """
+        self.update_native_value(json_dumps(payload))
+
 
 class ProtocolSensor(MLEnumSensor):
     STATE_DISCONNECTED = "disconnected"
@@ -321,6 +329,5 @@ class FilterMaintenanceNamespaceHandler(NamespaceHandler):
             self,
             device,
             mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
-            entity_class=MLFilterMaintenanceSensor,
         )
         MLFilterMaintenanceSensor(device, 0)
