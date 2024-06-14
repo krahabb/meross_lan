@@ -120,7 +120,7 @@ NS_APPLIANCE_MCU_HP110_FAVORITE = "Appliance.Mcu.Hp110.Favorite"
 NS_APPLIANCE_MCU_HP110_PREVIEW = "Appliance.Mcu.Hp110.Preview"
 NS_APPLIANCE_MCU_HP110_LOCK = "Appliance.Mcu.Hp110.Lock"
 NS_APPLIANCE_CONTROL_MP3 = "Appliance.Control.Mp3"
-# MTS200 smart thermostat
+# MTS200-960 smart thermostat
 NS_APPLIANCE_CONTROL_THERMOSTAT_ALARM = "Appliance.Control.Thermostat.Alarm"
 NS_APPLIANCE_CONTROL_THERMOSTAT_ALARMCONFIG = "Appliance.Control.Thermostat.AlarmConfig"
 NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION = "Appliance.Control.Thermostat.Calibration"
@@ -142,14 +142,16 @@ NS_APPLIANCE_CONTROL_THERMOSTAT_TIMER = "Appliance.Control.Thermostat.Timer"
 NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED = (
     "Appliance.Control.Thermostat.WindowOpened"
 )
+# screen brigtness (actually seen on MTS200)
+NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS = "Appliance.Control.Screen.Brightness"
+# carrying temp/humi on more recent (2024/06) thermostats
+NS_APPLIANCE_CONTROL_SENSOR_HISTORY = "Appliance.Control.Sensor.History"
+NS_APPLIANCE_CONTROL_SENSOR_LATEST = "Appliance.Control.Sensor.Latest"
+
 # MOD100-MOD150 diffuser
 NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY = "Appliance.Control.Diffuser.Spray"
 NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT = "Appliance.Control.Diffuser.Light"
 NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR = "Appliance.Control.Diffuser.Sensor"
-# screen brigtness (actually seen on MTS200)
-NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS = "Appliance.Control.Screen.Brightness"
-# unknown: seen on mts960
-NS_APPLIANCE_CONTROL_SENSOR_HISTORY = "Appliance.Control.Sensor.History"
 
 NS_APPLIANCE_MCU_FIRMWARE = "Appliance.Mcu.Firmware"
 NS_APPLIANCE_MCU_UPGRADE = "Appliance.Mcu.Upgrade"

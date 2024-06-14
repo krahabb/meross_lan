@@ -703,6 +703,13 @@ POLLING_STRATEGY_CONF: dict[
         70,
         NamespaceHandler.async_poll_smart,
     ),
+    mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST: (
+        300,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_lazy,
+    ),
     mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,

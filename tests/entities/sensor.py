@@ -41,6 +41,7 @@ class EntityTest(EntityComponentTest):
         ],
         mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: [MLFilterMaintenanceSensor],
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: [MLTemperatureSensor],
+        mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST: [MLHumiditySensor],
         mc.NS_APPLIANCE_SYSTEM_RUNTIME: [MLSignalStrengthSensor],  # Signal strength
     }
 

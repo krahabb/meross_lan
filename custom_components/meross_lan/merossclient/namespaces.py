@@ -95,7 +95,7 @@ class Namespace:
                     self.payload_get_inner = _LIST
                     self.payload_type = list
                     self.need_channel = False
-                case (_, _, "Thermostat", *_):
+                case (_, "Control", "Thermostat", *_) | (_, "Control", "Screen", *_)| (_, "Control", "Sensor", *_):
                     self.payload_get_inner = [{mc.KEY_CHANNEL: 0}]
                     self.payload_type = list
                     self.need_channel = True
@@ -209,6 +209,9 @@ Appliance_Control_Screen_Brightness = _ns_get(
 )
 Appliance_Control_Sensor_History = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_SENSOR_HISTORY, mc.KEY_HISTORY, _LIST_C
+)
+Appliance_Control_Sensor_Latest = _ns_get_push(
+    mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST, mc.KEY_LATEST, _LIST_C
 )
 Appliance_Control_Spray = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_SPRAY, mc.KEY_SPRAY, _DICT

@@ -2,9 +2,15 @@ import typing
 
 from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
+from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MtsTemperatureNumber
-from ..sensor import MLEnumSensor, MLTemperatureSensor
+from ..sensor import (
+    MLEnumSensor,
+    MLHumiditySensor,
+    MLNumericSensor,
+    MLTemperatureSensor,
+)
 from ..switch import MLSwitch
 from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
@@ -12,7 +18,7 @@ from .mts960 import Mts960Climate
 if typing.TYPE_CHECKING:
     from ..climate import MtsClimate
     from ..meross_device import DigestInitReturnType, DigestParseFunc, MerossDevice
-    from ..helpers.namespaces import NamespaceHandler
+
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
 
@@ -339,3 +345,60 @@ def digest_init_thermostat(
             digest_handlers[ns_key](ns_digest)
 
     return digest_parse, digest_pollers
+
+
+class SensorLatestNamespaceHandler(NamespaceHandler):
+    """
+    Specialized handler for Appliance.Control.Sensor.Latest actually carried in thermostats
+    (seen on an MTS200 so far:2024-06)
+    """
+
+    VALUE_KEY_EXCLUDED = (mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
+    VALUE_KEY_ENTITY_CLASS_MAP: dict[str, type[MLNumericSensor]] = {
+        "humi": MLHumiditySensor,  # confirmed in MTS200 trace (2024/06)
+        "temp": MLTemperatureSensor,  # just guessed (2024/04)
+    }
+
+    polling_request_payload: list
+
+    __slots__ = ()
+
+    def __init__(self, device: "MerossDevice"):
+        NamespaceHandler.__init__(
+            self,
+            device,
+            mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST,
+            handler=self._handle_Appliance_Control_Sensor_Latest,
+        )
+        self.polling_request_payload.append({mc.KEY_CHANNEL: 0})
+
+    def _handle_Appliance_Control_Sensor_Latest(self, header: dict, payload: dict):
+        """
+        {
+            "latest": [
+                {
+                    "value": [{"humi": 596, "timestamp": 1718302844}],
+                    "channel": 0,
+                    "capacity": 2,
+                }
+            ]
+        }
+        """
+        entities = self.device.entities
+        for p_channel in payload[mc.KEY_LATEST]:
+            channel = p_channel[mc.KEY_CHANNEL]
+            for p_value in p_channel[mc.KEY_VALUE]:
+                # I guess 'value' carries a list of sensors values
+                # carried in a dict like {"humi": 596, "timestamp": 1718302844}
+                for key, value in p_value.items():
+                    if key in SensorLatestNamespaceHandler.VALUE_KEY_EXCLUDED:
+                        continue
+                    try:
+                        entities[f"{channel}_sensor_{key}"].update_native_value(value / 10)
+                    except KeyError:
+                        entity_class = (
+                            SensorLatestNamespaceHandler.VALUE_KEY_ENTITY_CLASS_MAP.get(
+                                key, MLNumericSensor
+                            )
+                        )
+                        entity_class(self.device, channel, f"sensor_{key}", device_value=value / 10)  # type: ignore

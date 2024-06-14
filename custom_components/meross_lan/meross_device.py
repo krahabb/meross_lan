@@ -329,6 +329,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             ".devices.screenbrightness",
             "ScreenBrightnessNamespaceHandler",
         ),
+        mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST: (
+            ".devices.thermostat",
+            "SensorLatestNamespaceHandler",
+        ),
         mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (".cover", "MLRollerShutter"),
         mc.NS_APPLIANCE_SYSTEM_DNDMODE: (".light", "MLDNDLightEntity"),
         mc.NS_APPLIANCE_SYSTEM_RUNTIME: (".sensor", "MLSignalStrengthSensor"),
