@@ -2101,14 +2101,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                                     1 if _transition_info[1].total_seconds() else 0,
                                 ]
                             )
-                            _transition_info = tz_pytz._transition_info[idx]  # type: ignore
-                            timerules.append(
-                                [
-                                    int(tz_pytz._utc_transition_times[idx].timestamp()),  # type: ignore
-                                    int(_transition_info[0].total_seconds()),
-                                    1 if _transition_info[1].total_seconds() else 0,
-                                ]
-                            )
+                            # check the _transition_info has data beyond idx else
+                            # the timezone has likely stopped 'transitioning'
+                            if idx < len(tz_pytz._transition_info): # type: ignore
+                                _transition_info = tz_pytz._transition_info[idx]  # type: ignore
+                                timerules.append(
+                                    [
+                                        int(tz_pytz._utc_transition_times[idx].timestamp()),  # type: ignore
+                                        int(_transition_info[0].total_seconds()),
+                                        1 if _transition_info[1].total_seconds() else 0,
+                                    ]
+                                )
                             return timerules
                         elif isinstance(tz_pytz, pytz.tzinfo.StaticTzInfo):
                             utcoffset = tz_pytz.utcoffset(None)
