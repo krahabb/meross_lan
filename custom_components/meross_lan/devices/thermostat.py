@@ -4,7 +4,7 @@ from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
-from ..number import MtsTemperatureNumber
+from ..number import MLConfigNumber, MtsTemperatureNumber
 from ..sensor import (
     MLEnumSensor,
     MLHumiditySensor,
@@ -18,7 +18,6 @@ from .mts960 import Mts960Climate
 if typing.TYPE_CHECKING:
     from ..climate import MtsClimate
     from ..meross_device import DigestInitReturnType, DigestParseFunc, MerossDevice
-
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
 
@@ -347,6 +346,71 @@ def digest_init_thermostat(
     return digest_parse, digest_pollers
 
 
+class MLScreenBrightnessNumber(MLConfigNumber):
+    manager: "MerossDevice"
+
+    namespace = mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
+    key_namespace = mc.KEY_BRIGHTNESS
+
+    # HA core entity attributes:
+    icon: str = "mdi:brightness-percent"
+    native_max_value = 100
+    native_min_value = 0
+    native_step = 12.5
+
+    def __init__(self, manager: "MerossDevice", key: str):
+        self.key_value = key
+        self.name = f"Screen brightness ({key})"
+        super().__init__(
+            manager,
+            0,
+            f"screenbrightness_{key}",
+            native_unit_of_measurement=MLConfigNumber.UNIT_PERCENTAGE,
+        )
+
+    async def async_set_native_value(self, value: float):
+        """Override base async_set_native_value since it would round
+        the value to an int (common device native type)."""
+        if await self.async_request_value(value):
+            self.update_device_value(value)
+
+
+class ScreenBrightnessNamespaceHandler(NamespaceHandler):
+
+    polling_request_payload: list
+
+    __slots__ = (
+        "number_brightness_operation",
+        "number_brightness_standby",
+    )
+
+    def __init__(self, device: "MerossDevice"):
+        NamespaceHandler.__init__(
+            self,
+            device,
+            mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS,
+            handler=self._handle_Appliance_Control_Screen_Brightness,
+        )
+        self.polling_request_payload.append({mc.KEY_CHANNEL: 0})
+        self.number_brightness_operation = MLScreenBrightnessNumber(
+            device, mc.KEY_OPERATION
+        )
+        self.number_brightness_standby = MLScreenBrightnessNumber(
+            device, mc.KEY_STANDBY
+        )
+
+    def _handle_Appliance_Control_Screen_Brightness(self, header: dict, payload: dict):
+        for p_channel in payload[mc.KEY_BRIGHTNESS]:
+            if p_channel[mc.KEY_CHANNEL] == 0:
+                self.number_brightness_operation.update_device_value(
+                    p_channel[mc.KEY_OPERATION]
+                )
+                self.number_brightness_standby.update_device_value(
+                    p_channel[mc.KEY_STANDBY]
+                )
+                break
+
+
 class SensorLatestNamespaceHandler(NamespaceHandler):
     """
     Specialized handler for Appliance.Control.Sensor.Latest actually carried in thermostats
@@ -394,7 +458,9 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                     if key in SensorLatestNamespaceHandler.VALUE_KEY_EXCLUDED:
                         continue
                     try:
-                        entities[f"{channel}_sensor_{key}"].update_native_value(value / 10)
+                        entities[f"{channel}_sensor_{key}"].update_native_value(
+                            value / 10
+                        )
                     except KeyError:
                         entity_class = (
                             SensorLatestNamespaceHandler.VALUE_KEY_ENTITY_CLASS_MAP.get(

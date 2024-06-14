@@ -326,7 +326,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         mc.NS_APPLIANCE_CONTROL_MP3: (".media_player", "MLMp3Player"),
         mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (".switch", "PhysicalLockSwitch"),
         mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
-            ".devices.screenbrightness",
+            ".devices.thermostat",
             "ScreenBrightnessNamespaceHandler",
         ),
         mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST: (
