@@ -159,10 +159,10 @@ class HAMQTTConnection(MQTTConnection):
                     )
                 except:
                     self._unsub_mqtt_disconnected = mqtt.async_dispatcher_connect(
-                        hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected
+                        hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected # type: ignore (removed in HA core 2024.6)
                     )
                     self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
-                        hass, mqtt.MQTT_CONNECTED, self._mqtt_connected
+                        hass, mqtt.MQTT_CONNECTED, self._mqtt_connected # type: ignore (removed in HA core 2024.6)
                     )
                 if mqtt.is_connected(hass):
                     self._mqtt_connected()
