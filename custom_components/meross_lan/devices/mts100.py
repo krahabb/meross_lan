@@ -112,7 +112,7 @@ class Mts100Climate(MtsClimate):
                 ]
             },
         ):
-            self._parse(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
+            self._parse_temperature(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
 
     async def async_request_mode(self, mode: int):
         """Requests an mts mode and (ensure) turn-on"""
@@ -149,7 +149,7 @@ class Mts100Climate(MtsClimate):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
     # message handlers
-    def _parse(self, payload: dict):
+    def _parse_temperature(self, payload: dict):
         if self._mts_payload == payload:
             return
         self._mts_payload = payload

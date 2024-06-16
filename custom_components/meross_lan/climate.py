@@ -192,15 +192,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     def is_mts_scheduled(self):
         raise NotImplementedError()
 
-    def _parse(self, p_temperature: dict):
-        """
-        This the handler for the default payload carrying the gross state of the climate entity.
-        It is dynamically binded to the self.namespace NamespaceHandler on __init__.
-        By convention every implementation used to define this as _parse_'key_namespace' but
-        it is not needed anymore since that was due to the legacy message handle/parse engine
-        """
-        raise NotImplementedError()
-
     def _update_current_temperature(self, current_temperature: float | int):
         """
         Common handler for incoming room temperature value

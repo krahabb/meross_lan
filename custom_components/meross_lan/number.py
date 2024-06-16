@@ -188,6 +188,8 @@ class MtsSetPointNumber(MtsTemperatureNumber):
             payload = response[mc.KEY_PAYLOAD]
             if key_namespace in payload:
                 # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)
-                self.climate._parse(payload[key_namespace][0])
+                getattr(self.climate, f"_parse_{key_namespace}")(
+                    payload[key_namespace][0]
+                )
 
         return response

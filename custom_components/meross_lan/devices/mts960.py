@@ -220,17 +220,17 @@ class Mts960Climate(MtsClimate):
                 payload = response[mc.KEY_PAYLOAD][mc.KEY_MODEB]
                 if isinstance(payload, list):
                     if payload:
-                        self._parse(payload[0])
+                        self._parse_modeB(payload[0])
                     else:
-                        self._parse(self._mts_payload | p_modeb)
+                        self._parse_modeB(self._mts_payload | p_modeb)
                 elif isinstance(payload, dict):
-                    self._parse(self._mts_payload | p_modeb | payload)
+                    self._parse_modeB(self._mts_payload | p_modeb | payload)
             except (KeyError, IndexError):
                 # optimistic update
-                self._parse(self._mts_payload | p_modeb)
+                self._parse_modeB(self._mts_payload | p_modeb)
 
     # message handlers
-    def _parse(self, payload: dict):
+    def _parse_modeB(self, payload: dict):
         """
         {
             "channel": 0,
