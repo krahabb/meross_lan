@@ -654,6 +654,13 @@ POLLING_STRATEGY_CONF: dict[
         80,
         NamespaceHandler.async_poll_smart,
     ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CTLRANGE: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_once,
+    ),
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,

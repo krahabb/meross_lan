@@ -261,6 +261,7 @@ DIGEST_KEY_TO_NAMESPACE: dict[str, str] = {
 """Maps the digest key to the associated namespace handler (used in _parse_thermostat)"""
 
 OPTIONAL_NAMESPACES_INITIALIZERS = {
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CTLRANGE,
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION,
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
 }

@@ -230,6 +230,19 @@ class Mts960Climate(MtsClimate):
                 self._parse_modeB(self._mts_payload | p_modeb)
 
     # message handlers
+    def _parse_ctlRange(self, payload: dict):
+        """
+        {
+            "channel": 0,
+            "max": 11000,
+            "min": -3000,
+            "ctlMax": 3600,
+            "ctlMin": 300,
+        }
+        """
+        self.max_temp = payload[mc.KEY_MAX] / self.device_scale
+        self.min_temp = payload[mc.KEY_MIN] / self.device_scale
+        
     def _parse_modeB(self, payload: dict):
         """
         {
