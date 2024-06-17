@@ -469,3 +469,12 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                             )
                         )
                         entity_class(self.device, channel, f"sensor_{key}", device_value=value / 10)  # type: ignore
+
+                    if key == mc.KEY_HUMI:
+                        # look for a thermostat and sync the reported humidity
+                        climate = entities.get(channel)
+                        if isinstance(climate, MtsClimate):
+                            humidity = value / 10
+                            if climate.current_humidity != humidity:
+                                climate.current_humidity = humidity
+                                climate.flush_state()

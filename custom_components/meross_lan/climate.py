@@ -58,6 +58,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     select_tracked_sensor: typing.Final["MtsTrackedSensor"]
 
     # HA core entity attributes:
+    current_humidity: float | None
     current_temperature: float | None
     hvac_action: climate.HVACAction | None
     hvac_mode: climate.HVACMode | None
@@ -87,6 +88,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     translation_key = "mts_climate"
 
     __slots__ = (
+        "current_humidity",
         "current_temperature",
         "hvac_action",
         "hvac_mode",
@@ -113,6 +115,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         preset_number_class: typing.Type["MtsSetPointNumber"] | None,
         calendar_class: typing.Type["MtsSchedule"],
     ):
+        self.current_humidity = None
         self.current_temperature = None
         self.hvac_action = None
         self.hvac_mode = None
@@ -152,6 +155,8 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_mode = None
         self._mts_onoff = None
         self._mts_payload = {}
+        self.current_humidity = None
+        self.current_temperature = None
         self.preset_mode = None
         self.hvac_action = None
         self.hvac_mode = None
