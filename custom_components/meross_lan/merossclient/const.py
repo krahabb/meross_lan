@@ -468,6 +468,11 @@ MTS960_WORKING_COOL = 2
 MTS960_ONOFF_UNKNOWN = 0
 MTS960_ONOFF_ON = 1
 MTS960_ONOFF_OFF = 2  # this appears when the plug is off (why not 0?)
+#
+# mapping the Timer Type
+MTS960_TIMER_TYPE_COUNTDOWN = 1
+MTS960_TIMER_TYPE_CYCLE = 2
+#
 # diffuser mode enums
 DIFFUSER_SPRAY_MODE_OFF = 2  # or 255 ? or 'any' ?
 DIFFUSER_SPRAY_MODE_ECO = 0
