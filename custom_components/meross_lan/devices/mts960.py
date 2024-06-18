@@ -240,9 +240,9 @@ class Mts960Climate(MtsClimate):
             "ctlMin": 300,
         }
         """
-        self.max_temp = payload[mc.KEY_MAX] / self.device_scale
-        self.min_temp = payload[mc.KEY_MIN] / self.device_scale
-        
+        self.max_temp = payload[mc.KEY_CTLMAX] / self.device_scale
+        self.min_temp = payload[mc.KEY_CTLMIN] / self.device_scale
+
     def _parse_modeB(self, payload: dict):
         """
         {
