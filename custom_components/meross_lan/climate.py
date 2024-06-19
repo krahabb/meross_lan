@@ -6,7 +6,7 @@ from . import meross_entity as me
 from .helpers import reverse_lookup
 from .merossclient import const as mc
 from .select import MtsTrackedSensor
-from .sensor import MLTemperatureSensor, UnitOfTemperature
+from .sensor import MLTemperatureSensor, UnitOfTemperature, MLOutputPower
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -90,6 +90,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     __slots__ = (
         "current_humidity",
         "current_temperature",
+        "current_output_power",
         "hvac_action",
         "hvac_mode",
         "max_temp",
@@ -105,6 +106,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "schedule",
         "select_tracked_sensor",
         "sensor_current_temperature",
+        "sensor_output_power"
     )
 
     def __init__(
@@ -114,9 +116,11 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         adjust_number_class: typing.Type["MtsTemperatureNumber"],
         preset_number_class: typing.Type["MtsSetPointNumber"] | None,
         calendar_class: typing.Type["MtsSchedule"],
+        has_sensor_output_power: bool = False
     ):
         self.current_humidity = None
         self.current_temperature = None
+        self.current_output_power = None
         self.hvac_action = None
         self.hvac_mode = None
         self.max_temp = 35
@@ -141,11 +145,16 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
         self.sensor_current_temperature.entity_registry_enabled_default = False
         self.sensor_current_temperature.suggested_display_precision = 1
+        if has_sensor_output_power:
+            self.sensor_output_power = MLOutputPower(manager, channel)
+            self.sensor_output_power.entity_registry_enabled_default = False
 
     # interface: MerossEntity
     async def async_shutdown(self):
         await super().async_shutdown()
         self.sensor_current_temperature: "MLTemperatureSensor" = None  # type: ignore
+        if self.sensor_output_power:
+            self.sensor_output_power: "MLOutputPower" = None  # type: ignore
         self.select_tracked_sensor = None  # type: ignore
         self.schedule = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
@@ -206,5 +215,15 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
             self.current_temperature = current_temperature
             self.select_tracked_sensor.check_tracking()
             self.sensor_current_temperature.update_native_value(current_temperature)
+            return True
+        return False
+
+    def _update_output_power(self, current_output_power: bool):
+        """
+        Common handler for incoming room temperature value
+        """
+        if self.sensor_output_power and self.current_output_power != current_output_power:
+            self.current_output_power = current_output_power
+            self.sensor_output_power.update_onoff(current_output_power)
             return True
         return False

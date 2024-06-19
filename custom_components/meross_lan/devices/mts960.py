@@ -93,6 +93,7 @@ class Mts960Climate(MtsClimate):
             adjust_number_class,
             None,
             Mts960Schedule,
+            True
         )
         self._mts_working = None
 
@@ -109,11 +110,14 @@ class Mts960Climate(MtsClimate):
                     self.hvac_action = MtsClimate.HVACAction.FAN
                 else:
                     self.hvac_action = self.MTS_WORKING_TO_HVAC_ACTION.get(self._mts_working, MtsClimate.HVACAction.OFF)
+                self._update_output_power(True)
             else:
                 self.hvac_action = MtsClimate.HVACAction.IDLE
+                self._update_output_power(False)
         else:
             self.hvac_mode = MtsClimate.HVACMode.OFF
             self.hvac_action = MtsClimate.HVACAction.OFF
+            self._update_output_power(False)
 
         super().flush_state()
 

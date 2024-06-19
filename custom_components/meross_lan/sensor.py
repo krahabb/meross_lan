@@ -1,5 +1,6 @@
 import typing
 
+from .binary_sensor import MLBinarySensor
 from homeassistant.components import sensor
 from homeassistant.const import (
     UnitOfElectricCurrent,
@@ -29,7 +30,6 @@ async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
-
 
 class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
     """Specialization for sensor with ENUM device_class which allows to store
@@ -165,6 +165,45 @@ class MLTemperatureSensor(MLNumericSensor):
             sensor.SensorDeviceClass.TEMPERATURE,
             device_value=device_value,
         )
+
+class MLOutputPower(MLBinarySensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+    _attr_available = True
+#    entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        manager: "EntityManager",
+        channel: object | None,
+        entitykey: str | None = "output power",
+        *,
+        device_value: int | None = None,
+    ):
+        self._custom_on_value="On"
+        self._custom_off_value="Off"
+
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            self.DeviceClass.POWER,
+            device_value=device_value,
+        )
+
+    @property
+    def state(self):
+        """Return the state of the sensor."""
+        return self._custom_on_value if self.is_on else self._custom_off_value
+
+    @property
+    def icon(self):
+        """Return the icon of this sensor."""
+        if self.is_on:
+            return 'mdi:power-plug'
+        else:
+            return 'mdi:power-plug-off'
 
 
 class MLDiagnosticSensor(MLEnumSensor):
