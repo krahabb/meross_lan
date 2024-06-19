@@ -141,6 +141,7 @@ class MerossDeviceBase(EntityManager):
     __slots__ = (
         "_online",
         "_device_registry_entry",
+        "_push_payload_data_as_array"
     )
 
     def __init__(
@@ -164,6 +165,7 @@ class MerossDeviceBase(EntityManager):
         )
         self._online = False
         self._device_registry_entry = None
+        self._push_payload_data_as_array=False
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             self._device_registry_entry = weakref.ref(
                 self.get_device_registry().async_get_or_create(

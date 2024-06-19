@@ -87,6 +87,7 @@ class Mts960Climate(MtsClimate):
         channel: object,
         adjust_number_class: typing.Type["MtsTemperatureNumber"],
     ):
+        manager._push_payload_data_as_array = True
         super().__init__(
             manager,
             channel,
