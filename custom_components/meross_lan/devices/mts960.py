@@ -289,4 +289,4 @@ class Mts960Schedule(MtsSchedule):
     key_channel = mc.KEY_CHANNEL
 
     def __init__(self, climate: Mts960Climate):
-        super().__init__(climate)
+        super().__init__(climate, manage_key_section=True)
