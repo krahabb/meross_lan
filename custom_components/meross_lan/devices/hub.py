@@ -126,7 +126,7 @@ class HubNamespaceHandler(NamespaceHandler):
                         # force a rescan since we discovered a new subdevice
                         hub.namespace_handlers[
                             mc.NS_APPLIANCE_SYSTEM_ALL
-                        ].lastrequest = 0.0
+                        ].polling_epoch_next = 0.0
                     subdevices_parsed.add(subdevice_id)
             except Exception as exception:
                 self.handle_exception(exception, "_handle_subdevice", p_subdevice)
@@ -159,8 +159,8 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         self._count = count
         self.polling_strategy = HubChunkedNamespaceHandler.async_poll_chunked
 
-    async def async_poll_chunked(self, device: "HubMixin", epoch: float):
-        if not (device._mqtt_active and self.lastrequest):
+    async def async_poll_chunked(self, device: "HubMixin"):
+        if not (device._mqtt_active and self.polling_epoch_next):
             max_queuable = 1
             # for hubs, this payload request might be splitted
             # in order to query a small amount of devices per iteration
@@ -185,7 +185,6 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
                 self.polling_response_size_adj(len(p))
                 if await device.async_request_smartpoll(
                     self,
-                    epoch,
                     cloud_queue_max=max_queuable,
                 ):
                     max_queuable += 1
@@ -520,7 +519,7 @@ class MerossSubDevice(MerossDeviceBase):
                 if self.type in mc.MTS100_ALL_TYPESET
                 else mc.NS_APPLIANCE_HUB_SENSOR_ALL
             )
-        ].lastrequest = 0
+        ].polling_epoch_next = 0.0
 
     # interface: self
     def build_enum_sensor(self, entitykey: str):
@@ -815,7 +814,7 @@ class MS100SubDevice(MerossSubDevice):
         if sensor.update_native_value(device_value / 10):
             strategy = self.hub.namespace_handlers[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST]
             if strategy.lastrequest < (self.hub.lastresponse - 30):
-                strategy.lastrequest = 0
+                strategy.polling_epoch_next = 0.0
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice

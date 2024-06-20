@@ -160,7 +160,7 @@ class Mts100Climate(MtsClimate):
                 hub = self.manager.hub
                 strategy = hub.namespace_handlers[mc.NS_APPLIANCE_HUB_MTS100_ADJUST]
                 if strategy.lastrequest < (hub.lastresponse - 30):
-                    strategy.lastrequest = 0
+                    strategy.polling_epoch_next = 0.0
         if mc.KEY_CURRENTSET in payload:
             self.target_temperature = payload[mc.KEY_CURRENTSET] / self.device_scale
         if mc.KEY_MIN in payload:

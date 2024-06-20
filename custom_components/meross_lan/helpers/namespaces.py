@@ -10,7 +10,7 @@ if typing.TYPE_CHECKING:
     from ..meross_entity import MerossEntity
 
 PollingStrategyFunc = typing.Callable[
-    ["NamespaceHandler", "MerossDevice", float], typing.Coroutine
+    ["NamespaceHandler", "MerossDevice"], typing.Coroutine
 ]
 
 
@@ -47,11 +47,12 @@ class NamespaceHandler:
         "ns",
         "namespace",
         "key_namespace",
-        "lastrequest",
-        "lastresponse",
         "handler",
         "entities",
         "entity_class",
+        "lastrequest",
+        "lastresponse",
+        "polling_epoch_next",
         "polling_strategy",
         "polling_period",
         "polling_period_cloud",
@@ -77,7 +78,7 @@ class NamespaceHandler:
         self.ns = ns = mn.NAMESPACES[namespace]
         self.namespace = namespace
         self.key_namespace = ns.key
-        self.lastresponse = self.lastrequest = 0.0
+        self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
         self.entities: dict[object, typing.Callable[[dict], None]] = {}
         if entity_class:
             assert not handler
@@ -325,7 +326,11 @@ class NamespaceHandler:
                 continue
             try:
                 device_entities[
-                    f"{channel}_{key}_{subkey}" if channel is not None else f"{key}_{subkey}"
+                    (
+                        f"{channel}_{key}_{subkey}"
+                        if channel is not None
+                        else f"{key}_{subkey}"
+                    )
                 ].update_native_value(subvalue)
             except KeyError:
                 from ..sensor import MLDiagnosticSensor
@@ -372,17 +377,19 @@ class NamespaceHandler:
         elif self.device.create_diagnostic_entities:
             from ..sensor import MLDiagnosticSensor
 
-            self.register_entity(MLDiagnosticSensor(
-                self.device,
-                channel,
-                self.key_namespace,
-            ))
+            self.register_entity(
+                MLDiagnosticSensor(
+                    self.device,
+                    channel,
+                    self.key_namespace,
+                )
+            )
         else:
             self.entities[channel] = self._parse_stub
 
         return self.entities[channel]
 
-    async def async_poll_all(self, device: "MerossDevice", epoch: float):
+    async def async_poll_all(self, device: "MerossDevice"):
         """
         This is a special policy for NS_ALL.
         It is basically an 'async_poll_default' policy so it kicks-in whenever we poll
@@ -398,16 +405,14 @@ class NamespaceHandler:
         """
         if device._mqtt_active:
             # on MQTT no need for updates since they're being PUSHed
-            if not self.lastrequest:
+            if not self.polling_epoch_next:
                 # just when onlining...
-                self.lastrequest = epoch
                 await device.async_request_poll(self)
             return
 
         # here we're missing PUSHed updates so we have to poll...
-        if (epoch - self.lastrequest) > mlc.PARAM_HEARTBEAT_PERIOD:
+        if device._polling_epoch >= self.polling_epoch_next:
             # at start or periodically ask for NS_ALL..plain
-            self.lastrequest = epoch
             await device.async_request_poll(self)
             return
 
@@ -418,10 +423,9 @@ class NamespaceHandler:
                 # don't query if digest key/namespace hasn't any entity registered
                 # this also prevents querying a somewhat 'malformed' ToggleX reply
                 # appearing in an mrs100 (#447)
-                digest_poller.lastrequest = epoch
                 await device.async_request_poll(digest_poller)
 
-    async def async_poll_default(self, device: "MerossDevice", epoch: float):
+    async def async_poll_default(self, device: "MerossDevice"):
         """
         This is a basic 'default' policy:
         - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
@@ -431,11 +435,10 @@ class NamespaceHandler:
         - as an optimization, when onlining we'll skip the request if it's for
         the same namespace by not calling this strategy (see MerossDevice.async_request_updates)
         """
-        if not (device._mqtt_active and self.lastrequest):
-            self.lastrequest = epoch
+        if not (device._mqtt_active and self.polling_epoch_next):
             await device.async_request_poll(self)
 
-    async def async_poll_lazy(self, device: "MerossDevice", epoch: float):
+    async def async_poll_lazy(self, device: "MerossDevice"):
         """
         This strategy is for those namespaces which might be skipped now and then
         if they don't fit in the current ns_multiple request. Their delaying
@@ -445,8 +448,9 @@ class NamespaceHandler:
         be done. If it hasn't elapsed then they're eventually packed
         with the outgoing ns_multiple
         """
-        if (epoch - self.lastrequest) >= self.polling_period:
-            await device.async_request_smartpoll(self, epoch)
+        epoch = device._polling_epoch
+        if epoch >= self.polling_epoch_next:
+            await device.async_request_smartpoll(self)
         else:
             # insert into the lazypoll_requests ordering by least recently polled
             def _lazypoll_key(_handler: NamespaceHandler):
@@ -454,20 +458,20 @@ class NamespaceHandler:
 
             bisect.insort(device.lazypoll_requests, self, key=_lazypoll_key)
 
-    async def async_poll_smart(self, device: "MerossDevice", epoch: float):
-        if (epoch - self.lastrequest) >= self.polling_period:
-            await device.async_request_smartpoll(self, epoch)
+    async def async_poll_smart(self, device: "MerossDevice"):
+        if device._polling_epoch >= self.polling_epoch_next:
+            await device.async_request_smartpoll(self)
 
-    async def async_poll_once(self, device: "MerossDevice", epoch: float):
+    async def async_poll_once(self, device: "MerossDevice"):
         """
         This strategy is for 'constant' namespace data which do not change and only
         need to be requested once (after onlining that is). When polling use
         same queueing policy as async_poll_smart (don't overwhelm the cloud mqtt),
         """
-        if not self.lastrequest:
-            await device.async_request_smartpoll(self, epoch)
+        if not self.polling_epoch_next:
+            await device.async_request_smartpoll(self)
 
-    async def async_poll_diagnostic(self, device: "MerossDevice", epoch: float):
+    async def async_poll_diagnostic(self, device: "MerossDevice"):
         """
         This strategy is for namespace polling when diagnostics sensors are detected and
         installed due to any unknown namespace parsing (see self._parse_undefined_dict).
@@ -476,8 +480,8 @@ class NamespaceHandler:
         (period, payload size, etc) has been defaulted in self.__init__ when the definition
         for the namespace polling has not been found in POLLING_STRATEGY_CONF
         """
-        if (epoch - self.lastrequest) >= self.polling_period:
-            await device.async_request_smartpoll(self, epoch)
+        if device._polling_epoch >= self.polling_epoch_next:
+            await device.async_request_smartpoll(self)
 
     async def async_trace(self, device: "MerossDevice", protocol: str | None):
         """
@@ -551,8 +555,8 @@ class VoidNamespaceHandler(NamespaceHandler):
 Default timeouts and config parameters for polled namespaces.
 The configuration is set in the tuple as:
 (
-    polling_timeout,
-    polling_timeout_cloud,
+    polling_period,
+    polling_period_cloud,
     response_base_size,
     response_item_size,
     strategy
@@ -574,7 +578,13 @@ responses though
 POLLING_STRATEGY_CONF: dict[
     str, tuple[int, int, int, int, PollingStrategyFunc | None]
 ] = {
-    mc.NS_APPLIANCE_SYSTEM_ALL: (0, 0, 1000, 0, NamespaceHandler.async_poll_all),
+    mc.NS_APPLIANCE_SYSTEM_ALL: (
+        mlc.PARAM_HEARTBEAT_PERIOD,
+        0,
+        1000,
+        0,
+        NamespaceHandler.async_poll_all,
+    ),
     mc.NS_APPLIANCE_SYSTEM_DEBUG: (0, 0, 1900, 0, None),
     mc.NS_APPLIANCE_SYSTEM_DNDMODE: (
         300,

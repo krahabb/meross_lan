@@ -793,7 +793,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._mqtt_active = self._http_active = None
         self.device_debug = None
         for handler in self.namespace_handlers.values():
-            handler.lastrequest = 0
+            handler.polling_epoch_next = 0.0
 
     # interface: self
     @property
@@ -1085,6 +1085,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         handler.polling_response_size + multiple_response_size
                     ) < self.device_response_size_max:
                         handler.lastrequest = time()
+                        handler.polling_epoch_next = (
+                            handler.lastrequest + handler.polling_period
+                        )
                         multiple_requests.append(handler.polling_request)
                         lazypoll_requests.remove(handler)
                         multiple_response_size += handler.polling_response_size
@@ -1353,6 +1356,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         )
 
     async def async_request_poll(self, handler: NamespaceHandler):
+        handler.lastrequest = self._polling_epoch
+        handler.polling_epoch_next = handler.lastrequest + handler.polling_period
         if self._multiple_len and (
             handler.polling_response_size < self.device_response_size_max
         ):
@@ -1378,17 +1383,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     async def async_request_smartpoll(
         self,
         handler: NamespaceHandler,
-        epoch: float,
         *,
         cloud_queue_max: int = 1,
     ):
         if (self.curr_protocol is CONF_PROTOCOL_MQTT) and self.mqtt_cloudactive:
             # the request would go over cloud mqtt
             if (self._queued_smartpoll_requests >= cloud_queue_max) or (
-                (epoch - handler.lastrequest) < handler.polling_period_cloud
+                (self._polling_epoch - handler.lastrequest)
+                < handler.polling_period_cloud
             ):
                 return False
-        handler.lastrequest = epoch
         await self.async_request_poll(handler)
         return True
 
@@ -1416,7 +1420,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if namespace == namespace_handler.namespace:
                 continue
             if polling_strategy := namespace_handler.polling_strategy:
-                await polling_strategy(namespace_handler, self, epoch)
+                await polling_strategy(namespace_handler, self)
                 if not self._online:
                     break  # do not return: do the flush first!
         # needed even if offline: it takes care of resetting the ns_multiple state
@@ -1542,6 +1546,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
                 if ns_all_response:
                     ns_all_handler.lastrequest = epoch
+                    ns_all_handler.polling_epoch_next = (
+                        epoch + ns_all_handler.polling_period
+                    )
                     ns_all_handler.polling_response_size = len(ns_all_response.json())
                     await self._async_request_updates(epoch, mc.NS_APPLIANCE_SYSTEM_ALL)
                 elif self._online:
@@ -1837,6 +1844,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             handler = self._create_handler(namespace)
 
         handler.lastresponse = self.lastresponse
+        handler.polling_epoch_next = handler.lastresponse + handler.polling_period
         try:
             handler.handler(header, payload)  # type: ignore
         except Exception as exception:
