@@ -154,14 +154,14 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.schedule = calendar_class(self)
         self.select_tracked_sensor = MtsTrackedSensor(self)
         self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
-        self.sensor_current_temperature.entity_registry_enabled_default = False
+        self.sensor_current_temperature.entity_registry_enabled_default = True
         self.sensor_current_temperature.suggested_display_precision = 1
         if self._mtsclimate_mask & mc.MTSCLIMATE_MASK_SENSOR_OUTPUT_POWER_STATE:
             self.sensor_output_power_state = MLOutputPowerState(manager, channel)
-            self.sensor_output_power_state.entity_registry_enabled_default = False
+            self.sensor_output_power_state.entity_registry_enabled_default = True
         if self._mtsclimate_mask & mc.MTSCLIMATE_MASK_SENSOR_MODE_STATE:
             self.sensor_mode_state = MLModeStateSensor(manager, channel, entitykey = "Mode State")
-            self.sensor_mode_state.entity_registry_enabled_default = False
+            self.sensor_mode_state.entity_registry_enabled_default = True
 
     # interface: MerossEntity
     async def async_shutdown(self):
