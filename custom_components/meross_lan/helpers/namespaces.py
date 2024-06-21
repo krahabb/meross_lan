@@ -45,8 +45,6 @@ class NamespaceHandler:
     __slots__ = (
         "device",
         "ns",
-        "namespace",
-        "key_namespace",
         "handler",
         "entities",
         "entity_class",
@@ -76,8 +74,6 @@ class NamespaceHandler:
         ), "namespace already registered"
         self.device = device
         self.ns = ns = mn.NAMESPACES[namespace]
-        self.namespace = namespace
-        self.key_namespace = ns.key
         self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
         self.entities: dict[object, typing.Callable[[dict], None]] = {}
         if entity_class:
@@ -117,12 +113,22 @@ class NamespaceHandler:
 
         # by default we calculate 1 item/channel per payload but we should
         # refine this whenever needed
-        item_count = 1
         self.polling_response_size = (
-            self.polling_response_base_size
-            + item_count * self.polling_response_item_size
+            self.polling_response_base_size + self.polling_response_item_size
         )
         device.namespace_handlers[namespace] = self
+
+    def polling_request_set(self, payload: list | dict):
+        self.polling_request = (
+            self.ns.name,
+            mc.METHOD_GET,
+            {self.ns.key: payload},
+        )
+        self.polling_response_size = (
+            self.polling_response_base_size
+            + self.polling_response_item_size
+            * (len(payload) if type(payload) is list else 1)
+        )
 
     def polling_response_size_adj(self, item_count: int):
         self.polling_response_size = (
@@ -151,20 +157,19 @@ class NamespaceHandler:
         # Thermostat payloads for instance) but many older ones are not, and still
         # either carry dict or, worse, could present themselves in both forms
         # (ToggleX is a well-known example)
+        ns = self.ns
         channel = entity.channel
         assert channel not in self.entities, "entity already registered"
-        self.entities[channel] = getattr(
-            entity, f"_parse_{self.key_namespace}", entity._parse
-        )
+        self.entities[channel] = getattr(entity, f"_parse_{ns.key}", entity._parse)
         entity.namespace_handlers.add(self)
 
         polling_request_payload = self.polling_request_payload
         if polling_request_payload is not None:
             for channel_payload in polling_request_payload:
-                if channel_payload[mc.KEY_CHANNEL] == channel:
+                if channel_payload[ns.key_channel] == channel:
                     break
             else:
-                polling_request_payload.append({mc.KEY_CHANNEL: channel})
+                polling_request_payload.append({ns.key_channel: channel})
                 self.polling_response_size = (
                     self.polling_response_base_size
                     + len(polling_request_payload) * self.polling_response_item_size
@@ -183,7 +188,7 @@ class NamespaceHandler:
             exception,
             "%s(%s).%s: payload=%s",
             self.__class__.__name__,
-            self.namespace,
+            self.ns.name,
             function_name,
             str(device.loggable_any(payload)),
             timeout=604800,
@@ -197,9 +202,10 @@ class NamespaceHandler:
         "payload": { "key_namespace": [{"channel":...., ...}] }
         """
         try:
-            for p_channel in payload[self.key_namespace]:
+            ns = self.ns
+            for p_channel in payload[ns.key]:
                 try:
-                    _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+                    _parse = self.entities[p_channel[ns.key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -215,9 +221,10 @@ class NamespaceHandler:
         This handler si optimized for dict payloads:
         "payload": { "key_namespace": {"channel":...., ...} }
         """
-        p_channel = payload[self.key_namespace]
+        ns = self.ns
+        p_channel = payload[ns.key]
         try:
-            _parse = self.entities[p_channel.get(mc.KEY_CHANNEL)]
+            _parse = self.entities[p_channel.get(ns.key_channel)]
         except KeyError as key_error:
             _parse = self._try_create_entity(key_error)
         except AttributeError:
@@ -236,17 +243,18 @@ class NamespaceHandler:
         payloads without the "channel" key (see namespace Toggle)
         which will default forwarding to channel == None
         """
-        p_channel = payload[self.key_namespace]
+        ns = self.ns
+        p_channel = payload[ns.key]
         if type(p_channel) is dict:
             try:
-                _parse = self.entities[p_channel.get(mc.KEY_CHANNEL)]
+                _parse = self.entities[p_channel.get(ns.key_channel)]
             except KeyError as key_error:
                 _parse = self._try_create_entity(key_error)
             _parse(p_channel)
         else:
             for p_channel in p_channel:
                 try:
-                    _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+                    _parse = self.entities[p_channel[ns.key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -264,26 +272,23 @@ class NamespaceHandler:
         if device.create_diagnostic_entities:
             # since we're parsing an unknown namespace, our euristic about
             # the key_namespace might be wrong so we use another euristic
+            key_channel = self.ns.key_channel
             for key, payload in payload.items():
-                # payload = payload[self.key_namespace]
                 if isinstance(payload, dict):
-                    self._parse_undefined_dict(
-                        key, payload, payload.get(mc.KEY_CHANNEL)
-                    )
+                    self._parse_undefined_dict(key, payload, payload.get(key_channel))
                 else:
                     for payload in payload:
                         # not having a "channel" in the list payloads is unexpected so far
-                        self._parse_undefined_dict(
-                            key, payload, payload[mc.KEY_CHANNEL]
-                        )
+                        self._parse_undefined_dict(key, payload, payload[key_channel])
 
     def parse_list(self, digest: list):
         """twin method for _handle (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
         try:
+            key_channel = self.ns.key_channel
             for p_channel in digest:
                 try:
-                    _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+                    _parse = self.entities[p_channel[key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -294,12 +299,13 @@ class NamespaceHandler:
         """twin method for _handle (same job - different context).
         Used when parsing digest(s) in NS_ALL"""
         try:
+            key_channel = self.ns.key_channel
             if type(digest) is dict:
-                self.entities[digest.get(mc.KEY_CHANNEL)](digest)
+                self.entities[digest.get(key_channel)](digest)
             else:
                 for p_channel in digest:
                     try:
-                        _parse = self.entities[p_channel[mc.KEY_CHANNEL]]
+                        _parse = self.entities[p_channel[key_channel]]
                     except KeyError as key_error:
                         _parse = self._try_create_entity(key_error)
                     _parse(p_channel)
@@ -352,7 +358,7 @@ class NamespaceHandler:
         device.log(
             device.DEBUG,
             "Parser stub called on namespace:%s payload:%s",
-            self.namespace,
+            self.ns.name,
             str(device.loggable_dict(payload)),
             timeout=14400,
         )
@@ -367,7 +373,7 @@ class NamespaceHandler:
         configured so, or just an empty handler.
         """
         channel = key_error.args[0]
-        if channel == mc.KEY_CHANNEL:
+        if channel == self.ns.key_channel:
             # ensure key represents a channel and not the "channel" key
             # in the p_channel dict
             raise key_error
@@ -381,7 +387,7 @@ class NamespaceHandler:
                 MLDiagnosticSensor(
                     self.device,
                     channel,
-                    self.key_namespace,
+                    self.ns.key,
                 )
             )
         else:
@@ -507,13 +513,13 @@ class EntityNamespaceMixin(MerossEntity if typing.TYPE_CHECKING else object):
     manager: "MerossDevice"
 
     async def async_added_to_hass(self):
-        self.manager.get_handler(self.namespace).polling_strategy = (
-            POLLING_STRATEGY_CONF[self.namespace][4]
-        )
+        self.manager.get_handler(self.ns.name).polling_strategy = POLLING_STRATEGY_CONF[
+            self.ns.name
+        ][4]
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
-        self.manager.get_handler(self.namespace).polling_strategy = None
+        self.manager.get_handler(self.ns.name).polling_strategy = None
         return await super().async_will_remove_from_hass()
 
 
@@ -527,9 +533,9 @@ class EntityNamespaceHandler(NamespaceHandler):
         NamespaceHandler.__init__(
             self,
             entity.manager,
-            entity.namespace,
+            entity.ns.name,
             handler=getattr(
-                entity, f"_handle_{entity.namespace.replace('.', '_')}", entity._handle
+                entity, f"_handle_{entity.ns.name.replace('.', '_')}", entity._handle
             ),
         )
         if not entity._hass_connected:

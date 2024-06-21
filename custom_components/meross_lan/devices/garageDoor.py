@@ -83,8 +83,7 @@ class MLGarageMultipleConfigSwitch(me.MEListChannelMixin, MLSwitch):
 
     manager: "MerossDevice"
 
-    namespace = mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
-    key_namespace = mc.KEY_CONFIG
+    ns = mn.Appliance_GarageDoor_MultipleConfig
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
@@ -162,7 +161,7 @@ class MLGarageConfigSwitch(me.MENoChannelMixin, MLGarageMultipleConfigSwitch):
     'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
     """
 
-    namespace = mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
+    ns = mn.Appliance_GarageDoor_Config
 
     def __init__(self, manager: "MerossDevice", key: str, payload: dict):
         super().__init__(
@@ -179,8 +178,7 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
     'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
     """
 
-    namespace = mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
-    key_namespace = mc.KEY_CONFIG
+    ns = mn.Appliance_GarageDoor_MultipleConfig
 
     KEY_TO_DEVICE_CLASS_MAP = {
         mc.KEY_SIGNALDURATION: MLConfigNumber.DEVICE_CLASS_DURATION,
@@ -227,7 +225,7 @@ class MLGarageConfigNumber(me.MENoChannelMixin, MLGarageMultipleConfigNumber):
     'x device' through mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
     """
 
-    namespace = mc.NS_APPLIANCE_GARAGEDOOR_CONFIG
+    ns = mn.Appliance_GarageDoor_Config
 
     def __init__(self, manager: "MerossDevice", key: str, payload: dict):
         super().__init__(manager, None, key, device_value=payload[key])
@@ -242,7 +240,7 @@ class MLGarageEmulatedConfigNumber(MLGarageMultipleConfigNumber):
     This entity will just provide an 'HA only' storage for these parameters
     """
 
-    namespace = None
+    ns = None
 
     # HA core entity attributes:
     _attr_available = True

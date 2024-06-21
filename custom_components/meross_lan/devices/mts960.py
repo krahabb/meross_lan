@@ -2,9 +2,9 @@ import typing
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..merossclient import const as mc
-from ..sensor import MLDiagnosticSensor
 from ..helpers import reverse_lookup
+from ..merossclient import const as mc, namespaces as mn
+from ..sensor import MLDiagnosticSensor
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
@@ -15,8 +15,7 @@ class Mts960Climate(MtsClimate):
     """Climate entity for MTS960 devices"""
 
     manager: "MerossDevice"
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB
-    key_namespace = mc.KEY_MODEB
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB]
     device_scale = mc.MTS960_TEMP_SCALE
 
     # default choice to map when any 'non thermostat' mode swapping
@@ -242,7 +241,7 @@ class Mts960Climate(MtsClimate):
         """
         self.max_temp = payload[mc.KEY_MAX] / self.device_scale
         self.min_temp = payload[mc.KEY_MIN] / self.device_scale
-        
+
     def _parse_modeB(self, payload: dict):
         """
         {
@@ -297,9 +296,7 @@ class Mts960Climate(MtsClimate):
 
 
 class Mts960Schedule(MtsSchedule):
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB
-    key_namespace = mc.KEY_SCHEDULEB
-    key_channel = mc.KEY_CHANNEL
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB]
 
     def __init__(self, climate: Mts960Climate):
         super().__init__(climate)

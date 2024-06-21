@@ -51,7 +51,7 @@ async def async_get_config_entry_diagnostics(
                         "http_active": bool(device._http_active),
                     },
                     "namespace_handlers": {
-                        handler.namespace: {
+                        handler.ns.name: {
                             "lastrequest": handler.lastrequest,
                             "lastresponse": handler.lastresponse,
                             "polling_strategy": (

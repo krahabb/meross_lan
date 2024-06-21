@@ -13,7 +13,7 @@ from ..helpers.namespaces import (
     NamespaceHandler,
     VoidNamespaceHandler,
 )
-from ..merossclient import const as mc
+from ..merossclient import const as mc, namespaces as mn
 from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 
@@ -195,7 +195,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     ATTR_RESET_TS: typing.Final = "reset_ts"
 
     manager: "MerossDevice"
-    namespace = mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
+    ns = mn.Appliance_Control_ConsumptionX
 
     __slots__ = (
         "offset",
@@ -437,8 +437,7 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
 
 class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
 
-    namespace = mc.NS_APPLIANCE_CONFIG_OVERTEMP
-    key_namespace = mc.KEY_OVERTEMP
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONFIG_OVERTEMP]
     key_value = mc.KEY_ENABLE
 
     # HA core entity attributes:

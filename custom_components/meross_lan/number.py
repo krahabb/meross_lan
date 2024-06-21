@@ -184,7 +184,7 @@ class MtsSetPointNumber(MtsTemperatureNumber):
             # make sure the climate state is consistent and all the correct roundings
             # are processed when changing any of the presets
             # not sure about mts200 replies..but we're optimist
-            key_namespace = self.key_namespace
+            key_namespace = self.ns.key
             payload = response[mc.KEY_PAYLOAD]
             if key_namespace in payload:
                 # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)

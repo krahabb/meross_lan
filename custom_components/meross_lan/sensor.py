@@ -15,7 +15,7 @@ from .helpers.namespaces import (
     EntityNamespaceMixin,
     NamespaceHandler,
 )
-from .merossclient import const as mc, json_dumps
+from .merossclient import const as mc, json_dumps, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -283,7 +283,7 @@ class ProtocolSensor(MLEnumSensor):
 
 class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
-    namespace = mc.NS_APPLIANCE_SYSTEM_RUNTIME
+    ns = mn.Appliance_System_Runtime
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.DIAGNOSTIC
@@ -304,8 +304,7 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
 class MLFilterMaintenanceSensor(MLNumericSensor):
 
-    namespace = mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE
-    key_namespace = mc.KEY_FILTER
+    ns = mn.Appliance_Control_FilterMaintenance
     key_value = mc.KEY_LIFE
 
     # HA core entity attributes:
@@ -319,7 +318,7 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
             None,
             native_unit_of_measurement=MLNumericSensor.UNIT_PERCENTAGE,
         )
-        manager.register_parser(self.namespace, self)
+        manager.register_parser_entity(self)
 
 
 class FilterMaintenanceNamespaceHandler(NamespaceHandler):

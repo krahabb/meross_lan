@@ -33,11 +33,9 @@ class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
         entitykey: str,
         *,
         device_value=None,
-        namespace: str,
+        ns: mn.Namespace,
     ):
-        self.namespace = namespace
-        self.key_namespace = mn.NAMESPACES[namespace].key
-
+        self.ns = ns
         super().__init__(
             climate.manager,
             climate.channel,
@@ -73,14 +71,14 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
     )
 
     def __init__(self, climate: "MtsThermostatClimate"):
-        super().__init__(climate, self.__class__.key_namespace)
+        super().__init__(climate, self.__class__.ns.key)
         manager = self.manager
         # preset entity platforms since these might be instantiated later
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
         manager.platforms.setdefault(MLEnumSensor.PLATFORM)
         self.sensor_warning = None
         self.switch = None
-        manager.register_parser(self.namespace, self)
+        manager.register_parser_entity(self)
 
     async def async_shutdown(self):
         self.switch = None
@@ -105,7 +103,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
                     self.climate,
                     f"{self.entitykey}_switch",
                     device_value=payload[mc.KEY_ONOFF],
-                    namespace=self.namespace,
+                    ns=self.ns,
                 )
         if mc.KEY_WARNING in payload:
             # on demand instance
@@ -128,8 +126,7 @@ class MtsCalibrationNumber(MtsRichTemperatureNumber):
     {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
     """
 
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
-    key_namespace = mc.KEY_CALIBRATION
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION]
 
     def __init__(self, climate: "MtsThermostatClimate"):
         self.name = "Calibration"
@@ -147,8 +144,7 @@ class MtsDeadZoneNumber(MtsRichTemperatureNumber):
     payload will carry the values and so set them
     """
 
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE
-    key_namespace = mc.KEY_DEADZONE
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE]
 
     def __init__(self, climate: "MtsThermostatClimate"):
         self.native_max_value = 3.5
@@ -163,8 +159,7 @@ class MtsFrostNumber(MtsRichTemperatureNumber):
     {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
     """
 
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST
-    key_namespace = mc.KEY_FROST
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST]
 
     def __init__(self, climate: "MtsThermostatClimate"):
         self.native_max_value = 15
@@ -181,8 +176,7 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
     """
 
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT
-    key_namespace = mc.KEY_OVERHEAT
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT]
 
     __slots__ = ("sensor_external_temperature",)
 
@@ -213,7 +207,7 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
 class MtsWindowOpened(MLBinarySensor):
     """specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe)."""
 
-    key_value = mc.KEY_STATUS
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED]
 
     def __init__(self, climate: "MtsThermostatClimate"):
         super().__init__(
@@ -222,10 +216,7 @@ class MtsWindowOpened(MLBinarySensor):
             mc.KEY_WINDOWOPENED,
             MLBinarySensor.DeviceClass.WINDOW,
         )
-        climate.manager.register_parser(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED,
-            self,
-        )
+        climate.manager.register_parser_entity(self)
 
     def _parse(self, payload: dict):
         """{ "channel": 0, "status": 0, "detect": 1, "lmTime": 1642425303 }"""
@@ -241,9 +232,9 @@ class MtsExternalSensorSwitch(MtsConfigSwitch):
         super().__init__(
             climate,
             "external sensor mode",
-            namespace=mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
+            ns=mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR],
         )
-        climate.manager.register_parser(mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR, self)
+        climate.manager.register_parser_entity(self)
 
 
 CLIMATE_INITIALIZERS: dict[str, type["MtsThermostatClimate"]] = {
@@ -316,10 +307,9 @@ def digest_init_thermostat(
             for channel_digest in ns_digest:
                 channel = channel_digest[mc.KEY_CHANNEL]
                 climate = climate_class(device, channel, MtsCalibrationNumber)
-                device.register_parser(climate.namespace, climate)
-                schedule = climate.schedule
+                device.register_parser_entity(climate)
                 # TODO: the scheduleB parsing might be different than 'classic' schedule
-                device.register_parser(schedule.namespace, schedule)
+                device.register_parser_entity(climate.schedule)
                 for ns in OPTIONAL_NAMESPACES_INITIALIZERS:
                     if ns in ability:
                         device.register_parser(ns, climate)
@@ -350,8 +340,7 @@ def digest_init_thermostat(
 class MLScreenBrightnessNumber(MLConfigNumber):
     manager: "MerossDevice"
 
-    namespace = mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS
-    key_namespace = mc.KEY_BRIGHTNESS
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS]
 
     # HA core entity attributes:
     icon: str = "mdi:brightness-percent"

@@ -16,7 +16,7 @@ from homeassistant.util import dt
 from . import meross_entity as me
 from .climate import MtsClimate
 from .helpers import clamp
-from .merossclient import const as mc
+from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -93,11 +93,6 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
     PLATFORM = calendar.DOMAIN
     manager: "MerossDeviceBase"
 
-    # set in descendants class def
-    namespace: typing.ClassVar[str]
-    key_namespace: typing.ClassVar[str]
-    key_channel: typing.ClassVar[str]
-
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
     supported_features: calendar.CalendarEntityFeature = (
@@ -145,7 +140,7 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         # shown/available in the calendar UI.
         self._schedule_entry_count = 0
         self.extra_state_attributes = {}
-        super().__init__(climate.manager, climate.channel, self.key_namespace)
+        super().__init__(climate.manager, climate.channel, self.ns.key)
 
     # interface: MerossEntity
     async def async_shutdown(self):
@@ -284,19 +279,19 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
                     )
                 payload[weekday] = payload_weekday_schedule
 
-            payload[self.key_channel] = self.channel
-
+            ns = self.ns
+            payload[ns.key_channel] = self.channel
             if not await self.manager.async_request_ack(
-                self.namespace,
+                ns.name,
                 mc.METHOD_SET,
-                {self.key_namespace: [payload]},
+                {ns.key: [payload]},
             ):
                 # there was an error so we request the actual device state again
                 if self.manager.online:
                     await self.manager.async_request(
-                        self.namespace,
+                        ns.name,
                         mc.METHOD_GET,
-                        {self.key_namespace: [{self.key_channel: self.channel}]},
+                        {ns.key: [{ns.key_channel: self.channel}]},
                     )
 
     def _get_event_entry(self, event_time: datetime) -> MtsScheduleEntry | None:
@@ -650,7 +645,7 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
                 return
         else:
             native_schedule = payload
-        self.extra_state_attributes[self.key_namespace] = str(native_schedule)
+        self.extra_state_attributes[self.ns.key] = str(native_schedule)
         self._native_schedule = native_schedule
         self._build_internal_schedule()
         self.flush_state()

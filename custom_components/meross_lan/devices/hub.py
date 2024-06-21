@@ -40,9 +40,7 @@ WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
 
 
 class MLHubSensorAdjustNumber(MLConfigNumber):
-    namespace = mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
-    key_namespace = mc.KEY_ADJUST
-    key_channel = mc.KEY_ID
+    ns = mn.Appliance_Hub_Sensor_Adjust
 
     device_scale = 10
 
@@ -72,7 +70,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
         super().__init__(
             manager,
             manager.id,
-            f"config_{self.key_namespace}_{self.key_value}",
+            f"config_{self.ns.key}_{self.key_value}",
             device_class,
         )
 
@@ -87,9 +85,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
 
 
 class MLHubToggle(me.MEListChannelMixin, MLSwitch):
-    namespace = mc.NS_APPLIANCE_HUB_TOGGLEX
-    key_namespace = mc.KEY_TOGGLEX
-    key_channel = mc.KEY_ID
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_HUB_TOGGLEX]
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
@@ -114,14 +110,15 @@ class HubNamespaceHandler(NamespaceHandler):
         hub = self.device
         subdevices = hub.subdevices
         subdevices_parsed = set()
-        for p_subdevice in payload[self.key_namespace]:
+        key_namespace = self.ns.key
+        for p_subdevice in payload[key_namespace]:
             try:
                 subdevice_id = p_subdevice[mc.KEY_ID]
                 if subdevice_id in subdevices_parsed:
                     hub.log_duplicated_subdevice(subdevice_id)
                 else:
                     try:
-                        subdevices[subdevice_id]._parse(self.key_namespace, p_subdevice)
+                        subdevices[subdevice_id]._parse(key_namespace, p_subdevice)
                     except KeyError:
                         # force a rescan since we discovered a new subdevice
                         hub.namespace_handlers[
@@ -177,12 +174,7 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
                 # if we're good to go on the first iteration,
                 # we don't want to break this cycle else it
                 # would restart (stateless) at the next polling cycle
-                self.polling_request = (
-                    self.namespace,
-                    mc.METHOD_GET,
-                    {self.key_namespace: p},
-                )
-                self.polling_response_size_adj(len(p))
+                self.polling_request_set(p)
                 if await device.async_request_smartpoll(
                     self,
                     cloud_queue_max=max_queuable,
@@ -196,12 +188,7 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         a better structured payload.
         """
         for p in self._build_subdevices_payload(device.subdevices.values()):
-            self.polling_request = (
-                self.namespace,
-                mc.METHOD_GET,
-                {self.key_namespace: p},
-            )
-            self.polling_response_size_adj(len(p))
+            self.polling_request_set(p)
             await super().async_trace(device, protocol)
 
     def _build_subdevices_payload(
@@ -716,13 +703,13 @@ class MerossSubDevice(MerossDeviceBase):
         """{"id": "00000000", "onoff": 0, ...}"""
         # might come from parse_digest or from Appliance.Hub.ToggleX
         # in any case we're just interested to the "onoff" key
-        if switch_togglex := self.switch_togglex:
-            switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])
-        else:
-            self.switch_togglex = switch_togglex = MLHubToggle(
+        try:
+            self.switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])  # type: ignore
+        except AttributeError:
+            self.switch_togglex = MLHubToggle(
                 self,
                 self.id,
-                None,
+                mc.KEY_TOGGLEX,
                 MLSwitch.DeviceClass.SWITCH,
                 device_value=p_togglex[mc.KEY_ONOFF],
             )

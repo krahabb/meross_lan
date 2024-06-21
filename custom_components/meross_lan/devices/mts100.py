@@ -2,7 +2,7 @@ import typing
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..merossclient import const as mc
+from ..merossclient import const as mc, namespaces as mn
 from ..number import MtsSetPointNumber, MtsTemperatureNumber
 
 if typing.TYPE_CHECKING:
@@ -12,9 +12,7 @@ if typing.TYPE_CHECKING:
 
 class Mts100AdjustNumber(MtsTemperatureNumber):
 
-    namespace = mc.NS_APPLIANCE_HUB_MTS100_ADJUST
-    key_namespace = mc.KEY_ADJUST
-    key_channel = mc.KEY_ID
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_HUB_MTS100_ADJUST]
     key_value = mc.KEY_TEMPERATURE
 
     # HA core entity attributes:
@@ -26,7 +24,7 @@ class Mts100AdjustNumber(MtsTemperatureNumber):
         self.name = "Adjust temperature"
         super().__init__(
             climate,
-            f"config_{self.key_namespace}_{self.key_value}",
+            f"config_{self.ns.key}_{self.key_value}",
         )
         # override the default climate.device_scale set in base cls
         self.device_scale = 100
@@ -35,8 +33,7 @@ class Mts100AdjustNumber(MtsTemperatureNumber):
 class Mts100Climate(MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
 
-    namespace = mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE
-    key_namespace = mc.KEY_TEMPERATURE
+    ns = mn.Appliance_Hub_Mts100_Temperature
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS100_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
@@ -192,15 +189,11 @@ class Mts100SetPointNumber(MtsSetPointNumber):
     customize MtsSetPointNumber to interact with Mts100 family valves
     """
 
-    namespace = mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE
-    key_namespace = mc.KEY_TEMPERATURE
-    key_channel = mc.KEY_ID
+    ns = mn.Appliance_Hub_Mts100_Temperature
 
 
 class Mts100Schedule(MtsSchedule):
-    namespace = mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB
-    key_namespace = mc.KEY_SCHEDULE
-    key_channel = mc.KEY_ID
+    ns = mn.Appliance_Hub_Mts100_ScheduleB
 
     def __init__(self, climate: Mts100Climate):
         super().__init__(climate)

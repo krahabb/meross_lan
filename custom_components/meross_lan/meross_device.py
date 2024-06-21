@@ -855,6 +855,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     ):
         self.get_handler(namespace).register_entity(entity)
 
+    def register_parser_entity(
+        self,
+        entity: "MerossEntity",
+    ):
+        self.get_handler(entity.ns.name).register_entity(entity)
+
     def unregister_parser(self, namespace: str, entity: "MerossEntity"):
         try:
             self.namespace_handlers[namespace].unregister(entity)
@@ -1416,13 +1422,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._queued_smartpoll_requests = 0
         # self.namespace_handlers could change at any time due to async
         # message parsing (handlers might be dynamically created by then)
-        for namespace_handler in list(self.namespace_handlers.values()):
-            if namespace == namespace_handler.namespace:
-                continue
-            if polling_strategy := namespace_handler.polling_strategy:
-                await polling_strategy(namespace_handler, self)
-                if not self._online:
-                    break  # do not return: do the flush first!
+        for handler in [
+            handler
+            for handler in self.namespace_handlers.values()
+            if (handler.ns.name != namespace) and (handler.polling_strategy)
+        ]:
+            await handler.polling_strategy(handler, self)  # type: ignore
+            if not self._online:
+                break  # do not return: do the flush first!
+
         # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_multiple_requests_flush()
 

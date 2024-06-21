@@ -80,7 +80,7 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
             for namespace_handler in device.namespace_handlers.values():
                 assert (not namespace_handler.ns.need_channel) or (
                     namespace_handler.polling_request_payload
-                ), f"Incorrect config for {namespace_handler.namespace} namespace"
+                ), f"Incorrect config for {namespace_handler.ns.name} namespace"
 
             if entity_dnd:
                 state = hass.states.get(entity_dnd.entity_id)

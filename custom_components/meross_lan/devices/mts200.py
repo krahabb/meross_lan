@@ -2,7 +2,7 @@ import typing
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..merossclient import const as mc
+from ..merossclient import const as mc, namespaces as mn
 from ..number import MtsSetPointNumber
 
 if typing.TYPE_CHECKING:
@@ -15,16 +15,14 @@ class Mts200SetPointNumber(MtsSetPointNumber):
     customize MtsSetPointNumber to interact with Mts200 family valves
     """
 
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
-    key_namespace = mc.KEY_MODE
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE]
 
 
 class Mts200Climate(MtsClimate):
     """Climate entity for MTS200 devices"""
 
     manager: "MerossDevice"
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
-    key_namespace = mc.KEY_MODE
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE]
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_MANUAL: MtsClimate.PRESET_CUSTOM,
@@ -232,9 +230,7 @@ class Mts200Climate(MtsClimate):
 
 
 class Mts200Schedule(MtsSchedule):
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE
-    key_namespace = mc.KEY_SCHEDULE
-    key_channel = mc.KEY_CHANNEL
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE]
 
     def __init__(self, climate: Mts200Climate):
         super().__init__(climate)

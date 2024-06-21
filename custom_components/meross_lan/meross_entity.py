@@ -23,7 +23,7 @@ from homeassistant.helpers.entity import Entity, EntityCategory
 
 from .helpers import Loggable
 from .helpers.manager import ApiProfile
-from .merossclient import const as mc
+from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -59,9 +59,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     # in inherited entities but could nonetheless be set 'per instance'.
     # These also come handy when generalizing parsing of received payloads
     # for simple enough entities (like sensors, numbers or switches)
-    namespace: str
-    key_namespace: str
-    key_channel: str = mc.KEY_CHANNEL
+    ns: mn.Namespace
     key_value: str
 
     # HA core entity attributes:
@@ -283,10 +281,11 @@ class MENoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
     # interface: MerossEntity
     async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
+        ns = self.ns
         return await self.manager.async_request_ack(
-            self.namespace,
+            ns.name,
             mc.METHOD_SET,
-            {self.key_namespace: {self.key_value: device_value}},
+            {ns.key: {self.key_value: device_value}},
         )
 
 
@@ -302,12 +301,13 @@ class MEDictChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
     # interface: MerossEntity
     async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
+        ns = self.ns
         return await self.manager.async_request_ack(
-            self.namespace,
+            ns.name,
             mc.METHOD_SET,
             {
-                self.key_namespace: {
-                    self.key_channel: self.channel,
+                ns.key: {
+                    ns.key_channel: self.channel,
                     self.key_value: device_value,
                 }
             },
@@ -326,14 +326,11 @@ class MEListChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
     # interface: MerossEntity
     async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
+        ns = self.ns
         return await self.manager.async_request_ack(
-            self.namespace,
+            ns.name,
             mc.METHOD_SET,
-            {
-                self.key_namespace: [
-                    {self.key_channel: self.channel, self.key_value: device_value}
-                ]
-            },
+            {ns.key: [{ns.key_channel: self.channel, self.key_value: device_value}]},
         )
 
 

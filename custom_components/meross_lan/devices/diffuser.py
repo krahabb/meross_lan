@@ -14,7 +14,8 @@ from ..light import (
     native_to_rgb,
     rgb_to_native,
 )
-from ..merossclient import const as mc
+from ..meross_entity import MEListChannelMixin
+from ..merossclient import const as mc, namespaces as mn
 from ..sensor import MLHumiditySensor, MLTemperatureSensor
 from .spray import MLSpray
 
@@ -104,7 +105,7 @@ class MLDiffuserLight(MLLightBase):
     light entity for Meross diffuser (MOD100)
     """
 
-    namespace = mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT
+    ns = mn.Appliance_Control_Diffuser_Light
 
     def __init__(self, manager: "MerossDevice", digest: dict):
 
@@ -115,9 +116,9 @@ class MLDiffuserLight(MLLightBase):
     # interface: MLLightBase
     async def async_request_light_ack(self, _light: dict):
         return await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT,
+            self.ns.name,
             mc.METHOD_SET,
-            {mc.KEY_LIGHT: [_light]},
+            {self.ns.key: [_light]},
         )
 
     def _flush_light(self, _light: dict):
@@ -184,20 +185,12 @@ class MLDiffuserLight(MLLightBase):
             self.update_onoff(0)
 
 
-class MLDiffuserSpray(MLSpray):
+class MLDiffuserSpray(MEListChannelMixin, MLSpray):
+
+    ns = mn.Appliance_Control_Diffuser_Spray
 
     SPRAY_MODE_MAP = {
         mc.DIFFUSER_SPRAY_MODE_OFF: MLSpray.OPTION_SPRAY_MODE_OFF,
         mc.DIFFUSER_SPRAY_MODE_ECO: MLSpray.OPTION_SPRAY_MODE_ECO,
         mc.DIFFUSER_SPRAY_MODE_FULL: MLSpray.OPTION_SPRAY_MODE_CONTINUOUS,
     }
-
-    namespace = mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY
-
-    # interface: MLSpray
-    async def async_request_spray_ack(self, payload: dict):
-        return await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {self.key_namespace: [payload]},
-        )
