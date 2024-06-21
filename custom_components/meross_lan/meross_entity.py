@@ -390,9 +390,10 @@ class MerossNumericEntity(MerossEntity):
         )
         super().__init__(manager, channel, entitykey, device_class)
 
-    def set_unavailable(self):
-        self.device_value = None
-        self.native_value = None
+    def set_unavailable(self, onlysetavailable=False):
+        if not onlysetavailable:
+            self.device_value = None
+            self.native_value = None
         super().set_unavailable()
 
     def update_device_value(self, device_value: int | float):

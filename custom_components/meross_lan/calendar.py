@@ -100,7 +100,7 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
     key_channel: typing.ClassVar[str]
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.CONFIG
+    entity_category = me.EntityCategory.DIAGNOSTIC
     supported_features: calendar.CalendarEntityFeature = (
         calendar.CalendarEntityFeature.CREATE_EVENT
         | calendar.CalendarEntityFeature.DELETE_EVENT

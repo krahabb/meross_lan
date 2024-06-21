@@ -84,9 +84,9 @@ class MLConfigNumber(
         self._cancel_request()
         await super().async_shutdown()
 
-    def set_unavailable(self):
+    def set_unavailable(self,onlysetavailable=False):
         self._cancel_request()
-        super().set_unavailable()
+        super().set_unavailable(onlysetavailable)
 
     # interface: number.NumberEntity
     async def async_set_native_value(self, value: float):
@@ -131,6 +131,11 @@ class MtsTemperatureNumber(MLConfigNumber):
         "climate",
         "device_scale",
     )
+
+    @property
+    def value(self):
+        # Return the rounded value
+        return round(self.native_value,1) if self.native_value is not None else None
 
     def __init__(self, climate: "MtsClimate", entitykey: str):
         self.climate = climate
