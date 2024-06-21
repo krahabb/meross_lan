@@ -9,8 +9,7 @@ from ..sensor import (
     MLEnumSensor,
     MLHumiditySensor,
     MLNumericSensor,
-    MLTemperatureSensor,
-    MLOutputPower
+    MLTemperatureSensor
 )
 from ..switch import MLSwitch
 from .mts200 import Mts200Climate

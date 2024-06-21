@@ -6,7 +6,7 @@ from . import meross_entity as me
 from .helpers import reverse_lookup
 from .merossclient import const as mc
 from .select import MtsTrackedSensor
-from .sensor import MLTemperatureSensor, UnitOfTemperature, MLOutputPower
+from .sensor import MLTemperatureSensor, UnitOfTemperature, MLOutputPowerState, MLModeStateSensor
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -60,6 +60,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     # HA core entity attributes:
     current_humidity: float | None
     current_temperature: float | None
+    current_mode: str | None
     hvac_action: climate.HVACAction | None
     hvac_mode: climate.HVACMode | None
     hvac_modes: list[climate.HVACMode] = [HVACMode.OFF, HVACMode.HEAT]
@@ -90,7 +91,9 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     __slots__ = (
         "current_humidity",
         "current_temperature",
-        "current_output_power",
+        "current_output_power_state",
+        "current_mode_state",
+        "current_mode_state_attr",
         "hvac_action",
         "hvac_mode",
         "max_temp",
@@ -106,7 +109,9 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "schedule",
         "select_tracked_sensor",
         "sensor_current_temperature",
-        "sensor_output_power"
+        "sensor_output_power_state",
+        "sensor_mode_state",
+        "_mtsclimate_mask"
     )
 
     def __init__(
@@ -116,11 +121,13 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         adjust_number_class: typing.Type["MtsTemperatureNumber"],
         preset_number_class: typing.Type["MtsSetPointNumber"] | None,
         calendar_class: typing.Type["MtsSchedule"],
-        has_sensor_output_power: bool = False
+        mtsclimate_mask: int = mc.MTSCLIMATE_MASK_NONE
     ):
         self.current_humidity = None
         self.current_temperature = None
-        self.current_output_power = None
+        self.current_output_power_state = None
+        self.current_mode_state = None
+        self.current_mode_state_attr = None
         self.hvac_action = None
         self.hvac_mode = None
         self.max_temp = 35
@@ -131,6 +138,10 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_mode: int | None = None
         self._mts_onoff: int | None = None
         self._mts_payload = {}
+        self._mtsclimate_mask=mtsclimate_mask
+        self.sensor_output_power_state: "MLOutputPowerState" = None
+        self.sensor_mode_state: "MLModeStateSensor" = None
+
         super().__init__(manager, channel)
         self.number_adjust_temperature = adjust_number_class(self)  # type: ignore
         self.number_preset_temperature = {}
@@ -145,16 +156,21 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
         self.sensor_current_temperature.entity_registry_enabled_default = False
         self.sensor_current_temperature.suggested_display_precision = 1
-        if has_sensor_output_power:
-            self.sensor_output_power = MLOutputPower(manager, channel)
-            self.sensor_output_power.entity_registry_enabled_default = False
+        if self._mtsclimate_mask & mc.MTSCLIMATE_MASK_SENSOR_OUTPUT_POWER_STATE:
+            self.sensor_output_power_state = MLOutputPowerState(manager, channel)
+            self.sensor_output_power_state.entity_registry_enabled_default = False
+        if self._mtsclimate_mask & mc.MTSCLIMATE_MASK_SENSOR_MODE_STATE:
+            self.sensor_mode_state = MLModeStateSensor(manager, channel, entitykey = "Mode State")
+            self.sensor_mode_state.entity_registry_enabled_default = False
 
     # interface: MerossEntity
     async def async_shutdown(self):
         await super().async_shutdown()
         self.sensor_current_temperature: "MLTemperatureSensor" = None  # type: ignore
-        if self.sensor_output_power:
-            self.sensor_output_power: "MLOutputPower" = None  # type: ignore
+        if self.sensor_output_power_state:
+            self.sensor_output_power_state: "MLOutputPowerState" = None  # type: ignore
+        if self.sensor_mode_state:
+            self.sensor_mode_state: "MLModeStateSensor" = None  # type: ignore
         self.select_tracked_sensor = None  # type: ignore
         self.schedule = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
@@ -167,6 +183,8 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_payload = {}
         self.current_humidity = None
         self.current_temperature = None
+        self.current_output_power_state = None
+        self._update_mode_state(mc.SensorModeStateEnum.UNKNOW)
         self.preset_mode = None
         self.hvac_action = None
         self.hvac_mode = None
@@ -218,12 +236,23 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
             return True
         return False
 
-    def _update_output_power(self, current_output_power: bool):
+    def _update_output_power_state(self, current_output_power_state: bool):
         """
         Common handler for incoming room temperature value
         """
-        if self.sensor_output_power and self.current_output_power != current_output_power:
-            self.current_output_power = current_output_power
-            self.sensor_output_power.update_onoff(current_output_power)
+        if self.sensor_output_power_state and self.current_output_power_state != current_output_power_state:
+            self.current_output_power_state = current_output_power_state
+            self.sensor_output_power_state.update_onoff(current_output_power_state)
+            return True
+        return False
+
+    def _update_mode_state(self, current_mode_state: "mc.SensorModeStateEnum", extra_attributs:dict|None = None):
+        """
+        Common handler for incoming room temperature value
+        """
+        if self.sensor_mode_state and (self.current_mode_state != current_mode_state or self.current_mode_state_attr != extra_attributs):
+            self.current_mode_state = current_mode_state
+            self.current_mode_state_attr = extra_attributs
+            self.sensor_mode_state.update_native_and_extra_state_attribut(current_mode_state,extra_attributs)
             return True
         return False

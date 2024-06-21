@@ -9,6 +9,7 @@ from homeassistant.const import (
     UnitOfPower,
     UnitOfTemperature,
 )
+import copy
 
 from . import const as mlc, meross_entity as me
 from .helpers.namespaces import (
@@ -63,7 +64,6 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
             self.native_value = native_value
             self.flush_state()
             return True
-
 
 class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
     PLATFORM = sensor.DOMAIN
@@ -166,18 +166,39 @@ class MLTemperatureSensor(MLNumericSensor):
             device_value=device_value,
         )
 
-class MLOutputPower(MLBinarySensor):
+
+class MLModeStateSensor(MLEnumSensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+    options: list[str] = [state.value for state in mc.SensorModeStateEnum]
+    extra_state_attributes: dict = { "Comment": "My comments"}
+    capability_attributes: dict = None
+
+
+    @property
+    def state(self):
+        # The state reported to Home Assistant
+        return self.native_value.value
+
+
+    def update_native_and_extra_state_attribut(self,native_value,extra_state_attributes: dict = None):
+        if self.native_value != native_value or self.extra_state_attributes != extra_state_attributes:
+            self.native_value=native_value
+            self.extra_state_attributes=copy.deepcopy(extra_state_attributes)
+            self.flush_state()
+
+class MLOutputPowerState(MLBinarySensor):
     """Specialization for widely used device class type.
     This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
     """
     _attr_available = True
-#    entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
         manager: "EntityManager",
         channel: object | None,
-        entitykey: str | None = "output power",
+        entitykey: str | None = "output power state",
         *,
         device_value: int | None = None,
     ):

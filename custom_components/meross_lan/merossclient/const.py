@@ -4,6 +4,7 @@
 
 import collections
 import re
+from enum import Enum
 
 # MQTT topics
 TOPIC_DISCOVERY = "/appliance/+/publish"
@@ -206,6 +207,13 @@ KEY_TRIGGER = "trigger"
 KEY_TRIGGERX = "triggerx"
 KEY_TIMER = "timer"
 KEY_TIMERX = "timerx"
+KEY_DOWN = "down"
+KEY_CYCLE = "cycle"
+KEY_DURATION = "duration"
+KEY_OFFDURATION = "offDuration"
+KEY_ONDURATION = "onDuration"
+KEY_END = "end"
+KEY_CYCLE = "cycle"
 KEY_CLOCK = "clock"
 KEY_TIME = "time"
 KEY_TIMEZONE = "timezone"
@@ -409,6 +417,25 @@ ROLLERSHUTTER_POSITION_CLOSED = 0
 
 MTS_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS960_TEMP_SCALE = 100  # native mts960 temperatures expressed in hundredths of °C
+
+MTSCLIMATE_MASK_NONE = 0
+MTSCLIMATE_MASK_SENSOR_OUTPUT_POWER_STATE = 1
+MTSCLIMATE_MASK_SENSOR_MODE_STATE = 2
+
+class SensorModeStateEnum(Enum):
+    UNKNOW = "Unknow"
+    OFF = "Off"
+    HEATING = "Heating"
+    COOLING = "Cooling"
+    SCHEDULING_HEATING = "Scheduling Heating"
+    SCHEDULING_COOLING = "Scheduling Cooling"
+    TIMER_COUNTDOWN_ON = "CountDown On"
+    TIMER_COUNTDOWN_OFF = "CountDown Off"
+    TIMER_CYCLE = "Cycle"
+
+    def __str__(self):
+        return self.value
+
 
 # mts100 (and the likes..) valves mode
 MTS100_MODE_CUSTOM = 0
