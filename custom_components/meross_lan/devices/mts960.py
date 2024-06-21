@@ -137,9 +137,9 @@ class Mts960Climate(MtsClimate):
                         ModeStat=mc.SensorModeStateEnum.COOLING
                 elif self._mts_mode == mc.MTS960_MODE_SCHEDULE:
                     if self._mts_working == mc.MTS960_WORKING_HEAT:
-                        ModeStat=mc.SensorModeStateEnum.SCHEDULING_HEATING
+                        ModeStat=mc.SensorModeStateEnum.SCHEDULING_HEAT
                     elif self._mts_working == mc.MTS960_WORKING_COOL:
-                        ModeStat=mc.SensorModeStateEnum.SCHEDULING_COOLING
+                        ModeStat=mc.SensorModeStateEnum.SCHEDULING_COOL
             if ModeStat is not None:
                 self._update_mode_state(ModeStat,ModeStatAttributs)
         else:
