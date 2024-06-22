@@ -2,6 +2,7 @@ import typing
 
 from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
+from ..climate import MtsClimate
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber, MtsTemperatureNumber
@@ -16,7 +17,6 @@ from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
 
 if typing.TYPE_CHECKING:
-    from ..climate import MtsClimate
     from ..meross_device import DigestInitReturnType, DigestParseFunc, MerossDevice
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
