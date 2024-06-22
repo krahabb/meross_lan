@@ -302,9 +302,6 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
 
             payload[self.key_channel] = self.channel
 
-            # if self.manager._push_payload_data_as_array:
-            #     payload=[ payload ]
-
             if not await self.manager.async_request_ack(
                 self.namespace,
                 mc.METHOD_SET,
