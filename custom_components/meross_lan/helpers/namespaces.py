@@ -442,7 +442,7 @@ class NamespaceHandler:
         would be no harm since they typically carry rather unchanging values
         or data which are not 'critical'. For those namespaces, polling_period
         is considered the maximum amount of time after which the poll 'has' to
-        be done. If it hasn't elpased then they're eventually packed
+        be done. If it hasn't elapsed then they're eventually packed
         with the outgoing ns_multiple
         """
         if (epoch - self.lastrequest) >= self.polling_period:
