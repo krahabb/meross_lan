@@ -2373,7 +2373,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         self._trace_data = [["time", "rxtx", "protocol", "method", "namespace", "data"]]
         self._trace_future = future = asyncio.get_running_loop().create_future()
-        self.trace_open()
+        await self.async_trace_open()
         return await future
 
     async def _async_trace_ability(self, abilities_iterator: typing.Iterator[str]):
