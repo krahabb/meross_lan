@@ -10,7 +10,7 @@ from ..sensor import (
     MLEnumSensor,
     MLHumiditySensor,
     MLNumericSensor,
-    MLTemperatureSensor,
+    MLTemperatureSensor
 )
 from ..switch import MLSwitch
 from .mts200 import Mts200Climate
@@ -27,6 +27,7 @@ class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
 
+    __slot__ = ('classManageAvailableSwitch')
     def __init__(
         self,
         climate: "MtsClimate",
@@ -34,10 +35,14 @@ class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
         *,
         device_value=None,
         namespace: str,
+        name:str=None,
+        classManageAvailableSwitch:object|None = None
     ):
         self.namespace = namespace
         self.key_namespace = mn.NAMESPACES[namespace].key
-
+        if name is not None:
+            self.name=name
+        self.classManageAvailableSwitch=classManageAvailableSwitch
         super().__init__(
             climate.manager,
             climate.channel,
@@ -45,7 +50,13 @@ class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
             MLSwitch.DeviceClass.SWITCH,
             device_value=device_value,
         )
+        if self.classManageAvailableSwitch:
+            self.classManageAvailableSwitch._manageAvailableSwitch(self.is_on)
 
+    def update_onoff(self,onoff):
+        super().update_onoff(onoff)
+        if self.classManageAvailableSwitch:
+            self.classManageAvailableSwitch._manageAvailableSwitch(onoff)
 
 class MtsRichTemperatureNumber(MtsTemperatureNumber):
     """
@@ -87,6 +98,13 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         self.sensor_warning = None
         await super().async_shutdown()
 
+    def _manageAvailableSwitch(self,onoff):
+        if onoff == 1:
+            self.set_available()
+            self.flush_state()
+        else:
+            self.set_unavailable(True)
+
     def _parse(self, payload: dict):
         """
         {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
@@ -98,15 +116,21 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         self.update_device_value(payload[self.key_value])
         if mc.KEY_ONOFF in payload:
             # on demand instance
+
             try:
                 self.switch.update_onoff(payload[mc.KEY_ONOFF])  # type: ignore
             except AttributeError:
+                thename=f"{self.entitykey} Alarm"
+                thename=thename[0].upper()+thename[1:]
                 self.switch = MtsConfigSwitch(
                     self.climate,
                     f"{self.entitykey}_switch",
                     device_value=payload[mc.KEY_ONOFF],
                     namespace=self.namespace,
+                    name=thename,
+                    classManageAvailableSwitch=self
                 )
+
         if mc.KEY_WARNING in payload:
             # on demand instance
             try:
@@ -264,6 +288,7 @@ OPTIONAL_NAMESPACES_INITIALIZERS = {
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CTLRANGE,
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION,
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_TIMER,
 }
 """These namespaces handlers will forward message parsing to the climate entity"""
 

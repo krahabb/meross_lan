@@ -1,5 +1,6 @@
 import typing
 
+from .binary_sensor import MLBinarySensor
 from homeassistant.components import sensor
 from homeassistant.const import (
     UnitOfElectricCurrent,
@@ -8,6 +9,7 @@ from homeassistant.const import (
     UnitOfPower,
     UnitOfTemperature,
 )
+import copy
 
 from . import const as mlc, meross_entity as me
 from .helpers.namespaces import (
@@ -29,7 +31,6 @@ async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
 ):
     me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
-
 
 class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
     """Specialization for sensor with ENUM device_class which allows to store
@@ -63,7 +64,6 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
             self.native_value = native_value
             self.flush_state()
             return True
-
 
 class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
     PLATFORM = sensor.DOMAIN
@@ -165,6 +165,66 @@ class MLTemperatureSensor(MLNumericSensor):
             sensor.SensorDeviceClass.TEMPERATURE,
             device_value=device_value,
         )
+
+
+class MLModeStateSensor(MLEnumSensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+    options: list[str] = [state.value for state in mc.SensorModeStateEnum]
+    extra_state_attributes: dict = { "Comment": "My comments"}
+    capability_attributes: dict = None
+
+
+    @property
+    def state(self):
+        # The state reported to Home Assistant
+        return self.native_value.value
+
+
+    def update_native_and_extra_state_attribut(self,native_value,extra_state_attributes: dict = None):
+        if self.native_value != native_value or self.extra_state_attributes != extra_state_attributes:
+            self.native_value=native_value
+            self.extra_state_attributes=copy.deepcopy(extra_state_attributes)
+            self.flush_state()
+
+class MLOutputPowerState(MLBinarySensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+    _attr_available = True
+
+    def __init__(
+        self,
+        manager: "EntityManager",
+        channel: object | None,
+        entitykey: str | None = "output power state",
+        *,
+        device_value: int | None = None,
+    ):
+        self._custom_on_value="On"
+        self._custom_off_value="Off"
+
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            self.DeviceClass.POWER,
+            device_value=device_value,
+        )
+
+    @property
+    def state(self):
+        """Return the state of the sensor."""
+        return self._custom_on_value if self.is_on else self._custom_off_value
+
+    @property
+    def icon(self):
+        """Return the icon of this sensor."""
+        if self.is_on:
+            return 'mdi:power-plug'
+        else:
+            return 'mdi:power-plug-off'
 
 
 class MLDiagnosticSensor(MLEnumSensor):

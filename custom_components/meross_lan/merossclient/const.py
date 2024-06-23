@@ -4,6 +4,7 @@
 
 import collections
 import re
+from enum import Enum
 
 # MQTT topics
 TOPIC_DISCOVERY = "/appliance/+/publish"
@@ -206,6 +207,13 @@ KEY_TRIGGER = "trigger"
 KEY_TRIGGERX = "triggerx"
 KEY_TIMER = "timer"
 KEY_TIMERX = "timerx"
+KEY_DOWN = "down"
+KEY_CYCLE = "cycle"
+KEY_DURATION = "duration"
+KEY_OFFDURATION = "offDuration"
+KEY_ONDURATION = "onDuration"
+KEY_END = "end"
+KEY_CYCLE = "cycle"
 KEY_CLOCK = "clock"
 KEY_TIME = "time"
 KEY_TIMEZONE = "timezone"
@@ -224,6 +232,7 @@ KEY_SIGNAL = "signal"
 KEY_LMTIME = "lmTime"
 KEY_LMTIME_ = "lmtime"
 KEY_CHANNEL = "channel"
+KEY_SECTION = "section"
 KEY_LOCK = "lock"
 KEY_TOGGLE = "toggle"
 KEY_TOGGLEX = "togglex"
@@ -409,6 +418,25 @@ ROLLERSHUTTER_POSITION_CLOSED = 0
 MTS_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS960_TEMP_SCALE = 100  # native mts960 temperatures expressed in hundredths of °C
 
+MTSCLIMATE_MASK_NONE = 0
+MTSCLIMATE_MASK_SENSOR_OUTPUT_POWER_STATE = 1
+MTSCLIMATE_MASK_SENSOR_MODE_STATE = 2
+
+class SensorModeStateEnum(Enum):
+    UNKNOW = "Unknow"
+    OFF = "Off"
+    HEATING = "Heating"
+    COOLING = "Cooling"
+    SCHEDULING_HEAT = "Scheduling Heat"
+    SCHEDULING_COOL = "Scheduling Cool"
+    TIMER_COUNTDOWN_ON = "CountDown On"
+    TIMER_COUNTDOWN_OFF = "CountDown Off"
+    TIMER_CYCLE = "Cycle"
+
+    def __str__(self):
+        return self.value
+
+
 # mts100 (and the likes..) valves mode
 MTS100_MODE_CUSTOM = 0
 MTS100_MODE_HEAT = 1
@@ -468,6 +496,11 @@ MTS960_WORKING_COOL = 2
 MTS960_ONOFF_UNKNOWN = 0
 MTS960_ONOFF_ON = 1
 MTS960_ONOFF_OFF = 2  # this appears when the plug is off (why not 0?)
+#
+# mapping the Timer Type
+MTS960_TIMER_TYPE_COUNTDOWN = 1
+MTS960_TIMER_TYPE_CYCLE = 2
+#
 # diffuser mode enums
 DIFFUSER_SPRAY_MODE_OFF = 2  # or 255 ? or 'any' ?
 DIFFUSER_SPRAY_MODE_ECO = 0

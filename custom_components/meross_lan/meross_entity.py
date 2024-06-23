@@ -302,16 +302,28 @@ class MEDictChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
     # interface: MerossEntity
     async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
-        return await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {
-                self.key_namespace: {
-                    self.key_channel: self.channel,
-                    self.key_value: device_value,
-                }
-            },
-        )
+        if self.manager._push_payload_data_as_array:
+            return await self.manager.async_request_ack(
+                self.namespace,
+                mc.METHOD_SET,
+                {
+                    self.key_namespace: [ {
+                        self.key_channel: self.channel,
+                        self.key_value: device_value,
+                    } ]
+                },
+            )
+        else:
+            return await self.manager.async_request_ack(
+                self.namespace,
+                mc.METHOD_SET,
+                {
+                    self.key_namespace:  {
+                        self.key_channel: self.channel,
+                        self.key_value: device_value,
+                    }
+                },
+            )
 
 
 class MEListChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
@@ -378,9 +390,10 @@ class MerossNumericEntity(MerossEntity):
         )
         super().__init__(manager, channel, entitykey, device_class)
 
-    def set_unavailable(self):
-        self.device_value = None
-        self.native_value = None
+    def set_unavailable(self, onlysetavailable=False):
+        if not onlysetavailable:
+            self.device_value = None
+            self.native_value = None
         super().set_unavailable()
 
     def update_device_value(self, device_value: int | float):
