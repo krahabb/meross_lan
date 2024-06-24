@@ -30,9 +30,6 @@ class EntityTest(EntityComponentTest):
         mc.NS_APPLIANCE_CONTROL_TOGGLE: [MLToggle],
     }
 
-    async def async_test_each_callback(self, entity: haec.SwitchEntity):
-        pass
-
     async def async_test_enabled_callback(self, entity: haec.SwitchEntity):
         await self.async_service_call_check(haec.SERVICE_TURN_ON, STATE_ON)
         await self.async_service_call_check(haec.SERVICE_TURN_OFF, STATE_OFF)
