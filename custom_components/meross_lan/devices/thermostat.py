@@ -36,13 +36,11 @@ class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
         device_value=None,
         namespace: str,
         name:str=None,
-        classManageAvailableSwitch:object|None = None
     ):
         self.namespace = namespace
         self.key_namespace = mn.NAMESPACES[namespace].key
         if name is not None:
             self.name=name
-        self.classManageAvailableSwitch=classManageAvailableSwitch
         super().__init__(
             climate.manager,
             climate.channel,
@@ -50,13 +48,7 @@ class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
             MLSwitch.DeviceClass.SWITCH,
             device_value=device_value,
         )
-        if self.classManageAvailableSwitch:
-            self.classManageAvailableSwitch._manageAvailableSwitch(self.is_on)
 
-    def update_onoff(self,onoff):
-        super().update_onoff(onoff)
-        if self.classManageAvailableSwitch:
-            self.classManageAvailableSwitch._manageAvailableSwitch(onoff)
 
 class MtsRichTemperatureNumber(MtsTemperatureNumber):
     """
@@ -98,13 +90,6 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         self.sensor_warning = None
         await super().async_shutdown()
 
-    def _manageAvailableSwitch(self,onoff):
-        if onoff == 1:
-            self.set_available()
-            self.flush_state()
-        else:
-            self.set_unavailable(True)
-
     def _parse(self, payload: dict):
         """
         {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
@@ -113,10 +98,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
             self.native_min_value = payload[mc.KEY_MIN] / self.device_scale
         if mc.KEY_MAX in payload:
             self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
-        self.update_device_value(payload[self.key_value])
         if mc.KEY_ONOFF in payload:
-            # on demand instance
-
             try:
                 self.switch.update_onoff(payload[mc.KEY_ONOFF])  # type: ignore
             except AttributeError:
@@ -128,11 +110,11 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
                     device_value=payload[mc.KEY_ONOFF],
                     namespace=self.namespace,
                     name=thename,
-                    classManageAvailableSwitch=self
                 )
+            self.available = self.switch.is_on # type: ignore
+        self.update_device_value(payload[self.key_value])
 
         if mc.KEY_WARNING in payload:
-            # on demand instance
             try:
                 self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])  # type: ignore
             except AttributeError:

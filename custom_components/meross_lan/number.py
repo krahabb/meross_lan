@@ -84,9 +84,9 @@ class MLConfigNumber(
         self._cancel_request()
         await super().async_shutdown()
 
-    def set_unavailable(self,onlysetavailable=False):
+    def set_unavailable(self):
         self._cancel_request()
-        super().set_unavailable(onlysetavailable)
+        super().set_unavailable()
 
     # interface: number.NumberEntity
     async def async_set_native_value(self, value: float):
