@@ -141,7 +141,6 @@ class MerossDeviceBase(EntityManager):
     __slots__ = (
         "_online",
         "_device_registry_entry",
-        "_push_payload_data_as_array"
     )
 
     def __init__(
@@ -165,7 +164,6 @@ class MerossDeviceBase(EntityManager):
         )
         self._online = False
         self._device_registry_entry = None
-        self._push_payload_data_as_array=False
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
             self._device_registry_entry = weakref.ref(
                 self.get_device_registry().async_get_or_create(
@@ -2105,7 +2103,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             )
                             # check the _transition_info has data beyond idx else
                             # the timezone has likely stopped 'transitioning'
-                            if idx < len(tz_pytz._transition_info): # type: ignore
+                            if idx < len(tz_pytz._transition_info):  # type: ignore
                                 _transition_info = tz_pytz._transition_info[idx]  # type: ignore
                                 timerules.append(
                                     [

@@ -64,7 +64,7 @@ class MLSwitch(me.MerossBinaryEntity, switch.SwitchEntity):
             self.update_onoff(0)
 
 
-class PhysicalLockSwitch(me.MEDictChannelMixin, MLSwitch):
+class PhysicalLockSwitch(me.MEListChannelMixin, MLSwitch):
 
     namespace = mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK
     key_namespace = mc.KEY_LOCK

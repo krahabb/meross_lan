@@ -302,28 +302,16 @@ class MEDictChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
     # interface: MerossEntity
     async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
-        if self.manager._push_payload_data_as_array:
-            return await self.manager.async_request_ack(
-                self.namespace,
-                mc.METHOD_SET,
-                {
-                    self.key_namespace: [ {
-                        self.key_channel: self.channel,
-                        self.key_value: device_value,
-                    } ]
-                },
-            )
-        else:
-            return await self.manager.async_request_ack(
-                self.namespace,
-                mc.METHOD_SET,
-                {
-                    self.key_namespace:  {
-                        self.key_channel: self.channel,
-                        self.key_value: device_value,
-                    }
-                },
-            )
+        return await self.manager.async_request_ack(
+            self.namespace,
+            mc.METHOD_SET,
+            {
+                self.key_namespace: {
+                    self.key_channel: self.channel,
+                    self.key_value: device_value,
+                }
+            },
+        )
 
 
 class MEListChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
