@@ -77,7 +77,7 @@ class Mts960Climate(MtsClimate):
         MtsClimate.HVACMode.AUTO,
     ]
 
-    preset_modes = None
+    preset_modes = []
 
     __slots__ = ("_mts_working","_mts_mode_timer","_mts_mode_timer_attributs")
 
@@ -149,11 +149,6 @@ class Mts960Climate(MtsClimate):
 
 
         super().flush_state()
-
-    async def async_set_preset_mode(self, preset_mode: str):
-        await self.async_request_mode(
-            self._mts_mode, reverse_lookup(self.MTS_WORKING_TO_PRESET_MAP, preset_mode)
-        )
 
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
         # here special handling is applied to hvac_mode == AUTO,
