@@ -10,7 +10,7 @@ from ..sensor import (
     MLEnumSensor,
     MLHumiditySensor,
     MLNumericSensor,
-    MLTemperatureSensor
+    MLTemperatureSensor,
 )
 from ..switch import MLSwitch
 from .mts200 import Mts200Climate
@@ -27,27 +27,35 @@ class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
 
-    __slot__ = ('classManageAvailableSwitch')
+    __slot__ = ("number_value",)
+
     def __init__(
         self,
-        climate: "MtsClimate",
-        entitykey: str,
-        *,
-        device_value=None,
-        namespace: str,
-        name:str=None,
+        number_value: "MtsRichTemperatureNumber",
+        device_value,
     ):
-        self.namespace = namespace
-        self.key_namespace = mn.NAMESPACES[namespace].key
-        if name is not None:
-            self.name=name
+        self.number_value = number_value
+        self.namespace = number_value.namespace
+        self.key_namespace = number_value.key_namespace
+        self.name = (f"{number_value.entitykey} Alarm").capitalize()
         super().__init__(
-            climate.manager,
-            climate.channel,
-            entitykey,
+            number_value.manager,
+            number_value.channel,
+            f"{number_value.entitykey}_switch",
             MLSwitch.DeviceClass.SWITCH,
             device_value=device_value,
         )
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.number_value: "MtsRichTemperatureNumber" = None  # type: ignore
+
+    def update_onoff(self, onoff):
+        if self.is_on != onoff:
+            self.is_on = onoff
+            self.flush_state()
+            self.number_value.available = onoff
+            self.number_value.flush_state()
 
 
 class MtsRichTemperatureNumber(MtsTemperatureNumber):
@@ -81,14 +89,14 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         # preset entity platforms since these might be instantiated later
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
         manager.platforms.setdefault(MLEnumSensor.PLATFORM)
-        self.sensor_warning = None
-        self.switch = None
+        self.sensor_warning: "MLEnumSensor" = None  # type: ignore
+        self.switch: "MtsConfigSwitch" = None  # type: ignore
         manager.register_parser(self.namespace, self)
 
     async def async_shutdown(self):
-        self.switch = None
-        self.sensor_warning = None
         await super().async_shutdown()
+        self.switch: "MtsConfigSwitch" = None  # type: ignore
+        self.sensor_warning: "MLEnumSensor" = None  # type: ignore
 
     def _parse(self, payload: dict):
         """
@@ -99,19 +107,17 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         if mc.KEY_MAX in payload:
             self.native_max_value = payload[mc.KEY_MAX] / self.device_scale
         if mc.KEY_ONOFF in payload:
+            onoff = payload[mc.KEY_ONOFF]
             try:
-                self.switch.update_onoff(payload[mc.KEY_ONOFF])  # type: ignore
+                # we don't use 'update_onoff' since it would (double) flush
+                # our availability
+                switch = self.switch
+                if switch.is_on != onoff:
+                    switch.is_on = onoff
+                    switch.flush_state()
             except AttributeError:
-                thename=f"{self.entitykey} Alarm"
-                thename=thename[0].upper()+thename[1:]
-                self.switch = MtsConfigSwitch(
-                    self.climate,
-                    f"{self.entitykey}_switch",
-                    device_value=payload[mc.KEY_ONOFF],
-                    namespace=self.namespace,
-                    name=thename,
-                )
-            self.available = self.switch.is_on # type: ignore
+                self.switch = MtsConfigSwitch(self, device_value=onoff)
+            self.available = onoff
         self.update_device_value(payload[self.key_value])
 
         if mc.KEY_WARNING in payload:
@@ -238,16 +244,22 @@ class MtsWindowOpened(MLBinarySensor):
         self.update_onoff(payload[mc.KEY_STATUS])
 
 
-class MtsExternalSensorSwitch(MtsConfigSwitch):
+class MtsExternalSensorSwitch(me.MEListChannelMixin, MLSwitch):
     """sensor mode: use internal(0) vs external(1) sensor as temperature loopback."""
 
+    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR
+    key_namespace = mc.KEY_SENSOR
     key_value = mc.KEY_MODE
+
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.CONFIG
 
     def __init__(self, climate: "MtsThermostatClimate"):
         super().__init__(
-            climate,
+            climate.manager,
+            climate.channel,
             "external sensor mode",
-            namespace=mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR,
+            MLSwitch.DeviceClass.SWITCH,
         )
         climate.manager.register_parser(mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR, self)
 
