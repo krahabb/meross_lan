@@ -22,40 +22,61 @@ if typing.TYPE_CHECKING:
     MtsThermostatClimate = Mts200Climate | Mts960Climate
 
 
+class MtsWarningSensor(MLEnumSensor):
+
+    __slots__ = (
+        "translation_key",
+    )
+
+    def __init__(
+        self,
+        number_temperature: "MtsRichTemperatureNumber",
+        native_value: str | int | float | None,
+    ):
+        entitykey = f"{number_temperature.entitykey}_warning"
+        self.translation_key = f"mts_{entitykey}"
+        super().__init__(
+            number_temperature.manager,
+            number_temperature.channel,
+            entitykey,
+            native_value=native_value,
+        )
+
+
 class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
 
-    __slot__ = ("number_value",)
+    __slot__ = ("number_temperature",)
 
     def __init__(
         self,
-        number_value: "MtsRichTemperatureNumber",
+        number_temperature: "MtsRichTemperatureNumber",
         device_value,
     ):
-        self.number_value = number_value
-        self.namespace = number_value.namespace
-        self.key_namespace = number_value.key_namespace
-        self.name = (f"{number_value.entitykey} Alarm").capitalize()
+        self.number_temperature = number_temperature
+        self.namespace = number_temperature.namespace
+        self.key_namespace = number_temperature.key_namespace
+        self.name = (f"{number_temperature.entitykey} Alarm").capitalize()
         super().__init__(
-            number_value.manager,
-            number_value.channel,
-            f"{number_value.entitykey}_switch",
+            number_temperature.manager,
+            number_temperature.channel,
+            f"{number_temperature.entitykey}_switch",
             MLSwitch.DeviceClass.SWITCH,
             device_value=device_value,
         )
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.number_value: "MtsRichTemperatureNumber" = None  # type: ignore
+        self.number_temperature: "MtsRichTemperatureNumber" = None  # type: ignore
 
     def update_onoff(self, onoff):
         if self.is_on != onoff:
             self.is_on = onoff
             self.flush_state()
-            self.number_value.available = onoff
-            self.number_value.flush_state()
+            self.number_temperature.available = onoff
+            self.number_temperature.flush_state()
 
 
 class MtsRichTemperatureNumber(MtsTemperatureNumber):
@@ -89,14 +110,14 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         # preset entity platforms since these might be instantiated later
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
         manager.platforms.setdefault(MLEnumSensor.PLATFORM)
-        self.sensor_warning: "MLEnumSensor" = None  # type: ignore
+        self.sensor_warning: "MtsWarningSensor" = None  # type: ignore
         self.switch: "MtsConfigSwitch" = None  # type: ignore
         manager.register_parser(self.namespace, self)
 
     async def async_shutdown(self):
         await super().async_shutdown()
         self.switch: "MtsConfigSwitch" = None  # type: ignore
-        self.sensor_warning: "MLEnumSensor" = None  # type: ignore
+        self.sensor_warning: "MtsWarningSensor" = None  # type: ignore
 
     def _parse(self, payload: dict):
         """
@@ -124,13 +145,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
             try:
                 self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])  # type: ignore
             except AttributeError:
-                self.sensor_warning = sensor_warning = MLEnumSensor(
-                    self.manager,
-                    self.channel,
-                    f"{self.entitykey}_warning",
-                    native_value=payload[mc.KEY_WARNING],
-                )
-                sensor_warning.translation_key = f"mts_{sensor_warning.entitykey}"
+                self.sensor_warning = MtsWarningSensor(self, payload[mc.KEY_WARNING])
 
 
 class MtsCalibrationNumber(MtsRichTemperatureNumber):
