@@ -1,15 +1,97 @@
+import copy
+from enum import Enum
 import typing
 
+from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..merossclient import const as mc
-from ..sensor import MLDiagnosticSensor
+from ..sensor import MLDiagnosticSensor, MLEnumSensor
 from ..helpers import reverse_lookup
 from homeassistant.exceptions import Unauthorized
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
     from ..number import MtsTemperatureNumber
+
+
+class SensorModeStateEnum(Enum):
+    UNKNOW = "Unknow"
+    OFF = "Off"
+    HEATING = "Heating"
+    COOLING = "Cooling"
+    SCHEDULING_HEAT = "Scheduling Heat"
+    SCHEDULING_COOL = "Scheduling Cool"
+    TIMER_COUNTDOWN_ON = "CountDown On"
+    TIMER_COUNTDOWN_OFF = "CountDown Off"
+    TIMER_CYCLE = "Cycle"
+
+    def __str__(self):
+        return self.value
+
+
+class MLModeStateSensor(MLEnumSensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+
+    options: list[str] = [state.value for state in SensorModeStateEnum]
+
+    @property
+    def state(self):
+        # The state reported to Home Assistant
+        return self.native_value.value
+
+    def update_native_and_extra_state_attribut(
+        self, native_value, extra_state_attributes: dict = {}
+    ):
+        if (
+            self.native_value != native_value
+            or self.extra_state_attributes != extra_state_attributes
+        ):
+            self.native_value = native_value
+            self.extra_state_attributes = copy.deepcopy(extra_state_attributes)
+            self.flush_state()
+
+
+class MLOutputPowerState(MLBinarySensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+
+    _attr_available = True
+
+    def __init__(
+        self,
+        manager: "MerossDevice",
+        channel: object | None,
+        entitykey: str | None = "output power state",
+        *,
+        device_value: int | None = None,
+    ):
+        self._custom_on_value = "On"
+        self._custom_off_value = "Off"
+
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            self.DeviceClass.POWER,
+            device_value=device_value,
+        )
+
+    @property
+    def state(self):
+        """Return the state of the sensor."""
+        return self._custom_on_value if self.is_on else self._custom_off_value
+
+    @property
+    def icon(self):
+        """Return the icon of this sensor."""
+        if self.is_on:
+            return "mdi:power-plug"
+        else:
+            return "mdi:power-plug-off"
 
 
 class Mts960Climate(MtsClimate):
@@ -79,7 +161,13 @@ class Mts960Climate(MtsClimate):
 
     preset_modes = []
 
-    __slots__ = ("_mts_working","_mts_mode_timer","_mts_mode_timer_attributs")
+    __slots__ = (
+        "_mts_working",
+        "_mts_mode_timer",
+        "_mts_mode_timer_attributs",
+        "sensor_output_power_state",
+        "sensor_mode_state",
+    )
 
     def __init__(
         self,
@@ -93,60 +181,87 @@ class Mts960Climate(MtsClimate):
             adjust_number_class,
             None,
             Mts960Schedule,
-            mc.MTSCLIMATE_MASK_SENSOR_OUTPUT_POWER_STATE|mc.MTSCLIMATE_MASK_SENSOR_MODE_STATE
         )
         self._mts_working = None
         self._mts_mode_timer = None
         self._mts_mode_timer_attributs = None
+        self.sensor_output_power_state = MLOutputPowerState(manager, channel)
+        """
+        Suggestion: avoid binary_sensor customization and use plain 'PLUG' device class (or 'POWER')
+        self.sensor_output_power_state = MLBinarySensor(manager, channel, "output power state", MLBinarySensor.DeviceClass.PLUG)
+        """
+        self.sensor_mode_state = MLModeStateSensor(
+            manager, channel, entitykey="Mode State"
+        )
+
+    # interface: MerossEntity
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.sensor_output_power_state: "MLBinarySensor" = None  # type: ignore
+        self.sensor_mode_state: "MLModeStateSensor" = None  # type: ignore
 
     def set_unavailable(self):
         self._mts_working = None
         self._mts_mode_timer = None
         self._mts_mode_timer_attributs = None
+        self.sensor_mode_state.update_native_and_extra_state_attribut(
+            SensorModeStateEnum.UNKNOW
+        )
         super().set_unavailable()
 
     def flush_state(self):
         """interface: MtsClimate."""
         if self._mts_onoff == mc.MTS960_STATE_ON:
-            self.hvac_mode = self.MTS_MODE_TO_HVAC_MODE.get(self._mts_mode, lambda mts_working: MtsClimate.HVACMode.OFF)(self._mts_working)
+            self.hvac_mode = self.MTS_MODE_TO_HVAC_MODE.get(
+                self._mts_mode, lambda mts_working: MtsClimate.HVACMode.OFF
+            )(self._mts_working)
             if self._mts_active == mc.MTS960_STATE_ON:
                 if self._mts_mode == mc.MTS960_MODE_TIMER:
                     self.hvac_action = MtsClimate.HVACAction.FAN
                 else:
-                    self.hvac_action = self.MTS_WORKING_TO_HVAC_ACTION.get(self._mts_working, MtsClimate.HVACAction.OFF)
-                self._update_output_power_state(True)
+                    self.hvac_action = self.MTS_WORKING_TO_HVAC_ACTION.get(
+                        self._mts_working, MtsClimate.HVACAction.OFF
+                    )
+                self.sensor_output_power_state.update_onoff(True)
             else:
                 self.hvac_action = MtsClimate.HVACAction.IDLE
-                self._update_output_power_state(False)
-            ModeStat=mc.SensorModeStateEnum.UNKNOW
-            ModeStatAttributs=None
+                self.sensor_output_power_state.update_onoff(False)
+            ModeStat = SensorModeStateEnum.UNKNOW
+            ModeStatAttributs = None
             if self._mts_mode == mc.MTS960_MODE_TIMER:
-                if self._mts_mode_timer is not None and self._mts_mode_timer != mc.SensorModeStateEnum.UNKNOW:
-                    ModeStat=self._mts_mode_timer
-                    ModeStatAttributs=self._mts_mode_timer_attributs
+                if (
+                    self._mts_mode_timer is not None
+                    and self._mts_mode_timer != SensorModeStateEnum.UNKNOW
+                ):
+                    ModeStat = self._mts_mode_timer
+                    ModeStatAttributs = self._mts_mode_timer_attributs
                 else:
-                    ModeStat=None
+                    ModeStat = None
             else:
-                self._mts_mode_timer=mc.SensorModeStateEnum.UNKNOW
-                self._mts_mode_timer_attributs=None
+                self._mts_mode_timer = SensorModeStateEnum.UNKNOW
+                self._mts_mode_timer_attributs = None
                 if self._mts_mode == mc.MTS960_MODE_HEAT_COOL:
                     if self._mts_working == mc.MTS960_WORKING_HEAT:
-                        ModeStat=mc.SensorModeStateEnum.HEATING
+                        ModeStat = SensorModeStateEnum.HEATING
                     elif self._mts_working == mc.MTS960_WORKING_COOL:
-                        ModeStat=mc.SensorModeStateEnum.COOLING
+                        ModeStat = SensorModeStateEnum.COOLING
                 elif self._mts_mode == mc.MTS960_MODE_SCHEDULE:
                     if self._mts_working == mc.MTS960_WORKING_HEAT:
-                        ModeStat=mc.SensorModeStateEnum.SCHEDULING_HEAT
+                        ModeStat = SensorModeStateEnum.SCHEDULING_HEAT
                     elif self._mts_working == mc.MTS960_WORKING_COOL:
-                        ModeStat=mc.SensorModeStateEnum.SCHEDULING_COOL
+                        ModeStat = SensorModeStateEnum.SCHEDULING_COOL
             if ModeStat is not None:
-                self._update_mode_state(ModeStat,ModeStatAttributs)
+                self.sensor_mode_state.update_native_and_extra_state_attribut(
+                    ModeStat, ModeStatAttributs
+                )
+
         else:
             self.hvac_mode = MtsClimate.HVACMode.OFF
             self.hvac_action = MtsClimate.HVACAction.OFF
-            self._update_output_power_state(False)
-            self._update_mode_state(mc.SensorModeStateEnum.OFF)
-
+            self.sensor_output_power_state.update_onoff(False)
+            self.sensor_mode_state.update_native_and_extra_state_attribut(
+                SensorModeStateEnum.OFF
+            )
 
         super().flush_state()
 
@@ -156,7 +271,7 @@ class Mts960Climate(MtsClimate):
         # among the AUTO(s) else mapping to a 'closest' one (see the lambdas
         # in HVAC_MODE_TO_MTS_MODE).
         if hvac_mode == MtsClimate.HVACMode.FAN_ONLY:
-           raise Unauthorized
+            raise Unauthorized
         elif hvac_mode == MtsClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
             return
@@ -168,7 +283,9 @@ class Mts960Climate(MtsClimate):
                     mc.KEY_CHANNEL: self.channel,
                     mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
                     mc.KEY_MODE: mode,
-                    mc.KEY_WORKING: self.HVAC_MODE_TO_MTS_WORKING.get(hvac_mode, lambda mts_working: mts_working)(self._mts_working),
+                    mc.KEY_WORKING: self.HVAC_MODE_TO_MTS_WORKING.get(
+                        hvac_mode, lambda mts_working: mts_working
+                    )(self._mts_working),
                 }
             )
         else:
@@ -248,62 +365,76 @@ class Mts960Climate(MtsClimate):
     # message handlers
     def _parse_timer(self, payload: dict):
         """
-       {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 2}} ==> Count down Off
-       {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 1}} ==> Count down On
-       {'channel': 0, 'type': 2, 'cycle': {'offDuration': 15, 'state': 1, 'end': 1718725103, 'onDuration': 15} } ==> cycle Current On
-       {'channel': 0, 'type': 2, 'cycle': {'offDuration': 15, 'state': 2, 'end': 1718725103, 'onDuration': 15} } ==> cycle Current Off
+        {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 2}} ==> Count down Off
+        {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 1}} ==> Count down On
+        {'channel': 0, 'type': 2, 'cycle': {'offDuration': 15, 'state': 1, 'end': 1718725103, 'onDuration': 15} } ==> cycle Current On
+        {'channel': 0, 'type': 2, 'cycle': {'offDuration': 15, 'state': 2, 'end': 1718725103, 'onDuration': 15} } ==> cycle Current Off
         """
-        new_mts_mode_timer=mc.SensorModeStateEnum.UNKNOW
-        new_mts_mode_timer_attr=None
+        new_mts_mode_timer = SensorModeStateEnum.UNKNOW
+        new_mts_mode_timer_attr = None
         if payload[mc.KEY_TYPE] == mc.MTS960_TIMER_TYPE_COUNTDOWN:
             if payload[mc.KEY_DOWN][mc.KEY_ONOFF] == mc.MTS960_ONOFF_ON:
-                new_mts_mode_timer=mc.SensorModeStateEnum.TIMER_COUNTDOWN_ON
+                new_mts_mode_timer = SensorModeStateEnum.TIMER_COUNTDOWN_ON
             if payload[mc.KEY_DOWN][mc.KEY_ONOFF] == mc.MTS960_ONOFF_OFF:
-                new_mts_mode_timer=mc.SensorModeStateEnum.TIMER_COUNTDOWN_OFF
-            if new_mts_mode_timer!=mc.SensorModeStateEnum.UNKNOW:
-                new_mts_mode_timer_attr= { "Timer Type": new_mts_mode_timer.value,
-                                           "Duration": f"{payload[mc.KEY_DOWN][mc.KEY_DURATION]} min",
-                                           "End": self.manager.get_device_datetime(payload[mc.KEY_DOWN][mc.KEY_END])}
+                new_mts_mode_timer = SensorModeStateEnum.TIMER_COUNTDOWN_OFF
+            if new_mts_mode_timer != SensorModeStateEnum.UNKNOW:
+                new_mts_mode_timer_attr = {
+                    "Timer Type": new_mts_mode_timer.value,
+                    "Duration": f"{payload[mc.KEY_DOWN][mc.KEY_DURATION]} min",
+                    "End": self.manager.get_device_datetime(
+                        payload[mc.KEY_DOWN][mc.KEY_END]
+                    ),
+                }
         elif payload[mc.KEY_TYPE] == mc.MTS960_TIMER_TYPE_CYCLE:
-            new_mts_mode_timer=mc.SensorModeStateEnum.TIMER_CYCLE
-            new_mts_mode_timer_attr= { "Timer Type": new_mts_mode_timer.value,
-                                       "Current Output Power": "On" if payload[mc.KEY_CYCLE][mc.KEY_STATE] == mc.MTS960_ONOFF_ON else "Off",
-                                       "Duration On": f"{payload[mc.KEY_CYCLE][mc.KEY_ONDURATION]} min",
-                                       "Duration Off": f"{payload[mc.KEY_CYCLE][mc.KEY_OFFDURATION]} min",
-                                       "Next Cycle": self.manager.get_device_datetime(payload[mc.KEY_CYCLE][mc.KEY_END])}
-        if new_mts_mode_timer != self._mts_mode_timer or self._mts_mode_timer_attributs != new_mts_mode_timer_attr:
-            self._mts_mode_timer=new_mts_mode_timer
-            self._mts_mode_timer_attributs=new_mts_mode_timer_attr
+            new_mts_mode_timer = SensorModeStateEnum.TIMER_CYCLE
+            new_mts_mode_timer_attr = {
+                "Timer Type": new_mts_mode_timer.value,
+                "Current Output Power": (
+                    "On"
+                    if payload[mc.KEY_CYCLE][mc.KEY_STATE] == mc.MTS960_ONOFF_ON
+                    else "Off"
+                ),
+                "Duration On": f"{payload[mc.KEY_CYCLE][mc.KEY_ONDURATION]} min",
+                "Duration Off": f"{payload[mc.KEY_CYCLE][mc.KEY_OFFDURATION]} min",
+                "Next Cycle": self.manager.get_device_datetime(
+                    payload[mc.KEY_CYCLE][mc.KEY_END]
+                ),
+            }
+        if (
+            new_mts_mode_timer != self._mts_mode_timer
+            or self._mts_mode_timer_attributs != new_mts_mode_timer_attr
+        ):
+            self._mts_mode_timer = new_mts_mode_timer
+            self._mts_mode_timer_attributs = new_mts_mode_timer_attr
             self.flush_state()
-
 
     def _parse_modeB(self, payload: dict):
         """
-    if new_mts_mode_timer != self._mts_mode_timer:
-        self._mts_mode_timer=new_mts_mode_timer
-        self.flush_state()
-
-        {
-            "channel": 0,
         if new_mts_mode_timer != self._mts_mode_timer:
             self._mts_mode_timer=new_mts_mode_timer
             self.flush_state()
 
-            "mode": 2,
-            "targetTemp": 2000,
-        if new_mts_mode_timer != self._mts_mode_timer:
-            self._mts_mode_timer=new_mts_mode_timer
-            self.flush_state()
+            {
+                "channel": 0,
+            if new_mts_mode_timer != self._mts_mode_timer:
+                self._mts_mode_timer=new_mts_mode_timer
+                self.flush_state()
 
-            "working": 1,
-            "currentTemp": 1915,
-            "state": 1,
-            "onoff": 1,
-            "sensorStatus": 1
-        }
-        TODO:
-        - decode "mode" (likely mapping mts modes like other mts)
-        - interpret "working" - "sensorStatus"
+                "mode": 2,
+                "targetTemp": 2000,
+            if new_mts_mode_timer != self._mts_mode_timer:
+                self._mts_mode_timer=new_mts_mode_timer
+                self.flush_state()
+
+                "working": 1,
+                "currentTemp": 1915,
+                "state": 1,
+                "onoff": 1,
+                "sensorStatus": 1
+            }
+            TODO:
+            - decode "mode" (likely mapping mts modes like other mts)
+            - interpret "working" - "sensorStatus"
         """
         if self._mts_payload == payload:
             return
@@ -321,7 +452,11 @@ class Mts960Climate(MtsClimate):
                 payload[mc.KEY_CURRENTTEMP] / self.device_scale
             )
         if mc.KEY_TARGETTEMP in payload:
-            self.target_temperature = (payload[mc.KEY_TARGETTEMP] / self.device_scale) if self._mts_mode != mc.MTS960_MODE_TIMER else None
+            self.target_temperature = (
+                (payload[mc.KEY_TARGETTEMP] / self.device_scale)
+                if self._mts_mode != mc.MTS960_MODE_TIMER
+                else None
+            )
 
         manager = self.manager
         if manager.create_diagnostic_entities:
