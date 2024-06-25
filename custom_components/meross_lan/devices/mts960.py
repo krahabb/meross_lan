@@ -43,14 +43,14 @@ class MLModeStateSensor(MLEnumSensor):
         return self.native_value.value
 
     def update_native_and_extra_state_attribut(
-        self, native_value, extra_state_attributes: dict = {}
+        self, native_value, extra_state_attributes: dict | None = None
     ):
         if (
             self.native_value != native_value
             or self.extra_state_attributes != extra_state_attributes
         ):
             self.native_value = native_value
-            self.extra_state_attributes = copy.deepcopy(extra_state_attributes)
+            self.extra_state_attributes = copy.deepcopy(extra_state_attributes) if extra_state_attributes else {}
             self.flush_state()
 
 
