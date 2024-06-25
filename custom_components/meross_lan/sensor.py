@@ -102,6 +102,7 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         *,
         device_value: int | None = None,
         native_unit_of_measurement: str | None = None,
+        suggested_display_precision: int | None = None,
     ):
         assert device_class is not sensor.SensorDeviceClass.ENUM
         self.state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
@@ -114,19 +115,32 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
             device_class,
             device_value=device_value,
             native_unit_of_measurement=native_unit_of_measurement,
+            suggested_display_precision=suggested_display_precision,
         )
 
     @staticmethod
     def build_for_device(
-        device: "MerossDevice", device_class: "MLNumericSensor.DeviceClass"
+        device: "MerossDevice",
+        device_class: "MLNumericSensor.DeviceClass",
+        *,
+        suggested_display_precision: int | None = None,
     ):
-        return MLNumericSensor(device, None, str(device_class), device_class)
+        return MLNumericSensor(
+            device,
+            None,
+            str(device_class),
+            device_class,
+            suggested_display_precision=suggested_display_precision,
+        )
 
 
 class MLHumiditySensor(MLNumericSensor):
     """Specialization for widely used device class type.
     This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
     """
+
+    # HA core entity attributes:
+    _attr_suggested_display_precision = 0
 
     def __init__(
         self,
@@ -149,6 +163,9 @@ class MLTemperatureSensor(MLNumericSensor):
     """Specialization for widely used device class type.
     This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
     """
+
+    # HA core entity attributes:
+    _attr_suggested_display_precision = 1
 
     def __init__(
         self,

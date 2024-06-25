@@ -140,7 +140,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.select_tracked_sensor = MtsTrackedSensor(self)
         self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
         self.sensor_current_temperature.entity_registry_enabled_default = False
-        self.sensor_current_temperature.suggested_display_precision = 1
 
     # interface: MerossEntity
     async def async_shutdown(self):

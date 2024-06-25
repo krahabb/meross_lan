@@ -127,15 +127,13 @@ class MtsTemperatureNumber(MLConfigNumber):
     Common number entity for representing MTS temperatures configuration
     """
 
+    # HA core entity attributes:
+    _attr_suggested_display_precision = 1
+
     __slots__ = (
         "climate",
         "device_scale",
     )
-
-    @property
-    def value(self):
-        # Return the rounded value
-        return round(self.native_value,1) if self.native_value is not None else None
 
     def __init__(self, climate: "MtsClimate", entitykey: str):
         self.climate = climate
