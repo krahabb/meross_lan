@@ -236,6 +236,8 @@ Appliance_Control_TempUnit = _ns_get_push(
 Appliance_Control_Thermostat_CompressorDelay = _ns_get(
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_COMPRESSORDELAY, mc.KEY_DELAY, _LIST_C
 )
+Appliance_Control_Thermostat_Timer = _ns_push(
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_TIMER, mc.KEY_TIMER)
 Appliance_Control_TimerX = _ns_get(mc.NS_APPLIANCE_CONTROL_TIMERX, mc.KEY_TIMERX, _DICT)
 Appliance_Control_Toggle = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_TOGGLE, mc.KEY_TOGGLE, _DICT

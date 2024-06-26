@@ -7,7 +7,10 @@ from custom_components.meross_lan.devices.garageDoor import (
 )
 from custom_components.meross_lan.devices.hub import MLHubSensorAdjustNumber
 from custom_components.meross_lan.devices.mts100 import Mts100AdjustNumber
-from custom_components.meross_lan.devices.thermostat import MLScreenBrightnessNumber
+from custom_components.meross_lan.devices.thermostat import (
+    MLScreenBrightnessNumber,
+    MtsRichTemperatureNumber,
+)
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.number import MLConfigNumber
 
@@ -38,15 +41,25 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: MLConfigNumber):
-        pass
+        if isinstance(entity, MtsRichTemperatureNumber):
+            # rich temperatures are set to 'unavailable' when
+            # the corresponding function is 'off'
+            if switch := entity.switch:
+                if not switch.is_on:
+                    return
+        await super().async_test_each_callback(entity)
 
     async def async_test_enabled_callback(self, entity: MLConfigNumber):
         states = self.hass_states
-        await self.async_service_call(haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.max_value})
+        await self.async_service_call(
+            haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.max_value}
+        )
         await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
         assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.max_value, "max_value"
-        await self.async_service_call(haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.min_value})
+        await self.async_service_call(
+            haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.min_value}
+        )
         await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
         assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.min_value, "min_value"

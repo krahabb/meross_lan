@@ -127,6 +127,9 @@ class MtsTemperatureNumber(MLConfigNumber):
     Common number entity for representing MTS temperatures configuration
     """
 
+    # HA core entity attributes:
+    _attr_suggested_display_precision = 1
+
     __slots__ = (
         "climate",
         "device_scale",

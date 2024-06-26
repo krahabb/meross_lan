@@ -1,14 +1,99 @@
+import copy
+from enum import Enum
 import typing
 
+from homeassistant.exceptions import Unauthorized
+
+from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..helpers import reverse_lookup
 from ..merossclient import const as mc, namespaces as mn
-from ..sensor import MLDiagnosticSensor
+from ..sensor import MLDiagnosticSensor, MLEnumSensor
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
     from ..number import MtsTemperatureNumber
+
+
+class SensorModeStateEnum(Enum):
+    UNKNOW = "Unknow"
+    OFF = "Off"
+    HEATING = "Heating"
+    COOLING = "Cooling"
+    SCHEDULING_HEAT = "Scheduling Heat"
+    SCHEDULING_COOL = "Scheduling Cool"
+    TIMER_COUNTDOWN_ON = "CountDown On"
+    TIMER_COUNTDOWN_OFF = "CountDown Off"
+    TIMER_CYCLE = "Cycle"
+
+    def __str__(self):
+        return self.value
+
+
+class MLModeStateSensor(MLEnumSensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+
+    options: list[str] = [state.value for state in SensorModeStateEnum]
+
+    @property
+    def state(self):
+        # The state reported to Home Assistant
+        return self.native_value.value
+
+    def update_native_and_extra_state_attribut(
+        self, native_value, extra_state_attributes: dict | None = None
+    ):
+        if (
+            self.native_value != native_value
+            or self.extra_state_attributes != extra_state_attributes
+        ):
+            self.native_value = native_value
+            self.extra_state_attributes = (
+                copy.deepcopy(extra_state_attributes) if extra_state_attributes else {}
+            )
+            self.flush_state()
+
+
+class MLOutputPowerState(MLBinarySensor):
+    """Specialization for widely used device class type.
+    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """
+
+    _attr_available = True
+
+    def __init__(
+        self,
+        manager: "MerossDevice",
+        channel: object | None,
+        entitykey: str | None = "output power state",
+        *,
+        device_value: int | None = None,
+    ):
+        self._custom_on_value = "On"
+        self._custom_off_value = "Off"
+
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            self.DeviceClass.POWER,
+            device_value=device_value,
+        )
+
+    @property
+    def state(self):
+        """Return the state of the sensor."""
+        return self._custom_on_value if self.is_on else self._custom_off_value
+
+    @property
+    def icon(self):
+        """Return the icon of this sensor."""
+        if self.is_on:
+            return "mdi:power-plug"
+        else:
+            return "mdi:power-plug-off"
 
 
 class Mts960Climate(MtsClimate):
@@ -21,16 +106,6 @@ class Mts960Climate(MtsClimate):
     # default choice to map when any 'non thermostat' mode swapping
     # needs an heating/cooling final choice
     MTS_MODE_DEFAULT = mc.MTS960_MODE_HEAT_COOL
-
-    MTS_WORKING_TO_PRESET_MAP = {
-        mc.MTS960_WORKING_HEAT: "Heating Mode",
-        mc.MTS960_WORKING_COOL: "Cooling Mode",
-        # mc.MTS960_MODE_CYCLE: "cycle_timer",
-        # mc.MTS960_MODE_COUNTDOWN_ON: "countdown_on",
-        # mc.MTS960_MODE_COUNTDOWN_OFF: "countdown_off",
-        # mc.MTS960_MODE_SCHEDULE_HEAT: "schedule_heat",
-        # mc.MTS960_MODE_SCHEDULE_COOL: "schedule_cool",
-    }
 
     MTS_WORKING_TO_HVAC_ACTION: dict[int | None, MtsClimate.HVACAction] = {
         mc.MTS960_WORKING_HEAT: MtsClimate.HVACAction.HEATING,
@@ -45,7 +120,7 @@ class Mts960Climate(MtsClimate):
             mts_working, MtsClimate.HVACMode.OFF
         ),
         mc.MTS960_MODE_SCHEDULE: lambda mts_working: MtsClimate.HVACMode.AUTO,
-        mc.MTS960_MODE_TIMER: lambda mts_working: MtsClimate.HVACMode.AUTO,
+        mc.MTS960_MODE_TIMER: lambda mts_working: MtsClimate.HVACMode.FAN_ONLY,
     }
 
     HVAC_MODE_TO_MTS_MODE = {
@@ -54,11 +129,8 @@ class Mts960Climate(MtsClimate):
         ),
         MtsClimate.HVACMode.HEAT: lambda mts_mode: mc.MTS960_MODE_HEAT_COOL,
         MtsClimate.HVACMode.COOL: lambda mts_mode: mc.MTS960_MODE_HEAT_COOL,
-        MtsClimate.HVACMode.AUTO: lambda mts_mode: (
-            mc.MTS960_MODE_HEAT_COOL
-            if mts_mode in (mc.MTS960_MODE_SCHEDULE, mc.MTS960_MODE_TIMER)
-            else mc.MTS960_MODE_SCHEDULE
-        ),
+        MtsClimate.HVACMode.AUTO: lambda mts_mode: mc.MTS960_MODE_SCHEDULE,
+        MtsClimate.HVACMode.FAN_ONLY: lambda mts_mode: mc.MTS960_MODE_TIMER,
     }
 
     HVAC_MODE_TO_MTS_WORKING = {
@@ -66,30 +138,10 @@ class Mts960Climate(MtsClimate):
         MtsClimate.HVACMode.HEAT: lambda mts_working: mc.MTS960_WORKING_HEAT,
         MtsClimate.HVACMode.COOL: lambda mts_working: mc.MTS960_WORKING_COOL,
         MtsClimate.HVACMode.AUTO: lambda mts_working: mts_working,
+        MtsClimate.HVACMode.FAN_ONLY: lambda mts_working: mts_working,
     }
 
     MTS_MODE_TO_PRESET_MAP = {}
-
-    # used to eventually bump out of any AUTO modes when manually setting
-    # the setpoint temp
-    MTS_MODE_TO_MTS_MODE_NOAUTO = {
-        # None: MTS_MODE_DEFAULT,
-        # mc.MTS960_MODE_HEAT: mc.MTS960_MODE_HEAT,
-        # mc.MTS960_MODE_COOL: mc.MTS960_MODE_COOL,
-        # mc.MTS960_MODE_CYCLE: MTS_MODE_DEFAULT,
-        # mc.MTS960_MODE_COUNTDOWN_ON: MTS_MODE_DEFAULT,
-        # mc.MTS960_MODE_COUNTDOWN_OFF: MTS_MODE_DEFAULT,
-        # mc.MTS960_MODE_SCHEDULE_HEAT: mc.MTS960_MODE_HEAT,
-        # mc.MTS960_MODE_SCHEDULE_COOL: mc.MTS960_MODE_COOL,
-        # None: MTS_MODE_DEFAULT,
-        # mc.MTS960_MODE_HEAT: mc.MTS960_MODE_HEAT,
-        # mc.MTS960_MODE_COOL: mc.MTS960_MODE_COOL,
-        # mc.MTS960_MODE_CYCLE: MTS_MODE_DEFAULT,
-        # mc.MTS960_MODE_COUNTDOWN_ON: MTS_MODE_DEFAULT,
-        # mc.MTS960_MODE_COUNTDOWN_OFF: MTS_MODE_DEFAULT,
-        # mc.MTS960_MODE_SCHEDULE_HEAT: mc.MTS960_MODE_HEAT,
-        # mc.MTS960_MODE_SCHEDULE_COOL: mc.MTS960_MODE_COOL,
-    }
 
     DIAGNOSTIC_SENSOR_KEYS = (
         mc.KEY_MODE,
@@ -104,12 +156,19 @@ class Mts960Climate(MtsClimate):
         MtsClimate.HVACMode.OFF,
         MtsClimate.HVACMode.HEAT,
         MtsClimate.HVACMode.COOL,
+        MtsClimate.HVACMode.FAN_ONLY,
         MtsClimate.HVACMode.AUTO,
     ]
 
-    preset_modes = list(MTS_MODE_TO_PRESET_MAP.values())
+    preset_modes = []
 
-    __slots__ = ("_mts_working",)
+    __slots__ = (
+        "_mts_working",
+        "_mts_mode_timer",
+        "_mts_mode_timer_attributs",
+        "sensor_output_power_state",
+        "sensor_mode_state",
+    )
 
     def __init__(
         self,
@@ -125,9 +184,30 @@ class Mts960Climate(MtsClimate):
             Mts960Schedule,
         )
         self._mts_working = None
+        self._mts_mode_timer = None
+        self._mts_mode_timer_attributs = None
+        self.sensor_output_power_state = MLOutputPowerState(manager, channel)
+        """
+        Suggestion: avoid binary_sensor customization and use plain 'PLUG' device class (or 'POWER')
+        self.sensor_output_power_state = MLBinarySensor(manager, channel, "output power state", MLBinarySensor.DeviceClass.PLUG)
+        """
+        self.sensor_mode_state = MLModeStateSensor(
+            manager, channel, entitykey="Mode State"
+        )
+
+    # interface: MerossEntity
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.sensor_output_power_state: "MLBinarySensor" = None  # type: ignore
+        self.sensor_mode_state: "MLModeStateSensor" = None  # type: ignore
 
     def set_unavailable(self):
         self._mts_working = None
+        self._mts_mode_timer = None
+        self._mts_mode_timer_attributs = None
+        self.sensor_mode_state.update_native_and_extra_state_attribut(
+            SensorModeStateEnum.UNKNOW
+        )
         super().set_unavailable()
 
     def flush_state(self):
@@ -137,45 +217,86 @@ class Mts960Climate(MtsClimate):
                 self._mts_mode, lambda mts_working: MtsClimate.HVACMode.OFF
             )(self._mts_working)
             if self._mts_active == mc.MTS960_STATE_ON:
-                self.hvac_action = self.MTS_WORKING_TO_HVAC_ACTION.get(
-                    self._mts_working, MtsClimate.HVACAction.OFF
-                )
+                if self._mts_mode == mc.MTS960_MODE_TIMER:
+                    self.hvac_action = MtsClimate.HVACAction.FAN
+                else:
+                    self.hvac_action = self.MTS_WORKING_TO_HVAC_ACTION.get(
+                        self._mts_working, MtsClimate.HVACAction.OFF
+                    )
+                self.sensor_output_power_state.update_onoff(True)
             else:
                 self.hvac_action = MtsClimate.HVACAction.IDLE
+                self.sensor_output_power_state.update_onoff(False)
+            ModeStat = SensorModeStateEnum.UNKNOW
+            ModeStatAttributs = None
+            if self._mts_mode == mc.MTS960_MODE_TIMER:
+                if (
+                    self._mts_mode_timer is not None
+                    and self._mts_mode_timer != SensorModeStateEnum.UNKNOW
+                ):
+                    ModeStat = self._mts_mode_timer
+                    ModeStatAttributs = self._mts_mode_timer_attributs
+                else:
+                    ModeStat = None
+            else:
+                self._mts_mode_timer = SensorModeStateEnum.UNKNOW
+                self._mts_mode_timer_attributs = None
+                if self._mts_mode == mc.MTS960_MODE_HEAT_COOL:
+                    if self._mts_working == mc.MTS960_WORKING_HEAT:
+                        ModeStat = SensorModeStateEnum.HEATING
+                    elif self._mts_working == mc.MTS960_WORKING_COOL:
+                        ModeStat = SensorModeStateEnum.COOLING
+                elif self._mts_mode == mc.MTS960_MODE_SCHEDULE:
+                    if self._mts_working == mc.MTS960_WORKING_HEAT:
+                        ModeStat = SensorModeStateEnum.SCHEDULING_HEAT
+                    elif self._mts_working == mc.MTS960_WORKING_COOL:
+                        ModeStat = SensorModeStateEnum.SCHEDULING_COOL
+            if ModeStat is not None:
+                self.sensor_mode_state.update_native_and_extra_state_attribut(
+                    ModeStat, ModeStatAttributs
+                )
+
         else:
             self.hvac_mode = MtsClimate.HVACMode.OFF
             self.hvac_action = MtsClimate.HVACAction.OFF
+            self.sensor_output_power_state.update_onoff(False)
+            self.sensor_mode_state.update_native_and_extra_state_attribut(
+                SensorModeStateEnum.OFF
+            )
 
         super().flush_state()
-
-    async def async_set_preset_mode(self, preset_mode: str):
-        await self.async_request_mode(
-            self._mts_mode, reverse_lookup(self.MTS_WORKING_TO_PRESET_MAP, preset_mode)
-        )
 
     async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
         # here special handling is applied to hvac_mode == AUTO,
         # trying to preserve the previous mts_mode if it was already
         # among the AUTO(s) else mapping to a 'closest' one (see the lambdas
         # in HVAC_MODE_TO_MTS_MODE).
-        if hvac_mode == MtsClimate.HVACMode.OFF:
+        if hvac_mode == MtsClimate.HVACMode.FAN_ONLY:
+            raise Unauthorized
+        elif hvac_mode == MtsClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
             return
-        working = self._mts_working
+
         mode = self.HVAC_MODE_TO_MTS_MODE[hvac_mode](self._mts_mode)
         if mode == mc.MTS960_MODE_HEAT_COOL:
-            working = self.HVAC_MODE_TO_MTS_WORKING.get(
-                hvac_mode, lambda mts_working: mts_working
-            )(working)
-
-        await self._async_request_modeb(
-            {
-                mc.KEY_CHANNEL: self.channel,
-                mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
-                mc.KEY_MODE: mode,
-                mc.KEY_WORKING: working,
-            }
-        )
+            await self._async_request_modeb(
+                {
+                    mc.KEY_CHANNEL: self.channel,
+                    mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
+                    mc.KEY_MODE: mode,
+                    mc.KEY_WORKING: self.HVAC_MODE_TO_MTS_WORKING.get(
+                        hvac_mode, lambda mts_working: mts_working
+                    )(self._mts_working),
+                }
+            )
+        else:
+            await self._async_request_modeb(
+                {
+                    mc.KEY_CHANNEL: self.channel,
+                    mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
+                    mc.KEY_MODE: mode,
+                }
+            )
 
     async def async_set_temperature(self, **kwargs):
         await self._async_request_modeb(
@@ -244,19 +365,31 @@ class Mts960Climate(MtsClimate):
 
     def _parse_modeB(self, payload: dict):
         """
-        {
-            "channel": 0,
-            "mode": 2,
-            "targetTemp": 2000,
-            "working": 1,
-            "currentTemp": 1915,
-            "state": 1,
-            "onoff": 1,
-            "sensorStatus": 1
-        }
-        TODO:
-        - decode "mode" (likely mapping mts modes like other mts)
-        - interpret "working" - "sensorStatus"
+        if new_mts_mode_timer != self._mts_mode_timer:
+            self._mts_mode_timer=new_mts_mode_timer
+            self.flush_state()
+
+            {
+                "channel": 0,
+            if new_mts_mode_timer != self._mts_mode_timer:
+                self._mts_mode_timer=new_mts_mode_timer
+                self.flush_state()
+
+                "mode": 2,
+                "targetTemp": 2000,
+            if new_mts_mode_timer != self._mts_mode_timer:
+                self._mts_mode_timer=new_mts_mode_timer
+                self.flush_state()
+
+                "working": 1,
+                "currentTemp": 1915,
+                "state": 1,
+                "onoff": 1,
+                "sensorStatus": 1
+            }
+            TODO:
+            - decode "mode" (likely mapping mts modes like other mts)
+            - interpret "working" - "sensorStatus"
         """
         if self._mts_payload == payload:
             return
@@ -274,7 +407,11 @@ class Mts960Climate(MtsClimate):
                 payload[mc.KEY_CURRENTTEMP] / self.device_scale
             )
         if mc.KEY_TARGETTEMP in payload:
-            self.target_temperature = payload[mc.KEY_TARGETTEMP] / self.device_scale
+            self.target_temperature = (
+                (payload[mc.KEY_TARGETTEMP] / self.device_scale)
+                if self._mts_mode != mc.MTS960_MODE_TIMER
+                else None
+            )
 
         manager = self.manager
         if manager.create_diagnostic_entities:
@@ -299,4 +436,4 @@ class Mts960Schedule(MtsSchedule):
     ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB]
 
     def __init__(self, climate: Mts960Climate):
-        super().__init__(climate)
+        super().__init__(climate, manage_key_section=True)

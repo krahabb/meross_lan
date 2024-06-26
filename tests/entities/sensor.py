@@ -53,9 +53,6 @@ class EntityTest(EntityComponentTest):
         mc.KEY_SMOKEALARM: [MLEnumSensor, MLEnumSensor],  # status, interConn sensors
     }
 
-    async def async_test_each_callback(self, entity: MLEnumSensor | MLNumericSensor):
-        pass
-
     async def async_test_enabled_callback(self, entity: MLEnumSensor | MLNumericSensor):
         pass
 

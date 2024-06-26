@@ -1,8 +1,7 @@
 from homeassistant.components import cover as haec
-from homeassistant.components.cover import CoverEntity, CoverEntityFeature
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.cover import MLRollerShutter
+from custom_components.meross_lan.cover import MLCover, MLRollerShutter
 from custom_components.meross_lan.devices.garageDoor import MLGarage
 from custom_components.meross_lan.merossclient import const as mc
 from emulator.mixins.rollershutter import RollerShutterMixin
@@ -12,7 +11,7 @@ from tests.entities import EntityComponentTest
 
 class EntityTest(EntityComponentTest):
 
-    ENTITY_TYPE = CoverEntity
+    ENTITY_TYPE = haec.CoverEntity
 
     DIGEST_ENTITIES = {
         mc.KEY_GARAGEDOOR: [MLGarage],
@@ -35,26 +34,31 @@ class EntityTest(EntityComponentTest):
         ),
     }
 
-    async def async_test_each_callback(self, entity: CoverEntity):
+    async def async_test_each_callback(self, entity: MLCover):
+        await super().async_test_each_callback(entity)
 
         if isinstance(entity, MLGarage):
             assert (
                 entity.supported_features
-                == CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
+                == haec.CoverEntityFeature.OPEN | haec.CoverEntityFeature.CLOSE
             )
             self._check_remove_togglex(entity)
 
         elif isinstance(entity, MLRollerShutter):
             assert (
                 entity.supported_features
-                >= CoverEntityFeature.OPEN
-                | CoverEntityFeature.CLOSE
-                | CoverEntityFeature.STOP
+                >= haec.CoverEntityFeature.OPEN
+                | haec.CoverEntityFeature.CLOSE
+                | haec.CoverEntityFeature.STOP
             )
-            assert entity.number_signalClose.device_value == RollerShutterMixin.SIGNALCLOSE
-            assert entity.number_signalOpen.device_value == RollerShutterMixin.SIGNALOPEN
+            assert (
+                entity.number_signalClose.device_value == RollerShutterMixin.SIGNALCLOSE
+            )
+            assert (
+                entity.number_signalOpen.device_value == RollerShutterMixin.SIGNALOPEN
+            )
 
-    async def async_test_enabled_callback(self, entity: CoverEntity):
+    async def async_test_enabled_callback(self, entity: MLCover):
         states = self.hass_states
         if isinstance(entity, MLGarage):
             await self._async_test_garage_transition(entity)
@@ -64,7 +68,7 @@ class EntityTest(EntityComponentTest):
             # support for SET_POSITION
             # this should open the cover (emulator starts with closed)
             await self._async_test_garage_transition(entity)
-            assert CoverEntityFeature.OPEN in entity.supported_features
+            assert haec.CoverEntityFeature.OPEN in entity.supported_features
             # this should close the cover
             state = await self._async_test_garage_transition(entity)
             assert (
@@ -95,7 +99,7 @@ class EntityTest(EntityComponentTest):
             await self._async_test_set_position(entity, 0)
             await self._async_test_set_position(entity, 100)
 
-    async def async_test_disabled_callback(self, entity: CoverEntity):
+    async def async_test_disabled_callback(self, entity: MLCover):
         pass
 
     async def _async_test_garage_transition(self, entity):

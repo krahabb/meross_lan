@@ -64,7 +64,7 @@ class MLSwitch(me.MerossBinaryEntity, switch.SwitchEntity):
             self.update_onoff(0)
 
 
-class PhysicalLockSwitch(me.MEDictChannelMixin, MLSwitch):
+class PhysicalLockSwitch(me.MEListChannelMixin, MLSwitch):
 
     ns = mn.Appliance_Control_PhysicalLock
 

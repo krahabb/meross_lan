@@ -698,6 +698,13 @@ POLLING_STRATEGY_CONF: dict[
         140,
         NamespaceHandler.async_poll_default,
     ),
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_TIMER: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        550,
+        NamespaceHandler.async_poll_default,
+    ),
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: (
         0,
         0,

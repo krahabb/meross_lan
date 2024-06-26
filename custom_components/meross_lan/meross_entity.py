@@ -349,11 +349,16 @@ class MerossNumericEntity(MerossEntity):
     # HA core entity attributes:
     native_value: int | float | None
     native_unit_of_measurement: str | None
+    # these are core attributes only for Sensor entity but we're
+    # trying emulate that kind of same behavior for Number
+    _attr_suggested_display_precision: typing.ClassVar[int | None] = None
+    suggested_display_precision: int | None
 
     __slots__ = (
         "device_value",
         "native_value",
         "native_unit_of_measurement",
+        "suggested_display_precision",
     )
 
     def __init__(
@@ -365,11 +370,22 @@ class MerossNumericEntity(MerossEntity):
         *,
         device_value: int | float | None = None,
         native_unit_of_measurement: str | None = None,
+        suggested_display_precision: int | None = None,
     ):
-        self.device_value = device_value
-        self.native_value = (
-            None if device_value is None else device_value / self.device_scale
+        self.suggested_display_precision = (
+            self._attr_suggested_display_precision
+            if suggested_display_precision is None
+            else suggested_display_precision
         )
+        self.device_value = device_value
+        if device_value is None:
+            self.native_value = None
+        elif self.suggested_display_precision is None:
+            self.native_value = device_value / self.device_scale
+        else:
+            self.native_value = round(
+                device_value / self.device_scale, self.suggested_display_precision
+            )
         self.native_unit_of_measurement = (
             native_unit_of_measurement or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
         )
@@ -383,11 +399,18 @@ class MerossNumericEntity(MerossEntity):
     def update_device_value(self, device_value: int | float):
         if self.device_value != device_value:
             self.device_value = device_value
-            self.native_value = device_value / self.device_scale
+            if self.suggested_display_precision is None:
+                self.native_value = device_value / self.device_scale
+            else:
+                self.native_value = round(
+                    device_value / self.device_scale, self.suggested_display_precision
+                )
             self.flush_state()
             return True
 
     def update_native_value(self, native_value: int | float):
+        if self.suggested_display_precision is not None:
+            native_value = round(native_value, self.suggested_display_precision)
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()

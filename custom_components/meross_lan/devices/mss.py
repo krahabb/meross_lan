@@ -157,13 +157,13 @@ class ElectricityNamespaceHandler(NamespaceHandler):
         )
         self._sensor_energy_estimate = EnergyEstimateSensor(device)
         self._sensor_power = MLNumericSensor.build_for_device(
-            device, MLNumericSensor.DeviceClass.POWER
+            device, MLNumericSensor.DeviceClass.POWER, suggested_display_precision=1
         )
         self._sensor_current = MLNumericSensor.build_for_device(
-            device, MLNumericSensor.DeviceClass.CURRENT
+            device, MLNumericSensor.DeviceClass.CURRENT, suggested_display_precision=1
         )
         self._sensor_voltage = MLNumericSensor.build_for_device(
-            device, MLNumericSensor.DeviceClass.VOLTAGE
+            device, MLNumericSensor.DeviceClass.VOLTAGE, suggested_display_precision=1
         )
         self._electricity_lastepoch = 0.0
 
