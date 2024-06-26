@@ -27,8 +27,9 @@ class EntityTest(EntityComponentTest):
     async def async_test_each_callback(self, entity: MtsSchedule):
         await super().async_test_each_callback(entity)
         if isinstance(entity, Mts100Schedule):
-            # these are not set in stone though, but always appears like these in our traces
-            assert entity._schedule_entry_count == 6, "schedule_entry_count"
+            # these are not set in stone though, but always appear like these in our traces
+            assert entity._schedule_entry_count_max == 6, "schedule_entry_count_max"
+            assert entity._schedule_entry_count_min == 6, "schedule_entry_count_min"
             assert entity._schedule_unit_time == 15, "schedule_unit_time"
 
     async def async_test_enabled_callback(self, entity: MtsSchedule):

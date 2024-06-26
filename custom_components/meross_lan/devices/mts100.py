@@ -181,7 +181,8 @@ class Mts100Climate(MtsClimate):
     # interface: self
     def update_scheduleb_mode(self, mode):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
-        self.schedule._schedule_entry_count = mode
+        self.schedule._schedule_entry_count_max = mode
+        self.schedule._schedule_entry_count_min = mode
 
 
 class Mts100SetPointNumber(MtsSetPointNumber):

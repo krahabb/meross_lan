@@ -231,6 +231,3 @@ class Mts200Climate(MtsClimate):
 
 class Mts200Schedule(MtsSchedule):
     ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE]
-
-    def __init__(self, climate: Mts200Climate):
-        super().__init__(climate)

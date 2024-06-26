@@ -37,19 +37,14 @@ class MLModeStateSensor(MLEnumSensor):
 
     options: list[str] = [state.value for state in SensorModeStateEnum]
 
-    @property
-    def state(self):
-        # The state reported to Home Assistant
-        return self.native_value.value
-
     def update_native_and_extra_state_attribut(
-        self, native_value, extra_state_attributes: dict | None = None
+        self, state: SensorModeStateEnum, extra_state_attributes: dict | None = None
     ):
         if (
-            self.native_value != native_value
+            self.native_value != state.value
             or self.extra_state_attributes != extra_state_attributes
         ):
-            self.native_value = native_value
+            self.native_value = state.value
             self.extra_state_attributes = (
                 copy.deepcopy(extra_state_attributes) if extra_state_attributes else {}
             )
@@ -57,43 +52,10 @@ class MLModeStateSensor(MLEnumSensor):
 
 
 class MLOutputPowerState(MLBinarySensor):
-    """Specialization for widely used device class type.
-    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
-    """
-
-    _attr_available = True
-
-    def __init__(
-        self,
-        manager: "MerossDevice",
-        channel: object | None,
-        entitykey: str | None = "output power state",
-        *,
-        device_value: int | None = None,
-    ):
-        self._custom_on_value = "On"
-        self._custom_off_value = "Off"
-
-        super().__init__(
-            manager,
-            channel,
-            entitykey,
-            self.DeviceClass.POWER,
-            device_value=device_value,
-        )
-
-    @property
-    def state(self):
-        """Return the state of the sensor."""
-        return self._custom_on_value if self.is_on else self._custom_off_value
 
     @property
     def icon(self):
-        """Return the icon of this sensor."""
-        if self.is_on:
-            return "mdi:power-plug"
-        else:
-            return "mdi:power-plug-off"
+        return "mdi:power-plug" if self.is_on else "mdi:power-plug-off"
 
 
 class Mts960Climate(MtsClimate):
@@ -186,14 +148,10 @@ class Mts960Climate(MtsClimate):
         self._mts_working = None
         self._mts_mode_timer = None
         self._mts_mode_timer_attributs = None
-        self.sensor_output_power_state = MLOutputPowerState(manager, channel)
-        """
-        Suggestion: avoid binary_sensor customization and use plain 'PLUG' device class (or 'POWER')
-        self.sensor_output_power_state = MLBinarySensor(manager, channel, "output power state", MLBinarySensor.DeviceClass.PLUG)
-        """
-        self.sensor_mode_state = MLModeStateSensor(
-            manager, channel, entitykey="Mode State"
+        self.sensor_output_power_state = MLOutputPowerState(
+            manager, channel, "output power state"
         )
+        self.sensor_mode_state = MLModeStateSensor(manager, channel, "Mode State")
 
     # interface: MerossEntity
     async def async_shutdown(self):
@@ -434,6 +392,3 @@ class Mts960Climate(MtsClimate):
 
 class Mts960Schedule(MtsSchedule):
     ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB]
-
-    def __init__(self, climate: Mts960Climate):
-        super().__init__(climate, manage_key_section=True)
