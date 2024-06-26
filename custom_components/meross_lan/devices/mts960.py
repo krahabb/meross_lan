@@ -318,8 +318,53 @@ class Mts960Climate(MtsClimate):
             "ctlMin": 300,
         }
         """
-        self.max_temp = payload[mc.KEY_MAX] / self.device_scale
-        self.min_temp = payload[mc.KEY_MIN] / self.device_scale
+        self.max_temp = payload[mc.KEY_CTLMAX] / self.device_scale
+        self.min_temp = payload[mc.KEY_CTLMIN] / self.device_scale
+
+    def _parse_timer(self, payload: dict):
+        """
+        {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 2}} ==> Count down Off
+        {'channel': 0, 'type': 1, 'down': {'duration': 1, 'end': 1718724107, 'onoff': 1}} ==> Count down On
+        {'channel': 0, 'type': 2, 'cycle': {'offDuration': 15, 'state': 1, 'end': 1718725103, 'onDuration': 15} } ==> cycle Current On
+        {'channel': 0, 'type': 2, 'cycle': {'offDuration': 15, 'state': 2, 'end': 1718725103, 'onDuration': 15} } ==> cycle Current Off
+        """
+        new_mts_mode_timer = SensorModeStateEnum.UNKNOW
+        new_mts_mode_timer_attr = None
+        if payload[mc.KEY_TYPE] == mc.MTS960_TIMER_TYPE_COUNTDOWN:
+            if payload[mc.KEY_DOWN][mc.KEY_ONOFF] == mc.MTS960_ONOFF_ON:
+                new_mts_mode_timer = SensorModeStateEnum.TIMER_COUNTDOWN_ON
+            if payload[mc.KEY_DOWN][mc.KEY_ONOFF] == mc.MTS960_ONOFF_OFF:
+                new_mts_mode_timer = SensorModeStateEnum.TIMER_COUNTDOWN_OFF
+            if new_mts_mode_timer != SensorModeStateEnum.UNKNOW:
+                new_mts_mode_timer_attr = {
+                    "Timer Type": new_mts_mode_timer.value,
+                    "Duration": f"{payload[mc.KEY_DOWN][mc.KEY_DURATION]} min",
+                    "End": self.manager.get_device_datetime(
+                        payload[mc.KEY_DOWN][mc.KEY_END]
+                    ),
+                }
+        elif payload[mc.KEY_TYPE] == mc.MTS960_TIMER_TYPE_CYCLE:
+            new_mts_mode_timer = SensorModeStateEnum.TIMER_CYCLE
+            new_mts_mode_timer_attr = {
+                "Timer Type": new_mts_mode_timer.value,
+                "Current Output Power": (
+                    "On"
+                    if payload[mc.KEY_CYCLE][mc.KEY_STATE] == mc.MTS960_ONOFF_ON
+                    else "Off"
+                ),
+                "Duration On": f"{payload[mc.KEY_CYCLE][mc.KEY_ONDURATION]} min",
+                "Duration Off": f"{payload[mc.KEY_CYCLE][mc.KEY_OFFDURATION]} min",
+                "Next Cycle": self.manager.get_device_datetime(
+                    payload[mc.KEY_CYCLE][mc.KEY_END]
+                ),
+            }
+        if (
+            new_mts_mode_timer != self._mts_mode_timer
+            or self._mts_mode_timer_attributs != new_mts_mode_timer_attr
+        ):
+            self._mts_mode_timer = new_mts_mode_timer
+            self._mts_mode_timer_attributs = new_mts_mode_timer_attr
+            self.flush_state()
 
     def _parse_modeB(self, payload: dict):
         """
