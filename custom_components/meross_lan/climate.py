@@ -13,6 +13,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .calendar import MtsSchedule
+    from .helpers.namespaces import NamespaceHandler
     from .meross_device import MerossDeviceBase
     from .number import MtsSetPointNumber, MtsTemperatureNumber
 
@@ -197,13 +198,31 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     def is_mts_scheduled(self):
         raise NotImplementedError()
 
+    def get_ns_adjust(self) -> "NamespaceHandler":
+        """
+        Returns the correct ns handler for the adjust namespace.
+        Used to trigger a poll and the ns which is by default polled
+        on a long timeout.
+        """
+        raise NotImplementedError()
+
     def _update_current_temperature(self, current_temperature: float | int):
         """
         Common handler for incoming room temperature value
         """
+        current_temperature = current_temperature / self.device_scale
         if self.current_temperature != current_temperature:
             self.current_temperature = current_temperature
             self.select_tracked_sensor.check_tracking()
             self.sensor_current_temperature.update_native_value(current_temperature)
-            return True
-        return False
+            # temp change might be an indication of a calibration so
+            # we'll speed up polling for the adjust/calibration ns
+            try:
+                ns_adjust = self.get_ns_adjust()
+                if ns_adjust.polling_epoch_next > (
+                    ns_adjust.device._polling_epoch + 30
+                ):
+                    ns_adjust.polling_epoch_next = 0.0
+            except:
+                # in case the ns is not available for this device
+                pass

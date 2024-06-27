@@ -664,7 +664,7 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_lazy,
     ),
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: (
-        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,

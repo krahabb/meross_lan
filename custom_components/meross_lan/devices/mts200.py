@@ -131,6 +131,11 @@ class Mts200Climate(MtsClimate):
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
 
+    def get_ns_adjust(self):
+        return self.manager.namespace_handlers[
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
+        ]
+
     # interface: self
     async def async_request_summermode(self, summermode: int):
         if await self.manager.async_request_ack(
@@ -193,9 +198,7 @@ class Mts200Climate(MtsClimate):
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE]
         if mc.KEY_CURRENTTEMP in payload:
-            self._update_current_temperature(
-                payload[mc.KEY_CURRENTTEMP] / self.device_scale
-            )
+            self._update_current_temperature(payload[mc.KEY_CURRENTTEMP])
         if mc.KEY_TARGETTEMP in payload:
             self.target_temperature = payload[mc.KEY_TARGETTEMP] / self.device_scale
         if mc.KEY_MIN in payload:

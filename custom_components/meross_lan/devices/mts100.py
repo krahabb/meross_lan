@@ -145,19 +145,16 @@ class Mts100Climate(MtsClimate):
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
+    def get_ns_adjust(self):
+        return self.manager.hub.namespace_handlers[mc.NS_APPLIANCE_HUB_MTS100_ADJUST]
+
     # message handlers
     def _parse_temperature(self, payload: dict):
         if self._mts_payload == payload:
             return
         self._mts_payload = payload
         if mc.KEY_ROOM in payload:
-            if self._update_current_temperature(
-                payload[mc.KEY_ROOM] / self.device_scale
-            ):
-                hub = self.manager.hub
-                strategy = hub.namespace_handlers[mc.NS_APPLIANCE_HUB_MTS100_ADJUST]
-                if strategy.lastrequest < (hub.lastresponse - 30):
-                    strategy.polling_epoch_next = 0.0
+            self._update_current_temperature(payload[mc.KEY_ROOM])
         if mc.KEY_CURRENTSET in payload:
             self.target_temperature = payload[mc.KEY_CURRENTSET] / self.device_scale
         if mc.KEY_MIN in payload:
