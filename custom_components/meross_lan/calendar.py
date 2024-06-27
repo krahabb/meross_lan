@@ -139,7 +139,7 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         # shown/available in the calendar UI.
         self._schedule_entry_count_max = 0
         self._schedule_entry_count_min = 0
-        self.extra_state_attributes = {}
+        self.name = "Schedule"
         super().__init__(climate.manager, climate.channel, self.ns.key)
 
     # interface: MerossEntity
@@ -613,7 +613,6 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
             if payload == native_schedule:
                 return
         self._native_schedule = payload
-        self.extra_state_attributes[self.ns.key] = str(payload)
         if mc.KEY_SECTION in payload:
             # mts960 carries 'section' to accomodate the
             # maximum number of entries according to @bernardpe
