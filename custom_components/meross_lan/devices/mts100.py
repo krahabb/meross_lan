@@ -89,11 +89,32 @@ class Mts100Climate(MtsClimate):
         await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        if self._mts_mode == mc.MTS100_MODE_AUTO:
-            # when sending a temp this way the device should automatically
-            # exit auto mode if needed. We're anyway forcing going
-            # to manual mode when the device is set to schedule
-            await self.async_request_mode(mc.MTS100_MODE_CUSTOM)
+        if (
+            self.SET_TEMP_FORCE_MANUAL_MODE and self._mts_mode != mc.MTS100_MODE_CUSTOM
+        ) or (self._mts_mode == mc.MTS100_MODE_AUTO):
+            # setting the temperature automatically switches
+            # to manual 'custom' mode. (2024-06-27) This is a change
+            # against previous behavior where the mode was retained
+            # (unless schedule mode) and the temp setting was directed to any
+            # of the presets, whichever was active at the moment.
+            # This is following #401 and seems more natural behavior.
+            # self.SET_TEMP_FORCE_MANUAL_MODE acts as a config bool
+            # to enable this behavior or fallback to the legacy one.
+            # Keep in mind we're not also forcing the device to 'ON'.
+            # This is intended (right now) to allow the user change
+            # the setpoint without implying the device switch on.
+            # Turning on/off the device must be an explicit action on HVACMode.
+            if await self.manager.async_request_ack(
+                mc.NS_APPLIANCE_HUB_MTS100_MODE,
+                mc.METHOD_SET,
+                {
+                    mc.KEY_MODE: [
+                        {mc.KEY_ID: self.id, mc.KEY_STATE: mc.MTS100_MODE_CUSTOM}
+                    ]
+                },
+            ):
+                self._mts_mode = mc.MTS100_MODE_CUSTOM
+
         key = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
         if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,

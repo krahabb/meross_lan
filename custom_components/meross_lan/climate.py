@@ -52,6 +52,9 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     }
     """lookups used in MtsSetpointNumber to map a pretty icon to the setpoint entity"""
 
+    SET_TEMP_FORCE_MANUAL_MODE = True
+    """Determines the behavior of async_set_temperature."""
+    
     manager: "MerossDeviceBase"
     number_adjust_temperature: typing.Final["MtsTemperatureNumber"]
     number_preset_temperature: dict[str, "MtsSetPointNumber"]

@@ -100,16 +100,19 @@ class Mts200Climate(MtsClimate):
         await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        key = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(self._mts_mode) or mc.KEY_MANUALTEMP
+        mode = self._mts_mode
+        if self.SET_TEMP_FORCE_MANUAL_MODE or (mode == mc.MTS200_MODE_AUTO):
+            # ensure we're not in schedule mode or any other preset (#401)
+            key = mc.KEY_MANUALTEMP
+            mode = mc.MTS200_MODE_MANUAL
+        else:
+            key = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(mode) or mc.KEY_MANUALTEMP
+            if key is mc.KEY_MANUALTEMP:
+                mode = mc.MTS200_MODE_MANUAL
         await self._async_request_mode(
             {
                 mc.KEY_CHANNEL: self.channel,
-                mc.KEY_MODE: (
-                    mc.MTS200_MODE_MANUAL
-                    if key is mc.KEY_MANUALTEMP
-                    else self._mts_mode
-                ),
-                mc.KEY_ONOFF: 1,
+                mc.KEY_MODE: mode,
                 key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale),
             }
         )

@@ -257,10 +257,13 @@ class Mts960Climate(MtsClimate):
             )
 
     async def async_set_temperature(self, **kwargs):
+        # bumps out of any timer/schedule mode and sets target temp
+        # preserving heating/cooling mode
         await self._async_request_modeb(
             {
                 mc.KEY_CHANNEL: self.channel,
-                mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
+                mc.KEY_MODE: mc.MTS960_MODE_HEAT_COOL,
+                mc.KEY_WORKING: self._mts_working or mc.MTS960_WORKING_HEAT,
                 mc.KEY_TARGETTEMP: round(
                     kwargs[self.ATTR_TEMPERATURE] * self.device_scale
                 ),
