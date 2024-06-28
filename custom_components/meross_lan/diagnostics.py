@@ -54,6 +54,7 @@ async def async_get_config_entry_diagnostics(
                         handler.ns.name: {
                             "lastrequest": handler.lastrequest,
                             "lastresponse": handler.lastresponse,
+                            "polling_epoch_next": handler.polling_epoch_next,
                             "polling_strategy": (
                                 handler.polling_strategy.__name__
                                 if handler.polling_strategy
