@@ -58,7 +58,6 @@ class MerossHttpClient:
                     aiohttp.hdrs.USER_AGENT: "MerossLan aiohttp/{0} Python/{1[0]}.{1[1]}".format(
                         aiohttp.__version__, sys.version_info
                     ),
-                    aiohttp.hdrs.CONTENT_TYPE: "application/json",
                 },
                 timeout=MerossHttpClient.SESSION_TIMEOUT,
             )
@@ -170,18 +169,20 @@ class MerossHttpClient:
 
             if _cipher := self._encryption_cipher:
                 request_bytes = request.encode("utf-8")
-                pad_length = 16 - (len(request_bytes) % 16)
-                request_bytes += bytes([0] * pad_length)
+                if pad_length := (len(request_bytes) % 16):
+                    request_bytes += bytes([0] * (16 - pad_length))
                 encryptor = _cipher.encryptor()
                 request = b64encode(
                     encryptor.update(request_bytes) + encryptor.finalize()
                 ).decode("utf-8")
-                headers_crypto = {
+                headers = {
                     aiohttp.hdrs.CONTENT_TYPE: "application/octet-stream",
                 }
             else:
                 # no encryption: session defaults to json
-                headers_crypto = None
+                headers = {
+                    aiohttp.hdrs.CONTENT_TYPE: "application/json",
+                }
             # since device HTTP service sometimes timeouts with no apparent
             # reason we're using an increasing timeout loop to try recover
             # when this timeout is transient. This will lead to a total timeout
@@ -193,7 +194,7 @@ class MerossHttpClient:
                     response = await self._session.post(
                         url=self._requesturl,
                         data=request,
-                        headers=headers_crypto,
+                        headers=headers,
                         timeout=aiohttp.ClientTimeout(
                             total=self.timeout.total, connect=_connect_timeout
                         ),
