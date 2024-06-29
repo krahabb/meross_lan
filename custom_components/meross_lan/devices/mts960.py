@@ -170,7 +170,7 @@ class Mts960Climate(MtsClimate):
 
     def flush_state(self):
         """interface: MtsClimate."""
-        if self._mts_onoff == mc.MTS960_STATE_ON:
+        if self._mts_onoff:
             self.hvac_mode = self.MTS_MODE_TO_HVAC_MODE.get(
                 self._mts_mode, lambda mts_working: MtsClimate.HVACMode.OFF
             )(self._mts_working)
@@ -288,7 +288,9 @@ class Mts960Climate(MtsClimate):
         )
 
     def is_mts_scheduled(self):
-        return self._mts_onoff and self._mts_mode == mc.MTS960_MODE_SCHEDULE
+        return self._mts_onoff and (
+            self._mts_mode == mc.MTS960_MODE_SCHEDULE
+        )
 
     def get_ns_adjust(self):
         return self.manager.namespace_handlers[
@@ -408,7 +410,7 @@ class Mts960Climate(MtsClimate):
         if mc.KEY_MODE in payload:
             self._mts_mode = payload[mc.KEY_MODE]
         if mc.KEY_ONOFF in payload:
-            self._mts_onoff = payload[mc.KEY_ONOFF]
+            self._mts_onoff = (payload[mc.KEY_ONOFF] == mc.MTS960_STATE_ON)
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE]
         if mc.KEY_WORKING in payload:
