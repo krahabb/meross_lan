@@ -44,9 +44,9 @@ class Namespace:
     DEFAULT_PUSH_PAYLOAD: typing.Final = {}
 
     has_get: bool | None
-    """ns supports method GET"""
+    """ns supports method GET - is None when we have no clue"""
     has_push: bool | None
-    """ns supports method PUSH"""
+    """ns supports method PUSH - is None when we have no clue"""
     need_channel: bool
     """ns needs the channel index in standard GET queries"""
     payload_get_inner: list | dict | None
@@ -156,8 +156,7 @@ def _ns_push(
     name: str,
     key: str | None = None,
 ):
-    # these namespaces do not provide the GET/GETACK methods
-    # hence querying works by issuing an empty PUSH. SET/SETACK might work though
+    """Builds a definition for a namespace supporting only PUSH queries (no GET)"""
     return Namespace(name, key, None, has_get=False, has_push=True)
 
 
@@ -166,6 +165,7 @@ def _ns_get(
     key: str | None = None,
     payload_get: list | dict | None = None,
 ):
+    """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
     return Namespace(name, key, payload_get, has_get=True, has_push=False)
 
 
@@ -174,6 +174,7 @@ def _ns_get_push(
     key: str | None = None,
     payload_get: list | dict | None = None,
 ):
+    """Builds a definition for a namespace supporting GET queries (which also PUSHes updates)"""
     return Namespace(name, key, payload_get, has_get=True, has_push=True)
 
 

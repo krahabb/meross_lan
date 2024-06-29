@@ -2325,41 +2325,45 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if ability in TRACE_ABILITY_EXCLUDE:
                         continue
                     if ability in self.namespace_handlers:
+                        # query using our 'well-known' message structure
                         handler = self.namespace_handlers[ability]
                         if handler.polling_strategy:
                             await handler.async_trace(self, CONF_PROTOCOL_HTTP)
                             continue
-                    # these requests are likely for new unknown namespaces
-                    # so our euristics might fall off very soon
+                    # this ability might be new/unknown or something we're not actively
+                    # 'handling'. If the ability has a known 'Namespace' definition
+                    # we'll use that knowledge to smartly query
                     ns = mn.NAMESPACES[ability]
-                    request = ns.request_get
-                    response = await self.async_http_request(*request)
-                    if response and (
-                        response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
-                    ):
-                        if ns.is_hub:
-                            # for Hub namespaces there's nothing more guessable
-                            continue
-                        key_namespace = ns.key
-                        # we're not sure our key_namespace is correct (euristics!)
-                        response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
-                        if response_payload:
-                            # our euristic query hit something..loop next
-                            continue
-                        request_payload = request[2][key_namespace]
-                        if request_payload:
-                            # we've already issued a channel-like GET
+                    if ns.has_get is not False:
+                        request = ns.request_get
+                        response = await self.async_http_request(*request)
+                        if response and (
+                            response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
+                        ):
+                            if ns.is_hub:
+                                # for Hub namespaces there's nothing more guessable
+                                continue
+                            key_namespace = ns.key
+                            # we're not sure our key_namespace is correct (euristics!)
+                            response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
+                            if response_payload:
+                                # our euristic query hit something..loop next
+                                continue
+                            # the reply was empty: this ns might need a "channel" in request
+                            request_payload = request[2][key_namespace]
+                            if request_payload:
+                                # we've already issued a channel-like GET
+                                continue
+                            if isinstance(response_payload, list):
+                                await self.async_http_request(
+                                    ability,
+                                    mc.METHOD_GET,
+                                    {key_namespace: [{mc.KEY_CHANNEL: 0}]},
+                                )
                             continue
 
-                        if isinstance(response_payload, list):
-                            # the namespace might need a channel index in the request
-                            await self.async_http_request(
-                                ability,
-                                mc.METHOD_GET,
-                                {key_namespace: [{mc.KEY_CHANNEL: 0}]},
-                            )
-                    else:
-                        # METHOD_GET doesnt work. Try PUSH
+                    if ns.has_push is not False:
+                        # METHOD_GET didnt work. Try PUSH
                         await self.async_http_request(*ns.request_push)
 
                 return trace_data  # might be truncated because offlining or async shutting trace
@@ -2396,24 +2400,24 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     # these requests are likely for new unknown namespaces
                     # so our euristics might fall off very soon
                     ns = mn.NAMESPACES[ability]
-                    request = ns.request_get
-                    if response := await self.async_request_ack(*request):
-                        key_namespace = ns.key
-                        request_payload = request[2][key_namespace]
-                        response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
-                        if (
-                            not response_payload
-                            and not request_payload
-                            and not ns.is_hub
-                        ):
-                            # the namespace might need a channel index in the request
-                            if isinstance(response_payload, list):
-                                await self.async_request(
-                                    ability,
-                                    mc.METHOD_GET,
-                                    {key_namespace: [{mc.KEY_CHANNEL: 0}]},
-                                )
-                    else:
+                    if ns.has_get is not False:
+                        if response := await self.async_request_ack(*ns.request_get):
+                            key_namespace = ns.key
+                            response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
+                            if (
+                                not response_payload
+                                and not ns.request_get[2][key_namespace]
+                                and not ns.is_hub
+                            ):
+                                # the namespace might need a channel index in the request
+                                if isinstance(response_payload, list):
+                                    await self.async_request(
+                                        ability,
+                                        mc.METHOD_GET,
+                                        {key_namespace: [{mc.KEY_CHANNEL: 0}]},
+                                    )
+                            
+                    if ns.has_push is not False:
                         # METHOD_GET doesnt work. Try PUSH
                         await self.async_request(*ns.request_push)
 
