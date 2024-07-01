@@ -334,6 +334,74 @@ class MEListChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
         )
 
 
+class MEAutoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Implementation for protocol method 'SET' on entities/namespaces backed by a channel
+    where the command payload could be either a list or a dict. This mixin actually
+    tries to learn the correct format at runtime buy 'sensing' it
+    Actual examples: Appliance.Control.ToggleX
+    """
+
+    manager: "MerossDeviceBase"
+
+    _set_format = None
+
+    # interface: MerossEntity
+    async def async_request_value(self, device_value):
+        """sends the actual request to the device. this is likely to be overloaded"""
+        ns = self.ns
+        if self._set_format is None:
+            # check if the list format works first
+            if response_set := await self.manager.async_request_ack(
+                ns.name,
+                mc.METHOD_SET,
+                {
+                    ns.key: [
+                        {ns.key_channel: self.channel, self.key_value: device_value}
+                    ]
+                },
+            ):
+                if response_get := await self.manager.async_request_ack(
+                    ns.name,
+                    mc.METHOD_GET,
+                    {ns.key: [{ns.key_channel: self.channel}]},
+                ):
+                    if response_get[ns.key][0][self.key_value] == device_value:
+                        self._set_format = list
+                        return response_set
+            # something didnt work: try with dict format
+            if response_set := await self.manager.async_request_ack(
+                ns.name,
+                mc.METHOD_SET,
+                {ns.key: {ns.key_channel: self.channel, self.key_value: device_value}},
+            ):
+                # even if dict was used we assume response to be in list format
+                if response_get := await self.manager.async_request_ack(
+                    ns.name,
+                    mc.METHOD_GET,
+                    {ns.key: [{ns.key_channel: self.channel}]},
+                ):
+                    if response_get[ns.key][0][self.key_value] == device_value:
+                        self._set_format = dict
+            return response_set
+        elif self._set_format is list:
+            return await self.manager.async_request_ack(
+                ns.name,
+                mc.METHOD_SET,
+                {
+                    ns.key: [
+                        {ns.key_channel: self.channel, self.key_value: device_value}
+                    ]
+                },
+            )
+        else:
+            return await self.manager.async_request_ack(
+                ns.name,
+                mc.METHOD_SET,
+                {ns.key: {ns.key_channel: self.channel, self.key_value: device_value}},
+            )
+
+
 class MerossNumericEntity(MerossEntity):
     """Common base class for (numeric) sensors and numbers."""
 
