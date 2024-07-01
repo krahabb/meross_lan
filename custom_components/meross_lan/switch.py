@@ -96,7 +96,7 @@ def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestInitRetur
     return handler.parse_generic, (handler,)
 
 
-class MLToggleX(me.MEListChannelMixin, MLSwitch):
+class MLToggleX(me.MEDictChannelMixin, MLSwitch):
 
     ns = mn.Appliance_Control_ToggleX
 
