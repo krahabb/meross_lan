@@ -448,9 +448,8 @@ MTS200_MODE_TO_TARGETTEMP_MAP = {
     None: KEY_MANUALTEMP,
 }
 
-# looks like with 'summerMode' disabled (i.e. in winter) the MTS reports '1'
 MTS200_SUMMERMODE_HEAT = 1
-MTS200_SUMMERMODE_COOL = 0
+MTS200_SUMMERMODE_COOL = 2
 
 # MTS200 external sensor status (overheat protection)
 MTS200_OVERHEAT_WARNING_OK = 0
