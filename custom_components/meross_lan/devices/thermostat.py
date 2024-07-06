@@ -387,7 +387,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
             manager,
             0,
             f"screenbrightness_{key}",
-            native_unit_of_measurement=MLConfigNumber.UNIT_PERCENTAGE,
+            native_unit_of_measurement=MLConfigNumber.hac.PERCENTAGE,
         )
 
     async def async_set_native_value(self, value: float):

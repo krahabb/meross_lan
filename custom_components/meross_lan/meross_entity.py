@@ -11,8 +11,6 @@
 from functools import partial
 import typing
 
-from homeassistant import const as hac
-
 try:
     from homeassistant.components.recorder import get_instance as r_get_instance
     from homeassistant.components.recorder.history import get_last_state_changes
@@ -43,9 +41,9 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
     class MyCustomSwitch(MerossEntity, Switch)
     """
 
-    PLATFORM: typing.ClassVar[str]
-
     EntityCategory = EntityCategory
+
+    PLATFORM: typing.ClassVar[str]
 
     is_diagnostic: typing.ClassVar[bool] = False
     """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
@@ -231,7 +229,10 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         )
         if states := _last_state.get(self.entity_id):
             for state in reversed(states):
-                if state.state not in (hac.STATE_UNKNOWN, hac.STATE_UNAVAILABLE):
+                if state.state not in (
+                    MerossEntity.hac.STATE_UNKNOWN,
+                    MerossEntity.hac.STATE_UNAVAILABLE,
+                ):
                     return state
         return None
 
@@ -436,8 +437,6 @@ class MEPartialAvailableMixin(MerossEntity if typing.TYPE_CHECKING else object):
 
 class MerossNumericEntity(MerossEntity):
     """Common base class for (numeric) sensors and numbers."""
-
-    UNIT_PERCENTAGE: typing.Final = hac.PERCENTAGE
 
     DEVICECLASS_TO_UNIT_MAP: typing.ClassVar[dict[object | None, str | None]]
     """To be init in derived classes with their DeviceClass own types"""

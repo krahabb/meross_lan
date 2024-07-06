@@ -6,7 +6,7 @@ from . import meross_entity as me
 from .helpers import reverse_lookup
 from .merossclient import const as mc
 from .select import MtsTrackedSensor
-from .sensor import MLTemperatureSensor, UnitOfTemperature
+from .sensor import MLTemperatureSensor
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -28,7 +28,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PLATFORM = climate.DOMAIN
 
     ATTR_TEMPERATURE: typing.Final = climate.ATTR_TEMPERATURE
-    TEMP_CELSIUS: typing.Final = UnitOfTemperature.CELSIUS
+    TEMP_CELSIUS: typing.Final = me.MerossEntity.hac.UnitOfTemperature.CELSIUS
 
     HVACAction: typing.Final = climate.HVACAction
     HVACMode: typing.Final = climate.HVACMode
@@ -54,7 +54,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     SET_TEMP_FORCE_MANUAL_MODE = True
     """Determines the behavior of async_set_temperature."""
-    
+
     manager: "MerossDeviceBase"
     number_adjust_temperature: typing.Final["MtsTemperatureNumber"]
     number_preset_temperature: dict[str, "MtsSetPointNumber"]

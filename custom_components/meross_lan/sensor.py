@@ -1,13 +1,6 @@
 import typing
 
 from homeassistant.components import sensor
-from homeassistant.const import (
-    UnitOfElectricCurrent,
-    UnitOfElectricPotential,
-    UnitOfEnergy,
-    UnitOfPower,
-    UnitOfTemperature,
-)
 
 from . import const as mlc, meross_entity as me
 from .helpers.namespaces import (
@@ -71,14 +64,14 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
     StateClass = sensor.SensorStateClass
 
     DEVICECLASS_TO_UNIT_MAP = {
-        DeviceClass.POWER: UnitOfPower.WATT,
-        DeviceClass.CURRENT: UnitOfElectricCurrent.AMPERE,
-        DeviceClass.VOLTAGE: UnitOfElectricPotential.VOLT,
-        DeviceClass.ENERGY: UnitOfEnergy.WATT_HOUR,
-        DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
-        DeviceClass.HUMIDITY: me.MerossNumericEntity.UNIT_PERCENTAGE,
-        DeviceClass.BATTERY: me.MerossNumericEntity.UNIT_PERCENTAGE,
-        DeviceClass.POWER_FACTOR: me.MerossNumericEntity.UNIT_PERCENTAGE,
+        DeviceClass.POWER: me.MerossEntity.hac.UnitOfPower.WATT,
+        DeviceClass.CURRENT: me.MerossEntity.hac.UnitOfElectricCurrent.AMPERE,
+        DeviceClass.VOLTAGE: me.MerossEntity.hac.UnitOfElectricPotential.VOLT,
+        DeviceClass.ENERGY: me.MerossEntity.hac.UnitOfEnergy.WATT_HOUR,
+        DeviceClass.TEMPERATURE: me.MerossEntity.hac.UnitOfTemperature.CELSIUS,
+        DeviceClass.HUMIDITY: me.MerossEntity.hac.PERCENTAGE,
+        DeviceClass.BATTERY: me.MerossEntity.hac.PERCENTAGE,
+        DeviceClass.POWER_FACTOR: me.MerossEntity.hac.PERCENTAGE,
     }
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
@@ -332,7 +325,7 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
             channel,
             mc.KEY_FILTER,
             None,
-            native_unit_of_measurement=MLNumericSensor.UNIT_PERCENTAGE,
+            native_unit_of_measurement=me.MerossEntity.hac.PERCENTAGE,
         )
         manager.register_parser_entity(self)
 

@@ -1,7 +1,6 @@
 import typing
 
 from homeassistant.components import number
-from homeassistant.const import UnitOfTemperature, UnitOfTime
 
 from . import meross_entity as me
 from .helpers import reverse_lookup, schedule_async_callback
@@ -37,9 +36,9 @@ class MLNumber(me.MerossNumericEntity, number.NumberEntity):
 
     DEVICECLASS_TO_UNIT_MAP = {
         None: None,
-        DEVICE_CLASS_DURATION: UnitOfTime.SECONDS,
-        DeviceClass.HUMIDITY: me.MerossNumericEntity.UNIT_PERCENTAGE,
-        DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
+        DEVICE_CLASS_DURATION: me.MerossEntity.hac.UnitOfTime.SECONDS,
+        DeviceClass.HUMIDITY: me.MerossEntity.hac.PERCENTAGE,
+        DeviceClass.TEMPERATURE: me.MerossEntity.hac.UnitOfTemperature.CELSIUS,
     }
 
     manager: "MerossDeviceBase"
