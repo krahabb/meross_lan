@@ -21,17 +21,12 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
 
-class MLConfigNumber(
-    me.MEListChannelMixin, me.MerossNumericEntity, number.NumberEntity
-):
+class MLNumber(me.MerossNumericEntity, number.NumberEntity):
     """
-    Base class for any configurable parameter in the device. This works much-like
-    MLSwitch by refining the 'async_request_value' api in order to send the command.
-    Contrary to MLSwitch (which is abstract), this has a default implementation for
-    payloads sent in a list through me.MEListChannelMixin since this looks to be
-    widely adopted (thermostats and the likes) but some care needs to be taken for
-    some namespaces not supporting channels (i.e. Appliance.GarageDoor.Config) or
-    not understanding the list payload (likely all the RollerShutter stuff)
+    Base (abstract) ancestor for ML number entities. This has 2 specializations:
+    - MLConfigNumber: for configuration parameters backed by a device namespace value.
+    - MLEmulatedNumber: for configuration parameters not directly mapped to a device ns.
+    These in turn will be managed with HA state-restoration.
     """
 
     PLATFORM = number.DOMAIN
@@ -47,8 +42,6 @@ class MLConfigNumber(
         DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
     }
 
-    DEBOUNCE_DELAY = 1
-
     manager: "MerossDeviceBase"
 
     # HA core entity attributes:
@@ -58,6 +51,20 @@ class MLConfigNumber(
     native_min_value: float
     native_step: float
 
+
+class MLConfigNumber(me.MEListChannelMixin, MLNumber):
+    """
+    Base class for any configurable parameter in the device. This works much-like
+    MLSwitch by refining the 'async_request_value' api in order to send the command.
+    Contrary to MLSwitch (which is abstract), this has a default implementation for
+    payloads sent in a list through me.MEListChannelMixin since this looks to be
+    widely adopted (thermostats and the likes) but some care needs to be taken for
+    some namespaces not supporting channels (i.e. Appliance.GarageDoor.Config) or
+    not understanding the list payload (likely all the RollerShutter stuff)
+    """
+
+    DEBOUNCE_DELAY = 1
+
     __slots__ = ("_async_request_debounce_unsub",)
 
     def __init__(
@@ -65,7 +72,7 @@ class MLConfigNumber(
         manager: "MerossDeviceBase",
         channel: object | None,
         entitykey: str | None = None,
-        device_class: DeviceClass | str | None = None,
+        device_class: MLNumber.DeviceClass | str | None = None,
         *,
         device_value: int | None = None,
         native_unit_of_measurement: str | None = None,
@@ -120,6 +127,30 @@ class MLConfigNumber(
         if self._async_request_debounce_unsub:
             self._async_request_debounce_unsub.cancel()
             self._async_request_debounce_unsub = None
+
+
+class MLEmulatedNumber(MLNumber):
+    """
+    Number entity for locally (HA recorder) stored parameters.
+    """
+
+    def set_available(self):
+        self.available = True
+        self.flush_state()
+
+    def set_unavailable(self):
+        if self.available:
+            self.available = False
+            self.flush_state()
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        with self.exception_warning("restoring previous state"):
+            if last_state := await self.get_last_state_available():
+                self.native_value = float(last_state.state)
+
+    async def async_set_native_value(self, value: float):
+        self.update_native_value(value)
 
 
 class MtsTemperatureNumber(MLConfigNumber):
