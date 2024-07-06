@@ -129,19 +129,10 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
             self._async_request_debounce_unsub = None
 
 
-class MLEmulatedNumber(MLNumber):
+class MLEmulatedNumber(me.MEPartialAvailableMixin, MLNumber):
     """
     Number entity for locally (HA recorder) stored parameters.
     """
-
-    def set_available(self):
-        self.available = True
-        self.flush_state()
-
-    def set_unavailable(self):
-        if self.available:
-            self.available = False
-            self.flush_state()
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

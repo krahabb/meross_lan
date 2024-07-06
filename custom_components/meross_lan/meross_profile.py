@@ -13,7 +13,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import storage
 from homeassistant.util import dt as dt_util
 
-from . import const as mlc
+from . import const as mlc, meross_entity as me
 from .const import (
     CONF_CHECK_FIRMWARE_UPDATES,
     CONF_DEVICE_ID,
@@ -73,7 +73,6 @@ if typing.TYPE_CHECKING:
     from .merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
-        MerossCloudCredentials,
         SubDeviceInfoType,
     )
 
@@ -81,7 +80,7 @@ if typing.TYPE_CHECKING:
     DeviceInfoDictType = dict[UuidType, "DeviceInfoType"]
 
 
-class ConnectionSensor(MLDiagnosticSensor):
+class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
     STATE_DISCONNECTED: typing.Final = "disconnected"
     STATE_CONNECTED: typing.Final = "connected"
     STATE_DROPPING: typing.Final = "dropping"
@@ -100,7 +99,6 @@ class ConnectionSensor(MLDiagnosticSensor):
     manager: ApiProfile
 
     # HA core entity attributes:
-    _attr_available = True
     extra_state_attributes: AttrDictType
     native_value: str
     options: list[str] = [

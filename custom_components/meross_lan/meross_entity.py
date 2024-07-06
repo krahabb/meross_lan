@@ -402,6 +402,38 @@ class MEAutoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
             )
 
 
+class MEAlwaysAvailableMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Mixin class for entities which should always be available
+    disregarding current device connection state.
+    """
+
+    # HA core entity attributes:
+    _attr_available = True
+
+    def set_available(self):
+        pass
+
+    def set_unavailable(self):
+        pass
+
+
+class MEPartialAvailableMixin(MerossEntity if typing.TYPE_CHECKING else object):
+    """
+    Mixin class for entities which should be available when device is connected
+    but their state needs to be preserved since they're representing a state not directly
+    carried by the device ('emulated' configuration params like MLEmulatedNumber or so).
+    """
+
+    def set_available(self):
+        self.available = True
+        self.flush_state()
+
+    def set_unavailable(self):
+        self.available = False
+        self.flush_state()
+
+
 class MerossNumericEntity(MerossEntity):
     """Common base class for (numeric) sensors and numbers."""
 

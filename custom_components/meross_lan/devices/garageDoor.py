@@ -31,10 +31,9 @@ EXTRA_ATTR_TRANSITION_TARGET = (
 )
 
 
-class MLGarageTimeoutBinarySensor(MLBinarySensor):
+class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
 
     # HA core entity attributes:
-    _attr_available = True
     entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, garage: "MLGarage"):
@@ -46,12 +45,6 @@ class MLGarageTimeoutBinarySensor(MLBinarySensor):
             self.DeviceClass.PROBLEM,
             device_value=False,
         )
-
-    def set_available(self):
-        pass
-
-    def set_unavailable(self):
-        pass
 
     def update_ok(self, was_closing):
         extra_state_attributes = self.extra_state_attributes

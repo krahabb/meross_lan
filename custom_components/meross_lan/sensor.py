@@ -200,7 +200,7 @@ class MLDiagnosticSensor(MLEnumSensor):
         self.update_native_value(json_dumps(payload))
 
 
-class ProtocolSensor(MLEnumSensor):
+class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
@@ -211,7 +211,6 @@ class ProtocolSensor(MLEnumSensor):
     manager: "MerossDevice"
 
     # HA core entity attributes:
-    _attr_available = True
     entity_category = me.EntityCategory.DIAGNOSTIC
     entity_registry_enabled_default = False
     native_value: str

@@ -21,7 +21,7 @@ if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
 
 
-class EnergyEstimateSensor(MLNumericSensor):
+class EnergyEstimateSensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     """
     Implements an estimated energy measure from device power readings.
     Estimate is a trapezoidal integral sum on power.
@@ -31,7 +31,6 @@ class EnergyEstimateSensor(MLNumericSensor):
     """
 
     # HA core entity attributes:
-    _attr_available = True
     entity_registry_enabled_default = False
     native_value: int
 
@@ -88,16 +87,6 @@ class EnergyEstimateSensor(MLNumericSensor):
             # and more consistent
             self._estimate = float(state.state)
             self.native_value = int(self._estimate)
-
-    def set_available(self):
-        pass
-
-    def set_unavailable(self):
-        # we need to preserve our sum so we don't reset
-        # it on disconnection. Also, it's nice to have it
-        # available since this entity has a computed value
-        # not directly related to actual connection state
-        pass
 
     def update_estimate(self, de: float):
         if self.sensor_consumptionx:

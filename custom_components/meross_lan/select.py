@@ -50,7 +50,7 @@ class MLSelect(me.MerossEntity, select.SelectEntity):
             self.flush_state()
 
 
-class MtsTrackedSensor(MLSelect):
+class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
     """
     A select entity used to select among all temperature sensors in HA
     an entity to track so that the thermostat regulates T against
@@ -64,7 +64,6 @@ class MtsTrackedSensor(MLSelect):
     climate: "MtsClimate"
 
     # HA core entity attributes:
-    _attr_available = True
     current_option: str
     entity_category = me.EntityCategory.CONFIG
     entity_registry_enabled_default = False
@@ -95,9 +94,6 @@ class MtsTrackedSensor(MLSelect):
         self._tracking_stop()
         await super().async_shutdown()
         self.climate = None  # type: ignore
-
-    def set_available(self):
-        pass
 
     def set_unavailable(self):
         # reset the timeout and the eventual callback when the device
