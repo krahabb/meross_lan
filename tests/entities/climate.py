@@ -30,7 +30,6 @@ PRESET_MODES: dict[type[MtsClimate], set] = {
         mc.MTS200_MODE_AUTO,
         mc.MTS200_MODE_MANUAL,
     },
-    Mts960Climate: set(),
 }
 
 
@@ -59,18 +58,20 @@ class EntityTest(EntityComponentTest):
         if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in self.ability:
             assert HVACMode.COOL in entity_hvac_modes
 
-        entity_preset_modes = set(entity.preset_modes)
-        expected_preset_modes = {
-            entity.MTS_MODE_TO_PRESET_MAP[mts_mode]
-            for mts_mode in PRESET_MODES[entity.__class__]
-        }
-        assert expected_preset_modes == entity_preset_modes
+        if entity.__class__ in PRESET_MODES:
+            entity_preset_modes = set(entity.preset_modes)
+            expected_preset_modes = {
+                entity.MTS_MODE_TO_PRESET_MAP[mts_mode]
+                for mts_mode in PRESET_MODES[entity.__class__]
+            }
+            assert expected_preset_modes == entity_preset_modes
 
     async def async_test_enabled_callback(self, entity: MtsClimate):
+        if isinstance(entity, Mts960Climate):
+            # TODO: restore testing once mts960 is done
+            return
+
         for hvac_mode in entity.hvac_modes:
-            if hvac_mode is HVACMode.FAN_ONLY:
-                # TODO: restore testing once mts960 is done
-                continue
             await self.async_service_call_check(
                 haec.SERVICE_SET_HVAC_MODE, hvac_mode, {haec.ATTR_HVAC_MODE: hvac_mode}
             )

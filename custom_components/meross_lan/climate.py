@@ -167,7 +167,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         super().set_unavailable()
 
     def flush_state(self):
-        self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         super().flush_state()
         self.schedule.flush_state()
 

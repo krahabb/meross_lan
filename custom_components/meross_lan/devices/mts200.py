@@ -73,6 +73,7 @@ class Mts200Climate(MtsClimate):
 
     # interface: MtsClimate
     def flush_state(self):
+        self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         if self._mts_onoff:
             self.hvac_mode = self.MTS_SUMMERMODE_TO_HVAC_MODE.get(self._mts_summermode)
             self.hvac_action = (

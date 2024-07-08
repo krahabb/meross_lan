@@ -474,7 +474,6 @@ MTS960_WORKING_HEAT = 1
 MTS960_WORKING_COOL = 2
 #
 # mapping the "ONOFF" key value to the socket/plug action
-MTS960_ONOFF_UNKNOWN = 0
 MTS960_ONOFF_ON = 1
 MTS960_ONOFF_OFF = 2  # this appears when the plug is off (why not 0?)
 #

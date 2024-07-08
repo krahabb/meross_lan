@@ -70,6 +70,7 @@ class Mts100Climate(MtsClimate):
         self.binary_sensor_window: "MLBinarySensor" = None  # type: ignore
 
     def flush_state(self):
+        self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         if self._mts_onoff:
             self.hvac_mode = MtsClimate.HVACMode.HEAT
             self.hvac_action = (
