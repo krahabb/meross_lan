@@ -10,7 +10,14 @@
                             "comfort": "Comfort (heat)",
                             "sleep": "Sleep (cool)",
                             "away": "Away (economy)",
-                            "auto": "Auto"
+                            "auto": "Auto",
+                            "heating": "Heating",
+                            "cooling": "Cooling",
+                            "schedule_heating": "Schedule Heating",
+                            "schedule_cooling": "Schedule Cooling",
+                            "timer_cycle": "Cycle Timer",
+                            "timer_countdown_on": "Countdown On",
+                            "timer_countdown_off": "Countdown Off"
                         }
                     }
                 }
@@ -107,7 +114,8 @@
                     "allow_mqtt_publish": "Allow cloud MQTT publish",
                     "check_firmware_updates": "Check firmware updates",
                     "error": "[%key:config::step::hub::data::error%]",
-                    "cloud_region": "Account region"
+                    "cloud_region": "Account region",
+                    "mfa_code": "Authenticator code"
                 }
             },
             "finalize": {
@@ -167,7 +175,8 @@
                     "save_password": "[%key:config::step::profile::data::save_password%]",
                     "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]",
                     "check_firmware_updates": "[%key:config::step::profile::data::check_firmware_updates%]",
-                    "error": "[%key:config::step::profile::data::error%]"
+                    "error": "[%key:config::step::profile::data::error%]",
+                    "mfa_code": "[%key:config::step::profile::data::mfa_code%]"
                 }
             },
             "menu": {
@@ -270,6 +279,9 @@
                     "cannot_connect": "[%key:config::error::cannot_connect%]"
                 },
                 "step": {
+                    "confirm": {
+                        "title": "[%key:issues::device_timezone::title%]"
+                    }
                 }
             }
         }

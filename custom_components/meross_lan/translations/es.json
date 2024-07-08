@@ -10,7 +10,14 @@
                             "comfort": "Confort (calor)",
                             "sleep": "Dormir (fresco)",
                             "away": "Lejos (económico)",
-                            "auto": "Auto"
+                            "auto": "Auto",
+                            "heating": "Calefacción",
+                            "cooling": "Enfriamiento",
+                            "schedule_heating": "Calefacción (programar)",
+                            "schedule_cooling": "Enfriamiento (programar)",
+                            "timer_cycle": "Temporizador de Ciclo",
+                            "timer_countdown_on": "Cuenta Regresiva (Activada)",
+                            "timer_countdown_off": "Cuenta regresiva (Desactivada)"
                         }
                     }
                 }

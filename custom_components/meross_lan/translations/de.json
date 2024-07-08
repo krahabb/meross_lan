@@ -10,7 +10,14 @@
                             "comfort": "Komfort (wärme)",
                             "sleep": "Schlaf (kühl)",
                             "away": "Abwesend (wirtschaft)",
-                            "auto": "Automatisch"
+                            "auto": "Automatisch",
+                            "heating": "Heizung",
+                            "cooling": "Kühlung",
+                            "schedule_heating": "Heizung planen",
+                            "schedule_cooling": "Kühlung planen",
+                            "timer_cycle": "Zeitschaltuhr",
+                            "timer_countdown_on": "Countdown Ein",
+                            "timer_countdown_off": "Countdown Aus"
                         }
                     }
                 }

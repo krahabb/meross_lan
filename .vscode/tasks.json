@@ -16,7 +16,7 @@
         {
             "label": "Upload to lokalise",
             "type": "shell",
-            "command": "./bin/lokalise2 --config=./bin/lokalise2_config.yml file upload --file=./custom_components/meross_lan/strings.json --lang-iso=en --replace_modified=true",
+            "command": "./bin/lokalise2 --config=./bin/lokalise2_config.yml file upload --file=./custom_components/meross_lan/strings.json --lang-iso=en --replace-modified=true",
             "problemMatcher": []
         },
         {
