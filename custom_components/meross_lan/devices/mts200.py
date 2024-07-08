@@ -162,16 +162,15 @@ class Mts200Climate(MtsClimate):
             {mc.KEY_MODE: [p_mode]},
         ):
             try:
-                payload = response[mc.KEY_PAYLOAD][mc.KEY_MODE]
-                self._parse_mode(payload[0] if isinstance(payload, list) else payload)
-            except KeyError:
+                payload = response[mc.KEY_PAYLOAD][mc.KEY_MODE][0]
+            except (KeyError, IndexError):
                 # optimistic update
                 payload = self._mts_payload | p_mode
                 if mc.KEY_MODE in p_mode:
                     key_temp = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(p_mode[mc.KEY_MODE])
                     if key_temp in payload:
                         payload[mc.KEY_TARGETTEMP] = payload[key_temp]
-                self._parse_mode(payload)
+            self._parse_mode(payload)
 
     # message handlers
     def _parse_mode(self, payload: dict):
