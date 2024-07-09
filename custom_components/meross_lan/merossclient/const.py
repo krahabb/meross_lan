@@ -10,6 +10,7 @@ TOPIC_DISCOVERY = "/appliance/+/publish"
 TOPIC_REQUEST = "/appliance/{}/subscribe"
 TOPIC_RESPONSE = "/appliance/{}/publish"
 
+RE_PATTERN_UUID = re.compile(r"(^|[^a-fA-F0-9])([a-fA-F0-9]{32})($|[^a-fA-F0-9])")
 RE_PATTERN_TOPIC_UUID = re.compile(r"/.+/(.*)/.+")
 """re pattern to search/extract the uuid from an MQTT topic or the "from" field in message header"""
 
@@ -120,7 +121,7 @@ NS_APPLIANCE_MCU_HP110_FAVORITE = "Appliance.Mcu.Hp110.Favorite"
 NS_APPLIANCE_MCU_HP110_PREVIEW = "Appliance.Mcu.Hp110.Preview"
 NS_APPLIANCE_MCU_HP110_LOCK = "Appliance.Mcu.Hp110.Lock"
 NS_APPLIANCE_CONTROL_MP3 = "Appliance.Control.Mp3"
-# MTS200 smart thermostat
+# MTS200-960 smart thermostat
 NS_APPLIANCE_CONTROL_THERMOSTAT_ALARM = "Appliance.Control.Thermostat.Alarm"
 NS_APPLIANCE_CONTROL_THERMOSTAT_ALARMCONFIG = "Appliance.Control.Thermostat.AlarmConfig"
 NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION = "Appliance.Control.Thermostat.Calibration"
@@ -142,17 +143,22 @@ NS_APPLIANCE_CONTROL_THERMOSTAT_TIMER = "Appliance.Control.Thermostat.Timer"
 NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED = (
     "Appliance.Control.Thermostat.WindowOpened"
 )
+# screen brigtness (actually seen on MTS200)
+NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS = "Appliance.Control.Screen.Brightness"
+# carrying temp/humi on more recent (2024/06) thermostats
+NS_APPLIANCE_CONTROL_SENSOR_HISTORY = "Appliance.Control.Sensor.History"
+NS_APPLIANCE_CONTROL_SENSOR_LATEST = "Appliance.Control.Sensor.Latest"
+
 # MOD100-MOD150 diffuser
 NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY = "Appliance.Control.Diffuser.Spray"
 NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT = "Appliance.Control.Diffuser.Light"
 NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR = "Appliance.Control.Diffuser.Sensor"
-# screen brigtness (actually seen on MTS200)
-NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS = "Appliance.Control.Screen.Brightness"
-# unknown: seen on mts960
-NS_APPLIANCE_CONTROL_SENSOR_HISTORY = "Appliance.Control.Sensor.History"
 
 NS_APPLIANCE_MCU_FIRMWARE = "Appliance.Mcu.Firmware"
 NS_APPLIANCE_MCU_UPGRADE = "Appliance.Mcu.Upgrade"
+
+NS_APPLIANCE_ENCRYPT_SUITE = "Appliance.Encrypt.Suite"
+NS_APPLIANCE_ENCRYPT_ECDHE = "Appliance.Encrypt.ECDHE"
 
 # misc keys for json payloads
 KEY_HEADER = "header"
@@ -201,6 +207,13 @@ KEY_TRIGGER = "trigger"
 KEY_TRIGGERX = "triggerx"
 KEY_TIMER = "timer"
 KEY_TIMERX = "timerx"
+KEY_DOWN = "down"
+KEY_CYCLE = "cycle"
+KEY_DURATION = "duration"
+KEY_OFFDURATION = "offDuration"
+KEY_ONDURATION = "onDuration"
+KEY_END = "end"
+KEY_CYCLE = "cycle"
 KEY_CLOCK = "clock"
 KEY_TIME = "time"
 KEY_TIMEZONE = "timezone"
@@ -219,6 +232,7 @@ KEY_SIGNAL = "signal"
 KEY_LMTIME = "lmTime"
 KEY_LMTIME_ = "lmtime"
 KEY_CHANNEL = "channel"
+KEY_SECTION = "section"
 KEY_LOCK = "lock"
 KEY_TOGGLE = "toggle"
 KEY_TOGGLEX = "togglex"
@@ -233,6 +247,7 @@ KEY_RGB = "rgb"
 KEY_LUMINANCE = "luminance"
 KEY_TEMPERATURE = "temperature"
 KEY_HUMIDITY = "humidity"
+KEY_HUMI = "humi"
 KEY_SPRAY = "spray"
 KEY_FAN = "fan"
 KEY_SPEED = "speed"
@@ -311,6 +326,8 @@ KEY_ALARM = "alarm"
 KEY_ALARMCONFIG = "alarmConfig"
 KEY_CALIBRATION = "calibration"
 KEY_CTLRANGE = "ctlRange"
+KEY_CTLMAX = "ctlMax"
+KEY_CTLMIN = "ctlMin"
 KEY_DEADZONE = "deadZone"
 KEY_FROST = "frost"
 KEY_OVERHEAT = "overheat"
@@ -401,6 +418,7 @@ ROLLERSHUTTER_POSITION_CLOSED = 0
 MTS_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 MTS960_TEMP_SCALE = 100  # native mts960 temperatures expressed in hundredths of °C
 
+
 # mts100 (and the likes..) valves mode
 MTS100_MODE_CUSTOM = 0
 MTS100_MODE_HEAT = 1
@@ -430,9 +448,8 @@ MTS200_MODE_TO_TARGETTEMP_MAP = {
     None: KEY_MANUALTEMP,
 }
 
-# looks like with 'summerMode' disabled (i.e. in winter) the MTS reports '1'
 MTS200_SUMMERMODE_HEAT = 1
-MTS200_SUMMERMODE_COOL = 0
+MTS200_SUMMERMODE_COOL = 2
 
 # MTS200 external sensor status (overheat protection)
 MTS200_OVERHEAT_WARNING_OK = 0
@@ -445,18 +462,25 @@ MTS200_OVERHEAT_WARNING_MAP = {
 }
 
 # inferring the mts960 modes from the manual
-MTS960_MODE_HEAT = 1
-MTS960_MODE_COOL = 2
-MTS960_MODE_CYCLE = 3
-MTS960_MODE_COUNTDOWN_ON = 4
-MTS960_MODE_COUNTDOWN_OFF = 5
-MTS960_MODE_SCHEDULE_HEAT = 6
-MTS960_MODE_SCHEDULE_COOL = 7
+MTS960_MODE_HEAT_COOL = 1
+MTS960_MODE_SCHEDULE = 2
+MTS960_MODE_TIMER = 3
 # mapping the "state" key value to the socket/plug action
 MTS960_STATE_UNKNOWN = 0
 MTS960_STATE_ON = 1
 MTS960_STATE_OFF = 2  # this appears when the plug is off (why not 0?)
-
+#
+MTS960_WORKING_HEAT = 1
+MTS960_WORKING_COOL = 2
+#
+# mapping the "ONOFF" key value to the socket/plug action
+MTS960_ONOFF_ON = 1
+MTS960_ONOFF_OFF = 2  # this appears when the plug is off (why not 0?)
+#
+# mapping the Timer Type
+MTS960_TIMER_TYPE_COUNTDOWN = 1
+MTS960_TIMER_TYPE_CYCLE = 2
+#
 # diffuser mode enums
 DIFFUSER_SPRAY_MODE_OFF = 2  # or 255 ? or 'any' ?
 DIFFUSER_SPRAY_MODE_ECO = 0

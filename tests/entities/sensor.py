@@ -41,6 +41,7 @@ class EntityTest(EntityComponentTest):
         ],
         mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: [MLFilterMaintenanceSensor],
         mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: [MLTemperatureSensor],
+        mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST: [MLHumiditySensor],
         mc.NS_APPLIANCE_SYSTEM_RUNTIME: [MLSignalStrengthSensor],  # Signal strength
     }
 
@@ -51,9 +52,6 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS150: [MLTemperatureSensor],
         mc.KEY_SMOKEALARM: [MLEnumSensor, MLEnumSensor],  # status, interConn sensors
     }
-
-    async def async_test_each_callback(self, entity: MLEnumSensor | MLNumericSensor):
-        pass
 
     async def async_test_enabled_callback(self, entity: MLEnumSensor | MLNumericSensor):
         pass

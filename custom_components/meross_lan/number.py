@@ -1,7 +1,6 @@
 import typing
 
 from homeassistant.components import number
-from homeassistant.const import UnitOfTemperature, UnitOfTime
 
 from . import meross_entity as me
 from .helpers import reverse_lookup, schedule_async_callback
@@ -21,17 +20,12 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, number.DOMAIN)
 
 
-class MLConfigNumber(
-    me.MEListChannelMixin, me.MerossNumericEntity, number.NumberEntity
-):
+class MLNumber(me.MerossNumericEntity, number.NumberEntity):
     """
-    Base class for any configurable parameter in the device. This works much-like
-    MLSwitch by refining the 'async_request_value' api in order to send the command.
-    Contrary to MLSwitch (which is abstract), this has a default implementation for
-    payloads sent in a list through me.MEListChannelMixin since this looks to be
-    widely adopted (thermostats and the likes) but some care needs to be taken for
-    some namespaces not supporting channels (i.e. Appliance.GarageDoor.Config) or
-    not understanding the list payload (likely all the RollerShutter stuff)
+    Base (abstract) ancestor for ML number entities. This has 2 specializations:
+    - MLConfigNumber: for configuration parameters backed by a device namespace value.
+    - MLEmulatedNumber: for configuration parameters not directly mapped to a device ns.
+    These in turn will be managed with HA state-restoration.
     """
 
     PLATFORM = number.DOMAIN
@@ -42,12 +36,10 @@ class MLConfigNumber(
 
     DEVICECLASS_TO_UNIT_MAP = {
         None: None,
-        DEVICE_CLASS_DURATION: UnitOfTime.SECONDS,
-        DeviceClass.HUMIDITY: me.MerossNumericEntity.UNIT_PERCENTAGE,
-        DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
+        DEVICE_CLASS_DURATION: me.MerossEntity.hac.UnitOfTime.SECONDS,
+        DeviceClass.HUMIDITY: me.MerossEntity.hac.PERCENTAGE,
+        DeviceClass.TEMPERATURE: me.MerossEntity.hac.UnitOfTemperature.CELSIUS,
     }
-
-    DEBOUNCE_DELAY = 1
 
     manager: "MerossDeviceBase"
 
@@ -58,6 +50,20 @@ class MLConfigNumber(
     native_min_value: float
     native_step: float
 
+
+class MLConfigNumber(me.MEListChannelMixin, MLNumber):
+    """
+    Base class for any configurable parameter in the device. This works much-like
+    MLSwitch by refining the 'async_request_value' api in order to send the command.
+    Contrary to MLSwitch (which is abstract), this has a default implementation for
+    payloads sent in a list through me.MEListChannelMixin since this looks to be
+    widely adopted (thermostats and the likes) but some care needs to be taken for
+    some namespaces not supporting channels (i.e. Appliance.GarageDoor.Config) or
+    not understanding the list payload (likely all the RollerShutter stuff)
+    """
+
+    DEBOUNCE_DELAY = 1
+
     __slots__ = ("_async_request_debounce_unsub",)
 
     def __init__(
@@ -65,7 +71,7 @@ class MLConfigNumber(
         manager: "MerossDeviceBase",
         channel: object | None,
         entitykey: str | None = None,
-        device_class: DeviceClass | str | None = None,
+        device_class: MLNumber.DeviceClass | str | None = None,
         *,
         device_value: int | None = None,
         native_unit_of_measurement: str | None = None,
@@ -122,10 +128,28 @@ class MLConfigNumber(
             self._async_request_debounce_unsub = None
 
 
+class MLEmulatedNumber(me.MEPartialAvailableMixin, MLNumber):
+    """
+    Number entity for locally (HA recorder) stored parameters.
+    """
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        with self.exception_warning("restoring previous state"):
+            if last_state := await self.get_last_state_available():
+                self.native_value = float(last_state.state)
+
+    async def async_set_native_value(self, value: float):
+        self.update_native_value(value)
+
+
 class MtsTemperatureNumber(MLConfigNumber):
     """
     Common number entity for representing MTS temperatures configuration
     """
+
+    # HA core entity attributes:
+    _attr_suggested_display_precision = 1
 
     __slots__ = (
         "climate",
@@ -184,10 +208,12 @@ class MtsSetPointNumber(MtsTemperatureNumber):
             # make sure the climate state is consistent and all the correct roundings
             # are processed when changing any of the presets
             # not sure about mts200 replies..but we're optimist
-            key_namespace = self.key_namespace
+            key_namespace = self.ns.key
             payload = response[mc.KEY_PAYLOAD]
             if key_namespace in payload:
                 # by design key_namespace is either "temperature" (mts100) or "mode" (mts200)
-                self.climate._parse(payload[key_namespace][0])
+                getattr(self.climate, f"_parse_{key_namespace}")(
+                    payload[key_namespace][0]
+                )
 
         return response

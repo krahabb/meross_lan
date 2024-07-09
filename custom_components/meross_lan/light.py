@@ -181,9 +181,6 @@ class MLLightBase(me.MerossBinaryEntity, light.LightEntity):
     PLATFORM = light.DOMAIN
     manager: "MerossDevice"
 
-    namespace: typing.ClassVar[str]
-    key_namespace = mc.KEY_LIGHT
-
     # define our own EFFECT_OFF semantically compatible to the 'new' HA core
     # symbol in order to mantain a sort of backward compatibility
     EFFECT_OFF: typing.Final = "off"
@@ -271,7 +268,7 @@ class MLLightBase(me.MerossBinaryEntity, light.LightEntity):
                 LightEntityFeature.EFFECT | LightEntityFeature.TRANSITION
             )
         super().__init__(manager, digest.get(mc.KEY_CHANNEL))
-        manager.register_parser(self.namespace, self)
+        manager.register_parser_entity(self)
 
     # interface: MerossToggle
     async def async_shutdown(self):
@@ -303,9 +300,9 @@ class MLLightBase(me.MerossBinaryEntity, light.LightEntity):
     # interface: self
     async def async_request_light_ack(self, payload: dict):
         return await self.manager.async_request_ack(
-            self.namespace,
+            self.ns.name,
             mc.METHOD_SET,
-            {self.key_namespace: payload},
+            {self.ns.key: payload},
         )
 
     def _flush_light(self, _light: dict):
@@ -441,7 +438,7 @@ class MLLight(MLLightBase):
 
     manager: "MerossDevice"
 
-    namespace = mc.NS_APPLIANCE_CONTROL_LIGHT
+    ns = mn.Appliance_Control_Light
 
     _togglex: bool
     _togglex_auto: bool | None
@@ -855,7 +852,7 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MerossBinaryEntity, light.LightE
     PLATFORM = light.DOMAIN
     manager: "MerossDevice"
 
-    namespace = mc.NS_APPLIANCE_SYSTEM_DNDMODE
+    ns = mn.Appliance_System_DNDMode
 
     # HA core entity attributes:
     color_mode: ColorMode = ColorMode.ONOFF

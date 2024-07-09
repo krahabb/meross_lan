@@ -4,7 +4,7 @@ import typing
 from homeassistant.components import switch
 
 from . import meross_entity as me
-from .merossclient import const as mc, extract_dict_payloads
+from .merossclient import const as mc, extract_dict_payloads, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -64,10 +64,9 @@ class MLSwitch(me.MerossBinaryEntity, switch.SwitchEntity):
             self.update_onoff(0)
 
 
-class PhysicalLockSwitch(me.MEDictChannelMixin, MLSwitch):
+class PhysicalLockSwitch(me.MEListChannelMixin, MLSwitch):
 
-    namespace = mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK
-    key_namespace = mc.KEY_LOCK
+    ns = mn.Appliance_Control_PhysicalLock
 
     # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
@@ -75,20 +74,19 @@ class PhysicalLockSwitch(me.MEDictChannelMixin, MLSwitch):
     def __init__(self, manager: "MerossDevice"):
         # right now we expect only 1 entity on channel == 0 (whatever)
         super().__init__(manager, 0, mc.KEY_LOCK, self.DeviceClass.SWITCH)
-        manager.register_parser(self.namespace, self)
+        manager.register_parser_entity(self)
 
 
 class MLToggle(me.MENoChannelMixin, MLSwitch):
 
-    namespace = mc.NS_APPLIANCE_CONTROL_TOGGLE
-    key_namespace = mc.KEY_TOGGLE
+    ns = mn.Appliance_Control_Toggle
 
     def __init__(self, manager: "MerossDevice"):
         # 2024-03-13: passing entitykey="0" instead of channel in order
         # to mantain unique_id compatibility with installations but
         # updating to new toggle entity model (where channel is None for this entity type)
         super().__init__(manager, None, "0", MLSwitch.DeviceClass.OUTLET)
-        manager.register_parser(self.namespace, self)
+        manager.register_parser_entity(self)
 
 
 def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestInitReturnType":
@@ -100,12 +98,11 @@ def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestInitRetur
 
 class MLToggleX(me.MEDictChannelMixin, MLSwitch):
 
-    namespace = mc.NS_APPLIANCE_CONTROL_TOGGLEX
-    key_namespace = mc.KEY_TOGGLEX
+    ns = mn.Appliance_Control_ToggleX
 
     def __init__(self, manager: "MerossDevice", channel: object):
         super().__init__(manager, channel, None, MLSwitch.DeviceClass.OUTLET)
-        manager.register_parser(self.namespace, self)
+        manager.register_parser_entity(self)
 
 
 def digest_init_togglex(

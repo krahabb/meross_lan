@@ -44,9 +44,9 @@ class Namespace:
     DEFAULT_PUSH_PAYLOAD: typing.Final = {}
 
     has_get: bool | None
-    """ns supports method GET"""
+    """ns supports method GET - is None when we have no clue"""
     has_push: bool | None
-    """ns supports method PUSH"""
+    """ns supports method PUSH - is None when we have no clue"""
     need_channel: bool
     """ns needs the channel index in standard GET queries"""
     payload_get_inner: list | dict | None
@@ -55,6 +55,7 @@ class Namespace:
     __slots__ = (
         "name",
         "key",
+        "key_channel",
         "has_get",
         "has_push",
         "need_channel",
@@ -95,7 +96,11 @@ class Namespace:
                     self.payload_get_inner = _LIST
                     self.payload_type = list
                     self.need_channel = False
-                case (_, _, "Thermostat", *_):
+                case (
+                    (_, "Control", "Thermostat", *_)
+                    | (_, "Control", "Screen", *_)
+                    | (_, "Control", "Sensor", *_)
+                ):
                     self.payload_get_inner = [{mc.KEY_CHANNEL: 0}]
                     self.payload_type = list
                     self.need_channel = True
@@ -107,6 +112,8 @@ class Namespace:
             self.payload_get_inner = payload_get
             self.payload_type = type(payload_get)
             self.need_channel = bool(payload_get)
+
+        self.key_channel = mc.KEY_ID if self.is_hub else mc.KEY_CHANNEL
         self.has_get = has_get
         self.has_push = has_push
         NAMESPACES[name] = self
@@ -149,8 +156,7 @@ def _ns_push(
     name: str,
     key: str | None = None,
 ):
-    # these namespaces do not provide the GET/GETACK methods
-    # hence querying works by issuing an empty PUSH. SET/SETACK might work though
+    """Builds a definition for a namespace supporting only PUSH queries (no GET)"""
     return Namespace(name, key, None, has_get=False, has_push=True)
 
 
@@ -159,6 +165,7 @@ def _ns_get(
     key: str | None = None,
     payload_get: list | dict | None = None,
 ):
+    """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
     return Namespace(name, key, payload_get, has_get=True, has_push=False)
 
 
@@ -167,6 +174,7 @@ def _ns_get_push(
     key: str | None = None,
     payload_get: list | dict | None = None,
 ):
+    """Builds a definition for a namespace supporting GET queries (which also PUSHes updates)"""
     return Namespace(name, key, payload_get, has_get=True, has_push=True)
 
 
@@ -183,16 +191,26 @@ Appliance_System_Debug = _ns_get(mc.NS_APPLIANCE_SYSTEM_DEBUG, mc.KEY_DEBUG, _DI
 Appliance_System_DNDMode = _ns_get(
     mc.NS_APPLIANCE_SYSTEM_DNDMODE, mc.KEY_DNDMODE, _DICT
 )
+Appliance_System_Runtime = _ns_get(
+    mc.NS_APPLIANCE_SYSTEM_RUNTIME, mc.KEY_RUNTIME, _DICT
+)
 
 Appliance_Control_ConsumptionX = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX, mc.KEY_CONSUMPTIONX, _LIST
 )
+Appliance_Control_Diffuser_Light = _ns_get_push(
+    mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT, mc.KEY_LIGHT, _DICT
+)
 Appliance_Control_Diffuser_Sensor = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR, mc.KEY_SENSOR, _DICT
+)
+Appliance_Control_Diffuser_Spray = _ns_get_push(
+    mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY, mc.KEY_SPRAY, _DICT
 )
 Appliance_Control_Electricity = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_ELECTRICITY, mc.KEY_ELECTRICITY, _DICT
 )
+Appliance_Control_Fan = _ns_get(mc.NS_APPLIANCE_CONTROL_FAN, mc.KEY_FAN)
 Appliance_Control_FilterMaintenance = _ns_push(
     mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE, mc.KEY_FILTER
 )
@@ -204,11 +222,11 @@ Appliance_Control_Mp3 = _ns_get_push(mc.NS_APPLIANCE_CONTROL_MP3, mc.KEY_MP3, _D
 Appliance_Control_PhysicalLock = _ns_push(
     mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK, mc.KEY_LOCK
 )
-Appliance_Control_Screen_Brightness = _ns_get(
-    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS, mc.KEY_BRIGHTNESS, _LIST_C
-)
 Appliance_Control_Sensor_History = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_SENSOR_HISTORY, mc.KEY_HISTORY, _LIST_C
+)
+Appliance_Control_Sensor_Latest = _ns_get_push(
+    mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST, mc.KEY_LATEST, _LIST_C
 )
 Appliance_Control_Spray = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_SPRAY, mc.KEY_SPRAY, _DICT
@@ -218,6 +236,9 @@ Appliance_Control_TempUnit = _ns_get_push(
 )
 Appliance_Control_Thermostat_CompressorDelay = _ns_get(
     mc.NS_APPLIANCE_CONTROL_THERMOSTAT_COMPRESSORDELAY, mc.KEY_DELAY, _LIST_C
+)
+Appliance_Control_Thermostat_Timer = _ns_get_push(
+    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_TIMER, mc.KEY_TIMER, _LIST_C
 )
 Appliance_Control_TimerX = _ns_get(mc.NS_APPLIANCE_CONTROL_TIMERX, mc.KEY_TIMERX, _DICT)
 Appliance_Control_Toggle = _ns_get_push(
@@ -247,6 +268,12 @@ Appliance_GarageDoor_State = _ns_get_push(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
 Appliance_Hub_Mts100_ScheduleB = _ns_get_push(
     mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB, mc.KEY_SCHEDULE, _LIST
 )
+Appliance_Hub_Mts100_Temperature = _ns_get_push(
+    mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE, mc.KEY_TEMPERATURE, _LIST
+)
+Appliance_Hub_Sensor_Adjust = _ns_get(
+    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST, mc.KEY_ADJUST, _LIST
+)
 Appliance_Hub_Sensor_Smoke = _ns_get_push(
     mc.NS_APPLIANCE_HUB_SENSOR_SMOKE, mc.KEY_SMOKEALARM, _LIST
 )
@@ -255,3 +282,4 @@ Appliance_Hub_SubDevice_MotorAdjust = _ns_get_push(
 )
 
 Appliance_RollerShutter_Adjust = _ns_push(mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST)
+Appliance_RollerShutter_Config = _ns_get(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG)

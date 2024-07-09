@@ -10,7 +10,14 @@
                             "comfort": "Comfort (caldo)",
                             "sleep": "Notturno (fresco)",
                             "away": "Fuori casa (eco)",
-                            "auto": "Auto"
+                            "auto": "Auto",
+                            "heating": "Riscaldamento",
+                            "cooling": "Raffreddamento",
+                            "schedule_heating": "Riscaldamento (pianificato)",
+                            "schedule_cooling": "Raffreddamento (pianificato)",
+                            "timer_cycle": "Timer Ciclico",
+                            "timer_countdown_on": "Countdown On",
+                            "timer_countdown_off": "Countdown Off"
                         }
                     }
                 }

@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 from datetime import datetime, timedelta
 import re
@@ -16,7 +17,7 @@ from homeassistant.util import dt
 from . import meross_entity as me
 from .climate import MtsClimate
 from .helpers import clamp
-from .merossclient import const as mc
+from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -93,11 +94,6 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
     PLATFORM = calendar.DOMAIN
     manager: "MerossDeviceBase"
 
-    # set in descendants class def
-    namespace: typing.ClassVar[str]
-    key_namespace: typing.ClassVar[str]
-    key_channel: typing.ClassVar[str]
-
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
     supported_features: calendar.CalendarEntityFeature = (
@@ -116,13 +112,11 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         "_native_schedule",
         "_schedule",
         "_schedule_unit_time",
-        "_schedule_entry_count",
+        "_schedule_entry_count_max",
+        "_schedule_entry_count_min",
     )
 
-    def __init__(
-        self,
-        climate: MtsClimate,
-    ):
+    def __init__(self, climate: MtsClimate):
         self.climate = climate
         self._flatten = True
         # save a flattened version of the device schedule to ease/optimize CalendarEvent management
@@ -143,9 +137,10 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         # The default here (=0) disables any schedule entry count check in building payloads
         # meaning we're sending (more or less) the effective number of entries (per day) as
         # shown/available in the calendar UI.
-        self._schedule_entry_count = 0
-        self.extra_state_attributes = {}
-        super().__init__(climate.manager, climate.channel, self.key_namespace)
+        self._schedule_entry_count_max = 0
+        self._schedule_entry_count_min = 0
+        self.name = "Schedule"
+        super().__init__(climate.manager, climate.channel, self.ns.key)
 
     # interface: MerossEntity
     async def async_shutdown(self):
@@ -242,61 +237,37 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
     async def _async_request_schedule(self):
         if schedule := self._schedule:
             payload = {}
-            # the time duration step (minimum interval) of the schedule intervals
-            schedule_unit_time = self._schedule_unit_time
-            # unpack our schedule struct to be compliant with the device payload i.e.
-            # the weekday_schedule must contain
+            # unpack our schedule struct to be compliant with the device payload:
+            # the weekday_schedule must contain between _schedule_entry_count_min and
+            # _schedule_entry_count_max
             for weekday, weekday_schedule in schedule.items():
-                schedule_entry_count = self._schedule_entry_count
-                if not schedule_entry_count:
-                    # no checks on number of items in day schedule
-                    payload[weekday] = weekday_schedule
-                    continue
-
-                # our working schedule might contain less entries than requested by MTS
-                schedule_items_missing = schedule_entry_count - len(weekday_schedule)
-                if schedule_items_missing < 0:
-                    raise Exception("Inconsistent number of elements in the schedule")
-                if schedule_items_missing == 0:
-                    payload[weekday] = weekday_schedule
-                    continue
-                # we have to generate some 'filler' since the mts expects
-                # _schedule_entry_count in the weekday schedule
-                payload_weekday_schedule = []
-                for schedule_entry in weekday_schedule:
-                    # schedule_entry[0] = duration
-                    # schedule_entry[1] = setpoint
-                    if schedule_items_missing == 0:
-                        # at this point just pass over
-                        payload_weekday_schedule.append(schedule_entry)
-                        continue
-                    schedule_entry_duration = schedule_entry[0]
-                    while (schedule_entry_duration > schedule_unit_time) and (
-                        schedule_items_missing > 0
-                    ):
-                        payload_weekday_schedule.append(
-                            [schedule_unit_time, schedule_entry[1]]
-                        )
-                        schedule_entry_duration -= schedule_unit_time
-                        schedule_items_missing -= 1
-                    payload_weekday_schedule.append(
-                        [schedule_entry_duration, schedule_entry[1]]
+                schedule_entry_count = len(weekday_schedule)
+                if schedule_entry_count > self._schedule_entry_count_max:
+                    raise Exception("Too many elements in the schedule")
+                schedule_items_missing = (
+                    self._schedule_entry_count_min - schedule_entry_count
+                )
+                if schedule_items_missing > 0:
+                    # our working schedule contains less entries than requested by MTS
+                    weekday_schedule = list(weekday_schedule)
+                    weekday_schedule.extend(
+                        [[0, weekday_schedule[0][1]]] * schedule_items_missing
                     )
-                payload[weekday] = payload_weekday_schedule
+                payload[weekday] = weekday_schedule
 
-            payload[self.key_channel] = self.channel
-
+            ns = self.ns
+            payload[ns.key_channel] = self.channel
             if not await self.manager.async_request_ack(
-                self.namespace,
+                ns.name,
                 mc.METHOD_SET,
-                {self.key_namespace: [payload]},
+                {ns.key: [payload]},
             ):
                 # there was an error so we request the actual device state again
                 if self.manager.online:
                     await self.manager.async_request(
-                        self.namespace,
+                        ns.name,
                         mc.METHOD_GET,
-                        {self.key_namespace: [{self.key_channel: self.channel}]},
+                        {ns.key: [{ns.key_channel: self.channel}]},
                     )
 
     def _get_event_entry(self, event_time: datetime) -> MtsScheduleEntry | None:
@@ -367,29 +338,14 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
     def _extract_rfc5545_temp(self, event: dict[str, typing.Any]) -> int:
         match = re.search(r"[-+]?(?:\d*\.*\d+)", event[EVENT_SUMMARY])
         if match:
-            return int(
+            return round(
                 clamp(
                     float(match.group()),
                     self.climate.min_temp,
                     self.climate.max_temp,
                 )
-                * 10
+                * self.climate.device_scale
             )
-        else:
-            raise Exception("Provide a valid temperature in the summary field")
-
-        for s in event[EVENT_SUMMARY].split():
-            try:
-                return int(
-                    clamp(
-                        float(s),
-                        self.climate.min_temp,
-                        self.climate.max_temp,
-                    )
-                    * 10
-                )
-            except Exception:
-                pass
         else:
             raise Exception("Provide a valid temperature in the summary field")
 
@@ -455,7 +411,6 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         event_minutes_duration = event_minutes_end - event_minutes_start
         if event_minutes_duration < schedule_unit_time:
             raise Exception(f"Minimum event duration is {schedule_unit_time} minutes")
-
         # recognize some basic recurrence scheme: typically the MTS100 has a weekly schedule
         # and that's by default but we let the user select a daily schedule to setup
         # the same entry among all of the week days
@@ -469,9 +424,18 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
                     raise Exception("Daily recurrence too complex")
                 recurrencedays = MTS_SCHEDULE_WEEKDAY
             elif freq == "WEEKLY":
-                if len(rule_parts) > 1:
+                if len(rule_parts) == 2 and "BYDAY" in rule_parts:
+                    lstdays = {}
+                    for day in rule_parts["BYDAY"].split(","):
+                        for MtsDays in MTS_SCHEDULE_WEEKDAY:
+                            if MtsDays[:2] == day.lower():
+                                lstdays[MtsDays] = None
+                                break
+                    recurrencedays = tuple(lstdays.keys())
+                elif len(rule_parts) > 1:
                     raise Exception("Weekly recurrence too complex")
-                recurrencedays = (MTS_SCHEDULE_WEEKDAY[event_start.weekday()],)
+                else:
+                    recurrencedays = (MTS_SCHEDULE_WEEKDAY[event_start.weekday()],)
             else:
                 raise Exception(f"Invalid frequency for rule: {event_rrule}")
         else:
@@ -573,7 +537,7 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
             # at this point our schedule is set but might have too many events in it
             # (total schedules entry need to be less than so we'll reparse and kindly coalesce some events
             assert schedule_index_insert is not None, "New event was not added"
-            schedule_entry_count = self._schedule_entry_count
+            schedule_entry_count = self._schedule_entry_count_max
             if not schedule_entry_count:
                 # we don't have a set limit. Leave as is
                 continue
@@ -600,7 +564,7 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
                 # we discard the other and enlarge the last addition to cover the full day
                 schedule_entry = weekday_schedule.pop(1 - schedule_index_insert)
                 weekday_schedule[0][0] += schedule_entry[0]
-                # end while (len(weekday_schedule) > schedule_count):
+                # end while (len(weekday_schedule) > schedule_entry_count):
 
             # end for weekday
 
@@ -645,12 +609,20 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         # the updated entries for the updated day.
         native_schedule = self._native_schedule
         if native_schedule:
-            native_schedule.update(payload)
-            if self._native_schedule == native_schedule:
+            payload = native_schedule | payload
+            if payload == native_schedule:
                 return
-        else:
-            native_schedule = payload
-        self.extra_state_attributes[self.key_namespace] = str(native_schedule)
-        self._native_schedule = native_schedule
+        self._native_schedule = payload
+        if mc.KEY_SECTION in payload:
+            # mts960 carries 'section' to accomodate the
+            # maximum number of entries according to @bernardpe
+            # mts200 too carries this field and is likely behaving
+            # the same as mts960
+            self._schedule_entry_count_min = self._schedule_entry_count_max = payload[
+                mc.KEY_SECTION
+            ]
+            # TODO: check if we can leave _schedule_entry_count_min at 0 (default)
+            # since it appears mts200 and mts960 could accept any number between 0
+            # and max (key "section"). This needs to be confirmed though.
         self._build_internal_schedule()
         self.flush_state()

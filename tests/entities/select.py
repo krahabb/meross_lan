@@ -3,7 +3,7 @@ from homeassistant.components import select as haec
 from custom_components.meross_lan.devices.diffuser import MLDiffuserSpray
 from custom_components.meross_lan.devices.spray import MLSpray
 from custom_components.meross_lan.merossclient import const as mc
-from custom_components.meross_lan.select import MtsTrackedSensor
+from custom_components.meross_lan.select import MLSelect, MtsTrackedSensor
 
 from tests.entities import EntityComponentTest
 
@@ -27,17 +27,14 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS150: [MtsTrackedSensor],
     }
 
-    async def async_test_each_callback(self, entity: haec.SelectEntity):
-        pass
-
-    async def async_test_enabled_callback(self, entity: haec.SelectEntity):
+    async def async_test_enabled_callback(self, entity: MLSelect):
         for option in entity.options:
             state = await self.async_service_call(
                 haec.SERVICE_SELECT_OPTION, {haec.ATTR_OPTION: option}
             )
             assert state.state == option
 
-    async def async_test_disabled_callback(self, entity: haec.SelectEntity):
+    async def async_test_disabled_callback(self, entity: MLSelect):
         for option in entity.options:
             await entity.async_select_option(option)
             assert entity.state == option

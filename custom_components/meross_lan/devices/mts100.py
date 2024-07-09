@@ -2,7 +2,7 @@ import typing
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..merossclient import const as mc
+from ..merossclient import const as mc, namespaces as mn
 from ..number import MtsSetPointNumber, MtsTemperatureNumber
 
 if typing.TYPE_CHECKING:
@@ -12,9 +12,7 @@ if typing.TYPE_CHECKING:
 
 class Mts100AdjustNumber(MtsTemperatureNumber):
 
-    namespace = mc.NS_APPLIANCE_HUB_MTS100_ADJUST
-    key_namespace = mc.KEY_ADJUST
-    key_channel = mc.KEY_ID
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_HUB_MTS100_ADJUST]
     key_value = mc.KEY_TEMPERATURE
 
     # HA core entity attributes:
@@ -26,7 +24,7 @@ class Mts100AdjustNumber(MtsTemperatureNumber):
         self.name = "Adjust temperature"
         super().__init__(
             climate,
-            f"config_{self.key_namespace}_{self.key_value}",
+            f"config_{self.ns.key}_{self.key_value}",
         )
         # override the default climate.device_scale set in base cls
         self.device_scale = 100
@@ -35,8 +33,7 @@ class Mts100AdjustNumber(MtsTemperatureNumber):
 class Mts100Climate(MtsClimate):
     """Climate entity for hub paired devices MTS100, MTS100V3, MTS150"""
 
-    namespace = mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE
-    key_namespace = mc.KEY_TEMPERATURE
+    ns = mn.Appliance_Hub_Mts100_Temperature
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS100_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
@@ -73,6 +70,7 @@ class Mts100Climate(MtsClimate):
         self.binary_sensor_window: "MLBinarySensor" = None  # type: ignore
 
     def flush_state(self):
+        self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         if self._mts_onoff:
             self.hvac_mode = MtsClimate.HVACMode.HEAT
             self.hvac_action = (
@@ -92,11 +90,32 @@ class Mts100Climate(MtsClimate):
         await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        if self._mts_mode == mc.MTS100_MODE_AUTO:
-            # when sending a temp this way the device should automatically
-            # exit auto mode if needed. We're anyway forcing going
-            # to manual mode when the device is set to schedule
-            await self.async_request_mode(mc.MTS100_MODE_CUSTOM)
+        if (
+            self.SET_TEMP_FORCE_MANUAL_MODE and self._mts_mode != mc.MTS100_MODE_CUSTOM
+        ) or (self._mts_mode == mc.MTS100_MODE_AUTO):
+            # setting the temperature automatically switches
+            # to manual 'custom' mode. (2024-06-27) This is a change
+            # against previous behavior where the mode was retained
+            # (unless schedule mode) and the temp setting was directed to any
+            # of the presets, whichever was active at the moment.
+            # This is following #401 and seems more natural behavior.
+            # self.SET_TEMP_FORCE_MANUAL_MODE acts as a config bool
+            # to enable this behavior or fallback to the legacy one.
+            # Keep in mind we're not also forcing the device to 'ON'.
+            # This is intended (right now) to allow the user change
+            # the setpoint without implying the device switch on.
+            # Turning on/off the device must be an explicit action on HVACMode.
+            if await self.manager.async_request_ack(
+                mc.NS_APPLIANCE_HUB_MTS100_MODE,
+                mc.METHOD_SET,
+                {
+                    mc.KEY_MODE: [
+                        {mc.KEY_ID: self.id, mc.KEY_STATE: mc.MTS100_MODE_CUSTOM}
+                    ]
+                },
+            ):
+                self._mts_mode = mc.MTS100_MODE_CUSTOM
+
         key = mc.MTS100_MODE_TO_CURRENTSET_MAP.get(self._mts_mode) or mc.KEY_CUSTOM
         if response := await self.manager.async_request_ack(
             mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE,
@@ -112,7 +131,7 @@ class Mts100Climate(MtsClimate):
                 ]
             },
         ):
-            self._parse(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
+            self._parse_temperature(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
 
     async def async_request_mode(self, mode: int):
         """Requests an mts mode and (ensure) turn-on"""
@@ -148,22 +167,16 @@ class Mts100Climate(MtsClimate):
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
+    def get_ns_adjust(self):
+        return self.manager.hub.namespace_handlers[mc.NS_APPLIANCE_HUB_MTS100_ADJUST]
+
     # message handlers
-    def _parse(self, payload: dict):
+    def _parse_temperature(self, payload: dict):
         if self._mts_payload == payload:
             return
         self._mts_payload = payload
         if mc.KEY_ROOM in payload:
-            mts100 = self.manager
-            self.current_temperature = payload[mc.KEY_ROOM] / self.device_scale
-            self.select_tracked_sensor.check_tracking()
-            if mts100.sensor_temperature.update_native_value(self.current_temperature):
-                strategy = mts100.hub.namespace_handlers[
-                    mc.NS_APPLIANCE_HUB_MTS100_ADJUST
-                ]
-                if strategy.lastrequest < (mts100.hub.lastresponse - 30):
-                    strategy.lastrequest = 0
-
+            self._update_current_temperature(payload[mc.KEY_ROOM])
         if mc.KEY_CURRENTSET in payload:
             self.target_temperature = payload[mc.KEY_CURRENTSET] / self.device_scale
         if mc.KEY_MIN in payload:
@@ -187,7 +200,8 @@ class Mts100Climate(MtsClimate):
     # interface: self
     def update_scheduleb_mode(self, mode):
         self.extra_state_attributes[mc.KEY_SCHEDULEBMODE] = mode
-        self.schedule._schedule_entry_count = mode
+        self.schedule._schedule_entry_count_max = mode
+        self.schedule._schedule_entry_count_min = mode
 
 
 class Mts100SetPointNumber(MtsSetPointNumber):
@@ -195,15 +209,11 @@ class Mts100SetPointNumber(MtsSetPointNumber):
     customize MtsSetPointNumber to interact with Mts100 family valves
     """
 
-    namespace = mc.NS_APPLIANCE_HUB_MTS100_TEMPERATURE
-    key_namespace = mc.KEY_TEMPERATURE
-    key_channel = mc.KEY_ID
+    ns = mn.Appliance_Hub_Mts100_Temperature
 
 
 class Mts100Schedule(MtsSchedule):
-    namespace = mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB
-    key_namespace = mc.KEY_SCHEDULE
-    key_channel = mc.KEY_ID
+    ns = mn.Appliance_Hub_Mts100_ScheduleB
 
     def __init__(self, climate: Mts100Climate):
         super().__init__(climate)

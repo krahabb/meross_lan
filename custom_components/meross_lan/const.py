@@ -37,7 +37,6 @@ CONF_TRACE_TIMEOUT_DEFAULT: Final = 600
 CONF_TRACE_MAXSIZE: Final = 262144  # or when MAXSIZE exceeded
 # folder where to store traces
 CONF_TRACE_DIRECTORY: Final = "traces"
-CONF_TRACE_FILENAME: Final = "{}_{}.csv"
 
 
 class ManagerConfigType(TypedDict):

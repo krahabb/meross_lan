@@ -15,12 +15,12 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
     me.platform_setup_entry(hass, config_entry, async_add_devices, update.DOMAIN)
 
 
-class MLUpdate(me.MerossEntity, update.UpdateEntity):
+class MLUpdate(me.MEAlwaysAvailableMixin, me.MerossEntity, update.UpdateEntity):
     PLATFORM = update.DOMAIN
     DeviceClass = update.UpdateDeviceClass
     manager: "MerossDevice"
+
     # HA core entity attributes:
-    _attr_available = True
     entity_category = me.EntityCategory.DIAGNOSTIC
     installed_version: str | None
     latest_version: str | None
@@ -42,12 +42,6 @@ class MLUpdate(me.MerossEntity, update.UpdateEntity):
             "update_firmware",
             self.DeviceClass.FIRMWARE,
         )
-
-    def set_available(self):
-        pass
-
-    def set_unavailable(self):
-        pass
 
     def _generate_unique_id(self):
         return None

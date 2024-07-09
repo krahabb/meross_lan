@@ -193,12 +193,6 @@ async def _async_test_entities(manager: "MerossDeviceBase"):
 
         await entity_component_test.async_test_each_callback(entity)
 
-        for pattern in UNAVAILABLE_ENTITIES:
-            if re.match(pattern, entity_id):
-                break
-        else:
-            assert entity.available, f"entity {entity_id} not available"
-
         state = EntityComponentTest.hass_states.get(entity_id)
         if state:
             assert entity._hass_connected

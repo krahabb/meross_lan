@@ -10,7 +10,14 @@
                             "comfort": "Comfort (heat)",
                             "sleep": "Sleep (cool)",
                             "away": "Away (economy)",
-                            "auto": "Auto"
+                            "auto": "Auto",
+                            "heating": "Heating",
+                            "cooling": "Cooling",
+                            "schedule_heating": "Schedule Heating",
+                            "schedule_cooling": "Schedule Cooling",
+                            "timer_cycle": "Cycle Timer",
+                            "timer_countdown_on": "Countdown On",
+                            "timer_countdown_off": "Countdown Off"
                         }
                     }
                 }

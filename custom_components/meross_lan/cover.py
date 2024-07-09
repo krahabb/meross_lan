@@ -6,7 +6,7 @@ from homeassistant.exceptions import InvalidStateError
 from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
 from .helpers import schedule_async_callback, versiontuple
-from .merossclient import const as mc
+from .merossclient import const as mc, namespaces as mn
 from .number import MLConfigNumber
 
 if typing.TYPE_CHECKING:
@@ -480,8 +480,7 @@ class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
     Helper entity to configure MRS open/close duration
     """
 
-    namespace = mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG
-    key_namespace = mc.KEY_CONFIG
+    ns = mn.Appliance_RollerShutter_Config
 
     device_scale = 1000
 

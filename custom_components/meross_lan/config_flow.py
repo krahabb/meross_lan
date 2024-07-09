@@ -22,8 +22,11 @@ from .merossclient import (
     MerossDeviceDescriptor,
     MerossKeyError,
     cloudapi,
+    compute_message_encryption_key,
     const as mc,
     fmt_macaddress,
+    get_macaddress_from_uuid,
+    get_message_uuid,
     namespaces as mn,
 )
 from .merossclient.httpclient import MerossHttpClient
@@ -104,7 +107,6 @@ class MerossFlowHandlerMixin(
     }
 
     _is_keyerror: bool = False
-    _httpclient: MerossHttpClient | None = None
 
     # instance properties managed with show_form_errorcontext
     # and async_show_form_with_errors
@@ -435,33 +437,48 @@ class MerossFlowHandlerMixin(
         self, host: str, key: str | None
     ) -> tuple[mlc.DeviceConfigType, MerossDeviceDescriptor]:
         # passing key=None would allow key-hack and we don't want it aymore
+        key = key or ""
         api = self.api
-        if key is None:
-            key = ""
-        if _httpclient := self._httpclient:
-            _httpclient.host = host
-            _httpclient.key = key
-        else:
-            self._httpclient = _httpclient = MerossHttpClient(
-                host,
-                key,
-                None,
-                api,  # type: ignore (api almost duck-compatible with logging.Logger)
-                api.VERBOSE,
-            )
-
-        payload = (
-            await _httpclient.async_request_strict(
-                *mn.Appliance_System_All.request_default
-            )
-        )[mc.KEY_PAYLOAD]
-        payload.update(
-            (
-                await _httpclient.async_request_strict(
-                    *mn.Appliance_System_Ability.request_default
-                )
-            )[mc.KEY_PAYLOAD]
+        _httpclient = MerossHttpClient(
+            host,
+            key,
+            None,
+            api,  # type: ignore (api almost duck-compatible with logging.Logger)
+            api.VERBOSE,
         )
+
+        response_ability = await _httpclient.async_request_strict(
+            *mn.Appliance_System_Ability.request_default
+        )
+        ability = response_ability[mc.KEY_PAYLOAD][mc.KEY_ABILITY]
+        try:
+            all = (
+                await _httpclient.async_request_strict(
+                    *mn.Appliance_System_All.request_default
+                )
+            )[mc.KEY_PAYLOAD][mc.KEY_ALL]
+        except:
+            # might it be the device needs encryption?
+            if mc.NS_APPLIANCE_ENCRYPT_ECDHE not in ability:
+                raise
+            # here we'd need the uuid and mac but we have no ns_all
+            # to parse so we'll try extract these info from ns_ability query
+            uuid = get_message_uuid(response_ability[mc.KEY_HEADER])
+            _httpclient.set_encryption(
+                compute_message_encryption_key(
+                    uuid, key, get_macaddress_from_uuid(uuid)
+                ).encode("utf-8")
+            )
+            all = (
+                await _httpclient.async_request_strict(
+                    *mn.Appliance_System_All.request_default
+                )
+            )[mc.KEY_PAYLOAD][mc.KEY_ALL]
+
+        payload = {
+            mc.KEY_ALL: all,
+            mc.KEY_ABILITY: ability,
+        }
         descriptor = MerossDeviceDescriptor(payload)
         return (
             {

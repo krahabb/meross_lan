@@ -10,7 +10,14 @@
                             "comfort": "Komfort (teplo)",
                             "sleep": "Spánek (v pohodě)",
                             "away": "Pryč (ekonomika)",
-                            "auto": "Automatický"
+                            "auto": "Automatický",
+                            "heating": "Topení",
+                            "cooling": "Chlazení",
+                            "schedule_heating": "Naplánovat vytápění",
+                            "schedule_cooling": "Naplánovat chlazení",
+                            "timer_cycle": "Časovač cyklu",
+                            "timer_countdown_on": "Odpočítávání zapnuto",
+                            "timer_countdown_off": "Odpočítávání vypnuto"
                         }
                     }
                 }

@@ -40,9 +40,7 @@ WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
 
 
 class MLHubSensorAdjustNumber(MLConfigNumber):
-    namespace = mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
-    key_namespace = mc.KEY_ADJUST
-    key_channel = mc.KEY_ID
+    ns = mn.Appliance_Hub_Sensor_Adjust
 
     device_scale = 10
 
@@ -72,7 +70,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
         super().__init__(
             manager,
             manager.id,
-            f"config_{self.key_namespace}_{self.key_value}",
+            f"config_{self.ns.key}_{self.key_value}",
             device_class,
         )
 
@@ -87,9 +85,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
 
 
 class MLHubToggle(me.MEListChannelMixin, MLSwitch):
-    namespace = mc.NS_APPLIANCE_HUB_TOGGLEX
-    key_namespace = mc.KEY_TOGGLEX
-    key_channel = mc.KEY_ID
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_HUB_TOGGLEX]
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
@@ -114,19 +110,20 @@ class HubNamespaceHandler(NamespaceHandler):
         hub = self.device
         subdevices = hub.subdevices
         subdevices_parsed = set()
-        for p_subdevice in payload[self.key_namespace]:
+        key_namespace = self.ns.key
+        for p_subdevice in payload[key_namespace]:
             try:
                 subdevice_id = p_subdevice[mc.KEY_ID]
                 if subdevice_id in subdevices_parsed:
                     hub.log_duplicated_subdevice(subdevice_id)
                 else:
                     try:
-                        subdevices[subdevice_id]._parse(self.key_namespace, p_subdevice)
+                        subdevices[subdevice_id]._parse(key_namespace, p_subdevice)
                     except KeyError:
                         # force a rescan since we discovered a new subdevice
                         hub.namespace_handlers[
                             mc.NS_APPLIANCE_SYSTEM_ALL
-                        ].lastrequest = 0.0
+                        ].polling_epoch_next = 0.0
                     subdevices_parsed.add(subdevice_id)
             except Exception as exception:
                 self.handle_exception(exception, "_handle_subdevice", p_subdevice)
@@ -159,8 +156,8 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         self._count = count
         self.polling_strategy = HubChunkedNamespaceHandler.async_poll_chunked
 
-    async def async_poll_chunked(self, device: "HubMixin", epoch: float):
-        if not (device._mqtt_active and self.lastrequest):
+    async def async_poll_chunked(self, device: "HubMixin"):
+        if not (device._mqtt_active and self.polling_epoch_next):
             max_queuable = 1
             # for hubs, this payload request might be splitted
             # in order to query a small amount of devices per iteration
@@ -177,15 +174,9 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
                 # if we're good to go on the first iteration,
                 # we don't want to break this cycle else it
                 # would restart (stateless) at the next polling cycle
-                self.polling_request = (
-                    self.namespace,
-                    mc.METHOD_GET,
-                    {self.key_namespace: p},
-                )
-                self.polling_response_size_adj(len(p))
+                self.polling_request_set(p)
                 if await device.async_request_smartpoll(
                     self,
-                    epoch,
                     cloud_queue_max=max_queuable,
                 ):
                     max_queuable += 1
@@ -197,12 +188,7 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         a better structured payload.
         """
         for p in self._build_subdevices_payload(device.subdevices.values()):
-            self.polling_request = (
-                self.namespace,
-                mc.METHOD_GET,
-                {self.key_namespace: p},
-            )
-            self.polling_response_size_adj(len(p))
+            self.polling_request_set(p)
             await super().async_trace(device, protocol)
 
     def _build_subdevices_payload(
@@ -520,7 +506,7 @@ class MerossSubDevice(MerossDeviceBase):
                 if self.type in mc.MTS100_ALL_TYPESET
                 else mc.NS_APPLIANCE_HUB_SENSOR_ALL
             )
-        ].lastrequest = 0
+        ].polling_epoch_next = 0.0
 
     # interface: self
     def build_enum_sensor(self, entitykey: str):
@@ -717,13 +703,13 @@ class MerossSubDevice(MerossDeviceBase):
         """{"id": "00000000", "onoff": 0, ...}"""
         # might come from parse_digest or from Appliance.Hub.ToggleX
         # in any case we're just interested to the "onoff" key
-        if switch_togglex := self.switch_togglex:
-            switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])
-        else:
-            self.switch_togglex = switch_togglex = MLHubToggle(
+        try:
+            self.switch_togglex.update_onoff(p_togglex[mc.KEY_ONOFF])  # type: ignore
+        except AttributeError:
+            self.switch_togglex = MLHubToggle(
                 self,
                 self.id,
-                None,
+                mc.KEY_TOGGLEX,
                 MLSwitch.DeviceClass.SWITCH,
                 device_value=p_togglex[mc.KEY_ONOFF],
             )
@@ -815,7 +801,7 @@ class MS100SubDevice(MerossSubDevice):
         if sensor.update_native_value(device_value / 10):
             strategy = self.hub.namespace_handlers[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST]
             if strategy.lastrequest < (self.hub.lastresponse - 30):
-                strategy.lastrequest = 0
+                strategy.polling_epoch_next = 0.0
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
@@ -826,23 +812,17 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_TEMPHUM] = MS100SubDevice
 
 
 class MTS100SubDevice(MerossSubDevice):
-    __slots__ = (
-        "climate",
-        "sensor_temperature",
-    )
+    __slots__ = ("climate",)
 
     def __init__(self, hub: HubMixin, p_digest: dict, _type: str = mc.TYPE_MTS100):
         super().__init__(hub, p_digest, _type)
         from .mts100 import Mts100Climate
 
         self.climate = Mts100Climate(self)
-        self.sensor_temperature = MLTemperatureSensor(self, self.id)
-        self.sensor_temperature.entity_registry_enabled_default = False
 
     async def async_shutdown(self):
         await super().async_shutdown()
         self.climate: "Mts100Climate" = None  # type: ignore
-        self.sensor_temperature: "MLNumericSensor" = None  # type: ignore
 
     def _parse_all(self, p_all: dict):
         self._parse_online(p_all.get(mc.KEY_ONLINE, {}))
@@ -859,7 +839,7 @@ class MTS100SubDevice(MerossSubDevice):
             climate._mts_onoff = p_togglex[mc.KEY_ONOFF]
 
         if isinstance(p_temperature := p_all.get(mc.KEY_TEMPERATURE), dict):
-            climate._parse(p_temperature)
+            climate._parse_temperature(p_temperature)
         else:
             climate.flush_state()
 
@@ -882,7 +862,7 @@ class MTS100SubDevice(MerossSubDevice):
         self.climate.schedule._parse(p_schedule)
 
     def _parse_temperature(self, p_temperature: dict):
-        self.climate._parse(p_temperature)
+        self.climate._parse_temperature(p_temperature)
 
     def _parse_togglex(self, p_togglex: dict):
         climate = self.climate

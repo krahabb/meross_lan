@@ -13,6 +13,7 @@ from time import gmtime, time
 import typing
 import zoneinfo
 
+from homeassistant import const as hac
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry, entity_registry
 
@@ -169,7 +170,7 @@ class ConfigEntriesHelper:
     """
 
     # TODO: move to a static class model
-    
+
     __slots__ = (
         "config_entries",
         "_entries",
@@ -220,7 +221,6 @@ class ConfigEntriesHelper:
                     self.config_entries.async_reload(entry_id),
                     f"config entry reload {entry.title} {entry.domain} {entry.entry_id}",
                 )
-
 
 
 def getLogger(name):
@@ -302,6 +302,8 @@ class Loggable(abc.ABC):
     - custom way by overriding 'log' like in 'MerossDevice' we can
     intercept log messages.
     """
+
+    hac = hac
 
     VERBOSE = mlc.CONF_LOGGING_VERBOSE
     DEBUG = mlc.CONF_LOGGING_DEBUG

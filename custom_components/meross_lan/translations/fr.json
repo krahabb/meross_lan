@@ -10,7 +10,14 @@
                             "comfort": "Confort (chaleur)",
                             "sleep": "Sommeil (froid)",
                             "away": "Absent (économique)",
-                            "auto": "Auto"
+                            "auto": "Auto",
+                            "heating": "Chauffage",
+                            "cooling": "Refroidissement",
+                            "schedule_heating": "Chauffage (programmer)",
+                            "schedule_cooling": "Refroidissement (Programmer)",
+                            "timer_cycle": "Minuteur de cycle",
+                            "timer_countdown_on": "Compte à rebours (Activé)",
+                            "timer_countdown_off": "Compte à rebours (Désactivé)"
                         }
                     }
                 }

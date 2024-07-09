@@ -1,8 +1,12 @@
 import asyncio
+from base64 import b64decode, b64encode
+from json import JSONDecodeError
 import threading
 from time import time
 import typing
 from zoneinfo import ZoneInfo
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.manager import ConfigEntryManager
@@ -15,6 +19,7 @@ from custom_components.meross_lan.merossclient import (
     MerossPayloadType,
     MerossRequest,
     build_message,
+    compute_message_encryption_key,
     const as mc,
     extract_dict_payloads,
     get_element_by_key,
@@ -35,9 +40,7 @@ if typing.TYPE_CHECKING:
 class MerossEmulatorDescriptor(MerossDeviceDescriptor):
     namespaces: dict[MerossNamespaceType, MerossPayloadType]
 
-    __slots__ = (
-        "namespaces",
-    )
+    __slots__ = ("namespaces",)
 
     def __init__(
         self,
@@ -115,7 +118,11 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
 
         match method:
             case mc.METHOD_GETACK:
-                self.namespaces[namespace] = {mn.NAMESPACES[namespace].key: _get_data_dict(data)} if protocol == mlc.CONF_PROTOCOL_AUTO else _get_data_dict(data)
+                self.namespaces[namespace] = (
+                    {mn.NAMESPACES[namespace].key: _get_data_dict(data)}
+                    if protocol == mlc.CONF_PROTOCOL_AUTO
+                    else _get_data_dict(data)
+                )
             case mc.METHOD_SETACK:
                 if namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
                     for message in _get_data_dict(data)[mc.KEY_MULTIPLE]:
@@ -124,7 +131,6 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                             self.namespaces[header[mc.KEY_NAMESPACE]] = message[
                                 mc.KEY_PAYLOAD
                             ]
-
 
 
 class MerossEmulator:
@@ -153,6 +159,7 @@ class MerossEmulator:
         "mqtt_connected",
         "_scheduler_unsub",
         "_tzinfo",
+        "_cipher",
         "__dict__",
     )
 
@@ -168,6 +175,18 @@ class MerossEmulator:
         self.mqtt_connected = None
         self._scheduler_unsub = None
         self._tzinfo: ZoneInfo | None = None
+        self._cipher = (
+            Cipher(
+                algorithms.AES(
+                    compute_message_encryption_key(
+                        descriptor.uuid, key, descriptor.macAddress
+                    ).encode("utf-8")
+                ),
+                modes.CBC("0000000000000000".encode("utf8")),
+            )
+            if mc.NS_APPLIANCE_ENCRYPT_ECDHE in descriptor.ability
+            else None
+        )
         self.update_epoch()
 
     async def async_startup(self, *, enable_scheduler: bool, enable_mqtt: bool):
@@ -227,8 +246,34 @@ class MerossEmulator:
         scenario like for testing (where the web/mqtt environments are likely mocked)
         This method is thread-safe
         """
+        cipher = None
         if isinstance(request, str):
-            request = MerossMessage.decode(request)
+            # this is typically the path when processing HTTP requests.
+            # we're now 'enforcing' encrypted local traffic if device abilities
+            # request so
+            try:
+                request = MerossMessage.decode(request)
+            except JSONDecodeError:
+                if cipher := self._cipher:
+                    decryptor = cipher.decryptor()
+                    request = (
+                        (decryptor.update(b64decode(request)) + decryptor.finalize())
+                        .decode("utf8")
+                        .rstrip("\0")
+                    )
+                    request = MerossMessage.decode(request)
+                else:
+                    raise
+            else:
+                # when a non encrypted requested is received the device
+                # actually resets the TCP connection..here we're just raising an
+                # exception in the hope we can emulate a broken connection
+                if self._cipher and (
+                    request[mc.KEY_HEADER][mc.KEY_NAMESPACE]
+                    != mc.NS_APPLIANCE_SYSTEM_ABILITY
+                ):
+                    raise Exception("Encryption required")
+
         request_header = request[mc.KEY_HEADER]
         request_payload = request[mc.KEY_PAYLOAD]
         self._log_message("RX", request.json())
@@ -249,17 +294,24 @@ class MerossEmulator:
                 response = self._handle_message(request_header, request_payload)
 
         if response:
-            text = json_dumps(response)
-            if len(text) > self.MAXIMUM_RESPONSE_SIZE:
+            response = json_dumps(response)
+            if len(response) > self.MAXIMUM_RESPONSE_SIZE:
                 # Applying 'overflow' if the response text is too big,
                 # thus emulating the same behavior of hw devices.
                 # These have a ranging 'maximum response size' based on my experience:
                 # - msl120:  2k
                 # - msh300:  4k
                 # - mss310:  2.9k
-                text = text[: self.MAXIMUM_RESPONSE_SIZE]
-            self._log_message("TX", text)
-            return text
+                response = response[: self.MAXIMUM_RESPONSE_SIZE]
+            self._log_message("TX", response)
+            if cipher:
+                response_bytes = response.encode("utf-8")
+                response_bytes += bytes([0] * (16 - (len(response_bytes) % 16)))
+                encryptor = cipher.encryptor()
+                response = b64encode(
+                    encryptor.update(response_bytes) + encryptor.finalize()
+                ).decode("utf-8")
+            return response
 
         return None
 

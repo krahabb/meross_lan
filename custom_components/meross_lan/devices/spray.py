@@ -1,6 +1,7 @@
 import typing
 
-from ..merossclient import const as mc
+from ..meross_entity import MEDictChannelMixin
+from ..merossclient import const as mc, namespaces as mn
 from ..select import MLSelect
 
 if typing.TYPE_CHECKING:
@@ -13,11 +14,10 @@ def digest_init_spray(device: "MerossDevice", digest) -> "DigestInitReturnType":
         MLSpray(device, channel_digest[mc.KEY_CHANNEL])
 
     handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_SPRAY)
-    handler.register_entity_class(MLSpray)
     return handler.parse_list, (handler,)
 
 
-class MLSpray(MLSelect):
+class MLSpray(MEDictChannelMixin, MLSelect):
     """
     SelectEntity class for Appliance.Control.Spray namespace. This is also
     slightly customized in MLDiffuserSpray to override namespace mapping and
@@ -34,8 +34,7 @@ class MLSpray(MLSelect):
         mc.SPRAY_MODE_CONTINUOUS: OPTION_SPRAY_MODE_CONTINUOUS,
     }
 
-    namespace = mc.NS_APPLIANCE_CONTROL_SPRAY
-    key_namespace = mc.KEY_SPRAY
+    ns = mn.Appliance_Control_Spray
     key_value = mc.KEY_MODE
 
     manager: "MerossDevice"
@@ -51,30 +50,20 @@ class MLSpray(MLSelect):
         self.current_option = None
         self.options = list(self._spray_mode_map.values())
         super().__init__(manager, channel, mc.KEY_SPRAY)
-        manager.register_parser(self.namespace, self)
+        manager.register_parser_entity(self)
 
     # interface: select.SelectEntity
     async def async_select_option(self, option: str):
         # reverse lookup the dict
         for mode, _option in self._spray_mode_map.items():
             if _option == option:
+                if await self.async_request_value(mode):
+                    self.update_option(option)
                 break
         else:
             raise NotImplementedError("async_select_option")
 
-        if await self.async_request_spray_ack(
-            {self.key_channel: self.channel, self.key_value: mode}
-        ):
-            self.update_option(option)
-
     # interface: self
-    async def async_request_spray_ack(self, payload: dict):
-        return await self.manager.async_request_ack(
-            self.namespace,
-            mc.METHOD_SET,
-            {self.key_namespace: payload},
-        )
-
     def _parse_spray(self, payload: dict):
         """
         We'll map the mode key to a well-known option for this entity

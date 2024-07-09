@@ -13,7 +13,7 @@ from ..helpers.namespaces import (
     NamespaceHandler,
     VoidNamespaceHandler,
 )
-from ..merossclient import const as mc
+from ..merossclient import const as mc, namespaces as mn
 from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 
@@ -21,7 +21,7 @@ if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
 
 
-class EnergyEstimateSensor(MLNumericSensor):
+class EnergyEstimateSensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     """
     Implements an estimated energy measure from device power readings.
     Estimate is a trapezoidal integral sum on power.
@@ -31,7 +31,6 @@ class EnergyEstimateSensor(MLNumericSensor):
     """
 
     # HA core entity attributes:
-    _attr_available = True
     entity_registry_enabled_default = False
     native_value: int
 
@@ -88,16 +87,6 @@ class EnergyEstimateSensor(MLNumericSensor):
             # and more consistent
             self._estimate = float(state.state)
             self.native_value = int(self._estimate)
-
-    def set_available(self):
-        pass
-
-    def set_unavailable(self):
-        # we need to preserve our sum so we don't reset
-        # it on disconnection. Also, it's nice to have it
-        # available since this entity has a computed value
-        # not directly related to actual connection state
-        pass
 
     def update_estimate(self, de: float):
         if self.sensor_consumptionx:
@@ -157,13 +146,13 @@ class ElectricityNamespaceHandler(NamespaceHandler):
         )
         self._sensor_energy_estimate = EnergyEstimateSensor(device)
         self._sensor_power = MLNumericSensor.build_for_device(
-            device, MLNumericSensor.DeviceClass.POWER
+            device, MLNumericSensor.DeviceClass.POWER, suggested_display_precision=1
         )
         self._sensor_current = MLNumericSensor.build_for_device(
-            device, MLNumericSensor.DeviceClass.CURRENT
+            device, MLNumericSensor.DeviceClass.CURRENT, suggested_display_precision=1
         )
         self._sensor_voltage = MLNumericSensor.build_for_device(
-            device, MLNumericSensor.DeviceClass.VOLTAGE
+            device, MLNumericSensor.DeviceClass.VOLTAGE, suggested_display_precision=1
         )
         self._electricity_lastepoch = 0.0
 
@@ -195,7 +184,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     ATTR_RESET_TS: typing.Final = "reset_ts"
 
     manager: "MerossDevice"
-    namespace = mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
+    ns = mn.Appliance_Control_ConsumptionX
 
     __slots__ = (
         "offset",
@@ -437,8 +426,7 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
 
 class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
 
-    namespace = mc.NS_APPLIANCE_CONFIG_OVERTEMP
-    key_namespace = mc.KEY_OVERTEMP
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONFIG_OVERTEMP]
     key_value = mc.KEY_ENABLE
 
     # HA core entity attributes:

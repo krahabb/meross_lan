@@ -21,7 +21,6 @@ from ..const import (
     CONF_PROTOCOL_MQTT,
     CONF_TRACE,
     CONF_TRACE_DIRECTORY,
-    CONF_TRACE_FILENAME,
     CONF_TRACE_MAXSIZE,
     CONF_TRACE_TIMEOUT,
     CONF_TRACE_TIMEOUT_DEFAULT,
@@ -269,7 +268,7 @@ class ConfigEntryManager(EntityManager):
         # so we could catch logs in this phase too
         state = ApiProfile.managers_transient_state.setdefault(self.config_entry_id, {})
         if state.pop(CONF_TRACE, None):
-            self.trace_open()
+            await self.async_trace_open()
 
         if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
             await self.async_create_diagnostic_entities()
@@ -380,28 +379,25 @@ class ConfigEntryManager(EntityManager):
     def is_tracing(self):
         return self._trace_file or self._trace_data
 
-    def trace_open(self):
+    async def async_trace_open(self):
         try:
             self.log(self.DEBUG, "Tracing start")
             epoch = time()
-            tracedir = self.hass.config.path(
-                "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
-            )
-            os.makedirs(tracedir, exist_ok=True)
-            self._trace_file = open(
-                os.path.join(
-                    tracedir,
-                    CONF_TRACE_FILENAME.format(
-                        strftime("%Y-%m-%d_%H-%M-%S", localtime(epoch)),
-                        self.config_entry_id,
+            hass = self.hass
+            def _trace_open():
+                tracedir = hass.config.path(
+                    "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
+                )
+                os.makedirs(tracedir, exist_ok=True)
+                return open(
+                    os.path.join(
+                        tracedir,
+                        f"{strftime("%Y-%m-%d_%H-%M-%S", localtime(epoch))}_{self.config_entry_id}.csv"
                     ),
-                ),
-                mode="w",
-                encoding="utf8",
-            )
-            trace_timeout = (
-                self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT
-            )
+                    mode="w",
+                    encoding="utf8",
+                )
+            self._trace_file = await hass.async_add_executor_job(_trace_open)
 
             @callback
             def _trace_close_callback():
@@ -409,7 +405,7 @@ class ConfigEntryManager(EntityManager):
                 self.trace_close()
 
             self._unsub_trace_endtime = schedule_callback(
-                self.hass, trace_timeout, _trace_close_callback
+                hass, self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT, _trace_close_callback
             )
             self._trace_opened(epoch)
         except Exception as exception:

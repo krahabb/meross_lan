@@ -2,7 +2,7 @@ import typing
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..merossclient import const as mc
+from ..merossclient import const as mc, namespaces as mn
 from ..number import MtsSetPointNumber
 
 if typing.TYPE_CHECKING:
@@ -15,16 +15,14 @@ class Mts200SetPointNumber(MtsSetPointNumber):
     customize MtsSetPointNumber to interact with Mts200 family valves
     """
 
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
-    key_namespace = mc.KEY_MODE
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE]
 
 
 class Mts200Climate(MtsClimate):
     """Climate entity for MTS200 devices"""
 
     manager: "MerossDevice"
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE
-    key_namespace = mc.KEY_MODE
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE]
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_MANUAL: MtsClimate.PRESET_CUSTOM,
@@ -75,6 +73,7 @@ class Mts200Climate(MtsClimate):
 
     # interface: MtsClimate
     def flush_state(self):
+        self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         if self._mts_onoff:
             self.hvac_mode = self.MTS_SUMMERMODE_TO_HVAC_MODE.get(self._mts_summermode)
             self.hvac_action = (
@@ -102,16 +101,19 @@ class Mts200Climate(MtsClimate):
         await self.async_request_onoff(1)
 
     async def async_set_temperature(self, **kwargs):
-        key = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(self._mts_mode) or mc.KEY_MANUALTEMP
+        mode = self._mts_mode
+        if self.SET_TEMP_FORCE_MANUAL_MODE or (mode == mc.MTS200_MODE_AUTO):
+            # ensure we're not in schedule mode or any other preset (#401)
+            key = mc.KEY_MANUALTEMP
+            mode = mc.MTS200_MODE_MANUAL
+        else:
+            key = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(mode) or mc.KEY_MANUALTEMP
+            if key is mc.KEY_MANUALTEMP:
+                mode = mc.MTS200_MODE_MANUAL
         await self._async_request_mode(
             {
                 mc.KEY_CHANNEL: self.channel,
-                mc.KEY_MODE: (
-                    mc.MTS200_MODE_MANUAL
-                    if key is mc.KEY_MANUALTEMP
-                    else self._mts_mode
-                ),
-                mc.KEY_ONOFF: 1,
+                mc.KEY_MODE: mode,
                 key: round(kwargs[self.ATTR_TEMPERATURE] * self.device_scale),
             }
         )
@@ -132,6 +134,11 @@ class Mts200Climate(MtsClimate):
 
     def is_mts_scheduled(self):
         return self._mts_onoff and self._mts_mode == mc.MTS200_MODE_AUTO
+
+    def get_ns_adjust(self):
+        return self.manager.namespace_handlers[
+            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
+        ]
 
     # interface: self
     async def async_request_summermode(self, summermode: int):
@@ -156,19 +163,18 @@ class Mts200Climate(MtsClimate):
             {mc.KEY_MODE: [p_mode]},
         ):
             try:
-                payload = response[mc.KEY_PAYLOAD][mc.KEY_MODE]
-                self._parse(payload[0] if isinstance(payload, list) else payload)
-            except KeyError:
+                payload = response[mc.KEY_PAYLOAD][mc.KEY_MODE][0]
+            except (KeyError, IndexError):
                 # optimistic update
                 payload = self._mts_payload | p_mode
                 if mc.KEY_MODE in p_mode:
                     key_temp = mc.MTS200_MODE_TO_TARGETTEMP_MAP.get(p_mode[mc.KEY_MODE])
                     if key_temp in payload:
                         payload[mc.KEY_TARGETTEMP] = payload[key_temp]
-                self._parse(payload)
+            self._parse_mode(payload)
 
     # message handlers
-    def _parse(self, payload: dict):
+    def _parse_mode(self, payload: dict):
         """{
             "channel": 0,
             "onoff": 1,
@@ -195,8 +201,7 @@ class Mts200Climate(MtsClimate):
         if mc.KEY_STATE in payload:
             self._mts_active = payload[mc.KEY_STATE]
         if mc.KEY_CURRENTTEMP in payload:
-            self.current_temperature = payload[mc.KEY_CURRENTTEMP] / self.device_scale
-            self.select_tracked_sensor.check_tracking()
+            self._update_current_temperature(payload[mc.KEY_CURRENTTEMP])
         if mc.KEY_TARGETTEMP in payload:
             self.target_temperature = payload[mc.KEY_TARGETTEMP] / self.device_scale
         if mc.KEY_MIN in payload:
@@ -219,10 +224,7 @@ class Mts200Climate(MtsClimate):
         # The trace shows the log about the missing handler in 4.5.2
         # and it looks like when we receive this, it is a notification
         # the mts is not really changing its setpoint (as per the issue).
-        # We need more info about how to process this. This handler however
-        # will be fully implemented in next major (5.x) since the new Mts200
-        # architecture is too different from current version one and
-        # it would be a mess to merge branches afterway
+        # We need more info about how to process this.
 
     def _parse_summerMode(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""
@@ -234,9 +236,4 @@ class Mts200Climate(MtsClimate):
 
 
 class Mts200Schedule(MtsSchedule):
-    namespace = mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE
-    key_namespace = mc.KEY_SCHEDULE
-    key_channel = mc.KEY_CHANNEL
-
-    def __init__(self, climate: Mts200Climate):
-        super().__init__(climate)
+    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE]

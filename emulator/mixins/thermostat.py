@@ -96,16 +96,31 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         for p_modeb in payload[mc.KEY_MODEB]:
             p_digest_modeb = update_dict_strict_by_key(p_digest_modeb_list, p_modeb)
             if p_digest_modeb[mc.KEY_ONOFF]:
-                p_digest_modeb[mc.KEY_STATE] = (
-                    mc.MTS960_STATE_ON
-                    if p_digest_modeb[mc.KEY_TARGETTEMP]
-                    > p_digest_modeb[mc.KEY_CURRENTTEMP]
-                    else mc.MTS960_STATE_OFF
-                )
+                match p_digest_modeb[mc.KEY_MODE]:
+                    case mc.MTS960_MODE_HEAT_COOL:
+                        match p_digest_modeb[mc.KEY_WORKING]:
+                            case mc.MTS960_WORKING_HEAT:
+                                p_digest_modeb[mc.KEY_STATE] = (
+                                    mc.MTS960_STATE_ON
+                                    if p_digest_modeb[mc.KEY_TARGETTEMP]
+                                    > p_digest_modeb[mc.KEY_CURRENTTEMP]
+                                    else mc.MTS960_STATE_OFF
+                                )
+                            case mc.MTS960_WORKING_COOL:
+                                p_digest_modeb[mc.KEY_STATE] = (
+                                    mc.MTS960_STATE_ON
+                                    if p_digest_modeb[mc.KEY_TARGETTEMP]
+                                    < p_digest_modeb[mc.KEY_CURRENTTEMP]
+                                    else mc.MTS960_STATE_OFF
+                                )
+                    case mc.MTS960_MODE_SCHEDULE:
+                        pass
+                    case mc.MTS960_MODE_TIMER:
+                        pass
             else:
                 p_digest_modeb[mc.KEY_STATE] = mc.MTS960_STATE_UNKNOWN
 
-        return mc.METHOD_SETACK, {mc.KEY_MODEB: p_digest_modeb}
+        return mc.METHOD_SETACK, {mc.KEY_MODEB: [p_digest_modeb]}
 
     def _handle_Appliance_Control_Thermostat_Any(self, header, payload):
         """

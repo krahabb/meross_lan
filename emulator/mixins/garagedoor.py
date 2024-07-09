@@ -20,6 +20,21 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     OPENDURATION = 2
     CLOSEDURATION = 10
 
+    def _scheduler(self):
+        super()._scheduler()
+        if self.mqtt_connected:
+            # emulate the 'glitch' caused by msg200 pushing state for channel 0
+            # see #428
+            p_garageDoor: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]
+            if len(p_garageDoor) == 3:
+                self.mqtt_publish_push(
+                    mc.NS_APPLIANCE_GARAGEDOOR_STATE,
+                    {
+                        "state": [{"channel": 0, "open": 1, "lmTime": 0}],
+                        "reason": {"online": {"timestamp": self.epoch}},
+                    },
+                )
+
     def _SET_Appliance_GarageDoor_Config(self, header, payload):
         p_config = self.descriptor.namespaces[mc.NS_APPLIANCE_GARAGEDOOR_CONFIG][
             mc.KEY_CONFIG

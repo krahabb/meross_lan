@@ -27,6 +27,8 @@ class EntityTest(EntityComponentTest):
         pass
 
     async def async_test_enabled_callback(self, entity: MLMp3Player):
+        await super().async_test_each_callback(entity)
+
         for service_name, expected_state in EntityTest.SERVICE_STATE_MAP.items():
             await self.async_service_call_check(service_name, expected_state)
         await self.async_service_call_check(

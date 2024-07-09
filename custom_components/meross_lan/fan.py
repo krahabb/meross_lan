@@ -4,7 +4,7 @@ from homeassistant.components import fan
 
 from . import meross_entity as me
 from .helpers.namespaces import NamespaceHandler
-from .merossclient import const as mc
+from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from .meross_device import DigestInitReturnType, MerossDevice
@@ -22,8 +22,7 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
     PLATFORM = fan.DOMAIN
     manager: "MerossDevice"
 
-    namespace = mc.NS_APPLIANCE_CONTROL_FAN
-    key_namespace = mc.KEY_FAN
+    ns = mn.Appliance_Control_Fan
     key_value = mc.KEY_SPEED
 
     # HA core entity attributes:
@@ -47,7 +46,7 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
         self._fan = {}
         self._saved_speed = 1
         super().__init__(manager, channel)
-        manager.register_parser(self.namespace, self)
+        manager.register_parser_entity(self)
         self._togglex = manager.register_togglex_channel(self)
 
     # interface: MerossToggle
@@ -89,9 +88,9 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
     async def async_request_fan(self, speed: int):
         payload = {mc.KEY_CHANNEL: self.channel, mc.KEY_SPEED: speed}
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_FAN,
+            self.ns.name,
             mc.METHOD_SET,
-            {mc.KEY_FAN: [payload]},
+            {self.ns.key: [payload]},
         ):
             self._parse_fan(payload)
 
@@ -139,10 +138,10 @@ def digest_init_fan(device: "MerossDevice", digest) -> "DigestInitReturnType":
 
 def namespace_init_fan(device: "MerossDevice"):
     """Special care for NS_FAN since it might have been initialized in digest_init"""
-    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN)
-    handler.register_entity_class(MLFan)
     if mc.KEY_FAN not in device.descriptor.digest:
         # actually only map100 (so far)
         MLFan(device, 0)
         # setup a polling strategy since state is not carried in digest
-        handler.polling_strategy = NamespaceHandler.async_poll_default
+        device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN).polling_strategy = (
+            NamespaceHandler.async_poll_default
+        )

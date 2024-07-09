@@ -88,208 +88,28 @@ try:
 except Exception:
     MEROSSDEBUG = None  # type: ignore
 
-
-_json_encoder = json.JSONEncoder(
+#
+# Optimized JSON encoding/decoding
+#
+JSON_ENCODER = json.JSONEncoder(
     ensure_ascii=False, check_circular=False, separators=(",", ":")
 )
-_json_decoder = json.JSONDecoder()
+JSON_DECODER = json.JSONDecoder()
 
 
 def json_dumps(obj):
     """Slightly optimized json.dumps with pre-configured encoder"""
-    return _json_encoder.encode(obj)
+    return JSON_ENCODER.encode(obj)
 
 
 def json_loads(s: str):
     """Slightly optimized json.loads with pre-configured decoder"""
-    return _json_decoder.raw_decode(s)[0]
+    return JSON_DECODER.raw_decode(s)[0]
 
 
-class MerossProtocolError(Exception):
-    """
-    signal a protocol error like:
-    - missing header keys
-    - application layer ERROR(s)
-
-    - response is the full response payload
-    - reason is an additional context error
-    """
-
-    def __init__(self, response, reason: object | None = None):
-        self.response = response
-        self.reason = reason
-        super().__init__(reason)
-
-
-class MerossKeyError(MerossProtocolError):
-    """
-    signal a protocol key error (wrong key)
-    reported by device
-    """
-
-    def __init__(self, response: "MerossResponse"):
-        super().__init__(response, "Invalid key")
-
-
-class MerossSignatureError(MerossProtocolError):
-    """
-    signal a protocol signature error detected
-    when validating the received header
-    """
-
-    def __init__(self, response: "MerossResponse"):
-        super().__init__(response, "Signature error")
-
-
-@dataclass
-class HostAddress:
-    __slots__ = (
-        "host",
-        "port",
-    )
-    host: str
-    port: int
-
-    @staticmethod
-    def build(address: str, default_port=mc.MQTT_DEFAULT_PORT):
-        """Splits the eventual :port suffix from domain and return (host, port)"""
-        if (colon_index := address.find(":")) != -1:
-            return HostAddress(address[0:colon_index], int(address[colon_index + 1 :]))
-        else:
-            return HostAddress(address, default_port)
-
-    def __str__(self) -> str:
-        return f"{self.host}:{self.port}"
-
-
-def get_macaddress_from_uuid(uuid: str):
-    """Infers the device mac address from the UUID"""
-    return ":".join(re.findall("..", uuid[-12:].lower()))
-
-
-def fmt_macaddress(macaddress: str):
-    """internal component macaddress representation (lowercase without dots/colons)"""
-    return macaddress.replace(":", "").lower()
-
-
-def build_message(
-    namespace: str,
-    method: str,
-    payload: MerossPayloadType,
-    key: KeyType,
-    from_: str,
-    messageid: str | None = None,
-) -> MerossMessageType:
-    if isinstance(key, dict):
-        key[mc.KEY_NAMESPACE] = namespace
-        key[mc.KEY_METHOD] = method
-        key[mc.KEY_PAYLOADVERSION] = 1
-        key[mc.KEY_FROM] = from_
-        return {mc.KEY_HEADER: key, mc.KEY_PAYLOAD: payload}  # type: ignore
-    else:
-        messageid = messageid or uuid4().hex
-        timestamp = int(time())
-        return {
-            mc.KEY_HEADER: {
-                mc.KEY_MESSAGEID: messageid,
-                mc.KEY_NAMESPACE: namespace,
-                mc.KEY_METHOD: method,
-                mc.KEY_PAYLOADVERSION: 1,
-                mc.KEY_FROM: from_,
-                # mc.KEY_FROM: "/app/0-0/subscribe",
-                # "from": "/appliance/9109182170548290882048e1e9522946/publish",
-                mc.KEY_TIMESTAMP: timestamp,
-                mc.KEY_TIMESTAMPMS: 0,
-                mc.KEY_SIGN: get_message_signature(messageid, key or "", timestamp),
-            },
-            mc.KEY_PAYLOAD: payload,
-        }
-
-
-def build_message_reply(
-    header: MerossHeaderType,
-    payload: MerossPayloadType,
-) -> MerossMessageType:
-    """
-    builds a message by replying the full header. This is used
-    in replies to some PUSH sent by devices where it appears
-    (from meross broker protocol inspection - see #346)
-    the broker doesn't calculate a new signature but just replies
-    the incoming header data
-    """
-    header = header.copy()
-    header.pop(mc.KEY_UUID, None)
-    return {
-        mc.KEY_HEADER: header,
-        mc.KEY_PAYLOAD: payload,
-    }
-
-
-def get_message_signature(messageid: str, key: str, timestamp):
-    return md5(
-        "".join((messageid, key, str(timestamp))).encode("utf-8"), usedforsecurity=False
-    ).hexdigest()
-
-
-def get_message_uuid(header: MerossHeaderType):
-    return header.get(mc.KEY_UUID) or mc.RE_PATTERN_TOPIC_UUID.match(header[mc.KEY_FROM]).group(1)  # type: ignore
-
-
-def get_replykey(header: MerossHeaderType, key: KeyType) -> KeyType:
-    """
-    checks header signature against key:
-    if ok return sign itsef else return the full header { "messageId", "timestamp", "sign", ...}
-    in order to be able to use it in a reply scheme
-    **UPDATE 28-03-2021**
-    the 'reply scheme' hack doesnt work on mqtt but works on http: this code will be left since it works if the key is correct
-    anyway and could be reused in a future attempt
-    """
-    if isinstance(key, str):
-        sign = get_message_signature(
-            header[mc.KEY_MESSAGEID], key, header[mc.KEY_TIMESTAMP]
-        )
-        if sign == header[mc.KEY_SIGN]:
-            return key
-
-    return header
-
-
-def is_device_online(payload: dict) -> bool:
-    try:
-        return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
-    except Exception:
-        return False
-
-
-def get_port_safe(p_dict: dict, key: str) -> int:
-    """
-    Parses the "firmware" dict in device descriptor (coming from NS_ALL)
-    or the "debug" dict and returns the broker port value or what we know
-    is the default for Meross.
-    """
-    try:
-        return int(p_dict[key]) or mc.MQTT_DEFAULT_PORT
-    except Exception:
-        return mc.MQTT_DEFAULT_PORT
-
-
-def get_active_broker(p_debug: dict):
-    """
-    Parses the "debug" dict coming from NS_SYSTEM_DEBUG and returns
-    current MQTT active broker
-    """
-    p_cloud = p_debug[mc.KEY_CLOUD]
-    active_server: str = p_cloud[mc.KEY_ACTIVESERVER]
-    if active_server == p_cloud[mc.KEY_MAINSERVER]:
-        return HostAddress(active_server, get_port_safe(p_cloud, mc.KEY_MAINPORT))
-    elif active_server == p_cloud[mc.KEY_SECONDSERVER]:
-        return HostAddress(active_server, get_port_safe(p_cloud, mc.KEY_SECONDPORT))
-    else:
-        raise Exception(
-            "Unable to detect active MQTT broker from current device debug info"
-        )
-
-
+#
+# General purpose utilities for payload handling
+#
 def get_element_by_key(payload: list, key: str, value: object) -> dict:
     """
     scans the payload(list) looking for the first item matching
@@ -361,6 +181,234 @@ def extract_dict_payloads(payload):
         yield payload
 
 
+#
+# Custom Exceptions
+#
+class MerossProtocolError(Exception):
+    """
+    signal a protocol error like:
+    - missing header keys
+    - application layer ERROR(s)
+
+    - response is the full response payload
+    - reason is an additional context error
+    """
+
+    def __init__(self, response, reason: object | None = None):
+        self.response = response
+        self.reason = reason
+        super().__init__(reason)
+
+
+class MerossKeyError(MerossProtocolError):
+    """
+    signal a protocol key error (wrong key)
+    reported by device
+    """
+
+    def __init__(self, response: "MerossResponse"):
+        super().__init__(response, "Invalid key")
+
+
+class MerossSignatureError(MerossProtocolError):
+    """
+    signal a protocol signature error detected
+    when validating the received header
+    """
+
+    def __init__(self, response: "MerossResponse"):
+        super().__init__(response, "Signature error")
+
+
+@dataclass
+class HostAddress:
+    """
+    Helper class to build an host:port representation for broker addresses
+    carried in Meross payloads
+    """
+
+    __slots__ = (
+        "host",
+        "port",
+    )
+    host: str
+    port: int
+
+    @staticmethod
+    def build(address: str, default_port=mc.MQTT_DEFAULT_PORT):
+        """Splits the eventual :port suffix from domain and return (host, port)"""
+        if (colon_index := address.find(":")) != -1:
+            return HostAddress(address[0:colon_index], int(address[colon_index + 1 :]))
+        else:
+            return HostAddress(address, default_port)
+
+    def __str__(self) -> str:
+        return f"{self.host}:{self.port}"
+
+
+#
+# Low level message building helpers
+#
+def compute_message_signature(messageid: str, key: str, timestamp):
+    return md5(
+        "".join((messageid, key, str(timestamp))).encode("utf-8"), usedforsecurity=False
+    ).hexdigest()
+
+
+def compute_message_encryption_key(uuid: str, key: str, mac: str):
+    return md5(
+        "".join((uuid[3:22], key[1:9], mac, key[10:28])).encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()
+
+
+def build_message(
+    namespace: str,
+    method: str,
+    payload: MerossPayloadType,
+    key: KeyType,
+    from_: str,
+    messageid: str | None = None,
+) -> MerossMessageType:
+    if isinstance(key, dict):
+        key[mc.KEY_NAMESPACE] = namespace
+        key[mc.KEY_METHOD] = method
+        key[mc.KEY_PAYLOADVERSION] = 1
+        key[mc.KEY_FROM] = from_
+        return {mc.KEY_HEADER: key, mc.KEY_PAYLOAD: payload}  # type: ignore
+    else:
+        messageid = messageid or uuid4().hex
+        timestamp = int(time())
+        return {
+            mc.KEY_HEADER: {
+                mc.KEY_MESSAGEID: messageid,
+                mc.KEY_NAMESPACE: namespace,
+                mc.KEY_METHOD: method,
+                mc.KEY_PAYLOADVERSION: 1,
+                mc.KEY_FROM: from_,
+                # mc.KEY_FROM: "/app/0-0/subscribe",
+                # "from": "/appliance/9109182170548290882048e1e9522946/publish",
+                mc.KEY_TIMESTAMP: timestamp,
+                mc.KEY_TIMESTAMPMS: 0,
+                mc.KEY_SIGN: compute_message_signature(messageid, key or "", timestamp),
+            },
+            mc.KEY_PAYLOAD: payload,
+        }
+
+
+def build_message_reply(
+    header: MerossHeaderType,
+    payload: MerossPayloadType,
+) -> MerossMessageType:
+    """
+    builds a message by replying the full header. This is used
+    in replies to some PUSH sent by devices where it appears
+    (from meross broker protocol inspection - see #346)
+    the broker doesn't calculate a new signature but just replies
+    the incoming header data
+    """
+    header = header.copy()
+    header.pop(mc.KEY_UUID, None)
+    return {
+        mc.KEY_HEADER: header,
+        mc.KEY_PAYLOAD: payload,
+    }
+
+
+def check_message_strict(message: "MerossResponse | None"):
+    """
+    Does a formal check of the message structure also raising a
+    typed exception if formally correct but carrying a protocol error
+    """
+    if not message:
+        raise MerossProtocolError(message, "No response")
+    try:
+        payload = message[mc.KEY_PAYLOAD]
+        header = message[mc.KEY_HEADER]
+        header[mc.KEY_NAMESPACE]
+        if header[mc.KEY_METHOD] == mc.METHOD_ERROR:
+            p_error = payload[mc.KEY_ERROR]
+            if p_error.get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
+                raise MerossKeyError(message)
+            else:
+                raise MerossProtocolError(message, p_error)
+        return message
+    except KeyError as error:
+        raise MerossProtocolError(message, str(error)) from error
+
+
+#
+# Various helpers to extract some meaningful data from payloads
+#
+def get_message_uuid(header: MerossHeaderType):
+    return header.get(mc.KEY_UUID) or mc.RE_PATTERN_TOPIC_UUID.match(header[mc.KEY_FROM]).group(1)  # type: ignore
+
+
+def get_replykey(header: MerossHeaderType, key: KeyType) -> KeyType:
+    """
+    checks header signature against key:
+    if ok return sign itsef else return the full header { "messageId", "timestamp", "sign", ...}
+    in order to be able to use it in a reply scheme
+    **UPDATE 28-03-2021**
+    the 'reply scheme' hack doesnt work on mqtt but works on http: this code will be left since it works if the key is correct
+    anyway and could be reused in a future attempt
+    """
+    if isinstance(key, str):
+        sign = compute_message_signature(
+            header[mc.KEY_MESSAGEID], key, header[mc.KEY_TIMESTAMP]
+        )
+        if sign == header[mc.KEY_SIGN]:
+            return key
+
+    return header
+
+
+def get_macaddress_from_uuid(uuid: str):
+    """Infers the device mac address from the UUID"""
+    return ":".join(re.findall("..", uuid[-12:].lower()))
+
+
+def fmt_macaddress(macaddress: str):
+    """internal component macaddress representation (lowercase without dots/colons)"""
+    return macaddress.replace(":", "").lower()
+
+
+def is_device_online(payload: dict) -> bool:
+    try:
+        return payload[mc.KEY_ONLINE][mc.KEY_STATUS] == mc.STATUS_ONLINE
+    except Exception:
+        return False
+
+
+def get_port_safe(p_dict: dict, key: str) -> int:
+    """
+    Parses the "firmware" dict in device descriptor (coming from NS_ALL)
+    or the "debug" dict and returns the broker port value or what we know
+    is the default for Meross.
+    """
+    try:
+        return int(p_dict[key]) or mc.MQTT_DEFAULT_PORT
+    except Exception:
+        return mc.MQTT_DEFAULT_PORT
+
+
+def get_active_broker(p_debug: dict):
+    """
+    Parses the "debug" dict coming from NS_SYSTEM_DEBUG and returns
+    current MQTT active broker
+    """
+    p_cloud = p_debug[mc.KEY_CLOUD]
+    active_server: str = p_cloud[mc.KEY_ACTIVESERVER]
+    if active_server == p_cloud[mc.KEY_MAINSERVER]:
+        return HostAddress(active_server, get_port_safe(p_cloud, mc.KEY_MAINPORT))
+    elif active_server == p_cloud[mc.KEY_SECONDSERVER]:
+        return HostAddress(active_server, get_port_safe(p_cloud, mc.KEY_SECONDPORT))
+    else:
+        raise Exception(
+            "Unable to detect active MQTT broker from current device debug info"
+        )
+
+
 def get_productname(producttype: str) -> str:
     for _type, _name in mc.TYPE_NAME_MAP.items():
         if producttype.startswith(_type):
@@ -397,28 +445,9 @@ def get_mts_digest(p_subdevice_digest: dict) -> dict | None:
     return None
 
 
-def check_message_strict(message: "MerossResponse | None"):
-    """
-    Does a formal check of the message structure also raising a
-    typed exception if formally correct but carrying a protocol error
-    """
-    if not message:
-        raise MerossProtocolError(message, "No response")
-    try:
-        payload = message[mc.KEY_PAYLOAD]
-        header = message[mc.KEY_HEADER]
-        header[mc.KEY_NAMESPACE]
-        if header[mc.KEY_METHOD] == mc.METHOD_ERROR:
-            p_error = payload[mc.KEY_ERROR]
-            if p_error.get(mc.KEY_CODE) == mc.ERROR_INVALIDKEY:
-                raise MerossKeyError(message)
-            else:
-                raise MerossProtocolError(message, p_error)
-        return message
-    except KeyError as error:
-        raise MerossProtocolError(message, str(error)) from error
-
-
+#
+# 'Higher level' message representations
+#
 class MerossMessage(dict):
     """
     Base (almost) abstract class for different source of messages that
@@ -445,19 +474,19 @@ class MerossMessage(dict):
 
     def json(self):
         if not self._json_str:
-            self._json_str = _json_encoder.encode(self)
+            self._json_str = JSON_ENCODER.encode(self)
         return self._json_str
 
     @staticmethod
     def decode(json_str: str):
-        return MerossMessage(_json_decoder.decode(json_str), json_str)
+        return MerossMessage(JSON_DECODER.decode(json_str), json_str)
 
 
 class MerossResponse(MerossMessage):
     """Helper for messages received from a device"""
 
     def __init__(self, json_str: str):
-        super().__init__(_json_decoder.decode(json_str), json_str)
+        super().__init__(JSON_DECODER.decode(json_str), json_str)
 
 
 class MerossRequest(MerossMessage):
@@ -493,7 +522,9 @@ class MerossRequest(MerossMessage):
                     mc.KEY_FROM: from_,
                     mc.KEY_TIMESTAMP: timestamp,
                     mc.KEY_TIMESTAMPMS: 0,
-                    mc.KEY_SIGN: get_message_signature(self.messageid, key, timestamp),
+                    mc.KEY_SIGN: compute_message_signature(
+                        self.messageid, key, timestamp
+                    ),
                 },
                 mc.KEY_PAYLOAD: self.payload,
             }
@@ -549,13 +580,18 @@ class MerossAckReply(MerossMessage):
                     mc.KEY_TRIGGERSRC: "CloudControl",
                     mc.KEY_TIMESTAMP: timestamp,
                     mc.KEY_TIMESTAMPMS: 0,
-                    mc.KEY_SIGN: get_message_signature(self.messageid, key, timestamp),
+                    mc.KEY_SIGN: compute_message_signature(
+                        self.messageid, key, timestamp
+                    ),
                 },
                 mc.KEY_PAYLOAD: payload,
             }
         )
 
 
+#
+#
+#
 class MerossDeviceDescriptor:
     """
     Utility class to extract various info from Appliance.System.All

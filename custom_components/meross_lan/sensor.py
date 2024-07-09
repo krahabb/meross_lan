@@ -1,13 +1,6 @@
 import typing
 
 from homeassistant.components import sensor
-from homeassistant.const import (
-    UnitOfElectricCurrent,
-    UnitOfElectricPotential,
-    UnitOfEnergy,
-    UnitOfPower,
-    UnitOfTemperature,
-)
 
 from . import const as mlc, meross_entity as me
 from .helpers.namespaces import (
@@ -15,7 +8,7 @@ from .helpers.namespaces import (
     EntityNamespaceMixin,
     NamespaceHandler,
 )
-from .merossclient import const as mc
+from .merossclient import const as mc, json_dumps, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -71,14 +64,14 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
     StateClass = sensor.SensorStateClass
 
     DEVICECLASS_TO_UNIT_MAP = {
-        DeviceClass.POWER: UnitOfPower.WATT,
-        DeviceClass.CURRENT: UnitOfElectricCurrent.AMPERE,
-        DeviceClass.VOLTAGE: UnitOfElectricPotential.VOLT,
-        DeviceClass.ENERGY: UnitOfEnergy.WATT_HOUR,
-        DeviceClass.TEMPERATURE: UnitOfTemperature.CELSIUS,
-        DeviceClass.HUMIDITY: me.MerossNumericEntity.UNIT_PERCENTAGE,
-        DeviceClass.BATTERY: me.MerossNumericEntity.UNIT_PERCENTAGE,
-        DeviceClass.POWER_FACTOR: me.MerossNumericEntity.UNIT_PERCENTAGE,
+        DeviceClass.POWER: me.MerossEntity.hac.UnitOfPower.WATT,
+        DeviceClass.CURRENT: me.MerossEntity.hac.UnitOfElectricCurrent.AMPERE,
+        DeviceClass.VOLTAGE: me.MerossEntity.hac.UnitOfElectricPotential.VOLT,
+        DeviceClass.ENERGY: me.MerossEntity.hac.UnitOfEnergy.WATT_HOUR,
+        DeviceClass.TEMPERATURE: me.MerossEntity.hac.UnitOfTemperature.CELSIUS,
+        DeviceClass.HUMIDITY: me.MerossEntity.hac.PERCENTAGE,
+        DeviceClass.BATTERY: me.MerossEntity.hac.PERCENTAGE,
+        DeviceClass.POWER_FACTOR: me.MerossEntity.hac.PERCENTAGE,
     }
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
@@ -102,6 +95,7 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         *,
         device_value: int | None = None,
         native_unit_of_measurement: str | None = None,
+        suggested_display_precision: int | None = None,
     ):
         assert device_class is not sensor.SensorDeviceClass.ENUM
         self.state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
@@ -114,19 +108,32 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
             device_class,
             device_value=device_value,
             native_unit_of_measurement=native_unit_of_measurement,
+            suggested_display_precision=suggested_display_precision,
         )
 
     @staticmethod
     def build_for_device(
-        device: "MerossDevice", device_class: "MLNumericSensor.DeviceClass"
+        device: "MerossDevice",
+        device_class: "MLNumericSensor.DeviceClass",
+        *,
+        suggested_display_precision: int | None = None,
     ):
-        return MLNumericSensor(device, None, str(device_class), device_class)
+        return MLNumericSensor(
+            device,
+            None,
+            str(device_class),
+            device_class,
+            suggested_display_precision=suggested_display_precision,
+        )
 
 
 class MLHumiditySensor(MLNumericSensor):
     """Specialization for widely used device class type.
     This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
     """
+
+    # HA core entity attributes:
+    _attr_suggested_display_precision = 0
 
     def __init__(
         self,
@@ -149,6 +156,9 @@ class MLTemperatureSensor(MLNumericSensor):
     """Specialization for widely used device class type.
     This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
     """
+
+    # HA core entity attributes:
+    _attr_suggested_display_precision = 1
 
     def __init__(
         self,
@@ -174,8 +184,16 @@ class MLDiagnosticSensor(MLEnumSensor):
     # HA core entity attributes:
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
+    def _parse(self, payload: dict):
+        """
+        This implementation aims at diagnostic sensors installed in 'well-known'
+        namespace handlers to manage 'unexpected' channels when they eventually
+        pop-up and we (still) have no clue why these channels are pushed (See #428)
+        """
+        self.update_native_value(json_dumps(payload))
 
-class ProtocolSensor(MLEnumSensor):
+
+class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     STATE_DISCONNECTED = "disconnected"
     STATE_ACTIVE = "active"
     STATE_INACTIVE = "inactive"
@@ -186,7 +204,6 @@ class ProtocolSensor(MLEnumSensor):
     manager: "MerossDevice"
 
     # HA core entity attributes:
-    _attr_available = True
     entity_category = me.EntityCategory.DIAGNOSTIC
     entity_registry_enabled_default = False
     native_value: str
@@ -275,7 +292,7 @@ class ProtocolSensor(MLEnumSensor):
 
 class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
-    namespace = mc.NS_APPLIANCE_SYSTEM_RUNTIME
+    ns = mn.Appliance_System_Runtime
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.DIAGNOSTIC
@@ -296,8 +313,7 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
 
 class MLFilterMaintenanceSensor(MLNumericSensor):
 
-    namespace = mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE
-    key_namespace = mc.KEY_FILTER
+    ns = mn.Appliance_Control_FilterMaintenance
     key_value = mc.KEY_LIFE
 
     # HA core entity attributes:
@@ -309,9 +325,9 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
             channel,
             mc.KEY_FILTER,
             None,
-            native_unit_of_measurement=MLNumericSensor.UNIT_PERCENTAGE,
+            native_unit_of_measurement=me.MerossEntity.hac.PERCENTAGE,
         )
-        manager.register_parser(self.namespace, self)
+        manager.register_parser_entity(self)
 
 
 class FilterMaintenanceNamespaceHandler(NamespaceHandler):
@@ -321,6 +337,5 @@ class FilterMaintenanceNamespaceHandler(NamespaceHandler):
             self,
             device,
             mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
-            entity_class=MLFilterMaintenanceSensor,
         )
         MLFilterMaintenanceSensor(device, 0)

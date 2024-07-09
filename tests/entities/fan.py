@@ -17,6 +17,7 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: MLFan):
+        await super().async_test_each_callback(entity)
         assert entity.speed_count, "speed_count"
         self._check_remove_togglex(entity)
 

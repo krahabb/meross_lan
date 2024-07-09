@@ -6,13 +6,14 @@ from . import meross_entity as me
 from .helpers import reverse_lookup
 from .merossclient import const as mc
 from .select import MtsTrackedSensor
-from .sensor import UnitOfTemperature
+from .sensor import MLTemperatureSensor
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .calendar import MtsSchedule
+    from .helpers.namespaces import NamespaceHandler
     from .meross_device import MerossDeviceBase
     from .number import MtsSetPointNumber, MtsTemperatureNumber
 
@@ -27,7 +28,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     PLATFORM = climate.DOMAIN
 
     ATTR_TEMPERATURE: typing.Final = climate.ATTR_TEMPERATURE
-    TEMP_CELSIUS: typing.Final = UnitOfTemperature.CELSIUS
+    TEMP_CELSIUS: typing.Final = me.MerossEntity.hac.UnitOfTemperature.CELSIUS
 
     HVACAction: typing.Final = climate.HVACAction
     HVACMode: typing.Final = climate.HVACMode
@@ -51,6 +52,9 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     }
     """lookups used in MtsSetpointNumber to map a pretty icon to the setpoint entity"""
 
+    SET_TEMP_FORCE_MANUAL_MODE = True
+    """Determines the behavior of async_set_temperature."""
+
     manager: "MerossDeviceBase"
     number_adjust_temperature: typing.Final["MtsTemperatureNumber"]
     number_preset_temperature: dict[str, "MtsSetPointNumber"]
@@ -58,6 +62,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     select_tracked_sensor: typing.Final["MtsTrackedSensor"]
 
     # HA core entity attributes:
+    current_humidity: float | None
     current_temperature: float | None
     hvac_action: climate.HVACAction | None
     hvac_mode: climate.HVACMode | None
@@ -78,13 +83,16 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         | getattr(climate.ClimateEntityFeature, "TURN_OFF", 0)
         | getattr(climate.ClimateEntityFeature, "TURN_ON", 0)
     )
-    _enable_turn_on_off_backwards_compatibility = False
+    _enable_turn_on_off_backwards_compatibility = (
+        False  # compatibility flag (see HA core climate)
+    )
     target_temperature: float | None
     target_temperature_step: float = 0.5
     temperature_unit: str = TEMP_CELSIUS
     translation_key = "mts_climate"
 
     __slots__ = (
+        "current_humidity",
         "current_temperature",
         "hvac_action",
         "hvac_mode",
@@ -96,11 +104,11 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         "_mts_mode",
         "_mts_onoff",
         "_mts_payload",
-        "_mts_adjust_offset",
         "number_adjust_temperature",
         "number_preset_temperature",
         "schedule",
         "select_tracked_sensor",
+        "sensor_current_temperature",
     )
 
     def __init__(
@@ -111,6 +119,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         preset_number_class: typing.Type["MtsSetPointNumber"] | None,
         calendar_class: typing.Type["MtsSchedule"],
     ):
+        self.current_humidity = None
         self.current_temperature = None
         self.hvac_action = None
         self.hvac_mode = None
@@ -122,7 +131,6 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_mode: int | None = None
         self._mts_onoff: int | None = None
         self._mts_payload = {}
-        self._mts_adjust_offset = 0
         super().__init__(manager, channel)
         self.number_adjust_temperature = adjust_number_class(self)  # type: ignore
         self.number_preset_temperature = {}
@@ -134,10 +142,13 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
                 )
         self.schedule = calendar_class(self)
         self.select_tracked_sensor = MtsTrackedSensor(self)
+        self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
+        self.sensor_current_temperature.entity_registry_enabled_default = False
 
     # interface: MerossEntity
     async def async_shutdown(self):
         await super().async_shutdown()
+        self.sensor_current_temperature: "MLTemperatureSensor" = None  # type: ignore
         self.select_tracked_sensor = None  # type: ignore
         self.schedule = None  # type: ignore
         self.number_adjust_temperature = None  # type: ignore
@@ -148,13 +159,14 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self._mts_mode = None
         self._mts_onoff = None
         self._mts_payload = {}
+        self.current_humidity = None
+        self.current_temperature = None
         self.preset_mode = None
         self.hvac_action = None
         self.hvac_mode = None
         super().set_unavailable()
 
     def flush_state(self):
-        self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         super().flush_state()
         self.schedule.flush_state()
 
@@ -188,11 +200,31 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     def is_mts_scheduled(self):
         raise NotImplementedError()
 
-    def _parse(self, p_temperature: dict):
+    def get_ns_adjust(self) -> "NamespaceHandler":
         """
-        This the handler for the default payload carrying the gross state of the climate entity.
-        It is dynamically binded to the self.namespace NamespaceHandler on __init__.
-        By convention every implementation used to define this as _parse_'key_namespace' but
-        it is not needed anymore since that was due to the legacy message handle/parse engine
+        Returns the correct ns handler for the adjust namespace.
+        Used to trigger a poll and the ns which is by default polled
+        on a long timeout.
         """
         raise NotImplementedError()
+
+    def _update_current_temperature(self, current_temperature: float | int):
+        """
+        Common handler for incoming room temperature value
+        """
+        current_temperature = current_temperature / self.device_scale
+        if self.current_temperature != current_temperature:
+            self.current_temperature = current_temperature
+            self.select_tracked_sensor.check_tracking()
+            self.sensor_current_temperature.update_native_value(current_temperature)
+            # temp change might be an indication of a calibration so
+            # we'll speed up polling for the adjust/calibration ns
+            try:
+                ns_adjust = self.get_ns_adjust()
+                if ns_adjust.polling_epoch_next > (
+                    ns_adjust.device._polling_epoch + 30
+                ):
+                    ns_adjust.polling_epoch_next = 0.0
+            except:
+                # in case the ns is not available for this device
+                pass

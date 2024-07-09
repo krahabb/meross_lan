@@ -34,6 +34,8 @@ class EntityTest(EntityComponentTest):
         self,
         entity: MLLight | MLDiffuserLight | MLDNDLightEntity,
     ):
+        await super().async_test_each_callback(entity)
+
         supported_color_modes = entity.supported_color_modes
         supported_features = entity.supported_features
 

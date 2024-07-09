@@ -10,7 +10,14 @@
                             "comfort": "快適（熱）",
                             "sleep": "スリープ（クール）",
                             "away": "アウェイ（エコノミー）",
-                            "auto": "自動"
+                            "auto": "自動",
+                            "heating": "暖房",
+                            "cooling": "冷却",
+                            "schedule_heating": "暖房のスケジュール設定",
+                            "schedule_cooling": "冷却スケジュール",
+                            "timer_cycle": "サイクルタイマー",
+                            "timer_countdown_on": "カウントダウンオン",
+                            "timer_countdown_off": "カウントダウン オフ"
                         }
                     }
                 }
