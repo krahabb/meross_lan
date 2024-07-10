@@ -2345,7 +2345,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                                 continue
                             key_namespace = ns.key
                             # we're not sure our key_namespace is correct (euristics!)
-                            response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
+                            response_payload = response[mc.KEY_PAYLOAD].get(
+                                key_namespace
+                            )
                             if response_payload:
                                 # our euristic query hit something..loop next
                                 continue
@@ -2403,7 +2405,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     if ns.has_get is not False:
                         if response := await self.async_request_ack(*ns.request_get):
                             key_namespace = ns.key
-                            response_payload = response[mc.KEY_PAYLOAD].get(key_namespace)
+                            response_payload = response[mc.KEY_PAYLOAD].get(
+                                key_namespace
+                            )
                             if (
                                 not response_payload
                                 and not ns.request_get[2][key_namespace]
@@ -2416,9 +2420,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                                         mc.METHOD_GET,
                                         {key_namespace: [{mc.KEY_CHANNEL: 0}]},
                                     )
-                            
+
                     if ns.has_push is not False:
-                        # METHOD_GET doesnt work. Try PUSH
+                        # whatever the GET reply check also method PUSH
+                        # sending a PUSH 'out of the blue' might trigger unknown
+                        # device behaviors but we'll see
                         await self.async_request(*ns.request_push)
 
         except StopIteration:
@@ -2461,26 +2467,34 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 protocol,
                 rxtx,
             )
-        if self.isEnabledFor(self.VERBOSE):
+        # here we avoid using self.log since it would
+        # log to the trace file too but we've already 'traced' the
+        # message if that's the case
+        logger = self.logger
+        if logger.isEnabledFor(self.VERBOSE):
             header = message[mc.KEY_HEADER]
-            self.log(
+            logger._log(
                 self.VERBOSE,
                 "%s(%s) %s %s (messageId:%s) %s",
-                rxtx,
-                protocol,
-                header[mc.KEY_METHOD],
-                header[mc.KEY_NAMESPACE],
-                header[mc.KEY_MESSAGEID],
-                json_dumps(self.loggable_dict(message)),
+                (
+                    rxtx,
+                    protocol,
+                    header[mc.KEY_METHOD],
+                    header[mc.KEY_NAMESPACE],
+                    header[mc.KEY_MESSAGEID],
+                    json_dumps(self.loggable_dict(message)),
+                ),
             )
-        elif self.isEnabledFor(self.DEBUG):
+        elif logger.isEnabledFor(self.DEBUG):
             header = message[mc.KEY_HEADER]
-            self.log(
+            logger._log(
                 self.DEBUG,
                 "%s(%s) %s %s (messageId:%s)",
-                rxtx,
-                protocol,
-                header[mc.KEY_METHOD],
-                header[mc.KEY_NAMESPACE],
-                header[mc.KEY_MESSAGEID],
+                (
+                    rxtx,
+                    protocol,
+                    header[mc.KEY_METHOD],
+                    header[mc.KEY_NAMESPACE],
+                    header[mc.KEY_MESSAGEID],
+                ),
             )
