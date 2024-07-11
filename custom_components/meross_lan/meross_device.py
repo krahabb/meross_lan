@@ -616,7 +616,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
         if not self._online:
-            self.request(mn.Appliance_System_All.request_default)
+            self.request(mn.Appliance_System_All.request_get)
 
     async def async_create_diagnostic_entities(self):
         self._diagnostics_build = True  # set a flag cause we'll lazy scan/build
@@ -1480,7 +1480,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     and ((epoch - self._http_lastrequest) > PARAM_HEARTBEAT_PERIOD)
                 ):
                     if await self.async_http_request(
-                        *mn.Appliance_System_All.request_default
+                        *mn.Appliance_System_All.request_get
                     ):
                         namespace = mc.NS_APPLIANCE_SYSTEM_ALL
                     # going on, should the http come online, the next
@@ -1495,7 +1495,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     # be unused for quite a bit
                     if (epoch - self._mqtt_lastresponse) > PARAM_HEARTBEAT_PERIOD:
                         if not await self.async_mqtt_request(
-                            *mn.Appliance_System_All.request_default
+                            *mn.Appliance_System_All.request_get
                         ):
                             self._mqtt_active = None
                             self.device_debug = None
