@@ -548,14 +548,11 @@ class MerossSubDevice(MerossDeviceBase):
                 )
 
     def _parse(self, key: str, payload: dict):
-        with self.exception_warning("_parse(%s, %s)", key, str(payload), timeout=14400):
-            method = getattr(self, f"_parse_{key}", None)
-            if method:
-                method(payload)
-                return
-
+        try:
+            getattr(self, f"_parse_{key}")(payload)
+        except AttributeError:
             # This happens when we still haven't 'normalized' the device structure
-            # so we'll (entually) euristically generate sensors for device properties
+            # so we'll (eventually) euristically generate sensors for device properties
             # This is the case for when we see newer devices and we don't know
             # their payloads and features.
             # as for now we've seen "smokeAlarm" and "doorWindow" subdevices
@@ -598,6 +595,9 @@ class MerossSubDevice(MerossDeviceBase):
                 pass
 
             _parse_dict(key, payload)
+
+        except Exception as exception:
+            self.log_exception(self.WARNING, exception, "_parse(%s, %s)", key, str(payload), timeout=14400)
 
     def parse_digest(self, p_digest: dict):
         """
