@@ -43,7 +43,6 @@ from .helpers import (
     async_import_module,
     async_load_zoneinfo,
     datetime_from_epoch,
-    schedule_async_callback,
 )
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import NamespaceHandler
@@ -586,8 +585,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # here we'll register mqtt listening (in case) and start polling after
         # the states have been eventually restored (some entities need this)
         self._check_protocol_ext()
-        self._polling_callback_unsub = schedule_async_callback(
-            self.hass, 0, self._async_polling_callback, None
+        self._polling_callback_unsub = self.schedule_async_callback(
+            0, self._async_polling_callback, None
         )
         self.state = ManagerState.STARTED
 
@@ -640,8 +639,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         descr = self.descriptor
         # set the scheduled callback first so it gets (eventually) cleaned
         # should the following self.trace close the file due to an error
-        self._trace_ability_callback_unsub = schedule_async_callback(
-            self.hass,
+        self._trace_ability_callback_unsub = self.schedule_async_callback(
             PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             self._async_trace_ability,
             iter(descr.ability),
@@ -1571,8 +1569,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self._polling_callback_shutdown.set_result(True)
                 self._polling_callback_shutdown = None
             else:
-                self._polling_callback_unsub = schedule_async_callback(
-                    self.hass, self._polling_delay, self._async_polling_callback, None
+                self._polling_callback_unsub = self.schedule_async_callback(
+                    self._polling_delay, self._async_polling_callback, None
                 )
             self.log(self.DEBUG, "Polling end")
 
@@ -1628,8 +1626,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             if not self._online and self._polling_callback_unsub:
                 # reschedule immediately
                 self._polling_callback_unsub.cancel()
-                self._polling_callback_unsub = schedule_async_callback(
-                    self.hass, 0, self._async_polling_callback, None
+                self._polling_callback_unsub = self.schedule_async_callback(
+                    0, self._async_polling_callback, None
                 )
         elif self.conf_protocol is CONF_PROTOCOL_MQTT:
             self.log(
@@ -1792,8 +1790,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # This could happen when we receive an MQTT message
             if self._polling_callback_unsub:
                 self._polling_callback_unsub.cancel()
-                self._polling_callback_unsub = schedule_async_callback(
-                    self.hass,
+                self._polling_callback_unsub = self.schedule_async_callback(
                     0,
                     self._async_polling_callback,
                     header[mc.KEY_NAMESPACE],
@@ -2443,8 +2440,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
         else:
             timeout = PARAM_TRACING_ABILITY_POLL_TIMEOUT
-        self._trace_ability_callback_unsub = schedule_async_callback(
-            self.hass,
+        self._trace_ability_callback_unsub = self.schedule_async_callback(
             timeout,
             self._async_trace_ability,
             abilities_iterator,

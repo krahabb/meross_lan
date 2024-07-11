@@ -16,7 +16,7 @@ from homeassistant.components.light import (
 import homeassistant.util.color as color_util
 
 from . import const as mlc, meross_entity as me
-from .helpers import clamp, schedule_async_callback
+from .helpers import clamp
 from .helpers.namespaces import (
     EntityNamespaceHandler,
     EntityNamespaceMixin,
@@ -382,8 +382,8 @@ class MLLightBase(me.MerossBinaryEntity, light.LightEntity):
             _t_resolution = self._t_resolution
         # now 'spread' the resolution over the remaining duration
         _t_resolution = t_duration / (round(t_duration / _t_resolution) or 1)
-        self._t_unsub = schedule_async_callback(
-            self.hass, _t_resolution, self._async_transition
+        self._t_unsub = self.manager.schedule_async_callback(
+            _t_resolution, self._async_transition
         )
 
     async def _async_transition(self):

@@ -28,7 +28,6 @@ from .helpers import (
     ConfigEntriesHelper,
     Loggable,
     datetime_from_epoch,
-    schedule_async_callback,
     versiontuple,
 )
 from .helpers.manager import ApiProfile, CloudApiClient
@@ -774,12 +773,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                     if MEROSSDEBUG.mqtt_random_disconnect():
                         self.log(self.DEBUG, "Random disconnect")
                         await self.async_disconnect()
-                self._unsub_random_disconnect = schedule_async_callback(
-                    self.hass, 60, _async_random_disconnect
+                self._unsub_random_disconnect = profile.schedule_async_callback(
+                    60, _async_random_disconnect
                 )
 
-            self._unsub_random_disconnect = schedule_async_callback(
-                self.hass, 60, _async_random_disconnect
+            self._unsub_random_disconnect = profile.schedule_async_callback(
+                60, _async_random_disconnect
             )
         else:
             self._unsub_random_disconnect = None
@@ -983,8 +982,7 @@ class MerossCloudProfile(ApiProfile):
                         json_dumps(_data),
                     )
         """
-        self._unsub_polling_query_device_info = schedule_async_callback(
-            self.hass,
+        self._unsub_polling_query_device_info = self.schedule_async_callback(
             next_query_delay,
             self._async_polling_query_device_info,
         )
@@ -1162,8 +1160,7 @@ class MerossCloudProfile(ApiProfile):
             # at any time (say the user does a new cloud login or so...)
             if self._unsub_polling_query_device_info:
                 self._unsub_polling_query_device_info.cancel()
-            self._unsub_polling_query_device_info = schedule_async_callback(
-                self.hass,
+            self._unsub_polling_query_device_info = self.schedule_async_callback(
                 mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
                 self._async_polling_query_device_info,
             )
@@ -1337,8 +1334,7 @@ class MerossCloudProfile(ApiProfile):
             if self._unsub_polling_query_device_info is None:
                 # this happens when 'async_query_devices' is unable to
                 # retrieve fresh cloud data for whatever reason
-                self._unsub_polling_query_device_info = schedule_async_callback(
-                    self.hass,
+                self._unsub_polling_query_device_info = self.schedule_async_callback(
                     mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
                     self._async_polling_query_device_info,
                 )

@@ -12,7 +12,7 @@ from ..const import (
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
 from ..cover import MLCover
-from ..helpers import clamp, schedule_async_callback
+from ..helpers import clamp
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber, MLEmulatedNumber, MLNumber
@@ -347,7 +347,8 @@ class MLGarage(MLCover):
 
     # interface: self
     async def async_request_position(self, open_request: int):
-        if response := await self.manager.async_request_ack(
+        manager = self.manager
+        if response := await manager.async_request_ack(
             mc.NS_APPLIANCE_GARAGEDOOR_STATE,
             mc.METHOD_SET,
             {mc.KEY_STATE: {mc.KEY_CHANNEL: self.channel, mc.KEY_OPEN: open_request}},
@@ -374,7 +375,7 @@ class MLGarage(MLCover):
                 _open = p_state[mc.KEY_OPEN]
                 self.is_closed = not _open
                 if p_state.get(mc.KEY_EXECUTE) and open_request != _open:
-                    self._transition_start = self.manager.lastresponse
+                    self._transition_start = manager.lastresponse
                     if open_request:
                         self.is_closing = False
                         self.is_opening = True
@@ -384,7 +385,7 @@ class MLGarage(MLCover):
                             # this happens (once) when we don't have MULTIPLECONFIG ns support
                             # we'll then try use the 'x device' CONFIG or (since it could be missing)
                             # just build an emulated config entity
-                            self.number_open_timeout = self.manager.entities.get(
+                            self.number_open_timeout = manager.entities.get(
                                 f"config_{mc.KEY_DOOROPENDURATION}"
                             ) or MLGarageEmulatedConfigNumber(  # type: ignore
                                 self, mc.KEY_DOOROPENDURATION
@@ -399,20 +400,19 @@ class MLGarage(MLCover):
                             # this happens (once) when we don't have MULTIPLECONFIG ns support
                             # we'll then try use the 'x device' CONFIG or (since it could be missing)
                             # just build an emulated config entity
-                            self.number_close_timeout = self.manager.entities.get(
+                            self.number_close_timeout = manager.entities.get(
                                 f"config_{mc.KEY_DOORCLOSEDURATION}"
                             ) or MLGarageEmulatedConfigNumber(  # type: ignore
                                 self, mc.KEY_DOORCLOSEDURATION
                             )
                             timeout = self.number_close_timeout.native_value  # type: ignore
 
-                    self._transition_unsub = schedule_async_callback(
-                        self.hass, 0.9, self._async_transition_callback
+                    self._transition_unsub = manager.schedule_async_callback(
+                        0.9, self._async_transition_callback
                     )
                     # check the timeout after expected to account
                     # for delays in communication
-                    self._transition_end_unsub = schedule_async_callback(
-                        self.hass,
+                    self._transition_end_unsub = manager.schedule_async_callback(
                         (timeout or self._transition_duration),  # type: ignore
                         self._async_transition_end_callback,
                     )
@@ -445,8 +445,8 @@ class MLGarage(MLCover):
         if self.is_closed == is_closed:
             if self._transition_start and not self._transition_unsub:
                 # keep monitoring the transition in less than 1 sec
-                self._transition_unsub = schedule_async_callback(
-                    self.hass, 0.9, self._async_transition_callback
+                self._transition_unsub = self.manager.schedule_async_callback(
+                    0.9, self._async_transition_callback
                 )
             return
 

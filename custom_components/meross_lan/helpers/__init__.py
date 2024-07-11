@@ -75,22 +75,6 @@ def datetime_from_epoch(epoch, tz: "tzinfo | None"):
         return utcdt.astimezone(tz)
 
 
-def schedule_async_callback(
-    hass: "HomeAssistant", delay: float, target: "Callable[..., Coroutine]", *args
-) -> "asyncio.TimerHandle":
-    @callback
-    def _callback(_target, *_args):
-        hass.async_create_task(_target(*_args))
-
-    return hass.loop.call_later(delay, _callback, target, *args)
-
-
-def schedule_callback(
-    hass: "HomeAssistant", delay: float, target: "Callable", *args
-) -> "asyncio.TimerHandle":
-    return hass.loop.call_later(delay, target, *args)
-
-
 _import_module_lock = asyncio.Lock()
 _import_module_cache = {}
 

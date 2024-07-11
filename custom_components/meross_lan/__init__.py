@@ -19,7 +19,6 @@ from .helpers import (
     ConfigEntryType,
     Loggable,
     async_import_module,
-    schedule_async_callback,
 )
 from .helpers.manager import ApiProfile, ConfigEntryManager
 from .meross_device import MerossDevice
@@ -81,8 +80,8 @@ class HAMQTTConnection(MQTTConnection):
         if MEROSSDEBUG:
             # TODO : check bug in hass shutdown
             async def _async_random_disconnect():
-                self._unsub_random_disconnect = schedule_async_callback(
-                    MerossApi.hass, 60, _async_random_disconnect
+                self._unsub_random_disconnect = api.schedule_async_callback(
+                    60, _async_random_disconnect
                 )
                 if self._mqtt_subscribing:
                     return
@@ -95,8 +94,8 @@ class HAMQTTConnection(MQTTConnection):
                         self.log(self.DEBUG, "random disconnect")
                         await self.async_mqtt_unsubscribe()
 
-            self._unsub_random_disconnect = schedule_async_callback(
-                MerossApi.hass, 60, _async_random_disconnect
+            self._unsub_random_disconnect = api.schedule_async_callback(
+                60, _async_random_disconnect
             )
         else:
             self._unsub_random_disconnect = None

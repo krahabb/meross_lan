@@ -5,7 +5,7 @@ from homeassistant.exceptions import InvalidStateError
 
 from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
-from .helpers import schedule_async_callback, versiontuple
+from .helpers import versiontuple
 from .merossclient import const as mc, namespaces as mn
 from .number import MLConfigNumber
 
@@ -209,8 +209,8 @@ class MLRollerShutter(MLCover):
             else:
                 return  # No-Op
             if await self.async_request_position(position):
-                self._transition_end_unsub = schedule_async_callback(
-                    self.hass, timeout, self._async_transition_end_callback
+                self._transition_end_unsub = self.manager.schedule_async_callback(
+                    timeout, self._async_transition_end_callback
                 )
 
     async def async_stop_cover(self, **kwargs):
@@ -414,8 +414,7 @@ class MLRollerShutter(MLCover):
                 self.is_opening = not self.is_closing
                 if not self._transition_unsub:
                     # ensure we 'follow' cover movement
-                    self._transition_unsub = schedule_async_callback(
-                        self.hass,
+                    self._transition_unsub = self.manager.schedule_async_callback(
                         PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
                         self._async_transition_callback,
                     )
@@ -431,12 +430,11 @@ class MLRollerShutter(MLCover):
         This is a very 'gentle' polling happening only on HTTP when we're sure we're
         not receiving MQTT updates. If device was configured for MQTT only we could
         not setup this at all."""
-        self._transition_unsub = schedule_async_callback(
-            self.hass,
+        manager = self.manager
+        self._transition_unsub = manager.schedule_async_callback(
             PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
             self._async_transition_callback,
         )
-        manager = self.manager
         if (
             manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active
         ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):

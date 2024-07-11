@@ -3,7 +3,7 @@ import typing
 from homeassistant.components import number
 
 from . import meross_entity as me
-from .helpers import reverse_lookup, schedule_async_callback
+from .helpers import reverse_lookup
 from .merossclient import const as mc
 
 if typing.TYPE_CHECKING:
@@ -107,8 +107,8 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
         self.update_native_value(device_value / self.device_scale)
         if self._async_request_debounce_unsub:
             self._async_request_debounce_unsub.cancel()
-        self._async_request_debounce_unsub = schedule_async_callback(
-            self.hass, self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
+        self._async_request_debounce_unsub = self.manager.schedule_async_callback(
+            self.DEBOUNCE_DELAY, self._async_request_debounce, device_value
         )
 
     # interface: self
