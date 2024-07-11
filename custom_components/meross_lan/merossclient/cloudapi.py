@@ -127,7 +127,7 @@ class DeviceInfoType(typing.TypedDict):
     domain: str  # optionally formatted as host:port
     reservedDomain: str  # optionally formatted as host:port
     hardwareCapabilities: list
-    __subDeviceInfo: dict[str, "SubDeviceInfoType"]  # this key is not from meross api
+    __subDeviceInfo: typing.NotRequired[dict[str, "SubDeviceInfoType"]]  # this key is not from meross api
 
 
 class LatestVersionType(typing.TypedDict, total=False):
