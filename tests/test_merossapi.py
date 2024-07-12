@@ -1,7 +1,6 @@
 """Test the core MerossApi class"""
 
 from time import time
-from unittest.mock import ANY
 
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
@@ -16,7 +15,7 @@ from custom_components.meross_lan.merossclient import (
 from . import const as tc, helpers
 
 
-async def test_hamqtt_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker):
+async def test_hamqtt_device_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker):
     """
     check the local broker session management handles the device transactions
     when they connect to the HA broker

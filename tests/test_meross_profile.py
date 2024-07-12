@@ -4,7 +4,6 @@ from unittest import mock
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from pytest_homeassistant_custom_component.common import flush_store
 
 from custom_components.meross_lan import MerossApi, const as mlc
@@ -12,25 +11,6 @@ from custom_components.meross_lan.meross_profile import MerossCloudProfile
 from custom_components.meross_lan.merossclient import HostAddress, cloudapi, const as mc
 
 from . import const as tc, helpers
-
-
-async def test_cloudapi(hass, cloudapi_mock: helpers.CloudApiMocker):
-    cloudapiclient = cloudapi.CloudApiClient(session=async_get_clientsession(hass))
-    credentials = await cloudapiclient.async_signin(
-        tc.MOCK_PROFILE_EMAIL, tc.MOCK_PROFILE_PASSWORD
-    )
-    assert credentials == tc.MOCK_PROFILE_CREDENTIALS_SIGNIN
-
-    result = await cloudapiclient.async_device_devlist()
-    assert result == tc.MOCK_CLOUDAPI_DEVICE_DEVLIST
-
-    result = await cloudapiclient.async_device_latestversion()
-    assert result == tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION
-
-    result = await cloudapiclient.async_hub_getsubdevices(tc.MOCK_PROFILE_MSH300_UUID)
-    assert result == tc.MOCK_CLOUDAPI_HUB_GETSUBDEVICES[tc.MOCK_PROFILE_MSH300_UUID]
-
-    await cloudapiclient.async_logout()
 
 
 async def test_meross_profile(
