@@ -26,6 +26,10 @@ class ObfuscateRule:
     def obfuscate(self, value):
         return "<redacted>"
 
+    def clear(self):
+        """Resets any cached data"""
+        pass
+
 
 class ObfuscateMap(ObfuscateRule, dict):
     def obfuscate(self, value):
@@ -50,6 +54,9 @@ class ObfuscateMap(ObfuscateRule, dict):
                 self[value] = "@" + str(count)
 
         return self[value]
+
+    def clear(self):
+        dict.clear(self)
 
 
 class ObfuscateUserIdMap(ObfuscateMap):
@@ -88,21 +95,45 @@ class ObfuscateServerMap(ObfuscateMap):
 
         return super().obfuscate(value)
 
+    def clear(self):
+        OBFUSCATE_PORT_MAP.clear()
+        return super().clear()
+
 
 class ObfuscateFrom(ObfuscateRule):
     """
     Obfuscate the "from" payload field which may carry the device "uuid"
+    or the "userid"
     """
 
     def obfuscate(self, value: str):
         """
         Renders the obfuscated uuid in place like:
         "/appliance/###############################0/publish"
+        or, when matching an userid like:
+        "/app/########0-whatever/subscribe
         """
+        # start by matching the eventual userid since the pattern is more specific
+        if m := mc.RE_PATTERN_TOPIC_USERID.match(value):
+            return "".join(
+                (m.group(1), OBFUSCATE_USERID_MAP.obfuscate(m.group(2)), m.group(3))
+            )
+
+        # this is a 'broad matcher' capturing whatever looks like an UUID (32 alfanumerics)
         def _sub(match: re.Match):
-            return "".join((match.group(1), OBFUSCATE_DEVICE_ID_MAP.obfuscate(match.group(2)), match.group(3)))
+            return "".join(
+                (
+                    match.group(1),
+                    OBFUSCATE_DEVICE_ID_MAP.obfuscate(match.group(2)),
+                    match.group(3),
+                )
+            )
 
         return mc.RE_PATTERN_UUID.sub(_sub, value)
+
+    def clear(self):
+        OBFUSCATE_USERID_MAP.clear()
+        OBFUSCATE_DEVICE_ID_MAP.clear()
 
 
 # common (shared) obfuscation mappings for related keys

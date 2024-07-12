@@ -12,6 +12,7 @@ TOPIC_RESPONSE = "/appliance/{}/publish"
 
 RE_PATTERN_UUID = re.compile(r"(^|[^a-fA-F0-9])([a-fA-F0-9]{32})($|[^a-fA-F0-9])")
 RE_PATTERN_TOPIC_UUID = re.compile(r"/.+/(.*)/.+")
+RE_PATTERN_TOPIC_USERID = re.compile(r"(/app/)(\d+)(.*/subscribe)")
 """re pattern to search/extract the uuid from an MQTT topic or the "from" field in message header"""
 
 METHOD_PUSH = "PUSH"
