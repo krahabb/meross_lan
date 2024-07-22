@@ -316,6 +316,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             ".devices.mss",
             "ElectricityNamespaceHandler",
         ),
+        mc.NS_APPLIANCE_CONTROL_CONSUMPTIONH: (
+            ".devices.mss",
+            "ConsumptionHNamespaceHandler",
+        ),
         mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (".devices.mss", "ConsumptionXSensor"),
         mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "namespace_init_fan"),
         mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: (

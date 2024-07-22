@@ -43,14 +43,16 @@ def digest_init_diffuser(
     """
 
     diffuser_light_handler = NamespaceHandler(
-        device, mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT, entity_class=MLDiffuserLight
+        device, mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT
     )
+    diffuser_light_handler.register_entity_class(MLDiffuserLight)
     for light_digest in digest.get(mc.KEY_LIGHT, []):
         MLDiffuserLight(device, light_digest)
 
     diffuser_spray_handler = NamespaceHandler(
-        device, mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY, entity_class=MLDiffuserSpray
+        device, mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY
     )
+    diffuser_spray_handler.register_entity_class(MLDiffuserSpray)
     for spray_digest in digest.get(mc.KEY_SPRAY, []):
         MLDiffuserSpray(device, spray_digest[mc.KEY_CHANNEL])
 

@@ -179,6 +179,34 @@ class ElectricityNamespaceHandler(NamespaceHandler):
             device.check_device_timezone()
 
 
+class ConsumptionHSensor(MLNumericSensor):
+
+    manager: "MerossDevice"
+    ns = mn.Appliance_Control_ConsumptionH
+    device_scale = 1
+    _attr_suggested_display_precision = 0
+
+    __slots__ = ()
+
+    def __init__(self, manager: "MerossDevice", channel: object | None):
+        self.name = "Consumption"
+        super().__init__(manager, channel, self.ns.key, self.DeviceClass.ENERGY)
+        manager.register_parser_entity(self)
+
+    def _parse_consumptionH(self, payload: dict):
+        """
+        {"channel": 1, "total": 958, "data": [{"timestamp": 1721548740, "value": 0}]}
+        """
+        self.update_device_value(payload[mc.KEY_TOTAL])
+
+
+class ConsumptionHNamespaceHandler(NamespaceHandler):
+
+    def __init__(self, device: "MerossDevice"):
+        super().__init__(device, mc.NS_APPLIANCE_CONTROL_CONSUMPTIONH)
+        self.register_entity_class(ConsumptionHSensor, initially_disabled=False)
+
+
 class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     ATTR_OFFSET: typing.Final = "offset"
     ATTR_RESET_TS: typing.Final = "reset_ts"

@@ -66,7 +66,6 @@ class NamespaceHandler:
         device: "MerossDevice",
         namespace: str,
         *,
-        entity_class: type["MerossEntity"] | None = None,
         handler: typing.Callable[[dict, dict], None] | None = None,
     ):
         assert (
@@ -76,14 +75,10 @@ class NamespaceHandler:
         self.ns = ns = mn.NAMESPACES[namespace]
         self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
         self.entities: dict[object, typing.Callable[[dict], None]] = {}
-        if entity_class:
-            assert not handler
-            self.register_entity_class(entity_class)
-        else:
-            self.entity_class = None
-            self.handler = handler or getattr(
-                device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
-            )
+        self.entity_class = None
+        self.handler = handler or getattr(
+            device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
+        )
 
         if _conf := POLLING_STRATEGY_CONF.get(namespace):
             self.polling_period = _conf[0]
@@ -139,9 +134,13 @@ class NamespaceHandler:
     def polling_response_size_inc(self):
         self.polling_response_size += self.polling_response_item_size
 
-    def register_entity_class(self, entity_class: type["MerossEntity"]):
-        self.entity_class = type(
-            entity_class.__name__, (EntityDisablerMixin, entity_class), {}
+    def register_entity_class(
+        self, entity_class: type["MerossEntity"], *, initially_disabled=True
+    ):
+        self.entity_class = (
+            type(entity_class.__name__, (EntityDisablerMixin, entity_class), {})
+            if initially_disabled
+            else entity_class
         )
         self.handler = self._handle_list
         self.device.platforms.setdefault(entity_class.PLATFORM)
@@ -612,6 +611,13 @@ POLLING_STRATEGY_CONF: dict[
         340,
         0,
         NamespaceHandler.async_poll_lazy,
+    ),
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONH: (
+        mlc.PARAM_ENERGY_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        320,
+        400,
+        NamespaceHandler.async_poll_smart,
     ),
     mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,

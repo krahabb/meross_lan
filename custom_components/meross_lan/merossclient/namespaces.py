@@ -195,6 +195,9 @@ Appliance_System_Runtime = _ns_get(
     mc.NS_APPLIANCE_SYSTEM_RUNTIME, mc.KEY_RUNTIME, _DICT
 )
 
+Appliance_Control_ConsumptionH = _ns_get(
+    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONH, mc.KEY_CONSUMPTIONH, _LIST_C
+)
 Appliance_Control_ConsumptionX = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX, mc.KEY_CONSUMPTIONX, _LIST
 )
