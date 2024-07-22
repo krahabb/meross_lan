@@ -213,6 +213,9 @@ Appliance_Control_Diffuser_Spray = _ns_get_push(
 Appliance_Control_Electricity = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_ELECTRICITY, mc.KEY_ELECTRICITY, _DICT
 )
+Appliance_Control_ElectricityX = _ns_get_push(
+    mc.NS_APPLIANCE_CONTROL_ELECTRICITYX, mc.KEY_ELECTRICITYX, _LIST
+)
 Appliance_Control_Fan = _ns_get(mc.NS_APPLIANCE_CONTROL_FAN, mc.KEY_FAN)
 Appliance_Control_FilterMaintenance = _ns_push(
     mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE, mc.KEY_FILTER
