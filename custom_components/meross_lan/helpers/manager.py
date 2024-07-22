@@ -391,7 +391,7 @@ class ConfigEntryManager(EntityManager):
                 return open(
                     os.path.join(
                         tracedir,
-                        f"{strftime("%Y-%m-%d_%H-%M-%S", localtime(epoch))}_{self.config_entry_id}.csv"
+                        f"{strftime('%Y-%m-%d_%H-%M-%S', localtime(epoch))}_{self.config_entry_id}.csv"
                     ),
                     mode="w",
                     encoding="utf8",
