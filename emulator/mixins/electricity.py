@@ -15,6 +15,7 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     # used to 'fix' and control the power level in tests
     # if None (default) it will generate random values
     _power_set: int | None = None
+    # this is 'shared' with ConsumptionXMixin to control tests output
     power: int
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
@@ -63,6 +64,71 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         p_electricity[mc.KEY_VOLTAGE] = self.voltage_average + randint(-20, 20)
         p_electricity[mc.KEY_CURRENT] = int(10 * power / p_electricity[mc.KEY_VOLTAGE])
         return mc.METHOD_GETACK, self.payload_electricity
+
+
+class ElectricityXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
+        super().__init__(descriptor, key)
+        self.payload_electricityx = descriptor.namespaces.setdefault(
+            mc.NS_APPLIANCE_CONTROL_ELECTRICITYX,
+            {
+                mc.KEY_ELECTRICITY: [
+                    {
+                        "channel": 1,
+                        "current": 0,
+                        "voltage": 233680,
+                        "power": 0,
+                        "mConsume": 1967,
+                        "factor": 0,
+                    },
+                    {
+                        "channel": 2,
+                        "current": 574,
+                        "voltage": 233184,
+                        "power": 115185,
+                        "mConsume": 4881,
+                        "factor": 0.8602570295333862,
+                    },
+                    {
+                        "channel": 3,
+                        "current": 0,
+                        "voltage": 232021,
+                        "power": 0,
+                        "mConsume": 59,
+                        "factor": 0,
+                    },
+                    {
+                        "channel": 4,
+                        "current": 311,
+                        "voltage": 233748,
+                        "power": 324,
+                        "mConsume": 0,
+                        "factor": 0.004454255104064941,
+                    },
+                    {
+                        "channel": 5,
+                        "current": 0,
+                        "voltage": 233313,
+                        "power": 0,
+                        "mConsume": 0,
+                        "factor": 0,
+                    },
+                    {
+                        "channel": 6,
+                        "current": 339,
+                        "voltage": 232127,
+                        "power": -10,
+                        "mConsume": 0,
+                        "factor": -0.0001285076141357422,
+                    },
+                ]
+            },
+        )
+        self.electricityx = self.payload_electricityx[mc.KEY_ELECTRICITY]
+
+    def _GET_Appliance_Control_ElectricityX(self, header, payload):
+        return mc.METHOD_GETACK, self.payload_electricityx
 
 
 class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):

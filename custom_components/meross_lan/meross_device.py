@@ -39,11 +39,7 @@ from .const import (
     PARAM_TRACING_ABILITY_POLL_TIMEOUT,
     DeviceConfigType,
 )
-from .helpers import (
-    async_import_module,
-    async_load_zoneinfo,
-    datetime_from_epoch,
-)
+from .helpers import async_import_module, async_load_zoneinfo, datetime_from_epoch
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import NamespaceHandler
 from .merossclient import (
@@ -314,11 +310,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         ),
         mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (
             ".devices.mss",
-            "ElectricityNamespaceHandler",
+            "namespace_init_electricity",
         ),
-        mc.NS_APPLIANCE_CONTROL_CONSUMPTIONH: (
+        mc.NS_APPLIANCE_CONTROL_ELECTRICITYX: (
             ".devices.mss",
-            "ConsumptionHNamespaceHandler",
+            "namespace_init_electricityx",
         ),
         mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (".devices.mss", "ConsumptionXSensor"),
         mc.NS_APPLIANCE_CONTROL_FAN: (".fan", "namespace_init_fan"),

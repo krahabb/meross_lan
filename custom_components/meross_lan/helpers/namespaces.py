@@ -169,11 +169,11 @@ class NamespaceHandler:
                     break
             else:
                 polling_request_payload.append({ns.key_channel: channel})
-                self.polling_response_size = (
-                    self.polling_response_base_size
-                    + len(polling_request_payload) * self.polling_response_item_size
-                )
 
+        self.polling_response_size = (
+            self.polling_response_base_size
+            + len(self.entities) * self.polling_response_item_size
+        )
         self.handler = self._handle_list
 
     def unregister(self, entity: "MerossEntity"):
@@ -525,7 +525,7 @@ class EntityNamespaceMixin(MerossEntity if typing.TYPE_CHECKING else object):
 class EntityNamespaceHandler(NamespaceHandler):
     """
     Utility class to manage namespaces which are mapped to a single entity.
-    This will acts as an helper in initialization
+    This will act as an helper in initialization
     """
 
     def __init__(self, entity: "EntityNamespaceMixin"):
@@ -638,6 +638,13 @@ POLLING_STRATEGY_CONF: dict[
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         430,
         0,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mc.NS_APPLIANCE_CONTROL_ELECTRICITYX: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        100,
         NamespaceHandler.async_poll_smart,
     ),
     mc.NS_APPLIANCE_CONTROL_FAN: (

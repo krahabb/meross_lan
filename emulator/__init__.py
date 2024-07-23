@@ -92,6 +92,10 @@ def build_emulator(
         from .mixins.electricity import ElectricityMixin
 
         mixin_classes.append(ElectricityMixin)
+    if mc.NS_APPLIANCE_CONTROL_ELECTRICITYX in ability:
+        from .mixins.electricity import ElectricityXMixin
+
+        mixin_classes.append(ElectricityXMixin)
     if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
         from .mixins.electricity import ConsumptionXMixin
 

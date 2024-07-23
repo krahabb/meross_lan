@@ -2,7 +2,7 @@ from homeassistant.components import sensor as haec
 
 from custom_components.meross_lan.devices.mss import (
     ConsumptionXSensor,
-    EnergyEstimateSensor,
+    ElectricitySensor,
 )
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.sensor import (
@@ -34,7 +34,7 @@ class EntityTest(EntityComponentTest):
             MLTemperatureSensor,
         ],
         mc.NS_APPLIANCE_CONTROL_ELECTRICITY: [
-            EnergyEstimateSensor,
+            ElectricitySensor,
             MLNumericSensor,
             MLNumericSensor,
             MLNumericSensor,
