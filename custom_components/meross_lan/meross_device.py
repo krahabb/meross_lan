@@ -527,7 +527,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         _module_path = MerossDevice.DIGEST_INIT.get(
                             key_digest, f".devices.{key_digest}"
                         )
-                        _digest_init_func: DigestInitFunc = getattr(
+                        digest_init_func: DigestInitFunc = getattr(
                             await async_import_module(_module_path),
                             f"digest_init_{key_digest}",
                         )
@@ -538,10 +538,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             "loading digest initializer for key '%s'",
                             key_digest,
                         )
-                        _digest_init_func = MerossDevice.digest_init_empty
-                    MerossDevice.DIGEST_INIT[key_digest] = _digest_init_func
+                        digest_init_func = MerossDevice.digest_init_empty
+                    MerossDevice.DIGEST_INIT[key_digest] = digest_init_func
                     self.digest_handlers[key_digest], _digest_pollers = (
-                        _digest_init_func(self, _digest)
+                        digest_init_func(self, _digest)
                     )
                 self.digest_pollers.update(_digest_pollers)
 
@@ -551,18 +551,18 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 )
                 self.digest_handlers[key_digest] = MerossDevice.digest_parse_empty
 
-        for namespace in MerossDevice.NAMESPACE_INIT:
+        for namespace, ns_init_func in MerossDevice.NAMESPACE_INIT.items():
             if namespace not in descriptor.ability:
                 continue
             try:
                 try:
-                    MerossDevice.NAMESPACE_INIT[namespace](self)
+                    ns_init_func(self)
                 except TypeError:
                     try:
-                        _ns_init_descriptor = MerossDevice.NAMESPACE_INIT[namespace]
-                        _ns_init_func = getattr(
-                            await async_import_module(_ns_init_descriptor[0]),
-                            _ns_init_descriptor[1],
+                        # _ns_init_descriptor = MerossDevice.NAMESPACE_INIT[namespace]
+                        ns_init_func = getattr(
+                            await async_import_module(ns_init_func[0]),
+                            ns_init_func[1],
                         )
                     except Exception as exception:
                         self.log_exception(
@@ -571,9 +571,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             "loading namespace initializer for %s",
                             namespace,
                         )
-                        _ns_init_func = MerossDevice.namespace_init_empty
-                    MerossDevice.NAMESPACE_INIT[namespace] = _ns_init_func
-                    _ns_init_func(self)
+                        ns_init_func = MerossDevice.namespace_init_empty
+                    MerossDevice.NAMESPACE_INIT[namespace] = ns_init_func
+                    ns_init_func(self)
 
             except Exception as exception:
                 self.log_exception(
