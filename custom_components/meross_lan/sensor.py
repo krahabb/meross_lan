@@ -71,7 +71,6 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         DeviceClass.TEMPERATURE: me.MerossEntity.hac.UnitOfTemperature.CELSIUS,
         DeviceClass.HUMIDITY: me.MerossEntity.hac.PERCENTAGE,
         DeviceClass.BATTERY: me.MerossEntity.hac.PERCENTAGE,
-        DeviceClass.POWER_FACTOR: me.MerossEntity.hac.PERCENTAGE,
     }
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
@@ -303,7 +302,8 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
             manager,
             None,
             mlc.SIGNALSTRENGTH_ID,
-            MLNumericSensor.DeviceClass.POWER_FACTOR,
+            None,
+            native_unit_of_measurement=me.MerossEntity.hac.PERCENTAGE
         )
         EntityNamespaceHandler(self)
 
