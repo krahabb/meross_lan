@@ -340,7 +340,6 @@ def digest_init_thermostat(
                 channel = channel_digest[mc.KEY_CHANNEL]
                 climate = climate_class(device, channel, MtsCalibrationNumber)
                 device.register_parser_entity(climate)
-                # TODO: the scheduleB parsing might be different than 'classic' schedule
                 device.register_parser_entity(climate.schedule)
                 for ns in OPTIONAL_NAMESPACES_INITIALIZERS:
                     if ns in ability:
