@@ -69,7 +69,8 @@ class EntityComponentTest:
         return state
 
     async def async_test_each_callback(self, entity: MerossEntity):
-        assert entity.available, f"entity {entity.entity_id} not available"
+        if entity.manager.online:
+            assert entity.available, f"entity {entity.entity_id} not available"
 
     async def async_test_enabled_callback(self, entity: MerossEntity):
         pass

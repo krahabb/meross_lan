@@ -248,6 +248,7 @@ KEY_CAPACITY = "capacity"
 KEY_RGB = "rgb"
 KEY_LUMINANCE = "luminance"
 KEY_TEMPERATURE = "temperature"
+KEY_TEMP = "temp"
 KEY_HUMIDITY = "humidity"
 KEY_HUMI = "humi"
 KEY_SPRAY = "spray"
@@ -269,6 +270,7 @@ KEY_SYNCEDTIME = "syncedTime"
 KEY_LATESTSAMPLETIME = "latestSampleTime"
 KEY_LATEST = "latest"
 KEY_TEMPHUM = "tempHum"
+KEY_TEMPHUMI = "tempHumi"
 KEY_LATESTTEMPERATURE = "latestTemperature"
 KEY_LATESTHUMIDITY = "latestHumidity"
 KEY_SMOKEALARM = "smokeAlarm"
@@ -592,6 +594,9 @@ TYPE_NAME_MAP[TYPE_GS559] = "Smart Smoke Alarm"
 
 TYPE_MS100 = "ms100"  # Smart temp/humidity sensor over Hub
 TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
+
+TYPE_MS130 = "ms130"  # Smart temp/humidity sensor (with display) over Hub
+TYPE_NAME_MAP[TYPE_MS130] = "Smart Temp/Humidity Sensor"
 
 TYPE_MS200 = "ms200"
 TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"

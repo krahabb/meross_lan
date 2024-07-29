@@ -441,8 +441,8 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
 
     VALUE_KEY_EXCLUDED = (mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
     VALUE_KEY_ENTITY_CLASS_MAP: dict[str, type[MLNumericSensor]] = {
-        "humi": MLHumiditySensor,  # confirmed in MTS200 trace (2024/06)
-        "temp": MLTemperatureSensor,  # just guessed (2024/04)
+        mc.KEY_HUMI: MLHumiditySensor,  # confirmed in MTS200 trace (2024/06)
+        mc.KEY_TEMP: MLTemperatureSensor,  # just guessed (2024/04)
     }
 
     polling_request_payload: list

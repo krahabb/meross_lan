@@ -47,6 +47,7 @@ class EntityTest(EntityComponentTest):
 
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MS100: [MLHumiditySensor, MLTemperatureSensor],
+        mc.KEY_TEMPHUMI: [MLHumiditySensor, MLTemperatureSensor],
         mc.TYPE_MTS100: [MLTemperatureSensor],
         mc.TYPE_MTS100V3: [MLTemperatureSensor],
         mc.TYPE_MTS150: [MLTemperatureSensor],
