@@ -1780,7 +1780,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     self.DEBUG,
                     "Received signature error: computed=%s, header=%s",
                     sign,
-                    json_dumps(header),  # TODO: obfuscate header? check
+                    str(self.loggable_dict(header)),
                 )
 
         if not self._online:
