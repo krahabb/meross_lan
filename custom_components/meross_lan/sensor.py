@@ -71,6 +71,7 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         DeviceClass.TEMPERATURE: me.MerossEntity.hac.UnitOfTemperature.CELSIUS,
         DeviceClass.HUMIDITY: me.MerossEntity.hac.PERCENTAGE,
         DeviceClass.BATTERY: me.MerossEntity.hac.PERCENTAGE,
+        DeviceClass.ILLUMINANCE: me.MerossEntity.hac.LIGHT_LUX
     }
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT

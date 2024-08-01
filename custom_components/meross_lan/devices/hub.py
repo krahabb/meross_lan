@@ -1005,9 +1005,12 @@ class MS130SubDevice(MerossSubDevice):
         if mn.Appliance_Control_Sensor_LatestX.name in hub.descriptor.ability:
             self.subId = self.id
             hub.register_parser(mn.Appliance_Control_Sensor_LatestX.name, self)
-            # TODO: no clue about the actual device scale/unit
             self.sensor_light = MLNumericSensor(
-                self, self.id, mc.KEY_LIGHT, None, suggested_display_precision=0
+                self,
+                self.id,
+                mc.KEY_LIGHT,
+                MLNumericSensor.DeviceClass.ILLUMINANCE,
+                suggested_display_precision=0,
             )
 
     async def async_shutdown(self):
