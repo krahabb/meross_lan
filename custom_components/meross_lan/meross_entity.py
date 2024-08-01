@@ -21,6 +21,7 @@ from homeassistant.helpers.entity import Entity, EntityCategory
 
 from .helpers import Loggable
 from .helpers.manager import ApiProfile
+from .helpers.namespaces import NamespaceParser
 from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
@@ -32,7 +33,9 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDeviceBase
 
 
-class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
+class MerossEntity(
+    NamespaceParser, Loggable, Entity if typing.TYPE_CHECKING else object
+):
     """
     Mixin style base class for all of the entity platform(s)
     This class must prepend the HA entity class in our custom
@@ -88,7 +91,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         "manager",
         "channel",
         "entitykey",
-        "namespace_handlers",
         "available",
         "device_class",
         "name",
@@ -122,7 +124,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
         self.manager = manager
         self.channel = channel
         self.entitykey = entitykey
-        self.namespace_handlers: set["NamespaceHandler"] = set()
         self.available = self._attr_available or manager.online
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
@@ -174,8 +175,7 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     # interface: self
     async def async_shutdown(self):
-        for handler in set(self.namespace_handlers):
-            handler.unregister(self)
+        await NamespaceParser.async_shutdown(self)
         self.manager.entities.pop(self.id)
         self.manager: "EntityManager" = None  # type: ignore
 
@@ -238,37 +238,6 @@ class MerossEntity(Loggable, Entity if typing.TYPE_CHECKING else object):
 
     def _generate_unique_id(self):
         return self.manager.generate_unique_id(self)
-
-    def _parse(self, payload):
-        """Default entity payload message parser. This is invoked automatically
-        when the entity is registered to a NamespaceHandler for a given namespace
-        and no 'better' _parse_xxxx has been defined. See NamespaceHandler.register.
-        At this root level, coming here is likely an error but this feature
-        (default parser) is being leveraged to setup a quick parsing route for some
-        specific class of entities instead of having to define a specific _parse_xxxx.
-        This is useful for generalized sensor classes which are just mapped to a single
-        namespace."""
-        self.log(
-            self.WARNING,
-            "Parser undefined for payload:(%s)",
-            str(payload),
-            timeout=14400,
-        )
-
-    def _handle(self, header: dict, payload: dict):
-        """
-        Raw handler to be used as a direct callback for NamespaceHandler.
-        Contrary to _parse which is invoked after splitting (x channel) the payload,
-        this is intendend to be used as a direct handler for the full namespace
-        message as an optimization in case the namespace is only mapped to a single entity
-        (See DNDMode)
-        """
-        self.log(
-            self.WARNING,
-            "Handler undefined for payload:(%s)",
-            str(payload),
-            timeout=14400,
-        )
 
 
 class MENoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):

@@ -65,6 +65,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .helpers.namespaces import NamespaceParser
     from .meross_entity import MerossEntity
     from .meross_profile import MQTTConnection
     from .merossclient import (
@@ -849,21 +850,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def register_parser(
         self,
         namespace: str,
-        entity: "MerossEntity",
+        parser: "NamespaceParser",
     ):
-        self.get_handler(namespace).register_entity(entity)
+        self.get_handler(namespace).register_parser(parser)
 
     def register_parser_entity(
         self,
         entity: "MerossEntity",
     ):
-        self.get_handler(entity.ns.name).register_entity(entity)
-
-    def unregister_parser(self, namespace: str, entity: "MerossEntity"):
-        try:
-            self.namespace_handlers[namespace].unregister(entity)
-        except KeyError:
-            pass
+        self.get_handler(entity.ns.name).register_parser(entity)
 
     def register_togglex_channel(self, entity: "MerossEntity"):
         """

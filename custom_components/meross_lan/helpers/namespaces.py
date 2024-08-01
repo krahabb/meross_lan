@@ -25,6 +25,66 @@ class EntityDisablerMixin:
     entity_registry_enabled_default = False
 
 
+class NamespaceParser:
+    """
+    Represents the final 'parser' of a message after 'handling' in NamespaceHandler.
+    In this model, NamespaceHandler is responsible for unpacking those messages
+    who are intended to be delivered to different entities based off some indexing
+    keys. These are typically: "channel", "Id", "subId" depending on the namespace itself.
+    The class implementing the NamespaceParser protocol needs to expose that key value as a
+    property with the same name. 99% of the time the class is a MerossEntity with its "channel"
+    property but the implementation allows more versatility.
+    The protocol implementation needs to also expose a proper _parse_{key_namespace}
+    (see NamespaceHandler.register_parser).
+    """
+
+    # These properties must be implemented in derived classes according to the
+    # namespace payload syntax. NamespaceHandler will lookup any of these when
+    # establishing the link between the handler and the parser
+    channel: object
+    subId: object
+
+    # This set will be created x instance when linking the parser to the handler
+    namespace_handlers: set["NamespaceHandler"] = None  # type: ignore
+
+    async def async_shutdown(self):
+        if self.namespace_handlers:
+            for handler in set(self.namespace_handlers):
+                handler.unregister(self)
+
+    def _parse(self, payload):
+        """Default payload message parser. This is invoked automatically
+        when the parser is registered to a NamespaceHandler for a given namespace
+        and no 'better' _parse_xxxx has been defined. See NamespaceHandler.register.
+        At this root level, coming here is likely an error but this feature
+        (default parser) is being leveraged to setup a quick parsing route for some
+        specific class of entities instead of having to define a specific _parse_xxxx.
+        This is useful for generalized sensor classes which are just mapped to a single
+        namespace."""
+        # forgive typing: the parser will nevertheless inherit from Loggable
+        self.log(  # type: ignore
+            self.WARNING,  # type: ignore
+            "Parsing undefined for payload:(%s)",
+            str(payload),
+            timeout=14400,
+        )
+
+    def _handle(self, header: dict, payload: dict):
+        """
+        Raw handler to be used as a direct callback for NamespaceHandler.
+        Contrary to _parse which is invoked after splitting (x channel) the payload,
+        this is intendend to be used as a direct handler for the full namespace
+        message as an optimization in case the namespace is only mapped to a single
+        entity/class instance (See DNDMode)
+        """
+        self.log(  # type: ignore
+            self.WARNING,  # type: ignore
+            "Handler undefined for payload:(%s)",
+            str(payload),
+            timeout=14400,
+        )
+
+
 class NamespaceHandler:
     """
     This is the root class for somewhat dynamic namespace handlers.
@@ -46,7 +106,7 @@ class NamespaceHandler:
         "device",
         "ns",
         "handler",
-        "entities",
+        "parsers",
         "entity_class",
         "lastrequest",
         "lastresponse",
@@ -74,7 +134,7 @@ class NamespaceHandler:
         self.device = device
         self.ns = ns = mn.NAMESPACES[namespace]
         self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
-        self.entities: dict[object, typing.Callable[[dict], None]] = {}
+        self.parsers: dict[object, typing.Callable[[dict], None]] = {}
         self.entity_class = None
         self.handler = handler or getattr(
             device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
@@ -145,7 +205,7 @@ class NamespaceHandler:
         self.handler = self._handle_list
         self.device.platforms.setdefault(entity_class.PLATFORM)
 
-    def register_entity(self, entity: "MerossEntity"):
+    def register_parser(self, parser: "NamespaceParser"):
         # when setting up the entity-dispatching we'll substitute the legacy handler
         # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
         # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
@@ -157,10 +217,12 @@ class NamespaceHandler:
         # either carry dict or, worse, could present themselves in both forms
         # (ToggleX is a well-known example)
         ns = self.ns
-        channel = entity.channel
-        assert channel not in self.entities, "entity already registered"
-        self.entities[channel] = getattr(entity, f"_parse_{ns.key}", entity._parse)
-        entity.namespace_handlers.add(self)
+        channel = getattr(parser, ns.key_channel)
+        assert channel not in self.parsers, "parser already registered"
+        self.parsers[channel] = getattr(parser, f"_parse_{ns.key}", parser._parse)
+        if not parser.namespace_handlers:
+            parser.namespace_handlers = set()
+        parser.namespace_handlers.add(self)
 
         polling_request_payload = self.polling_request_payload
         if polling_request_payload is not None:
@@ -172,13 +234,13 @@ class NamespaceHandler:
 
         self.polling_response_size = (
             self.polling_response_base_size
-            + len(self.entities) * self.polling_response_item_size
+            + len(self.parsers) * self.polling_response_item_size
         )
         self.handler = self._handle_list
 
-    def unregister(self, entity: "MerossEntity"):
-        if self.entities.pop(entity.channel, None):
-            entity.namespace_handlers.remove(self)
+    def unregister(self, parser: "NamespaceParser"):
+        if self.parsers.pop(getattr(parser, self.ns.key_channel), None):
+            parser.namespace_handlers.remove(self)
 
     def handle_exception(self, exception: Exception, function_name: str, payload):
         device = self.device
@@ -204,7 +266,7 @@ class NamespaceHandler:
             ns = self.ns
             for p_channel in payload[ns.key]:
                 try:
-                    _parse = self.entities[p_channel[ns.key_channel]]
+                    _parse = self.parsers[p_channel[ns.key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -223,7 +285,7 @@ class NamespaceHandler:
         ns = self.ns
         p_channel = payload[ns.key]
         try:
-            _parse = self.entities[p_channel.get(ns.key_channel)]
+            _parse = self.parsers[p_channel.get(ns.key_channel)]
         except KeyError as key_error:
             _parse = self._try_create_entity(key_error)
         except AttributeError:
@@ -246,14 +308,14 @@ class NamespaceHandler:
         p_channel = payload[ns.key]
         if type(p_channel) is dict:
             try:
-                _parse = self.entities[p_channel.get(ns.key_channel)]
+                _parse = self.parsers[p_channel.get(ns.key_channel)]
             except KeyError as key_error:
                 _parse = self._try_create_entity(key_error)
             _parse(p_channel)
         else:
             for p_channel in p_channel:
                 try:
-                    _parse = self.entities[p_channel[ns.key_channel]]
+                    _parse = self.parsers[p_channel[ns.key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -287,7 +349,7 @@ class NamespaceHandler:
             key_channel = self.ns.key_channel
             for p_channel in digest:
                 try:
-                    _parse = self.entities[p_channel[key_channel]]
+                    _parse = self.parsers[p_channel[key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -300,11 +362,11 @@ class NamespaceHandler:
         try:
             key_channel = self.ns.key_channel
             if type(digest) is dict:
-                self.entities[digest.get(key_channel)](digest)
+                self.parsers[digest.get(key_channel)](digest)
             else:
                 for p_channel in digest:
                     try:
-                        _parse = self.entities[p_channel[key_channel]]
+                        _parse = self.parsers[p_channel[key_channel]]
                     except KeyError as key_error:
                         _parse = self._try_create_entity(key_error)
                     _parse(p_channel)
@@ -382,7 +444,7 @@ class NamespaceHandler:
         elif self.device.create_diagnostic_entities:
             from ..sensor import MLDiagnosticSensor
 
-            self.register_entity(
+            self.register_parser(
                 MLDiagnosticSensor(
                     self.device,
                     channel,
@@ -390,9 +452,9 @@ class NamespaceHandler:
                 )
             )
         else:
-            self.entities[channel] = self._parse_stub
+            self.parsers[channel] = self._parse_stub
 
-        return self.entities[channel]
+        return self.parsers[channel]
 
     async def async_poll_all(self, device: "MerossDevice"):
         """
@@ -424,7 +486,7 @@ class NamespaceHandler:
         # query specific namespaces instead of NS_ALL since we hope this is
         # better (less overhead/http sessions) together with ns_multiple packing
         for digest_poller in device.digest_pollers:
-            if digest_poller.entities:
+            if digest_poller.parsers:
                 # don't query if digest key/namespace hasn't any entity registered
                 # this also prevents querying a somewhat 'malformed' ToggleX reply
                 # appearing in an mrs100 (#447)
@@ -435,10 +497,8 @@ class NamespaceHandler:
         This is a basic 'default' policy:
         - avoid the request when MQTT available (this is for general 'state' namespaces like NS_ALL) and
         we expect this namespace to be updated by PUSH(es)
-        - unless the 'lastrequest' is 0 which means we're re-onlining the device and so
+        - unless the 'polling_epoch_next' is 0 which means we're re-onlining the device and so
         we like to re-query the full state (even on MQTT)
-        - as an optimization, when onlining we'll skip the request if it's for
-        the same namespace by not calling this strategy (see MerossDevice.async_request_updates)
         """
         if not (device._mqtt_active and self.polling_epoch_next):
             await device.async_request_poll(self)
