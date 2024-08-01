@@ -4,7 +4,7 @@ from .. import const as mlc, meross_entity as me
 from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..helpers.namespaces import NamespaceHandler
+from ..helpers.namespaces import NamespaceHandler, NamespaceParser
 from ..meross_device import MerossDevice, MerossDeviceBase
 from ..merossclient import (
     const as mc,
@@ -118,7 +118,7 @@ class HubNamespaceHandler(NamespaceHandler):
                     hub.log_duplicated_subdevice(subdevice_id)
                 else:
                     try:
-                        subdevices[subdevice_id]._parse(key_namespace, p_subdevice)
+                        subdevices[subdevice_id]._hub_parse(key_namespace, p_subdevice)
                     except KeyError:
                         # force a rescan since we discovered a new subdevice
                         hub.namespace_handlers[
@@ -424,14 +424,20 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
             return MerossSubDevice(self, p_subdevice, _type)  # type: ignore
 
 
-class MerossSubDevice(MerossDeviceBase):
+class MerossSubDevice(NamespaceParser, MerossDeviceBase):
     """
     MerossSubDevice introduces some hybridization in EntityManager:
     (owned) entities will refer to MerossSubDevice effectively as if
     it were a full-fledged device but some EntityManager properties
     are overriden in order to manage ConfigEntry setup/unload since
     MerossSubDevice doesn't actively represent one (it delegates this to
-    the owning Hub)
+    the owning Hub).
+    Inheriting from NamespaceParser allows this class to be registered
+    as a parser for any namespace where the list payload indexing is carried
+    over the key "id" (typical for hub namespaces - even though these namespaces
+    are actually already custom handled in HubNamespaceHandler). This added
+    flexibility is now necessary to allow for some new 'exotic' design (see
+    ms130-Appliance.Control.Sensor.LatestX)
     """
 
     __slots__ = (
@@ -485,7 +491,8 @@ class MerossSubDevice(MerossDeviceBase):
 
     # interface: MerossDeviceBase
     async def async_shutdown(self):
-        await super().async_shutdown()
+        await NamespaceParser.async_shutdown(self)
+        await MerossDeviceBase.async_shutdown(self)
         self.check_device_timezone = None  # type: ignore
         self.async_request = None  # type: ignore
         self.hub: HubMixin = None  # type: ignore
@@ -549,7 +556,7 @@ class MerossSubDevice(MerossDeviceBase):
                     _device_registry_entry.id, name=name
                 )
 
-    def _parse(self, key: str, payload: dict):
+    def _hub_parse(self, key: str, payload: dict):
         try:
             getattr(self, f"_parse_{key}")(payload)
         except AttributeError:
@@ -639,7 +646,7 @@ class MerossSubDevice(MerossDeviceBase):
         self._parse_online(p_digest)
         if self._online:
             for _ in (
-                self._parse(key, value)
+                self._hub_parse(key, value)
                 for key, value in p_digest.items()
                 if key
                 not in {mc.KEY_ID, mc.KEY_STATUS, mc.KEY_ONOFF, mc.KEY_LASTACTIVETIME}
@@ -681,7 +688,7 @@ class MerossSubDevice(MerossDeviceBase):
 
         if self._online:
             for _ in (
-                self._parse(key, value)
+                self._hub_parse(key, value)
                 for key, value in p_all.items()
                 if key not in {mc.KEY_ID, mc.KEY_ONLINE} and isinstance(value, dict)
             ):
@@ -983,19 +990,29 @@ WELL_KNOWN_TYPE_MAP[mc.KEY_TEMPHUM] = MS100SubDevice
 
 class MS130SubDevice(MerossSubDevice):
     __slots__ = (
-        "sensor_temperature",
+        "subId",
         "sensor_humidity",
+        "sensor_light",
+        "sensor_temperature",
     )
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS130)
-        self.sensor_temperature = MLTemperatureSensor(self, self.id)
-        self.sensor_temperature.device_scale = 100
         self.sensor_humidity = MLHumiditySensor(self, self.id)
         self.sensor_humidity.device_scale = 10
+        self.sensor_temperature = MLTemperatureSensor(self, self.id)
+        self.sensor_temperature.device_scale = 100
+        if mn.Appliance_Control_Sensor_LatestX.name in hub.descriptor.ability:
+            self.subId = self.id
+            hub.register_parser(mn.Appliance_Control_Sensor_LatestX.name, self)
+            # TODO: no clue about the actual device scale/unit
+            self.sensor_light = MLNumericSensor(
+                self, self.id, mc.KEY_LIGHT, None, suggested_display_precision=0
+            )
 
     async def async_shutdown(self):
         await super().async_shutdown()
+        self.sensor_light: MLNumericSensor = None  # type: ignore
         self.sensor_temperature: MLNumericSensor = None  # type: ignore
         self.sensor_humidity: MLNumericSensor = None  # type: ignore
 
@@ -1038,6 +1055,51 @@ class MS130SubDevice(MerossSubDevice):
         # avoid the base class creating a toggle entity
         # since we're pretty sure ms130 doesn't have one
         pass
+
+    def _parse_latest(self, p_latest: dict):
+        """parser for Appliance.Control.Sensor.LatestX:
+        {
+            "data": {
+                "light": [
+                    {
+                    "value": 220,
+                    "timestamp": 1722349685
+                    }
+                ],
+                "temp": [
+                    {
+                    "value": 2134,
+                    "timestamp": 1722349685
+                    }
+                ],
+                "humi": [
+                    {
+                    "value": 670,
+                    "timestamp": 1722349685
+                    }
+                ]
+            },
+            "channel": 0,
+            "subId": "1A00694ACBC7"
+        }
+        """
+        p_data = p_latest[mc.KEY_DATA]
+        try:
+            self.sensor_light.update_device_value(p_data[mc.KEY_LIGHT][0][mc.KEY_VALUE])
+        except:
+            pass
+        try:
+            self.sensor_temperature.update_device_value(
+                p_data[mc.KEY_TEMP][0][mc.KEY_VALUE]
+            )
+        except:
+            pass
+        try:
+            self.sensor_humidity.update_device_value(
+                p_data[mc.KEY_HUMI][0][mc.KEY_VALUE]
+            )
+        except:
+            pass
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MS130] = MS130SubDevice

@@ -142,12 +142,11 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             if subdevice_ns is mc.NS_APPLIANCE_HUB_MTS100_ALL:
                 # this subdevice is an mts like so we'll ensure its
                 # 'all' payload (at least) is set. we'll also bind
-                # the child dicts in 'all' to teh corresponding specific
+                # the child dicts in 'all' to the corresponding specific
                 # namespace payload for the subdevice id so that the
                 # state is maintained consistent. For instance, the 'temperature' dict
                 # in the subdevice ns_all payload is the same as the corresponding
                 # payload in Mts100.Temperature
-
                 if mc.KEY_SCHEDULEBMODE in p_subdevice_digest:
                     p_subdevice_all[mc.KEY_SCHEDULEBMODE] = p_subdevice_digest[
                         mc.KEY_SCHEDULEBMODE
@@ -258,7 +257,9 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                     elif mc.KEY_SMOKEALARM in p_subdevice:
                         a = randint(0, 2)
                         if a == 0:
-                            p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(17, 27)
+                            p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = randint(
+                                17, 27
+                            )
                         elif a == 1:
                             p_subdevice[mc.KEY_SMOKEALARM][mc.KEY_STATUS] = 170
 

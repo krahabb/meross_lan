@@ -52,7 +52,7 @@ class NamespaceParser:
             for handler in set(self.namespace_handlers):
                 handler.unregister(self)
 
-    def _parse(self, payload):
+    def _parse(self, payload: dict):
         """Default payload message parser. This is invoked automatically
         when the parser is registered to a NamespaceHandler for a given namespace
         and no 'better' _parse_xxxx has been defined. See NamespaceHandler.register.
@@ -640,6 +640,7 @@ response. This issue also appeared on hubs when querying for a big number of sub
 as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
 responses though
 """
+# TODO: use the mn. symbols instead of legacy mc. ones (trying to get rid of mc namespaces constants)
 POLLING_STRATEGY_CONF: dict[
     str, tuple[int, int, int, int, PollingStrategyFunc | None]
 ] = {
@@ -812,6 +813,13 @@ POLLING_STRATEGY_CONF: dict[
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_lazy,
+    ),
+    mn.Appliance_Control_Sensor_LatestX.name: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        220,
+        NamespaceHandler.async_poll_default,
     ),
     mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: (
         0,

@@ -43,6 +43,12 @@ class Namespace:
 
     DEFAULT_PUSH_PAYLOAD: typing.Final = {}
 
+    name: str
+    """The namespace name"""
+    key: str
+    """The root key of the payload"""
+    key_channel: str
+    """The key used to index items in list payloads"""
     has_get: bool | None
     """ns supports method GET - is None when we have no clue"""
     has_push: bool | None
@@ -70,6 +76,7 @@ class Namespace:
         key: str | None = None,
         payload_get: list | dict | None = None,
         *,
+        key_channel: str | None = None,
         has_get: bool | None = None,
         has_push: bool | None = None,
     ) -> None:
@@ -113,7 +120,7 @@ class Namespace:
             self.payload_type = type(payload_get)
             self.need_channel = bool(payload_get)
 
-        self.key_channel = mc.KEY_ID if self.is_hub else mc.KEY_CHANNEL
+        self.key_channel = key_channel or (mc.KEY_ID if self.is_hub else mc.KEY_CHANNEL)
         self.has_get = has_get
         self.has_push = has_push
         NAMESPACES[name] = self
@@ -233,6 +240,15 @@ Appliance_Control_Sensor_History = _ns_get_push(
 )
 Appliance_Control_Sensor_Latest = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST, mc.KEY_LATEST, _LIST_C
+)
+# carrying light/temp/humi on ms130 (hub subdevice)
+Appliance_Control_Sensor_LatestX = Namespace(
+    "Appliance.Control.Sensor.LatestX",
+    mc.KEY_LATEST,
+    _LIST_C,
+    key_channel=mc.KEY_SUBID,
+    has_get=True,
+    has_push=True,
 )
 Appliance_Control_Spray = _ns_get_push(
     mc.NS_APPLIANCE_CONTROL_SPRAY, mc.KEY_SPRAY, _DICT

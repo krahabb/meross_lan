@@ -91,9 +91,9 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         """
         try:
             _json = json_loads(f.read())
-            data = _json["data"]
+            _data: dict = _json["data"]
             columns = None
-            for row in data["trace"]:
+            for row in _data["trace"]:
                 if columns is None:
                     columns = row
                     # we could parse and setup a 'column search'
@@ -102,7 +102,16 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                 else:
                     self._import_tracerow(row)
 
-        except Exception:
+            _device: dict = _data["device"]
+            try:
+                # also add the pushed numespaces if not already traced
+                for namespace, payload in _device["namespace_pushes"].items():
+                    if namespace not in self.namespaces:
+                        self.namespaces[namespace] = payload
+            except:
+                pass
+
+        except:
             pass
 
         return
