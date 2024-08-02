@@ -857,18 +857,18 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Hub_Mts100_All: (
-        0,
+        mlc.PARAM_HEARTBEAT_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         350,
-        None,
+        None,  # HubChunkedNamespaceHandler.async_poll_chunked
     ),
     mn.Appliance_Hub_Mts100_ScheduleB: (
-        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         500,
-        None,
+        None,  # HubChunkedNamespaceHandler.async_poll_chunked
     ),
     mn.Appliance_Hub_Sensor_Adjust: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
@@ -878,11 +878,11 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Hub_Sensor_All: (
-        0,
+        mlc.PARAM_HEARTBEAT_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         250,
-        None,
+        None,  # HubChunkedNamespaceHandler.async_poll_chunked
     ),
     mn.Appliance_Hub_SubDevice_Version: (
         0,

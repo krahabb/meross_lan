@@ -100,10 +100,8 @@ class HubNamespaceHandler(NamespaceHandler):
 
     device: "HubMixin"
 
-    def __init__(self, device: "HubMixin", namespace: "mn.Namespace"):
-        NamespaceHandler.__init__(
-            self, device, namespace, handler=self._handle_subdevice
-        )
+    def __init__(self, device: "HubMixin", ns: "mn.Namespace"):
+        NamespaceHandler.__init__(self, device, ns, handler=self._handle_subdevice)
 
     def _handle_subdevice(self, header, payload):
         """Generalized Hub namespace dispatcher to subdevices"""
@@ -132,8 +130,10 @@ class HubNamespaceHandler(NamespaceHandler):
 class HubChunkedNamespaceHandler(HubNamespaceHandler):
     """
     This is a strategy for polling (general) subdevices state with special care for messages
-    possibly generating huge payloads (see #244). We should avoid this
-    poll when the device is MQTT pushing its state
+    possibly generating huge payloads (see #244).
+    The strategy itself will poll the namespace on every cycle if no MQTT active
+    When MQTT active we rely on states PUSHES in general but we'll also poll
+    from time to time (see POLLING_STRATEGY_CONF for the relevant namespaces)
     """
 
     __slots__ = (
@@ -145,19 +145,21 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
     def __init__(
         self,
         device: "HubMixin",
-        namespace: "mn.Namespace",
+        ns: "mn.Namespace",
         types: typing.Collection,
         included: bool,
         count: int,
     ):
-        HubNamespaceHandler.__init__(self, device, namespace)
+        HubNamespaceHandler.__init__(self, device, ns)
         self._types = types
         self._included = included
         self._count = count
         self.polling_strategy = HubChunkedNamespaceHandler.async_poll_chunked
 
     async def async_poll_chunked(self, device: "HubMixin"):
-        if not (device._mqtt_active and self.polling_epoch_next):
+        if (not device._mqtt_active) or (
+            device._polling_epoch >= self.polling_epoch_next
+        ):
             max_queuable = 1
             # for hubs, this payload request might be splitted
             # in order to query a small amount of devices per iteration
