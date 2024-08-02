@@ -49,7 +49,7 @@ from aiohttp import web
 # so I've changed a bit the import sequence in meross_lan
 # to have the homeassistant.core imported (initialized) before
 # homeassistant.helpers.storage
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
 
@@ -88,35 +88,35 @@ def build_emulator(
         from .mixins.garagedoor import GarageDoorMixin
 
         mixin_classes.append(GarageDoorMixin)
-    if mc.NS_APPLIANCE_CONTROL_ELECTRICITY in ability:
+    if mn.Appliance_Control_Electricity.name in ability:
         from .mixins.electricity import ElectricityMixin
 
         mixin_classes.append(ElectricityMixin)
-    if mc.NS_APPLIANCE_CONTROL_ELECTRICITYX in ability:
+    if mn.Appliance_Control_ElectricityX.name in ability:
         from .mixins.electricity import ElectricityXMixin
 
         mixin_classes.append(ElectricityXMixin)
-    if mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX in ability:
+    if mn.Appliance_Control_ConsumptionX.name in ability:
         from .mixins.electricity import ConsumptionXMixin
 
         mixin_classes.append(ConsumptionXMixin)
 
-    if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
+    if mn.Appliance_Control_Light.name in ability:
         from .mixins.light import LightMixin
 
         mixin_classes.append(LightMixin)
 
-    if mc.NS_APPLIANCE_CONTROL_FAN in ability:
+    if mn.Appliance_Control_Fan.name in ability:
         from .mixins.fan import FanMixin
 
         mixin_classes.append(FanMixin)
 
-    if mc.NS_APPLIANCE_ROLLERSHUTTER_STATE in ability:
+    if mn.Appliance_RollerShutter_State.name in ability:
         from .mixins.rollershutter import RollerShutterMixin
 
         mixin_classes.append(RollerShutterMixin)
 
-    if mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK in ability:
+    if mn.Appliance_Control_PhysicalLock.name in ability:
         from .mixins.physicallock import PhysicalLockMixin
 
         mixin_classes.append(PhysicalLockMixin)

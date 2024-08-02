@@ -7,6 +7,7 @@ import typing
 from custom_components.meross_lan.merossclient import (
     const as mc,
     get_element_by_key,
+    namespaces as mn,
     update_dict_strict,
     update_dict_strict_by_key,
 )
@@ -28,7 +29,7 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             p_garageDoor: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]
             if len(p_garageDoor) == 3:
                 self.mqtt_publish_push(
-                    mc.NS_APPLIANCE_GARAGEDOOR_STATE,
+                    mn.Appliance_GarageDoor_State.name,
                     {
                         "state": [{"channel": 0, "open": 1, "lmTime": 0}],
                         "reason": {"online": {"timestamp": self.epoch}},
@@ -36,7 +37,7 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 )
 
     def _SET_Appliance_GarageDoor_Config(self, header, payload):
-        p_config = self.descriptor.namespaces[mc.NS_APPLIANCE_GARAGEDOOR_CONFIG][
+        p_config = self.descriptor.namespaces[mn.Appliance_GarageDoor_Config.name][
             mc.KEY_CONFIG
         ]
         update_dict_strict(p_config, payload[mc.KEY_CONFIG])
@@ -44,7 +45,7 @@ class GarageDoorMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
     def _SET_Appliance_GarageDoor_MultipleConfig(self, header, payload):
         p_config: list = self.descriptor.namespaces[
-            mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
+            mn.Appliance_GarageDoor_MultipleConfig.name
         ][mc.KEY_CONFIG]
         p_state: list = self.descriptor.digest[mc.KEY_GARAGEDOOR]
         for p_payload_channel in payload[mc.KEY_CONFIG]:

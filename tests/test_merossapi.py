@@ -10,12 +10,15 @@ from custom_components.meross_lan.merossclient import (
     build_message,
     const as mc,
     json_dumps,
+    namespaces as mn,
 )
 
 from . import const as tc, helpers
 
 
-async def test_hamqtt_device_session(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker):
+async def test_hamqtt_device_session(
+    hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker
+):
     """
     check the local broker session management handles the device transactions
     when they connect to the HA broker
@@ -28,9 +31,9 @@ async def test_hamqtt_device_session(hass: HomeAssistant, hamqtt_mock: helpers.H
     # check the mc.NS_APPLIANCE_CONTROL_BIND is replied
     #
     message_bind_set = build_message(
-        mc.NS_APPLIANCE_CONTROL_BIND,
+        mn.Appliance_Control_Bind.name,
         mc.METHOD_SET,
-        {mc.KEY_BIND: {}},  # actual payload actually doesn't care
+        {mn.Appliance_Control_Bind.key: {}},  # actual payload actually doesn't care
         key,
         topic_subscribe,
     )
@@ -46,7 +49,7 @@ async def test_hamqtt_device_session(hass: HomeAssistant, hamqtt_mock: helpers.H
         helpers.MessageMatcher(
             header=helpers.DictMatcher(
                 {
-                    mc.KEY_NAMESPACE: mc.NS_APPLIANCE_CONTROL_BIND,
+                    mc.KEY_NAMESPACE: mn.Appliance_Control_Bind.name,
                     mc.KEY_METHOD: mc.METHOD_SETACK,
                     mc.KEY_MESSAGEID: message_bind_set[mc.KEY_HEADER][mc.KEY_MESSAGEID],
                     mc.KEY_FROM: topic_publish,
@@ -59,7 +62,7 @@ async def test_hamqtt_device_session(hass: HomeAssistant, hamqtt_mock: helpers.H
     # check the NS_APPLIANCE_SYSTEM_CLOCK
     #
     message_clock_push = build_message(
-        mc.NS_APPLIANCE_SYSTEM_CLOCK,
+        mn.Appliance_System_Clock.name,
         mc.METHOD_PUSH,
         {"clock": {"timestamp": int(time())}},
         key,
@@ -80,10 +83,10 @@ async def test_hamqtt_device_session(hass: HomeAssistant, hamqtt_mock: helpers.H
     # check the NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG
     #
     message_consumption_push = build_message(
-        mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
+        mn.Appliance_Control_ConsumptionConfig.name,
         mc.METHOD_PUSH,
         {
-            "config": {
+            mn.Appliance_Control_ConsumptionConfig.key: {
                 "voltageRatio": 188,
                 "electricityRatio": 102,
                 "maxElectricityCurrent": 11000,

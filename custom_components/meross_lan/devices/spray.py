@@ -13,7 +13,7 @@ def digest_init_spray(device: "MerossDevice", digest) -> "DigestInitReturnType":
     for channel_digest in digest:
         MLSpray(device, channel_digest[mc.KEY_CHANNEL])
 
-    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_SPRAY)
+    handler = device.get_handler(mn.Appliance_Control_Spray)
     return handler.parse_list, (handler,)
 
 

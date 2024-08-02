@@ -96,10 +96,10 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
 
     async def async_request_togglex(self, onoff: int):
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+            mn.Appliance_Control_ToggleX.name,
             mc.METHOD_SET,
             {
-                mc.KEY_TOGGLEX: {
+                mn.Appliance_Control_ToggleX.key: {
                     mc.KEY_CHANNEL: self.channel,
                     mc.KEY_ONOFF: onoff,
                 }
@@ -132,7 +132,7 @@ def digest_init_fan(device: "MerossDevice", digest) -> "DigestInitReturnType":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
         MLFan(device, channel_digest[mc.KEY_CHANNEL])
-    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN)
+    handler = device.get_handler(mn.Appliance_Control_Fan)
     return handler.parse_list, (handler,)
 
 
@@ -142,6 +142,6 @@ def namespace_init_fan(device: "MerossDevice"):
         # actually only map100 (so far)
         MLFan(device, 0)
         # setup a polling strategy since state is not carried in digest
-        device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN).polling_strategy = (
+        device.get_handler(mn.Appliance_Control_Fan).polling_strategy = (
             NamespaceHandler.async_poll_default
         )

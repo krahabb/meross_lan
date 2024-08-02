@@ -59,8 +59,8 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                 self._import_tsv(f)
 
         super().__init__(
-            self.namespaces[mc.NS_APPLIANCE_SYSTEM_ALL]
-            | self.namespaces[mc.NS_APPLIANCE_SYSTEM_ABILITY]
+            self.namespaces[mn.Appliance_System_All.name]
+            | self.namespaces[mn.Appliance_System_Ability.name]
         )
         # patch system payload with fake ids
         if uuid:
@@ -133,7 +133,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                     else _get_data_dict(data)
                 )
             case mc.METHOD_SETACK:
-                if namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
+                if namespace == mn.Appliance_Control_Multiple.name:
                     for message in _get_data_dict(data)[mc.KEY_MULTIPLE]:
                         header = message[mc.KEY_HEADER]
                         if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
@@ -177,7 +177,7 @@ class MerossEmulator:
         self.loop: asyncio.AbstractEventLoop = None  # type: ignore
         self.key = key
         self.descriptor = descriptor
-        if mc.NS_APPLIANCE_SYSTEM_DNDMODE in descriptor.ability:
+        if mn.Appliance_System_DNDMode.name in descriptor.ability:
             self.p_dndmode = {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}}
         self.topic_response = mc.TOPIC_RESPONSE.format(descriptor.uuid)
         self.mqtt_client: MerossMQTTDeviceClient = None  # type: ignore
@@ -193,7 +193,7 @@ class MerossEmulator:
                 ),
                 modes.CBC("0000000000000000".encode("utf8")),
             )
-            if mc.NS_APPLIANCE_ENCRYPT_ECDHE in descriptor.ability
+            if mn.Appliance_Encrypt_ECDHE.name in descriptor.ability
             else None
         )
         self.update_epoch()
@@ -279,7 +279,7 @@ class MerossEmulator:
                 # exception in the hope we can emulate a broken connection
                 if self._cipher and (
                     request[mc.KEY_HEADER][mc.KEY_NAMESPACE]
-                    != mc.NS_APPLIANCE_SYSTEM_ABILITY
+                    != mn.Appliance_System_Ability.name
                 ):
                     raise Exception("Encryption required")
 
@@ -331,7 +331,7 @@ class MerossEmulator:
             if namespace not in self.descriptor.ability:
                 raise Exception(f"{namespace} not supported in ability")
 
-            if namespace == mc.NS_APPLIANCE_CONTROL_MULTIPLE:
+            if namespace == mn.Appliance_Control_Multiple.name:
                 if method != mc.METHOD_SET:
                     raise Exception(f"{method} not supported for {namespace}")
                 multiple = []
@@ -482,16 +482,16 @@ class MerossEmulator:
 
     def _SETACK_Appliance_Control_Bind(self, header, payload):
         self.mqtt_publish_push(
-            mc.NS_APPLIANCE_SYSTEM_REPORT,
+            mn.Appliance_System_Report.name,
             {
-                mc.KEY_REPORT: [
+                mn.Appliance_System_Report.key: [
                     {mc.KEY_TYPE: 1, mc.KEY_VALUE: 0, mc.KEY_TIMESTAMP: self.epoch}
                 ]
             },
         )
         self.mqtt_publish_push(
-            mc.NS_APPLIANCE_SYSTEM_TIME,
-            {mc.KEY_TIME: self.descriptor.time},
+            mn.Appliance_System_Time.name,
+            {mn.Appliance_System_Time.key: self.descriptor.time},
         )
         return None, None
 
@@ -700,10 +700,10 @@ class MerossEmulator:
             # Meross brokers. Check the SETACK reply to follow the state machine
             message = MerossRequest(
                 self.key,
-                mc.NS_APPLIANCE_CONTROL_BIND,
+                mn.Appliance_Control_Bind.name,
                 mc.METHOD_SET,
                 {
-                    mc.KEY_BIND: {
+                    mn.Appliance_Control_Bind.key: {
                         mc.KEY_BINDTIME: self.epoch,
                         mc.KEY_TIME: self.descriptor.time,
                         mc.KEY_HARDWARE: self.descriptor.hardware,

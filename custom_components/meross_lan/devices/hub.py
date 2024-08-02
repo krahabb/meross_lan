@@ -85,7 +85,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
 
 
 class MLHubToggle(me.MEListChannelMixin, MLSwitch):
-    ns = mn.NAMESPACES[mc.NS_APPLIANCE_HUB_TOGGLEX]
+    ns = mn.Appliance_Hub_ToggleX
 
     # HA core entity attributes:
     entity_category = me.EntityCategory.CONFIG
@@ -100,7 +100,7 @@ class HubNamespaceHandler(NamespaceHandler):
 
     device: "HubMixin"
 
-    def __init__(self, device: "HubMixin", namespace: str):
+    def __init__(self, device: "HubMixin", namespace: "mn.Namespace"):
         NamespaceHandler.__init__(
             self, device, namespace, handler=self._handle_subdevice
         )
@@ -122,7 +122,7 @@ class HubNamespaceHandler(NamespaceHandler):
                     except KeyError:
                         # force a rescan since we discovered a new subdevice
                         hub.namespace_handlers[
-                            mc.NS_APPLIANCE_SYSTEM_ALL
+                            mn.Appliance_System_All.name
                         ].polling_epoch_next = 0.0
                     subdevices_parsed.add(subdevice_id)
             except Exception as exception:
@@ -145,7 +145,7 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
     def __init__(
         self,
         device: "HubMixin",
-        namespace: str,
+        namespace: "mn.Namespace",
         types: typing.Collection,
         included: bool,
         count: int,
@@ -250,15 +250,17 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
             subdevice._set_offline()
         super()._set_offline()
 
-    def _create_handler(self, namespace: str):
-        match namespace.split("."):
-            case (_, "Hub", "SubdeviceList"):
-                return NamespaceHandler(
-                    self, namespace, handler=self._handle_Appliance_Hub_SubdeviceList
-                )
-            case (_, "Hub", *args):
-                return HubNamespaceHandler(self, namespace)
-        return super()._create_handler(namespace)
+    def _create_handler(self, ns: "mn.Namespace"):
+        if ns is mn.Appliance_Hub_SubdeviceList:
+            return NamespaceHandler(
+                self,
+                ns,
+                handler=self._handle_Appliance_Hub_SubdeviceList,
+            )
+        elif ns.is_hub:
+            return HubNamespaceHandler(self, ns)
+        else:
+            return super()._create_handler(ns)
 
     def _parse_hub(self, p_hub: dict):
         # This is usually called inside _parse_all as part of the digest parsing
@@ -356,66 +358,30 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
 
         namespace_handlers = self.namespace_handlers
         abilities = self.descriptor.ability
-        if _type in mc.MTS100_ALL_TYPESET:
-            if (mc.NS_APPLIANCE_HUB_MTS100_ALL not in namespace_handlers) and (
-                mc.NS_APPLIANCE_HUB_MTS100_ALL in abilities
-            ):
-                HubChunkedNamespaceHandler(
-                    self, mc.NS_APPLIANCE_HUB_MTS100_ALL, mc.MTS100_ALL_TYPESET, True, 8
-                )
-            if (mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB not in namespace_handlers) and (
-                mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB in abilities
-            ):
-                HubChunkedNamespaceHandler(
-                    self,
-                    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB,
-                    mc.MTS100_ALL_TYPESET,
-                    True,
-                    4,
-                )
-            if mc.NS_APPLIANCE_HUB_MTS100_ADJUST in namespace_handlers:
-                namespace_handlers[
-                    mc.NS_APPLIANCE_HUB_MTS100_ADJUST
-                ].polling_response_size_inc()
-            elif mc.NS_APPLIANCE_HUB_MTS100_ADJUST in abilities:
-                HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_MTS100_ADJUST)
-        else:
-            if (mc.NS_APPLIANCE_HUB_SENSOR_ALL not in namespace_handlers) and (
-                mc.NS_APPLIANCE_HUB_SENSOR_ALL in abilities
-            ):
-                HubChunkedNamespaceHandler(
-                    self,
-                    mc.NS_APPLIANCE_HUB_SENSOR_ALL,
-                    mc.MTS100_ALL_TYPESET,
-                    False,
-                    8,
-                )
-            if mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in namespace_handlers:
-                namespace_handlers[
-                    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST
-                ].polling_response_size_inc()
-            elif mc.NS_APPLIANCE_HUB_SENSOR_ADJUST in abilities:
-                HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_SENSOR_ADJUST)
-            if (mc.NS_APPLIANCE_HUB_TOGGLEX not in namespace_handlers) and (
-                mc.NS_APPLIANCE_HUB_TOGGLEX in abilities
-            ):
-                # this is a status message irrelevant for mts100(s) and
-                # other types. If not use an MQTT-PUSH friendly startegy
-                if _type not in (mc.TYPE_MS100,):
-                    HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_TOGGLEX)
 
-        if mc.NS_APPLIANCE_HUB_TOGGLEX in namespace_handlers:
-            namespace_handlers[mc.NS_APPLIANCE_HUB_TOGGLEX].polling_response_size_inc()
-        if mc.NS_APPLIANCE_HUB_BATTERY in namespace_handlers:
-            namespace_handlers[mc.NS_APPLIANCE_HUB_BATTERY].polling_response_size_inc()
-        elif mc.NS_APPLIANCE_HUB_BATTERY in abilities:
-            HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_BATTERY)
-        if mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in namespace_handlers:
-            namespace_handlers[
-                mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION
-            ].polling_response_size_inc()
-        elif mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION in abilities:
-            HubNamespaceHandler(self, mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION)
+        def _setup_chunked_handler(ns: mn.Namespace, is_mts100: bool, count: int):
+            if (ns.name not in namespace_handlers) and (ns.name in abilities):
+                HubChunkedNamespaceHandler(
+                    self, ns, mc.MTS100_ALL_TYPESET, is_mts100, count
+                )
+
+        def _setup_simple_handler(ns: mn.Namespace):
+            if ns.name in namespace_handlers:
+                namespace_handlers[ns.name].polling_response_size_inc()
+            elif ns.name in abilities:
+                HubNamespaceHandler(self, ns)
+
+        if _type in mc.MTS100_ALL_TYPESET:
+            _setup_chunked_handler(mn.Appliance_Hub_Mts100_All, True, 8)
+            _setup_chunked_handler(mn.Appliance_Hub_Mts100_ScheduleB, True, 4)
+            _setup_simple_handler(mn.Appliance_Hub_Mts100_Adjust)
+        else:
+            _setup_chunked_handler(mn.Appliance_Hub_Sensor_All, False, 8)
+            _setup_simple_handler(mn.Appliance_Hub_Sensor_Adjust)
+
+        _setup_simple_handler(mn.Appliance_Hub_ToggleX)
+        _setup_simple_handler(mn.Appliance_Hub_Battery)
+        _setup_simple_handler(mn.Appliance_Hub_SubDevice_Version)
 
         try:
             return WELL_KNOWN_TYPE_MAP[_type](self, p_subdevice)
@@ -511,9 +477,9 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
         # force a re-poll even on MQTT
         self.hub.namespace_handlers[
             (
-                mc.NS_APPLIANCE_HUB_MTS100_ALL
+                mn.Appliance_Hub_Mts100_All.name
                 if self.type in mc.MTS100_ALL_TYPESET
-                else mc.NS_APPLIANCE_HUB_SENSOR_ALL
+                else mn.Appliance_Hub_Sensor_All.name
             )
         ].polling_epoch_next = 0.0
 
@@ -976,7 +942,7 @@ class MS100SubDevice(MerossSubDevice):
         # the adjust sooner than scheduled in case the change
         # was due to an adjustment
         if sensor.update_device_value(device_value):
-            strategy = self.hub.namespace_handlers[mc.NS_APPLIANCE_HUB_SENSOR_ADJUST]
+            strategy = self.hub.namespace_handlers[mn.Appliance_Hub_Sensor_Adjust.name]
             if strategy.lastrequest < (self.hub.lastresponse - 30):
                 strategy.polling_epoch_next = 0.0
 
@@ -1004,7 +970,7 @@ class MS130SubDevice(MerossSubDevice):
         self.sensor_temperature.device_scale = 100
         if mn.Appliance_Control_Sensor_LatestX.name in hub.descriptor.ability:
             self.subId = self.id
-            hub.register_parser(mn.Appliance_Control_Sensor_LatestX.name, self)
+            hub.register_parser(self, mn.Appliance_Control_Sensor_LatestX)
             self.sensor_light = MLNumericSensor(
                 self,
                 self.id,

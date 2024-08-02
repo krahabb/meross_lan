@@ -138,12 +138,12 @@ class MLRollerShutter(MLCover):
         super().__init__(manager, 0, MLCover.DeviceClass.SHUTTER)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
-        if mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST in descriptor.ability:
+        if mn.Appliance_RollerShutter_Adjust.name in descriptor.ability:
             # unknown use: actually the polling period is set on a very high timeout
-            manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST, self)
-        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, self)
-        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, self)
-        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, self)
+            manager.register_parser(self, mn.Appliance_RollerShutter_Adjust)
+        manager.register_parser(self, mn.Appliance_RollerShutter_Config)
+        manager.register_parser(self, mn.Appliance_RollerShutter_Position)
+        manager.register_parser(self, mn.Appliance_RollerShutter_State)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -284,10 +284,10 @@ class MLRollerShutter(MLCover):
         # in case the ns_multiple didn't succesfully kick-in we'll
         # fallback to the legacy procedure
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            mn.Appliance_RollerShutter_Position.name,
             mc.METHOD_SET,
             {
-                mc.KEY_POSITION: {
+                mn.Appliance_RollerShutter_Position.key: {
                     mc.KEY_CHANNEL: self.channel,
                     mc.KEY_POSITION: position,
                 }
@@ -443,28 +443,30 @@ class MLRollerShutter(MLCover):
                 await manager.async_multiple_requests_ack(
                     (
                         (
-                            mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+                            mn.Appliance_RollerShutter_State.name,
                             mc.METHOD_GET,
-                            {mc.KEY_STATE: p_channel_payload},
+                            {mn.Appliance_RollerShutter_State.key: p_channel_payload},
                         ),
                         (
-                            mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                            mn.Appliance_RollerShutter_Position.name,
                             mc.METHOD_GET,
-                            {mc.KEY_POSITION: p_channel_payload},
+                            {
+                                mn.Appliance_RollerShutter_Position.key: p_channel_payload
+                            },
                         ),
                     )
                 )
             else:
                 await manager.async_request(
-                    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+                    mn.Appliance_RollerShutter_State.name,
                     mc.METHOD_GET,
-                    {mc.KEY_STATE: p_channel_payload},
+                    {mn.Appliance_RollerShutter_State.key: p_channel_payload},
                 )
                 if self._position_native_isgood:
                     await manager.async_request(
-                        mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                        mn.Appliance_RollerShutter_Position.name,
                         mc.METHOD_GET,
-                        {mc.KEY_POSITION: p_channel_payload},
+                        {mn.Appliance_RollerShutter_Position.key: p_channel_payload},
                     )
 
     async def _async_transition_end_callback(self):

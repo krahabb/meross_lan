@@ -158,10 +158,10 @@ class HAMQTTConnection(MQTTConnection):
                     )
                 except:
                     self._unsub_mqtt_disconnected = mqtt.async_dispatcher_connect(
-                        hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected # type: ignore (removed in HA core 2024.6)
+                        hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected  # type: ignore (removed in HA core 2024.6)
                     )
                     self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
-                        hass, mqtt.MQTT_CONNECTED, self._mqtt_connected # type: ignore (removed in HA core 2024.6)
+                        hass, mqtt.MQTT_CONNECTED, self._mqtt_connected  # type: ignore (removed in HA core 2024.6)
                     )
                 if mqtt.is_connected(hass):
                     self._mqtt_connected()
@@ -288,10 +288,10 @@ class HAMQTTConnection(MQTTConnection):
 
 
 HAMQTTConnection.SESSION_HANDLERS = {
-    mc.NS_APPLIANCE_CONTROL_BIND: HAMQTTConnection._handle_Appliance_Control_Bind,
-    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
-    mc.NS_APPLIANCE_SYSTEM_CLOCK: HAMQTTConnection._handle_Appliance_System_Clock,
-    mc.NS_APPLIANCE_SYSTEM_ONLINE: MQTTConnection._handle_Appliance_System_Online,
+    mn.Appliance_Control_Bind.name: HAMQTTConnection._handle_Appliance_Control_Bind,
+    mn.Appliance_Control_ConsumptionConfig.name: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
+    mn.Appliance_System_Clock.name: HAMQTTConnection._handle_Appliance_System_Clock,
+    mn.Appliance_System_Online.name: MQTTConnection._handle_Appliance_System_Online,
 }
 
 

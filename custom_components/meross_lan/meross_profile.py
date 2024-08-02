@@ -24,12 +24,7 @@ from .const import (
     DeviceConfigType,
 )
 from .devices.hub import HubMixin
-from .helpers import (
-    ConfigEntriesHelper,
-    Loggable,
-    datetime_from_epoch,
-    versiontuple,
-)
+from .helpers import ConfigEntriesHelper, Loggable, datetime_from_epoch, versiontuple
 from .helpers.manager import ApiProfile, CloudApiClient
 from .merossclient import (
     MEROSSDEBUG,
@@ -553,10 +548,10 @@ class MQTTConnection(Loggable):
                         device_id,
                         MerossRequest(
                             key,
-                            mc.NS_APPLIANCE_CONTROL_MULTIPLE,
+                            mn.Appliance_Control_Multiple.name,
                             mc.METHOD_SET,
                             {
-                                mc.KEY_MULTIPLE: [
+                                mn.Appliance_Control_Multiple.key: [
                                     MerossRequest(
                                         key,
                                         *mn.Appliance_System_All.request_get,
@@ -832,7 +827,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
 
 
 MerossMQTTConnection.SESSION_HANDLERS = {
-    mc.NS_APPLIANCE_SYSTEM_ONLINE: MQTTConnection._handle_Appliance_System_Online,
+    mn.Appliance_System_Online.name: MQTTConnection._handle_Appliance_System_Online,
 }
 
 

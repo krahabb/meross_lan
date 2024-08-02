@@ -92,7 +92,7 @@ class MLToggle(me.MENoChannelMixin, MLSwitch):
 def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
     MLToggle(device)
-    handler = device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLE]
+    handler = device.namespace_handlers[mn.Appliance_Control_Toggle.name]
     return handler.parse_generic, (handler,)
 
 
@@ -133,7 +133,7 @@ def digest_init_togglex(
                     channels.remove(channel)
 
     # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
-    if (mc.NS_APPLIANCE_CONTROL_FAN in device.descriptor.ability) and (
+    if (mn.Appliance_Control_Fan.name in device.descriptor.ability) and (
         mc.KEY_FAN not in digest
     ):
         if 0 in channels:
@@ -142,6 +142,6 @@ def digest_init_togglex(
     for channel in channels:
         MLToggleX(device, channel)
 
-    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)
+    handler = device.get_handler(mn.Appliance_Control_ToggleX)
     handler.register_entity_class(MLToggleX)
     return handler.parse_list, (handler,)

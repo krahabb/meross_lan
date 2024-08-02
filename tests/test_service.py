@@ -1,10 +1,15 @@
 """Test for meross_lan.request service calls"""
+
 from unittest.mock import ANY
 
 from homeassistant.core import HomeAssistant
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import const as mc, json_dumps
+from custom_components.meross_lan.merossclient import (
+    const as mc,
+    json_dumps,
+    namespaces as mn,
+)
 
 from tests import const as tc, helpers
 
@@ -21,7 +26,7 @@ async def test_request_on_mqtt(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTM
             mlc.SERVICE_REQUEST,
             service_data={
                 mlc.CONF_DEVICE_ID: tc.MOCK_DEVICE_UUID,
-                mc.KEY_NAMESPACE: mc.NS_APPLIANCE_SYSTEM_ALL,
+                mc.KEY_NAMESPACE: mn.Appliance_System_All.name,
                 mc.KEY_METHOD: mc.METHOD_GET,
             },
             blocking=True,
@@ -41,9 +46,7 @@ async def test_request_on_device(
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(
-        hass, mc.TYPE_MSS310, aioclient_mock
-    ) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -56,11 +59,11 @@ async def test_request_on_device(
             mlc.SERVICE_REQUEST,
             service_data={
                 mlc.CONF_DEVICE_ID: context.device_id,
-                mc.KEY_NAMESPACE: mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+                mc.KEY_NAMESPACE: mn.Appliance_Control_ToggleX.name,
                 mc.KEY_METHOD: mc.METHOD_SET,
                 mc.KEY_PAYLOAD: json_dumps(
                     {
-                        mc.KEY_TOGGLEX: {
+                        mn.Appliance_Control_ToggleX.key: {
                             mc.KEY_CHANNEL: 0,
                             mc.KEY_ONOFF: 1 - initialstate,
                         }
@@ -87,9 +90,7 @@ async def test_request_notification(
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(
-        hass, mc.TYPE_MSS310, aioclient_mock
-    ) as context:
+    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
         # when routing the call through a device the service data 'key' is not used
@@ -98,7 +99,7 @@ async def test_request_notification(
             mlc.SERVICE_REQUEST,
             service_data={
                 mlc.CONF_DEVICE_ID: context.device_id,
-                mc.KEY_NAMESPACE: mc.NS_APPLIANCE_SYSTEM_ALL,
+                mc.KEY_NAMESPACE: mn.Appliance_System_All.name,
                 mlc.CONF_NOTIFYRESPONSE: True,
             },
             blocking=True,

@@ -5,7 +5,7 @@ from random import randint
 from time import gmtime
 import typing
 
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from .. import MerossEmulator, MerossEmulatorDescriptor
@@ -21,7 +21,7 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_electricity = descriptor.namespaces[
-            mc.NS_APPLIANCE_CONTROL_ELECTRICITY
+            mn.Appliance_Control_Electricity.name
         ]
         self.electricity = self.payload_electricity[mc.KEY_ELECTRICITY]
         self.voltage_average: int = self.electricity[mc.KEY_VOLTAGE] or 2280
@@ -71,7 +71,7 @@ class ElectricityXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_electricityx = descriptor.namespaces.setdefault(
-            mc.NS_APPLIANCE_CONTROL_ELECTRICITYX,
+            mn.Appliance_Control_ElectricityX.name,
             {
                 mc.KEY_ELECTRICITY: [
                     {
@@ -141,7 +141,7 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_consumptionx = descriptor.namespaces[
-            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
+            mn.Appliance_Control_ConsumptionX.name
         ]
         p_consumptionx: list = self.payload_consumptionx[mc.KEY_CONSUMPTIONX]
         if (len(p_consumptionx)) == 0:
@@ -175,9 +175,9 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         # the server code in meross_lan (it doesn't really check this
         # payload)
         self.mqtt_publish_push(
-            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
+            mn.Appliance_Control_ConsumptionConfig.name,
             {
-                mc.KEY_CONFIG: {
+                mn.Appliance_Control_ConsumptionConfig.key: {
                     "voltageRatio": 188,
                     "electricityRatio": 102,
                     "maxElectricityCurrent": 11000,

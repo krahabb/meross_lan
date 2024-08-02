@@ -7,7 +7,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 
 from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.light import MLDNDLightEntity
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 from emulator import generate_emulators
 
 from tests import const as tc, helpers
@@ -62,14 +62,14 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
             device = context.device
 
             entity_dnd = None
-            if mc.NS_APPLIANCE_SYSTEM_DNDMODE in ability:
+            if mn.Appliance_System_DNDMode.name in ability:
                 entity_dnd = device.entities[mlc.DND_ID]
                 assert isinstance(entity_dnd, MLDNDLightEntity)
                 state = hass.states.get(entity_dnd.entity_id)
                 assert state and state.state == hac.STATE_UNAVAILABLE
 
             sensor_signal_strength = None
-            if mc.NS_APPLIANCE_SYSTEM_RUNTIME in ability:
+            if mn.Appliance_System_Runtime.name in ability:
                 sensor_signal_strength = device.entities[mlc.SIGNALSTRENGTH_ID]
                 state = hass.states.get(sensor_signal_strength.entity_id)
                 assert state and state.state == hac.STATE_UNAVAILABLE

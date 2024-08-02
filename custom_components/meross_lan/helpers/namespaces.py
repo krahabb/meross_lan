@@ -124,15 +124,16 @@ class NamespaceHandler:
     def __init__(
         self,
         device: "MerossDevice",
-        namespace: str,
+        ns: "mn.Namespace",
         *,
         handler: typing.Callable[[dict, dict], None] | None = None,
     ):
+        namespace = ns.name
         assert (
             namespace not in device.namespace_handlers
         ), "namespace already registered"
         self.device = device
-        self.ns = ns = mn.NAMESPACES[namespace]
+        self.ns = ns
         self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
         self.parsers: dict[object, typing.Callable[[dict], None]] = {}
         self.entity_class = None
@@ -140,7 +141,7 @@ class NamespaceHandler:
             device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
         )
 
-        if _conf := POLLING_STRATEGY_CONF.get(namespace):
+        if _conf := POLLING_STRATEGY_CONF.get(ns):
             self.polling_period = _conf[0]
             self.polling_period_cloud = _conf[1]
             self.polling_response_base_size = _conf[2]
@@ -572,13 +573,13 @@ class EntityNamespaceMixin(MerossEntity if typing.TYPE_CHECKING else object):
     manager: "MerossDevice"
 
     async def async_added_to_hass(self):
-        self.manager.get_handler(self.ns.name).polling_strategy = POLLING_STRATEGY_CONF[
-            self.ns.name
+        self.manager.get_handler(self.ns).polling_strategy = POLLING_STRATEGY_CONF[
+            self.ns
         ][4]
         return await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
-        self.manager.get_handler(self.ns.name).polling_strategy = None
+        self.manager.get_handler(self.ns).polling_strategy = None
         return await super().async_will_remove_from_hass()
 
 
@@ -592,7 +593,7 @@ class EntityNamespaceHandler(NamespaceHandler):
         NamespaceHandler.__init__(
             self,
             entity.manager,
-            entity.ns.name,
+            entity.ns,
             handler=getattr(
                 entity, f"_handle_{entity.ns.name.replace('.', '_')}", entity._handle
             ),
@@ -609,7 +610,7 @@ class VoidNamespaceHandler(NamespaceHandler):
     just provides an empty handler and so suppresses any log too (for unknown namespaces)
     done by the base default handling."""
 
-    def __init__(self, device: "MerossDevice", namespace: str):
+    def __init__(self, device: "MerossDevice", namespace: "mn.Namespace"):
         NamespaceHandler.__init__(self, device, namespace, handler=self._handle_void)
 
     def _handle_void(self, header: dict, payload: dict):
@@ -642,277 +643,283 @@ responses though
 """
 # TODO: use the mn. symbols instead of legacy mc. ones (trying to get rid of mc namespaces constants)
 POLLING_STRATEGY_CONF: dict[
-    str, tuple[int, int, int, int, PollingStrategyFunc | None]
+    mn.Namespace, tuple[int, int, int, int, PollingStrategyFunc | None]
 ] = {
-    mc.NS_APPLIANCE_SYSTEM_ALL: (
+    mn.Appliance_System_All: (
         mlc.PARAM_HEARTBEAT_PERIOD,
         0,
         1000,
         0,
         NamespaceHandler.async_poll_all,
     ),
-    mc.NS_APPLIANCE_SYSTEM_DEBUG: (0, 0, 1900, 0, None),
-    mc.NS_APPLIANCE_SYSTEM_DNDMODE: (
+    mn.Appliance_System_Debug: (0, 0, 1900, 0, None),
+    mn.Appliance_System_DNDMode: (
         300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         320,
         0,
         NamespaceHandler.async_poll_lazy,
     ),
-    mc.NS_APPLIANCE_SYSTEM_RUNTIME: (
+    mn.Appliance_System_Runtime: (
         300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         330,
         0,
         NamespaceHandler.async_poll_lazy,
     ),
-    mc.NS_APPLIANCE_CONFIG_OVERTEMP: (
+    mn.Appliance_Config_OverTemp: (
         300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         340,
         0,
         NamespaceHandler.async_poll_lazy,
     ),
-    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONH: (
+    mn.Appliance_Control_ConsumptionH: (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         320,
         400,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: (
+    mn.Appliance_Control_ConsumptionX: (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         320,
         53,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: (
+    mn.Appliance_Control_Diffuser_Sensor: (
         300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         100,
         NamespaceHandler.async_poll_lazy,
     ),
-    mc.NS_APPLIANCE_CONTROL_ELECTRICITY: (
+    mn.Appliance_Control_Electricity: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         430,
         0,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_ELECTRICITYX: (
+    mn.Appliance_Control_ElectricityX: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         100,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_FAN: (
+    mn.Appliance_Control_Fan: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         20,
         None,
     ),
-    mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: (
+    mn.Appliance_Control_FilterMaintenance: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         35,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT: (
+    mn.Appliance_Control_Light_Effect: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         1850,
         0,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_MP3: (0, 0, 380, 0, NamespaceHandler.async_poll_default),
-    mc.NS_APPLIANCE_CONTROL_PHYSICALLOCK: (
+    mn.Appliance_Control_Mp3: (
+        0,
+        0,
+        380,
+        0,
+        NamespaceHandler.async_poll_default,
+    ),
+    mn.Appliance_Control_PhysicalLock: (
         300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         35,
         NamespaceHandler.async_poll_lazy,
     ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION: (
+    mn.Appliance_Control_Thermostat_Calibration: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CTLRANGE: (
+    mn.Appliance_Control_Thermostat_CtlRange: (
         0,
         0,
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_once,
     ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE: (
+    mn.Appliance_Control_Thermostat_DeadZone: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_FROST: (
+    mn.Appliance_Control_Thermostat_Frost: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: (
+    mn.Appliance_Control_Thermostat_Overheat: (
         0,
         0,
         mlc.PARAM_HEADER_SIZE,
         140,
         NamespaceHandler.async_poll_default,
     ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_TIMER: (
+    mn.Appliance_Control_Thermostat_Timer: (
         0,
         0,
         mlc.PARAM_HEADER_SIZE,
         550,
         NamespaceHandler.async_poll_default,
     ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE: (
+    mn.Appliance_Control_Thermostat_Schedule: (
         0,
         0,
         mlc.PARAM_HEADER_SIZE,
         550,
         NamespaceHandler.async_poll_default,
     ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB: (
+    mn.Appliance_Control_Thermostat_ScheduleB: (
         0,
         0,
         mlc.PARAM_HEADER_SIZE,
         550,
         NamespaceHandler.async_poll_default,
     ),
-    mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR: (
+    mn.Appliance_Control_Thermostat_Sensor: (
         0,
         0,
         mlc.PARAM_HEADER_SIZE,
         40,
         NamespaceHandler.async_poll_default,
     ),
-    mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: (
+    mn.Appliance_Control_Screen_Brightness: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         70,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST: (
+    mn.Appliance_Control_Sensor_Latest: (
         300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_lazy,
     ),
-    mn.Appliance_Control_Sensor_LatestX.name: (
+    mn.Appliance_Control_Sensor_LatestX: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         220,
         NamespaceHandler.async_poll_default,
     ),
-    mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: (
+    mn.Appliance_GarageDoor_Config: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         410,
         0,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: (
+    mn.Appliance_GarageDoor_MultipleConfig: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         140,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_HUB_BATTERY: (
+    mn.Appliance_Hub_Battery: (
         3600,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         40,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_HUB_MTS100_ADJUST: (
+    mn.Appliance_Hub_Mts100_Adjust: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         40,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_HUB_MTS100_ALL: (
+    mn.Appliance_Hub_Mts100_All: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         350,
         None,
     ),
-    mc.NS_APPLIANCE_HUB_MTS100_SCHEDULEB: (
+    mn.Appliance_Hub_Mts100_ScheduleB: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         500,
         None,
     ),
-    mc.NS_APPLIANCE_HUB_SENSOR_ADJUST: (
+    mn.Appliance_Hub_Sensor_Adjust: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         60,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_HUB_SENSOR_ALL: (
+    mn.Appliance_Hub_Sensor_All: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         250,
         None,
     ),
-    mc.NS_APPLIANCE_HUB_SUBDEVICE_VERSION: (
+    mn.Appliance_Hub_SubDevice_Version: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         55,
         NamespaceHandler.async_poll_once,
     ),
-    mc.NS_APPLIANCE_HUB_TOGGLEX: (
+    mn.Appliance_Hub_ToggleX: (
         0,
         0,
         mlc.PARAM_HEADER_SIZE,
         35,
         NamespaceHandler.async_poll_default,
     ),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST: (
+    mn.Appliance_RollerShutter_Adjust: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         35,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: (
+    mn.Appliance_RollerShutter_Config: (
         0,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         70,
         NamespaceHandler.async_poll_smart,
     ),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION: (
+    mn.Appliance_RollerShutter_Position: (
         0,
         0,
         mlc.PARAM_HEADER_SIZE,
         50,
         NamespaceHandler.async_poll_default,
     ),
-    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE: (
+    mn.Appliance_RollerShutter_State: (
         0,
         0,
         mlc.PARAM_HEADER_SIZE,

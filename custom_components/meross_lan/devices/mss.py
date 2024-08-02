@@ -186,7 +186,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
 def namespace_init_electricity(device: "MerossDevice"):
     NamespaceHandler(
         device,
-        mc.NS_APPLIANCE_CONTROL_ELECTRICITY,
+        mn.Appliance_Control_Electricity,
         handler=ElectricitySensor(device, None)._handle_Appliance_Control_Electricity,
     )
 
@@ -205,7 +205,7 @@ class ElectricityXSensor(ElectricitySensor):
         super().__init__(manager, channel)
         # patch the energy meter sensor state class...
         manager.entities[f"{channel}_{mc.KEY_MCONSUME}"].state_class = MLNumericSensor.StateClass.TOTAL  # type: ignore
-        manager.register_parser(mc.NS_APPLIANCE_CONTROL_ELECTRICITYX, self)
+        manager.register_parser(self, mn.Appliance_Control_ElectricityX)
 
     def _parse_electricity(self, payload: dict):
         ElectricitySensor._parse_electricity(self, payload)
@@ -214,7 +214,7 @@ class ElectricityXSensor(ElectricitySensor):
 def namespace_init_electricityx(device: "MerossDevice"):
     NamespaceHandler(
         device,
-        mc.NS_APPLIANCE_CONTROL_ELECTRICITYX,
+        mn.Appliance_Control_ElectricityX,
     ).register_entity_class(ElectricityXSensor)
 
 
@@ -253,7 +253,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     """
 
     def __init__(self, device: "MerossDevice"):
-        super().__init__(device, mc.NS_APPLIANCE_CONTROL_CONSUMPTIONH)
+        super().__init__(device, mn.Appliance_Control_ConsumptionH)
         self.register_entity_class(ConsumptionHSensor, initially_disabled=False)
 
 
@@ -403,7 +403,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         days = payload[mc.KEY_CONSUMPTIONX]
         days_len = len(days)
         device.namespace_handlers[
-            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
+            mn.Appliance_Control_ConsumptionX.name
         ].polling_response_size_adj(days_len)
         # the days array contains a month worth of data
         # but we're only interested in the last few days (today
@@ -499,12 +499,12 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
     it is already processed at the MQTTConnection message handling."""
 
     def __init__(self, device: "MerossDevice"):
-        super().__init__(device, mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG)
+        super().__init__(device, mn.Appliance_Control_ConsumptionConfig)
 
 
 class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
 
-    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONFIG_OVERTEMP]
+    ns = mn.Appliance_Config_OverTemp
     key_value = mc.KEY_ENABLE
 
     # HA core entity attributes:

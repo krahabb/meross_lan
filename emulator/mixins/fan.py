@@ -3,7 +3,11 @@
 from random import randint
 import typing
 
-from custom_components.meross_lan.merossclient import MerossRequest, const as mc
+from custom_components.meross_lan.merossclient import (
+    MerossRequest,
+    const as mc,
+    namespaces as mn,
+)
 
 if typing.TYPE_CHECKING:
     from .. import MerossEmulator, MerossEmulatorDescriptor
@@ -17,7 +21,7 @@ class FanMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             # map100 doesn't carry 'fan' digest key so
             # we'll ensure it's state is available in the namespaces
             self.update_namespace_state(
-                mc.NS_APPLIANCE_CONTROL_FAN,
+                mn.Appliance_Control_Fan.name,
                 0,
                 {
                     mc.KEY_SPEED: 0,
@@ -25,9 +29,9 @@ class FanMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 },
             )
 
-        if mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE in descriptor.ability:
+        if mn.Appliance_Control_FilterMaintenance.name in descriptor.ability:
             self.update_namespace_state(
-                mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
+                mn.Appliance_Control_FilterMaintenance.name,
                 0,
                 {
                     mc.KEY_LIFE: 100,
@@ -37,10 +41,10 @@ class FanMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
     def _scheduler(self):
         super()._scheduler()
-        if mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE in self.descriptor.ability:
+        if mn.Appliance_Control_FilterMaintenance.name in self.descriptor.ability:
             if lifedec := randint(0, 1):
                 p_payload = self.descriptor.namespaces[
-                    mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE
+                    mn.Appliance_Control_FilterMaintenance.name
                 ]
                 p_payload_channel = p_payload[mc.KEY_FILTER][0]
                 life = p_payload_channel[mc.KEY_LIFE]
@@ -48,5 +52,5 @@ class FanMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 p_payload_channel[mc.KEY_LMTIME] = self.epoch
                 if self.mqtt_connected:
                     self.mqtt_publish_push(
-                        mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE, p_payload
+                        mn.Appliance_Control_FilterMaintenance.name, p_payload
                     )

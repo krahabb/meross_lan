@@ -71,7 +71,7 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         DeviceClass.TEMPERATURE: me.MerossEntity.hac.UnitOfTemperature.CELSIUS,
         DeviceClass.HUMIDITY: me.MerossEntity.hac.PERCENTAGE,
         DeviceClass.BATTERY: me.MerossEntity.hac.PERCENTAGE,
-        DeviceClass.ILLUMINANCE: me.MerossEntity.hac.LIGHT_LUX
+        DeviceClass.ILLUMINANCE: me.MerossEntity.hac.LIGHT_LUX,
     }
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
@@ -304,7 +304,7 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
             None,
             mlc.SIGNALSTRENGTH_ID,
             None,
-            native_unit_of_measurement=me.MerossEntity.hac.PERCENTAGE
+            native_unit_of_measurement=me.MerossEntity.hac.PERCENTAGE,
         )
         EntityNamespaceHandler(self)
 
@@ -337,6 +337,6 @@ class FilterMaintenanceNamespaceHandler(NamespaceHandler):
         NamespaceHandler.__init__(
             self,
             device,
-            mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE,
+            mn.Appliance_Control_FilterMaintenance,
         )
         MLFilterMaintenanceSensor(device, 0)

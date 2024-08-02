@@ -1,7 +1,7 @@
 from homeassistant.components import media_player as haec  # HA EntityComponent
 
 from custom_components.meross_lan.media_player import MLMp3Player
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 
 from tests.entities import EntityComponentTest
 
@@ -13,7 +13,7 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_CONTROL_MP3: [MLMp3Player],
+        mn.Appliance_Control_Mp3.name: [MLMp3Player],
     }
 
     SERVICE_STATE_MAP = {

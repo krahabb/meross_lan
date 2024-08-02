@@ -459,7 +459,7 @@ class MerossFlowHandlerMixin(
             )[mc.KEY_PAYLOAD][mc.KEY_ALL]
         except:
             # might it be the device needs encryption?
-            if mc.NS_APPLIANCE_ENCRYPT_ECDHE not in ability:
+            if mn.Appliance_Encrypt_ECDHE.name not in ability:
                 raise
             # here we'd need the uuid and mac but we have no ns_all
             # to parse so we'll try extract these info from ns_ability query

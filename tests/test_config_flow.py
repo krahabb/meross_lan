@@ -19,6 +19,7 @@ from custom_components.meross_lan.merossclient import (
     const as mc,
     fmt_macaddress,
     json_dumps,
+    namespaces as mn,
 )
 
 from tests import const as tc, helpers
@@ -218,9 +219,9 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
     key = ""
     topic = mc.TOPIC_RESPONSE.format(device_id)
     payload = build_message(
-        mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+        mn.Appliance_Control_ToggleX.name,
         mc.METHOD_PUSH,
-        {mc.KEY_TOGGLEX: {mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 0}},
+        {mn.Appliance_Control_ToggleX.key: {mc.KEY_CHANNEL: 0, mc.KEY_ONOFF: 0}},
         key,
         mc.TOPIC_REQUEST.format(device_id),
     )

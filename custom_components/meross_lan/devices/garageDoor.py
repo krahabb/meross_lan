@@ -251,6 +251,8 @@ class MLGarageEmulatedConfigNumber(MLEmulatedNumber):
 
 class MLGarage(MLCover):
 
+    ns = mn.Appliance_GarageDoor_State
+
     # these keys in Appliance.GarageDoor.MultipleConfig are to be ignored
     CONFIG_KEY_EXCLUDED = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
     # maps keys from Appliance.GarageDoor.MultipleConfig to
@@ -290,10 +292,10 @@ class MLGarage(MLCover):
         }
         super().__init__(manager, channel, MLCover.DeviceClass.GARAGE)
         ability = manager.descriptor.ability
-        manager.register_parser(mc.NS_APPLIANCE_GARAGEDOOR_STATE, self)
+        manager.register_parser_entity(self)
         manager.register_togglex_channel(self)
         self.binary_sensor_timeout = MLGarageTimeoutBinarySensor(self)
-        if mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG in ability:
+        if mn.Appliance_GarageDoor_MultipleConfig.name in ability:
             # historically, when MultipleConfig appeared, these used to be
             # the available timeouts while recent fw (4.2.8) shows presence
             # of more 'natural' doorOpenDuration/doorCloseDuration keys.
@@ -305,7 +307,7 @@ class MLGarage(MLCover):
             self.number_open_timeout = MLGarageMultipleConfigNumber(
                 manager, channel, mc.KEY_SIGNALOPEN
             )
-            manager.register_parser(mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG, self)
+            manager.register_parser(self, mn.Appliance_GarageDoor_MultipleConfig)
         else:
             self.number_close_timeout = None
             self.number_open_timeout = None
@@ -349,9 +351,9 @@ class MLGarage(MLCover):
     async def async_request_position(self, open_request: int):
         manager = self.manager
         if response := await manager.async_request_ack(
-            mc.NS_APPLIANCE_GARAGEDOOR_STATE,
+            self.ns.name,
             mc.METHOD_SET,
-            {mc.KEY_STATE: {mc.KEY_CHANNEL: self.channel, mc.KEY_OPEN: open_request}},
+            {self.ns.key: {mc.KEY_CHANNEL: self.channel, mc.KEY_OPEN: open_request}},
         ):
             """
             example (historical) payload in SETACK:
@@ -610,7 +612,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
         NamespaceHandler.__init__(
             self,
             device,
-            mc.NS_APPLIANCE_GARAGEDOOR_CONFIG,
+            mn.Appliance_GarageDoor_Config,
             handler=self._handle_Appliance_GarageDoor_Config,
         )
 
@@ -708,12 +710,12 @@ def digest_init_garageDoor(
     for channel_digest in digest:
         MLGarage(device, channel_digest[mc.KEY_CHANNEL])
 
-    if mc.NS_APPLIANCE_GARAGEDOOR_CONFIG in ability:
+    if mn.Appliance_GarageDoor_Config.name in ability:
         GarageDoorConfigNamespaceHandler(device)
 
     # We have notice (#428) that the msg200 pushes a strange garage door state
     # over channel 0 which is not in the list of channels exposed in digest.
     # We so prepare the handler to eventually build an MLGarage instance
     # even though it's behavior is unknown at the moment.
-    handler = device.get_handler(mc.NS_APPLIANCE_GARAGEDOOR_STATE)
+    handler = device.get_handler(mn.Appliance_GarageDoor_State)
     return handler.parse_list, (handler,)

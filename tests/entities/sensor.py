@@ -4,7 +4,7 @@ from custom_components.meross_lan.devices.mss import (
     ConsumptionXSensor,
     ElectricitySensor,
 )
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 from custom_components.meross_lan.sensor import (
     MLEnumSensor,
     MLFilterMaintenanceSensor,
@@ -27,22 +27,22 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_CONFIG_OVERTEMP: [MLEnumSensor],
-        mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX: [ConsumptionXSensor],
-        mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR: [
+        mn.Appliance_Config_OverTemp.name: [MLEnumSensor],
+        mn.Appliance_Control_ConsumptionX.name: [ConsumptionXSensor],
+        mn.Appliance_Control_Diffuser_Sensor.name: [
             MLHumiditySensor,
             MLTemperatureSensor,
         ],
-        mc.NS_APPLIANCE_CONTROL_ELECTRICITY: [
+        mn.Appliance_Control_Electricity.name: [
             ElectricitySensor,
             MLNumericSensor,
             MLNumericSensor,
             MLNumericSensor,
         ],
-        mc.NS_APPLIANCE_CONTROL_FILTERMAINTENANCE: [MLFilterMaintenanceSensor],
-        mc.NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT: [MLTemperatureSensor],
-        mc.NS_APPLIANCE_CONTROL_SENSOR_LATEST: [MLHumiditySensor],
-        mc.NS_APPLIANCE_SYSTEM_RUNTIME: [MLSignalStrengthSensor],  # Signal strength
+        mn.Appliance_Control_FilterMaintenance.name: [MLFilterMaintenanceSensor],
+        mn.Appliance_Control_Thermostat_Overheat.name: [MLTemperatureSensor],
+        mn.Appliance_Control_Sensor_Latest.name: [MLHumiditySensor],
+        mn.Appliance_System_Runtime.name: [MLSignalStrengthSensor],  # Signal strength
     }
 
     HUB_SUBDEVICES_ENTITIES = {

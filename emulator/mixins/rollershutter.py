@@ -5,7 +5,11 @@ from time import time
 import typing
 
 from custom_components.meross_lan.helpers import clamp, versiontuple
-from custom_components.meross_lan.merossclient import const as mc, extract_dict_payloads
+from custom_components.meross_lan.merossclient import (
+    const as mc,
+    extract_dict_payloads,
+    namespaces as mn,
+)
 from emulator.mixins import MerossEmulatorDescriptor
 
 if typing.TYPE_CHECKING:
@@ -38,10 +42,10 @@ class _Transition:
         self.position_begin: typing.Final = p_position[mc.KEY_POSITION]
         self.position_end: typing.Final = position_end
         self.p_state: typing.Final = emulator.get_namespace_state(
-            mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, channel
+            mn.Appliance_RollerShutter_State.name, channel
         )
         p_config = emulator.get_namespace_state(
-            mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, channel
+            mn.Appliance_RollerShutter_Config.name, channel
         )
         if self.has_native_position:
             if position_end > self.position_begin:
@@ -58,7 +62,9 @@ class _Transition:
                     * p_config[mc.KEY_SIGNALCLOSE]
                     / _DURATION_SCALE
                 )
-            self.speed: typing.Final = (position_end - self.position_begin) / self.duration
+            self.speed: typing.Final = (
+                position_end - self.position_begin
+            ) / self.duration
         else:
             if position_end == mc.ROLLERSHUTTER_POSITION_OPENED:
                 # when opening we'll set the position opened at the start of the transition
@@ -116,7 +122,7 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         # only 1 channel seen so far...even tho our transitions and message parsing
         # should already be multi-channel proof
         self.update_namespace_state(
-            mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG,
+            mn.Appliance_RollerShutter_Config.name,
             0,
             {
                 mc.KEY_SIGNALCLOSE: RollerShutterMixin.SIGNALCLOSE,
@@ -124,14 +130,14 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             },
         )
         self.update_namespace_state(
-            mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            mn.Appliance_RollerShutter_Position.name,
             0,
             {
                 mc.KEY_POSITION: mc.ROLLERSHUTTER_POSITION_CLOSED,
             },
         )
         self.update_namespace_state(
-            mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+            mn.Appliance_RollerShutter_State.name,
             0,
             {
                 mc.KEY_STATE: mc.ROLLERSHUTTER_STATE_IDLE,
@@ -144,7 +150,7 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         super().shutdown()
 
     def _GET_Appliance_Control_ToggleX(self, header, payload):
-        return mc.METHOD_GETACK, { "channel": 0} # 'strange' format response in #447
+        return mc.METHOD_GETACK, {"channel": 0}  # 'strange' format response in #447
 
     def _SET_Appliance_RollerShutter_Position(self, header, payload):
         """payload = { "postion": {"channel": 0, "position": 100}}"""
@@ -160,7 +166,7 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 continue
 
             p_position = self.get_namespace_state(
-                mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, channel
+                mn.Appliance_RollerShutter_Position.name, channel
             )
             if self.has_native_position:
                 # accepts intermediate positioning

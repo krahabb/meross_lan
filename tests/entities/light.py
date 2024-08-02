@@ -13,7 +13,7 @@ from custom_components.meross_lan.light import (
     native_to_rgb,
     rgb_to_native,
 )
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 
 from tests.entities import EntityComponentTest
 
@@ -27,7 +27,7 @@ class EntityTest(EntityComponentTest):
         mc.KEY_DIFFUSER: {mc.KEY_LIGHT: [MLDiffuserLight]},
     }
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_SYSTEM_DNDMODE: [MLDNDLightEntity],
+        mn.Appliance_System_DNDMode.name: [MLDNDLightEntity],
     }
 
     async def async_test_each_callback(
@@ -46,18 +46,18 @@ class EntityTest(EntityComponentTest):
             ability = self.ability
             self._check_remove_togglex(entity)
             # check the other specialized implementations
-            if mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT in ability:
+            if mn.Appliance_Control_Diffuser_Light.name in ability:
                 assert isinstance(entity, MLDiffuserLight)
                 assert ColorMode.RGB in supported_color_modes, "supported_color_modes"
                 assert LightEntityFeature.EFFECT in supported_features
                 assert entity.effect_list == mc.DIFFUSER_LIGHT_MODE_LIST, "effect_list"
-            if mc.NS_APPLIANCE_CONTROL_LIGHT in ability:
+            if mn.Appliance_Control_Light.name in ability:
                 assert isinstance(entity, MLLight)
                 # need to manually remove MLLight since actual is rather polymorphic
                 # and the general code in _async_test_entities cannot handle this case
                 if type(entity) is not MLLight:
                     EntityComponentTest.expected_entity_types.remove(MLLight)
-                capacity = ability[mc.NS_APPLIANCE_CONTROL_LIGHT][mc.KEY_CAPACITY]
+                capacity = ability[mn.Appliance_Control_Light.name][mc.KEY_CAPACITY]
                 if capacity & mc.LIGHT_CAPACITY_RGB:
                     assert (
                         ColorMode.RGB in supported_color_modes
@@ -69,11 +69,11 @@ class EntityTest(EntityComponentTest):
                 if capacity & mc.LIGHT_CAPACITY_EFFECT:
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
-                if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
+                if mn.Appliance_Control_Light_Effect.name in ability:
                     assert isinstance(entity, MLLightEffect)
                     assert LightEntityFeature.EFFECT in supported_features
                     assert entity.effect_list, "effect_list"
-                if mc.NS_APPLIANCE_CONTROL_MP3 in ability:
+                if mn.Appliance_Control_Mp3.name in ability:
                     assert isinstance(entity, MLLightMp3)
                     assert LightEntityFeature.EFFECT in supported_features
                     assert (

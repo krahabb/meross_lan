@@ -11,7 +11,7 @@ from custom_components.meross_lan.devices.thermostat import (
     MLScreenBrightnessNumber,
     MtsRichTemperatureNumber,
 )
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 from custom_components.meross_lan.number import MLConfigNumber, MLNumber
 
 from tests.entities import EntityComponentTest
@@ -22,13 +22,13 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = haec.NumberEntity
 
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_GARAGEDOOR_CONFIG: [MLGarageConfigNumber],
-        mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG: [MLGarageMultipleConfigNumber],
-        mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG: [
+        mn.Appliance_GarageDoor_Config.name: [MLGarageConfigNumber],
+        mn.Appliance_GarageDoor_MultipleConfig.name: [MLGarageMultipleConfigNumber],
+        mn.Appliance_RollerShutter_Config.name: [
             MLRollerShutterConfigNumber,
             MLRollerShutterConfigNumber,
         ],
-        mc.NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS: [
+        mn.Appliance_Control_Screen_Brightness.name: [
             MLScreenBrightnessNumber,
             MLScreenBrightnessNumber,
         ],
