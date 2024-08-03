@@ -18,6 +18,7 @@ from .mts960 import Mts960Climate
 
 if typing.TYPE_CHECKING:
     from ..meross_device import DigestInitReturnType, DigestParseFunc, MerossDevice
+    from ..number import MLConfigNumberArgs
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
 
@@ -32,12 +33,12 @@ class MtsWarningSensor(MLEnumSensor):
         native_value: str | int | float | None,
     ):
         entitykey = f"{number_temperature.entitykey}_warning"
-        self.translation_key = f"mts_{entitykey}"
         super().__init__(
             number_temperature.manager,
             number_temperature.channel,
             entitykey,
             native_value=native_value,
+            translation_key=f"mts_{entitykey}",
         )
 
 
@@ -55,13 +56,13 @@ class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
     ):
         self.number_temperature = number_temperature
         self.ns = number_temperature.ns
-        self.name = (f"{number_temperature.entitykey} Alarm").capitalize()
         super().__init__(
             number_temperature.manager,
             number_temperature.channel,
             f"{number_temperature.entitykey}_switch",
             MLSwitch.DeviceClass.SWITCH,
             device_value=device_value,
+            name=(f"{number_temperature.entitykey} Alarm").capitalize(),
         )
 
     async def async_shutdown(self):
@@ -101,8 +102,12 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         "native_step",
     )
 
-    def __init__(self, climate: "MtsThermostatClimate"):
-        super().__init__(climate, self.__class__.ns.key)
+    def __init__(
+        self,
+        climate: "MtsThermostatClimate",
+        **kwargs: "typing.Unpack[MLConfigNumberArgs]",
+    ):
+        super().__init__(climate, self.__class__.ns.key, **kwargs)
         manager = self.manager
         # preset entity platforms since these might be instantiated later
         manager.platforms.setdefault(MtsConfigSwitch.PLATFORM)
@@ -155,11 +160,10 @@ class MtsCalibrationNumber(MtsRichTemperatureNumber):
     ns = mn.Appliance_Control_Thermostat_Calibration
 
     def __init__(self, climate: "MtsThermostatClimate"):
-        self.name = "Calibration"
         self.native_max_value = 8
         self.native_min_value = -8
         self.native_step = 0.1
-        super().__init__(climate)
+        super().__init__(climate, name="Calibration")
 
 
 class MtsDeadZoneNumber(MtsRichTemperatureNumber):
@@ -207,11 +211,10 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
     __slots__ = ("sensor_external_temperature",)
 
     def __init__(self, climate: "MtsThermostatClimate"):
-        self.name = "Overheat threshold"
         self.native_max_value = 70
         self.native_min_value = 20
         self.native_step = climate.target_temperature_step
-        super().__init__(climate)
+        super().__init__(climate, name="Overheat threshold")
         self.sensor_external_temperature = MLTemperatureSensor(
             self.manager, self.channel, "external sensor"
         )
@@ -381,12 +384,12 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 
     def __init__(self, manager: "MerossDevice", key: str):
         self.key_value = key
-        self.name = f"Screen brightness ({key})"
         super().__init__(
             manager,
             0,
             f"screenbrightness_{key}",
             native_unit_of_measurement=MLConfigNumber.hac.PERCENTAGE,
+            name=f"Screen brightness ({key})",
         )
 
     async def async_set_native_value(self, value: float):
@@ -488,7 +491,12 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                                 key, MLNumericSensor
                             )
                         )
-                        entity_class(self.device, channel, f"sensor_{key}", device_value=value / 10)  # type: ignore
+                        entity_class(
+                            self.device,
+                            channel,
+                            f"sensor_{key}",
+                            device_value=value / 10,
+                        )
 
                     if key == mc.KEY_HUMI:
                         # look for a thermostat and sync the reported humidity

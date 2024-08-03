@@ -67,14 +67,14 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         )
         self._schedule_reset(dt_util.now())
         for key, entity_def in self.SENSOR_DEFS.items():
-            sensor = MLNumericSensor(
+            MLNumericSensor(
                 manager,
                 channel,
                 key,
                 entity_def[0],
+                device_scale=entity_def[2],
                 suggested_display_precision=entity_def[1],
             )
-            sensor.device_scale = entity_def[2]
 
     async def async_shutdown(self):
         if self._reset_unsub:
@@ -222,14 +222,19 @@ class ConsumptionHSensor(MLNumericSensor):
 
     manager: "MerossDevice"
     ns = mn.Appliance_Control_ConsumptionH
-    device_scale = 1
+
     _attr_suggested_display_precision = 0
 
     __slots__ = ()
 
     def __init__(self, manager: "MerossDevice", channel: object | None):
-        self.name = "Consumption"
-        super().__init__(manager, channel, self.ns.key, self.DeviceClass.ENERGY)
+        super().__init__(
+            manager,
+            channel,
+            mc.KEY_CONSUMPTIONH,
+            self.DeviceClass.ENERGY,
+            name="Consumption",
+        )
         manager.register_parser_entity(self)
 
     def _parse_consumptionH(self, payload: dict):

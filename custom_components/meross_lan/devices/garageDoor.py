@@ -20,6 +20,7 @@ from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
     from ..meross_device import DigestInitReturnType, MerossDevice
+    from ..number import MLConfigNumberArgs
 
 # garagedoor extra attributes
 EXTRA_ATTR_TRANSITION_DURATION = "transition_duration"
@@ -90,13 +91,13 @@ class MLGarageMultipleConfigSwitch(me.MEListChannelMixin, MLSwitch):
         device_value=None,
     ):
         self.key_value = key
-        self.name = key
         super().__init__(
             manager,
             channel,
             f"config_{key}",
             self.DeviceClass.SWITCH,
             device_value=device_value,
+            name=key,
         )
 
 
@@ -174,14 +175,13 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
     ns = mn.Appliance_GarageDoor_MultipleConfig
 
     KEY_TO_DEVICE_CLASS_MAP = {
-        mc.KEY_SIGNALDURATION: MLConfigNumber.DEVICE_CLASS_DURATION,
-        mc.KEY_SIGNALCLOSE: MLConfigNumber.DEVICE_CLASS_DURATION,
-        mc.KEY_SIGNALOPEN: MLConfigNumber.DEVICE_CLASS_DURATION,
-        mc.KEY_DOORCLOSEDURATION: MLConfigNumber.DEVICE_CLASS_DURATION,
-        mc.KEY_DOOROPENDURATION: MLConfigNumber.DEVICE_CLASS_DURATION,
+        mc.KEY_SIGNALDURATION: (MLConfigNumber.DEVICE_CLASS_DURATION, 1000),
+        mc.KEY_SIGNALCLOSE: (MLConfigNumber.DEVICE_CLASS_DURATION, 1000),
+        mc.KEY_SIGNALOPEN: (MLConfigNumber.DEVICE_CLASS_DURATION, 1000),
+        mc.KEY_DOORCLOSEDURATION: (MLConfigNumber.DEVICE_CLASS_DURATION, 1000),
+        mc.KEY_DOOROPENDURATION: (MLConfigNumber.DEVICE_CLASS_DURATION, 1000),
     }
 
-    device_scale = 1000
     # HA core entity attributes:
     # these are ok for open/close durations
     # customize those when needed...
@@ -194,21 +194,19 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
         manager: "MerossDevice",
         channel,
         key: str,
-        *,
-        device_value=None,
+        **kwargs: "typing.Unpack[MLConfigNumberArgs]",
     ):
         self.key_value = key
-        self.name = key
-        device_class = MLGarageMultipleConfigNumber.KEY_TO_DEVICE_CLASS_MAP.get(key)
-        if not device_class:
-            # TODO: set appropriate defaults (how?)
-            self.device_scale = 1
+        kwargs["name"] = key
+        device_class, kwargs["device_scale"] = (
+            MLGarageMultipleConfigNumber.KEY_TO_DEVICE_CLASS_MAP.get(key, (None, 1))
+        )
         super().__init__(
             manager,
             channel,
             f"config_{key}",
             device_class,
-            device_value=device_value,
+            **kwargs,
         )
 
 
@@ -239,13 +237,13 @@ class MLGarageEmulatedConfigNumber(MLEmulatedNumber):
     native_step = 1
 
     def __init__(self, garage: "MLGarage", key: str):
-        self.name = key
         super().__init__(
             garage.manager,
             garage.channel,
             f"config_{key}",
             MLEmulatedNumber.DEVICE_CLASS_DURATION,
             device_value=garage._transition_duration,
+            name=key,
         )
 
 
@@ -257,7 +255,7 @@ class MLGarage(MLCover):
     CONFIG_KEY_EXCLUDED = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
     # maps keys from Appliance.GarageDoor.MultipleConfig to
     # dedicated entity types (if any) else create a MLGarageMultipleConfigNumber
-    CONFIG_KEY_TO_ENTITY_MAP = {
+    CONFIG_KEY_TO_ENTITY_MAP: dict[str, type[MLGarageMultipleConfigSwitch]] = {
         mc.KEY_BUZZERENABLE: MLGarageMultipleConfigSwitch,
         mc.KEY_DOORENABLE: MLGarageDoorEnableSwitch,
     }
@@ -505,9 +503,9 @@ class MLGarage(MLCover):
                         self.manager, self.channel, key, device_value=value
                     )
                     if key == mc.KEY_DOORCLOSEDURATION:
-                        self.number_close_timeout = entity
+                        self.number_close_timeout = entity  # type: ignore
                     elif key == mc.KEY_DOOROPENDURATION:
-                        self.number_open_timeout = entity
+                        self.number_open_timeout = entity  # type: ignore
                     continue
                 entity._parse(payload)
                 self._config[key] = value

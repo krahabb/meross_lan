@@ -482,7 +482,7 @@ class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
 
     ns = mn.Appliance_RollerShutter_Config
 
-    device_scale = 1000
+    _attr_device_scale = 1000
 
     # HA core entity attributes:
     # these are ok for open/close durations
@@ -496,10 +496,10 @@ class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
     def __init__(self, cover: "MLRollerShutter", key: str):
         self._cover = cover
         self.key_value = key
-        self.name = key
         super().__init__(
             cover.manager,
             cover.channel,
             f"config_{key}",
             MLConfigNumber.DEVICE_CLASS_DURATION,
+            name=key,
         )

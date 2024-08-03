@@ -32,6 +32,22 @@ if typing.TYPE_CHECKING:
     from .helpers.namespaces import NamespaceHandler
     from .meross_device import MerossDeviceBase
 
+    # optional arguments for MerossEntity init
+    class MerossEntityArgs(typing.TypedDict):
+        name: typing.NotRequired[str]
+        translation_key: typing.NotRequired[str]
+
+    # optional arguments for MerossBinaryEntity init
+    class MerossBinaryEntityArgs(MerossEntityArgs):
+        device_value: typing.NotRequired[typing.Any]
+
+    # optional arguments for  MerossNumericEntity init
+    class MerossNumericEntityArgs(MerossEntityArgs):
+        device_value: typing.NotRequired[int | float]
+        device_scale: typing.NotRequired[int | float]
+        native_unit_of_measurement: typing.NotRequired[str]
+        suggested_display_precision: typing.NotRequired[int]
+
 
 class MerossEntity(
     NamespaceParser, Loggable, Entity if typing.TYPE_CHECKING else object
@@ -107,6 +123,7 @@ class MerossEntity(
         channel: object | None,
         entitykey: str | None = None,
         device_class: object | str | None = None,
+        **kwargs: "typing.Unpack[MerossEntityArgs]",
     ):
         """
         - channel: historically used to create an unique id for this entity inside the device
@@ -138,8 +155,12 @@ class MerossEntity(
             )
         if id in manager.entities:
             raise AssertionError(f"id:{id} is not unique inside manager.entities")
-        if hasattr(self, "name"):
-            name = self.name
+
+        # here a flexible way to pass attributes values through kwargs
+        # without getting too verbose in __init__ parameters
+
+        if "name" in kwargs:
+            name = kwargs.pop("name")
         else:
             name = entitykey or device_class
             name = str(name).capitalize() if name else None
@@ -152,10 +173,14 @@ class MerossEntity(
         else:
             self.name = name
         self.suggested_object_id = self.name
-        self._hass_connected = False
+
         # by default all of our entities have unique_id so they're registered
         # there could be some exceptions though (MLUpdate)
         self.unique_id = self._generate_unique_id()
+        for _attr_name, _attr_value in kwargs.items():
+            setattr(self, _attr_name, _attr_value)
+
+        self._hass_connected = False
         manager.entities[id] = self
         async_add_devices = manager.platforms.setdefault(self.PLATFORM)
         if async_add_devices:
@@ -416,13 +441,52 @@ class MEPartialAvailableMixin(MerossEntity if typing.TYPE_CHECKING else object):
         self.flush_state()
 
 
+class MerossBinaryEntity(MerossEntity):
+    """Partially abstract common base class for ToggleEntity and BinarySensor.
+    The initializer is skipped."""
+
+    key_value = mc.KEY_ONOFF
+
+    # HA core entity attributes:
+    is_on: bool | None
+
+    __slots__ = ("is_on",)
+
+    def __init__(
+        self,
+        manager: "MerossDeviceBase",
+        channel: object,
+        entitykey: str | None = None,
+        device_class: object | None = None,
+        **kwargs: "typing.Unpack[MerossBinaryEntityArgs]",
+    ):
+        self.is_on = kwargs.pop("device_value", None)
+        super().__init__(manager, channel, entitykey, device_class, **kwargs)
+
+    def set_unavailable(self):
+        self.is_on = None
+        super().set_unavailable()
+
+    def update_onoff(self, onoff):
+        if self.is_on != onoff:
+            self.is_on = onoff
+            self.flush_state()
+
+    def _parse(self, payload: dict):
+        """Default parsing for toggles and binary sensors. Set the proper
+        key_value in class/instance definition to make it work."""
+        self.update_onoff(payload[self.key_value])
+
+
 class MerossNumericEntity(MerossEntity):
     """Common base class for (numeric) sensors and numbers."""
 
     DEVICECLASS_TO_UNIT_MAP: typing.ClassVar[dict[object | None, str | None]]
     """To be init in derived classes with their DeviceClass own types"""
-    device_scale: int | float = 1
-    """Used to scale the device value when converting to/from native value"""
+    _attr_device_scale: int | float = 1
+    """
+    Provides a class initializer default for device_scale
+    """
     device_value: int | float | None
     """The 'native' device value carried in protocol messages"""
 
@@ -435,6 +499,7 @@ class MerossNumericEntity(MerossEntity):
     suggested_display_precision: int | None
 
     __slots__ = (
+        "device_scale",
         "device_value",
         "native_value",
         "native_unit_of_measurement",
@@ -447,28 +512,27 @@ class MerossNumericEntity(MerossEntity):
         channel: object,
         entitykey: str | None = None,
         device_class: object | None = None,
-        *,
-        device_value: int | float | None = None,
-        native_unit_of_measurement: str | None = None,
-        suggested_display_precision: int | None = None,
+        **kwargs: "typing.Unpack[MerossNumericEntityArgs]",
     ):
-        self.suggested_display_precision = (
-            self._attr_suggested_display_precision
-            if suggested_display_precision is None
-            else suggested_display_precision
+        self.suggested_display_precision = kwargs.pop(
+            "suggested_display_precision", self._attr_suggested_display_precision
         )
-        self.device_value = device_value
-        if device_value is None:
-            self.native_value = None
-        elif self.suggested_display_precision is None:
-            self.native_value = device_value / self.device_scale
+        self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
+        if "device_value" in kwargs:
+            self.device_value = kwargs.pop("device_value")
+            if self.suggested_display_precision is None:
+                self.native_value = self.device_value / self.device_scale
+            else:
+                self.native_value = round(
+                    self.device_value / self.device_scale,
+                    self.suggested_display_precision,
+                )
         else:
-            self.native_value = round(
-                device_value / self.device_scale, self.suggested_display_precision
-            )
-        self.native_unit_of_measurement = (
-            native_unit_of_measurement or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
-        )
+            self.device_value = None
+            self.native_value = None
+        self.native_unit_of_measurement = kwargs.pop(
+            "native_unit_of_measurement", None
+        ) or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
         super().__init__(manager, channel, entitykey, device_class)
 
     def set_unavailable(self):
@@ -500,44 +564,6 @@ class MerossNumericEntity(MerossEntity):
         """Default parsing for sensor and number entities. Set the proper
         key_value in class/instance definition to make it work."""
         self.update_device_value(payload[self.key_value])
-
-
-class MerossBinaryEntity(MerossEntity):
-    """Partially abstract common base class for ToggleEntity and BinarySensor.
-    The initializer is skipped."""
-
-    key_value = mc.KEY_ONOFF
-
-    # HA core entity attributes:
-    is_on: bool | None
-
-    __slots__ = ("is_on",)
-
-    def __init__(
-        self,
-        manager: "MerossDeviceBase",
-        channel: object,
-        entitykey: str | None = None,
-        device_class: object | None = None,
-        *,
-        device_value=None,
-    ):
-        self.is_on = device_value
-        super().__init__(manager, channel, entitykey, device_class)
-
-    def set_unavailable(self):
-        self.is_on = None
-        super().set_unavailable()
-
-    def update_onoff(self, onoff):
-        if self.is_on != onoff:
-            self.is_on = onoff
-            self.flush_state()
-
-    def _parse(self, payload: dict):
-        """Default parsing for toggles and binary sensors. Set the proper
-        key_value in class/instance definition to make it work."""
-        self.update_onoff(payload[self.key_value])
 
 
 #

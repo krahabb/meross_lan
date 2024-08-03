@@ -13,6 +13,10 @@ if typing.TYPE_CHECKING:
     from .climate import MtsClimate
     from .meross_device import MerossDeviceBase
 
+    # optional arguments for MLNumericSensor init
+    class MLConfigNumberArgs(me.MerossNumericEntityArgs):
+        pass
+
 
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
@@ -72,9 +76,7 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
         channel: object | None,
         entitykey: str | None = None,
         device_class: MLNumber.DeviceClass | str | None = None,
-        *,
-        device_value: int | None = None,
-        native_unit_of_measurement: str | None = None,
+        **kwargs: "typing.Unpack[MLConfigNumberArgs]",
     ):
         self._async_request_debounce_unsub = None
         super().__init__(
@@ -82,8 +84,7 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
             channel,
             entitykey,
             device_class,
-            device_value=device_value,
-            native_unit_of_measurement=native_unit_of_measurement,
+            **kwargs,
         )
 
     async def async_shutdown(self):
@@ -151,19 +152,22 @@ class MtsTemperatureNumber(MLConfigNumber):
     # HA core entity attributes:
     _attr_suggested_display_precision = 1
 
-    __slots__ = (
-        "climate",
-        "device_scale",
-    )
+    __slots__ = ("climate",)
 
-    def __init__(self, climate: "MtsClimate", entitykey: str):
+    def __init__(
+        self,
+        climate: "MtsClimate",
+        entitykey: str,
+        **kwargs: "typing.Unpack[MLConfigNumberArgs]",
+    ):
         self.climate = climate
-        self.device_scale = climate.device_scale
+        kwargs["device_scale"] = climate.device_scale
         super().__init__(
             climate.manager,
             climate.channel,
             entitykey,
             MLConfigNumber.DeviceClass.TEMPERATURE,
+            **kwargs,
         )
 
 
@@ -178,15 +182,19 @@ class MtsSetPointNumber(MtsTemperatureNumber):
 
     __slots__ = ("icon",)
 
-    def __init__(self, climate: "MtsClimate", preset_mode: str):
+    def __init__(
+        self,
+        climate: "MtsClimate",
+        preset_mode: str,
+    ):
         self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
             reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
         ]
         self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
-        self.name = f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}"
         super().__init__(
             climate,
             f"config_temperature_{self.key_value}",
+            name=f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}",
         )
 
     @property

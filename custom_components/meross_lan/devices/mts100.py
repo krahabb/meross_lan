@@ -22,10 +22,10 @@ class Mts100AdjustNumber(MtsTemperatureNumber):
     native_step = 0.5
 
     def __init__(self, climate: "Mts100Climate"):
-        self.name = "Adjust temperature"
         super().__init__(
             climate,
             f"config_{self.ns.key}_{self.key_value}",
+            name="Adjust temperature",
         )
         # override the default climate.device_scale set in base cls
         self.device_scale = 100
@@ -68,7 +68,10 @@ class Mts100Climate(MtsClimate):
         )
         self.binary_sensor_window = manager.build_binary_sensor_window()
         self.switch_emulate_hvacaction = MLConfigSwitch(
-            manager, manager.id, "switch_emulate_hvacaction"
+            manager,
+            manager.id,
+            "emulate_hvacaction",
+            translation_key="mts100_emulate_hvacaction",
         )
         self.switch_emulate_hvacaction.register_state_callback(
             self._switch_emulate_hvacaction_state_callback

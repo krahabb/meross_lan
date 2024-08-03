@@ -26,6 +26,7 @@ if typing.TYPE_CHECKING:
     from ..meross_device import DigestInitReturnType
     from ..meross_entity import MerossEntity
     from ..merossclient.cloudapi import SubDeviceInfoType
+    from ..sensor import MLEnumSensorArgs
     from .mts100 import Mts100Climate
 
 
@@ -40,8 +41,6 @@ WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
 
 class MLHubSensorAdjustNumber(MLConfigNumber):
     ns = mn.Appliance_Hub_Sensor_Adjust
-
-    device_scale = 10
 
     __slots__ = (
         "native_max_value",
@@ -59,18 +58,16 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
         step: float,
     ):
         self.key_value = key
-        self.name = f"Adjust {device_class}"
         self.native_min_value = min_value
         self.native_max_value = max_value
         self.native_step = step
-        self.native_unit_of_measurement = MLConfigNumber.DEVICECLASS_TO_UNIT_MAP.get(
-            device_class
-        )
         super().__init__(
             manager,
             manager.id,
             f"config_{self.ns.key}_{self.key_value}",
             device_class,
+            device_scale=10,
+            name=f"Adjust {device_class}",
         )
 
     async def async_request_value(self, device_value):
@@ -485,8 +482,10 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
         ].polling_epoch_next = 0.0
 
     # interface: self
-    def build_enum_sensor(self, entitykey: str):
-        return MLEnumSensor(self, self.id, entitykey)
+    def build_enum_sensor(
+        self, entitykey: str, **kwargs: "typing.Unpack[MLEnumSensorArgs]"
+    ):
+        return MLEnumSensor(self, self.id, entitykey, **kwargs)
 
     def build_sensor(
         self, entitykey: str, device_class: MLNumericSensor.DeviceClass | None = None
@@ -844,8 +843,9 @@ class GS559SubDevice(MerossSubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
-        self.sensor_status: MLEnumSensor = self.build_enum_sensor(mc.KEY_STATUS)
-        self.sensor_status.translation_key = "smoke_alarm_status"
+        self.sensor_status: MLEnumSensor = self.build_enum_sensor(
+            mc.KEY_STATUS, translation_key="smoke_alarm_status"
+        )
         self.sensor_interConn: MLEnumSensor = self.build_enum_sensor(mc.KEY_INTERCONN)
         self.binary_sensor_alarm: MLBinarySensor = self.build_binary_sensor(
             "alarm", MLBinarySensor.DeviceClass.SAFETY
@@ -892,10 +892,8 @@ class MS100SubDevice(MerossSubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS100)
-        self.sensor_temperature = MLTemperatureSensor(self, self.id)
-        self.sensor_temperature.device_scale = 10
-        self.sensor_humidity = MLHumiditySensor(self, self.id)
-        self.sensor_humidity.device_scale = 10
+        self.sensor_temperature = MLTemperatureSensor(self, self.id, device_scale=10)
+        self.sensor_humidity = MLHumiditySensor(self, self.id, device_scale=10)
         self.number_adjust_temperature = MLHubSensorAdjustNumber(
             self,
             mc.KEY_TEMPERATURE,
@@ -973,10 +971,8 @@ class MS130SubDevice(MerossSubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS130)
-        self.sensor_humidity = MLHumiditySensor(self, self.id)
-        self.sensor_humidity.device_scale = 10
-        self.sensor_temperature = MLTemperatureSensor(self, self.id)
-        self.sensor_temperature.device_scale = 100
+        self.sensor_humidity = MLHumiditySensor(self, self.id, device_scale=10)
+        self.sensor_temperature = MLTemperatureSensor(self, self.id, device_scale=100)
         if mn.Appliance_Control_Sensor_LatestX.name in hub.descriptor.ability:
             self.subId = self.id
             hub.register_parser(self, mn.Appliance_Control_Sensor_LatestX)

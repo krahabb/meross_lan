@@ -871,7 +871,7 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MerossBinaryEntity, light.LightE
         if await self.manager.async_request_ack(
             self.ns.name,
             mc.METHOD_SET,
-            {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},
+            {self.ns.key: {mc.KEY_MODE: 0}},
         ):
             self.update_onoff(1)
 
@@ -879,7 +879,7 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MerossBinaryEntity, light.LightE
         if await self.manager.async_request_ack(
             self.ns.name,
             mc.METHOD_SET,
-            {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},
+            {self.ns.key: {mc.KEY_MODE: 1}},
         ):
             self.update_onoff(0)
 

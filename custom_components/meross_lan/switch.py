@@ -40,10 +40,19 @@ class MLConfigSwitch(me.MEAlwaysAvailableMixin, MLSwitchBase):
     entity_category = MLSwitchBase.EntityCategory.CONFIG
 
     def __init__(
-        self, manager: "MerossDeviceBase", channel: object, entitykey: str | None = None
+        self,
+        manager: "MerossDeviceBase",
+        channel: object,
+        entitykey: str | None = None,
+        **kwargs: "typing.Unpack[me.MerossEntityArgs]",
     ):
         super().__init__(
-            manager, channel, entitykey, MLSwitchBase.DeviceClass.SWITCH, device_value=0
+            manager,
+            channel,
+            entitykey,
+            MLSwitchBase.DeviceClass.SWITCH,
+            device_value=0,
+            **kwargs,
         )
 
     async def async_added_to_hass(self):
