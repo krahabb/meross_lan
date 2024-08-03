@@ -4,6 +4,7 @@ from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MtsSetPointNumber, MtsTemperatureNumber
+from ..switch import MLConfigSwitch
 
 if typing.TYPE_CHECKING:
     from ..binary_sensor import MLBinarySensor
@@ -51,7 +52,10 @@ class Mts100Climate(MtsClimate):
 
     manager: "MTS100SubDevice"
 
-    __slots__ = ("binary_sensor_window",)
+    __slots__ = (
+        "binary_sensor_window",
+        "switch_compute_heating",
+    )
 
     def __init__(self, manager: "MTS100SubDevice"):
         self.extra_state_attributes = {}
@@ -63,21 +67,36 @@ class Mts100Climate(MtsClimate):
             Mts100Schedule,
         )
         self.binary_sensor_window = manager.build_binary_sensor_window()
+        self.switch_compute_heating = MLConfigSwitch(
+            manager, manager.id, "switch_compute_heating"
+        )
 
     # interface: MtsClimate
     async def async_shutdown(self):
         await super().async_shutdown()
         self.binary_sensor_window: "MLBinarySensor" = None  # type: ignore
+        self.switch_compute_heating: "MLConfigSwitch" = None  # type: ignore
 
     def flush_state(self):
         self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         if self._mts_onoff:
             self.hvac_mode = MtsClimate.HVACMode.HEAT
-            self.hvac_action = (
-                MtsClimate.HVACAction.HEATING
-                if self._mts_active
-                else MtsClimate.HVACAction.IDLE
-            )
+            if self.switch_compute_heating.is_on:
+                # locally compute the state of the valve ignoring what's being
+                # reported in self._mts_active (see #331)
+                self.hvac_action = (
+                    MtsClimate.HVACAction.HEATING
+                    if (
+                        (self.target_temperature or 0) > (self.current_temperature or 0)
+                    )
+                    else MtsClimate.HVACAction.IDLE
+                )
+            else:
+                self.hvac_action = (
+                    MtsClimate.HVACAction.HEATING
+                    if self._mts_active
+                    else MtsClimate.HVACAction.IDLE
+                )
         else:
             self.hvac_mode = MtsClimate.HVACMode.OFF
             self.hvac_action = MtsClimate.HVACAction.OFF
