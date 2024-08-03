@@ -51,6 +51,7 @@ class MerossEntity(
     is_diagnostic: typing.ClassVar[bool] = False
     """Tells if this entity has been created as part of the 'create_diagnostic_entities' config"""
 
+    state_callbacks: set[typing.Callable] | None
     # These 'placeholder' definitions support generalization of
     # Meross protocol message build/parsing when related to the
     # current entity. These are usually relevant when this entity
@@ -91,6 +92,7 @@ class MerossEntity(
         "manager",
         "channel",
         "entitykey",
+        "state_callbacks",
         "available",
         "device_class",
         "name",
@@ -124,6 +126,7 @@ class MerossEntity(
         self.manager = manager
         self.channel = channel
         self.entitykey = entitykey
+        self.state_callbacks = None
         self.available = self._attr_available or manager.online
         self.device_class = device_class
         Loggable.__init__(self, id, logger=manager)
@@ -176,11 +179,20 @@ class MerossEntity(
     # interface: self
     async def async_shutdown(self):
         await NamespaceParser.async_shutdown(self)
+        self.state_callbacks = None
         self.manager.entities.pop(self.id)
         self.manager: "EntityManager" = None  # type: ignore
 
+    def register_state_callback(self, state_callback: typing.Callable):
+        if not self.state_callbacks:
+            self.state_callbacks = set()
+        self.state_callbacks.add(state_callback)
+
     def flush_state(self):
         """Actually commits a state change to HA."""
+        if self.state_callbacks:
+            for state_callback in self.state_callbacks:
+                state_callback()
         if self._hass_connected:
             self.async_write_ha_state()
 
