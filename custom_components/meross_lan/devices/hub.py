@@ -9,7 +9,6 @@ from ..meross_device import MerossDevice, MerossDeviceBase
 from ..merossclient import (
     const as mc,
     get_productnameuuid,
-    is_device_online,
     namespaces as mn,
 )
 from ..number import MLConfigNumber
@@ -340,7 +339,7 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
         # and builds accordingly
         _type = None
         for p_key, p_value in p_subdevice.items():
-            if isinstance(p_value, dict):
+            if type(p_value) is dict:
                 _type = p_key
                 break
         else:
@@ -541,10 +540,10 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
 
             def _parse_dict(parent_key: str, parent_dict: dict):
                 for subkey, subvalue in parent_dict.items():
-                    if isinstance(subvalue, dict):
+                    if type(subvalue) is dict:
                         _parse_dict(f"{parent_key}_{subkey}", subvalue)
                         continue
-                    if isinstance(subvalue, list):
+                    if type(subvalue) is list:
                         _parse_list()
                         continue
                     if subkey in {
@@ -616,9 +615,16 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
             for _ in (
                 self._hub_parse(key, value)
                 for key, value in p_digest.items()
-                if key
-                not in {mc.KEY_ID, mc.KEY_STATUS, mc.KEY_ONOFF, mc.KEY_LASTACTIVETIME}
-                and isinstance(value, dict)
+                if (
+                    key
+                    not in {
+                        mc.KEY_ID,
+                        mc.KEY_STATUS,
+                        mc.KEY_ONOFF,
+                        mc.KEY_LASTACTIVETIME,
+                    }
+                )
+                and (type(value) is dict)
             ):
                 pass
             if mc.KEY_ONOFF in p_digest:
@@ -658,7 +664,7 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
             for _ in (
                 self._hub_parse(key, value)
                 for key, value in p_all.items()
-                if key not in {mc.KEY_ID, mc.KEY_ONLINE} and isinstance(value, dict)
+                if (key not in {mc.KEY_ID, mc.KEY_ONLINE}) and (type(value) is dict)
             ):
                 pass
 
@@ -739,13 +745,13 @@ class MTS100SubDevice(MerossSubDevice):
         if mc.KEY_SCHEDULEBMODE in p_all:
             climate.update_scheduleb_mode(p_all[mc.KEY_SCHEDULEBMODE])
 
-        if isinstance(p_mode := p_all.get(mc.KEY_MODE), dict):
+        if p_mode := p_all.get(mc.KEY_MODE):
             climate._mts_mode = p_mode[mc.KEY_STATE]
 
-        if isinstance(p_togglex := p_all.get(mc.KEY_TOGGLEX), dict):
+        if p_togglex := p_all.get(mc.KEY_TOGGLEX):
             climate._mts_onoff = p_togglex[mc.KEY_ONOFF]
 
-        if isinstance(p_temperature := p_all.get(mc.KEY_TEMPERATURE), dict):
+        if p_temperature := p_all.get(mc.KEY_TEMPERATURE):
             climate._parse_temperature(p_temperature)
         else:
             climate.flush_state()
@@ -858,15 +864,16 @@ class GS559SubDevice(MerossSubDevice):
         self.sensor_interConn = None  # type: ignore
 
     def _parse_smokeAlarm(self, p_smokealarm: dict):
-        if isinstance(value := p_smokealarm.get(mc.KEY_STATUS), int):
+        if mc.KEY_STATUS in p_smokealarm:
+            value = p_smokealarm[mc.KEY_STATUS]
             self.binary_sensor_alarm.update_onoff(value in GS559SubDevice.STATUS_ALARM)
             self.binary_sensor_error.update_onoff(value in GS559SubDevice.STATUS_ERROR)
             self.binary_sensor_muted.update_onoff(value in GS559SubDevice.STATUS_MUTED)
             self.sensor_status.update_native_value(
                 GS559SubDevice.STATUS_MAP.get(value, value)
             )
-        if isinstance(value := p_smokealarm.get(mc.KEY_INTERCONN), int):
-            self.sensor_interConn.update_native_value(value)
+        if mc.KEY_INTERCONN in p_smokealarm:
+            self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
