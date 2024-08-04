@@ -26,7 +26,6 @@ if typing.TYPE_CHECKING:
     from ..meross_device import DigestInitReturnType
     from ..meross_entity import MerossEntity
     from ..merossclient.cloudapi import SubDeviceInfoType
-    from ..sensor import MLEnumSensorArgs
     from .mts100 import Mts100Climate
 
 
@@ -437,7 +436,9 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
         )
         self.platforms = hub.platforms
         hub.subdevices[id] = self
-        self.sensor_battery = self.build_sensor_c(MLNumericSensor.DeviceClass.BATTERY)
+        self.sensor_battery = MLNumericSensor(
+            self, self.id, mc.KEY_BATTERY, MLNumericSensor.DeviceClass.BATTERY
+        )
         # this is a generic toggle we'll setup in case the subdevice
         # 'advertises' it and no specialized implementation is in place
         self.switch_togglex: MLSwitch | None = None
@@ -482,27 +483,6 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
         ].polling_epoch_next = 0.0
 
     # interface: self
-    def build_enum_sensor(
-        self, entitykey: str, **kwargs: "typing.Unpack[MLEnumSensorArgs]"
-    ):
-        return MLEnumSensor(self, self.id, entitykey, **kwargs)
-
-    def build_sensor(
-        self, entitykey: str, device_class: MLNumericSensor.DeviceClass | None = None
-    ):
-        return MLNumericSensor(self, self.id, entitykey, device_class)
-
-    def build_sensor_c(self, device_class: MLNumericSensor.DeviceClass):
-        return MLNumericSensor(self, self.id, str(device_class), device_class)
-
-    def build_binary_sensor(
-        self, entitykey: str, device_class: MLBinarySensor.DeviceClass | None = None
-    ):
-        return MLBinarySensor(self, self.id, entitykey, device_class)
-
-    def build_binary_sensor_c(self, device_class: MLBinarySensor.DeviceClass):
-        return MLBinarySensor(self, self.id, str(device_class), device_class)
-
     def build_binary_sensor_window(self):
         return MLBinarySensor(
             self,
@@ -843,25 +823,25 @@ class GS559SubDevice(MerossSubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_GS559)
-        self.sensor_status: MLEnumSensor = self.build_enum_sensor(
-            mc.KEY_STATUS, translation_key="smoke_alarm_status"
+        self.sensor_status = MLEnumSensor(
+            self, self.id, mc.KEY_STATUS, translation_key="smoke_alarm_status"
         )
-        self.sensor_interConn: MLEnumSensor = self.build_enum_sensor(mc.KEY_INTERCONN)
-        self.binary_sensor_alarm: MLBinarySensor = self.build_binary_sensor(
-            "alarm", MLBinarySensor.DeviceClass.SAFETY
+        self.sensor_interConn = MLEnumSensor(self, self.id, mc.KEY_INTERCONN)
+        self.binary_sensor_alarm = MLBinarySensor(
+            self, self.id, "alarm", MLBinarySensor.DeviceClass.SAFETY
         )
-        self.binary_sensor_error: MLBinarySensor = self.build_binary_sensor(
-            "error", MLBinarySensor.DeviceClass.PROBLEM
+        self.binary_sensor_error = MLBinarySensor(
+            self, self.id, "error", MLBinarySensor.DeviceClass.PROBLEM
         )
-        self.binary_sensor_muted: MLBinarySensor = self.build_binary_sensor("muted")
+        self.binary_sensor_muted = MLBinarySensor(self, self.id, "muted")
 
     async def async_shutdown(self):
         await super().async_shutdown()
-        self.binary_sensor_muted = None  # type: ignore
-        self.binary_sensor_error = None  # type: ignore
-        self.binary_sensor_alarm = None  # type: ignore
-        self.sensor_status = None  # type: ignore
-        self.sensor_interConn = None  # type: ignore
+        self.binary_sensor_muted: MLBinarySensor = None  # type: ignore
+        self.binary_sensor_error: MLBinarySensor = None  # type: ignore
+        self.binary_sensor_alarm: MLBinarySensor = None  # type: ignore
+        self.sensor_status: MLEnumSensor = None  # type: ignore
+        self.sensor_interConn: MLEnumSensor = None  # type: ignore
 
     def _parse_smokeAlarm(self, p_smokealarm: dict):
         if mc.KEY_STATUS in p_smokealarm:
@@ -1106,8 +1086,8 @@ class MS400SubDevice(MerossSubDevice):
 
     def __init__(self, hub: HubMixin, p_digest: dict):
         super().__init__(hub, p_digest, mc.TYPE_MS400)
-        self.binary_sensor_waterleak = self.build_binary_sensor(
-            mc.KEY_WATERLEAK, MLBinarySensor.DeviceClass.SAFETY
+        self.binary_sensor_waterleak = MLBinarySensor(
+            self, self.id, mc.KEY_WATERLEAK, MLBinarySensor.DeviceClass.SAFETY
         )
 
     async def async_shutdown(self):
