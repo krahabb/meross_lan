@@ -156,9 +156,6 @@ class MerossEntity(
         if id in manager.entities:
             raise AssertionError(f"id:{id} is not unique inside manager.entities")
 
-        # here a flexible way to pass attributes values through kwargs
-        # without getting too verbose in __init__ parameters
-
         if "name" in kwargs:
             name = kwargs.pop("name")
         else:
@@ -533,7 +530,7 @@ class MerossNumericEntity(MerossEntity):
         self.native_unit_of_measurement = kwargs.pop(
             "native_unit_of_measurement", None
         ) or self.DEVICECLASS_TO_UNIT_MAP.get(device_class)
-        super().__init__(manager, channel, entitykey, device_class)
+        super().__init__(manager, channel, entitykey, device_class, **kwargs)
 
     def set_unavailable(self):
         self.device_value = None
