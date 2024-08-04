@@ -158,18 +158,19 @@ class MerossEntity(
 
         if "name" in kwargs:
             name = kwargs.pop("name")
+        elif entitykey:
+            name = entitykey.replace("_", " ").capitalize()
+        elif device_class:
+            name = str(device_class).capitalize()
         else:
-            name = entitykey or device_class
-            name = str(name).capitalize() if name else None
+            name = None
         # when channel == 0 it might be the only one so skip it
         # when channel is already in device name it also may be skipped
         if channel and (channel is not manager.id):
             # (channel is manager.id) means this is the 'main' entity of an hub subdevice
             # so we skip adding the subdevice.id to the entity name
-            self.name = f"{name} {channel}" if name else str(channel)
-        else:
-            self.name = name
-        self.suggested_object_id = self.name
+            name = f"{name} {channel}" if name else str(channel)
+        self.suggested_object_id = self.name = name
 
         # by default all of our entities have unique_id so they're registered
         # there could be some exceptions though (MLUpdate)

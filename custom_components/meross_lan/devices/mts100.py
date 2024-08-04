@@ -54,7 +54,7 @@ class Mts100Climate(MtsClimate):
 
     __slots__ = (
         "binary_sensor_window",
-        "switch_emulate_hvacaction",
+        "switch_patch_hvacaction",
     )
 
     def __init__(self, manager: "MTS100SubDevice"):
@@ -67,13 +67,10 @@ class Mts100Climate(MtsClimate):
             Mts100Schedule,
         )
         self.binary_sensor_window = manager.build_binary_sensor_window()
-        self.switch_emulate_hvacaction = MLConfigSwitch(
-            manager,
-            manager.id,
-            "emulate_hvacaction",
-            translation_key="mts100_emulate_hvacaction",
+        self.switch_patch_hvacaction = MLConfigSwitch(
+            manager, manager.id, "patch_hvacaction"
         )
-        self.switch_emulate_hvacaction.register_state_callback(
+        self.switch_patch_hvacaction.register_state_callback(
             self._switch_emulate_hvacaction_state_callback
         )
 
@@ -81,13 +78,13 @@ class Mts100Climate(MtsClimate):
     async def async_shutdown(self):
         await super().async_shutdown()
         self.binary_sensor_window: "MLBinarySensor" = None  # type: ignore
-        self.switch_emulate_hvacaction: "MLConfigSwitch" = None  # type: ignore
+        self.switch_patch_hvacaction: "MLConfigSwitch" = None  # type: ignore
 
     def flush_state(self):
         self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
         if self._mts_onoff:
             self.hvac_mode = MtsClimate.HVACMode.HEAT
-            if self.switch_emulate_hvacaction.is_on:
+            if self.switch_patch_hvacaction.is_on:
                 # locally compute the state of the valve ignoring what's being
                 # reported in self._mts_active (see #331)
                 self.hvac_action = (
