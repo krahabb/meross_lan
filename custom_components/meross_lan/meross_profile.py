@@ -94,6 +94,15 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
 
     # HA core entity attributes:
     extra_state_attributes: AttrDictType
+    _unrecorded_attributes = frozenset(
+        {
+            ATTR_DEVICES,
+            ATTR_RECEIVED,
+            ATTR_PUBLISHED,
+            ATTR_DROPPED,
+            *MLDiagnosticSensor._unrecorded_attributes,
+        }
+    )
     native_value: str
     options: list[str] = [
         STATE_DISCONNECTED,

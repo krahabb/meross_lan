@@ -30,8 +30,6 @@ if typing.TYPE_CHECKING:
 
     from .meross_device import DigestInitReturnType, MerossDevice
 
-ATTR_TOGGLEX_AUTO = "togglex_auto"
-
 
 async def async_setup_entry(
     hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices
@@ -440,6 +438,8 @@ class MLLight(MLLightBase):
 
     ns = mn.Appliance_Control_Light
 
+    ATTR_TOGGLEX_AUTO = "togglex_auto"
+
     _togglex: bool
     _togglex_auto: bool | None
     """
@@ -449,7 +449,12 @@ class MLLight(MLLightBase):
     """
 
     # HA core entity attributes:
-    _unrecorded_attributes = frozenset({ATTR_TOGGLEX_AUTO})
+    _unrecorded_attributes = frozenset(
+        {
+            ATTR_TOGGLEX_AUTO,
+            *MLLightBase._unrecorded_attributes,
+        }
+    )
 
     __slots__ = (
         "_togglex",
@@ -645,7 +650,7 @@ class MLLight(MLLightBase):
                     if self.is_on:
                         # in case MQTT pushed the togglex -> on
                         self._togglex_auto = True
-                        self.extra_state_attributes = {ATTR_TOGGLEX_AUTO: True}
+                        self.extra_state_attributes = {MLLight.ATTR_TOGGLEX_AUTO: True}
                         return
                     elif await self.manager.async_request_ack(
                         mn.Appliance_Control_ToggleX.name,
@@ -663,7 +668,7 @@ class MLLight(MLLightBase):
                         # all its (working) euristics after returning from async_request_ack
                         self._togglex_auto = self.is_on
                         self.extra_state_attributes = {
-                            ATTR_TOGGLEX_AUTO: self._togglex_auto
+                            MLLight.ATTR_TOGGLEX_AUTO: self._togglex_auto
                         }
                         if self.is_on:
                             return

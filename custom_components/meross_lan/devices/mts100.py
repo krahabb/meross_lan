@@ -52,6 +52,14 @@ class Mts100Climate(MtsClimate):
 
     manager: "MTS100SubDevice"
 
+    # HA core entity attributes:
+    _unrecorded_attributes = frozenset(
+        {
+            mc.KEY_SCHEDULEBMODE,
+            *MtsClimate._unrecorded_attributes,
+        }
+    )
+
     __slots__ = (
         "binary_sensor_window",
         "switch_patch_hvacaction",

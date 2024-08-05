@@ -22,19 +22,22 @@ if typing.TYPE_CHECKING:
     from ..meross_device import DigestInitReturnType, MerossDevice
     from ..number import MLConfigNumberArgs
 
-# garagedoor extra attributes
-EXTRA_ATTR_TRANSITION_DURATION = "transition_duration"
-EXTRA_ATTR_TRANSITION_TIMEOUT = (
-    "transition_timeout"  # the time at which the transition timeout occurred
-)
-EXTRA_ATTR_TRANSITION_TARGET = (
-    "transition_target"  # the target state which was not reached
-)
-
 
 class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
 
+    # the time at which the transition timeout occurred
+    ATTR_TRANSITION_TIMEOUT = "transition_timeout"
+    # the target state which was not reached
+    ATTR_TRANSITION_TARGET = "transition_target"
+
     # HA core entity attributes:
+    _unrecorded_attributes = frozenset(
+        {
+            ATTR_TRANSITION_TARGET,
+            ATTR_TRANSITION_TIMEOUT,
+            *MLBinarySensor._unrecorded_attributes,
+        }
+    )
     entity_category = MLBinarySensor.EntityCategory.DIAGNOSTIC
 
     def __init__(self, garage: "MLGarage"):
@@ -49,22 +52,22 @@ class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
 
     def update_ok(self, was_closing):
         extra_state_attributes = self.extra_state_attributes
-        if extra_state_attributes.get(EXTRA_ATTR_TRANSITION_TARGET) == (
+        if extra_state_attributes.get(self.ATTR_TRANSITION_TARGET) == (
             MLCover.ENTITY_COMPONENT.STATE_CLOSED
             if was_closing
             else MLCover.ENTITY_COMPONENT.STATE_OPEN
         ):
-            extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TIMEOUT, None)
-            extra_state_attributes.pop(EXTRA_ATTR_TRANSITION_TARGET, None)
+            extra_state_attributes.pop(self.ATTR_TRANSITION_TIMEOUT, None)
+            extra_state_attributes.pop(self.ATTR_TRANSITION_TARGET, None)
         self.update_onoff(False)
 
     def update_timeout(self, was_closing):
-        self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TARGET] = (
+        self.extra_state_attributes[self.ATTR_TRANSITION_TARGET] = (
             MLCover.ENTITY_COMPONENT.STATE_CLOSED
             if was_closing
             else MLCover.ENTITY_COMPONENT.STATE_OPEN
         )
-        self.extra_state_attributes[EXTRA_ATTR_TRANSITION_TIMEOUT] = now().isoformat()
+        self.extra_state_attributes[self.ATTR_TRANSITION_TIMEOUT] = now().isoformat()
         self.is_on = True
         self.flush_state()
 
@@ -251,6 +254,9 @@ class MLGarage(MLCover):
 
     ns = mn.Appliance_GarageDoor_State
 
+    # garagedoor extra attributes
+    ATTR_TRANSITION_DURATION = "transition_duration"
+
     # these keys in Appliance.GarageDoor.MultipleConfig are to be ignored
     CONFIG_KEY_EXCLUDED = (mc.KEY_CHANNEL, mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
     # maps keys from Appliance.GarageDoor.MultipleConfig to
@@ -286,7 +292,7 @@ class MLGarage(MLCover):
         ) / 2
         self._transition_start = 0.0
         self.extra_state_attributes = {
-            EXTRA_ATTR_TRANSITION_DURATION: self._transition_duration
+            self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
         super().__init__(manager, channel, MLCover.DeviceClass.GARAGE)
         ability = manager.descriptor.ability
@@ -325,12 +331,12 @@ class MLGarage(MLCover):
         with self.exception_warning("restoring previous state"):
             if last_state := await self.get_last_state_available():
                 _attr = last_state.attributes
-                if EXTRA_ATTR_TRANSITION_DURATION in _attr:
+                if self.ATTR_TRANSITION_DURATION in _attr:
                     # restore anyway besides PARAM_RESTORESTATE_TIMEOUT
                     # since this is no harm and unlikely to change
                     # better than defaulting to a pseudo-random value
-                    self._transition_duration = _attr[EXTRA_ATTR_TRANSITION_DURATION]
-                    self.extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = (
+                    self._transition_duration = _attr[self.ATTR_TRANSITION_DURATION]
+                    self.extra_state_attributes[self.ATTR_TRANSITION_DURATION] = (
                         self._transition_duration
                     )
 
@@ -583,7 +589,7 @@ class MLGarage(MLCover):
             PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
             PARAM_GARAGEDOOR_TRANSITION_MAXDURATION,
         )
-        self.extra_state_attributes[EXTRA_ATTR_TRANSITION_DURATION] = (
+        self.extra_state_attributes[self.ATTR_TRANSITION_DURATION] = (
             self._transition_duration
         )
 

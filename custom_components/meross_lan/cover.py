@@ -15,10 +15,6 @@ if typing.TYPE_CHECKING:
     from .meross_device import MerossDevice
 
 
-# rollershutter extra attributes
-EXTRA_ATTR_POSITION_NATIVE = "position_native"
-
-
 async def async_setup_entry(hass, config_entry, async_add_devices):
     me.platform_setup_entry(hass, config_entry, async_add_devices, cover.DOMAIN)
 
@@ -89,6 +85,8 @@ class MLRollerShutter(MLCover):
     MRS100 SHUTTER ENTITY
     """
 
+    ATTR_POSITION_NATIVE = "position_native"
+
     # HA core entity attributes:
     assumed_state = True
     current_cover_position: int | None
@@ -156,12 +154,12 @@ class MLRollerShutter(MLCover):
                 _attr = last_state.attributes  # type: ignore
                 if not self._position_native_isgood:
                     # at this stage, the euristic on fw version doesn't say anything
-                    if EXTRA_ATTR_POSITION_NATIVE in _attr:
+                    if MLRollerShutter.ATTR_POSITION_NATIVE in _attr:
                         # this means we haven't detected (so far) a reliable 'native_position'
                         # so we restore the cover position (which was emulated)
-                        self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = _attr[
-                            EXTRA_ATTR_POSITION_NATIVE
-                        ]
+                        self.extra_state_attributes[
+                            MLRollerShutter.ATTR_POSITION_NATIVE
+                        ] = _attr[MLRollerShutter.ATTR_POSITION_NATIVE]
                         if cover.ATTR_CURRENT_POSITION in _attr:
                             self.current_cover_position = _attr[
                                 cover.ATTR_CURRENT_POSITION
@@ -342,13 +340,13 @@ class MLRollerShutter(MLCover):
             self._position_native_isgood = True
             self._position_native = None
             self.is_closed = False
-            self.extra_state_attributes.pop(EXTRA_ATTR_POSITION_NATIVE, None)
+            self.extra_state_attributes.pop(MLRollerShutter.ATTR_POSITION_NATIVE, None)
             self.supported_features |= MLCover.EntityFeature.SET_POSITION
             self.current_cover_position = position
         else:
             self._position_native = position
             self.is_closed = position == mc.ROLLERSHUTTER_POSITION_CLOSED
-            self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
+            self.extra_state_attributes[MLRollerShutter.ATTR_POSITION_NATIVE] = position
             if self.current_cover_position is None:
                 # only happening when we didn't restore state on devices
                 # which are likely not supporting native positioning
