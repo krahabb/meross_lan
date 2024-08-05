@@ -13,11 +13,13 @@ if typing.TYPE_CHECKING:
 async def async_setup_entry(hass, config_entry, async_add_devices):
     me.platform_setup_entry(hass, config_entry, async_add_devices, fan.DOMAIN)
 
+
 try:
     # HA core 2024.8.0 new flags
-    _supported_features = fan.FanEntityFeature.SET_SPEED | fan.FanEntityFeature.TURN_OFF | fan.FanEntityFeature.TURN_ON
+    _supported_features = fan.FanEntityFeature.SET_SPEED | fan.FanEntityFeature.TURN_OFF | fan.FanEntityFeature.TURN_ON  # type: ignore
 except:
     _supported_features = fan.FanEntityFeature.SET_SPEED
+
 
 class MLFan(me.MerossBinaryEntity, fan.FanEntity):
     """
