@@ -641,7 +641,6 @@ response. This issue also appeared on hubs when querying for a big number of sub
 as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
 responses though
 """
-# TODO: use the mn. symbols instead of legacy mc. ones (trying to get rid of mc namespaces constants)
 POLLING_STRATEGY_CONF: dict[
     mn.Namespace, tuple[int, int, int, int, PollingStrategyFunc | None]
 ] = {
