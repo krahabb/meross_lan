@@ -1,7 +1,7 @@
 from homeassistant.components import fan as haec
 
 from custom_components.meross_lan.fan import MLFan
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 
 from tests.entities import EntityComponentTest
 
@@ -13,7 +13,7 @@ class EntityTest(EntityComponentTest):
     DIGEST_ENTITIES = {}
 
     NAMESPACES_ENTITIES = {
-        mc.NS_APPLIANCE_CONTROL_FAN: [MLFan],
+        mn.Appliance_Control_Fan.name: [MLFan],
     }
 
     async def async_test_each_callback(self, entity: MLFan):

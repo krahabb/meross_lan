@@ -19,7 +19,6 @@ from .helpers import (
     ConfigEntryType,
     Loggable,
     async_import_module,
-    schedule_async_callback,
 )
 from .helpers.manager import ApiProfile, ConfigEntryManager
 from .meross_device import MerossDevice
@@ -81,8 +80,8 @@ class HAMQTTConnection(MQTTConnection):
         if MEROSSDEBUG:
             # TODO : check bug in hass shutdown
             async def _async_random_disconnect():
-                self._unsub_random_disconnect = schedule_async_callback(
-                    MerossApi.hass, 60, _async_random_disconnect
+                self._unsub_random_disconnect = api.schedule_async_callback(
+                    60, _async_random_disconnect
                 )
                 if self._mqtt_subscribing:
                     return
@@ -95,8 +94,8 @@ class HAMQTTConnection(MQTTConnection):
                         self.log(self.DEBUG, "random disconnect")
                         await self.async_mqtt_unsubscribe()
 
-            self._unsub_random_disconnect = schedule_async_callback(
-                MerossApi.hass, 60, _async_random_disconnect
+            self._unsub_random_disconnect = api.schedule_async_callback(
+                60, _async_random_disconnect
             )
         else:
             self._unsub_random_disconnect = None
@@ -159,10 +158,10 @@ class HAMQTTConnection(MQTTConnection):
                     )
                 except:
                     self._unsub_mqtt_disconnected = mqtt.async_dispatcher_connect(
-                        hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected # type: ignore (removed in HA core 2024.6)
+                        hass, mqtt.MQTT_DISCONNECTED, self._mqtt_disconnected  # type: ignore (removed in HA core 2024.6)
                     )
                     self._unsub_mqtt_connected = mqtt.async_dispatcher_connect(
-                        hass, mqtt.MQTT_CONNECTED, self._mqtt_connected # type: ignore (removed in HA core 2024.6)
+                        hass, mqtt.MQTT_CONNECTED, self._mqtt_connected  # type: ignore (removed in HA core 2024.6)
                     )
                 if mqtt.is_connected(hass):
                     self._mqtt_connected()
@@ -289,10 +288,10 @@ class HAMQTTConnection(MQTTConnection):
 
 
 HAMQTTConnection.SESSION_HANDLERS = {
-    mc.NS_APPLIANCE_CONTROL_BIND: HAMQTTConnection._handle_Appliance_Control_Bind,
-    mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
-    mc.NS_APPLIANCE_SYSTEM_CLOCK: HAMQTTConnection._handle_Appliance_System_Clock,
-    mc.NS_APPLIANCE_SYSTEM_ONLINE: MQTTConnection._handle_Appliance_System_Online,
+    mn.Appliance_Control_Bind.name: HAMQTTConnection._handle_Appliance_Control_Bind,
+    mn.Appliance_Control_ConsumptionConfig.name: HAMQTTConnection._handle_Appliance_Control_ConsumptionConfig,
+    mn.Appliance_System_Clock.name: HAMQTTConnection._handle_Appliance_System_Clock,
+    mn.Appliance_System_Online.name: MQTTConnection._handle_Appliance_System_Online,
 }
 
 

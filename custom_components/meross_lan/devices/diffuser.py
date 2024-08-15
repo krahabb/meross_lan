@@ -43,18 +43,20 @@ def digest_init_diffuser(
     """
 
     diffuser_light_handler = NamespaceHandler(
-        device, mc.NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT, entity_class=MLDiffuserLight
+        device, mn.Appliance_Control_Diffuser_Light
     )
+    diffuser_light_handler.register_entity_class(MLDiffuserLight)
     for light_digest in digest.get(mc.KEY_LIGHT, []):
         MLDiffuserLight(device, light_digest)
 
     diffuser_spray_handler = NamespaceHandler(
-        device, mc.NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY, entity_class=MLDiffuserSpray
+        device, mn.Appliance_Control_Diffuser_Spray
     )
+    diffuser_spray_handler.register_entity_class(MLDiffuserSpray)
     for spray_digest in digest.get(mc.KEY_SPRAY, []):
         MLDiffuserSpray(device, spray_digest[mc.KEY_CHANNEL])
 
-    if mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR in device.descriptor.ability:
+    if mn.Appliance_Control_Diffuser_Sensor.name in device.descriptor.ability:
         # former mod100 devices reported fake values for sensors, maybe the mod150 and/or a new firmware
         # are supporting correct values so we implement them (#243)
         def _handle_Appliance_Control_Diffuser_Sensor(header: dict, payload: dict):
@@ -79,7 +81,7 @@ def digest_init_diffuser(
 
         NamespaceHandler(
             device,
-            mc.NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR,
+            mn.Appliance_Control_Diffuser_Sensor,
             handler=_handle_Appliance_Control_Diffuser_Sensor,
         )
 

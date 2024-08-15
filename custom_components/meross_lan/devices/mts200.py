@@ -15,14 +15,14 @@ class Mts200SetPointNumber(MtsSetPointNumber):
     customize MtsSetPointNumber to interact with Mts200 family valves
     """
 
-    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE]
+    ns = mn.Appliance_Control_Thermostat_Mode
 
 
 class Mts200Climate(MtsClimate):
     """Climate entity for MTS200 devices"""
 
     manager: "MerossDevice"
-    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE]
+    ns = mn.Appliance_Control_Thermostat_Mode
 
     MTS_MODE_TO_PRESET_MAP = {
         mc.MTS200_MODE_MANUAL: MtsClimate.PRESET_CUSTOM,
@@ -64,7 +64,10 @@ class Mts200Climate(MtsClimate):
             Mts200Schedule,
         )
         self._mts_summermode = None
-        if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in manager.descriptor.ability:
+        if (
+            mn.Appliance_Control_Thermostat_SummerMode.name
+            in manager.descriptor.ability
+        ):
             self.hvac_modes = [
                 MtsClimate.HVACMode.OFF,
                 MtsClimate.HVACMode.HEAT,
@@ -137,16 +140,16 @@ class Mts200Climate(MtsClimate):
 
     def get_ns_adjust(self):
         return self.manager.namespace_handlers[
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
+            mn.Appliance_Control_Thermostat_Calibration.name
         ]
 
     # interface: self
     async def async_request_summermode(self, summermode: int):
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE,
+            mn.Appliance_Control_Thermostat_SummerMode.name,
             mc.METHOD_SET,
             {
-                mc.KEY_SUMMERMODE: [
+                mn.Appliance_Control_Thermostat_SummerMode.key: [
                     {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: summermode}
                 ]
             },
@@ -158,9 +161,9 @@ class Mts200Climate(MtsClimate):
 
     async def _async_request_mode(self, p_mode: dict):
         if response := await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODE,
+            self.ns.name,
             mc.METHOD_SET,
-            {mc.KEY_MODE: [p_mode]},
+            {self.ns.key: [p_mode]},
         ):
             try:
                 payload = response[mc.KEY_PAYLOAD][mc.KEY_MODE][0]
@@ -236,4 +239,4 @@ class Mts200Climate(MtsClimate):
 
 
 class Mts200Schedule(MtsSchedule):
-    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE]
+    ns = mn.Appliance_Control_Thermostat_Schedule

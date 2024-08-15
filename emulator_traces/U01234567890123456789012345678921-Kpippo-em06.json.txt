@@ -1,0 +1,2553 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant Core",
+    "version": "2024.5.2",
+    "dev": false,
+    "hassio": false,
+    "virtualenv": true,
+    "python_version": "3.12.3",
+    "docker": false,
+    "arch": "aarch64",
+    "timezone": "Europe/Berlin",
+    "os_name": "Linux",
+    "os_version": "6.6.20+rpt-rpi-v8",
+    "run_as_root": false
+  },
+  "custom_components": {
+    "pyscript": {
+      "documentation": "https://github.com/custom-components/pyscript",
+      "version": "1.5.0",
+      "requirements": [
+        "croniter==1.3.8",
+        "watchdog==2.3.1"
+      ]
+    },
+    "weatherbit": {
+      "documentation": "https://github.com/briis/weatherbit",
+      "version": "1.0.21",
+      "requirements": [
+        "pyweatherbitdata==1.0.15"
+      ]
+    },
+    "circadian_lighting": {
+      "documentation": "https://github.com/claytonjn/hass-circadian_lighting",
+      "version": "2.1.4",
+      "requirements": []
+    },
+    "hacs": {
+      "documentation": "https://hacs.xyz/docs/configuration/start",
+      "version": "1.34.0",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "fontawesome": {
+      "documentation": "https://github.com/thomasloven/hass-fontawesome",
+      "version": "2.2.1",
+      "requirements": []
+    },
+    "meross_lan": {
+      "documentation": "https://github.com/krahabb/meross_lan",
+      "version": "5.3.0",
+      "requirements": []
+    },
+    "alexa_media": {
+      "documentation": "https://github.com/alandtse/alexa_media_player/wiki",
+      "version": "4.11.3",
+      "requirements": [
+        "alexapy==1.27.10",
+        "packaging>=20.3",
+        "wrapt>=1.14.0"
+      ]
+    },
+    "xiaomi_cloud_map_extractor": {
+      "documentation": "https://github.com/PiotrMachowski/Home-Assistant-custom-components-Xiaomi-Cloud-Map-Extractor",
+      "version": "v2.2.0",
+      "requirements": [
+        "pillow",
+        "pybase64",
+        "python-miio",
+        "requests",
+        "pycryptodome"
+      ]
+    },
+    "helios2n": {
+      "documentation": "https://github.com/SVD-NL/helios2n-hass",
+      "version": "0.3.4",
+      "requirements": [
+        "py2n==0.4.0"
+      ]
+    },
+    "home_connect_alt": {
+      "documentation": "https://github.com/ekutner/home-connect-hass",
+      "version": "1.1.7",
+      "requirements": [
+        "home-connect-async==0.8.0"
+      ]
+    },
+    "better_thermostat": {
+      "documentation": "https://github.com/KartoffelToby/better_thermostat",
+      "version": "1.6.0",
+      "requirements": []
+    },
+    "edgeos": {
+      "documentation": "https://github.com/elad-bar/ha-edgeos",
+      "version": "2.1.8",
+      "requirements": [
+        "aiohttp"
+      ]
+    },
+    "ics": {
+      "documentation": "https://github.com/KoljaWindeler/ics/blob/master/README.md",
+      "version": "20240420.01",
+      "requirements": [
+        "recurring-ical-events",
+        "icalendar>=4.0.4",
+        "tzlocal",
+        "integrationhelper",
+        "voluptuous",
+        "python-dateutil>2.7.3"
+      ]
+    },
+    "gpodder": {
+      "documentation": "https://github.com/custom-components/gpodder/blob/master/README.md",
+      "version": "2.0.0",
+      "requirements": [
+        "mygpoclient==1.8",
+        "podcastparser==0.6.4"
+      ]
+    },
+    "multiscrape": {
+      "documentation": "https://github.com/danieldotnl/ha-multiscrape",
+      "version": "7.0.0",
+      "requirements": [
+        "lxml>=4.9.1",
+        "beautifulsoup4>=4.12.2"
+      ]
+    },
+    "dwd_weather": {
+      "documentation": "https://github.com/FL550/dwd_weather",
+      "version": "v2.1.4",
+      "requirements": [
+        "simple_dwd_weatherforecast==2.0.31",
+        "markdownify==0.6.5",
+        "suntimes==1.1.2"
+      ]
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "C4E7AE*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "5.3.0",
+    "is_built_in": false
+  },
+  "data": {
+    "device_id": "###############################0",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "em06",
+            "subType": "eu",
+            "version": "2.0.0",
+            "chipType": "esp32-c3",
+            "uuid": "###############################0",
+            "macAddress": "################0"
+          },
+          "firmware": {
+            "version": "2.3.8",
+            "compileTime": "May 14 2024 -- 15:59:34",
+            "encrypt": 1,
+            "wifiMac": "################0",
+            "innerIp": "############0",
+            "server": "#######################2",
+            "port": "@2",
+            "userId": "@1"
+          },
+          "time": {
+            "timestamp": 1721586807,
+            "timezone": "Europe/Berlin",
+            "timeRule": [
+              [
+                1711843200,
+                7200,
+                1
+              ],
+              [
+                1729983600,
+                3600,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "0sImwZY8DdGukrQh",
+            "who": 1
+          }
+        },
+        "digest": {}
+      },
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Info": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 3
+        },
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Control.ConsumptionH": {},
+        "Appliance.Control.ElectricityX": {},
+        "Appliance.Control.CircuitFactor": {},
+        "Appliance.Control.AlertConfig": {},
+        "Appliance.Control.AlertReport": {},
+        "Appliance.Control.Sensor.History": {}
+      }
+    },
+    "key": "###########0",
+    "protocol": "auto",
+    "polling_period": 5,
+    "timestamp": 1721547037.0308082,
+    "create_diagnostic_entities": true,
+    "logging_level": 0,
+    "obfuscate": true,
+    "trace_timeout": 600,
+    "device": {
+      "class": "MerossDevice",
+      "conf_protocol": "auto",
+      "pref_protocol": "mqtt",
+      "curr_protocol": "mqtt",
+      "polling_period": 5,
+      "device_response_size_min": 7153,
+      "device_response_size_max": 7153,
+      "MQTT": {
+        "cloud_profile": false,
+        "locally_active": true,
+        "mqtt_connection": true,
+        "mqtt_connected": true,
+        "mqtt_publish": true,
+        "mqtt_active": true
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "namespace_handlers": {
+        "Appliance.System.All": {
+          "lastrequest": 1721586807.4493835,
+          "lastresponse": 1721586807.6617377,
+          "polling_epoch_next": 1721587102.4493835,
+          "polling_strategy": "async_poll_all"
+        },
+        "Appliance.System.Runtime": {
+          "lastrequest": 1721586760.6534638,
+          "lastresponse": 1721586782.9262156,
+          "polling_epoch_next": 1721587082.9262156,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.System.Debug": {
+          "lastrequest": 0.0,
+          "lastresponse": 1721586780.858741,
+          "polling_epoch_next": 1721586780.858741,
+          "polling_strategy": null
+        },
+        "Appliance.Config.Info": {
+          "lastrequest": 0.0,
+          "lastresponse": 1721586778.7455468,
+          "polling_epoch_next": 1721587078.7455468,
+          "polling_strategy": null
+        },
+        "Appliance.Control.ConsumptionH": {
+          "lastrequest": 0.0,
+          "lastresponse": 1721586785.251887,
+          "polling_epoch_next": 1721587085.251887,
+          "polling_strategy": "async_poll_diagnostic"
+        },
+        "Appliance.Control.CircuitFactor": {
+          "lastrequest": 0.0,
+          "lastresponse": 1721586794.5802255,
+          "polling_epoch_next": 1721587094.5802255,
+          "polling_strategy": "async_poll_diagnostic"
+        },
+        "Appliance.System.Report": {
+          "lastrequest": 0.0,
+          "lastresponse": 1721586778.7711034,
+          "polling_epoch_next": 1721587078.7711034,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Sensor.History": {
+          "lastrequest": 0.0,
+          "lastresponse": 1721586785.5097163,
+          "polling_epoch_next": 1721587085.5097163,
+          "polling_strategy": "async_poll_diagnostic"
+        },
+        "Appliance.Control.AlertConfig": {
+          "lastrequest": 0.0,
+          "lastresponse": 1721586801.7267213,
+          "polling_epoch_next": 1721587101.7267213,
+          "polling_strategy": null
+        }
+      },
+      "namespace_pushes": {
+        "Appliance.System.Report": {
+          "report": [
+            {
+              "type": "1",
+              "value": "2",
+              "timestamp": 1721586778
+            }
+          ]
+        },
+        "Appliance.Config.Info": {
+          "info": {
+            "homekit": {},
+            "matter": {}
+          }
+        },
+        "Appliance.Control.Sensor.History": {
+          "history": [
+            {
+              "channel": 4,
+              "capacity": 16,
+              "value": [
+                {
+                  "timestamp": 1721584851,
+                  "power": -128
+                },
+                {
+                  "timestamp": 1721584911,
+                  "power": -134
+                },
+                {
+                  "timestamp": 1721584971,
+                  "power": -131
+                },
+                {
+                  "timestamp": 1721585030,
+                  "power": -129
+                },
+                {
+                  "timestamp": 1721585090,
+                  "power": -130
+                },
+                {
+                  "timestamp": 1721585150,
+                  "power": -125
+                },
+                {
+                  "timestamp": 1721585210,
+                  "power": -127
+                },
+                {
+                  "timestamp": 1721585269,
+                  "power": -135
+                },
+                {
+                  "timestamp": 1721585329,
+                  "power": -125
+                },
+                {
+                  "timestamp": 1721585389,
+                  "power": -124
+                },
+                {
+                  "timestamp": 1721585449,
+                  "power": -123
+                },
+                {
+                  "timestamp": 1721585509,
+                  "power": -138
+                },
+                {
+                  "timestamp": 1721585569,
+                  "power": -135
+                },
+                {
+                  "timestamp": 1721585629,
+                  "power": -119
+                },
+                {
+                  "timestamp": 1721585688,
+                  "power": -123
+                },
+                {
+                  "timestamp": 1721585748,
+                  "power": -123
+                },
+                {
+                  "timestamp": 1721585808,
+                  "power": -126
+                },
+                {
+                  "timestamp": 1721585868,
+                  "power": -128
+                },
+                {
+                  "timestamp": 1721585928,
+                  "power": -129
+                },
+                {
+                  "timestamp": 1721585988,
+                  "power": -141
+                },
+                {
+                  "timestamp": 1721586048,
+                  "power": -126
+                },
+                {
+                  "timestamp": 1721586107,
+                  "power": -127
+                },
+                {
+                  "timestamp": 1721586167,
+                  "power": -136
+                },
+                {
+                  "timestamp": 1721586227,
+                  "power": -140
+                },
+                {
+                  "timestamp": 1721586287,
+                  "power": -124
+                },
+                {
+                  "timestamp": 1721586347,
+                  "power": -122
+                },
+                {
+                  "timestamp": 1721586407,
+                  "power": -122
+                },
+                {
+                  "timestamp": 1721586467,
+                  "power": -137
+                },
+                {
+                  "timestamp": 1721586526,
+                  "power": -131
+                },
+                {
+                  "timestamp": 1721586585,
+                  "power": -137
+                },
+                {
+                  "timestamp": 1721586644,
+                  "power": -132
+                },
+                {
+                  "timestamp": 1721583101,
+                  "power": -719
+                },
+                {
+                  "timestamp": 1721586744,
+                  "power": -142
+                },
+                {
+                  "timestamp": 1721583220,
+                  "power": -606
+                },
+                {
+                  "timestamp": 1721583280,
+                  "power": -480
+                },
+                {
+                  "timestamp": 1721583340,
+                  "power": -399
+                },
+                {
+                  "timestamp": 1721583400,
+                  "power": -492
+                },
+                {
+                  "timestamp": 1721583460,
+                  "power": -433
+                },
+                {
+                  "timestamp": 1721583519,
+                  "power": -395
+                },
+                {
+                  "timestamp": 1721583579,
+                  "power": -459
+                },
+                {
+                  "timestamp": 1721583639,
+                  "power": -385
+                },
+                {
+                  "timestamp": 1721583699,
+                  "power": -230
+                },
+                {
+                  "timestamp": 1721583759,
+                  "power": -123
+                },
+                {
+                  "timestamp": 1721583819,
+                  "power": -122
+                },
+                {
+                  "timestamp": 1721583879,
+                  "power": -127
+                },
+                {
+                  "timestamp": 1721583938,
+                  "power": -135
+                },
+                {
+                  "timestamp": 1721583998,
+                  "power": -155
+                },
+                {
+                  "timestamp": 1721584058,
+                  "power": -123
+                },
+                {
+                  "timestamp": 1721584118,
+                  "power": -124
+                },
+                {
+                  "timestamp": 1721584178,
+                  "power": -141
+                },
+                {
+                  "timestamp": 1721584238,
+                  "power": -122
+                },
+                {
+                  "timestamp": 1721584298,
+                  "power": -138
+                },
+                {
+                  "timestamp": 1721584358,
+                  "power": -116
+                },
+                {
+                  "timestamp": 1721584417,
+                  "power": -134
+                },
+                {
+                  "timestamp": 1721584477,
+                  "power": -133
+                },
+                {
+                  "timestamp": 1721584537,
+                  "power": -124
+                },
+                {
+                  "timestamp": 1721584597,
+                  "power": -123
+                },
+                {
+                  "timestamp": 1721584657,
+                  "power": -129
+                },
+                {
+                  "timestamp": 1721584717,
+                  "power": -122
+                },
+                {
+                  "timestamp": 1721584791,
+                  "power": -128
+                }
+              ]
+            },
+            {
+              "channel": 5,
+              "capacity": 16,
+              "value": [
+                {
+                  "timestamp": 1721584851,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584911,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584971,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585030,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585090,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585150,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585210,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585269,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585329,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585389,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585449,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585509,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585569,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585629,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585688,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585748,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585808,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585868,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585928,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585988,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586048,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586107,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586167,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586227,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586287,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586347,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586407,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586467,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586526,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586585,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586644,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583101,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586744,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583220,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583280,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583340,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583400,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583460,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583519,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583579,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583639,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583699,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583759,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583819,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583879,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583938,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583998,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584058,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584118,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584178,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584238,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584298,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584358,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584417,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584477,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584537,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584597,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584657,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584717,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584791,
+                  "power": 0
+                }
+              ]
+            },
+            {
+              "channel": 6,
+              "capacity": 16,
+              "value": [
+                {
+                  "timestamp": 1721584851,
+                  "power": -480
+                },
+                {
+                  "timestamp": 1721584911,
+                  "power": -491
+                },
+                {
+                  "timestamp": 1721584971,
+                  "power": -486
+                },
+                {
+                  "timestamp": 1721585030,
+                  "power": -488
+                },
+                {
+                  "timestamp": 1721585090,
+                  "power": -477
+                },
+                {
+                  "timestamp": 1721585150,
+                  "power": -479
+                },
+                {
+                  "timestamp": 1721585210,
+                  "power": -485
+                },
+                {
+                  "timestamp": 1721585269,
+                  "power": -476
+                },
+                {
+                  "timestamp": 1721585329,
+                  "power": -469
+                },
+                {
+                  "timestamp": 1721585389,
+                  "power": -466
+                },
+                {
+                  "timestamp": 1721585449,
+                  "power": -481
+                },
+                {
+                  "timestamp": 1721585509,
+                  "power": -488
+                },
+                {
+                  "timestamp": 1721585569,
+                  "power": -481
+                },
+                {
+                  "timestamp": 1721585629,
+                  "power": -484
+                },
+                {
+                  "timestamp": 1721585688,
+                  "power": -486
+                },
+                {
+                  "timestamp": 1721585748,
+                  "power": -486
+                },
+                {
+                  "timestamp": 1721585808,
+                  "power": -474
+                },
+                {
+                  "timestamp": 1721585868,
+                  "power": -487
+                },
+                {
+                  "timestamp": 1721585928,
+                  "power": -479
+                },
+                {
+                  "timestamp": 1721585988,
+                  "power": -453
+                },
+                {
+                  "timestamp": 1721586048,
+                  "power": -495
+                },
+                {
+                  "timestamp": 1721586107,
+                  "power": -498
+                },
+                {
+                  "timestamp": 1721586167,
+                  "power": -486
+                },
+                {
+                  "timestamp": 1721586227,
+                  "power": -471
+                },
+                {
+                  "timestamp": 1721586287,
+                  "power": -478
+                },
+                {
+                  "timestamp": 1721586347,
+                  "power": -487
+                },
+                {
+                  "timestamp": 1721586407,
+                  "power": -477
+                },
+                {
+                  "timestamp": 1721586467,
+                  "power": -475
+                },
+                {
+                  "timestamp": 1721586526,
+                  "power": -459
+                },
+                {
+                  "timestamp": 1721586585,
+                  "power": -472
+                },
+                {
+                  "timestamp": 1721586644,
+                  "power": -473
+                },
+                {
+                  "timestamp": 1721583101,
+                  "power": -1141
+                },
+                {
+                  "timestamp": 1721586744,
+                  "power": -482
+                },
+                {
+                  "timestamp": 1721583220,
+                  "power": -983
+                },
+                {
+                  "timestamp": 1721583280,
+                  "power": -854
+                },
+                {
+                  "timestamp": 1721583340,
+                  "power": -804
+                },
+                {
+                  "timestamp": 1721583400,
+                  "power": -884
+                },
+                {
+                  "timestamp": 1721583460,
+                  "power": -845
+                },
+                {
+                  "timestamp": 1721583519,
+                  "power": -783
+                },
+                {
+                  "timestamp": 1721583579,
+                  "power": -839
+                },
+                {
+                  "timestamp": 1721583639,
+                  "power": -798
+                },
+                {
+                  "timestamp": 1721583699,
+                  "power": -665
+                },
+                {
+                  "timestamp": 1721583759,
+                  "power": -471
+                },
+                {
+                  "timestamp": 1721583819,
+                  "power": -491
+                },
+                {
+                  "timestamp": 1721583879,
+                  "power": -466
+                },
+                {
+                  "timestamp": 1721583938,
+                  "power": -484
+                },
+                {
+                  "timestamp": 1721583998,
+                  "power": -477
+                },
+                {
+                  "timestamp": 1721584058,
+                  "power": -483
+                },
+                {
+                  "timestamp": 1721584118,
+                  "power": -482
+                },
+                {
+                  "timestamp": 1721584178,
+                  "power": -479
+                },
+                {
+                  "timestamp": 1721584238,
+                  "power": -487
+                },
+                {
+                  "timestamp": 1721584298,
+                  "power": -476
+                },
+                {
+                  "timestamp": 1721584358,
+                  "power": -483
+                },
+                {
+                  "timestamp": 1721584417,
+                  "power": -476
+                },
+                {
+                  "timestamp": 1721584477,
+                  "power": -490
+                },
+                {
+                  "timestamp": 1721584537,
+                  "power": -491
+                },
+                {
+                  "timestamp": 1721584597,
+                  "power": -472
+                },
+                {
+                  "timestamp": 1721584657,
+                  "power": -480
+                },
+                {
+                  "timestamp": 1721584717,
+                  "power": -474
+                },
+                {
+                  "timestamp": 1721584791,
+                  "power": -483
+                }
+              ]
+            }
+          ]
+        },
+        "Appliance.Control.AlertConfig": {}
+      },
+      "device_info": null
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "em06",
+              "subType": "eu",
+              "version": "2.0.0",
+              "chipType": "esp32-c3",
+              "uuid": "###############################0",
+              "macAddress": "################0"
+            },
+            "firmware": {
+              "version": "2.3.8",
+              "compileTime": "May 14 2024 -- 15:59:34",
+              "encrypt": 1,
+              "wifiMac": "################0",
+              "innerIp": "############0",
+              "server": "#######################2",
+              "port": "@2",
+              "userId": "@1"
+            },
+            "time": {
+              "timestamp": 1721586807,
+              "timezone": "Europe/Berlin",
+              "timeRule": [
+                [
+                  1711843200,
+                  7200,
+                  1
+                ],
+                [
+                  1729983600,
+                  3600,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "0sImwZY8DdGukrQh",
+              "who": 1
+            }
+          },
+          "digest": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 3
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.ConsumptionH": {},
+          "Appliance.Control.ElectricityX": {},
+          "Appliance.Control.CircuitFactor": {},
+          "Appliance.Control.AlertConfig": {},
+          "Appliance.Control.AlertReport": {},
+          "Appliance.Control.Sensor.History": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {},
+            "matter": {}
+          }
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "2.3.8",
+              "sysUpTime": "0h0m35s",
+              "UTC": 1721586807,
+              "localTimeOffset": 7200,
+              "localTime": "Sun Jul 21 20:33:27 2024",
+              "suncalc": "8:2;20:9",
+              "memTotal": 409600,
+              "memFree": 87036,
+              "memMini": 50348
+            },
+            "network": {
+              "linkStatus": "connected",
+              "channel": 6,
+              "ssid": "###########0",
+              "gatewayMac": "################0",
+              "innerIp": "############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "linkStatus": "connected",
+              "activeServer": "#######################2",
+              "mainServer": "#######################2",
+              "mainPort": "@2",
+              "secondServer": "#3",
+              "secondPort": "@0",
+              "userId": "@1",
+              "sysConnectTime": "Sun Jul 21 18:32:54 2024",
+              "sysOnlineTime": "0h0m33s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "mqtt_detached from ########1:@1"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "mqtt_disconnected from ########1:@1"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Switching protocol to http"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ConsumptionH",
+        {
+          "consumptionH": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ConsumptionH",
+        {
+          "consumptionH": [
+            {
+              "channel": 1,
+              "total": 958,
+              "data": [
+                {
+                  "timestamp": 1721548740,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721552340,
+                  "value": 253
+                },
+                {
+                  "timestamp": 1721555941,
+                  "value": 351
+                },
+                {
+                  "timestamp": 1721559540,
+                  "value": 354
+                },
+                {
+                  "timestamp": 1721563140,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721566740,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721570341,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721573940,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721577540,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721581140,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721584740,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721586808,
+                  "value": 0
+                }
+              ]
+            },
+            {
+              "channel": 2,
+              "total": 1329,
+              "data": [
+                {
+                  "timestamp": 1721548740,
+                  "value": 97
+                },
+                {
+                  "timestamp": 1721552340,
+                  "value": 221
+                },
+                {
+                  "timestamp": 1721555941,
+                  "value": 86
+                },
+                {
+                  "timestamp": 1721559540,
+                  "value": 76
+                },
+                {
+                  "timestamp": 1721563140,
+                  "value": 133
+                },
+                {
+                  "timestamp": 1721566740,
+                  "value": 130
+                },
+                {
+                  "timestamp": 1721570341,
+                  "value": 119
+                },
+                {
+                  "timestamp": 1721573940,
+                  "value": 113
+                },
+                {
+                  "timestamp": 1721577540,
+                  "value": 79
+                },
+                {
+                  "timestamp": 1721581140,
+                  "value": 96
+                },
+                {
+                  "timestamp": 1721584740,
+                  "value": 117
+                },
+                {
+                  "timestamp": 1721586808,
+                  "value": 62
+                }
+              ]
+            },
+            {
+              "channel": 3,
+              "total": 0,
+              "data": [
+                {
+                  "timestamp": 1721548740,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721552340,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721555941,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721559540,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721563140,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721566740,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721570341,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721573940,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721577540,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721581140,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721584740,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1721586808,
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.ConsumptionH payload:{'consumptionH': [{'channel': 1, 'total': 958, 'data': [{'timestamp': 1721548740, 'value': 0}, {'timestamp': 1721552340, 'value': 253}, {'timestamp': 1721555941, 'value': 351}, {'timestamp': 1721559540, 'value': 354}, {'timestamp': 1721563140, 'value': 0}, {'timestamp': 1721566740, 'value': 0}, {'timestamp': 1721570341, 'value': 0}, {'timestamp': 1721573940, 'value': 0}, {'timestamp': 1721577540, 'value': 0}, {'timestamp': 1721581140, 'value': 0}, {'timestamp': 1721584740, 'value': 0}, {'timestamp': 1721586808, 'value': 0}]}, {'channel': 2, 'total': 1329, 'data': [{'timestamp': 1721548740, 'value': 97}, {'timestamp': 1721552340, 'value': 221}, {'timestamp': 1721555941, 'value': 86}, {'timestamp': 1721559540, 'value': 76}, {'timestamp': 1721563140, 'value': 133}, {'timestamp': 1721566740, 'value': 130}, {'timestamp': 1721570341, 'value': 119}, {'timestamp': 1721573940, 'value': 113}, {'timestamp': 1721577540, 'value': 79}, {'timestamp': 1721581140, 'value': 96}, {'timestamp': 1721584740, 'value': 117}, {'timestamp': 1721586808, 'value': 62}]}, {'channel': 3, 'total': 0, 'data': [{'timestamp': 1721548740, 'value': 0}, {'timestamp': 1721552340, 'value': 0}, {'timestamp': 1721555941, 'value': 0}, {'timestamp': 1721559540, 'value': 0}, {'timestamp': 1721563140, 'value': 0}, {'timestamp': 1721566740, 'value': 0}, {'timestamp': 1721570341, 'value': 0}, {'timestamp': 1721573940, 'value': 0}, {'timestamp': 1721577540, 'value': 0}, {'timestamp': 1721581140, 'value': 0}, {'timestamp': 1721584740, 'value': 0}, {'timestamp': 1721586808, 'value': 0}]}]}"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(1_consumptionH_total): init"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(1_consumptionH_total): Added to HomeAssistant"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(2_consumptionH_total): init"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(2_consumptionH_total): Added to HomeAssistant"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(3_consumptionH_total): init"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(3_consumptionH_total): Added to HomeAssistant"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ElectricityX",
+        {
+          "electricityx": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.ElectricityX (messageId:994bee93a0fc4fd596cb8d12fd3aa80d ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.ElectricityX",
+        {}
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.ElectricityX (messageId:ab643d749bf0468486078f3902e1b84d ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.CircuitFactor",
+        {
+          "circuitFactor": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.CircuitFactor",
+        {
+          "circuitFactor": [
+            {
+              "channel": 1,
+              "factor": 1
+            },
+            {
+              "channel": 2,
+              "factor": 1
+            },
+            {
+              "channel": 3,
+              "factor": 1
+            },
+            {
+              "channel": 4,
+              "factor": 1
+            },
+            {
+              "channel": 5,
+              "factor": 1
+            },
+            {
+              "channel": 6,
+              "factor": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.CircuitFactor payload:{'circuitFactor': [{'channel': 1, 'factor': 1}, {'channel': 2, 'factor': 1}, {'channel': 3, 'factor': 1}, {'channel': 4, 'factor': 1}, {'channel': 5, 'factor': 1}, {'channel': 6, 'factor': 1}]}"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertConfig",
+        {
+          "alertConfig": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertConfig (messageId:812520b828e847938f258f5c7bbdb1e5 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertConfig",
+        {}
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertConfig",
+        {}
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Control.AlertConfig payload:{}"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alertReport": {}
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:6c0ef6d29e7144f581478ed71ed5897c ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertReport",
+        {}
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.AlertReport (messageId:b3fcf386cb42445f8daecf7d8b889c9d ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2024/07/21 - 20:33:28",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.History",
+        {
+          "history": []
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:29",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Sensor.History",
+        {
+          "history": [
+            {
+              "channel": 1,
+              "capacity": 16,
+              "value": [
+                {
+                  "timestamp": 1721584851,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584911,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584971,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585030,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585090,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585150,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585210,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585269,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585329,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585389,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585449,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585509,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585569,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585629,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585688,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585748,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585808,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585868,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585928,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585988,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586048,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586107,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586167,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586227,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586287,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586347,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586407,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586467,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586526,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586585,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586644,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583101,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586744,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583220,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583280,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583340,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583400,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583460,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583519,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583579,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583639,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583699,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583759,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583819,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583879,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583938,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583998,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584058,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584118,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584178,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584238,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584298,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584358,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584417,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584477,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584537,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584597,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584657,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584717,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584791,
+                  "power": 0
+                }
+              ]
+            },
+            {
+              "channel": 2,
+              "capacity": 16,
+              "value": [
+                {
+                  "timestamp": 1721584851,
+                  "power": 127942
+                },
+                {
+                  "timestamp": 1721584911,
+                  "power": 127628
+                },
+                {
+                  "timestamp": 1721584971,
+                  "power": 127368
+                },
+                {
+                  "timestamp": 1721585030,
+                  "power": 127179
+                },
+                {
+                  "timestamp": 1721585090,
+                  "power": 126720
+                },
+                {
+                  "timestamp": 1721585150,
+                  "power": 126454
+                },
+                {
+                  "timestamp": 1721585210,
+                  "power": 126562
+                },
+                {
+                  "timestamp": 1721585269,
+                  "power": 126258
+                },
+                {
+                  "timestamp": 1721585329,
+                  "power": 125945
+                },
+                {
+                  "timestamp": 1721585389,
+                  "power": 125774
+                },
+                {
+                  "timestamp": 1721585449,
+                  "power": 125685
+                },
+                {
+                  "timestamp": 1721585509,
+                  "power": 125613
+                },
+                {
+                  "timestamp": 1721585569,
+                  "power": 125344
+                },
+                {
+                  "timestamp": 1721585629,
+                  "power": 125073
+                },
+                {
+                  "timestamp": 1721585688,
+                  "power": 125067
+                },
+                {
+                  "timestamp": 1721585748,
+                  "power": 124729
+                },
+                {
+                  "timestamp": 1721585808,
+                  "power": 124868
+                },
+                {
+                  "timestamp": 1721585868,
+                  "power": 124486
+                },
+                {
+                  "timestamp": 1721585928,
+                  "power": 124572
+                },
+                {
+                  "timestamp": 1721585988,
+                  "power": 124462
+                },
+                {
+                  "timestamp": 1721586048,
+                  "power": 124391
+                },
+                {
+                  "timestamp": 1721586107,
+                  "power": 124346
+                },
+                {
+                  "timestamp": 1721586167,
+                  "power": 124310
+                },
+                {
+                  "timestamp": 1721586227,
+                  "power": 124647
+                },
+                {
+                  "timestamp": 1721586287,
+                  "power": 124208
+                },
+                {
+                  "timestamp": 1721586347,
+                  "power": 124006
+                },
+                {
+                  "timestamp": 1721586407,
+                  "power": 123957
+                },
+                {
+                  "timestamp": 1721586467,
+                  "power": 123757
+                },
+                {
+                  "timestamp": 1721586526,
+                  "power": 123508
+                },
+                {
+                  "timestamp": 1721586585,
+                  "power": 123657
+                },
+                {
+                  "timestamp": 1721586644,
+                  "power": 123449
+                },
+                {
+                  "timestamp": 1721583101,
+                  "power": 137294
+                },
+                {
+                  "timestamp": 1721586744,
+                  "power": 123551
+                },
+                {
+                  "timestamp": 1721583220,
+                  "power": 138523
+                },
+                {
+                  "timestamp": 1721583280,
+                  "power": 139462
+                },
+                {
+                  "timestamp": 1721583340,
+                  "power": 140487
+                },
+                {
+                  "timestamp": 1721583400,
+                  "power": 139424
+                },
+                {
+                  "timestamp": 1721583460,
+                  "power": 139595
+                },
+                {
+                  "timestamp": 1721583519,
+                  "power": 140359
+                },
+                {
+                  "timestamp": 1721583579,
+                  "power": 140973
+                },
+                {
+                  "timestamp": 1721583639,
+                  "power": 141775
+                },
+                {
+                  "timestamp": 1721583699,
+                  "power": 139229
+                },
+                {
+                  "timestamp": 1721583759,
+                  "power": 136255
+                },
+                {
+                  "timestamp": 1721583819,
+                  "power": 134343
+                },
+                {
+                  "timestamp": 1721583879,
+                  "power": 131015
+                },
+                {
+                  "timestamp": 1721583938,
+                  "power": 131183
+                },
+                {
+                  "timestamp": 1721583998,
+                  "power": 131134
+                },
+                {
+                  "timestamp": 1721584058,
+                  "power": 131866
+                },
+                {
+                  "timestamp": 1721584118,
+                  "power": 130774
+                },
+                {
+                  "timestamp": 1721584178,
+                  "power": 131005
+                },
+                {
+                  "timestamp": 1721584238,
+                  "power": 130870
+                },
+                {
+                  "timestamp": 1721584298,
+                  "power": 130656
+                },
+                {
+                  "timestamp": 1721584358,
+                  "power": 130323
+                },
+                {
+                  "timestamp": 1721584417,
+                  "power": 129949
+                },
+                {
+                  "timestamp": 1721584477,
+                  "power": 129773
+                },
+                {
+                  "timestamp": 1721584537,
+                  "power": 129514
+                },
+                {
+                  "timestamp": 1721584597,
+                  "power": 129232
+                },
+                {
+                  "timestamp": 1721584657,
+                  "power": 128916
+                },
+                {
+                  "timestamp": 1721584717,
+                  "power": 128536
+                },
+                {
+                  "timestamp": 1721584791,
+                  "power": 128236
+                }
+              ]
+            },
+            {
+              "channel": 3,
+              "capacity": 16,
+              "value": [
+                {
+                  "timestamp": 1721584851,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584911,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584971,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585030,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585090,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585150,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585210,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585269,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585329,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585389,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585449,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585509,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585569,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585629,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585688,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585748,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585808,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585868,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585928,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721585988,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586048,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586107,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586167,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586227,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586287,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586347,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586407,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586467,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586526,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586585,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586644,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583101,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721586744,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583220,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583280,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583340,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583400,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583460,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583519,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583579,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583639,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583699,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583759,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583819,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583879,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583938,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721583998,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584058,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584118,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584178,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584238,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584298,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584358,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584417,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584477,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584537,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584597,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584657,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584717,
+                  "power": 0
+                },
+                {
+                  "timestamp": 1721584791,
+                  "power": 0
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      [
+        "2024/07/21 - 20:33:29",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Sensor.History payload:{'history': [{'channel': 1, 'capacity': 16, 'value': [{'timestamp': 1721584851, 'power': 0}, {'timestamp': 1721584911, 'power': 0}, {'timestamp': 1721584971, 'power': 0}, {'timestamp': 1721585030, 'power': 0}, {'timestamp': 1721585090, 'power': 0}, {'timestamp': 1721585150, 'power': 0}, {'timestamp': 1721585210, 'power': 0}, {'timestamp': 1721585269, 'power': 0}, {'timestamp': 1721585329, 'power': 0}, {'timestamp': 1721585389, 'power': 0}, {'timestamp': 1721585449, 'power': 0}, {'timestamp': 1721585509, 'power': 0}, {'timestamp': 1721585569, 'power': 0}, {'timestamp': 1721585629, 'power': 0}, {'timestamp': 1721585688, 'power': 0}, {'timestamp': 1721585748, 'power': 0}, {'timestamp': 1721585808, 'power': 0}, {'timestamp': 1721585868, 'power': 0}, {'timestamp': 1721585928, 'power': 0}, {'timestamp': 1721585988, 'power': 0}, {'timestamp': 1721586048, 'power': 0}, {'timestamp': 1721586107, 'power': 0}, {'timestamp': 1721586167, 'power': 0}, {'timestamp': 1721586227, 'power': 0}, {'timestamp': 1721586287, 'power': 0}, {'timestamp': 1721586347, 'power': 0}, {'timestamp': 1721586407, 'power': 0}, {'timestamp': 1721586467, 'power': 0}, {'timestamp': 1721586526, 'power': 0}, {'timestamp': 1721586585, 'power': 0}, {'timestamp': 1721586644, 'power': 0}, {'timestamp': 1721583101, 'power': 0}, {'timestamp': 1721586744, 'power': 0}, {'timestamp': 1721583220, 'power': 0}, {'timestamp': 1721583280, 'power': 0}, {'timestamp': 1721583340, 'power': 0}, {'timestamp': 1721583400, 'power': 0}, {'timestamp': 1721583460, 'power': 0}, {'timestamp': 1721583519, 'power': 0}, {'timestamp': 1721583579, 'power': 0}, {'timestamp': 1721583639, 'power': 0}, {'timestamp': 1721583699, 'power': 0}, {'timestamp': 1721583759, 'power': 0}, {'timestamp': 1721583819, 'power': 0}, {'timestamp': 1721583879, 'power': 0}, {'timestamp': 1721583938, 'power': 0}, {'timestamp': 1721583998, 'power': 0}, {'timestamp': 1721584058, 'power': 0}, {'timestamp': 1721584118, 'power': 0}, {'timestamp': 1721584178, 'power': 0}, {'timestamp': 1721584238, 'power': 0}, {'timestamp': 1721584298, 'power': 0}, {'timestamp': 1721584358, 'power': 0}, {'timestamp': 1721584417, 'power': 0}, {'timestamp': 1721584477, 'power': 0}, {'timestamp': 1721584537, 'power': 0}, {'timestamp': 1721584597, 'power': 0}, {'timestamp': 1721584657, 'power': 0}, {'timestamp': 1721584717, 'power': 0}, {'timestamp': 1721584791, 'power': 0}]}, {'channel': 2, 'capacity': 16, 'value': [{'timestamp': 1721584851, 'power': 127942}, {'timestamp': 1721584911, 'power': 127628}, {'timestamp': 1721584971, 'power': 127368}, {'timestamp': 1721585030, 'power': 127179}, {'timestamp': 1721585090, 'power': 126720}, {'timestamp': 1721585150, 'power': 126454}, {'timestamp': 1721585210, 'power': 126562}, {'timestamp': 1721585269, 'power': 126258}, {'timestamp': 1721585329, 'power': 125945}, {'timestamp': 1721585389, 'power': 125774}, {'timestamp': 1721585449, 'power': 125685}, {'timestamp': 1721585509, 'power': 125613}, {'timestamp': 1721585569, 'power': 125344}, {'timestamp': 1721585629, 'power': 125073}, {'timestamp': 1721585688, 'power': 125067}, {'timestamp': 1721585748, 'power': 124729}, {'timestamp': 1721585808, 'power': 124868}, {'timestamp': 1721585868, 'power': 124486}, {'timestamp': 1721585928, 'power': 124572}, {'timestamp': 1721585988, 'power': 124462}, {'timestamp': 1721586048, 'power': 124391}, {'timestamp': 1721586107, 'power': 124346}, {'timestamp': 1721586167, 'power': 124310}, {'timestamp': 1721586227, 'power': 124647}, {'timestamp': 1721586287, 'power': 124208}, {'timestamp': 1721586347, 'power': 124006}, {'timestamp': 1721586407, 'power': 123957}, {'timestamp': 1721586467, 'power': 123757}, {'timestamp': 1721586526, 'power': 123508}, {'timestamp': 1721586585, 'power': 123657}, {'timestamp': 1721586644, 'power': 123449}, {'timestamp': 1721583101, 'power': 137294}, {'timestamp': 1721586744, 'power': 123551}, {'timestamp': 1721583220, 'power': 138523}, {'timestamp': 1721583280, 'power': 139462}, {'timestamp': 1721583340, 'power': 140487}, {'timestamp': 1721583400, 'power': 139424}, {'timestamp': 1721583460, 'power': 139595}, {'timestamp': 1721583519, 'power': 140359}, {'timestamp': 1721583579, 'power': 140973}, {'timestamp': 1721583639, 'power': 141775}, {'timestamp': 1721583699, 'power': 139229}, {'timestamp': 1721583759, 'power': 136255}, {'timestamp': 1721583819, 'power': 134343}, {'timestamp': 1721583879, 'power': 131015}, {'timestamp': 1721583938, 'power': 131183}, {'timestamp': 1721583998, 'power': 131134}, {'timestamp': 1721584058, 'power': 131866}, {'timestamp': 1721584118, 'power': 130774}, {'timestamp': 1721584178, 'power': 131005}, {'timestamp': 1721584238, 'power': 130870}, {'timestamp': 1721584298, 'power': 130656}, {'timestamp': 1721584358, 'power': 130323}, {'timestamp': 1721584417, 'power': 129949}, {'timestamp': 1721584477, 'power': 129773}, {'timestamp': 1721584537, 'power': 129514}, {'timestamp': 1721584597, 'power': 129232}, {'timestamp': 1721584657, 'power': 128916}, {'timestamp': 1721584717, 'power': 128536}, {'timestamp': 1721584791, 'power': 128236}]}, {'channel': 3, 'capacity': 16, 'value': [{'timestamp': 1721584851, 'power': 0}, {'timestamp': 1721584911, 'power': 0}, {'timestamp': 1721584971, 'power': 0}, {'timestamp': 1721585030, 'power': 0}, {'timestamp': 1721585090, 'power': 0}, {'timestamp': 1721585150, 'power': 0}, {'timestamp': 1721585210, 'power': 0}, {'timestamp': 1721585269, 'power': 0}, {'timestamp': 1721585329, 'power': 0}, {'timestamp': 1721585389, 'power': 0}, {'timestamp': 1721585449, 'power': 0}, {'timestamp': 1721585509, 'power': 0}, {'timestamp': 1721585569, 'power': 0}, {'timestamp': 1721585629, 'power': 0}, {'timestamp': 1721585688, 'power': 0}, {'timestamp': 1721585748, 'power': 0}, {'timestamp': 1721585808, 'power': 0}, {'timestamp': 1721585868, 'power': 0}, {'timestamp': 1721585928, 'power': 0}, {'timestamp': 1721585988, 'power': 0}, {'timestamp': 1721586048, 'power': 0}, {'timestamp': 1721586107, 'power': 0}, {'timestamp': 1721586167, 'power': 0}, {'timestamp': 1721586227, 'power': 0}, {'timestamp': 1721586287, 'power': 0}, {'timestamp': 1721586347, 'power': 0}, {'timestamp': 1721586407, 'power': 0}, {'timestamp': 1721586467, 'power': 0}, {'timestamp': 1721586526, 'power': 0}, {'timestamp': 1721586585, 'power': 0}, {'timestamp': 1721586644, 'power': 0}, {'timestamp': 1721583101, 'power': 0}, {'timestamp': 1721586744, 'power': 0}, {'timestamp': 1721583220, 'power': 0}, {'timestamp': 1721583280, 'power': 0}, {'timestamp': 1721583340, 'power': 0}, {'timestamp': 1721583400, 'power': 0}, {'timestamp': 1721583460, 'power': 0}, {'timestamp': 1721583519, 'power': 0}, {'timestamp': 1721583579, 'power': 0}, {'timestamp': 1721583639, 'power': 0}, {'timestamp': 1721583699, 'power': 0}, {'timestamp': 1721583759, 'power': 0}, {'timestamp': 1721583819, 'power': 0}, {'timestamp': 1721583879, 'power': 0}, {'timestamp': 1721583938, 'power': 0}, {'timestamp': 1721583998, 'power': 0}, {'timestamp': 1721584058, 'power': 0}, {'timestamp': 1721584118, 'power': 0}, {'timestamp': 1721584178, 'power': 0}, {'timestamp': 1721584238, 'power': 0}, {'timestamp': 1721584298, 'power': 0}, {'timestamp': 1721584358, 'power': 0}, {'timestamp': 1721584417, 'power': 0}, {'timestamp': 1721584477, 'power': 0}, {'timestamp': 1721584537, 'power': 0}, {'timestamp': 1721584597, 'power': 0}, {'timestamp': 1721584657, 'power': 0}, {'timestamp': 1721584717, 'power': 0}, {'timestamp': 1721584791, 'power': 0}]}]}"
+      ],
+      [
+        "2024/07/21 - 20:33:29",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(1_history_capacity): init"
+      ],
+      [
+        "2024/07/21 - 20:33:29",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(1_history_capacity): Added to HomeAssistant"
+      ],
+      [
+        "2024/07/21 - 20:33:29",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(2_history_capacity): init"
+      ],
+      [
+        "2024/07/21 - 20:33:29",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(2_history_capacity): Added to HomeAssistant"
+      ],
+      [
+        "2024/07/21 - 20:33:29",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "MLDiagnosticSensor(3_history_capacity): init"
+      ],
+      [
+        "2024/07/21 - 20:33:29",
+        "",
+        "auto",
+        "LOG",
+        "verbose",
+        "MLDiagnosticSensor(3_history_capacity): Added to HomeAssistant"
+      ]
+    ]
+  }
+}

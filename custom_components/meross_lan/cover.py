@@ -5,7 +5,7 @@ from homeassistant.exceptions import InvalidStateError
 
 from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
-from .helpers import schedule_async_callback, versiontuple
+from .helpers import versiontuple
 from .merossclient import const as mc, namespaces as mn
 from .number import MLConfigNumber
 
@@ -13,10 +13,6 @@ if typing.TYPE_CHECKING:
     import asyncio
 
     from .meross_device import MerossDevice
-
-
-# rollershutter extra attributes
-EXTRA_ATTR_POSITION_NATIVE = "position_native"
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
@@ -89,6 +85,8 @@ class MLRollerShutter(MLCover):
     MRS100 SHUTTER ENTITY
     """
 
+    ATTR_POSITION_NATIVE = "position_native"
+
     # HA core entity attributes:
     assumed_state = True
     current_cover_position: int | None
@@ -138,12 +136,12 @@ class MLRollerShutter(MLCover):
         super().__init__(manager, 0, MLCover.DeviceClass.SHUTTER)
         self.number_signalOpen = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALOPEN)
         self.number_signalClose = MLRollerShutterConfigNumber(self, mc.KEY_SIGNALCLOSE)
-        if mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST in descriptor.ability:
+        if mn.Appliance_RollerShutter_Adjust.name in descriptor.ability:
             # unknown use: actually the polling period is set on a very high timeout
-            manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_ADJUST, self)
-        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_CONFIG, self)
-        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION, self)
-        manager.register_parser(mc.NS_APPLIANCE_ROLLERSHUTTER_STATE, self)
+            manager.register_parser(self, mn.Appliance_RollerShutter_Adjust)
+        manager.register_parser(self, mn.Appliance_RollerShutter_Config)
+        manager.register_parser(self, mn.Appliance_RollerShutter_Position)
+        manager.register_parser(self, mn.Appliance_RollerShutter_State)
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -156,12 +154,12 @@ class MLRollerShutter(MLCover):
                 _attr = last_state.attributes  # type: ignore
                 if not self._position_native_isgood:
                     # at this stage, the euristic on fw version doesn't say anything
-                    if EXTRA_ATTR_POSITION_NATIVE in _attr:
+                    if MLRollerShutter.ATTR_POSITION_NATIVE in _attr:
                         # this means we haven't detected (so far) a reliable 'native_position'
                         # so we restore the cover position (which was emulated)
-                        self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = _attr[
-                            EXTRA_ATTR_POSITION_NATIVE
-                        ]
+                        self.extra_state_attributes[
+                            MLRollerShutter.ATTR_POSITION_NATIVE
+                        ] = _attr[MLRollerShutter.ATTR_POSITION_NATIVE]
                         if cover.ATTR_CURRENT_POSITION in _attr:
                             self.current_cover_position = _attr[
                                 cover.ATTR_CURRENT_POSITION
@@ -209,8 +207,8 @@ class MLRollerShutter(MLCover):
             else:
                 return  # No-Op
             if await self.async_request_position(position):
-                self._transition_end_unsub = schedule_async_callback(
-                    self.hass, timeout, self._async_transition_end_callback
+                self._transition_end_unsub = self.manager.schedule_async_callback(
+                    timeout, self._async_transition_end_callback
                 )
 
     async def async_stop_cover(self, **kwargs):
@@ -284,10 +282,10 @@ class MLRollerShutter(MLCover):
         # in case the ns_multiple didn't succesfully kick-in we'll
         # fallback to the legacy procedure
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+            mn.Appliance_RollerShutter_Position.name,
             mc.METHOD_SET,
             {
-                mc.KEY_POSITION: {
+                mn.Appliance_RollerShutter_Position.key: {
                     mc.KEY_CHANNEL: self.channel,
                     mc.KEY_POSITION: position,
                 }
@@ -342,13 +340,13 @@ class MLRollerShutter(MLCover):
             self._position_native_isgood = True
             self._position_native = None
             self.is_closed = False
-            self.extra_state_attributes.pop(EXTRA_ATTR_POSITION_NATIVE, None)
+            self.extra_state_attributes.pop(MLRollerShutter.ATTR_POSITION_NATIVE, None)
             self.supported_features |= MLCover.EntityFeature.SET_POSITION
             self.current_cover_position = position
         else:
             self._position_native = position
             self.is_closed = position == mc.ROLLERSHUTTER_POSITION_CLOSED
-            self.extra_state_attributes[EXTRA_ATTR_POSITION_NATIVE] = position
+            self.extra_state_attributes[MLRollerShutter.ATTR_POSITION_NATIVE] = position
             if self.current_cover_position is None:
                 # only happening when we didn't restore state on devices
                 # which are likely not supporting native positioning
@@ -414,8 +412,7 @@ class MLRollerShutter(MLCover):
                 self.is_opening = not self.is_closing
                 if not self._transition_unsub:
                     # ensure we 'follow' cover movement
-                    self._transition_unsub = schedule_async_callback(
-                        self.hass,
+                    self._transition_unsub = self.manager.schedule_async_callback(
                         PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
                         self._async_transition_callback,
                     )
@@ -431,12 +428,11 @@ class MLRollerShutter(MLCover):
         This is a very 'gentle' polling happening only on HTTP when we're sure we're
         not receiving MQTT updates. If device was configured for MQTT only we could
         not setup this at all."""
-        self._transition_unsub = schedule_async_callback(
-            self.hass,
+        manager = self.manager
+        self._transition_unsub = manager.schedule_async_callback(
             PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT,
             self._async_transition_callback,
         )
-        manager = self.manager
         if (
             manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active
         ) or (self._mrs_state == mc.ROLLERSHUTTER_STATE_IDLE):
@@ -445,28 +441,30 @@ class MLRollerShutter(MLCover):
                 await manager.async_multiple_requests_ack(
                     (
                         (
-                            mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+                            mn.Appliance_RollerShutter_State.name,
                             mc.METHOD_GET,
-                            {mc.KEY_STATE: p_channel_payload},
+                            {mn.Appliance_RollerShutter_State.key: p_channel_payload},
                         ),
                         (
-                            mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                            mn.Appliance_RollerShutter_Position.name,
                             mc.METHOD_GET,
-                            {mc.KEY_POSITION: p_channel_payload},
+                            {
+                                mn.Appliance_RollerShutter_Position.key: p_channel_payload
+                            },
                         ),
                     )
                 )
             else:
                 await manager.async_request(
-                    mc.NS_APPLIANCE_ROLLERSHUTTER_STATE,
+                    mn.Appliance_RollerShutter_State.name,
                     mc.METHOD_GET,
-                    {mc.KEY_STATE: p_channel_payload},
+                    {mn.Appliance_RollerShutter_State.key: p_channel_payload},
                 )
                 if self._position_native_isgood:
                     await manager.async_request(
-                        mc.NS_APPLIANCE_ROLLERSHUTTER_POSITION,
+                        mn.Appliance_RollerShutter_Position.name,
                         mc.METHOD_GET,
-                        {mc.KEY_POSITION: p_channel_payload},
+                        {mn.Appliance_RollerShutter_Position.key: p_channel_payload},
                     )
 
     async def _async_transition_end_callback(self):
@@ -482,7 +480,7 @@ class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
 
     ns = mn.Appliance_RollerShutter_Config
 
-    device_scale = 1000
+    _attr_device_scale = 1000
 
     # HA core entity attributes:
     # these are ok for open/close durations
@@ -496,10 +494,10 @@ class MLRollerShutterConfigNumber(me.MEDictChannelMixin, MLConfigNumber):
     def __init__(self, cover: "MLRollerShutter", key: str):
         self._cover = cover
         self.key_value = key
-        self.name = key
         super().__init__(
             cover.manager,
             cover.channel,
             f"config_{key}",
             MLConfigNumber.DEVICE_CLASS_DURATION,
+            name=key,
         )

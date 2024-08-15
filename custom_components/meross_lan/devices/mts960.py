@@ -47,7 +47,7 @@ class Mts960Climate(MtsClimate):
     """Climate entity for MTS960 devices"""
 
     manager: "MerossDevice"
-    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB]
+    ns = mn.Appliance_Control_Thermostat_ModeB
     device_scale = mc.MTS960_TEMP_SCALE
 
     PRESET_HEATING: typing.Final = "heating"
@@ -362,15 +362,15 @@ class Mts960Climate(MtsClimate):
 
     def get_ns_adjust(self):
         return self.manager.namespace_handlers[
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION
+            mn.Appliance_Control_Thermostat_Calibration.name
         ]
 
     # interface: self
     async def _async_request_modeb(self, p_modeb: dict):
         if response := await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB,
+            self.ns.name,
             mc.METHOD_SET,
-            {mc.KEY_MODEB: [p_modeb]},
+            {self.ns.key: [p_modeb]},
         ):
             try:
                 payload = response[mc.KEY_PAYLOAD][mc.KEY_MODEB][0]
@@ -386,7 +386,7 @@ class Mts960Climate(MtsClimate):
             Mts960Climate.TIMER_TYPE_KEY[timer_type]: payload,
         }
         if response := await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_THERMOSTAT_TIMER,
+            mn.Appliance_Control_Thermostat_Timer.name,
             mc.METHOD_SET,
             {mc.KEY_TIMER: [p_timer]},
         ):
@@ -501,4 +501,4 @@ class Mts960Climate(MtsClimate):
 
 
 class Mts960Schedule(MtsSchedule):
-    ns = mn.NAMESPACES[mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB]
+    ns = mn.Appliance_Control_Thermostat_ScheduleB

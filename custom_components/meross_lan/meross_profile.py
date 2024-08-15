@@ -24,13 +24,7 @@ from .const import (
     DeviceConfigType,
 )
 from .devices.hub import HubMixin
-from .helpers import (
-    ConfigEntriesHelper,
-    Loggable,
-    datetime_from_epoch,
-    schedule_async_callback,
-    versiontuple,
-)
+from .helpers import ConfigEntriesHelper, Loggable, datetime_from_epoch, versiontuple
 from .helpers.manager import ApiProfile, CloudApiClient
 from .merossclient import (
     MEROSSDEBUG,
@@ -100,6 +94,15 @@ class ConnectionSensor(me.MEAlwaysAvailableMixin, MLDiagnosticSensor):
 
     # HA core entity attributes:
     extra_state_attributes: AttrDictType
+    _unrecorded_attributes = frozenset(
+        {
+            ATTR_DEVICES,
+            ATTR_RECEIVED,
+            ATTR_PUBLISHED,
+            ATTR_DROPPED,
+            *MLDiagnosticSensor._unrecorded_attributes,
+        }
+    )
     native_value: str
     options: list[str] = [
         STATE_DISCONNECTED,
@@ -554,10 +557,10 @@ class MQTTConnection(Loggable):
                         device_id,
                         MerossRequest(
                             key,
-                            mc.NS_APPLIANCE_CONTROL_MULTIPLE,
+                            mn.Appliance_Control_Multiple.name,
                             mc.METHOD_SET,
                             {
-                                mc.KEY_MULTIPLE: [
+                                mn.Appliance_Control_Multiple.key: [
                                     MerossRequest(
                                         key,
                                         *mn.Appliance_System_All.request_get,
@@ -774,12 +777,12 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
                     if MEROSSDEBUG.mqtt_random_disconnect():
                         self.log(self.DEBUG, "Random disconnect")
                         await self.async_disconnect()
-                self._unsub_random_disconnect = schedule_async_callback(
-                    self.hass, 60, _async_random_disconnect
+                self._unsub_random_disconnect = profile.schedule_async_callback(
+                    60, _async_random_disconnect
                 )
 
-            self._unsub_random_disconnect = schedule_async_callback(
-                self.hass, 60, _async_random_disconnect
+            self._unsub_random_disconnect = profile.schedule_async_callback(
+                60, _async_random_disconnect
             )
         else:
             self._unsub_random_disconnect = None
@@ -833,7 +836,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
 
 
 MerossMQTTConnection.SESSION_HANDLERS = {
-    mc.NS_APPLIANCE_SYSTEM_ONLINE: MQTTConnection._handle_Appliance_System_Online,
+    mn.Appliance_System_Online.name: MQTTConnection._handle_Appliance_System_Online,
 }
 
 
@@ -983,8 +986,7 @@ class MerossCloudProfile(ApiProfile):
                         json_dumps(_data),
                     )
         """
-        self._unsub_polling_query_device_info = schedule_async_callback(
-            self.hass,
+        self._unsub_polling_query_device_info = self.schedule_async_callback(
             next_query_delay,
             self._async_polling_query_device_info,
         )
@@ -1162,8 +1164,7 @@ class MerossCloudProfile(ApiProfile):
             # at any time (say the user does a new cloud login or so...)
             if self._unsub_polling_query_device_info:
                 self._unsub_polling_query_device_info.cancel()
-            self._unsub_polling_query_device_info = schedule_async_callback(
-                self.hass,
+            self._unsub_polling_query_device_info = self.schedule_async_callback(
                 mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
                 self._async_polling_query_device_info,
             )
@@ -1337,8 +1338,7 @@ class MerossCloudProfile(ApiProfile):
             if self._unsub_polling_query_device_info is None:
                 # this happens when 'async_query_devices' is unable to
                 # retrieve fresh cloud data for whatever reason
-                self._unsub_polling_query_device_info = schedule_async_callback(
-                    self.hass,
+                self._unsub_polling_query_device_info = self.schedule_async_callback(
                     mlc.PARAM_CLOUDPROFILE_QUERY_DEVICELIST_TIMEOUT,
                     self._async_polling_query_device_info,
                 )

@@ -19,37 +19,65 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, switch.DOMAIN)
 
 
-class MLSwitch(me.MerossBinaryEntity, switch.SwitchEntity):
+class MLSwitchBase(me.MerossBinaryEntity, switch.SwitchEntity):
     """
-    Generic HA switch: could either be a physical outlet or another 'logical' setting
-    (see various config switches)
-    Switches are sometimes hybrid and their message dispatching is not 'set in stone'
-    since the status updates are likely managed in higher level implementations or so.
-    This class needs to be mixed in with any of the me.MENoChannelMixin,
-    me.MEDictChannelMixin, MEListChannelMixin in order to actually define the
-    implementation of the protocol message payload for 'SET' commands
+    Base (almost abstract) entity for switches. This has 2 main implementations:
+    - MLSwitch: switch representing some device feature (an actual output or a config option)
+    - MLConfigSwitch: switch used to configure a meross_lan feature/option
     """
 
     PLATFORM = switch.DOMAIN
     DeviceClass = switch.SwitchDeviceClass
-    manager: "MerossDeviceBase"
+
+
+class MLConfigSwitch(me.MEAlwaysAvailableMixin, MLSwitchBase):
+    """
+    Switch entity not related to any device feature but used to configure
+    behaviors for meross_lan entities.
+    """
+
+    # HA core entity attributes:
+    entity_category = MLSwitchBase.EntityCategory.CONFIG
 
     def __init__(
         self,
         manager: "MerossDeviceBase",
         channel: object,
         entitykey: str | None = None,
-        device_class: object | None = None,
-        *,
-        device_value=None,
+        **kwargs: "typing.Unpack[me.MerossEntityArgs]",
     ):
         super().__init__(
             manager,
             channel,
             entitykey,
-            device_class,
-            device_value=device_value,
+            MLSwitchBase.DeviceClass.SWITCH,
+            device_value=0,
+            **kwargs,
         )
+
+    async def async_added_to_hass(self):
+        await super().async_added_to_hass()
+        with self.exception_warning("restoring previous state"):
+            if last_state := await self.get_last_state_available():
+                self.is_on = last_state.state == self.hac.STATE_ON
+
+    async def async_turn_on(self, **kwargs):
+        self.update_onoff(1)
+
+    async def async_turn_off(self, **kwargs):
+        self.update_onoff(0)
+
+
+class MLSwitch(MLSwitchBase):
+    """
+    Generic HA switch: could either be a physical outlet or another binary setting
+    of the device (see various config switches)
+    Switches are sometimes hybrid and their message dispatching is not 'set in stone'
+    since the status updates are likely managed in higher level implementations or so.
+    This class needs to be mixed in with any of the me.MENoChannelMixin,
+    me.MEDictChannelMixin, MEListChannelMixin in order to actually define the
+    implementation of the protocol message payload for 'SET' commands
+    """
 
     @abstractmethod
     async def async_request_value(self, device_value):
@@ -92,7 +120,7 @@ class MLToggle(me.MENoChannelMixin, MLSwitch):
 def digest_init_toggle(device: "MerossDevice", digest: dict) -> "DigestInitReturnType":
     """{"onoff": 0, "lmTime": 1645391086}"""
     MLToggle(device)
-    handler = device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_TOGGLE]
+    handler = device.namespace_handlers[mn.Appliance_Control_Toggle.name]
     return handler.parse_generic, (handler,)
 
 
@@ -133,7 +161,7 @@ def digest_init_togglex(
                     channels.remove(channel)
 
     # the fan controller 'map100' doesn't expose a fan in digest but it has one at channel 0
-    if (mc.NS_APPLIANCE_CONTROL_FAN in device.descriptor.ability) and (
+    if (mn.Appliance_Control_Fan.name in device.descriptor.ability) and (
         mc.KEY_FAN not in digest
     ):
         if 0 in channels:
@@ -142,6 +170,6 @@ def digest_init_togglex(
     for channel in channels:
         MLToggleX(device, channel)
 
-    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_TOGGLEX)
+    handler = device.get_handler(mn.Appliance_Control_ToggleX)
     handler.register_entity_class(MLToggleX)
     return handler.parse_list, (handler,)

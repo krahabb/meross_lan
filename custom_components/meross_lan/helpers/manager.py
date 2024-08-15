@@ -9,7 +9,7 @@ from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import LOGGER, ConfigEntriesHelper, Loggable, getLogger, schedule_callback
+from . import LOGGER, ConfigEntriesHelper, Loggable, getLogger
 from ..const import (
     CONF_ALLOW_MQTT_PUBLISH,
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
@@ -141,6 +141,19 @@ class EntityManager(Loggable):
         """
         return f"{self.id}_{entity.id}"
 
+    def schedule_async_callback(
+        self, delay: float, target: "typing.Callable[..., typing.Coroutine]", *args
+    ) -> "asyncio.TimerHandle":
+        @callback
+        def _callback(_target, *_args):
+            self.hass.async_create_task(_target(*_args))
+
+        return self.hass.loop.call_later(delay, _callback, target, *args)
+
+    def schedule_callback(
+        self, delay: float, target: "typing.Callable", *args
+    ) -> "asyncio.TimerHandle":
+        return self.hass.loop.call_later(delay, target, *args)
 
 class ConfigEntryManager(EntityManager):
     """
@@ -241,20 +254,6 @@ class ConfigEntryManager(EntityManager):
     @property
     def create_diagnostic_entities(self):
         return self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES)
-
-    def schedule_async_callback(
-        self, delay: float, target: "typing.Callable[..., typing.Coroutine]", *args
-    ) -> "asyncio.TimerHandle":
-        @callback
-        def _callback(_target, *_args):
-            self.hass.async_create_task(_target(*_args))
-
-        return self.hass.loop.call_later(delay, _callback, target, *args)
-
-    def schedule_callback(
-        self, delay: float, target: "typing.Callable", *args
-    ) -> "asyncio.TimerHandle":
-        return self.hass.loop.call_later(delay, target, *args)
 
     async def async_setup_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
@@ -392,7 +391,7 @@ class ConfigEntryManager(EntityManager):
                 return open(
                     os.path.join(
                         tracedir,
-                        f"{strftime("%Y-%m-%d_%H-%M-%S", localtime(epoch))}_{self.config_entry_id}.csv"
+                        f"{strftime('%Y-%m-%d_%H-%M-%S', localtime(epoch))}_{self.config_entry_id}.csv"
                     ),
                     mode="w",
                     encoding="utf8",
@@ -404,8 +403,8 @@ class ConfigEntryManager(EntityManager):
                 self._unsub_trace_endtime = None
                 self.trace_close()
 
-            self._unsub_trace_endtime = schedule_callback(
-                hass, self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT, _trace_close_callback
+            self._unsub_trace_endtime = self.schedule_callback(
+                self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT, _trace_close_callback
             )
             self._trace_opened(epoch)
         except Exception as exception:

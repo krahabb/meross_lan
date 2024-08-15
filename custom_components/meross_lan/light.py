@@ -16,7 +16,7 @@ from homeassistant.components.light import (
 import homeassistant.util.color as color_util
 
 from . import const as mlc, meross_entity as me
-from .helpers import clamp, schedule_async_callback
+from .helpers import clamp
 from .helpers.namespaces import (
     EntityNamespaceHandler,
     EntityNamespaceMixin,
@@ -29,8 +29,6 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .meross_device import DigestInitReturnType, MerossDevice
-
-ATTR_TOGGLEX_AUTO = "togglex_auto"
 
 
 async def async_setup_entry(
@@ -382,8 +380,8 @@ class MLLightBase(me.MerossBinaryEntity, light.LightEntity):
             _t_resolution = self._t_resolution
         # now 'spread' the resolution over the remaining duration
         _t_resolution = t_duration / (round(t_duration / _t_resolution) or 1)
-        self._t_unsub = schedule_async_callback(
-            self.hass, _t_resolution, self._async_transition
+        self._t_unsub = self.manager.schedule_async_callback(
+            _t_resolution, self._async_transition
         )
 
     async def _async_transition(self):
@@ -440,6 +438,8 @@ class MLLight(MLLightBase):
 
     ns = mn.Appliance_Control_Light
 
+    ATTR_TOGGLEX_AUTO = "togglex_auto"
+
     _togglex: bool
     _togglex_auto: bool | None
     """
@@ -449,7 +449,12 @@ class MLLight(MLLightBase):
     """
 
     # HA core entity attributes:
-    _unrecorded_attributes = frozenset({ATTR_TOGGLEX_AUTO})
+    _unrecorded_attributes = frozenset(
+        {
+            ATTR_TOGGLEX_AUTO,
+            *MLLightBase._unrecorded_attributes,
+        }
+    )
 
     __slots__ = (
         "_togglex",
@@ -476,7 +481,7 @@ class MLLight(MLLightBase):
         descriptor = manager.descriptor
         ability = descriptor.ability
 
-        capacity = ability[mc.NS_APPLIANCE_CONTROL_LIGHT].get(
+        capacity = ability[mn.Appliance_Control_Light.name].get(
             mc.KEY_CAPACITY, mc.LIGHT_CAPACITY_LUMINANCE
         )
         self.supported_color_modes = supported_color_modes = set()
@@ -601,10 +606,10 @@ class MLLight(MLLightBase):
     async def async_request_onoff(self, onoff: int):
         if self._togglex:
             if await self.manager.async_request_ack(
-                mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+                mn.Appliance_Control_ToggleX.name,
                 mc.METHOD_SET,
                 {
-                    mc.KEY_TOGGLEX: {
+                    mn.Appliance_Control_ToggleX.key: {
                         mc.KEY_CHANNEL: self.channel,
                         mc.KEY_ONOFF: onoff,
                     }
@@ -626,7 +631,7 @@ class MLLight(MLLightBase):
             _light[mc.KEY_ONOFF] = 1
 
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_LIGHT,
+            mn.Appliance_Control_Light.name,
             mc.METHOD_SET,
             {mc.KEY_LIGHT: _light},
         ):
@@ -645,12 +650,16 @@ class MLLight(MLLightBase):
                     if self.is_on:
                         # in case MQTT pushed the togglex -> on
                         self._togglex_auto = True
-                        self.extra_state_attributes = {ATTR_TOGGLEX_AUTO: True}
+                        self.extra_state_attributes = {MLLight.ATTR_TOGGLEX_AUTO: True}
                         return
                     elif await self.manager.async_request_ack(
-                        mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+                        mn.Appliance_Control_ToggleX.name,
                         mc.METHOD_GET,
-                        {mc.KEY_TOGGLEX: [{mc.KEY_CHANNEL: self.channel}]},
+                        {
+                            mn.Appliance_Control_ToggleX.key: [
+                                {mc.KEY_CHANNEL: self.channel}
+                            ]
+                        },
                     ):
                         # various kind of lights here might respond with either an array or a
                         # simple dict since the "togglex" namespace used to be hybrid and still is.
@@ -659,7 +668,7 @@ class MLLight(MLLightBase):
                         # all its (working) euristics after returning from async_request_ack
                         self._togglex_auto = self.is_on
                         self.extra_state_attributes = {
-                            ATTR_TOGGLEX_AUTO: self._togglex_auto
+                            MLLight.ATTR_TOGGLEX_AUTO: self._togglex_auto
                         }
                         if self.is_on:
                             return
@@ -692,7 +701,7 @@ class MLLightEffect(MLLight):
         super().__init__(manager, digest, [])
         self._light_effect_handler = NamespaceHandler(
             manager,
-            mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
+            mn.Appliance_Control_Light_Effect,
             handler=self._handle_Appliance_Control_Light_Effect,
         )
         if manager.descriptor.type.startswith(mc.TYPE_MSL320_PRO):
@@ -745,7 +754,7 @@ class MLLightEffect(MLLight):
                 _light_effect = self._light_effect_list[effect_index]
                 _light_effect[mc.KEY_ENABLE] = 1
                 if await self.manager.async_request_ack(
-                    mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
+                    mn.Appliance_Control_Light_Effect.name,
                     mc.METHOD_SET,
                     {mc.KEY_EFFECT: [_light_effect]},
                 ):
@@ -774,7 +783,7 @@ class MLLightEffect(MLLight):
                     for m in member:
                         m[mc.KEY_LUMINANCE] = luminance
                     if await self.manager.async_request_ack(
-                        mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT,
+                        mn.Appliance_Control_Light_Effect.name,
                         mc.METHOD_SET,
                         {mc.KEY_EFFECT: [_light_effect]},
                     ):
@@ -865,17 +874,17 @@ class MLDNDLightEntity(EntityNamespaceMixin, me.MerossBinaryEntity, light.LightE
 
     async def async_turn_on(self, **kwargs):
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_SYSTEM_DNDMODE,
+            self.ns.name,
             mc.METHOD_SET,
-            {mc.KEY_DNDMODE: {mc.KEY_MODE: 0}},
+            {self.ns.key: {mc.KEY_MODE: 0}},
         ):
             self.update_onoff(1)
 
     async def async_turn_off(self, **kwargs):
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_SYSTEM_DNDMODE,
+            self.ns.name,
             mc.METHOD_SET,
-            {mc.KEY_DNDMODE: {mc.KEY_MODE: 1}},
+            {self.ns.key: {mc.KEY_MODE: 1}},
         ):
             self.update_onoff(0)
 
@@ -888,12 +897,12 @@ def digest_init_light(device: "MerossDevice", digest: dict) -> "DigestInitReturn
 
     ability = device.descriptor.ability
 
-    if mc.NS_APPLIANCE_CONTROL_LIGHT_EFFECT in ability:
+    if mn.Appliance_Control_Light_Effect.name in ability:
         MLLightEffect(device, digest)
-    elif mc.NS_APPLIANCE_CONTROL_MP3 in ability:
+    elif mn.Appliance_Control_Mp3.name in ability:
         MLLightMp3(device, digest)
     else:
         MLLight(device, digest)
 
-    handler = device.namespace_handlers[mc.NS_APPLIANCE_CONTROL_LIGHT]
+    handler = device.namespace_handlers[mn.Appliance_Control_Light.name]
     return handler.parse_generic, (handler,)

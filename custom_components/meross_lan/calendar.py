@@ -139,8 +139,7 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         # shown/available in the calendar UI.
         self._schedule_entry_count_max = 0
         self._schedule_entry_count_min = 0
-        self.name = "Schedule"
-        super().__init__(climate.manager, climate.channel, self.ns.key)
+        super().__init__(climate.manager, climate.channel, self.ns.key, name="Schedule")
 
     # interface: MerossEntity
     async def async_shutdown(self):

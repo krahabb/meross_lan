@@ -5,7 +5,7 @@ from random import randint
 from time import gmtime
 import typing
 
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from .. import MerossEmulator, MerossEmulatorDescriptor
@@ -15,12 +15,13 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     # used to 'fix' and control the power level in tests
     # if None (default) it will generate random values
     _power_set: int | None = None
+    # this is 'shared' with ConsumptionXMixin to control tests output
     power: int
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_electricity = descriptor.namespaces[
-            mc.NS_APPLIANCE_CONTROL_ELECTRICITY
+            mn.Appliance_Control_Electricity.name
         ]
         self.electricity = self.payload_electricity[mc.KEY_ELECTRICITY]
         self.voltage_average: int = self.electricity[mc.KEY_VOLTAGE] or 2280
@@ -65,6 +66,71 @@ class ElectricityMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return mc.METHOD_GETACK, self.payload_electricity
 
 
+class ElectricityXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+
+    def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
+        super().__init__(descriptor, key)
+        self.payload_electricityx = descriptor.namespaces.setdefault(
+            mn.Appliance_Control_ElectricityX.name,
+            {
+                mc.KEY_ELECTRICITY: [
+                    {
+                        "channel": 1,
+                        "current": 0,
+                        "voltage": 233680,
+                        "power": 0,
+                        "mConsume": 1967,
+                        "factor": 0,
+                    },
+                    {
+                        "channel": 2,
+                        "current": 574,
+                        "voltage": 233184,
+                        "power": 115185,
+                        "mConsume": 4881,
+                        "factor": 0.8602570295333862,
+                    },
+                    {
+                        "channel": 3,
+                        "current": 0,
+                        "voltage": 232021,
+                        "power": 0,
+                        "mConsume": 59,
+                        "factor": 0,
+                    },
+                    {
+                        "channel": 4,
+                        "current": 311,
+                        "voltage": 233748,
+                        "power": 324,
+                        "mConsume": 0,
+                        "factor": 0.004454255104064941,
+                    },
+                    {
+                        "channel": 5,
+                        "current": 0,
+                        "voltage": 233313,
+                        "power": 0,
+                        "mConsume": 0,
+                        "factor": 0,
+                    },
+                    {
+                        "channel": 6,
+                        "current": 339,
+                        "voltage": 232127,
+                        "power": -10,
+                        "mConsume": 0,
+                        "factor": -0.0001285076141357422,
+                    },
+                ]
+            },
+        )
+        self.electricityx = self.payload_electricityx[mc.KEY_ELECTRICITY]
+
+    def _GET_Appliance_Control_ElectricityX(self, header, payload):
+        return mc.METHOD_GETACK, self.payload_electricityx
+
+
 class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     # this is a static default but we're likely using
     # the current 'power' state managed by the ElectricityMixin
@@ -75,7 +141,7 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
         super().__init__(descriptor, key)
         self.payload_consumptionx = descriptor.namespaces[
-            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONX
+            mn.Appliance_Control_ConsumptionX.name
         ]
         p_consumptionx: list = self.payload_consumptionx[mc.KEY_CONSUMPTIONX]
         if (len(p_consumptionx)) == 0:
@@ -109,9 +175,9 @@ class ConsumptionXMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         # the server code in meross_lan (it doesn't really check this
         # payload)
         self.mqtt_publish_push(
-            mc.NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG,
+            mn.Appliance_Control_ConsumptionConfig.name,
             {
-                mc.KEY_CONFIG: {
+                mn.Appliance_Control_ConsumptionConfig.key: {
                     "voltageRatio": 188,
                     "electricityRatio": 102,
                     "maxElectricityCurrent": 11000,

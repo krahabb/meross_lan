@@ -14,6 +14,13 @@ async def async_setup_entry(hass, config_entry, async_add_devices):
     me.platform_setup_entry(hass, config_entry, async_add_devices, fan.DOMAIN)
 
 
+try:
+    # HA core 2024.8.0 new flags
+    _supported_features = fan.FanEntityFeature.SET_SPEED | fan.FanEntityFeature.TURN_OFF | fan.FanEntityFeature.TURN_ON  # type: ignore
+except:
+    _supported_features = fan.FanEntityFeature.SET_SPEED
+
+
 class MLFan(me.MerossBinaryEntity, fan.FanEntity):
     """
     Fan entity for map100 Air Purifier (or any device implementing Appliance.Control.Fan)
@@ -30,7 +37,9 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
     preset_mode: str | None = None
     preset_modes: list[str] | None = None
     speed_count: int
-    supported_features: fan.FanEntityFeature = fan.FanEntityFeature.SET_SPEED
+    supported_features: fan.FanEntityFeature = _supported_features
+
+    _enable_turn_on_off_backwards_compatibility = False
 
     __slots__ = (
         "percentage",
@@ -96,10 +105,10 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
 
     async def async_request_togglex(self, onoff: int):
         if await self.manager.async_request_ack(
-            mc.NS_APPLIANCE_CONTROL_TOGGLEX,
+            mn.Appliance_Control_ToggleX.name,
             mc.METHOD_SET,
             {
-                mc.KEY_TOGGLEX: {
+                mn.Appliance_Control_ToggleX.key: {
                     mc.KEY_CHANNEL: self.channel,
                     mc.KEY_ONOFF: onoff,
                 }
@@ -132,7 +141,7 @@ def digest_init_fan(device: "MerossDevice", digest) -> "DigestInitReturnType":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
         MLFan(device, channel_digest[mc.KEY_CHANNEL])
-    handler = device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN)
+    handler = device.get_handler(mn.Appliance_Control_Fan)
     return handler.parse_list, (handler,)
 
 
@@ -142,6 +151,6 @@ def namespace_init_fan(device: "MerossDevice"):
         # actually only map100 (so far)
         MLFan(device, 0)
         # setup a polling strategy since state is not carried in digest
-        device.get_handler(mc.NS_APPLIANCE_CONTROL_FAN).polling_strategy = (
+        device.get_handler(mn.Appliance_Control_Fan).polling_strategy = (
             NamespaceHandler.async_poll_default
         )

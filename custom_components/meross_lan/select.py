@@ -8,8 +8,6 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
 from . import meross_entity as me
-from .helpers import schedule_callback
-from .merossclient import const as mc  # mEROSS cONST
 
 if typing.TYPE_CHECKING:
 
@@ -164,8 +162,8 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
         if delay > 0:
             # last tracking was too recent so we delay this a bit
             if not self._delayed_tracking_unsub:
-                self._delayed_tracking_unsub = schedule_callback(
-                    self.hass, delay, self._delayed_tracking_callback
+                self._delayed_tracking_unsub = self.manager.schedule_callback(
+                    delay, self._delayed_tracking_callback
                 )
             return
         climate = self.climate

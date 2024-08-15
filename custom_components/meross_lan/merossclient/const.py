@@ -12,6 +12,7 @@ TOPIC_RESPONSE = "/appliance/{}/publish"
 
 RE_PATTERN_UUID = re.compile(r"(^|[^a-fA-F0-9])([a-fA-F0-9]{32})($|[^a-fA-F0-9])")
 RE_PATTERN_TOPIC_UUID = re.compile(r"/.+/(.*)/.+")
+RE_PATTERN_TOPIC_USERID = re.compile(r"(/app/)(\d+)(.*/subscribe)")
 """re pattern to search/extract the uuid from an MQTT topic or the "from" field in message header"""
 
 METHOD_PUSH = "PUSH"
@@ -25,140 +26,6 @@ METHOD_ACK_MAP = {
     METHOD_GET: METHOD_GETACK,
     METHOD_SET: METHOD_SETACK,
 }
-
-NS_APPLIANCE_SYSTEM_ALL = "Appliance.System.All"
-NS_APPLIANCE_SYSTEM_ABILITY = "Appliance.System.Ability"
-NS_APPLIANCE_SYSTEM_HARDWARE = "Appliance.System.Hardware"
-NS_APPLIANCE_SYSTEM_FIRMWARE = "Appliance.System.Firmware"
-NS_APPLIANCE_SYSTEM_CLOCK = "Appliance.System.Clock"
-NS_APPLIANCE_SYSTEM_REPORT = "Appliance.System.Report"
-NS_APPLIANCE_SYSTEM_ONLINE = "Appliance.System.Online"
-NS_APPLIANCE_SYSTEM_DEBUG = "Appliance.System.Debug"
-NS_APPLIANCE_SYSTEM_TIME = "Appliance.System.Time"
-NS_APPLIANCE_SYSTEM_DNDMODE = "Appliance.System.DNDMode"
-NS_APPLIANCE_SYSTEM_RUNTIME = "Appliance.System.Runtime"
-NS_APPLIANCE_SYSTEM_POSITION = "Appliance.System.Position"
-NS_APPLIANCE_CONFIG_KEY = "Appliance.Config.Key"
-NS_APPLIANCE_CONFIG_WIFI = "Appliance.Config.Wifi"
-NS_APPLIANCE_CONFIG_WIFIX = "Appliance.Config.WifiX"
-NS_APPLIANCE_CONFIG_WIFILIST = "Appliance.Config.WifiList"
-NS_APPLIANCE_CONFIG_TRACE = "Appliance.Config.Trace"
-NS_APPLIANCE_CONFIG_INFO = "Appliance.Config.Info"
-NS_APPLIANCE_CONFIG_OVERTEMP = "Appliance.Config.OverTemp"
-NS_APPLIANCE_DIGEST_TRIGGERX = "Appliance.Digest.TriggerX"
-NS_APPLIANCE_DIGEST_TIMERX = "Appliance.Digest.TimerX"
-NS_APPLIANCE_CONTROL_MULTIPLE = "Appliance.Control.Multiple"
-NS_APPLIANCE_CONTROL_BIND = "Appliance.Control.Bind"
-NS_APPLIANCE_CONTROL_UNBIND = "Appliance.Control.Unbind"
-NS_APPLIANCE_CONTROL_UPGRADE = "Appliance.Control.Upgrade"
-NS_APPLIANCE_CONTROL_TOGGLE = "Appliance.Control.Toggle"
-NS_APPLIANCE_CONTROL_TOGGLEX = "Appliance.Control.ToggleX"
-NS_APPLIANCE_CONTROL_TRIGGER = "Appliance.Control.Trigger"
-NS_APPLIANCE_CONTROL_TRIGGERX = "Appliance.Control.TriggerX"
-NS_APPLIANCE_CONTROL_TIMERX = "Appliance.Control.TimerX"
-NS_APPLIANCE_CONTROL_CONSUMPTIONCONFIG = "Appliance.Control.ConsumptionConfig"
-NS_APPLIANCE_CONTROL_CONSUMPTIONX = "Appliance.Control.ConsumptionX"
-NS_APPLIANCE_CONTROL_CONSUMPTIONH = "Appliance.Control.ConsumptionH"
-NS_APPLIANCE_CONTROL_ELECTRICITY = "Appliance.Control.Electricity"
-NS_APPLIANCE_CONTROL_OVERTEMP = "Appliance.Control.OverTemp"
-NS_APPLIANCE_CONTROL_TEMPUNIT = "Appliance.Control.TempUnit"
-# Light Abilities
-NS_APPLIANCE_CONTROL_LIGHT = "Appliance.Control.Light"
-NS_APPLIANCE_CONTROL_LIGHT_EFFECT = "Appliance.Control.Light.Effect"
-# Humidifier abilities
-NS_APPLIANCE_CONTROL_SPRAY = "Appliance.Control.Spray"
-# Unknown abilities
-NS_APPLIANCE_CONTROL_PHYSICALLOCK = "Appliance.Control.PhysicalLock"
-# MAP100 (air purifier) abilties
-NS_APPLIANCE_CONTROL_FAN = "Appliance.Control.Fan"
-NS_APPLIANCE_CONTROL_FILTERMAINTENANCE = "Appliance.Control.FilterMaintenance"
-
-# Garage door opener
-NS_APPLIANCE_GARAGEDOOR_STATE = "Appliance.GarageDoor.State"
-NS_APPLIANCE_GARAGEDOOR_CONFIG = "Appliance.GarageDoor.Config"
-NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG = "Appliance.GarageDoor.MultipleConfig"
-# Roller shutter
-NS_APPLIANCE_ROLLERSHUTTER_ADJUST = "Appliance.RollerShutter.Adjust"
-NS_APPLIANCE_ROLLERSHUTTER_CONFIG = "Appliance.RollerShutter.Config"
-NS_APPLIANCE_ROLLERSHUTTER_POSITION = "Appliance.RollerShutter.Position"
-NS_APPLIANCE_ROLLERSHUTTER_STATE = "Appliance.RollerShutter.State"
-# Hub
-NS_APPLIANCE_DIGEST_HUB = "Appliance.Digest.Hub"
-NS_APPLIANCE_HUB_SUBDEVICELIST = "Appliance.Hub.SubdeviceList"
-NS_APPLIANCE_HUB_REPORT = "Appliance.Hub.Report"
-NS_APPLIANCE_HUB_EXCEPTION = "Appliance.Hub.Exception"
-NS_APPLIANCE_HUB_BATTERY = "Appliance.Hub.Battery"
-NS_APPLIANCE_HUB_TOGGLEX = "Appliance.Hub.ToggleX"
-NS_APPLIANCE_HUB_ONLINE = "Appliance.Hub.Online"
-NS_APPLIANCE_HUB_PAIRSUBDEV = "Appliance.Hub.PairSubDev"
-NS_APPLIANCE_HUB_SENSITIVITY = "Appliance.Hub.Sensitivity"
-# miscellaneous
-NS_APPLIANCE_HUB_SUBDEVICE_MOTORADJUST = "Appliance.Hub.SubDevice.MotorAdjust"
-NS_APPLIANCE_HUB_SUBDEVICE_BEEP = "Appliance.Hub.SubDevice.Beep"
-NS_APPLIANCE_HUB_SUBDEVICE_VERSION = "Appliance.Hub.SubDevice.Version"
-# MS100 and other sensors
-NS_APPLIANCE_HUB_SENSOR_ALL = "Appliance.Hub.Sensor.All"
-NS_APPLIANCE_HUB_SENSOR_TEMPHUM = "Appliance.Hub.Sensor.TempHum"
-NS_APPLIANCE_HUB_SENSOR_ALERT = "Appliance.Hub.Sensor.Alert"
-NS_APPLIANCE_HUB_SENSOR_ADJUST = "Appliance.Hub.Sensor.Adjust"
-NS_APPLIANCE_HUB_SENSOR_LATEST = "Appliance.Hub.Sensor.Latest"
-NS_APPLIANCE_HUB_SENSOR_SMOKE = "Appliance.Hub.Sensor.Smoke"
-NS_APPLIANCE_HUB_SENSOR_WATERLEAK = "Appliance.Hub.Sensor.WaterLeak"
-NS_APPLIANCE_HUB_SENSOR_MOTION = "Appliance.Hub.Sensor.Motion"
-NS_APPLIANCE_HUB_SENSOR_DOORWINDOW = "Appliance.Hub.Sensor.DoorWindow"
-# MTS100
-NS_APPLIANCE_HUB_MTS100_ALL = "Appliance.Hub.Mts100.All"
-NS_APPLIANCE_HUB_MTS100_TEMPERATURE = "Appliance.Hub.Mts100.Temperature"
-NS_APPLIANCE_HUB_MTS100_MODE = "Appliance.Hub.Mts100.Mode"
-NS_APPLIANCE_HUB_MTS100_ADJUST = "Appliance.Hub.Mts100.Adjust"
-NS_APPLIANCE_HUB_MTS100_SCHEDULE = "Appliance.Hub.Mts100.Schedule"
-NS_APPLIANCE_HUB_MTS100_SCHEDULEB = "Appliance.Hub.Mts100.ScheduleB"
-NS_APPLIANCE_HUB_MTS100_TIMESYNC = "Appliance.Hub.Mts100.TimeSync"
-NS_APPLIANCE_HUB_MTS100_SUPERCTL = "Appliance.Hub.Mts100.SuperCtl"
-# Smart cherub HP110A
-NS_APPLIANCE_MCU_HP110_FIRMWARE = "Appliance.Mcu.Hp110.Firmware"
-NS_APPLIANCE_MCU_HP110_FAVORITE = "Appliance.Mcu.Hp110.Favorite"
-NS_APPLIANCE_MCU_HP110_PREVIEW = "Appliance.Mcu.Hp110.Preview"
-NS_APPLIANCE_MCU_HP110_LOCK = "Appliance.Mcu.Hp110.Lock"
-NS_APPLIANCE_CONTROL_MP3 = "Appliance.Control.Mp3"
-# MTS200-960 smart thermostat
-NS_APPLIANCE_CONTROL_THERMOSTAT_ALARM = "Appliance.Control.Thermostat.Alarm"
-NS_APPLIANCE_CONTROL_THERMOSTAT_ALARMCONFIG = "Appliance.Control.Thermostat.AlarmConfig"
-NS_APPLIANCE_CONTROL_THERMOSTAT_CALIBRATION = "Appliance.Control.Thermostat.Calibration"
-NS_APPLIANCE_CONTROL_THERMOSTAT_COMPRESSORDELAY = (
-    "Appliance.Control.Thermostat.CompressorDelay"
-)
-NS_APPLIANCE_CONTROL_THERMOSTAT_CTLRANGE = "Appliance.Control.Thermostat.CtlRange"
-NS_APPLIANCE_CONTROL_THERMOSTAT_DEADZONE = "Appliance.Control.Thermostat.DeadZone"
-NS_APPLIANCE_CONTROL_THERMOSTAT_FROST = "Appliance.Control.Thermostat.Frost"
-NS_APPLIANCE_CONTROL_THERMOSTAT_HOLDACTION = "Appliance.Control.Thermostat.HoldAction"
-NS_APPLIANCE_CONTROL_THERMOSTAT_MODE = "Appliance.Control.Thermostat.Mode"
-NS_APPLIANCE_CONTROL_THERMOSTAT_MODEB = "Appliance.Control.Thermostat.ModeB"
-NS_APPLIANCE_CONTROL_THERMOSTAT_OVERHEAT = "Appliance.Control.Thermostat.Overheat"
-NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULE = "Appliance.Control.Thermostat.Schedule"
-NS_APPLIANCE_CONTROL_THERMOSTAT_SCHEDULEB = "Appliance.Control.Thermostat.ScheduleB"
-NS_APPLIANCE_CONTROL_THERMOSTAT_SENSOR = "Appliance.Control.Thermostat.Sensor"
-NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE = "Appliance.Control.Thermostat.SummerMode"
-NS_APPLIANCE_CONTROL_THERMOSTAT_TIMER = "Appliance.Control.Thermostat.Timer"
-NS_APPLIANCE_CONTROL_THERMOSTAT_WINDOWOPENED = (
-    "Appliance.Control.Thermostat.WindowOpened"
-)
-# screen brigtness (actually seen on MTS200)
-NS_APPLIANCE_CONTROL_SCREEN_BRIGHTNESS = "Appliance.Control.Screen.Brightness"
-# carrying temp/humi on more recent (2024/06) thermostats
-NS_APPLIANCE_CONTROL_SENSOR_HISTORY = "Appliance.Control.Sensor.History"
-NS_APPLIANCE_CONTROL_SENSOR_LATEST = "Appliance.Control.Sensor.Latest"
-
-# MOD100-MOD150 diffuser
-NS_APPLIANCE_CONTROL_DIFFUSER_SPRAY = "Appliance.Control.Diffuser.Spray"
-NS_APPLIANCE_CONTROL_DIFFUSER_LIGHT = "Appliance.Control.Diffuser.Light"
-NS_APPLIANCE_CONTROL_DIFFUSER_SENSOR = "Appliance.Control.Diffuser.Sensor"
-
-NS_APPLIANCE_MCU_FIRMWARE = "Appliance.Mcu.Firmware"
-NS_APPLIANCE_MCU_UPGRADE = "Appliance.Mcu.Upgrade"
-
-NS_APPLIANCE_ENCRYPT_SUITE = "Appliance.Encrypt.Suite"
-NS_APPLIANCE_ENCRYPT_ECDHE = "Appliance.Encrypt.ECDHE"
 
 # misc keys for json payloads
 KEY_HEADER = "header"
@@ -246,6 +113,7 @@ KEY_CAPACITY = "capacity"
 KEY_RGB = "rgb"
 KEY_LUMINANCE = "luminance"
 KEY_TEMPERATURE = "temperature"
+KEY_TEMP = "temp"
 KEY_HUMIDITY = "humidity"
 KEY_HUMI = "humi"
 KEY_SPRAY = "spray"
@@ -262,11 +130,13 @@ KEY_HUBID = "hubId"
 KEY_SUBDEVICE = "subdevice"
 KEY_SUBDEVICELIST = "subdeviceList"
 KEY_ID = "id"
+KEY_SUBID = "subId"
 KEY_LASTACTIVETIME = "lastActiveTime"
 KEY_SYNCEDTIME = "syncedTime"
 KEY_LATESTSAMPLETIME = "latestSampleTime"
 KEY_LATEST = "latest"
 KEY_TEMPHUM = "tempHum"
+KEY_TEMPHUMI = "tempHumi"
 KEY_LATESTTEMPERATURE = "latestTemperature"
 KEY_LATESTHUMIDITY = "latestHumidity"
 KEY_SMOKEALARM = "smokeAlarm"
@@ -282,8 +152,11 @@ KEY_ELECTRICITY = "electricity"
 KEY_POWER = "power"
 KEY_CURRENT = "current"
 KEY_VOLTAGE = "voltage"
+KEY_FACTOR = "factor"
+KEY_MCONSUME = "mConsume"
 KEY_CONSUMPTIONX = "consumptionx"
 KEY_CONSUMPTIONH = "consumptionH"
+KEY_TOTAL = "total"
 KEY_CONSUMPTIONCONFIG = "consumptionconfig"
 KEY_OVERTEMP = "overTemp"
 KEY_ENABLE = "enable"
@@ -587,6 +460,9 @@ TYPE_NAME_MAP[TYPE_GS559] = "Smart Smoke Alarm"
 
 TYPE_MS100 = "ms100"  # Smart temp/humidity sensor over Hub
 TYPE_NAME_MAP[TYPE_MS100] = "Smart Temp/Humidity Sensor"
+
+TYPE_MS130 = "ms130"  # Smart temp/humidity sensor (with display) over Hub
+TYPE_NAME_MAP[TYPE_MS130] = "Smart Temp/Humidity Sensor"
 
 TYPE_MS200 = "ms200"
 TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"

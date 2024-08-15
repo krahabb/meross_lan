@@ -5,7 +5,7 @@ from custom_components.meross_lan.climate import MtsClimate
 from custom_components.meross_lan.devices.mts100 import Mts100Climate
 from custom_components.meross_lan.devices.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.mts960 import Mts960Climate
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 
 from tests.entities import EntityComponentTest
 
@@ -55,7 +55,7 @@ class EntityTest(EntityComponentTest):
         entity_hvac_modes = set(entity.hvac_modes)
         expected_hvac_modes = HVAC_MODES[entity.__class__]
         assert expected_hvac_modes.issubset(entity_hvac_modes)
-        if mc.NS_APPLIANCE_CONTROL_THERMOSTAT_SUMMERMODE in self.ability:
+        if mn.Appliance_Control_Thermostat_SummerMode.name in self.ability:
             assert HVACMode.COOL in entity_hvac_modes
 
         if entity.__class__ in PRESET_MODES:
