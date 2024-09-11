@@ -15,7 +15,12 @@ from homeassistant.helpers.selector import selector
 import voluptuous as vol
 
 from . import MerossApi, const as mlc
-from .helpers import ConfigEntriesHelper, ConfigEntryType, reverse_lookup
+from .helpers import (
+    ConfigEntriesHelper,
+    ConfigEntryType,
+    get_default_no_verify_ssl_context,
+    reverse_lookup,
+)
 from .helpers.manager import CloudApiClient
 from .merossclient import (
     HostAddress,
@@ -1249,7 +1254,11 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
                 key = key or api.key or ""
                 userid = "" if userid is None else str(userid)
                 mqttclient = MerossMQTTDeviceClient(
-                    device.id, key=key, userid=userid, loop=hass.loop
+                    device.id,
+                    key=key,
+                    userid=userid,
+                    loop=hass.loop,
+                    sslcontext=get_default_no_verify_ssl_context(),
                 )
                 if api.isEnabledFor(api.VERBOSE):
                     mqttclient.enable_logger(api)  # type: ignore (Loggable is duck-compatible with Logger)

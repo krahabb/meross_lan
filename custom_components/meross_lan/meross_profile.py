@@ -24,7 +24,13 @@ from .const import (
     DeviceConfigType,
 )
 from .devices.hub import HubMixin
-from .helpers import ConfigEntriesHelper, Loggable, datetime_from_epoch, versiontuple
+from .helpers import (
+    ConfigEntriesHelper,
+    Loggable,
+    datetime_from_epoch,
+    get_default_ssl_context,
+    versiontuple,
+)
 from .helpers.manager import ApiProfile, CloudApiClient
 from .merossclient import (
     MEROSSDEBUG,
@@ -760,6 +766,7 @@ class MerossMQTTConnection(MQTTConnection, MerossMQTTAppClient):
             profile.userid,
             app_id=profile.app_id,
             loop=self.hass.loop,
+            sslcontext=get_default_ssl_context()
         )
         MQTTConnection.__init__(self, profile, broker, self.topic_command)
         if profile.isEnabledFor(profile.VERBOSE):
