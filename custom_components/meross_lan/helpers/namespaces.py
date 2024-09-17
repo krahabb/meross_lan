@@ -107,6 +107,7 @@ class NamespaceHandler:
         "ns",
         "handler",
         "parsers",
+        "key_channel",
         "entity_class",
         "lastrequest",
         "lastresponse",
@@ -136,6 +137,7 @@ class NamespaceHandler:
         self.ns = ns
         self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
         self.parsers: dict[object, typing.Callable[[dict], None]] = {}
+        self.key_channel = ns.key_channel
         self.entity_class = None
         self.handler = handler or getattr(
             device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
@@ -206,7 +208,11 @@ class NamespaceHandler:
         self.handler = self._handle_list
         self.device.platforms.setdefault(entity_class.PLATFORM)
 
-    def register_parser(self, parser: "NamespaceParser"):
+    def register_parser(
+        self,
+        parser: "NamespaceParser",
+        key_channel: str,
+    ):
         # when setting up the entity-dispatching we'll substitute the legacy handler
         # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
         # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
@@ -218,7 +224,8 @@ class NamespaceHandler:
         # either carry dict or, worse, could present themselves in both forms
         # (ToggleX is a well-known example)
         ns = self.ns
-        channel = getattr(parser, ns.key_channel)
+        self.key_channel = key_channel
+        channel = getattr(parser, key_channel)
         assert channel not in self.parsers, "parser already registered"
         self.parsers[channel] = getattr(parser, f"_parse_{ns.key}", parser._parse)
         if not parser.namespace_handlers:
@@ -228,10 +235,10 @@ class NamespaceHandler:
         polling_request_payload = self.polling_request_payload
         if polling_request_payload is not None:
             for channel_payload in polling_request_payload:
-                if channel_payload[ns.key_channel] == channel:
+                if channel_payload[key_channel] == channel:
                     break
             else:
-                polling_request_payload.append({ns.key_channel: channel})
+                polling_request_payload.append({key_channel: channel})
 
         self.polling_response_size = (
             self.polling_response_base_size
@@ -240,7 +247,7 @@ class NamespaceHandler:
         self.handler = self._handle_list
 
     def unregister(self, parser: "NamespaceParser"):
-        if self.parsers.pop(getattr(parser, self.ns.key_channel), None):
+        if self.parsers.pop(getattr(parser, self.key_channel), None):
             parser.namespace_handlers.remove(self)
 
     def handle_exception(self, exception: Exception, function_name: str, payload):
@@ -264,10 +271,9 @@ class NamespaceHandler:
         "payload": { "key_namespace": [{"channel":...., ...}] }
         """
         try:
-            ns = self.ns
-            for p_channel in payload[ns.key]:
+            for p_channel in payload[self.ns.key]:
                 try:
-                    _parse = self.parsers[p_channel[ns.key_channel]]
+                    _parse = self.parsers[p_channel[self.key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -283,10 +289,9 @@ class NamespaceHandler:
         This handler si optimized for dict payloads:
         "payload": { "key_namespace": {"channel":...., ...} }
         """
-        ns = self.ns
-        p_channel = payload[ns.key]
+        p_channel = payload[self.ns.key]
         try:
-            _parse = self.parsers[p_channel.get(ns.key_channel)]
+            _parse = self.parsers[p_channel.get(self.key_channel)]
         except KeyError as key_error:
             _parse = self._try_create_entity(key_error)
         except AttributeError:
@@ -305,18 +310,17 @@ class NamespaceHandler:
         payloads without the "channel" key (see namespace Toggle)
         which will default forwarding to channel == None
         """
-        ns = self.ns
-        p_channel = payload[ns.key]
+        p_channel = payload[self.ns.key]
         if type(p_channel) is dict:
             try:
-                _parse = self.parsers[p_channel.get(ns.key_channel)]
+                _parse = self.parsers[p_channel.get(self.key_channel)]
             except KeyError as key_error:
                 _parse = self._try_create_entity(key_error)
             _parse(p_channel)
         else:
             for p_channel in p_channel:
                 try:
-                    _parse = self.parsers[p_channel[ns.key_channel]]
+                    _parse = self.parsers[p_channel[self.key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -450,7 +454,8 @@ class NamespaceHandler:
                     self.device,
                     channel,
                     self.ns.key,
-                )
+                ),
+                self.ns.key_channel
             )
         else:
             self.parsers[channel] = self._parse_stub
@@ -549,18 +554,18 @@ class NamespaceHandler:
         if device._polling_epoch >= self.polling_epoch_next:
             await device.async_request_smartpoll(self)
 
-    async def async_trace(self, device: "MerossDevice", protocol: str | None):
+    async def async_trace(self, protocol: str | None):
         """
         Used while tracing abilities. In general, we use an euristic 'default'
         query but for some 'well known namespaces' we might be better off querying with
         a better structured payload.
         """
         if protocol is mlc.CONF_PROTOCOL_HTTP:
-            await device.async_http_request(*self.polling_request)
+            await self.device.async_http_request(*self.polling_request)
         elif protocol is mlc.CONF_PROTOCOL_MQTT:
-            await device.async_mqtt_request(*self.polling_request)
+            await self.device.async_mqtt_request(*self.polling_request)
         else:
-            await device.async_request(*self.polling_request)
+            await self.device.async_request(*self.polling_request)
 
 
 class EntityNamespaceMixin(MerossEntity if typing.TYPE_CHECKING else object):
@@ -743,6 +748,27 @@ POLLING_STRATEGY_CONF: dict[
         35,
         NamespaceHandler.async_poll_lazy,
     ),
+    mn.Appliance_Control_Screen_Brightness: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        70,
+        NamespaceHandler.async_poll_smart,
+    ),
+    mn.Appliance_Control_Sensor_Latest: (
+        300,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn.Appliance_Control_Sensor_LatestX: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        220,
+        NamespaceHandler.async_poll_default,
+    ),
     mn.Appliance_Control_Thermostat_Calibration: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
@@ -804,27 +830,6 @@ POLLING_STRATEGY_CONF: dict[
         0,
         mlc.PARAM_HEADER_SIZE,
         40,
-        NamespaceHandler.async_poll_default,
-    ),
-    mn.Appliance_Control_Screen_Brightness: (
-        0,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        70,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Sensor_Latest: (
-        300,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        80,
-        NamespaceHandler.async_poll_lazy,
-    ),
-    mn.Appliance_Control_Sensor_LatestX: (
-        0,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        220,
         NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_GarageDoor_Config: (

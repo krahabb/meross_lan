@@ -2,6 +2,7 @@ import abc
 import asyncio
 import bisect
 from datetime import UTC, tzinfo
+from enum import Enum
 from json import JSONDecodeError
 from time import time
 import typing
@@ -126,6 +127,12 @@ TRACE_ABILITY_EXCLUDE = (
 TIMEZONES_SET = None
 
 
+class DeviceType(Enum):
+    DEVICE = 1
+    HUB = 2
+    SUBDEVICE = 3
+
+
 class MerossDeviceBase(EntityManager):
     """
     Abstract base class for MerossDevice and MerossSubDevice (from hub)
@@ -231,17 +238,8 @@ class MerossDeviceBase(EntityManager):
     def request(self, request_tuple: "MerossRequestType"):
         return self.hass.async_create_task(self.async_request(*request_tuple))
 
-    @property
-    @abc.abstractmethod
-    def tz(self) -> tzinfo:
-        raise NotImplementedError("tz")
-
     def check_device_timezone(self):
         raise NotImplementedError("check_device_timezone")
-
-    @abc.abstractmethod
-    def _get_internal_name(self) -> str:
-        return ""
 
     def _set_online(self):
         self.log(self.DEBUG, "Back online!")
@@ -254,6 +252,19 @@ class MerossDeviceBase(EntityManager):
         self._online = False
         for entity in self.entities.values():
             entity.set_unavailable()
+
+    @property
+    @abc.abstractmethod
+    def tz(self) -> tzinfo:
+        raise NotImplementedError("tz")
+
+    @abc.abstractmethod
+    def get_type(self) -> DeviceType:
+        raise NotImplementedError("get_type")
+
+    @abc.abstractmethod
+    def _get_internal_name(self) -> str:
+        raise NotImplementedError("_get_internal_name")
 
 
 class MerossDevice(ConfigEntryManager, MerossDeviceBase):
@@ -330,8 +341,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             "ScreenBrightnessNamespaceHandler",
         ),
         mn.Appliance_Control_Sensor_Latest.name: (
-            ".devices.thermostat",
+            ".devices.misc",
             "SensorLatestNamespaceHandler",
+        ),
+        mn.Appliance_Control_Sensor_LatestX.name: (
+            ".devices.misc",
+            "namespace_init_sensor_latestx",
         ),
         mn.Appliance_RollerShutter_State.name: (".cover", "MLRollerShutter"),
         mn.Appliance_System_DNDMode.name: (".light", "MLDNDLightEntity"),
@@ -783,9 +798,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             translation_placeholders={"device_name": self.name},
         )
 
-    def _get_internal_name(self) -> str:
-        return self.descriptor.productname
-
     def _set_offline(self):
         super()._set_offline()
         self._polling_delay = self.polling_period
@@ -793,6 +805,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.device_debug = None
         for handler in self.namespace_handlers.values():
             handler.polling_epoch_next = 0.0
+
+    def get_type(self) -> DeviceType:
+        return DeviceType.DEVICE
+
+    def _get_internal_name(self) -> str:
+        return self.descriptor.productname
 
     # interface: self
     @property
@@ -851,14 +869,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         parser: "NamespaceParser",
         ns: "mn.Namespace",
+        *,
+        key_channel: str | None = None,
     ):
-        self.get_handler(ns).register_parser(parser)
+        self.get_handler(ns).register_parser(parser, key_channel or ns.key_channel)
 
     def register_parser_entity(
         self,
         entity: "MerossEntity",
     ):
-        self.get_handler(entity.ns).register_parser(entity)
+        self.get_handler(entity.ns).register_parser(entity, entity.ns.key_channel)
 
     def register_togglex_channel(self, entity: "MerossEntity"):
         """
@@ -2328,7 +2348,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         # query using our 'well-known' message structure
                         handler = self.namespace_handlers[ability]
                         if handler.polling_strategy:
-                            await handler.async_trace(self, CONF_PROTOCOL_HTTP)
+                            await handler.async_trace(CONF_PROTOCOL_HTTP)
                             continue
                     # this ability might be new/unknown or something we're not actively
                     # 'handling'. If the ability has a known 'Namespace' definition
@@ -2397,7 +2417,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 if (
                     handler := self.namespace_handlers.get(ability)
                 ) and handler.polling_strategy:
-                    await handler.async_trace(self, None)
+                    await handler.async_trace(None)
                 else:
                     # these requests are likely for new unknown namespaces
                     # so our euristics might fall off very soon

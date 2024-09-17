@@ -126,7 +126,14 @@ class Namespace:
         NAMESPACES[name] = self
 
     @cached_property
+    def is_sensor(self):
+        """Namespace payload indexed on hub/subdevice by key 'subId' or
+        by 'channel' for regular devices."""
+        return re.match(r"Appliance\.Control\.Sensor\.(.*)", self.name)
+
+    @cached_property
     def is_hub(self):
+        """Namespace payload indexed on subdevice by key 'id'."""
         return re.match(r"Appliance\.Hub\.(.*)", self.name)
 
     @cached_property
@@ -327,22 +334,18 @@ Appliance_Control_TriggerX = _ns_get(
 Appliance_Control_Unbind = _ns_push("Appliance.Control.Unbind")
 Appliance_Control_Upgrade = _ns_get("Appliance.Control.Upgrade")
 
-# carrying temp/humi on more recent (2024/06) thermostats
-Appliance_Control_Sensor_History = _ns_get_push(
-    "Appliance.Control.Sensor.History", mc.KEY_HISTORY, _LIST_C
-)
 Appliance_Control_Sensor_Latest = _ns_get_push(
     "Appliance.Control.Sensor.Latest", mc.KEY_LATEST, _LIST_C
-)
-# carrying light/temp/humi on ms130 (hub subdevice)
-Appliance_Control_Sensor_LatestX = Namespace(
-    "Appliance.Control.Sensor.LatestX",
-    mc.KEY_LATEST,
-    _LIST_C,
-    key_channel=mc.KEY_SUBID,
-    has_get=True,
-    has_push=True,
-)
+) # carrying miscellaneous sensor values (temp/humi)
+Appliance_Control_Sensor_History = _ns_get_push(
+    "Appliance.Control.Sensor.History", mc.KEY_HISTORY, _LIST_C
+) # history of sensor values
+Appliance_Control_Sensor_LatestX = _ns_get_push(
+    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, _LIST
+) # Appearing on both regular devices (ms600) and hub/subdevices (ms130)
+Appliance_Control_Sensor_HistoryX = _ns_get_push(
+    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, _LIST
+) # history of sensor values
 
 # MTS200-960 smart thermostat
 Appliance_Control_Screen_Brightness = _ns_get_push(
