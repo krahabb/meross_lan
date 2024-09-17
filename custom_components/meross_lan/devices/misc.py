@@ -4,9 +4,11 @@ This unit is a collection of rarely used small components where having
 a dedicated unit for each of them would increase the number of small modules.
 """
 
+import typing
+
 from ..climate import MtsClimate
 from ..helpers.namespaces import NamespaceHandler
-from ..meross_device import DeviceType, MerossDevice
+from ..meross_device import DeviceType
 from ..merossclient import const as mc, namespaces as mn
 from ..sensor import (
     MLHumiditySensor,
@@ -15,6 +17,10 @@ from ..sensor import (
     MLNumericSensorDef,
     MLTemperatureSensor,
 )
+
+if typing.TYPE_CHECKING:
+    from ..meross_device import MerossDevice
+    from ..sensor import MLNumericSensorArgs
 
 
 class SensorLatestNamespaceHandler(NamespaceHandler):
@@ -95,6 +101,47 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                                 climate.flush_state()
 
 
+class MLPresenceSensor(MLNumericSensor):
+    """ms600 presence sensor."""
+
+    __slots__ = (
+        "sensor_distance",
+        "sensor_times",
+    )
+
+    def __init__(
+        self,
+        manager: "MerossDevice",
+        channel: object | None,
+        entitykey: str | None,
+        **kwargs: "typing.Unpack[MLNumericSensorArgs]",
+    ):
+        super().__init__(manager, channel, entitykey, None, **kwargs)
+        self.sensor_distance = MLNumericSensor(
+            manager,
+            channel,
+            f"{entitykey}_distance",
+            MLNumericSensor.DeviceClass.DISTANCE,
+            device_scale=1000,
+            native_unit_of_measurement=MLNumericSensor.hac.UnitOfLength.METERS,
+            suggested_display_precision=2,
+        )
+        self.sensor_times = MLNumericSensor(manager, channel, f"{entitykey}_times")
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        self.sensor_times: MLNumericSensor = None  # type: ignore
+        self.sensor_distance: MLNumericSensor = None  # type: ignore
+
+    def _parse(self, payload: dict):
+        """
+        {"times": 0, "distance": 760, "value": 2, "timestamp": 1725907895}
+        """
+        self.update_device_value(payload[mc.KEY_VALUE])
+        self.sensor_distance.update_device_value(payload[mc.KEY_DISTANCE])
+        self.sensor_times.update_device_value(payload[mc.KEY_TIMES])
+
+
 class SensorLatestXNamespaceHandler(NamespaceHandler):
     """
     Specialized handler for Appliance.Control.Sensor.LatestX. This ns carries
@@ -106,6 +153,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
     VALUE_KEY_ENTITY_DEF_MAP: dict[str, MLNumericSensorDef] = {
         mc.KEY_HUMI: MLNumericSensorDef(MLHumiditySensor, {}),
         mc.KEY_LIGHT: MLNumericSensorDef(MLLightSensor, {}),
+        mc.KEY_PRESENCE: MLNumericSensorDef(MLPresenceSensor, {}),
         mc.KEY_TEMP: MLNumericSensorDef(MLTemperatureSensor, {"device_scale": 100}),
     }
 

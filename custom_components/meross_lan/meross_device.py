@@ -865,6 +865,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         except KeyError:
             return self._create_handler(ns)
 
+    def get_handler_by_name(self, namespace: str):
+        try:
+            return self.namespace_handlers[namespace]
+        except KeyError:
+            return self._create_handler(mn.NAMESPACES[namespace])
+
     def register_parser(
         self,
         parser: "NamespaceParser",
@@ -2342,51 +2348,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 abilities = iter(descr.ability)
                 while self._online and self.is_tracing:
                     ability = next(abilities)
-                    if ability in TRACE_ABILITY_EXCLUDE:
-                        continue
-                    if ability in self.namespace_handlers:
-                        # query using our 'well-known' message structure
-                        handler = self.namespace_handlers[ability]
-                        if handler.polling_strategy:
-                            await handler.async_trace(CONF_PROTOCOL_HTTP)
-                            continue
-                    # this ability might be new/unknown or something we're not actively
-                    # 'handling'. If the ability has a known 'Namespace' definition
-                    # we'll use that knowledge to smartly query
-                    ns = mn.NAMESPACES[ability]
-                    if ns.has_get is not False:
-                        request = ns.request_get
-                        response = await self.async_http_request(*request)
-                        if response and (
-                            response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
-                        ):
-                            if ns.is_hub:
-                                # for Hub namespaces there's nothing more guessable
-                                continue
-                            key_namespace = ns.key
-                            # we're not sure our key_namespace is correct (euristics!)
-                            response_payload = response[mc.KEY_PAYLOAD].get(
-                                key_namespace
-                            )
-                            if response_payload:
-                                # our euristic query hit something..loop next
-                                continue
-                            # the reply was empty: this ns might need a "channel" in request
-                            request_payload = request[2][key_namespace]
-                            if request_payload:
-                                # we've already issued a channel-like GET
-                                continue
-                            if isinstance(response_payload, list):
-                                await self.async_http_request(
-                                    ability,
-                                    mc.METHOD_GET,
-                                    {key_namespace: [{mc.KEY_CHANNEL: 0}]},
-                                )
-                            continue
-
-                    if ns.has_push is not False:
-                        # METHOD_GET didnt work. Try PUSH
-                        await self.async_http_request(*ns.request_push)
+                    if ability not in TRACE_ABILITY_EXCLUDE:
+                        await self.get_handler_by_name(ability).async_trace(
+                            CONF_PROTOCOL_HTTP
+                        )
 
                 return trace_data  # might be truncated because offlining or async shutting trace
             except StopIteration:
@@ -2414,38 +2379,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 while (ability := next(abilities_iterator)) in TRACE_ABILITY_EXCLUDE:
                     continue
                 self.log(self.DEBUG, "Tracing %s ability", ability)
-                if (
-                    handler := self.namespace_handlers.get(ability)
-                ) and handler.polling_strategy:
-                    await handler.async_trace(None)
-                else:
-                    # these requests are likely for new unknown namespaces
-                    # so our euristics might fall off very soon
-                    ns = mn.NAMESPACES[ability]
-                    if ns.has_get is not False:
-                        if response := await self.async_request_ack(*ns.request_get):
-                            key_namespace = ns.key
-                            response_payload = response[mc.KEY_PAYLOAD].get(
-                                key_namespace
-                            )
-                            if (
-                                not response_payload
-                                and not ns.request_get[2][key_namespace]
-                                and not ns.is_hub
-                            ):
-                                # the namespace might need a channel index in the request
-                                if isinstance(response_payload, list):
-                                    await self.async_request(
-                                        ability,
-                                        mc.METHOD_GET,
-                                        {key_namespace: [{mc.KEY_CHANNEL: 0}]},
-                                    )
-
-                    if ns.has_push is not False:
-                        # whatever the GET reply check also method PUSH
-                        # sending a PUSH 'out of the blue' might trigger unknown
-                        # device behaviors but we'll see
-                        await self.async_request(*ns.request_push)
+                await self.get_handler_by_name(ability).async_trace(None)
 
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")

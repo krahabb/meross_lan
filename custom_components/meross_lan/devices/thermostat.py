@@ -140,7 +140,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
 
         if mc.KEY_WARNING in payload:
             try:
-                self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])  # type: ignore
+                self.sensor_warning.update_native_value(payload[mc.KEY_WARNING])
             except AttributeError:
                 self.sensor_warning = MtsWarningSensor(self, payload[mc.KEY_WARNING])
 

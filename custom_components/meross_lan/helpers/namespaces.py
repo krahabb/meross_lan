@@ -455,7 +455,7 @@ class NamespaceHandler:
                     channel,
                     self.ns.key,
                 ),
-                self.ns.key_channel
+                self.ns.key_channel,
             )
         else:
             self.parsers[channel] = self._parse_stub
@@ -556,16 +556,91 @@ class NamespaceHandler:
 
     async def async_trace(self, protocol: str | None):
         """
-        Used while tracing abilities. In general, we use an euristic 'default'
-        query but for some 'well known namespaces' we might be better off querying with
-        a better structured payload.
+        Used while tracing abilities. Depending on our 'knowledge' of this ns
+        we're going a straigth route (when the ns is well-known) or experiment some
+        euristics.
         """
-        if protocol is mlc.CONF_PROTOCOL_HTTP:
-            await self.device.async_http_request(*self.polling_request)
-        elif protocol is mlc.CONF_PROTOCOL_MQTT:
-            await self.device.async_mqtt_request(*self.polling_request)
+        if self.polling_strategy in (None, NamespaceHandler.async_poll_diagnostic):
+            """
+            We don't know yet how to query this ns so we'll brute-force it
+            """
+            ns = self.ns
+            if protocol is mlc.CONF_PROTOCOL_HTTP:
+                request_func = self.device.async_http_request
+            elif protocol is mlc.CONF_PROTOCOL_MQTT:
+                request_func = self.device.async_mqtt_request
+            else:
+                request_func = self.device.async_request
+
+            key_namespace = ns.key
+            key_channel = None
+            if ns.has_push is not False:
+                response_push = await request_func(
+                    ns.name, mc.METHOD_PUSH, ns.DEFAULT_PUSH_PAYLOAD
+                )
+                if response_push and (
+                    response_push[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_PUSH
+                ):
+                    for key, value in response_push[mc.KEY_PAYLOAD].items():
+                        key_namespace = key
+                        payload_type = type(value)
+                        if payload_type and (payload_type is list):
+                            value_item = value[0]
+                            if mc.KEY_SUBID in value_item:
+                                key_channel = mc.KEY_SUBID
+                            elif mc.KEY_ID in value_item:
+                                key_channel = mc.KEY_ID
+                            elif mc.KEY_CHANNEL in value_item:
+                                key_channel = mc.KEY_CHANNEL
+                        break
+
+            if ns.has_get is not False:
+
+                def _response_get_is_good(response: dict | None):
+                    return response and (
+                        response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
+                    )
+
+                response_get = await request_func(ns.name, mc.METHOD_GET, {ns.key: []})
+                if _response_get_is_good(response_get):
+                    key_namespace = ns.key
+                else:
+                    # ns.key might be wrong or verb GET unsupported
+                    if ns.key != key_namespace:
+                        # try the namespace key from PUSH attempt
+                        response_get = await request_func(
+                            ns.name, mc.METHOD_GET, {key_namespace: []}
+                        )
+                    if (not _response_get_is_good(response_get)) and ns.key.endswith(
+                        "x"
+                    ):
+                        # euristic(!)
+                        key_namespace = ns.key[:-1]
+                        response_get = await request_func(
+                            ns.name, mc.METHOD_GET, {key_namespace: []}
+                        )
+                    if not _response_get_is_good(response_get):
+                        # no chance
+                        return
+
+                response_payload = response_get[mc.KEY_PAYLOAD].get(key_namespace)  # type: ignore
+                if not response_payload:
+                    if not ns.is_hub:
+                        # the namespace might need a channel index in the request
+                        if type(response_payload) is list:
+                            await request_func(
+                                ns.name,
+                                mc.METHOD_GET,
+                                {key_namespace: [{mc.KEY_CHANNEL: 0}]},
+                            )
+            return
         else:
-            await self.device.async_request(*self.polling_request)
+            if protocol is mlc.CONF_PROTOCOL_HTTP:
+                await self.device.async_http_request(*self.polling_request)
+            elif protocol is mlc.CONF_PROTOCOL_MQTT:
+                await self.device.async_mqtt_request(*self.polling_request)
+            else:
+                await self.device.async_request(*self.polling_request)
 
 
 class EntityNamespaceMixin(MerossEntity if typing.TYPE_CHECKING else object):
@@ -767,7 +842,7 @@ POLLING_STRATEGY_CONF: dict[
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         220,
-        NamespaceHandler.async_poll_default,
+        None,  # TODO: check what kind of polling is appropriate
     ),
     mn.Appliance_Control_Thermostat_Calibration: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
