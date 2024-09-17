@@ -560,11 +560,9 @@ class NamespaceHandler:
         we're going a straigth route (when the ns is well-known) or experiment some
         euristics.
         """
-        if self.polling_strategy in (None, NamespaceHandler.async_poll_diagnostic):
-            """
-            We don't know yet how to query this ns so we'll brute-force it
-            """
-            ns = self.ns
+        ns = self.ns
+        if ns.experimental:
+            # We don't know yet how to query this ns so we'll brute-force it
             if protocol is mlc.CONF_PROTOCOL_HTTP:
                 request_func = self.device.async_http_request
             elif protocol is mlc.CONF_PROTOCOL_MQTT:
@@ -842,7 +840,7 @@ POLLING_STRATEGY_CONF: dict[
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         220,
-        None,  # TODO: check what kind of polling is appropriate
+        NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_Control_Thermostat_Calibration: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,

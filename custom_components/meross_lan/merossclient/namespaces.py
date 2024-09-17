@@ -24,7 +24,7 @@ class _NamespacesMap(dict):
         try:
             return super().__getitem__(namespace)
         except KeyError:
-            return Namespace(namespace)
+            return Namespace(namespace, experimental=True)
 
 
 NAMESPACES: dict[str, "Namespace"] = _NamespacesMap()
@@ -57,6 +57,8 @@ class Namespace:
     """ns needs the channel index in standard GET queries"""
     payload_get_inner: list | dict | None
     """when set it depicts the structure of the inner payload in GET queries"""
+    experimental: bool
+    """True if the namespace definition/behavior is somewhat unknown"""
 
     __slots__ = (
         "name",
@@ -67,6 +69,7 @@ class Namespace:
         "need_channel",
         "payload_get_inner",
         "payload_type",
+        "experimental",
         "__dict__",
     )
 
@@ -79,6 +82,7 @@ class Namespace:
         key_channel: str | None = None,
         has_get: bool | None = None,
         has_push: bool | None = None,
+        experimental: bool = False,
     ) -> None:
         self.name = name
         if key:
@@ -123,6 +127,7 @@ class Namespace:
         self.key_channel = key_channel or (mc.KEY_ID if self.is_hub else mc.KEY_CHANNEL)
         self.has_get = has_get
         self.has_push = has_push
+        self.experimental = experimental
         NAMESPACES[name] = self
 
     @cached_property
@@ -196,6 +201,7 @@ def ns_build_from_message(namespace: str, method: str, payload: dict):
         payload_get,
         key_channel=key_channel,
         has_push=True if method == mc.METHOD_PUSH else None,
+        experimental=True,
     )
 
 
@@ -204,7 +210,7 @@ def _ns_unknown(
     key: str | None = None,
 ):
     """Builds a definition for a namespace without specific knowledge of supported methods"""
-    return Namespace(name, key, None)
+    return Namespace(name, key, None, experimental=True)
 
 
 def _ns_push(
@@ -336,16 +342,17 @@ Appliance_Control_Upgrade = _ns_get("Appliance.Control.Upgrade")
 
 Appliance_Control_Sensor_Latest = _ns_get_push(
     "Appliance.Control.Sensor.Latest", mc.KEY_LATEST, _LIST_C
-) # carrying miscellaneous sensor values (temp/humi)
+)  # carrying miscellaneous sensor values (temp/humi)
 Appliance_Control_Sensor_History = _ns_get_push(
     "Appliance.Control.Sensor.History", mc.KEY_HISTORY, _LIST_C
-) # history of sensor values
+)  # history of sensor values
 Appliance_Control_Sensor_LatestX = _ns_get_push(
     "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, _LIST
-) # Appearing on both regular devices (ms600) and hub/subdevices (ms130)
+)  # Appearing on both regular devices (ms600) and hub/subdevices (ms130)
+Appliance_Control_Sensor_LatestX.experimental = True
 Appliance_Control_Sensor_HistoryX = _ns_get_push(
     "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, _LIST
-) # history of sensor values
+)  # history of sensor values
 
 # MTS200-960 smart thermostat
 Appliance_Control_Screen_Brightness = _ns_get_push(
