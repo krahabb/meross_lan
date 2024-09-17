@@ -122,7 +122,7 @@ class EntityManager(Loggable):
         return self.logtag
 
     @property
-    def online(self):
+    def online(self) -> bool:
         return True
 
     def managed_entities(self, platform):
