@@ -66,6 +66,11 @@ class EntityTest(EntityComponentTest):
             }
             assert expected_preset_modes == entity_preset_modes
 
+        if mn.Appliance_Control_Sensor_Latest.name in self.ability:
+            # this is prone to false checks depending on the
+            # emulator trace consistency. Right now (2024-09) it works
+            assert entity.current_humidity is not None
+
     async def async_test_enabled_callback(self, entity: MtsClimate):
         if isinstance(entity, Mts960Climate):
             # TODO: restore testing once mts960 is done
