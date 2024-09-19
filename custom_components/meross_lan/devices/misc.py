@@ -17,10 +17,10 @@ from ..sensor import (
     MLNumericSensorDef,
     MLTemperatureSensor,
 )
+from .ms600 import MLPresenceSensor
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
-    from ..sensor import MLNumericSensorArgs
 
 
 class SensorLatestNamespaceHandler(NamespaceHandler):
@@ -42,10 +42,6 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
         mc.KEY_LIGHT: MLNumericSensorDef(MLLightSensor, {}),  # just guessed (2024/09)
     }
 
-    polling_request_payload: list
-
-    __slots__ = ()
-
     def __init__(self, device: "MerossDevice"):
         NamespaceHandler.__init__(
             self,
@@ -53,7 +49,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
             mn.Appliance_Control_Sensor_Latest,
             handler=self._handle_Appliance_Control_Sensor_Latest,
         )
-        self.polling_request_payload.append({mc.KEY_CHANNEL: 0})
+        self.check_polling_channel(0)
 
     def _handle_Appliance_Control_Sensor_Latest(self, header: dict, payload: dict):
         """
@@ -101,51 +97,12 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                                 climate.flush_state()
 
 
-class MLPresenceSensor(MLNumericSensor):
-    """ms600 presence sensor."""
-
-    __slots__ = (
-        "sensor_distance",
-        "sensor_times",
-    )
-
-    def __init__(
-        self,
-        manager: "MerossDevice",
-        channel: object | None,
-        entitykey: str | None,
-        **kwargs: "typing.Unpack[MLNumericSensorArgs]",
-    ):
-        super().__init__(manager, channel, entitykey, None, **kwargs)
-        self.sensor_distance = MLNumericSensor(
-            manager,
-            channel,
-            f"{entitykey}_distance",
-            MLNumericSensor.DeviceClass.DISTANCE,
-            device_scale=1000,
-            native_unit_of_measurement=MLNumericSensor.hac.UnitOfLength.METERS,
-            suggested_display_precision=2,
-        )
-        self.sensor_times = MLNumericSensor(manager, channel, f"{entitykey}_times")
-
-    async def async_shutdown(self):
-        await super().async_shutdown()
-        self.sensor_times: MLNumericSensor = None  # type: ignore
-        self.sensor_distance: MLNumericSensor = None  # type: ignore
-
-    def _parse(self, payload: dict):
-        """
-        {"times": 0, "distance": 760, "value": 2, "timestamp": 1725907895}
-        """
-        self.update_device_value(payload[mc.KEY_VALUE])
-        self.sensor_distance.update_device_value(payload[mc.KEY_DISTANCE])
-        self.sensor_times.update_device_value(payload[mc.KEY_TIMES])
-
-
 class SensorLatestXNamespaceHandler(NamespaceHandler):
     """
     Specialized handler for Appliance.Control.Sensor.LatestX. This ns carries
-    a variadic payload of sensor values (seen on Hub/ms130 and ms600)
+    a variadic payload of sensor values (seen on Hub/ms130 and ms600).
+    This specific implementation is for standard MerossDevice(s) while
+    Hub(s) have a somewhat different parser.
     """
 
     VALUE_KEY_ENTITY_DEF_DEFAULT = MLNumericSensorDef(MLNumericSensor, {})
@@ -157,8 +114,6 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         mc.KEY_TEMP: MLNumericSensorDef(MLTemperatureSensor, {"device_scale": 100}),
     }
 
-    polling_request_payload: list
-
     __slots__ = ()
 
     def __init__(self, device: "MerossDevice"):
@@ -168,7 +123,10 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
             mn.Appliance_Control_Sensor_LatestX,
             handler=self._handle_Appliance_Control_Sensor_LatestX,
         )
-        self.polling_request_payload.append({mc.KEY_CHANNEL: 0})
+        if device.descriptor.type.startswith(mc.TYPE_MS600):
+            MLPresenceSensor(device, 0, f"sensor_{mc.KEY_PRESENCE}")
+            MLLightSensor(device, 0, f"sensor_{mc.KEY_LIGHT}")
+        self.check_polling_channel(0)
 
     def _handle_Appliance_Control_Sensor_LatestX(self, header: dict, payload: dict):
         """
@@ -218,8 +176,8 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                         f"sensor_{key_data}",
                         **entity_def.args,
                     )
-                    entity.key_value = mc.KEY_VALUE
-
+                    # this is needed if we detect a new channel through a PUSH msg parsing
+                    self.check_polling_channel(channel)
                 entity._parse(value_data[0])
 
 

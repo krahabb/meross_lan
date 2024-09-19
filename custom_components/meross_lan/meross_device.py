@@ -336,6 +336,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         ),
         mn.Appliance_Control_Mp3.name: (".media_player", "MLMp3Player"),
         mn.Appliance_Control_PhysicalLock.name: (".switch", "PhysicalLockSwitch"),
+        mn.Appliance_Control_Presence_Config.name: (
+            ".devices.ms600",
+            "namespace_init_presence_config",
+        ),
         mn.Appliance_Control_Screen_Brightness.name: (
             ".devices.thermostat",
             "ScreenBrightnessNamespaceHandler",

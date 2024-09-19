@@ -2,7 +2,6 @@ import typing
 
 from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
-from ..climate import MtsClimate
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber, MtsTemperatureNumber
@@ -232,6 +231,7 @@ class MtsWindowOpened(MLBinarySensor):
     """specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe)."""
 
     ns = mn.Appliance_Control_Thermostat_WindowOpened
+    key_value = mc.KEY_STATUS
 
     def __init__(self, climate: "MtsThermostatClimate"):
         super().__init__(
@@ -241,10 +241,6 @@ class MtsWindowOpened(MLBinarySensor):
             MLBinarySensor.DeviceClass.WINDOW,
         )
         climate.manager.register_parser_entity(self)
-
-    def _parse(self, payload: dict):
-        """{ "channel": 0, "status": 0, "detect": 1, "lmTime": 1642425303 }"""
-        self.update_onoff(payload[mc.KEY_STATUS])
 
 
 class MtsExternalSensorSwitch(me.MEListChannelMixin, MLSwitch):
@@ -396,8 +392,6 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 
 class ScreenBrightnessNamespaceHandler(NamespaceHandler):
 
-    polling_request_payload: list
-
     __slots__ = (
         "number_brightness_operation",
         "number_brightness_standby",
@@ -410,7 +404,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
             mn.Appliance_Control_Screen_Brightness,
             handler=self._handle_Appliance_Control_Screen_Brightness,
         )
-        self.polling_request_payload.append({mc.KEY_CHANNEL: 0})
+        self.check_polling_channel(0)
         self.number_brightness_operation = MLScreenBrightnessNumber(
             device, mc.KEY_OPERATION
         )

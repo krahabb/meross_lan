@@ -322,6 +322,12 @@ Appliance_Control_OverTemp = _ns_get(
     "Appliance.Control.OverTemp", mc.KEY_OVERTEMP, _LIST
 )
 Appliance_Control_PhysicalLock = _ns_push("Appliance.Control.PhysicalLock", mc.KEY_LOCK)
+Appliance_Control_Presence_Config = _ns_get(
+    "Appliance.Control.Presence.Config", mc.KEY_CONFIG, _LIST_C
+)
+Appliance_Control_Presence_Study = _ns_push(
+    "Appliance.Control.Presence.Study", mc.KEY_CONFIG
+)
 Appliance_Control_Spray = _ns_get_push("Appliance.Control.Spray", mc.KEY_SPRAY, _DICT)
 Appliance_Control_TempUnit = _ns_get_push(
     "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, _LIST_C
@@ -347,13 +353,13 @@ Appliance_Control_Sensor_History = _ns_get_push(
     "Appliance.Control.Sensor.History", mc.KEY_HISTORY, _LIST_C
 )  # history of sensor values
 Appliance_Control_Sensor_LatestX = _ns_get_push(
-    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, _LIST
+    "Appliance.Control.Sensor.LatestX", mc.KEY_LATEST, _LIST_C
 )  # Appearing on both regular devices (ms600) and hub/subdevices (ms130)
 Appliance_Control_Sensor_LatestX.experimental = True
 Appliance_Control_Sensor_HistoryX = _ns_get_push(
-    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, _LIST
+    "Appliance.Control.Sensor.HistoryX", mc.KEY_HISTORY, _LIST_C
 )  # history of sensor values
-
+Appliance_Control_Sensor_HistoryX.experimental = True
 # MTS200-960 smart thermostat
 Appliance_Control_Screen_Brightness = _ns_get_push(
     "Appliance.Control.Screen.Brightness"

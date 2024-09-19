@@ -7,6 +7,7 @@ from homeassistant.core import CoreState, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
+from .helpers import reverse_lookup
 from . import meross_entity as me
 
 if typing.TYPE_CHECKING:
@@ -18,6 +19,7 @@ if typing.TYPE_CHECKING:
     from homeassistant.helpers.event import EventStateChangedData
 
     from .climate import MtsClimate
+    from .meross_device import MerossDeviceBase
 
 
 async def async_setup_entry(
@@ -27,6 +29,11 @@ async def async_setup_entry(
 
 
 class MLSelect(me.MerossEntity, select.SelectEntity):
+    """Base 'abstract' class for both select entities representing a
+    device config/option value (through MLConfigSelect) and
+    emulated entities used to configure meross_lan (i.e. MtsTrackedSensor).
+    Be sure to correctly init current_option and options in any derived class."""
+
     PLATFORM = select.DOMAIN
 
     # HA core entity attributes:
@@ -46,6 +53,49 @@ class MLSelect(me.MerossEntity, select.SelectEntity):
         if self.current_option != option:
             self.current_option = option
             self.flush_state()
+
+
+class MLConfigSelect(MLSelect):
+    """
+    Base class for any configurable 'list-like' parameter in the device.
+    This works much-like MLConfigNumber but does not provide a default
+    async_request_value so this needs to be defined in actual implementations.
+    The mapping between HA entity select.options (string representation) and
+    the native (likely int) device value is carried in a dedicated map
+    (which also auto-updates should the device provide an unmapped value).
+    """
+
+    # configure initial options(map) through a class default
+    OPTIONS_MAP: typing.ClassVar[dict[typing.Any, str]] = {}
+
+    options_map: dict[typing.Any, str]
+    __slots__ = ("options_map",)
+
+    def __init__(
+        self,
+        manager: "MerossDeviceBase",
+        channel: object | None,
+        entitykey: str | None = None,
+    ):
+        self.current_option = None
+        self.options_map = dict(
+            self.OPTIONS_MAP
+        )  # make a copy to not pollute when auto-updating
+        self.options = list(self.options_map.values())
+        super().__init__(manager, channel, entitykey)
+
+    def update_device_value(self, device_value):
+        if device_value in self.options_map:
+            self.update_option(self.options_map[device_value])
+        else:
+            self.options_map[device_value] = option = str(device_value)
+            self.options.append(option)
+            self.update_option(option)
+
+    # interface: select.SelectEntity
+    async def async_select_option(self, option: str):
+        if await self.async_request_value(reverse_lookup(self.options_map, option)):
+            self.update_option(option)
 
 
 class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):

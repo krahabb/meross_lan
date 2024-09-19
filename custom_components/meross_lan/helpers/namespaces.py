@@ -119,7 +119,7 @@ class NamespaceHandler:
         "polling_response_item_size",
         "polling_response_size",
         "polling_request",
-        "polling_request_payload",
+        "polling_request_channels",
     )
 
     def __init__(
@@ -159,14 +159,14 @@ class NamespaceHandler:
             self.polling_strategy = None
 
         if ns.need_channel:
-            self.polling_request_payload = []
+            self.polling_request_channels = []
             self.polling_request = (
                 namespace,
                 mc.METHOD_GET,
-                {ns.key: self.polling_request_payload},
+                {ns.key: self.polling_request_channels},
             )
         else:
-            self.polling_request_payload = None
+            self.polling_request_channels = None
             self.polling_request = ns.request_default
 
         # by default we calculate 1 item/channel per payload but we should
@@ -231,20 +231,31 @@ class NamespaceHandler:
         if not parser.namespace_handlers:
             parser.namespace_handlers = set()
         parser.namespace_handlers.add(self)
+        if not self.check_polling_channel(channel):
+            self.polling_response_size = (
+                self.polling_response_base_size
+                + len(self.parsers) * self.polling_response_item_size
+            )
+        self.handler = self._handle_list
 
-        polling_request_payload = self.polling_request_payload
-        if polling_request_payload is not None:
-            for channel_payload in polling_request_payload:
-                if channel_payload[key_channel] == channel:
-                    break
-            else:
-                polling_request_payload.append({key_channel: channel})
-
+    def check_polling_channel(self, channel):
+        """Ensures the channel is set in polling request payload should
+        the ns need it. Also adjusts the estimated polling_response_size.
+        Returns False if not needed"""
+        polling_request_channels = self.polling_request_channels
+        if polling_request_channels is None:
+            return False
+        key_channel = self.key_channel
+        for channel_payload in polling_request_channels:
+            if channel_payload[key_channel] == channel:
+                break
+        else:
+            polling_request_channels.append({key_channel: channel})
         self.polling_response_size = (
             self.polling_response_base_size
-            + len(self.parsers) * self.polling_response_item_size
+            + len(polling_request_channels) * self.polling_response_item_size
         )
-        self.handler = self._handle_list
+        return True
 
     def unregister(self, parser: "NamespaceParser"):
         if self.parsers.pop(getattr(parser, self.key_channel), None):
@@ -731,7 +742,7 @@ POLLING_STRATEGY_CONF: dict[
     ),
     mn.Appliance_System_Debug: (0, 0, 1900, 0, None),
     mn.Appliance_System_DNDMode: (
-        300,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         320,
         0,
@@ -745,7 +756,7 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Config_OverTemp: (
-        300,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         340,
         0,
@@ -801,11 +812,11 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Light_Effect: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         1850,
         0,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Mp3: (
         0,
@@ -815,18 +826,25 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_Control_PhysicalLock: (
-        300,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         35,
         NamespaceHandler.async_poll_lazy,
     ),
+    mn.Appliance_Control_Presence_Config: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        260,
+        NamespaceHandler.async_poll_lazy,
+    ),
     mn.Appliance_Control_Screen_Brightness: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         70,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Sensor_Latest: (
         300,
@@ -843,11 +861,11 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_Control_Thermostat_Calibration: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_CtlRange: (
         0,
@@ -857,11 +875,11 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_once,
     ),
     mn.Appliance_Control_Thermostat_DeadZone: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Frost: (
         0,
@@ -885,18 +903,18 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_Control_Thermostat_Schedule: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         0,
         mlc.PARAM_HEADER_SIZE,
         550,
-        NamespaceHandler.async_poll_default,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_ScheduleB: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         0,
         mlc.PARAM_HEADER_SIZE,
         550,
-        NamespaceHandler.async_poll_default,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Sensor: (
         0,
@@ -906,18 +924,18 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_GarageDoor_Config: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         410,
         0,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_GarageDoor_MultipleConfig: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         140,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Hub_Battery: (
         3600,
@@ -976,18 +994,18 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_RollerShutter_Adjust: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         35,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_RollerShutter_Config: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         70,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_RollerShutter_Position: (
         0,

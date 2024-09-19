@@ -78,7 +78,7 @@ class MerossEntity(
     # These also come handy when generalizing parsing of received payloads
     # for simple enough entities (like sensors, numbers or switches)
     ns: mn.Namespace
-    key_value: str
+    key_value: str = mc.KEY_VALUE
 
     # HA core entity attributes:
     # These are constants throughout our model
@@ -228,10 +228,16 @@ class MerossEntity(
             self.available = False
             self.flush_state()
 
+    def update_device_value(self, device_value):
+        """This is a stub definition. It will be called by _parse (when namespace dispatching
+        is configured so) or directly as a short path inside other parsers to forward the
+        incoming device value to the underlyinh HA entity state."""
+        raise NotImplementedError("Called 'update_device_value' on wrong entity type")
+
     def update_native_value(self, native_value):
-        """This is a 'debug' friendly definition. It is needed to help static type checking
-        when implementing diagnostic sensors calls but, at runtime, it would be an error to
-        call such an implementation for an entity which is not a diagnostic sensor."""
+        """This is a stub definition. It will usually be called by update_device_value
+        with the result of the conversion from the incoming device value (from Meross protocol)
+        to the proper HA type/value for the entity class."""
         raise NotImplementedError("Called 'update_native_value' on wrong entity type")
 
     async def async_request_value(self, device_value):
@@ -274,6 +280,11 @@ class MerossEntity(
     def _generate_unique_id(self):
         return self.manager.generate_unique_id(self)
 
+    # interface: NamespaceParser
+    def _parse(self, payload: dict):
+        """Default parsing for entities. Set the proper
+        key_value in class/instance definition to make it work."""
+        self.update_device_value(payload[self.key_value])
 
 class MENoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
     """
@@ -557,11 +568,6 @@ class MerossNumericEntity(MerossEntity):
             self.native_value = native_value
             self.flush_state()
             return True
-
-    def _parse(self, payload: dict):
-        """Default parsing for sensor and number entities. Set the proper
-        key_value in class/instance definition to make it work."""
-        self.update_device_value(payload[self.key_value])
 
 
 #
