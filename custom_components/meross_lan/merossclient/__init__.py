@@ -147,7 +147,17 @@ def update_dict_strict(dst_dict: dict, src_dict: dict):
     value check to ensure it is valid."""
     for key, value in src_dict.items():
         if key in dst_dict:
-            dst_dict[key] = value
+            dst_value = dst_dict[key]
+            dst_type = type(dst_value)
+            src_type = type(value)
+            if dst_type is dict:
+                if src_type is dict:
+                    update_dict_strict(dst_value, value)
+            elif dst_type is list:
+                if src_type is list:
+                    dst_dict[key] = value # lists ?!
+            else:
+                dst_dict[key] = value
 
 
 def update_dict_strict_by_key(
