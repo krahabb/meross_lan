@@ -1,6 +1,6 @@
 import typing
 
-
+from .. import meross_entity as me
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber
@@ -9,11 +9,10 @@ from ..sensor import MLNumericSensor
 
 if typing.TYPE_CHECKING:
     from ..meross_device import MerossDevice
-    from ..meross_entity import MerossEntity
     from ..sensor import MLNumericSensorArgs
 
 
-class PresenceConfigBase(MerossEntity if typing.TYPE_CHECKING else object):
+class PresenceConfigBase(me.MerossEntity if typing.TYPE_CHECKING else object):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
     manager: "MerossDevice"
@@ -21,6 +20,9 @@ class PresenceConfigBase(MerossEntity if typing.TYPE_CHECKING else object):
     ns = mn.Appliance_Control_Presence_Config
 
     key_value_root: str
+
+    # HA core entity attributes:
+    entity_category = me.EntityCategory.CONFIG
 
     async def async_request_value(self, device_value):
         ns = self.ns
@@ -60,7 +62,7 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
 
     def __init__(self, manager: "MerossDevice", channel: object, key: str):
         self.key_value = key
-        super().__init__(manager, channel, f"presence_config_mode_{key}")
+        super().__init__(manager, channel, f"presence_config_mode_{key}", name=key)
 
 
 class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
@@ -79,6 +81,7 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
             channel,
             f"presence_config_noBodyTime_time",
             MLConfigNumber.DEVICE_CLASS_DURATION,  # defaults to seconds which is the native device unit
+            name=mc.KEY_NOBODYTIME,
         )
 
 
@@ -100,6 +103,7 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
             MLConfigNumber.DeviceClass.DISTANCE,
             device_scale=1000,
             native_unit_of_measurement=MLConfigNumber.hac.UnitOfLength.METERS,
+            name=mc.KEY_DISTANCE,
         )
 
 
@@ -120,6 +124,7 @@ class PresenceConfigSensitivity(PresenceConfigSelectBase):
             manager,
             channel,
             f"presence_config_sensitivity_level",
+            name=mc.KEY_SENSITIVITY,
         )
 
 
@@ -137,6 +142,7 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
             channel,
             f"presence_config_mthx_{key}",
             None,
+            name=key,
         )
 
 
@@ -203,7 +209,9 @@ class MLPresenceSensor(MLNumericSensor):
         entitykey: str | None,
         **kwargs: "typing.Unpack[MLNumericSensorArgs]",
     ):
-        super().__init__(manager, channel, entitykey, None, **kwargs)
+        super().__init__(
+            manager, channel, entitykey, None, **(kwargs | {"name": "Presence"})
+        )
         self.sensor_distance = MLNumericSensor(
             manager,
             channel,
@@ -212,8 +220,14 @@ class MLPresenceSensor(MLNumericSensor):
             device_scale=1000,
             native_unit_of_measurement=MLNumericSensor.hac.UnitOfLength.METERS,
             suggested_display_precision=2,
+            name="Presence distance",
         )
-        self.sensor_times = MLNumericSensor(manager, channel, f"{entitykey}_times")
+        self.sensor_times = MLNumericSensor(
+            manager,
+            channel,
+            f"{entitykey}_times",
+            name="Presence times",
+        )
 
     async def async_shutdown(self):
         await super().async_shutdown()

@@ -7,8 +7,8 @@ from homeassistant.core import CoreState, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from .helpers import reverse_lookup
 from . import meross_entity as me
+from .helpers import reverse_lookup
 
 if typing.TYPE_CHECKING:
 
@@ -20,6 +20,10 @@ if typing.TYPE_CHECKING:
 
     from .climate import MtsClimate
     from .meross_device import MerossDeviceBase
+
+    # optional arguments for MLConfigNumber init
+    class MLConfigSelectArgs(me.MerossEntityArgs):
+        pass
 
 
 async def async_setup_entry(
@@ -76,13 +80,14 @@ class MLConfigSelect(MLSelect):
         manager: "MerossDeviceBase",
         channel: object | None,
         entitykey: str | None = None,
+        **kwargs: "typing.Unpack[MLConfigSelectArgs]",
     ):
         self.current_option = None
         self.options_map = dict(
             self.OPTIONS_MAP
         )  # make a copy to not pollute when auto-updating
         self.options = list(self.options_map.values())
-        super().__init__(manager, channel, entitykey)
+        super().__init__(manager, channel, entitykey, None, **kwargs)
 
     def update_device_value(self, device_value):
         if device_value in self.options_map:

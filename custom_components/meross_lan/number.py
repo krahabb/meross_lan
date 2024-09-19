@@ -13,7 +13,7 @@ if typing.TYPE_CHECKING:
     from .climate import MtsClimate
     from .meross_device import MerossDeviceBase
 
-    # optional arguments for MLNumericSensor init
+    # optional arguments for MLConfigNumber init
     class MLConfigNumberArgs(me.MerossNumericEntityArgs):
         pass
 

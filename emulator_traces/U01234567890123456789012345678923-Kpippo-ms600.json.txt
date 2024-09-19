@@ -1,0 +1,840 @@
+{
+  "home_assistant": {
+    "installation_type": "Unknown",
+    "version": "2023.11.3",
+    "dev": false,
+    "hassio": false,
+    "virtualenv": false,
+    "python_version": "3.11.6",
+    "docker": false,
+    "arch": "aarch64",
+    "timezone": "Europe/Berlin",
+    "os_name": "Linux",
+    "os_version": "6.1.21-v8+",
+    "run_as_root": false
+  },
+  "custom_components": {
+    "hacs": {
+      "version": "1.34.0",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "alphaess": {
+      "version": "0.5.4",
+      "requirements": [
+        "alphaessopenapi==0.0.11"
+      ]
+    },
+    "meross_lan": {
+      "version": "5.3.1",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "@krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "C4E7AE*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "5.3.1",
+    "is_built_in": false
+  },
+  "data": {
+    "device_id": "###############################5",
+    "payload": {
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "ms600",
+            "subType": "un",
+            "version": "9.0.0",
+            "chipType": "rtl8720cm",
+            "uuid": "###############################5",
+            "macAddress": "################0"
+          },
+          "firmware": {
+            "version": "9.3.22",
+            "compileTime": "2024/07/09-09:44:18",
+            "encrypt": 1,
+            "wifiMac": "################0",
+            "innerIp": "#############0",
+            "server": "###################0",
+            "port": "@0",
+            "userId": "@0"
+          },
+          "time": {
+            "timestamp": 1726025259,
+            "timezone": "Europe/Berlin",
+            "timeRule": [
+              [
+                1711846800,
+                7200,
+                1
+              ],
+              [
+                1729990800,
+                3600,
+                0
+              ],
+              [
+                1743296400,
+                7200,
+                1
+              ],
+              [
+                1761440400,
+                3600,
+                0
+              ],
+              [
+                1774746000,
+                7200,
+                1
+              ],
+              [
+                1792890000,
+                3600,
+                0
+              ],
+              [
+                1806195600,
+                7200,
+                1
+              ],
+              [
+                1824944400,
+                3600,
+                0
+              ],
+              [
+                1837645200,
+                7200,
+                1
+              ],
+              [
+                1856394000,
+                3600,
+                0
+              ],
+              [
+                1869094800,
+                7200,
+                1
+              ],
+              [
+                1887843600,
+                3600,
+                0
+              ],
+              [
+                1901149200,
+                7200,
+                1
+              ],
+              [
+                1919293200,
+                3600,
+                0
+              ],
+              [
+                1932598800,
+                7200,
+                1
+              ],
+              [
+                1950742800,
+                3600,
+                0
+              ],
+              [
+                1964048400,
+                7200,
+                1
+              ],
+              [
+                1982797200,
+                3600,
+                0
+              ],
+              [
+                1995498000,
+                7200,
+                1
+              ],
+              [
+                2014246800,
+                3600,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "OQGNi0Kbk2iQtr6y",
+            "who": 1
+          }
+        },
+        "digest": {}
+      },
+      "ability": {
+        "Appliance.Config.Key": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Info": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Time": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 3
+        },
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Control.Sensor.LatestX": {},
+        "Appliance.Control.Presence.Config": {},
+        "Appliance.Control.Presence.Study": {},
+        "Appliance.Control.Sensor.HistoryX": {}
+      }
+    },
+    "key": "###############################0",
+    "host": "#############0",
+    "timestamp": 1725975566.1338913,
+    "device": {
+      "class": "MerossDevice",
+      "conf_protocol": "auto",
+      "pref_protocol": "http",
+      "curr_protocol": "http",
+      "polling_period": 30,
+      "device_response_size_min": 1244,
+      "device_response_size_max": 5000,
+      "MQTT": {
+        "cloud_profile": true,
+        "locally_active": false,
+        "mqtt_connection": true,
+        "mqtt_connected": true,
+        "mqtt_publish": false,
+        "mqtt_active": true
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "namespace_handlers": {
+        "Appliance.System.All": {
+          "lastrequest": 1726025260.4813643,
+          "lastresponse": 1726025260.6100175,
+          "polling_epoch_next": 1726025555.4813643,
+          "polling_strategy": "async_poll_all"
+        },
+        "Appliance.System.DNDMode": {
+          "lastrequest": 1726034563.0670478,
+          "lastresponse": 1726034563.1297138,
+          "polling_epoch_next": 1726034863.1297138,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.System.Runtime": {
+          "lastrequest": 1726034563.0670478,
+          "lastresponse": 1726034563.1297138,
+          "polling_epoch_next": 1726034863.1297138,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.System.Debug": {
+          "lastrequest": 0.0,
+          "lastresponse": 1726025260.8339193,
+          "polling_epoch_next": 1726025260.8339193,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Sensor.LatestX": {
+          "lastrequest": 0.0,
+          "lastresponse": 1726031368.7380261,
+          "polling_epoch_next": 1726031368.7380261,
+          "polling_strategy": "async_poll_default"
+        }
+      },
+      "namespace_pushes": {
+        "Appliance.Control.Sensor.LatestX": {
+          "latest": [
+            {
+              "channel": 0,
+              "data": {
+                "presence": [
+                  {
+                    "distance": 5760,
+                    "value": 1,
+                    "timestamp": 1726031367,
+                    "times": 0
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "device_info": {
+        "uuid": "###############################5",
+        "onlineStatus": 1,
+        "devName": "Smart Presence Sensor",
+        "devIconId": "device_ms600_un",
+        "bindTime": 1725972567,
+        "deviceType": "ms600",
+        "subType": "un",
+        "channels": [
+          {}
+        ],
+        "region": "eu",
+        "fmwareVersion": "9.3.22",
+        "hdwareVersion": "9.0.0",
+        "userDevIcon": "",
+        "iconType": 1,
+        "domain": "###################0",
+        "reservedDomain": "###################0",
+        "hardwareCapabilities": []
+      }
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2024/09/11 - 08:06:19",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "ms600",
+              "subType": "un",
+              "version": "9.0.0",
+              "chipType": "rtl8720cm",
+              "uuid": "###############################5",
+              "macAddress": "################0"
+            },
+            "firmware": {
+              "version": "9.3.22",
+              "compileTime": "2024/07/09-09:44:18",
+              "encrypt": 1,
+              "wifiMac": "################0",
+              "innerIp": "#############0",
+              "server": "###################0",
+              "port": "@0",
+              "userId": "@0"
+            },
+            "time": {
+              "timestamp": 1726025259,
+              "timezone": "Europe/Berlin",
+              "timeRule": [
+                [
+                  1711846800,
+                  7200,
+                  1
+                ],
+                [
+                  1729990800,
+                  3600,
+                  0
+                ],
+                [
+                  1743296400,
+                  7200,
+                  1
+                ],
+                [
+                  1761440400,
+                  3600,
+                  0
+                ],
+                [
+                  1774746000,
+                  7200,
+                  1
+                ],
+                [
+                  1792890000,
+                  3600,
+                  0
+                ],
+                [
+                  1806195600,
+                  7200,
+                  1
+                ],
+                [
+                  1824944400,
+                  3600,
+                  0
+                ],
+                [
+                  1837645200,
+                  7200,
+                  1
+                ],
+                [
+                  1856394000,
+                  3600,
+                  0
+                ],
+                [
+                  1869094800,
+                  7200,
+                  1
+                ],
+                [
+                  1887843600,
+                  3600,
+                  0
+                ],
+                [
+                  1901149200,
+                  7200,
+                  1
+                ],
+                [
+                  1919293200,
+                  3600,
+                  0
+                ],
+                [
+                  1932598800,
+                  7200,
+                  1
+                ],
+                [
+                  1950742800,
+                  3600,
+                  0
+                ],
+                [
+                  1964048400,
+                  7200,
+                  1
+                ],
+                [
+                  1982797200,
+                  3600,
+                  0
+                ],
+                [
+                  1995498000,
+                  7200,
+                  1
+                ],
+                [
+                  2014246800,
+                  3600,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "OQGNi0Kbk2iQtr6y",
+              "who": 1
+            }
+          },
+          "digest": {}
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:19",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Key": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Info": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Time": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 3
+          },
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Control.Sensor.LatestX": {},
+          "Appliance.Control.Presence.Config": {},
+          "Appliance.Control.Presence.Study": {},
+          "Appliance.Control.Sensor.HistoryX": {}
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": {}
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "matter": {}
+          }
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "9.3.22",
+              "sysUpTime": "16h22m37s",
+              "UTC": 1726034778,
+              "localTimeOffset": 7200,
+              "localTime": "Wed Sep 11 08:06:18 2024",
+              "suncalc": "7:53;19:59",
+              "memTotal": 3993792,
+              "memFree": 3653336,
+              "memMini": 3622728
+            },
+            "network": {
+              "linkStatus": "connected",
+              "snr": 37,
+              "channel": 1,
+              "signal": 100,
+              "rssi": -49,
+              "ssid": "############0",
+              "gatewayMac": "################0",
+              "innerIp": "#############0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "linkStatus": "connected",
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "#1",
+              "secondPort": "@1",
+              "userId": "@0",
+              "sysConnectTime": "Tue Sep 10 23:50:01 2024",
+              "sysOnlineTime": "6h16m17s",
+              "sysDisconnectCount": 1,
+              "iotDisconnectDetail": {
+                "totalCount": 1,
+                "detials": [
+                  {
+                    "sysUptime": 36380,
+                    "timestamp": 1726012200
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:19",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100
+          }
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:19",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.LatestX",
+        {
+          "latest": []
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Sensor.LatestX",
+        {
+          "latest": []
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Sensor.LatestX payload:{'latest': []}"
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Presence.Config",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Presence.Config",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Presence.Config payload:{'config': []}"
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Presence.Config",
+        {
+          "config": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Presence.Config",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "mode": {
+                "workMode": 1,
+                "testMode": 2
+              },
+              "noBodyTime": {
+                "time": 15
+              },
+              "distance": {
+                "value": 8100
+              },
+              "sensitivity": {
+                "level": 2
+              },
+              "mthx": {
+                "mth1": 120,
+                "mth2": 72,
+                "mth3": 72
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Control.Presence.Config payload:{'config': [{'channel': 0, 'mode': {'workMode': 1, 'testMode': 2}, 'noBodyTime': {'time': 15}, 'distance': {'value': 8100}, 'sensitivity': {'level': 2}, 'mthx': {'mth1': 120, 'mth2': 72, 'mth3': 72}}]}"
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Presence.Study",
+        {
+          "study": {}
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.Presence.Study (messageId:84f91e0966014bca8c2479f464c70255 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Presence.Study",
+        {}
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Presence.Study",
+        {
+          "study": [
+            {
+              "channel": 0,
+              "value": 2,
+              "status": 1
+            }
+          ]
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Control.Presence.Study payload:{'study': [{'channel': 0, 'value': 2, 'status': 1}]}"
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Sensor.HistoryX",
+        {
+          "historyx": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.Sensor.HistoryX (messageId:f26fb8c2ac8a4b1592002f8881f070c2 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.Sensor.HistoryX",
+        {}
+      ],
+      [
+        "2024/09/11 - 08:06:20",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.Sensor.HistoryX (messageId:4b2e180ad29340a185829213622acaca ServerDisconnectedError:Server disconnected)"
+      ]
+    ]
+  }
+}

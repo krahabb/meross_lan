@@ -85,6 +85,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                             f"sensor_{key}",
                             **entity_def.args,
                         )
+                        self.check_polling_channel(channel)
 
                     entity.update_device_value(value)
 
