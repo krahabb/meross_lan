@@ -793,6 +793,21 @@ class MTS150SubDevice(MTS100SubDevice):
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150] = MTS150SubDevice
 
 
+class MTS150PSubDevice(MTS100SubDevice):
+    def __init__(self, hub: HubMixin, p_digest: dict):
+        super().__init__(hub, p_digest, mc.TYPE_MTS150P)
+
+    def _parse_mts150p(self, p_mts150p: dict):
+        """{"mode": 3,"currentSet": 60,"updateMode": 3,"updateTemp": 175,
+        "motorCurLocation": 0,"motorStartCtr": 883,"motorTotalPath": 69852}"""
+        # typically called by MerossSubDevice.parse_digest
+        # when parsing Appliance.System.All
+        pass
+
+
+WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150P] = MTS150PSubDevice
+
+
 class GS559SubDevice(MerossSubDevice):
     STATUS_MAP = {
         17: "error_temperature",
