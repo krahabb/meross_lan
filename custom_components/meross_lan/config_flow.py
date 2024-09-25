@@ -585,17 +585,6 @@ class ConfigFlow(MerossFlowHandlerMixin, ce.ConfigFlow, domain=mlc.DOMAIN):
             menu_options=["profile", "device"],
         )
 
-    async def async_step_unignore(self, user_input):
-        """Rediscover a config entry by it's unique_id."""
-        match ConfigEntryType.get_type_and_id(user_input["unique_id"]):
-            case (ConfigEntryType.DEVICE, mac_address_fmt):
-                if mac_address_fmt in ConfigFlow.DHCP_DISCOVERIES:
-                    return await self.async_step_dhcp(
-                        ConfigFlow.DHCP_DISCOVERIES.pop(mac_address_fmt)
-                    )
-
-        return self.async_abort()
-
     async def async_step_hub(self, user_input=None):
         """configure the MQTT discovery device key"""
         if user_input is not None:
