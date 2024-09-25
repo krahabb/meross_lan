@@ -453,6 +453,7 @@ TYPE_NAME_MAP["mss"] = "Smart Switch"
 TYPE_MTS100 = "mts100"  # Smart thermostat over hub
 TYPE_MTS100V3 = "mts100v3"  # Smart thermostat over hub
 TYPE_MTS150 = "mts150"  # Smart thermostat over hub
+TYPE_MTS150P = "mts150p"  # Smart thermostat over hub
 TYPE_NAME_MAP["mts1"] = "Smart Thermostat Valve"
 TYPE_MTS200 = "mts200"  # Smart thermostat over wifi
 TYPE_MTS960 = "mts960"  # Smart thermostat over wifi
@@ -485,7 +486,7 @@ TYPE_NAME_MAP[TYPE_MS600] = "Smart Presence Sensor"
 #
 # HUB helpers symbols
 #
-MTS100_ALL_TYPESET = {TYPE_MTS150, TYPE_MTS100V3, TYPE_MTS100}
+MTS100_ALL_TYPESET = {TYPE_MTS150, TYPE_MTS150P, TYPE_MTS100V3, TYPE_MTS100}
 """subdevices types listed in NS_APPLIANCE_HUB_MTS100_ALL"""
 
 
