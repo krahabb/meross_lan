@@ -4,7 +4,8 @@ from typing import Final
 from uuid import uuid4
 
 from homeassistant import config_entries
-from homeassistant.components.dhcp import DhcpServiceInfo
+from homeassistant import const as hac
+from homeassistant.components import dhcp
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult, FlowResultType
@@ -23,6 +24,11 @@ from custom_components.meross_lan.merossclient import (
 )
 
 from tests import const as tc, helpers
+
+if (hac.MAJOR_VERSION, hac.MINOR_VERSION) >= (2024, 10):
+    from homeassistant.helpers import discovery_flow
+else:
+    discovery_flow = None
 
 
 async def _cleanup_config_entry(hass: HomeAssistant, result: FlowResult):
@@ -259,31 +265,68 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
     assert flow_device is None
 
 
-async def test_dhcp_discovery_config_flow(hass: HomeAssistant):
-    result = await hass.config_entries.flow.async_init(
-        mlc.DOMAIN,
-        context={"source": config_entries.SOURCE_DHCP},
-        data=DhcpServiceInfo(tc.MOCK_DEVICE_IP, "", tc.MOCK_MACADDRESS),
-    )
+async def _create_dhcp_discovery_flow(
+    hass: HomeAssistant, dhcp_service_info: dhcp.DhcpServiceInfo
+):
+    # helper to create the dhcp discovery under different HA cores discovery semantics
+    if discovery_flow:
+        # new semantic (from 2024.10 ?)
+        dhcp_discovery_flow_context = {"source": config_entries.SOURCE_DHCP}
+        discovery_flow.async_create_flow(
+            hass,
+            mlc.DOMAIN,
+            dhcp_discovery_flow_context,
+            dhcp_service_info,
+            discovery_key=discovery_flow.DiscoveryKey(
+                domain=dhcp.DOMAIN,
+                key=dhcp_service_info.macaddress,
+                version=1,
+            ),
+        )
+        await hass.async_block_till_done(wait_background_tasks=True)
+        for flow_result in hass.config_entries.flow.async_progress_by_handler(
+            mlc.DOMAIN,
+            include_uninitialized=True,
+            match_context=dhcp_discovery_flow_context,
+        ):
+            return flow_result
+        else:
+            return None
+    else:
+        # old semantic
+        return await hass.config_entries.flow.async_init(
+            mlc.DOMAIN,
+            context={"source": config_entries.SOURCE_DHCP},
+            data=dhcp_service_info,
+        )
 
-    assert result["type"] == FlowResultType.FORM  # type: ignore
-    assert result["step_id"] == "device"  # type: ignore
+
+async def test_dhcp_discovery_config_flow(hass: HomeAssistant):
+    result = await _create_dhcp_discovery_flow(
+        hass,
+        dhcp.DhcpServiceInfo(
+            tc.MOCK_DEVICE_IP,
+            "",
+            tc.MOCK_MACADDRESS,
+        ),
+    )
+    assert result, "Dhcp discovery didn't create the discovery flow"
+    assert result.get("step_id") == "device"
 
 
 async def test_dhcp_ignore_config_flow(hass: HomeAssistant):
-    """
-    # Unignore step semantics have been removed in HA 2024.10
-    # TODO: use new semantics for discovery flows (homeassistant.helpers.discovery_flow)
 
-    result = await hass.config_entries.flow.async_init(
-        mlc.DOMAIN,
-        context={"source": config_entries.SOURCE_DHCP},
-        data=DhcpServiceInfo(tc.MOCK_DEVICE_IP, "", tc.MOCK_MACADDRESS),
+    dhcp_service_info = dhcp.DhcpServiceInfo(
+        tc.MOCK_DEVICE_IP,
+        "",
+        tc.MOCK_MACADDRESS,
     )
+    # create the initial discovery
+    result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
+    assert result, "Dhcp discovery didn't create the initial discovery flow"
+    assert result.get("step_id") == "device"
 
-    assert result["type"] == FlowResultType.FORM  # type: ignore
-    assert result["step_id"] == "device"  # type: ignore
-
+    # now 'ignore' it
     entry_unique_id = fmt_macaddress(tc.MOCK_MACADDRESS)
     result = await hass.config_entries.flow.async_init(
         mlc.DOMAIN,
@@ -296,19 +339,19 @@ async def test_dhcp_ignore_config_flow(hass: HomeAssistant):
 
     assert not hass.config_entries.flow.async_progress_by_handler(mlc.DOMAIN)
 
-    result = await hass.config_entries.flow.async_init(
-        mlc.DOMAIN,
-        context={"source": config_entries.SOURCE_DHCP},
-        data=DhcpServiceInfo(tc.MOCK_DEVICE_IP, "", tc.MOCK_MACADDRESS),
-    )
+    # try dhcp rediscovery..should abort
+    result = await _create_dhcp_discovery_flow(hass, dhcp_service_info)
+    assert not result, "Dhcp discovery didn't ignored the discovery flow"
 
-    assert result["type"] == FlowResultType.ABORT  # type: ignore
-
+    # now remove the ignored entry
     ignored_entry = ConfigEntriesHelper(hass).get_config_entry(entry_unique_id)
     assert ignored_entry
     await hass.config_entries.async_remove(ignored_entry.entry_id)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
+    """
+    I expect the DHCP re-discovery kicks in automatically but this check is not not
+    working...I'm giving up atm
     has_progress = False
     for progress in hass.config_entries.flow.async_progress_by_handler(mlc.DOMAIN):
         assert progress.get("context", {}).get("unique_id") == entry_unique_id
@@ -357,7 +400,9 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             result = await hass.config_entries.flow.async_init(
                 mlc.DOMAIN,
                 context={"source": config_entries.SOURCE_DHCP},
-                data=DhcpServiceInfo(DHCP_GOOD_HOST, "", device.descriptor.macAddress),
+                data=dhcp.DhcpServiceInfo(
+                    DHCP_GOOD_HOST, "", device.descriptor.macAddress
+                ),
             )
 
             assert result["type"] == FlowResultType.ABORT  # type: ignore
@@ -385,7 +430,9 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             result = await hass.config_entries.flow.async_init(
                 mlc.DOMAIN,
                 context={"source": config_entries.SOURCE_DHCP},
-                data=DhcpServiceInfo(DHCP_BOGUS_HOST, "", device.descriptor.macAddress),
+                data=dhcp.DhcpServiceInfo(
+                    DHCP_BOGUS_HOST, "", device.descriptor.macAddress
+                ),
             )
 
             assert result["type"] == FlowResultType.ABORT  # type: ignore
