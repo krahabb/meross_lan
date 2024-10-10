@@ -1,6 +1,7 @@
 import typing
 
 from .. import meross_entity as me
+from ..binary_sensor import MLBinarySensor
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber
@@ -199,6 +200,7 @@ class MLPresenceSensor(MLNumericSensor):
 
     __slots__ = (
         "sensor_distance",
+        "binary_sensor_motion",
         "sensor_times",
     )
 
@@ -222,6 +224,9 @@ class MLPresenceSensor(MLNumericSensor):
             suggested_display_precision=2,
             name="Presence distance",
         )
+        self.binary_sensor_motion = MLBinarySensor(
+            manager, channel, f"{entitykey}_motion", MLBinarySensor.DeviceClass.MOTION
+        )
         self.sensor_times = MLNumericSensor(
             manager,
             channel,
@@ -232,6 +237,7 @@ class MLPresenceSensor(MLNumericSensor):
     async def async_shutdown(self):
         await super().async_shutdown()
         self.sensor_times: MLNumericSensor = None  # type: ignore
+        self.binary_sensor_motion: MLBinarySensor = None  # type: ignore
         self.sensor_distance: MLNumericSensor = None  # type: ignore
 
     def _parse(self, payload: dict):
@@ -240,4 +246,5 @@ class MLPresenceSensor(MLNumericSensor):
         """
         self.update_device_value(payload[mc.KEY_VALUE])
         self.sensor_distance.update_device_value(payload[mc.KEY_DISTANCE])
+        self.binary_sensor_motion.update_onoff(payload[mc.KEY_VALUE] == 2)
         self.sensor_times.update_device_value(payload[mc.KEY_TIMES])
