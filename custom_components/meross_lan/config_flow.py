@@ -6,6 +6,7 @@ from enum import StrEnum
 import json
 import logging
 from time import time
+from types import MappingProxyType
 import typing
 
 from homeassistant import config_entries as ce, const as hac
@@ -325,7 +326,8 @@ class MerossFlowHandlerMixin(
                             # this patch is the best I can think of
                             ce.ConfigEntry(
                                 version=self.VERSION,
-                                minor_version=self.MINOR_VERSION,  # type: ignore
+                                minor_version=self.MINOR_VERSION,  # required since 2024.1
+                                discovery_keys=MappingProxyType({}), # required since 2024.10
                                 domain=mlc.DOMAIN,
                                 title=profile_config[mc.KEY_EMAIL],
                                 data=profile_config,
