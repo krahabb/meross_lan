@@ -16,18 +16,17 @@ from ..light import (
 )
 from ..meross_entity import MEListChannelMixin
 from ..merossclient import const as mc, namespaces as mn
-from ..sensor import MLHumiditySensor, MLTemperatureSensor
+from ..sensor import MLHumiditySensor, MLNumericSensorDef, MLTemperatureSensor
 from .spray import MLSpray
 
 if typing.TYPE_CHECKING:
     from ..meross_device import DigestInitReturnType, MerossDevice
+    from ..sensor import MLNumericSensor
 
 
-DIFFUSER_SENSOR_CLASS_MAP: dict[
-    str, type[MLHumiditySensor] | type[MLTemperatureSensor]
-] = {
-    mc.KEY_HUMIDITY: MLHumiditySensor,
-    mc.KEY_TEMPERATURE: MLTemperatureSensor,
+DIFFUSER_SENSOR_CLASS_MAP: dict[str, MLNumericSensorDef] = {
+    mc.KEY_HUMIDITY: MLNumericSensorDef(MLHumiditySensor, {}),
+    mc.KEY_TEMPERATURE: MLNumericSensorDef(MLTemperatureSensor, {"device_scale": 10}),
 }
 
 
@@ -68,16 +67,14 @@ def digest_init_diffuser(
             }
             """
             entities = device.entities
-            for key in (mc.KEY_HUMIDITY, mc.KEY_TEMPERATURE):
+            for key in DIFFUSER_SENSOR_CLASS_MAP:
                 if key in payload:
                     try:
-                        entities[key].update_native_value(
-                            payload[key][mc.KEY_VALUE] / 10
-                        )
+                        entity: MLNumericSensor = entities[key]  # type: ignore
                     except KeyError:
-                        DIFFUSER_SENSOR_CLASS_MAP[key](
-                            device, None, device_value=payload[key][mc.KEY_VALUE] / 10
-                        )
+                        entity_def = DIFFUSER_SENSOR_CLASS_MAP[key]
+                        entity = entity_def.type(device, None, key, **entity_def.args)
+                    entity.update_device_value(payload[key][mc.KEY_VALUE])
 
         NamespaceHandler(
             device,
@@ -191,8 +188,8 @@ class MLDiffuserSpray(MEListChannelMixin, MLSpray):
 
     ns = mn.Appliance_Control_Diffuser_Spray
 
-    SPRAY_MODE_MAP = {
-        mc.DIFFUSER_SPRAY_MODE_OFF: MLSpray.OPTION_SPRAY_MODE_OFF,
-        mc.DIFFUSER_SPRAY_MODE_ECO: MLSpray.OPTION_SPRAY_MODE_ECO,
-        mc.DIFFUSER_SPRAY_MODE_FULL: MLSpray.OPTION_SPRAY_MODE_CONTINUOUS,
+    OPTIONS_MAP = {
+        mc.DIFFUSER_SPRAY_MODE_OFF: MLSpray.OPTIONS_MAP[mc.SPRAY_MODE_OFF],
+        mc.DIFFUSER_SPRAY_MODE_ECO: MLSpray.OPTIONS_MAP[mc.SPRAY_MODE_INTERMITTENT],
+        mc.DIFFUSER_SPRAY_MODE_FULL: MLSpray.OPTIONS_MAP[mc.SPRAY_MODE_CONTINUOUS],
     }

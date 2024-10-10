@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import typing
 
 from homeassistant.components import sensor
@@ -130,11 +131,22 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         )
 
 
+@dataclass(frozen=True, slots=True)
+class MLNumericSensorDef:
+    """Descriptor class used when populating maps used to dynamically instantiate (sensor)
+    entities based on their appearance in a payload key."""
+
+    type: "type[MLNumericSensor]"
+    args: "MLNumericSensorArgs"
+
+
 class MLHumiditySensor(MLNumericSensor):
-    """Specialization for widely used device class type.
-    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """Specialization for Humidity sensor.
+    - device_scale defaults to 10 which is actually the only scale seen so far.
+    - suggested_display_precision defaults to 0
     """
 
+    _attr_device_scale = 10
     # HA core entity attributes:
     _attr_suggested_display_precision = 0
 
@@ -145,6 +157,7 @@ class MLHumiditySensor(MLNumericSensor):
         entitykey: str | None = "humidity",
         **kwargs: "typing.Unpack[MLNumericSensorArgs]",
     ):
+        kwargs.setdefault("name", "Humidity")
         super().__init__(
             manager,
             channel,
@@ -155,8 +168,9 @@ class MLHumiditySensor(MLNumericSensor):
 
 
 class MLTemperatureSensor(MLNumericSensor):
-    """Specialization for widely used device class type.
-    This, beside providing a shortcut initializer, will benefit sensor entity testing checks.
+    """Specialization for Temperature sensor.
+    - device_scale defaults to 1 (from base class definition) and is likely to be overriden.
+    - suggested_display_precision defaults to 1
     """
 
     # HA core entity attributes:
@@ -169,11 +183,36 @@ class MLTemperatureSensor(MLNumericSensor):
         entitykey: str | None = "temperature",
         **kwargs: "typing.Unpack[MLNumericSensorArgs]",
     ):
+        kwargs.setdefault("name", "Temperature")
         super().__init__(
             manager,
             channel,
             entitykey,
             sensor.SensorDeviceClass.TEMPERATURE,
+            **kwargs,
+        )
+
+
+class MLLightSensor(MLNumericSensor):
+    """Specialization for sensor reporting light illuminance (lux)."""
+
+    _attr_device_scale = 1
+    # HA core entity attributes:
+    _attr_suggested_display_precision = 0
+
+    def __init__(
+        self,
+        manager: "EntityManager",
+        channel: object | None,
+        entitykey: str | None = "light",
+        **kwargs: "typing.Unpack[MLNumericSensorArgs]",
+    ):
+        kwargs.setdefault("name", "Light")
+        super().__init__(
+            manager,
+            channel,
+            entitykey,
+            sensor.SensorDeviceClass.ILLUMINANCE,
             **kwargs,
         )
 

@@ -107,6 +107,7 @@ class NamespaceHandler:
         "ns",
         "handler",
         "parsers",
+        "key_channel",
         "entity_class",
         "lastrequest",
         "lastresponse",
@@ -118,7 +119,7 @@ class NamespaceHandler:
         "polling_response_item_size",
         "polling_response_size",
         "polling_request",
-        "polling_request_payload",
+        "polling_request_channels",
     )
 
     def __init__(
@@ -136,6 +137,7 @@ class NamespaceHandler:
         self.ns = ns
         self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
         self.parsers: dict[object, typing.Callable[[dict], None]] = {}
+        self.key_channel = ns.key_channel
         self.entity_class = None
         self.handler = handler or getattr(
             device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
@@ -157,14 +159,14 @@ class NamespaceHandler:
             self.polling_strategy = None
 
         if ns.need_channel:
-            self.polling_request_payload = []
+            self.polling_request_channels = []
             self.polling_request = (
                 namespace,
                 mc.METHOD_GET,
-                {ns.key: self.polling_request_payload},
+                {ns.key: self.polling_request_channels},
             )
         else:
-            self.polling_request_payload = None
+            self.polling_request_channels = None
             self.polling_request = ns.request_default
 
         # by default we calculate 1 item/channel per payload but we should
@@ -206,7 +208,11 @@ class NamespaceHandler:
         self.handler = self._handle_list
         self.device.platforms.setdefault(entity_class.PLATFORM)
 
-    def register_parser(self, parser: "NamespaceParser"):
+    def register_parser(
+        self,
+        parser: "NamespaceParser",
+        key_channel: str,
+    ):
         # when setting up the entity-dispatching we'll substitute the legacy handler
         # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
         # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
@@ -218,29 +224,41 @@ class NamespaceHandler:
         # either carry dict or, worse, could present themselves in both forms
         # (ToggleX is a well-known example)
         ns = self.ns
-        channel = getattr(parser, ns.key_channel)
+        self.key_channel = key_channel
+        channel = getattr(parser, key_channel)
         assert channel not in self.parsers, "parser already registered"
         self.parsers[channel] = getattr(parser, f"_parse_{ns.key}", parser._parse)
         if not parser.namespace_handlers:
             parser.namespace_handlers = set()
         parser.namespace_handlers.add(self)
-
-        polling_request_payload = self.polling_request_payload
-        if polling_request_payload is not None:
-            for channel_payload in polling_request_payload:
-                if channel_payload[ns.key_channel] == channel:
-                    break
-            else:
-                polling_request_payload.append({ns.key_channel: channel})
-
-        self.polling_response_size = (
-            self.polling_response_base_size
-            + len(self.parsers) * self.polling_response_item_size
-        )
+        if not self.check_polling_channel(channel):
+            self.polling_response_size = (
+                self.polling_response_base_size
+                + len(self.parsers) * self.polling_response_item_size
+            )
         self.handler = self._handle_list
 
+    def check_polling_channel(self, channel):
+        """Ensures the channel is set in polling request payload should
+        the ns need it. Also adjusts the estimated polling_response_size.
+        Returns False if not needed"""
+        polling_request_channels = self.polling_request_channels
+        if polling_request_channels is None:
+            return False
+        key_channel = self.key_channel
+        for channel_payload in polling_request_channels:
+            if channel_payload[key_channel] == channel:
+                break
+        else:
+            polling_request_channels.append({key_channel: channel})
+        self.polling_response_size = (
+            self.polling_response_base_size
+            + len(polling_request_channels) * self.polling_response_item_size
+        )
+        return True
+
     def unregister(self, parser: "NamespaceParser"):
-        if self.parsers.pop(getattr(parser, self.ns.key_channel), None):
+        if self.parsers.pop(getattr(parser, self.key_channel), None):
             parser.namespace_handlers.remove(self)
 
     def handle_exception(self, exception: Exception, function_name: str, payload):
@@ -264,10 +282,9 @@ class NamespaceHandler:
         "payload": { "key_namespace": [{"channel":...., ...}] }
         """
         try:
-            ns = self.ns
-            for p_channel in payload[ns.key]:
+            for p_channel in payload[self.ns.key]:
                 try:
-                    _parse = self.parsers[p_channel[ns.key_channel]]
+                    _parse = self.parsers[p_channel[self.key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -283,10 +300,9 @@ class NamespaceHandler:
         This handler si optimized for dict payloads:
         "payload": { "key_namespace": {"channel":...., ...} }
         """
-        ns = self.ns
-        p_channel = payload[ns.key]
+        p_channel = payload[self.ns.key]
         try:
-            _parse = self.parsers[p_channel.get(ns.key_channel)]
+            _parse = self.parsers[p_channel.get(self.key_channel)]
         except KeyError as key_error:
             _parse = self._try_create_entity(key_error)
         except AttributeError:
@@ -305,18 +321,17 @@ class NamespaceHandler:
         payloads without the "channel" key (see namespace Toggle)
         which will default forwarding to channel == None
         """
-        ns = self.ns
-        p_channel = payload[ns.key]
+        p_channel = payload[self.ns.key]
         if type(p_channel) is dict:
             try:
-                _parse = self.parsers[p_channel.get(ns.key_channel)]
+                _parse = self.parsers[p_channel.get(self.key_channel)]
             except KeyError as key_error:
                 _parse = self._try_create_entity(key_error)
             _parse(p_channel)
         else:
             for p_channel in p_channel:
                 try:
-                    _parse = self.parsers[p_channel[ns.key_channel]]
+                    _parse = self.parsers[p_channel[self.key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -450,7 +465,8 @@ class NamespaceHandler:
                     self.device,
                     channel,
                     self.ns.key,
-                )
+                ),
+                self.ns.key_channel,
             )
         else:
             self.parsers[channel] = self._parse_stub
@@ -549,18 +565,91 @@ class NamespaceHandler:
         if device._polling_epoch >= self.polling_epoch_next:
             await device.async_request_smartpoll(self)
 
-    async def async_trace(self, device: "MerossDevice", protocol: str | None):
+    async def async_trace(self, protocol: str | None):
         """
-        Used while tracing abilities. In general, we use an euristic 'default'
-        query but for some 'well known namespaces' we might be better off querying with
-        a better structured payload.
+        Used while tracing abilities. Depending on our 'knowledge' of this ns
+        we're going a straigth route (when the ns is well-known) or experiment some
+        euristics.
         """
-        if protocol is mlc.CONF_PROTOCOL_HTTP:
-            await device.async_http_request(*self.polling_request)
-        elif protocol is mlc.CONF_PROTOCOL_MQTT:
-            await device.async_mqtt_request(*self.polling_request)
+        ns = self.ns
+        if ns.experimental:
+            # We don't know yet how to query this ns so we'll brute-force it
+            if protocol is mlc.CONF_PROTOCOL_HTTP:
+                request_func = self.device.async_http_request
+            elif protocol is mlc.CONF_PROTOCOL_MQTT:
+                request_func = self.device.async_mqtt_request
+            else:
+                request_func = self.device.async_request
+
+            key_namespace = ns.key
+            key_channel = None
+            if ns.has_push is not False:
+                response_push = await request_func(
+                    ns.name, mc.METHOD_PUSH, ns.DEFAULT_PUSH_PAYLOAD
+                )
+                if response_push and (
+                    response_push[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_PUSH
+                ):
+                    for key, value in response_push[mc.KEY_PAYLOAD].items():
+                        key_namespace = key
+                        payload_type = type(value)
+                        if payload_type and (payload_type is list):
+                            value_item = value[0]
+                            if mc.KEY_SUBID in value_item:
+                                key_channel = mc.KEY_SUBID
+                            elif mc.KEY_ID in value_item:
+                                key_channel = mc.KEY_ID
+                            elif mc.KEY_CHANNEL in value_item:
+                                key_channel = mc.KEY_CHANNEL
+                        break
+
+            if ns.has_get is not False:
+
+                def _response_get_is_good(response: dict | None):
+                    return response and (
+                        response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
+                    )
+
+                response_get = await request_func(ns.name, mc.METHOD_GET, {ns.key: []})
+                if _response_get_is_good(response_get):
+                    key_namespace = ns.key
+                else:
+                    # ns.key might be wrong or verb GET unsupported
+                    if ns.key != key_namespace:
+                        # try the namespace key from PUSH attempt
+                        response_get = await request_func(
+                            ns.name, mc.METHOD_GET, {key_namespace: []}
+                        )
+                    if (not _response_get_is_good(response_get)) and ns.key.endswith(
+                        "x"
+                    ):
+                        # euristic(!)
+                        key_namespace = ns.key[:-1]
+                        response_get = await request_func(
+                            ns.name, mc.METHOD_GET, {key_namespace: []}
+                        )
+                    if not _response_get_is_good(response_get):
+                        # no chance
+                        return
+
+                response_payload = response_get[mc.KEY_PAYLOAD].get(key_namespace)  # type: ignore
+                if not response_payload:
+                    if not ns.is_hub:
+                        # the namespace might need a channel index in the request
+                        if type(response_payload) is list:
+                            await request_func(
+                                ns.name,
+                                mc.METHOD_GET,
+                                {key_namespace: [{mc.KEY_CHANNEL: 0}]},
+                            )
+            return
         else:
-            await device.async_request(*self.polling_request)
+            if protocol is mlc.CONF_PROTOCOL_HTTP:
+                await self.device.async_http_request(*self.polling_request)
+            elif protocol is mlc.CONF_PROTOCOL_MQTT:
+                await self.device.async_mqtt_request(*self.polling_request)
+            else:
+                await self.device.async_request(*self.polling_request)
 
 
 class EntityNamespaceMixin(MerossEntity if typing.TYPE_CHECKING else object):
@@ -653,7 +742,7 @@ POLLING_STRATEGY_CONF: dict[
     ),
     mn.Appliance_System_Debug: (0, 0, 1900, 0, None),
     mn.Appliance_System_DNDMode: (
-        300,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         320,
         0,
@@ -667,7 +756,7 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Config_OverTemp: (
-        300,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         340,
         0,
@@ -723,11 +812,11 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Light_Effect: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         1850,
         0,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Mp3: (
         0,
@@ -737,18 +826,46 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_Control_PhysicalLock: (
-        300,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         35,
         NamespaceHandler.async_poll_lazy,
     ),
-    mn.Appliance_Control_Thermostat_Calibration: (
+    mn.Appliance_Control_Presence_Config: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        260,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn.Appliance_Control_Screen_Brightness: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        70,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn.Appliance_Control_Sensor_Latest: (
+        300,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn.Appliance_Control_Sensor_LatestX: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        220,
+        NamespaceHandler.async_poll_default,
+    ),
+    mn.Appliance_Control_Thermostat_Calibration: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_CtlRange: (
         0,
@@ -758,11 +875,11 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_once,
     ),
     mn.Appliance_Control_Thermostat_DeadZone: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Frost: (
         0,
@@ -786,18 +903,18 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_Control_Thermostat_Schedule: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         0,
         mlc.PARAM_HEADER_SIZE,
         550,
-        NamespaceHandler.async_poll_default,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_ScheduleB: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         0,
         mlc.PARAM_HEADER_SIZE,
         550,
-        NamespaceHandler.async_poll_default,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Sensor: (
         0,
@@ -806,40 +923,19 @@ POLLING_STRATEGY_CONF: dict[
         40,
         NamespaceHandler.async_poll_default,
     ),
-    mn.Appliance_Control_Screen_Brightness: (
-        0,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        70,
-        NamespaceHandler.async_poll_smart,
-    ),
-    mn.Appliance_Control_Sensor_Latest: (
-        300,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        80,
-        NamespaceHandler.async_poll_lazy,
-    ),
-    mn.Appliance_Control_Sensor_LatestX: (
-        0,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        220,
-        NamespaceHandler.async_poll_default,
-    ),
     mn.Appliance_GarageDoor_Config: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         410,
         0,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_GarageDoor_MultipleConfig: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         140,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Hub_Battery: (
         3600,
@@ -898,18 +994,18 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_RollerShutter_Adjust: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         35,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_RollerShutter_Config: (
-        0,
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         70,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_RollerShutter_Position: (
         0,

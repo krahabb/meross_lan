@@ -335,6 +335,7 @@ class MerossMQTTAppClient(_MerossMQTTClient):
         *,
         app_id: str | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
+        sslcontext: ssl.SSLContext | None = None,
     ):
         if not app_id:
             app_id = generate_app_id()
@@ -345,7 +346,12 @@ class MerossMQTTAppClient(_MerossMQTTClient):
             f"app:{app_id}", [(self.topic_push, 1), (self.topic_command, 1)], loop=loop
         )
         self.username_pw_set(userid, md5(f"{userid}{key}".encode("utf8")).hexdigest())
-        self.tls_set(cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT)
+        if sslcontext:
+            self.tls_set_context(sslcontext)
+        else:
+            self.tls_set(
+                cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS_CLIENT
+            )
 
 
 class MerossMQTTDeviceClient(_MerossMQTTClient):
@@ -364,6 +370,7 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         key: str = "",
         userid: str = "",
         loop: asyncio.AbstractEventLoop | None = None,
+        sslcontext: ssl.SSLContext | None = None,
     ):
         """
         uuid: 16 bytes hex string (lowercase)
@@ -382,4 +389,7 @@ class MerossMQTTDeviceClient(_MerossMQTTClient):
         macaddress = get_macaddress_from_uuid(uuid)
         pwd = md5(f"{macaddress}{key}".encode("utf8")).hexdigest()
         self.username_pw_set(macaddress, f"{userid}_{pwd}")
-        self.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)
+        if sslcontext:
+            self.tls_set_context(sslcontext)
+        else:
+            self.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLSv1_2)

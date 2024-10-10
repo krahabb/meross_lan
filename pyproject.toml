@@ -42,6 +42,15 @@ include = [
     "emulator",
     "tests",
 ]
+exclude = [
+    "emulator_traces",
+    "scripts",
+    "temp",
+]
+typeCheckingMode = "basic"
+reportPrivateImportUsage = "none"
+reportShadowedImports = "none"
+
 
 ################################################################################
 [tool.pytest.ini_options]

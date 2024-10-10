@@ -177,7 +177,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     async def async_turn_off(self):
         await self.async_request_onoff(0)
 
-    async def async_set_hvac_mode(self, hvac_mode: "MtsClimate.HVACMode"):
+    async def async_set_hvac_mode(self, hvac_mode: climate.HVACMode):
         raise NotImplementedError()
 
     async def async_set_preset_mode(self, preset_mode: str):

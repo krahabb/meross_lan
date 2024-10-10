@@ -2,14 +2,6 @@
     "files.associations": {
         "*.yaml": "home-assistant"
     },
-    "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.diagnosticSeverityOverrides": {
-        "reportPrivateImportUsage": "none",
-        "reportShadowedImports": "none"
-    },
-    "python.analysis.extraPaths": [
-        "./custom_components/meross_lan"
-    ],
     "testing.defaultGutterClickAction": "debug",
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,

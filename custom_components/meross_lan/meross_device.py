@@ -2,6 +2,7 @@ import abc
 import asyncio
 import bisect
 from datetime import UTC, tzinfo
+from enum import Enum
 from json import JSONDecodeError
 from time import time
 import typing
@@ -126,6 +127,12 @@ TRACE_ABILITY_EXCLUDE = (
 TIMEZONES_SET = None
 
 
+class DeviceType(Enum):
+    DEVICE = 1
+    HUB = 2
+    SUBDEVICE = 3
+
+
 class MerossDeviceBase(EntityManager):
     """
     Abstract base class for MerossDevice and MerossSubDevice (from hub)
@@ -231,17 +238,8 @@ class MerossDeviceBase(EntityManager):
     def request(self, request_tuple: "MerossRequestType"):
         return self.hass.async_create_task(self.async_request(*request_tuple))
 
-    @property
-    @abc.abstractmethod
-    def tz(self) -> tzinfo:
-        raise NotImplementedError("tz")
-
     def check_device_timezone(self):
         raise NotImplementedError("check_device_timezone")
-
-    @abc.abstractmethod
-    def _get_internal_name(self) -> str:
-        return ""
 
     def _set_online(self):
         self.log(self.DEBUG, "Back online!")
@@ -254,6 +252,19 @@ class MerossDeviceBase(EntityManager):
         self._online = False
         for entity in self.entities.values():
             entity.set_unavailable()
+
+    @property
+    @abc.abstractmethod
+    def tz(self) -> tzinfo:
+        raise NotImplementedError("tz")
+
+    @abc.abstractmethod
+    def get_type(self) -> DeviceType:
+        raise NotImplementedError("get_type")
+
+    @abc.abstractmethod
+    def _get_internal_name(self) -> str:
+        raise NotImplementedError("_get_internal_name")
 
 
 class MerossDevice(ConfigEntryManager, MerossDeviceBase):
@@ -325,13 +336,21 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         ),
         mn.Appliance_Control_Mp3.name: (".media_player", "MLMp3Player"),
         mn.Appliance_Control_PhysicalLock.name: (".switch", "PhysicalLockSwitch"),
+        mn.Appliance_Control_Presence_Config.name: (
+            ".devices.ms600",
+            "namespace_init_presence_config",
+        ),
         mn.Appliance_Control_Screen_Brightness.name: (
             ".devices.thermostat",
             "ScreenBrightnessNamespaceHandler",
         ),
         mn.Appliance_Control_Sensor_Latest.name: (
-            ".devices.thermostat",
+            ".devices.misc",
             "SensorLatestNamespaceHandler",
+        ),
+        mn.Appliance_Control_Sensor_LatestX.name: (
+            ".devices.misc",
+            "namespace_init_sensor_latestx",
         ),
         mn.Appliance_RollerShutter_State.name: (".cover", "MLRollerShutter"),
         mn.Appliance_System_DNDMode.name: (".light", "MLDNDLightEntity"),
@@ -783,9 +802,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             translation_placeholders={"device_name": self.name},
         )
 
-    def _get_internal_name(self) -> str:
-        return self.descriptor.productname
-
     def _set_offline(self):
         super()._set_offline()
         self._polling_delay = self.polling_period
@@ -793,6 +809,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.device_debug = None
         for handler in self.namespace_handlers.values():
             handler.polling_epoch_next = 0.0
+
+    def get_type(self) -> DeviceType:
+        return DeviceType.DEVICE
+
+    def _get_internal_name(self) -> str:
+        return self.descriptor.productname
 
     # interface: self
     @property
@@ -847,18 +869,26 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         except KeyError:
             return self._create_handler(ns)
 
+    def get_handler_by_name(self, namespace: str):
+        try:
+            return self.namespace_handlers[namespace]
+        except KeyError:
+            return self._create_handler(mn.NAMESPACES[namespace])
+
     def register_parser(
         self,
         parser: "NamespaceParser",
         ns: "mn.Namespace",
+        *,
+        key_channel: str | None = None,
     ):
-        self.get_handler(ns).register_parser(parser)
+        self.get_handler(ns).register_parser(parser, key_channel or ns.key_channel)
 
     def register_parser_entity(
         self,
         entity: "MerossEntity",
     ):
-        self.get_handler(entity.ns).register_parser(entity)
+        self.get_handler(entity.ns).register_parser(entity, entity.ns.key_channel)
 
     def register_togglex_channel(self, entity: "MerossEntity"):
         """
@@ -2322,51 +2352,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 abilities = iter(descr.ability)
                 while self._online and self.is_tracing:
                     ability = next(abilities)
-                    if ability in TRACE_ABILITY_EXCLUDE:
-                        continue
-                    if ability in self.namespace_handlers:
-                        # query using our 'well-known' message structure
-                        handler = self.namespace_handlers[ability]
-                        if handler.polling_strategy:
-                            await handler.async_trace(self, CONF_PROTOCOL_HTTP)
-                            continue
-                    # this ability might be new/unknown or something we're not actively
-                    # 'handling'. If the ability has a known 'Namespace' definition
-                    # we'll use that knowledge to smartly query
-                    ns = mn.NAMESPACES[ability]
-                    if ns.has_get is not False:
-                        request = ns.request_get
-                        response = await self.async_http_request(*request)
-                        if response and (
-                            response[mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_GETACK
-                        ):
-                            if ns.is_hub:
-                                # for Hub namespaces there's nothing more guessable
-                                continue
-                            key_namespace = ns.key
-                            # we're not sure our key_namespace is correct (euristics!)
-                            response_payload = response[mc.KEY_PAYLOAD].get(
-                                key_namespace
-                            )
-                            if response_payload:
-                                # our euristic query hit something..loop next
-                                continue
-                            # the reply was empty: this ns might need a "channel" in request
-                            request_payload = request[2][key_namespace]
-                            if request_payload:
-                                # we've already issued a channel-like GET
-                                continue
-                            if isinstance(response_payload, list):
-                                await self.async_http_request(
-                                    ability,
-                                    mc.METHOD_GET,
-                                    {key_namespace: [{mc.KEY_CHANNEL: 0}]},
-                                )
-                            continue
-
-                    if ns.has_push is not False:
-                        # METHOD_GET didnt work. Try PUSH
-                        await self.async_http_request(*ns.request_push)
+                    if ability not in TRACE_ABILITY_EXCLUDE:
+                        await self.get_handler_by_name(ability).async_trace(
+                            CONF_PROTOCOL_HTTP
+                        )
 
                 return trace_data  # might be truncated because offlining or async shutting trace
             except StopIteration:
@@ -2394,38 +2383,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 while (ability := next(abilities_iterator)) in TRACE_ABILITY_EXCLUDE:
                     continue
                 self.log(self.DEBUG, "Tracing %s ability", ability)
-                if (
-                    handler := self.namespace_handlers.get(ability)
-                ) and handler.polling_strategy:
-                    await handler.async_trace(self, None)
-                else:
-                    # these requests are likely for new unknown namespaces
-                    # so our euristics might fall off very soon
-                    ns = mn.NAMESPACES[ability]
-                    if ns.has_get is not False:
-                        if response := await self.async_request_ack(*ns.request_get):
-                            key_namespace = ns.key
-                            response_payload = response[mc.KEY_PAYLOAD].get(
-                                key_namespace
-                            )
-                            if (
-                                not response_payload
-                                and not ns.request_get[2][key_namespace]
-                                and not ns.is_hub
-                            ):
-                                # the namespace might need a channel index in the request
-                                if isinstance(response_payload, list):
-                                    await self.async_request(
-                                        ability,
-                                        mc.METHOD_GET,
-                                        {key_namespace: [{mc.KEY_CHANNEL: 0}]},
-                                    )
-
-                    if ns.has_push is not False:
-                        # whatever the GET reply check also method PUSH
-                        # sending a PUSH 'out of the blue' might trigger unknown
-                        # device behaviors but we'll see
-                        await self.async_request(*ns.request_push)
+                await self.get_handler_by_name(ability).async_trace(None)
 
         except StopIteration:
             self.log(self.DEBUG, "Tracing abilities end")

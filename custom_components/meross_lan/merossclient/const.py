@@ -122,6 +122,18 @@ KEY_SPEED = "speed"
 KEY_MAXSPEED = "maxSpeed"
 KEY_FILTER = "filter"
 KEY_LIFE = "life"
+KEY_PRESENCE = "presence"
+KEY_DISTANCE = "distance"
+KEY_TIMES = "times"
+KEY_WORKMODE = "workMode"
+KEY_TESTMODE = "testMode"
+KEY_NOBODYTIME = "noBodyTime"
+KEY_SENSITIVITY = "sensitivity"
+KEY_LEVEL = "level"
+KEY_MTHX = "mthx"
+KEY_MTH1 = "mth1"
+KEY_MTH2 = "mth2"
+KEY_MTH3 = "mth3"
 KEY_HUB = "hub"
 KEY_EXCEPTION = "exception"
 KEY_BATTERY = "battery"
@@ -447,9 +459,6 @@ TYPE_MTS200 = "mts200"  # Smart thermostat over wifi
 TYPE_MTS960 = "mts960"  # Smart thermostat over wifi
 TYPE_NAME_MAP[TYPE_MTS960] = "Smart Socket Thermostat"
 TYPE_NAME_MAP["mts"] = "Smart Thermostat"
-#
-# Hub subdevices
-#
 # do not register class 'ms' since it is rather
 # unusual naming and could issue collissions with mss or msl
 # just set the known type
@@ -470,6 +479,9 @@ TYPE_NAME_MAP[TYPE_MS200] = "Smart Door/Window Sensor"
 
 TYPE_MS400 = "ms400"
 TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
+
+TYPE_MS600 = "ms600"
+TYPE_NAME_MAP[TYPE_MS600] = "Smart Presence Sensor"
 
 #
 # HUB helpers symbols

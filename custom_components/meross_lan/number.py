@@ -13,7 +13,7 @@ if typing.TYPE_CHECKING:
     from .climate import MtsClimate
     from .meross_device import MerossDeviceBase
 
-    # optional arguments for MLNumericSensor init
+    # optional arguments for MLConfigNumber init
     class MLConfigNumberArgs(me.MerossNumericEntityArgs):
         pass
 
@@ -57,7 +57,7 @@ class MLNumber(me.MerossNumericEntity, number.NumberEntity):
 
 class MLConfigNumber(me.MEListChannelMixin, MLNumber):
     """
-    Base class for any configurable parameter in the device. This works much-like
+    Base class for any configurable numeric parameter in the device. This works much-like
     MLSwitch by refining the 'async_request_value' api in order to send the command.
     Contrary to MLSwitch (which is abstract), this has a default implementation for
     payloads sent in a list through me.MEListChannelMixin since this looks to be
@@ -194,7 +194,7 @@ class MtsSetPointNumber(MtsTemperatureNumber):
         super().__init__(
             climate,
             f"config_temperature_{self.key_value}",
-            name=f"{preset_mode} {MLConfigNumber.DeviceClass.TEMPERATURE}",
+            name=f"{preset_mode} temperature",
         )
 
     @property
