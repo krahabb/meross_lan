@@ -380,3 +380,73 @@ class FilterMaintenanceNamespaceHandler(NamespaceHandler):
             mn.Appliance_Control_FilterMaintenance,
         )
         MLFilterMaintenanceSensor(device, 0)
+
+
+class ConsumptionHSensor(MLNumericSensor):
+
+    manager: "MerossDevice"
+    ns = mn.Appliance_Control_ConsumptionH
+
+    _attr_suggested_display_precision = 0
+
+    __slots__ = ()
+
+    def __init__(self, manager: "MerossDevice", channel: object | None):
+        super().__init__(
+            manager,
+            channel,
+            mc.KEY_CONSUMPTIONH,
+            self.DeviceClass.ENERGY,
+            name="Consumption",
+        )
+        manager.register_parser_entity(self)
+
+    def _parse_consumptionH(self, payload: dict):
+        """
+        {"channel": 1, "total": 958, "data": [{"timestamp": 1721548740, "value": 0}]}
+        """
+        self.update_device_value(payload[mc.KEY_TOTAL])
+
+
+def namespace_init_consumptionh(device: "MerossDevice"):
+    """
+    This namespace carries hourly statistics (over last 24 ours?) of energy consumption
+    Appearing in: mts200 - em06 (Refoss) - mop320
+    This ns looks tricky since for mts200, the query (payload GET) needs the channel
+    index while for em06 this isn't necessary (empty query replies full sensor set statistics).
+    Actual coding, according to what mts200 expects might work badly on em06 (since the query
+    code setup will use our knowledge of which channels are available and this is not enforced
+    on em06).
+    Also, we need to come up with a reasonable euristic on which channels are available
+    mts200: 1 (channel 0)
+    mop320: 3 (channel 0 - 1 - 2) even tho it only has 2 metering channels (0 looks toggling both)
+    em06: 6 channels (but the query works without setting any)
+    """
+    NamespaceHandler(
+        device,
+        mn.Appliance_Control_ConsumptionH,
+    ).register_entity_class(ConsumptionHSensor, initially_disabled=False)
+    if device.descriptor.type.startswith(mc.TYPE_EM06):
+        # em06 doesn't provide any digest info
+        for channel in range(1, 7):
+            ConsumptionHSensor(device, channel)
+    else:
+        # current approach is to build a sensor for any
+        # appearing channel index in digest
+        channels = set()
+
+        def _scan_digest(digest: dict):
+            if mc.KEY_CHANNEL in digest:
+                channels.add(digest[mc.KEY_CHANNEL])
+            else:
+                for value in digest.values():
+                    if type(value) is dict:
+                        _scan_digest(value)
+                    elif type(value) is list:
+                        for value_item in value:
+                            if type(value_item) is dict:
+                                _scan_digest(value_item)
+
+        _scan_digest(device.descriptor.digest)
+        for channel in channels:
+            ConsumptionHSensor(device, channel)

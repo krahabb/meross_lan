@@ -328,6 +328,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             ".devices.mss",
             "namespace_init_electricityx",
         ),
+        mn.Appliance_Control_ConsumptionH.name: (
+            ".sensor",
+            "namespace_init_consumptionh",
+        ),
         mn.Appliance_Control_ConsumptionX.name: (".devices.mss", "ConsumptionXSensor"),
         mn.Appliance_Control_Fan.name: (".fan", "namespace_init_fan"),
         mn.Appliance_Control_FilterMaintenance.name: (
@@ -530,6 +534,34 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             except:
                 pass
 
+        for namespace, ns_init_func in MerossDevice.NAMESPACE_INIT.items():
+            if namespace not in descriptor.ability:
+                continue
+            try:
+                try:
+                    ns_init_func(self)
+                except TypeError:
+                    try:
+                        ns_init_func = getattr(
+                            await async_import_module(ns_init_func[0]),
+                            ns_init_func[1],
+                        )
+                    except Exception as exception:
+                        self.log_exception(
+                            self.WARNING,
+                            exception,
+                            "loading namespace initializer for %s",
+                            namespace,
+                        )
+                        ns_init_func = MerossDevice.namespace_init_empty
+                    MerossDevice.NAMESPACE_INIT[namespace] = ns_init_func
+                    ns_init_func(self)
+
+            except Exception as exception:
+                self.log_exception(
+                    self.WARNING, exception, "initializing namespace %s", namespace
+                )
+
         for key_digest, _digest in (
             descriptor.digest.items() or descriptor.control.items()
         ):
@@ -570,35 +602,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     self.WARNING, exception, "initializing digest key '%s'", key_digest
                 )
                 self.digest_handlers[key_digest] = MerossDevice.digest_parse_empty
-
-        for namespace, ns_init_func in MerossDevice.NAMESPACE_INIT.items():
-            if namespace not in descriptor.ability:
-                continue
-            try:
-                try:
-                    ns_init_func(self)
-                except TypeError:
-                    try:
-                        # _ns_init_descriptor = MerossDevice.NAMESPACE_INIT[namespace]
-                        ns_init_func = getattr(
-                            await async_import_module(ns_init_func[0]),
-                            ns_init_func[1],
-                        )
-                    except Exception as exception:
-                        self.log_exception(
-                            self.WARNING,
-                            exception,
-                            "loading namespace initializer for %s",
-                            namespace,
-                        )
-                        ns_init_func = MerossDevice.namespace_init_empty
-                    MerossDevice.NAMESPACE_INIT[namespace] = ns_init_func
-                    ns_init_func(self)
-
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING, exception, "initializing namespace %s", namespace
-                )
 
     def start(self):
         # called by async_setup_entry after the entities have been registered

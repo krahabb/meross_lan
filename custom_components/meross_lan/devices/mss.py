@@ -218,49 +218,6 @@ def namespace_init_electricityx(device: "MerossDevice"):
     ).register_entity_class(ElectricityXSensor)
 
 
-class ConsumptionHSensor(MLNumericSensor):
-
-    manager: "MerossDevice"
-    ns = mn.Appliance_Control_ConsumptionH
-
-    _attr_suggested_display_precision = 0
-
-    __slots__ = ()
-
-    def __init__(self, manager: "MerossDevice", channel: object | None):
-        super().__init__(
-            manager,
-            channel,
-            mc.KEY_CONSUMPTIONH,
-            self.DeviceClass.ENERGY,
-            name="Consumption",
-        )
-        manager.register_parser_entity(self)
-
-    def _parse_consumptionH(self, payload: dict):
-        """
-        {"channel": 1, "total": 958, "data": [{"timestamp": 1721548740, "value": 0}]}
-        """
-        self.update_device_value(payload[mc.KEY_TOTAL])
-
-
-class ConsumptionHNamespaceHandler(NamespaceHandler):
-    """
-    This namespace carries hourly statistics (over last 24 ours?) of energy consumption
-    It appeared in a mts200 and an em06 (Refoss). We're actually not registering for parsing
-    though since it looks like just carrying energy consumption (just different sum period)
-    for which we also usually have ConsumptionX or ElectricityX (for em06).
-    Nevertheless, it looks tricky since for mts200, the query (payload GET) needs the channel
-    index while for em06 this isn't necessary (empty query replies full sensor set statistics).
-    Actual coding, according to what mts200 expects might work badly on em06 (since the query
-    code setup will use our knowledge of which channels are available and this is not enforced
-    on em06).
-    """
-
-    def __init__(self, device: "MerossDevice"):
-        super().__init__(device, mn.Appliance_Control_ConsumptionH)
-        self.register_entity_class(ConsumptionHSensor, initially_disabled=False)
-
 
 class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     ATTR_OFFSET: typing.Final = "offset"
