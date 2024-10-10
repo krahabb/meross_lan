@@ -3,8 +3,7 @@
 from typing import Final
 from uuid import uuid4
 
-from homeassistant import config_entries
-from homeassistant import const as hac
+from homeassistant import config_entries, const as hac
 from homeassistant.components import dhcp
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
