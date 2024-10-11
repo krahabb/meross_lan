@@ -211,12 +211,35 @@ class ElectricityXSensor(ElectricitySensor):
         ElectricitySensor._parse_electricity(self, payload)
 
 
-def namespace_init_electricityx(device: "MerossDevice"):
-    NamespaceHandler(
-        device,
-        mn.Appliance_Control_ElectricityX,
-    ).register_entity_class(ElectricityXSensor)
+class ElectricityXNamespaceHandler(NamespaceHandler):
+    """
+    This namespace is still pretty unknown.
+    Looks like an upgraded version of Appliance.Control.Electricity and currently appears in:
+    - em06(Refoss)
+    - mop320
+    The em06 parsing looks established (not sure it really works..no updates from users so far)
+    while the mop is still obscure. While the em06 query is a plain empty dict it might be
+    the mop320 needs a 'channel indexed' request payload so we're now (2024-10-11) trying
+    the same approach as in ConsumptionH namespace
+    """
 
+    def __init__(self, device: "MerossDevice"):
+        NamespaceHandler.__init__(
+            self,
+            device,
+            mn.Appliance_Control_ElectricityX,
+        )
+        # Current approach is to build a sensor for any appearing channel index
+        # in digest. This in turns will not directly build the EM06 sensors
+        # but they should come when polling.
+        self.register_entity_class(ElectricityXSensor, build_from_digest=True)
+
+    def _polling_request_init(self, request_payload_type: mn.RequestPayloadType):
+        # TODO: move this device type 'patching' to some 'smart' Namespace grammar
+        if self.device.descriptor.type.startswith(mc.TYPE_EM06):
+            super()._polling_request_init(mn.RequestPayloadType.DICT)
+        else:
+            super()._polling_request_init(request_payload_type)
 
 
 class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):

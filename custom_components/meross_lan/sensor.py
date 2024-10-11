@@ -408,7 +408,7 @@ class ConsumptionHSensor(MLNumericSensor):
         self.update_device_value(payload[mc.KEY_TOTAL])
 
 
-def namespace_init_consumptionh(device: "MerossDevice"):
+class ConsumptionHNamespaceHandler(NamespaceHandler):
     """
     This namespace carries hourly statistics (over last 24 ours?) of energy consumption
     Appearing in: mts200 - em06 (Refoss) - mop320
@@ -422,31 +422,23 @@ def namespace_init_consumptionh(device: "MerossDevice"):
     mop320: 3 (channel 0 - 1 - 2) even tho it only has 2 metering channels (0 looks toggling both)
     em06: 6 channels (but the query works without setting any)
     """
-    NamespaceHandler(
-        device,
-        mn.Appliance_Control_ConsumptionH,
-    ).register_entity_class(ConsumptionHSensor, initially_disabled=False)
-    if device.descriptor.type.startswith(mc.TYPE_EM06):
-        # em06 doesn't provide any digest info
-        for channel in range(1, 7):
-            ConsumptionHSensor(device, channel)
-    else:
-        # current approach is to build a sensor for any
-        # appearing channel index in digest
-        channels = set()
 
-        def _scan_digest(digest: dict):
-            if mc.KEY_CHANNEL in digest:
-                channels.add(digest[mc.KEY_CHANNEL])
-            else:
-                for value in digest.values():
-                    if type(value) is dict:
-                        _scan_digest(value)
-                    elif type(value) is list:
-                        for value_item in value:
-                            if type(value_item) is dict:
-                                _scan_digest(value_item)
+    def __init__(self, device: "MerossDevice"):
+        NamespaceHandler.__init__(
+            self,
+            device,
+            mn.Appliance_Control_ConsumptionH,
+        )
+        # Current approach is to build a sensor for any appearing channel index
+        # in digest. This in turns will not directly build the EM06 sensors
+        # but they should come when polling.
+        self.register_entity_class(
+            ConsumptionHSensor, initially_disabled=False, build_from_digest=True
+        )
 
-        _scan_digest(device.descriptor.digest)
-        for channel in channels:
-            ConsumptionHSensor(device, channel)
+    def _polling_request_init(self, request_payload_type: mn.RequestPayloadType):
+        # TODO: move this device type 'patching' to some 'smart' Namespace grammar
+        if self.device.descriptor.type.startswith(mc.TYPE_EM06):
+            super()._polling_request_init(mn.RequestPayloadType.DICT)
+        else:
+            super()._polling_request_init(request_payload_type)

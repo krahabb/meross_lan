@@ -49,7 +49,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
             mn.Appliance_Control_Sensor_Latest,
             handler=self._handle_Appliance_Control_Sensor_Latest,
         )
-        self.check_polling_channel(0)
+        self.polling_request_add_channel(0)
 
     def _handle_Appliance_Control_Sensor_Latest(self, header: dict, payload: dict):
         """
@@ -85,7 +85,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                             f"sensor_{key}",
                             **entity_def.args,
                         )
-                        self.check_polling_channel(channel)
+                        self.polling_request_add_channel(channel)
 
                     entity.update_device_value(value)
 
@@ -127,7 +127,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
         if device.descriptor.type.startswith(mc.TYPE_MS600):
             MLPresenceSensor(device, 0, f"sensor_{mc.KEY_PRESENCE}")
             MLLightSensor(device, 0, f"sensor_{mc.KEY_LIGHT}")
-        self.check_polling_channel(0)
+        self.polling_request_add_channel(0)
 
     def _handle_Appliance_Control_Sensor_LatestX(self, header: dict, payload: dict):
         """
@@ -178,7 +178,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                         **entity_def.args,
                     )
                     # this is needed if we detect a new channel through a PUSH msg parsing
-                    self.check_polling_channel(channel)
+                    self.polling_request_add_channel(channel)
                 entity._parse(value_data[0])
 
 

@@ -80,9 +80,10 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
             for namespace_handler in device.namespace_handlers.values():
                 ns = namespace_handler.ns
                 assert (
-                    (not ns.need_channel)
+                    (ns.request_payload_type is not mn.RequestPayloadType.LIST_C)
                     or ns.is_sensor
                     or namespace_handler.polling_request_channels
+                    or descriptor.type.startswith(mc.TYPE_EM06)  # brutal exception
                 ), f"Incorrect config for {ns.name} namespace"
 
             if entity_dnd:

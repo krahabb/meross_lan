@@ -326,11 +326,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         ),
         mn.Appliance_Control_ElectricityX.name: (
             ".devices.mss",
-            "namespace_init_electricityx",
+            "ElectricityXNamespaceHandler",
         ),
         mn.Appliance_Control_ConsumptionH.name: (
             ".sensor",
-            "namespace_init_consumptionh",
+            "ConsumptionHNamespaceHandler",
         ),
         mn.Appliance_Control_ConsumptionX.name: (".devices.mss", "ConsumptionXSensor"),
         mn.Appliance_Control_Fan.name: (".fan", "namespace_init_fan"),
