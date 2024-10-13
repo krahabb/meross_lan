@@ -1,5 +1,7 @@
 """Test meross_lan config entry setup"""
 
+import asyncio
+
 from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
@@ -28,6 +30,9 @@ async def test_mqtthub_entry(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMoc
     # Unload the entry and verify that the data has not been removed
     # we actually never remove the MerossApi...
     assert type(hass.data[mlc.DOMAIN]) is MerossApi
+
+    # try to fight subscribe/unsubscribe cooldowns
+    await asyncio.sleep(1)
 
 
 async def test_mqtthub_entry_notready(hass: HomeAssistant):
