@@ -327,7 +327,9 @@ class MerossFlowHandlerMixin(
                             ce.ConfigEntry(
                                 version=self.VERSION,
                                 minor_version=self.MINOR_VERSION,  # required since 2024.1
-                                discovery_keys=MappingProxyType({}), # required since 2024.10
+                                discovery_keys=MappingProxyType(
+                                    {}
+                                ),  # required since 2024.10
                                 domain=mlc.DOMAIN,
                                 title=profile_config[mc.KEY_EMAIL],
                                 data=profile_config,
@@ -1341,17 +1343,18 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
 
                 await device.async_unbind()
                 action = user_input[KEY_ACTION]
-                hass = self.hass
                 if action == KEY_ACTION_DISABLE:
-                    hass.async_create_task(
-                        hass.config_entries.async_set_disabled_by(
+                    MerossApi.api.async_create_task(
+                        self.hass.config_entries.async_set_disabled_by(
                             self.config_entry_id,
                             ce.ConfigEntryDisabler.USER,
-                        )
+                        ),
+                        f".OptionsFlow.async_set_disabled_by",
                     )
                 elif action == KEY_ACTION_DELETE:
-                    hass.async_create_task(
-                        hass.config_entries.async_remove(self.config_entry_id)
+                    MerossApi.api.async_create_task(
+                        self.hass.config_entries.async_remove(self.config_entry_id),
+                        f".OptionsFlow.async_remove",
                     )
                 return self.async_create_entry(data=None)  # type: ignore
 

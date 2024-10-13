@@ -268,8 +268,9 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
                     return
                 adjust_temperature = number_adjust_temperature.native_min_value
             self._delayed_tracking_reset(epoch + self.TRACKING_DEADTIME)
-            self.hass.async_create_task(
-                number_adjust_temperature.async_set_native_value(adjust_temperature)
+            self.manager.async_create_task(
+                number_adjust_temperature.async_set_native_value(adjust_temperature),
+                f".async_set_native_value({adjust_temperature})",
             )
             self.log(
                 self.DEBUG,

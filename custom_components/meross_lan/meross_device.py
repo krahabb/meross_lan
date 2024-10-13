@@ -236,7 +236,9 @@ class MerossDeviceBase(EntityManager):
         )
 
     def request(self, request_tuple: "MerossRequestType"):
-        return self.hass.async_create_task(self.async_request(*request_tuple))
+        return self.async_create_task(
+            self.async_request(*request_tuple), f".request({request_tuple})"
+        )
 
     def check_device_timezone(self):
         raise NotImplementedError("check_device_timezone")
@@ -1262,8 +1264,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         method: str,
         payload: "MerossPayloadType",
     ):
-        return self.hass.async_create_task(
-            self.async_mqtt_request(namespace, method, payload)
+        return self.async_create_task(
+            self.async_mqtt_request(namespace, method, payload),
+            f".mqtt_request({namespace},{method},{type(payload)})",
         )
 
     async def async_http_request_raw(

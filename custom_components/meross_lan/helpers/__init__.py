@@ -218,9 +218,9 @@ class ConfigEntriesHelper:
             """Schedule a config entry to be reloaded."""
             if entry := self.config_entries.async_get_entry(entry_id):
                 entry.async_cancel_retry_setup()
-                Loggable.hass.async_create_task(
+                MerossApi.api.async_create_task(
                     self.config_entries.async_reload(entry_id),
-                    f"config entry reload {entry.title} {entry.domain} {entry.entry_id}",
+                    f".schedule_reload({entry.title},{entry_id})",
                 )
 
 
