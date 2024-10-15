@@ -304,9 +304,9 @@ class MLGarage(MLCover):
                 mn.Appliance_GarageDoor_State.name,
                 mc.METHOD_GET,
                 {
-                    mn.Appliance_GarageDoor_State.key: [
-                        {mn.Appliance_GarageDoor_State.key_channel: channel}
-                    ]
+                    mn.Appliance_GarageDoor_State.key: {
+                        mn.Appliance_GarageDoor_State.key_channel: channel
+                    }
                 },
             )
         else:
@@ -582,9 +582,7 @@ class MLGarage(MLCover):
 
         if was_closing != self.is_closed:
             # looks like on MQTT we don't receive a PUSHed state update? (#415)
-            if await self.manager.async_request_ack(
-                *self._state_request
-            ):
+            if await self.manager.async_request_ack(*self._state_request):
                 # the request/response parse already flushed the state
                 if was_closing == self.is_closed:
                     self.binary_sensor_timeout.update_ok(was_closing)
