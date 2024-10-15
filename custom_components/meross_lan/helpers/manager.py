@@ -174,14 +174,12 @@ class EntityManager(Loggable):
         return self.hass.loop.call_later(delay, target, *args)
 
     @callback
-    def async_create_task[
-        _R
-    ](
+    def async_create_task(
         self,
-        target: typing.Coroutine[typing.Any, typing.Any, _R],
+        target: typing.Coroutine,
         name: str,
         eager_start: bool = True,
-    ) -> "asyncio.Task[_R]":
+    ) -> "asyncio.Task":
         task = self.hass.async_create_task(target, f"{self.logtag}{name}", eager_start)
         if not (eager_start and task.done()):
             self._tasks.add(task)
