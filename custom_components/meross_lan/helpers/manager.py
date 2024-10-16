@@ -180,7 +180,13 @@ class EntityManager(Loggable):
         name: str,
         eager_start: bool = True,
     ) -> "asyncio.Task":
-        task = self.hass.async_create_task(target, f"{self.logtag}{name}", eager_start)
+        try:
+            task = self.hass.async_create_task(
+                target, f"{self.logtag}{name}", eager_start
+            )
+        except TypeError:  # older api compatibility fallback (likely pre core 2024.3)
+            task = self.hass.async_create_task(target, f"{self.logtag}{name}")
+            eager_start = False
         if not (eager_start and task.done()):
             self._tasks.add(task)
             task.add_done_callback(self._tasks.remove)
