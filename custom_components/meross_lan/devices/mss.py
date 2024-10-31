@@ -33,11 +33,39 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     manager: "MerossDevice"
 
     SENSOR_DEFS: typing.ClassVar[
-        dict[str, tuple[MLNumericSensor.DeviceClass, int, int]]
+        dict[
+            str,
+            tuple[
+                bool,
+                MLNumericSensor.DeviceClass,
+                MLNumericSensor.StateClass,
+                int,
+                int,
+            ],
+        ]
     ] = {
-        mc.KEY_CURRENT: (MLNumericSensor.DeviceClass.CURRENT, 1, 1000),
-        mc.KEY_POWER: (MLNumericSensor.DeviceClass.POWER, 1, 1000),
-        mc.KEY_VOLTAGE: (MLNumericSensor.DeviceClass.VOLTAGE, 1, 10),
+        # key: (not-optional, DeviceClass, StateClass, suggested_display_precision, device_scale)
+        mc.KEY_CURRENT: (
+            True,
+            MLNumericSensor.DeviceClass.CURRENT,
+            MLNumericSensor.StateClass.MEASUREMENT,
+            1,
+            1000,
+        ),
+        mc.KEY_POWER: (
+            True,
+            MLNumericSensor.DeviceClass.POWER,
+            MLNumericSensor.StateClass.MEASUREMENT,
+            1,
+            1000,
+        ),
+        mc.KEY_VOLTAGE: (
+            True,
+            MLNumericSensor.DeviceClass.VOLTAGE,
+            MLNumericSensor.StateClass.MEASUREMENT,
+            1,
+            10,
+        ),
     }
 
     # HA core entity attributes:
@@ -67,14 +95,16 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         )
         self._schedule_reset(dt_util.now())
         for key, entity_def in self.SENSOR_DEFS.items():
-            MLNumericSensor(
-                manager,
-                channel,
-                key,
-                entity_def[0],
-                device_scale=entity_def[2],
-                suggested_display_precision=entity_def[1],
-            )
+            if entity_def[0]:
+                MLNumericSensor(
+                    manager,
+                    channel,
+                    key,
+                    entity_def[1],
+                    state_class=entity_def[2],
+                    suggested_display_precision=entity_def[3],
+                    device_scale=entity_def[4],
+                )
 
     async def async_shutdown(self):
         if self._reset_unsub:
@@ -118,18 +148,29 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         """{"channel": 0, "power": 11000, ...}"""
         device = self.manager
         entities = device.entities
-        if self.channel is None:
-            sensor_power: MLNumericSensor = entities[mc.KEY_POWER]  # type: ignore
-        else:
-            sensor_power: MLNumericSensor = entities[f"{self.channel}_{mc.KEY_POWER}"]  # type: ignore
+
+        def _get_sensor_from_key(key: str):
+            try:
+                sensor: MLNumericSensor = entities[key if self.channel is None else f"{self.channel}_{key}"]  # type: ignore
+            except KeyError:
+                entity_def = self.SENSOR_DEFS[key]
+                sensor = MLNumericSensor(
+                    device,
+                    self.channel,
+                    key,
+                    entity_def[1],
+                    state_class=entity_def[2],
+                    suggested_display_precision=entity_def[3],
+                    device_scale=entity_def[4],
+                )
+            return sensor
+
+        sensor_power = _get_sensor_from_key(mc.KEY_POWER)
         last_power = sensor_power.native_value
 
         for key in self.SENSOR_DEFS:
-            if self.channel is None:
-                sensor: MLNumericSensor = entities[key]  # type: ignore
-            else:
-                sensor: MLNumericSensor = entities[f"{self.channel}_{key}"]  # type: ignore
-            sensor.update_device_value(payload[key])
+            if key in payload:
+                _get_sensor_from_key(key).update_device_value(payload[key])
 
         power = sensor_power.native_value
         if not power:
@@ -194,21 +235,41 @@ def namespace_init_electricity(device: "MerossDevice"):
 class ElectricityXSensor(ElectricitySensor):
 
     SENSOR_DEFS = ElectricitySensor.SENSOR_DEFS | {
-        mc.KEY_VOLTAGE: (MLNumericSensor.DeviceClass.VOLTAGE, 1, 1000),
-        mc.KEY_FACTOR: (MLNumericSensor.DeviceClass.POWER_FACTOR, 2, 1),
-        mc.KEY_MCONSUME: (MLNumericSensor.DeviceClass.ENERGY, 0, 1),
+        mc.KEY_VOLTAGE: (
+            True,
+            MLNumericSensor.DeviceClass.VOLTAGE,
+            MLNumericSensor.StateClass.MEASUREMENT,
+            1,
+            1000,
+        ),
+        mc.KEY_FACTOR: (
+            False,
+            MLNumericSensor.DeviceClass.POWER_FACTOR,
+            MLNumericSensor.StateClass.MEASUREMENT,
+            2,
+            1,
+        ),
+        mc.KEY_MCONSUME: (
+            False,
+            MLNumericSensor.DeviceClass.ENERGY,
+            MLNumericSensor.StateClass.TOTAL,
+            0,
+            1,
+        ),
+        mc.KEY_CONSUME: (
+            False,
+            MLNumericSensor.DeviceClass.ENERGY,
+            MLNumericSensor.StateClass.TOTAL,
+            0,
+            1,
+        ),
     }
 
     __slots__ = ()
 
     def __init__(self, manager: "MerossDevice", channel: object):
         super().__init__(manager, channel)
-        # patch the energy meter sensor state class...
-        manager.entities[f"{channel}_{mc.KEY_MCONSUME}"].state_class = MLNumericSensor.StateClass.TOTAL  # type: ignore
         manager.register_parser(self, mn.Appliance_Control_ElectricityX)
-
-    def _parse_electricity(self, payload: dict):
-        ElectricitySensor._parse_electricity(self, payload)
 
 
 class ElectricityXNamespaceHandler(NamespaceHandler):

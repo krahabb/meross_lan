@@ -24,7 +24,7 @@ if typing.TYPE_CHECKING:
 
     # optional arguments for MLNumericSensor init
     class MLNumericSensorArgs(me.MerossNumericEntityArgs):
-        pass
+        state_class: typing.NotRequired[sensor.SensorStateClass]
 
 
 async def async_setup_entry(
@@ -105,9 +105,12 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         **kwargs: "typing.Unpack[MLNumericSensorArgs]",
     ):
         assert device_class is not sensor.SensorDeviceClass.ENUM
-        self.state_class = self.DEVICECLASS_TO_STATECLASS_MAP.get(
+        self.state_class = kwargs.pop(
+            "state_class", None
+        ) or self.DEVICECLASS_TO_STATECLASS_MAP.get(
             device_class, MLNumericSensor.StateClass.MEASUREMENT
         )
+
         super().__init__(
             manager,
             channel,
