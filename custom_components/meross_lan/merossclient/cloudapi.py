@@ -359,7 +359,7 @@ async def async_cloudapi_signin(
     request_data = {
         mc.KEY_EMAIL: email,
         mc.KEY_PASSWORD: md5(password.encode("utf8")).hexdigest(),
-        # mc.KEY_ACCOUNTCOUNTRYCODE: region,
+        mc.KEY_ACCOUNTCOUNTRYCODE: region,
         mc.KEY_ENCRYPTION: 1,
         mc.KEY_AGREE: 0,
     }
