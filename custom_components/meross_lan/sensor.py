@@ -157,10 +157,10 @@ class MLHumiditySensor(MLNumericSensor):
         self,
         manager: "EntityManager",
         channel: object | None,
-        entitykey: str | None = "humidity",
+        entitykey: str = "humidity",
         **kwargs: "typing.Unpack[MLNumericSensorArgs]",
     ):
-        kwargs.setdefault("name", "Humidity")
+        kwargs.setdefault("name", entitykey.capitalize())
         super().__init__(
             manager,
             channel,
@@ -183,10 +183,10 @@ class MLTemperatureSensor(MLNumericSensor):
         self,
         manager: "EntityManager",
         channel: object | None,
-        entitykey: str | None = "temperature",
+        entitykey: str = "temperature",
         **kwargs: "typing.Unpack[MLNumericSensorArgs]",
     ):
-        kwargs.setdefault("name", "Temperature")
+        kwargs.setdefault("name", entitykey.capitalize())
         super().__init__(
             manager,
             channel,
@@ -207,10 +207,10 @@ class MLLightSensor(MLNumericSensor):
         self,
         manager: "EntityManager",
         channel: object | None,
-        entitykey: str | None = "light",
+        entitykey: str = "light",
         **kwargs: "typing.Unpack[MLNumericSensorArgs]",
     ):
-        kwargs.setdefault("name", "Light")
+        kwargs.setdefault("name", entitykey.capitalize())
         super().__init__(
             manager,
             channel,
