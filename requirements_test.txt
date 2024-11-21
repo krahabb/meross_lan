@@ -16,4 +16,5 @@ psutil-home-assistant
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.148 # HA core 2024.7.4
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.153 # HA core 2024.8.1
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.162 # HA core 2024.9.1
-pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.172 # HA core 2024.10.1
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.172 # HA core 2024.10.1
+pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.183 # HA core 2024.11.2
