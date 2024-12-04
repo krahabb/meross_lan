@@ -101,13 +101,13 @@ class MerossFlowHandlerMixin(
     profile_config: mlc.ProfileConfigType
     device_descriptor: MerossDeviceDescriptor
 
-    device_placeholders = {
+    device_placeholders: dict[str, str] = {
         "device_type": "",
         "device_id": "",
         "host": "",
     }
 
-    profile_placeholders = {
+    profile_placeholders: dict[str, str] = {
         "email": "",
         "placeholder": "",
     }
@@ -161,7 +161,7 @@ class MerossFlowHandlerMixin(
         step_id: str,
         *,
         config_schema: dict = {},
-        description_placeholders: typing.Mapping[str, str | None] | None = None,
+        description_placeholders: typing.Mapping[str, str] | None = None,
     ):
         """modularize errors managment: use together with show_form_errorcontext and get_schema_with_errors"""
         return super().async_show_form(
@@ -900,6 +900,8 @@ class OptionsFlow(MerossFlowHandlerMixin, ce.OptionsFlow):
         config_entry: ce.ConfigEntry,
         repair_issue_id: str | None = None,
     ):
+        # WARNING: HA core 2024.12 introduced new properties for config_entry/config_entry_id
+        # Right now we're overwriting the implementation hoping for the good...
         self.config_entry: typing.Final = config_entry
         self.config_entry_id: typing.Final = config_entry.entry_id
         self.config = dict(self.config_entry.data)  # type: ignore
