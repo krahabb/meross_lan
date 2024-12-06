@@ -158,23 +158,59 @@ class NamespaceHandler:
             self.polling_response_item_size = 0
             self.polling_strategy = None
 
-        if ns.need_channel:
-            self.polling_request_channels = []
-            self.polling_request = (
-                namespace,
-                mc.METHOD_GET,
-                {ns.key: self.polling_request_channels},
-            )
-        else:
-            self.polling_request_channels = None
-            self.polling_request = ns.request_default
-
         # by default we calculate 1 item/channel per payload but we should
         # refine this whenever needed
         self.polling_response_size = (
             self.polling_response_base_size + self.polling_response_item_size
         )
+        self._polling_request_init(ns.request_payload_type)
         device.namespace_handlers[namespace] = self
+
+    def _polling_request_init(self, request_payload_type: mn.RequestPayloadType):
+        """The structure of the polling payload is usually 'fixed' in the namespace
+        grammar (see merossclient.namespaces.Namespace) but we have some exceptions
+        here and there (one example is Refoss EM06) where the 'standard' is not valid.
+        This method allows to refine this namespace parser behavior based off current
+        device configuration/type at runtime. Needs to be called early on before
+        registering any parser."""
+        ns = self.ns
+        if request_payload_type is mn.RequestPayloadType.LIST_C:
+            self.polling_request_channels = []
+            self.polling_request = (
+                ns.name,
+                mc.METHOD_GET,
+                {ns.key: self.polling_request_channels},
+            )
+        elif request_payload_type is ns.request_payload_type:
+            # we'll reuse the default in the ns definition
+            self.polling_request_channels = None
+            self.polling_request = ns.request_default
+        else:
+            self.polling_request_channels = None
+            self.polling_request = (
+                ns.name,
+                mc.METHOD_GET,
+                {ns.key: request_payload_type.value},
+            )
+
+    def polling_request_add_channel(self, channel):
+        """Ensures the channel is set in polling request payload should
+        the ns need it. Also adjusts the estimated polling_response_size.
+        Returns False if not needed"""
+        polling_request_channels = self.polling_request_channels
+        if polling_request_channels is None:
+            return False
+        key_channel = self.key_channel
+        for channel_payload in polling_request_channels:
+            if channel_payload[key_channel] == channel:
+                break
+        else:
+            polling_request_channels.append({key_channel: channel})
+        self.polling_response_size = (
+            self.polling_response_base_size
+            + len(polling_request_channels) * self.polling_response_item_size
+        )
+        return True
 
     def polling_request_set(self, payload: list | dict):
         self.polling_request = (
@@ -198,7 +234,11 @@ class NamespaceHandler:
         self.polling_response_size += self.polling_response_item_size
 
     def register_entity_class(
-        self, entity_class: type["MerossEntity"], *, initially_disabled=True
+        self,
+        entity_class: type["MerossEntity"],
+        *,
+        initially_disabled: bool = True,
+        build_from_digest: bool = False,
     ):
         self.entity_class = (
             type(entity_class.__name__, (EntityDisablerMixin, entity_class), {})
@@ -207,6 +247,24 @@ class NamespaceHandler:
         )
         self.handler = self._handle_list
         self.device.platforms.setdefault(entity_class.PLATFORM)
+        if build_from_digest:
+            channels = set()
+
+            def _scan_digest(digest: dict):
+                if mc.KEY_CHANNEL in digest:
+                    channels.add(digest[mc.KEY_CHANNEL])
+                else:
+                    for value in digest.values():
+                        if type(value) is dict:
+                            _scan_digest(value)
+                        elif type(value) is list:
+                            for value_item in value:
+                                if type(value_item) is dict:
+                                    _scan_digest(value_item)
+
+            _scan_digest(self.device.descriptor.digest)
+            for channel in channels:
+                entity_class(self.device, channel)
 
     def register_parser(
         self,
@@ -231,31 +289,12 @@ class NamespaceHandler:
         if not parser.namespace_handlers:
             parser.namespace_handlers = set()
         parser.namespace_handlers.add(self)
-        if not self.check_polling_channel(channel):
+        if not self.polling_request_add_channel(channel):
             self.polling_response_size = (
                 self.polling_response_base_size
                 + len(self.parsers) * self.polling_response_item_size
             )
         self.handler = self._handle_list
-
-    def check_polling_channel(self, channel):
-        """Ensures the channel is set in polling request payload should
-        the ns need it. Also adjusts the estimated polling_response_size.
-        Returns False if not needed"""
-        polling_request_channels = self.polling_request_channels
-        if polling_request_channels is None:
-            return False
-        key_channel = self.key_channel
-        for channel_payload in polling_request_channels:
-            if channel_payload[key_channel] == channel:
-                break
-        else:
-            polling_request_channels.append({key_channel: channel})
-        self.polling_response_size = (
-            self.polling_response_base_size
-            + len(polling_request_channels) * self.polling_response_item_size
-        )
-        return True
 
     def unregister(self, parser: "NamespaceParser"):
         if self.parsers.pop(getattr(parser, self.key_channel), None):
@@ -749,7 +788,7 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_System_Runtime: (
-        300,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         330,
         0,
@@ -777,21 +816,21 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Diffuser_Sensor: (
-        300,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         100,
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Electricity: (
-        0,
+        mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         430,
         0,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_ElectricityX: (
-        0,
+        mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         100,
@@ -847,7 +886,7 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Sensor_Latest: (
-        300,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
@@ -882,18 +921,18 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Frost: (
-        0,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Overheat: (
-        0,
-        0,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         140,
-        NamespaceHandler.async_poll_default,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Timer: (
         0,
@@ -917,11 +956,11 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Sensor: (
-        0,
-        0,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         40,
-        NamespaceHandler.async_poll_default,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_GarageDoor_Config: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
@@ -942,14 +981,14 @@ POLLING_STRATEGY_CONF: dict[
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         40,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Hub_Mts100_Adjust: (
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         40,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Hub_Mts100_All: (
         mlc.PARAM_HEARTBEAT_PERIOD,
@@ -970,7 +1009,7 @@ POLLING_STRATEGY_CONF: dict[
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         60,
-        NamespaceHandler.async_poll_smart,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Hub_Sensor_All: (
         mlc.PARAM_HEARTBEAT_PERIOD,

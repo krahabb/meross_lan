@@ -165,6 +165,7 @@ KEY_POWER = "power"
 KEY_CURRENT = "current"
 KEY_VOLTAGE = "voltage"
 KEY_FACTOR = "factor"
+KEY_CONSUME = "consume"
 KEY_MCONSUME = "mConsume"
 KEY_CONSUMPTIONX = "consumptionx"
 KEY_CONSUMPTIONH = "consumptionH"
@@ -444,11 +445,10 @@ TYPE_NAME_MAP["msl"] = "Smart Light"
 
 TYPE_MSS310 = "mss310"  # smart plug with energy meter
 TYPE_NAME_MAP[TYPE_MSS310] = "Smart Plug"
-TYPE_MSS560 = "mss560"
-TYPE_NAME_MAP[TYPE_MSS560] = "Smart Dimmer Switch"
-TYPE_MSS570 = "mss570"
-TYPE_NAME_MAP[TYPE_MSS570] = TYPE_NAME_MAP[TYPE_MSS560]
+TYPE_NAME_MAP["mss560"] = "Smart Dimmer Switch"
+TYPE_NAME_MAP["mss570"] = TYPE_NAME_MAP["mss560"]
 TYPE_NAME_MAP["mss"] = "Smart Switch"
+TYPE_NAME_MAP["mop320"] = "Smart Outdoor Plug"
 
 TYPE_MTS100 = "mts100"  # Smart thermostat over hub
 TYPE_MTS100V3 = "mts100v3"  # Smart thermostat over hub
@@ -482,6 +482,10 @@ TYPE_NAME_MAP[TYPE_MS400] = "Smart Water Leak Sensor"
 
 TYPE_MS600 = "ms600"
 TYPE_NAME_MAP[TYPE_MS600] = "Smart Presence Sensor"
+
+# REFOSS device types
+TYPE_EM06 = "em06"
+TYPE_NAME_MAP[TYPE_EM06] = "Smart Energy Monitor"
 
 #
 # HUB helpers symbols

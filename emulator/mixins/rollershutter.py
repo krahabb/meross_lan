@@ -79,7 +79,7 @@ class _Transition:
                 self.duration = p_config[mc.KEY_SIGNALCLOSE] / _SIGNAL_SCALE
 
         self.callback_unsub = asyncio.get_event_loop().call_later(
-            1, self._transition_callback
+            RollerShutterMixin.SIGNAL_TRANSITION_PERIOD, self._transition_callback
         )
         emulator._transitions[channel] = self
 
@@ -98,7 +98,7 @@ class _Transition:
             self.shutdown()
             return
         self.callback_unsub = asyncio.get_event_loop().call_later(
-            1, self._transition_callback
+            RollerShutterMixin.SIGNAL_TRANSITION_PERIOD, self._transition_callback
         )
         if self.has_native_position:
             self.p_position[mc.KEY_POSITION] = self.position_begin + int(
@@ -112,6 +112,8 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     # different so to test they're used correctly
     SIGNALCLOSE = 20000
     SIGNALOPEN = 30000
+    # the internal sampling of the 'Transition'
+    SIGNAL_TRANSITION_PERIOD = 1 # sec
 
     def __init__(self, descriptor: MerossEmulatorDescriptor, key: str):
         self._transitions: dict[int, _Transition] = {}

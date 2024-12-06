@@ -2,6 +2,8 @@
     Tests the HA diagnostics and device tracing feature
 """
 
+import asyncio
+
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
@@ -54,6 +56,9 @@ async def test_mqtthub_diagnostics(
 ):
     async with helpers.MQTTHubEntryMocker(hass) as entry_mock:
         await entry_mock.async_test_config_entry_diagnostics()
+
+    # try to fight subscribe/unsubscribe cooldowns
+    await asyncio.sleep(1)
 
 
 async def test_mqtthub_tracing(

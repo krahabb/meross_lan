@@ -201,6 +201,12 @@ PARAM_CLOUDMQTT_UPDATE_PERIOD = 1795
 """for polled entities over cloud MQTT use 'at least' this"""
 PARAM_CONFIG_UPDATE_PERIOD = 300
 """read device config polling period"""
+PARAM_SENSOR_FAST_UPDATE_PERIOD = 0
+"""fast varying sensors polling period (this should lead to updates at every poll depending on polling policy)"""
+PARAM_SENSOR_MEDIUM_UPDATE_PERIOD = 55
+"""medium speed varying sensors polling period (not as critical as FAST_UPDATEs that need to be queried asap)"""
+PARAM_SENSOR_SLOW_UPDATE_PERIOD = 300
+"""slowly varying sensors polling period"""
 PARAM_DIAGNOSTIC_UPDATE_PERIOD = 300
 """read diagnostic sensors only every ... second"""
 PARAM_ENERGY_UPDATE_PERIOD = 55

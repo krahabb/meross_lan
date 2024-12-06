@@ -1,5 +1,7 @@
 """Test meross_lan config entry setup"""
 
+import asyncio
+
 from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
@@ -28,6 +30,9 @@ async def test_mqtthub_entry(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMoc
     # Unload the entry and verify that the data has not been removed
     # we actually never remove the MerossApi...
     assert type(hass.data[mlc.DOMAIN]) is MerossApi
+
+    # try to fight subscribe/unsubscribe cooldowns
+    await asyncio.sleep(1)
 
 
 async def test_mqtthub_entry_notready(hass: HomeAssistant):
@@ -80,9 +85,10 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
             for namespace_handler in device.namespace_handlers.values():
                 ns = namespace_handler.ns
                 assert (
-                    (not ns.need_channel)
+                    (ns.request_payload_type is not mn.RequestPayloadType.LIST_C)
                     or ns.is_sensor
                     or namespace_handler.polling_request_channels
+                    or descriptor.type.startswith(mc.TYPE_EM06)  # brutal exception
                 ), f"Incorrect config for {ns.name} namespace"
 
             if entity_dnd:

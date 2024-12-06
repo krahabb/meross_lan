@@ -1,11 +1,3 @@
--r requirements_dev.txt
-aiodiscover
-aiodhcpwatcher
-aiohttp-cors
-scapy
-janus
-fnv-hash-fast
-psutil-home-assistant
 #pytest-homeassistant-custom-component==0.13.42 # HA core 2023.7.0
 #pytest-homeassistant-custom-component==0.13.85 # HA core 2023.12.3
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.91 # HA core 2024.1.5
@@ -16,4 +8,16 @@ psutil-home-assistant
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.148 # HA core 2024.7.4
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.153 # HA core 2024.8.1
 #pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.162 # HA core 2024.9.1
-pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.172 # HA core 2024.10.1
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.172 # HA core 2024.10.1
+#pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.183 # HA core 2024.11.2
+pytest-homeassistant-custom-component @ git+https://github.com/MatthewFlamm/pytest-homeassistant-custom-component@0.13.189 # HA core 2024.12.0b5
+
+aiodiscover
+aiodhcpwatcher
+aiohttp-cors
+scapy
+janus
+fnv-hash-fast
+psutil-home-assistant
+
+-r requirements_dev.txt

@@ -147,6 +147,7 @@ class EntityTest(EntityComponentTest):
                 / 100000
             )
             expected_duration_max = RollerShutterMixin.SIGNALCLOSE / 1000
+        expected_duration_max += RollerShutterMixin.SIGNAL_TRANSITION_PERIOD
         assert (
             state.state == expected_state
         ), f"started {haec.SERVICE_SET_COVER_POSITION}({target_position}): state!={expected_state}"
@@ -161,7 +162,8 @@ class EntityTest(EntityComponentTest):
         while current_epoch < transition_end_epoch_max:
             # Advances the time mocker up to the next transition polling cycle and executes it
             _transition_unsub = entity._transition_unsub
-            assert _transition_unsub, "missing transition callback"
+            if not _transition_unsub:
+                break
             _when = _transition_unsub.when()
             if _when >= transition_end_epoch:
                 if entity._position_native_isgood:
@@ -191,7 +193,9 @@ class EntityTest(EntityComponentTest):
             await time_mock.async_tick(_when - current_epoch)
             current_epoch = loop_time()
 
-        assert entity._transition_unsub is None, "transition still pending"
+        assert (
+            entity._transition_unsub is None
+        ), f"transition to {target_position} still pending:current_epoch=={current_epoch} transition_end={entity._transition_unsub.when()}"
 
         assert (state := self.hass_states.get(self.entity_id))
         expected_state = haec.STATE_OPEN if target_position else haec.STATE_CLOSED

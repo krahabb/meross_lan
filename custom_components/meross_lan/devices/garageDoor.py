@@ -19,6 +19,7 @@ from ..number import MLConfigNumber, MLEmulatedNumber, MLNumber
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
+    from ..merossclient import MerossRequestType
     from ..meross_device import DigestInitReturnType, MerossDevice
     from ..number import MLConfigNumberArgs
 
@@ -275,8 +276,11 @@ class MLGarage(MLCover):
         MLCover.EntityFeature.OPEN | MLCover.EntityFeature.CLOSE
     )
 
+    _state_request: "MerossRequestType"
+
     __slots__ = (
         "_config",
+        "_state_request",
         "_transition_duration",
         "_transition_start",
         "binary_sensor_timeout",
@@ -295,6 +299,18 @@ class MLGarage(MLCover):
             self.ATTR_TRANSITION_DURATION: self._transition_duration
         }
         super().__init__(manager, channel, MLCover.DeviceClass.GARAGE)
+        if channel:
+            self._state_request = (
+                mn.Appliance_GarageDoor_State.name,
+                mc.METHOD_GET,
+                {
+                    mn.Appliance_GarageDoor_State.key: {
+                        mn.Appliance_GarageDoor_State.key_channel: channel
+                    }
+                },
+            )
+        else:
+            self._state_request = mn.Appliance_GarageDoor_State.request_default
         ability = manager.descriptor.ability
         manager.register_parser_entity(self)
         manager.register_togglex_channel(self)
@@ -542,9 +558,7 @@ class MLGarage(MLCover):
         self._transition_unsub = None
         manager = self.manager
         if manager.curr_protocol is CONF_PROTOCOL_HTTP and not manager._mqtt_active:
-            await manager.async_http_request(
-                *mn.Appliance_GarageDoor_State.request_default
-            )
+            await manager.async_http_request(*self._state_request)
 
     async def _async_transition_end_callback(self):
         """
@@ -568,9 +582,7 @@ class MLGarage(MLCover):
 
         if was_closing != self.is_closed:
             # looks like on MQTT we don't receive a PUSHed state update? (#415)
-            if await self.manager.async_request_ack(
-                *mn.Appliance_GarageDoor_State.request_default
-            ):
+            if await self.manager.async_request_ack(*self._state_request):
                 # the request/response parse already flushed the state
                 if was_closing == self.is_closed:
                     self.binary_sensor_timeout.update_ok(was_closing)

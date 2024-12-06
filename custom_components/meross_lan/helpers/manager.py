@@ -79,6 +79,7 @@ class EntityManager(Loggable):
         "key",
         "obfuscate",
         "state",
+        "_tasks",
         "_trace_file",
         "_trace_future",
         "_trace_data",
@@ -102,6 +103,7 @@ class EntityManager(Loggable):
         # in platforms(s) async_setup_entry with their corresponding platform
         self.entities: typing.Final[dict[object, "MerossEntity"]] = {}
         self.state = ManagerState.INIT
+        self._tasks: set[asyncio.Future] = set()
         super().__init__(id, **kwargs)
 
     async def async_shutdown(self):
@@ -113,9 +115,25 @@ class EntityManager(Loggable):
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
+        for task in list(self._tasks):
+            if task.done():
+                continue
+            self.log(self.DEBUG, "Shutting down pending task %s", task)
+            task.cancel("ConfigEntryManager shutdown")
+            try:
+                async with asyncio.timeout(0.1):
+                    await task
+            except asyncio.CancelledError:
+                pass
+            except Exception as exception:
+                self.log_exception(
+                    self.WARNING, exception, "cancelling task %s during shutdown", task
+                )
         for entity in set(self.entities.values()):
             # async_shutdown will pop out of self.entities
             await entity.async_shutdown()
+        if self._tasks:
+            self.log(self.DEBUG, "Some tasks were not shutdown %s", self._tasks)
 
     @property
     def name(self) -> str:
@@ -146,7 +164,7 @@ class EntityManager(Loggable):
     ) -> "asyncio.TimerHandle":
         @callback
         def _callback(_target, *_args):
-            self.hass.async_create_task(_target(*_args))
+            self.async_create_task(_target(*_args), "._callback")
 
         return self.hass.loop.call_later(delay, _callback, target, *args)
 
@@ -154,6 +172,26 @@ class EntityManager(Loggable):
         self, delay: float, target: "typing.Callable", *args
     ) -> "asyncio.TimerHandle":
         return self.hass.loop.call_later(delay, target, *args)
+
+    @callback
+    def async_create_task(
+        self,
+        target: typing.Coroutine,
+        name: str,
+        eager_start: bool = True,
+    ) -> "asyncio.Task":
+        try:
+            task = self.hass.async_create_task(
+                target, f"{self.logtag}{name}", eager_start
+            )
+        except TypeError:  # older api compatibility fallback (likely pre core 2024.3)
+            task = self.hass.async_create_task(target, f"{self.logtag}{name}")
+            eager_start = False
+        if not (eager_start and task.done()):
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.remove)
+        return task
+
 
 class ConfigEntryManager(EntityManager):
     """
@@ -383,6 +421,7 @@ class ConfigEntryManager(EntityManager):
             self.log(self.DEBUG, "Tracing start")
             epoch = time()
             hass = self.hass
+
             def _trace_open():
                 tracedir = hass.config.path(
                     "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
@@ -391,11 +430,12 @@ class ConfigEntryManager(EntityManager):
                 return open(
                     os.path.join(
                         tracedir,
-                        f"{strftime('%Y-%m-%d_%H-%M-%S', localtime(epoch))}_{self.config_entry_id}.csv"
+                        f"{strftime('%Y-%m-%d_%H-%M-%S', localtime(epoch))}_{self.config_entry_id}.csv",
                     ),
                     mode="w",
                     encoding="utf8",
                 )
+
             self._trace_file = await hass.async_add_executor_job(_trace_open)
 
             @callback
@@ -404,7 +444,8 @@ class ConfigEntryManager(EntityManager):
                 self.trace_close()
 
             self._unsub_trace_endtime = self.schedule_callback(
-                self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT, _trace_close_callback
+                self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT,
+                _trace_close_callback,
             )
             self._trace_opened(epoch)
         except Exception as exception:

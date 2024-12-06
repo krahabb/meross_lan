@@ -404,7 +404,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
             mn.Appliance_Control_Screen_Brightness,
             handler=self._handle_Appliance_Control_Screen_Brightness,
         )
-        self.check_polling_channel(0)
+        self.polling_request_add_channel(0)
         self.number_brightness_operation = MLScreenBrightnessNumber(
             device, mc.KEY_OPERATION
         )

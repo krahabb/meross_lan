@@ -19,5 +19,5 @@ cp "${PWD}/.devcontainer/configuration.yaml" "${PWD}/config/configuration.yaml"
 export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
 
 # Start Home Assistant
-#hass --config "${PWD}/config" --debug
-python3 -Xfrozen_modules=off -m homeassistant --config "${PWD}/config" --debug
+hass --config "${PWD}/config" --debug
+#python3 -Xfrozen_modules=off -m homeassistant --config "${PWD}/config" --debug

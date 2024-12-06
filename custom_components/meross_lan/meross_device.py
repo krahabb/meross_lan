@@ -236,7 +236,9 @@ class MerossDeviceBase(EntityManager):
         )
 
     def request(self, request_tuple: "MerossRequestType"):
-        return self.hass.async_create_task(self.async_request(*request_tuple))
+        return self.async_create_task(
+            self.async_request(*request_tuple), f".request({request_tuple})"
+        )
 
     def check_device_timezone(self):
         raise NotImplementedError("check_device_timezone")
@@ -326,7 +328,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         ),
         mn.Appliance_Control_ElectricityX.name: (
             ".devices.mss",
-            "namespace_init_electricityx",
+            "ElectricityXNamespaceHandler",
+        ),
+        mn.Appliance_Control_ConsumptionH.name: (
+            ".sensor",
+            "ConsumptionHNamespaceHandler",
         ),
         mn.Appliance_Control_ConsumptionX.name: (".devices.mss", "ConsumptionXSensor"),
         mn.Appliance_Control_Fan.name: (".fan", "namespace_init_fan"),
@@ -530,6 +536,34 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             except:
                 pass
 
+        for namespace, ns_init_func in MerossDevice.NAMESPACE_INIT.items():
+            if namespace not in descriptor.ability:
+                continue
+            try:
+                try:
+                    ns_init_func(self)
+                except TypeError:
+                    try:
+                        ns_init_func = getattr(
+                            await async_import_module(ns_init_func[0]),
+                            ns_init_func[1],
+                        )
+                    except Exception as exception:
+                        self.log_exception(
+                            self.WARNING,
+                            exception,
+                            "loading namespace initializer for %s",
+                            namespace,
+                        )
+                        ns_init_func = MerossDevice.namespace_init_empty
+                    MerossDevice.NAMESPACE_INIT[namespace] = ns_init_func
+                    ns_init_func(self)
+
+            except Exception as exception:
+                self.log_exception(
+                    self.WARNING, exception, "initializing namespace %s", namespace
+                )
+
         for key_digest, _digest in (
             descriptor.digest.items() or descriptor.control.items()
         ):
@@ -570,35 +604,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     self.WARNING, exception, "initializing digest key '%s'", key_digest
                 )
                 self.digest_handlers[key_digest] = MerossDevice.digest_parse_empty
-
-        for namespace, ns_init_func in MerossDevice.NAMESPACE_INIT.items():
-            if namespace not in descriptor.ability:
-                continue
-            try:
-                try:
-                    ns_init_func(self)
-                except TypeError:
-                    try:
-                        # _ns_init_descriptor = MerossDevice.NAMESPACE_INIT[namespace]
-                        ns_init_func = getattr(
-                            await async_import_module(ns_init_func[0]),
-                            ns_init_func[1],
-                        )
-                    except Exception as exception:
-                        self.log_exception(
-                            self.WARNING,
-                            exception,
-                            "loading namespace initializer for %s",
-                            namespace,
-                        )
-                        ns_init_func = MerossDevice.namespace_init_empty
-                    MerossDevice.NAMESPACE_INIT[namespace] = ns_init_func
-                    ns_init_func(self)
-
-            except Exception as exception:
-                self.log_exception(
-                    self.WARNING, exception, "initializing namespace %s", namespace
-                )
 
     def start(self):
         # called by async_setup_entry after the entities have been registered
@@ -1259,8 +1264,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         method: str,
         payload: "MerossPayloadType",
     ):
-        return self.hass.async_create_task(
-            self.async_mqtt_request(namespace, method, payload)
+        return self.async_create_task(
+            self.async_mqtt_request(namespace, method, payload),
+            f".mqtt_request({namespace},{method},{type(payload)})",
         )
 
     async def async_http_request_raw(
