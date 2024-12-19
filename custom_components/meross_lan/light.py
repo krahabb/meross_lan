@@ -562,7 +562,7 @@ class MLLight(MLLightBase):
 
         _light = dict(self._light)
 
-        if ATTR_TRANSITION in kwargs:
+        if ATTR_TRANSITION in kwargs and kwargs[ATTR_TRANSITION] != 0:
             _t_duration = self._transition_setup(_light, kwargs)
             if self._t_rgb_end:
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_RGB_LUMINANCE
