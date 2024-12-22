@@ -77,6 +77,7 @@ Most of this software has been developed and tested on my owned Meross devices w
   - [MSL120](https://www.meross.com/product/28/article/): Smart RGB bulb with dimmable light
   - [MSL320](https://www.meross.com/Detail/86/Smart%20Wi-Fi%20Light%20Strip): Smart Wifi Light Strip
   - [MSL420](https://www.meross.com/product/22/article): Smart Ambient Light
+  - [MSL450](https://www.meross.com/product/119/article): Smart LED Lamp
 - Hub
   - [MSH300](https://www.meross.com/Detail/50/Smart%20Wi-Fi%20Hub): Smart WiFi Hub
 - Sensors
