@@ -301,7 +301,7 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
             self.schedule_entry_reload(5)
 
     # interface: self
-    def log_duplicated_subdevice(self, subdevice_id: str):
+    def log_duplicated_subdevice(self, subdevice_id: object):
         self.log(
             self.CRITICAL,
             "Subdevice %s (id:%s) appears twice in device data. Shouldn't happen",
