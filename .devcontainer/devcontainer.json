@@ -1,6 +1,6 @@
 {
     "name": "ludeeus/integration_blueprint/meross_lan",
-    "image": "mcr.microsoft.com/devcontainers/python:3",
+    "image": "mcr.microsoft.com/devcontainers/python:3.13",
 	"runArgs": [ "--network=host" ],
     "postCreateCommand": "scripts/setup",
     "customizations": {
