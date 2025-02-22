@@ -1454,11 +1454,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         for handler in [
             handler
             for handler in self.namespace_handlers.values()
-            if (handler.ns.name != namespace) and (handler.polling_strategy)
+            if (handler.ns.name != namespace)
         ]:
-            await handler.polling_strategy(handler, self)  # type: ignore
-            if not self._online:
-                break  # do not return: do the flush first!
+            if handler.polling_strategy:
+                await handler.polling_strategy(handler, self)  # type: ignore
+                if not self._online:
+                    break  # do not return: do the flush first!
 
         # needed even if offline: it takes care of resetting the ns_multiple state
         await self.async_multiple_requests_flush()
