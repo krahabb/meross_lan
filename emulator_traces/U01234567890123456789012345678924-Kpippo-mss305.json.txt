@@ -1,0 +1,1396 @@
+{
+  "home_assistant": {
+    "installation_type": "Home Assistant OS",
+    "version": "2024.12.0",
+    "dev": false,
+    "hassio": true,
+    "virtualenv": false,
+    "python_version": "3.13.0",
+    "docker": true,
+    "arch": "x86_64",
+    "timezone": "Europe/London",
+    "os_name": "Linux",
+    "os_version": "6.6.63-haos",
+    "supervisor": "2025.02.1",
+    "host_os": "Home Assistant OS 14.0",
+    "docker_version": "27.2.0",
+    "chassis": "vm",
+    "run_as_root": true
+  },
+  "custom_components": {
+    "hacs": {
+      "documentation": "https://hacs.xyz/docs/configuration/start",
+      "version": "2.0.1",
+      "requirements": [
+        "aiogithubapi>=22.10.1"
+      ]
+    },
+    "llmvision": {
+      "documentation": "https://github.com/valentinfrlch/ha-llmvision",
+      "version": "1.3.1",
+      "requirements": []
+    },
+    "proxmoxve": {
+      "documentation": "https://github.com/dougiteixeira/proxmoxve",
+      "version": "3.5.2",
+      "requirements": [
+        "proxmoxer==2.0.1"
+      ]
+    },
+    "octopus_energy": {
+      "documentation": "https://bottlecapdave.github.io/HomeAssistant-OctopusEnergy",
+      "version": "13.2.1",
+      "requirements": []
+    },
+    "meross_lan": {
+      "documentation": "https://github.com/krahabb/meross_lan",
+      "version": "5.4.1",
+      "requirements": []
+    }
+  },
+  "integration_manifest": {
+    "domain": "meross_lan",
+    "name": "Meross LAN",
+    "after_dependencies": [
+      "mqtt",
+      "dhcp",
+      "recorder",
+      "persistent_notification"
+    ],
+    "codeowners": [
+      "krahabb"
+    ],
+    "config_flow": true,
+    "dhcp": [
+      {
+        "hostname": "*",
+        "macaddress": "48E1E9*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "C4E7AE*"
+      },
+      {
+        "hostname": "*",
+        "macaddress": "34298F1*"
+      },
+      {
+        "registered_devices": true
+      }
+    ],
+    "documentation": "https://github.com/krahabb/meross_lan",
+    "integration_type": "hub",
+    "iot_class": "local_polling",
+    "issue_tracker": "https://github.com/krahabb/meross_lan/issues",
+    "loggers": [
+      "custom_components.meross_lan"
+    ],
+    "mqtt": [
+      "/appliance/+/publish"
+    ],
+    "requirements": [],
+    "version": "5.4.1",
+    "is_built_in": false,
+    "overwrites_built_in": false
+  },
+  "setup_times": {
+    "null": {
+      "setup": 2.1766000003253794e-05
+    },
+    "01J39568X9QWZJBFSGZSYKX9JP": {
+      "wait_import_platforms": -2.986999999876616e-05,
+      "config_entry_setup": 0.012227498000001447
+    },
+    "01J395HD53JQB7MNS7XSJ4D9S3": {
+      "wait_import_platforms": -4.135900000079573e-05,
+      "wait_base_component": -0.0034982350000021256,
+      "config_entry_setup": 0.068758914
+    },
+    "01J395RMREZ22RX5AKV0BF8VG1": {
+      "config_entry_setup": 0.07559020799999416
+    },
+    "01J395J93EAXY8PZ59VQCXE04R": {
+      "config_entry_setup": 0.07786752800000585
+    },
+    "01J395HTVTC6JXEGZQE4SV372V": {
+      "config_entry_setup": 0.09118063900000095
+    },
+    "01J395JG37SCAY3WW5EBHQHYQ5": {
+      "config_entry_setup": 0.09216302499999784
+    },
+    "01J3AZRP4ND56PEA0ZY3M0YMFE": {
+      "config_entry_setup": 0.09092865800000283
+    },
+    "01J3A574F5MS4493HV8MK9SGTY": {
+      "config_entry_setup": 0.09192588900000231
+    },
+    "01J395JCVXRV8KS6K82NQ0JXVZ": {
+      "config_entry_setup": 0.09724302200000068
+    }
+  },
+  "data": {
+    "device_id": "###############################1",
+    "host": "###########0",
+    "key": "###############################0",
+    "payload": {
+      "ability": {
+        "Appliance.Config.Info": {},
+        "Appliance.Config.Key": {},
+        "Appliance.Config.OverTemp": {},
+        "Appliance.Config.StandbyKiller": {},
+        "Appliance.Config.Trace": {},
+        "Appliance.Config.Wifi": {},
+        "Appliance.Config.WifiList": {},
+        "Appliance.Config.WifiX": {},
+        "Appliance.Control.AlertReport": {},
+        "Appliance.Control.Bind": {},
+        "Appliance.Control.ConsumptionConfig": {},
+        "Appliance.Control.ConsumptionH": {},
+        "Appliance.Control.ConsumptionX": {},
+        "Appliance.Control.Electricity": {},
+        "Appliance.Control.Multiple": {
+          "maxCmdNum": 3
+        },
+        "Appliance.Control.OverTemp": {},
+        "Appliance.Control.TimerX": {
+          "sunOffsetSupport": 1
+        },
+        "Appliance.Control.ToggleX": {},
+        "Appliance.Control.TriggerX": {},
+        "Appliance.Control.Unbind": {},
+        "Appliance.Control.Upgrade": {},
+        "Appliance.Digest.TimerX": {},
+        "Appliance.Digest.TriggerX": {},
+        "Appliance.System.Ability": {},
+        "Appliance.System.All": {},
+        "Appliance.System.Clock": {},
+        "Appliance.System.DNDMode": {},
+        "Appliance.System.Debug": {},
+        "Appliance.System.Firmware": {},
+        "Appliance.System.Hardware": {},
+        "Appliance.System.Online": {},
+        "Appliance.System.Position": {},
+        "Appliance.System.Report": {},
+        "Appliance.System.Runtime": {},
+        "Appliance.System.Time": {}
+      },
+      "all": {
+        "system": {
+          "hardware": {
+            "type": "mss305",
+            "subType": "un",
+            "version": "8.0.0",
+            "chipType": "rtl8720cf",
+            "uuid": "###############################1",
+            "macAddress": "################0"
+          },
+          "firmware": {
+            "version": "8.3.15",
+            "compileTime": "2025/01/02-16:34:01",
+            "encrypt": 1,
+            "wifiMac": "################0",
+            "innerIp": "###########0",
+            "server": "###################0",
+            "port": "@0",
+            "userId": "@0"
+          },
+          "time": {
+            "timestamp": 1739780217,
+            "timezone": "Europe/London",
+            "timeRule": [
+              [
+                1711846800,
+                3600,
+                1
+              ],
+              [
+                1729990800,
+                0,
+                0
+              ],
+              [
+                1743296400,
+                3600,
+                1
+              ],
+              [
+                1761440400,
+                0,
+                0
+              ],
+              [
+                1774746000,
+                3600,
+                1
+              ],
+              [
+                1792890000,
+                0,
+                0
+              ],
+              [
+                1806195600,
+                3600,
+                1
+              ],
+              [
+                1824944400,
+                0,
+                0
+              ],
+              [
+                1837645200,
+                3600,
+                1
+              ],
+              [
+                1856394000,
+                0,
+                0
+              ],
+              [
+                1869094800,
+                3600,
+                1
+              ],
+              [
+                1887843600,
+                0,
+                0
+              ],
+              [
+                1901149200,
+                3600,
+                1
+              ],
+              [
+                1919293200,
+                0,
+                0
+              ],
+              [
+                1932598800,
+                3600,
+                1
+              ],
+              [
+                1950742800,
+                0,
+                0
+              ],
+              [
+                1964048400,
+                3600,
+                1
+              ],
+              [
+                1982797200,
+                0,
+                0
+              ],
+              [
+                1995498000,
+                3600,
+                1
+              ],
+              [
+                2014246800,
+                0,
+                0
+              ]
+            ]
+          },
+          "online": {
+            "status": 1,
+            "bindId": "ibg9bS2LxStM3zo7",
+            "who": 1
+          }
+        },
+        "digest": {
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 1,
+              "lmTime": 1739780127
+            }
+          ]
+        }
+      }
+    },
+    "timestamp": 1739524757.1978707,
+    "create_diagnostic_entities": false,
+    "logging_level": 0,
+    "obfuscate": true,
+    "trace_timeout": 600,
+    "device": {
+      "class": "MerossDevice",
+      "conf_protocol": "auto",
+      "pref_protocol": "http",
+      "curr_protocol": "http",
+      "polling_period": 30,
+      "device_response_size_min": 1965,
+      "device_response_size_max": 3135.0,
+      "MQTT": {
+        "cloud_profile": true,
+        "locally_active": false,
+        "mqtt_connection": true,
+        "mqtt_connected": true,
+        "mqtt_publish": true,
+        "mqtt_active": true
+      },
+      "HTTP": {
+        "http": true,
+        "http_active": true
+      },
+      "namespace_handlers": {
+        "Appliance.System.All": {
+          "lastrequest": 1739780217.8929021,
+          "lastresponse": 1739780217.9707096,
+          "polling_epoch_next": 1739780512.8929021,
+          "polling_strategy": "async_poll_all"
+        },
+        "Appliance.Config.OverTemp": {
+          "lastrequest": 0.0,
+          "lastresponse": 1739780273.3360105,
+          "polling_epoch_next": 1739780573.3360105,
+          "polling_strategy": null
+        },
+        "Appliance.Control.ConsumptionConfig": {
+          "lastrequest": 0.0,
+          "lastresponse": 1739780273.722593,
+          "polling_epoch_next": 1739780573.722593,
+          "polling_strategy": null
+        },
+        "Appliance.Control.Electricity": {
+          "lastrequest": 1739780217.8929021,
+          "lastresponse": 1739780273.9187489,
+          "polling_epoch_next": 1739780273.9187489,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.Control.ConsumptionH": {
+          "lastrequest": 1739780217.8929021,
+          "lastresponse": 1739780273.789867,
+          "polling_epoch_next": 1739780328.789867,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.Control.ConsumptionX": {
+          "lastrequest": 1739780217.8929021,
+          "lastresponse": 1739780273.8559165,
+          "polling_epoch_next": 1739780328.8559165,
+          "polling_strategy": "async_poll_smart"
+        },
+        "Appliance.System.DNDMode": {
+          "lastrequest": 0.0,
+          "lastresponse": 0.0,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.System.Runtime": {
+          "lastrequest": 1739780217.8929021,
+          "lastresponse": 1739780274.1447723,
+          "polling_epoch_next": 1739780574.1447723,
+          "polling_strategy": "async_poll_lazy"
+        },
+        "Appliance.Control.ToggleX": {
+          "lastrequest": 0.0,
+          "lastresponse": 1739780274.023711,
+          "polling_epoch_next": 1739780574.023711,
+          "polling_strategy": null
+        },
+        "Appliance.System.Debug": {
+          "lastrequest": 0.0,
+          "lastresponse": 1739780274.0891757,
+          "polling_epoch_next": 1739780274.0891757,
+          "polling_strategy": null
+        },
+        "Appliance.System.Online": {
+          "lastrequest": 0.0,
+          "lastresponse": 1739780256.1042917,
+          "polling_epoch_next": 1739780556.1042917,
+          "polling_strategy": null
+        },
+        "Appliance.Config.Info": {
+          "lastrequest": 0.0,
+          "lastresponse": 1739780273.2818387,
+          "polling_epoch_next": 1739780573.2818387,
+          "polling_strategy": null
+        },
+        "Appliance.Config.StandbyKiller": {
+          "lastrequest": 0.0,
+          "lastresponse": 1739780273.5758328,
+          "polling_epoch_next": 1739780573.5758328,
+          "polling_strategy": null
+        },
+        "Appliance.Control.AlertReport": {
+          "lastrequest": 0.0,
+          "lastresponse": 0.0,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        },
+        "Appliance.Control.OverTemp": {
+          "lastrequest": 0.0,
+          "lastresponse": 0.0,
+          "polling_epoch_next": 0.0,
+          "polling_strategy": null
+        }
+      },
+      "namespace_pushes": {
+        "Appliance.System.Online": {
+          "online": {
+            "status": 1
+          }
+        },
+        "Appliance.Config.Info": {
+          "info": {
+            "homekit": {}
+          }
+        },
+        "Appliance.Config.StandbyKiller": {
+          "config": [
+            {
+              "channel": 0,
+              "power": 0,
+              "time": 300,
+              "enable": 2,
+              "alert": 2
+            }
+          ]
+        }
+      },
+      "device_info": {
+        "uuid": "###############################1",
+        "onlineStatus": 2,
+        "devName": "JMLPVE01",
+        "devIconId": "device_mss305_uk",
+        "bindTime": 1721237195,
+        "deviceType": "mss305",
+        "subType": "uk",
+        "channels": [
+          {}
+        ],
+        "region": "eu",
+        "fmwareVersion": "8.3.15",
+        "hdwareVersion": "8.0.0",
+        "userDevIcon": "",
+        "iconType": 1,
+        "domain": "###################0",
+        "reservedDomain": "###################0",
+        "hardwareCapabilities": []
+      }
+    },
+    "trace": [
+      [
+        "time",
+        "rxtx",
+        "protocol",
+        "method",
+        "namespace",
+        "data"
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.All",
+        {
+          "system": {
+            "hardware": {
+              "type": "mss305",
+              "subType": "un",
+              "version": "8.0.0",
+              "chipType": "rtl8720cf",
+              "uuid": "###############################1",
+              "macAddress": "################0"
+            },
+            "firmware": {
+              "version": "8.3.15",
+              "compileTime": "2025/01/02-16:34:01",
+              "encrypt": 1,
+              "wifiMac": "################0",
+              "innerIp": "###########0",
+              "server": "###################0",
+              "port": "@0",
+              "userId": "@0"
+            },
+            "time": {
+              "timestamp": 1739780217,
+              "timezone": "Europe/London",
+              "timeRule": [
+                [
+                  1711846800,
+                  3600,
+                  1
+                ],
+                [
+                  1729990800,
+                  0,
+                  0
+                ],
+                [
+                  1743296400,
+                  3600,
+                  1
+                ],
+                [
+                  1761440400,
+                  0,
+                  0
+                ],
+                [
+                  1774746000,
+                  3600,
+                  1
+                ],
+                [
+                  1792890000,
+                  0,
+                  0
+                ],
+                [
+                  1806195600,
+                  3600,
+                  1
+                ],
+                [
+                  1824944400,
+                  0,
+                  0
+                ],
+                [
+                  1837645200,
+                  3600,
+                  1
+                ],
+                [
+                  1856394000,
+                  0,
+                  0
+                ],
+                [
+                  1869094800,
+                  3600,
+                  1
+                ],
+                [
+                  1887843600,
+                  0,
+                  0
+                ],
+                [
+                  1901149200,
+                  3600,
+                  1
+                ],
+                [
+                  1919293200,
+                  0,
+                  0
+                ],
+                [
+                  1932598800,
+                  3600,
+                  1
+                ],
+                [
+                  1950742800,
+                  0,
+                  0
+                ],
+                [
+                  1964048400,
+                  3600,
+                  1
+                ],
+                [
+                  1982797200,
+                  0,
+                  0
+                ],
+                [
+                  1995498000,
+                  3600,
+                  1
+                ],
+                [
+                  2014246800,
+                  0,
+                  0
+                ]
+              ]
+            },
+            "online": {
+              "status": 1,
+              "bindId": "ibg9bS2LxStM3zo7",
+              "who": 1
+            }
+          },
+          "digest": {
+            "togglex": [
+              {
+                "channel": 0,
+                "onoff": 1,
+                "lmTime": 1739780127
+              }
+            ]
+          }
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "",
+        "auto",
+        "GETACK",
+        "Appliance.System.Ability",
+        {
+          "Appliance.Config.Info": {},
+          "Appliance.Config.Key": {},
+          "Appliance.Config.OverTemp": {},
+          "Appliance.Config.StandbyKiller": {},
+          "Appliance.Config.Trace": {},
+          "Appliance.Config.Wifi": {},
+          "Appliance.Config.WifiList": {},
+          "Appliance.Config.WifiX": {},
+          "Appliance.Control.AlertReport": {},
+          "Appliance.Control.Bind": {},
+          "Appliance.Control.ConsumptionConfig": {},
+          "Appliance.Control.ConsumptionH": {},
+          "Appliance.Control.ConsumptionX": {},
+          "Appliance.Control.Electricity": {},
+          "Appliance.Control.Multiple": {
+            "maxCmdNum": 3
+          },
+          "Appliance.Control.OverTemp": {},
+          "Appliance.Control.TimerX": {
+            "sunOffsetSupport": 1
+          },
+          "Appliance.Control.ToggleX": {},
+          "Appliance.Control.TriggerX": {},
+          "Appliance.Control.Unbind": {},
+          "Appliance.Control.Upgrade": {},
+          "Appliance.Digest.TimerX": {},
+          "Appliance.Digest.TriggerX": {},
+          "Appliance.System.Ability": {},
+          "Appliance.System.All": {},
+          "Appliance.System.Clock": {},
+          "Appliance.System.DNDMode": {},
+          "Appliance.System.Debug": {},
+          "Appliance.System.Firmware": {},
+          "Appliance.System.Hardware": {},
+          "Appliance.System.Online": {},
+          "Appliance.System.Position": {},
+          "Appliance.System.Report": {},
+          "Appliance.System.Runtime": {},
+          "Appliance.System.Time": {}
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Info",
+        {}
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {}
+          }
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.Info",
+        {
+          "info": []
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.Info",
+        {
+          "info": {
+            "homekit": {}
+          }
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.OverTemp",
+        {
+          "overTemp": {}
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.OverTemp",
+        {
+          "overTemp": {
+            "enable": 1,
+            "type": 1
+          }
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Config.StandbyKiller",
+        {}
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "PUSH",
+        "Appliance.Config.StandbyKiller",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "power": 0,
+              "time": 300,
+              "enable": 2,
+              "alert": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:PUSH namespace:Appliance.Config.StandbyKiller payload:{'config': [{'channel': 0, 'power': 0, 'time': 300, 'enable': 2, 'alert': 2}]}"
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.StandbyKiller",
+        {
+          "standbyKiller": []
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Config.StandbyKiller (messageId:f86e34950cce40e58ec7ac871bb2ac92 ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.StandbyKiller",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.StandbyKiller",
+        {
+          "config": []
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.StandbyKiller payload:{'config': []}"
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Config.StandbyKiller",
+        {
+          "config": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Config.StandbyKiller",
+        {
+          "config": [
+            {
+              "channel": 0,
+              "power": 0,
+              "time": 300,
+              "enable": 2,
+              "alert": 2
+            }
+          ]
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "Handler undefined for method:GETACK namespace:Appliance.Config.StandbyKiller payload:{'config': [{'channel': 0, 'power': 0, 'time': 300, 'enable': 2, 'alert': 2}]}"
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "PUSH",
+        "Appliance.Control.AlertReport",
+        {}
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR PUSH Appliance.Control.AlertReport (messageId:a191b63b0db04b96ba268ec4a9f07a3b ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.AlertReport",
+        {
+          "alertReport": []
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.AlertReport (messageId:6bd3b8e88405404dac33e8bd269aa3bc ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ConsumptionConfig",
+        {
+          "config": {}
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ConsumptionConfig",
+        {
+          "config": {
+            "voltageRatio": 188,
+            "electricityRatio": 101,
+            "maxElectricityCurrent": 14000
+          }
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ConsumptionH",
+        {
+          "consumptionH": [
+            {
+              "channel": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ConsumptionH",
+        {
+          "consumptionH": [
+            {
+              "data": [
+                {
+                  "timestamp": 1739494747,
+                  "value": 11
+                },
+                {
+                  "timestamp": 1739498347,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739501947,
+                  "value": 8
+                },
+                {
+                  "timestamp": 1739505588,
+                  "value": 10
+                },
+                {
+                  "timestamp": 1739509148,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739512748,
+                  "value": 10
+                },
+                {
+                  "timestamp": 1739516348,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739519949,
+                  "value": 8
+                },
+                {
+                  "timestamp": 1739523549,
+                  "value": 11
+                },
+                {
+                  "timestamp": 1739524469,
+                  "value": 3
+                },
+                {
+                  "timestamp": 1739530745,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1739531425,
+                  "value": 0
+                },
+                {
+                  "timestamp": 1739451544,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739455194,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739458745,
+                  "value": 8
+                },
+                {
+                  "timestamp": 1739462345,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739465945,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739469546,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739473146,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739476746,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739480347,
+                  "value": 8
+                },
+                {
+                  "timestamp": 1739483946,
+                  "value": 11
+                },
+                {
+                  "timestamp": 1739487546,
+                  "value": 9
+                },
+                {
+                  "timestamp": 1739490597,
+                  "value": 7
+                }
+              ],
+              "channel": 0,
+              "total": 0
+            }
+          ]
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ConsumptionX",
+        {
+          "consumptionx": []
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ConsumptionX",
+        {
+          "consumptionx": [
+            {
+              "date": "2025-01-31",
+              "time": 1738367880,
+              "value": 216
+            },
+            {
+              "date": "2025-02-01",
+              "time": 1738454287,
+              "value": 220
+            },
+            {
+              "date": "2025-02-02",
+              "time": 1738540682,
+              "value": 216
+            },
+            {
+              "date": "2025-02-03",
+              "time": 1738627088,
+              "value": 217
+            },
+            {
+              "date": "2025-02-04",
+              "time": 1738713483,
+              "value": 217
+            },
+            {
+              "date": "2025-02-05",
+              "time": 1738799889,
+              "value": 217
+            },
+            {
+              "date": "2025-02-06",
+              "time": 1738886285,
+              "value": 218
+            },
+            {
+              "date": "2025-02-07",
+              "time": 1738972682,
+              "value": 219
+            },
+            {
+              "date": "2025-02-08",
+              "time": 1739059087,
+              "value": 215
+            },
+            {
+              "date": "2025-02-09",
+              "time": 1739145483,
+              "value": 215
+            },
+            {
+              "date": "2025-02-10",
+              "time": 1739231889,
+              "value": 217
+            },
+            {
+              "date": "2025-02-11",
+              "time": 1739318285,
+              "value": 216
+            },
+            {
+              "date": "2025-02-12",
+              "time": 1739404681,
+              "value": 218
+            },
+            {
+              "date": "2025-02-13",
+              "time": 1739491087,
+              "value": 217
+            },
+            {
+              "date": "2025-02-14",
+              "time": 1739534744,
+              "value": 88
+            },
+            {
+              "date": "2025-01-15",
+              "time": 1736985485,
+              "value": 217
+            },
+            {
+              "date": "2025-01-16",
+              "time": 1737071881,
+              "value": 225
+            },
+            {
+              "date": "2025-02-17",
+              "time": 1739780265,
+              "value": 0
+            },
+            {
+              "date": "2025-01-18",
+              "time": 1737244683,
+              "value": 216
+            },
+            {
+              "date": "2025-01-19",
+              "time": 1737331089,
+              "value": 217
+            },
+            {
+              "date": "2025-01-20",
+              "time": 1737417485,
+              "value": 218
+            },
+            {
+              "date": "2025-01-21",
+              "time": 1737503882,
+              "value": 218
+            },
+            {
+              "date": "2025-01-22",
+              "time": 1737590288,
+              "value": 216
+            },
+            {
+              "date": "2025-01-23",
+              "time": 1737676683,
+              "value": 218
+            },
+            {
+              "date": "2025-01-24",
+              "time": 1737763088,
+              "value": 218
+            },
+            {
+              "date": "2025-01-25",
+              "time": 1737849485,
+              "value": 216
+            },
+            {
+              "date": "2025-01-26",
+              "time": 1737935881,
+              "value": 218
+            },
+            {
+              "date": "2025-01-27",
+              "time": 1738022287,
+              "value": 218
+            },
+            {
+              "date": "2025-01-28",
+              "time": 1738108683,
+              "value": 220
+            },
+            {
+              "date": "2025-01-29",
+              "time": 1738195089,
+              "value": 219
+            },
+            {
+              "date": "2025-01-30",
+              "time": 1738281485,
+              "value": 217
+            }
+          ]
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.Electricity",
+        {
+          "electricity": {}
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.Electricity",
+        {
+          "electricity": {
+            "channel": 0,
+            "current": 290,
+            "voltage": 2331,
+            "power": 5297,
+            "config": {
+              "voltageRatio": 188,
+              "electricityRatio": 101,
+              "maxElectricityCurrent": 14000
+            }
+          }
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:54",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.OverTemp",
+        {
+          "overTemp": []
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:55",
+        "",
+        "auto",
+        "LOG",
+        "debug",
+        "HTTP ERROR GET Appliance.Control.OverTemp (messageId:b5ca2573182f45feb462569f244ae16c ServerDisconnectedError:Server disconnected)"
+      ],
+      [
+        "2025/02/17 - 08:17:55",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.Control.ToggleX",
+        {
+          "togglex": []
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:55",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.Control.ToggleX",
+        {
+          "channel": 4294967295,
+          "togglex": [
+            {
+              "channel": 0,
+              "onoff": 1,
+              "lmTime": 1739780266
+            }
+          ]
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:55",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Debug",
+        {
+          "debug": {}
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:55",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Debug",
+        {
+          "debug": {
+            "system": {
+              "version": "8.3.15",
+              "sysUpTime": "0h0m27s",
+              "UTC": 1739780274,
+              "localTimeOffset": 0,
+              "localTime": "Mon Feb 17 08:17:54 2025",
+              "suncalc": "6:10;18:17",
+              "memTotal": 155936,
+              "memFree": 17040,
+              "memMini": 5952
+            },
+            "network": {
+              "linkStatus": "connected",
+              "snr": 40,
+              "channel": 6,
+              "signal": 100,
+              "rssi": -37,
+              "ssid": "######0",
+              "gatewayMac": "################0",
+              "innerIp": "###########0",
+              "wifiDisconnectCount": 0,
+              "wifiDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            },
+            "cloud": {
+              "linkStatus": "connected",
+              "activeServer": "###################0",
+              "mainServer": "###################0",
+              "mainPort": "@0",
+              "secondServer": "#1",
+              "secondPort": "@1",
+              "userId": "@0",
+              "sysConnectTime": "Mon Feb 17 08:17:38 2025",
+              "sysOnlineTime": "0h0m16s",
+              "sysDisconnectCount": 0,
+              "iotDisconnectDetail": {
+                "totalCount": 0,
+                "detials": []
+              }
+            }
+          }
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:55",
+        "TX",
+        "http",
+        "GET",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {}
+        }
+      ],
+      [
+        "2025/02/17 - 08:17:55",
+        "RX",
+        "http",
+        "GETACK",
+        "Appliance.System.Runtime",
+        {
+          "runtime": {
+            "signal": 100,
+            "ssid": "######0"
+          }
+        }
+      ]
+    ]
+  }
+}

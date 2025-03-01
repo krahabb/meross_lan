@@ -153,9 +153,10 @@
                     "key": "[%key:config::step::device::data::key%]",
                     "protocol": "Connection protocol",
                     "polling_period": "Polling period",
+                    "disable_multiple": "Disable multiple requests packing",
                     "timezone": "Device time zone",
                     "trace_timeout": "Debug tracing duration (sec)",
-                    "error": "[%key:config::step::device::data::error%]"
+                    "error": "[%key:config::step::hub::data::error%]"
                 }
             },
             "keyerror": {
@@ -175,7 +176,7 @@
                     "save_password": "[%key:config::step::profile::data::save_password%]",
                     "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]",
                     "check_firmware_updates": "[%key:config::step::profile::data::check_firmware_updates%]",
-                    "error": "[%key:config::step::profile::data::error%]",
+                    "error": "[%key:config::step::hub::data::error%]",
                     "mfa_code": "[%key:config::step::profile::data::mfa_code%]"
                 }
             },
@@ -210,7 +211,7 @@
                     "check": "Check broker compatibility before reconfiguring",
                     "key": "[%key:config::step::hub::data::key%]",
                     "userid": "User Id",
-                    "error": "[%key:options::step::device::data::error%]"
+                    "error": "[%key:config::step::hub::data::error%]"
                 },
                 "data_description": {
                     "domain": "Enter the address in the form 'host(:port)' or leave empty to use the HA one",
@@ -227,7 +228,7 @@
                 "description": "WARNING! this will issue a special command to unbind the device from the current MQTT broker (either Meross cloud or local one) and reset it to factory defaults.\n After that, the device will need to be re-configured again in order to use it",
                 "data": {
                     "post_action": "After unbinding:",
-                    "error": "[%key:options::step::device::data::error%]"
+                    "error": "[%key:config::step::hub::data::error%]"
                 }
             }
         }
@@ -246,7 +247,7 @@
                             "save_password": "[%key:options::step::profile::data::save_password%]",
                             "allow_mqtt_publish": "[%key:options::step::profile::data::allow_mqtt_publish%]",
                             "check_firmware_updates": "[%key:options::step::profile::data::check_firmware_updates%]",
-                            "error": "[%key:options::step::profile::data::error%]"
+                            "error": "[%key:config::step::hub::data::error%]"
                         }
                     }
                 }
@@ -264,9 +265,10 @@
                             "key": "[%key:options::step::device::data::key%]",
                             "protocol": "[%key:options::step::device::data::protocol%]",
                             "polling_period": "[%key:options::step::device::data::polling_period%]",
+                            "disable_multiple": "[%key:options::step::device::data::disable_multiple%]",
                             "timezone": "[%key:options::step::device::data::timezone%]",
                             "trace_timeout": "[%key:options::step::device::data::trace_timeout%]",
-                            "error": "[%key:options::step::device::data::error%]"
+                            "error": "[%key:config::step::hub::data::error%]"
                         }
                     }
                 }

@@ -431,7 +431,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "_polling_callback_shutdown",
         "_queued_smartpoll_requests",
         "multiple_max",
-        "_multiple_len",
         "_multiple_requests",
         "_multiple_response_size",
         "_timezone_next_check",
@@ -485,18 +484,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._polling_callback_unsub = None
         self._polling_callback_shutdown = None
         self._queued_smartpoll_requests = 0
-        ability = descriptor.ability
-        self.multiple_max: int = ability.get(
-            mn.Appliance_Control_Multiple.name, {}
-        ).get("maxCmdNum", 0)
-        self._multiple_len = self.multiple_max
-        self._multiple_requests: list["MerossRequestType"] = []
-        self._multiple_response_size = PARAM_HEADER_SIZE
+        self.multiple_max = 0
         self._timezone_next_check = (
-            0 if mn.Appliance_System_Time.name in ability else PARAM_INFINITE_TIMEOUT
+            0
+            if mn.Appliance_System_Time.name in descriptor.ability
+            else PARAM_INFINITE_TIMEOUT
         )
-        """Indicates the (next) time we should perform a check (only when localmqtt)
-        in order to see if the device has correct timezone/dst configuration"""
         self._trace_ability_callback_unsub = None
         self._diagnostics_build = False
 
@@ -968,6 +961,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         and not at the configuration/option level
         see derived implementations
         """
+        if mn.Appliance_Control_Multiple.name in self.descriptor.ability:
+            config_schema[
+                vol.Optional(
+                    mlc.CONF_DISABLE_MULTIPLE,
+                    default=False,
+                    description={
+                        "suggested_value": self.config.get(mlc.CONF_DISABLE_MULTIPLE)
+                    },
+                )
+            ] = bool
+
         if mn.Appliance_System_Time.name in self.descriptor.ability:
             global TIMEZONES_SET
             if TIMEZONES_SET is None:
@@ -1056,9 +1060,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def disable_multiple(self):
         self.multiple_max = 0
-        self._multiple_len = 0
-        self._multiple_requests: list["MerossRequestType"] = []
-        self._multiple_response_size = PARAM_HEADER_SIZE
+        self._multiple_requests = None
+        self._multiple_response_size = 0
+
+    def enable_multiple(self):
+        if not self.multiple_max:
+            self.multiple_max: int = self.descriptor.ability.get(
+                mn.Appliance_Control_Multiple.name, {}
+            ).get("maxCmdNum", 0)
+            self._multiple_requests = []
+            self._multiple_response_size = PARAM_HEADER_SIZE
 
     async def async_multiple_requests_ack(
         self, requests: typing.Collection["MerossRequestType"], auto_handle: bool = True
@@ -1099,10 +1110,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 return multiple_responses
             return multiple_response[mc.KEY_PAYLOAD][mc.KEY_MULTIPLE]
 
-    async def async_multiple_requests_flush(self):
+    async def _async_multiple_requests_flush(self):
+        assert self._multiple_requests
         multiple_requests = self._multiple_requests
         multiple_response_size = self._multiple_response_size
-        self._multiple_len = self.multiple_max
         self._multiple_requests = []
         self._multiple_response_size = PARAM_HEADER_SIZE
 
@@ -1393,27 +1404,34 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     async def async_request_poll(self, handler: NamespaceHandler):
         handler.lastrequest = self._polling_epoch
         handler.polling_epoch_next = handler.lastrequest + handler.polling_period
-        if self._multiple_len and (
-            handler.polling_response_size < self.device_response_size_max
-        ):
-            # device supports NS_APPLIANCE_CONTROL_MULTIPLE namespace
-            # so we pack this request
+        if self._multiple_requests is None:
+            # multiple requests are disabled
+            await self.async_request(*handler.polling_request)
+            return
+        if handler.polling_response_size >= self.device_response_size_max:
+            # this request alone would overflow the device response size limit
+            await self.async_request(*handler.polling_request)
+            return
+        # estimate the size of the multiple response
+        multiple_response_size = (
+            self._multiple_response_size + handler.polling_response_size
+        )
+        if multiple_response_size > self.device_response_size_max:
+            # this request (together with already previously packed)
+            # would overflow the device response size limit
+            if not self._multiple_requests:
+                # again this request alone would overflow the device response size limit
+                await self.async_request(*handler.polling_request)
+                return
+            # flush the pending multiple requests
+            await self._async_multiple_requests_flush()
             multiple_response_size = (
                 self._multiple_response_size + handler.polling_response_size
             )
-            if multiple_response_size > self.device_response_size_max:
-                await self.async_multiple_requests_flush()
-                multiple_response_size = (
-                    self._multiple_response_size + handler.polling_response_size
-                )
-            self._multiple_requests.append(handler.polling_request)
-            self._multiple_response_size = multiple_response_size
-            self._multiple_len -= 1
-            if self._multiple_len:
-                return
-            await self.async_multiple_requests_flush()
-        else:
-            await self.async_request(*handler.polling_request)
+        self._multiple_requests.append(handler.polling_request)
+        self._multiple_response_size = multiple_response_size
+        if len(self._multiple_requests) >= self.multiple_max:
+            await self._async_multiple_requests_flush()
 
     async def async_request_smartpoll(
         self,
@@ -1454,14 +1472,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         for handler in [
             handler
             for handler in self.namespace_handlers.values()
-            if (handler.ns.name != namespace) and (handler.polling_strategy)
+            if (handler.ns.name != namespace)
         ]:
-            await handler.polling_strategy(handler, self)  # type: ignore
-            if not self._online:
-                break  # do not return: do the flush first!
+            if handler.polling_strategy:
+                await handler.polling_strategy(handler, self)  # type: ignore
+                if not self._online:
+                    break  # do not return: do the flush first!
 
         # needed even if offline: it takes care of resetting the ns_multiple state
-        await self.async_multiple_requests_flush()
+        if self._multiple_requests:
+            await self._async_multiple_requests_flush()
 
         # when create_diagnostic_entities is True, after onlining we'll dynamically
         # scan the abilities to look for 'unknown' namespaces (kind of like tracing)
@@ -2246,6 +2266,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if self.polling_period < CONF_POLLING_PERIOD_MIN:
             self.polling_period = CONF_POLLING_PERIOD_MIN
         self._polling_delay = self.polling_period
+
+        if config.get(mlc.CONF_DISABLE_MULTIPLE):
+            self.disable_multiple()
+        else:
+            self.enable_multiple()
 
         _http = self._http
         host = self.host

@@ -1,6 +1,7 @@
 import asyncio
 from collections import deque
 from hashlib import md5
+import logging
 import random
 import ssl
 import string
@@ -76,7 +77,14 @@ class _MerossMQTTClient(mqtt.Client):
         *,
         loop: asyncio.AbstractEventLoop | None = None,
     ):
-        super().__init__(client_id, protocol=mqtt.MQTTv311)
+        """
+        2025-02-28 paho-mqtt is now on v2... which has different callback signatures and
+        many other compatibility issues. The __init__ as is will select by default callback
+        v1 signatures since their implementation/execution is more performant.
+        Our callback signatures, nevertheless, are compatible with both versions so we can switch
+        to v2 if needed.
+        """
+        super().__init__(client_id=client_id, protocol=mqtt.MQTTv311)
         self._lock_state = threading.Lock()
         """synchronize connect/disconnect (not contended by the mqtt thread)"""
         self._lock_queue = threading.Lock()
@@ -127,6 +135,21 @@ class _MerossMQTTClient(mqtt.Client):
     @property
     def state_inactive(self):
         return self._stateext in (self.STATE_DISCONNECTING, self.STATE_DISCONNECTED)
+
+    def enable_logger(self, logger: logging.Logger | None = None) -> None:
+        """
+        In v2 we patch the original method so to avoid usage of the (new) 'logger' property
+        because it is used in our framweork and that would mess with the intended behavior.
+        The underlying _logger member instead will keep working as usual.
+        """
+        if logger is None:
+            if self._logger is not None:
+                return
+            logger = logging.getLogger(__name__)
+        self._logger = logger
+
+    def disable_logger(self):
+        self._logger = None
 
     async def async_connect(self, broker: HostAddress):
         loop = self._asyncio_loop
@@ -286,32 +309,32 @@ class _MerossMQTTClient(mqtt.Client):
         """
         pass
 
-    def _mqttc_connect(self, client: mqtt.Client, userdata, rc, other):
+    def _mqttc_connect(self, client: mqtt.Client, *args):
         client.subscribe(self._subscribe_topics)
 
-    def _mqttc_subscribe(self, client, userdata, mid, granted_qos):
+    def _mqttc_subscribe(self, *args):
         """This is the standard version of the callback: called when we're not managed through a loop"""
         self._stateext = self.STATE_CONNECTED
 
-    def _mqttc_subscribe_loop(self, client, userdata, mid, granted_qos):
+    def _mqttc_subscribe_loop(self, *args):
         """This is the asynced version of the callback: called when we're managed through a loop"""
         self._stateext = self.STATE_CONNECTED
         self._asyncio_loop.call_soon_threadsafe(self._mqtt_connected)
 
-    def _mqttc_disconnect(self, client: mqtt.Client, userdata, rc):
+    def _mqttc_disconnect(self, *args):
         """This is the standard version of the callback: called when we're not managed through a loop"""
         self._stateext = (
             self.STATE_DISCONNECTED if self.state_inactive else self.STATE_RECONNECTING
         )
 
-    def _mqttc_disconnect_loop(self, client: mqtt.Client, userdata, rc):
+    def _mqttc_disconnect_loop(self, *args):
         """This is the asynced version of the callback: called when we're managed through a loop"""
         self._stateext = (
             self.STATE_DISCONNECTED if self.state_inactive else self.STATE_RECONNECTING
         )
         self._asyncio_loop.call_soon_threadsafe(self._mqtt_disconnected)
 
-    def _mqttc_publish_loop(self, client, userdata, mid):
+    def _mqttc_publish_loop(self, *args):
         self._asyncio_loop.call_soon_threadsafe(self._mqtt_published)
 
     def _mqttc_message_loop(self, client, userdata, msg: mqtt.MQTTMessage):

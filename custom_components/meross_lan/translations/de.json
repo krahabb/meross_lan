@@ -157,7 +157,8 @@
                     "polling_period": "Abfragerate",
                     "timezone": "Gerätezeitzone",
                     "trace_timeout": "Dauer der Debug-Ablaufverfolgung (sec)",
-                    "error": "Fehlermeldung"
+                    "error": "Fehlermeldung",
+                    "disable_multiple": "Deaktivieren Sie das Packen mehrerer Anfragen"
                 }
             },
             "keyerror": {
@@ -253,7 +254,7 @@
             }
         },
         "device_identity_mismatch": {
-            "title": "Falsche Identität für das Gerät {device_name} erhalten",
+            "title": "Falsche Identität für das Gerät '{device_name}' erhalten",
             "fix_flow": {
                 "step": {
                     "device": {
@@ -266,7 +267,8 @@
                             "polling_period": "Abfragerate",
                             "timezone": "Gerätezeitzone",
                             "trace_timeout": "Dauer der Debug-Ablaufverfolgung (sec)",
-                            "error": "Fehlermeldung"
+                            "error": "Fehlermeldung",
+                            "disable_multiple": "Deaktivieren Sie das Packen mehrerer Anfragen"
                         }
                     }
                 }

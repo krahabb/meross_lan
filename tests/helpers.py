@@ -10,10 +10,15 @@ from typing import Any, Callable, Coroutine, Final
 from unittest.mock import ANY, MagicMock, patch
 
 import aiohttp
-from freezegun.api import FrozenDateTimeFactory, StepTickTimeFactory, freeze_time
+from freezegun.api import (
+    FrozenDateTimeFactory,
+    StepTickTimeFactory,
+    TickingDateTimeFactory,
+    freeze_time,
+)
 from homeassistant import config_entries, const as hac
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowManager, FlowResult, FlowResultType
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry
 from pytest_homeassistant_custom_component.common import MockConfigEntry  # type: ignore
 from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
@@ -43,6 +48,8 @@ from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
 from . import const as tc
 
+_TimeFactory = FrozenDateTimeFactory | StepTickTimeFactory | TickingDateTimeFactory
+
 
 class MockConfigEntry(MockConfigEntry):
     """
@@ -71,16 +78,12 @@ class MockConfigEntry(MockConfigEntry):
 
 
 async def async_assert_flow_menu_to_step(
-    flow: (
-        FlowManager
-        | config_entries.ConfigEntriesFlowManager
-        | config_entries.OptionsFlowManager
-    ),
-    result: FlowResult,
+    flow: config_entries.ConfigEntriesFlowManager | config_entries.OptionsFlowManager,
+    result: config_entries.ConfigFlowResult,
     menu_step_id: str,
     next_step_id: str,
     next_step_type: FlowResultType = FlowResultType.FORM,
-) -> FlowResult:
+):
     """
     Checks we've entered the menu 'menu_step_id' and chooses 'next_step_id' asserting it works
     Returns the FlowResult at the start of 'next_step_id'.
@@ -142,7 +145,7 @@ class TimeMocker(contextlib.AbstractContextManager):
     mocks its own time
     """
 
-    time: FrozenDateTimeFactory | StepTickTimeFactory
+    time: _TimeFactory
 
     __slots__ = (
         "hass",
@@ -467,7 +470,7 @@ class EmulatorContext(contextlib.AbstractContextManager):
         emulator: MerossEmulator | str,
         aioclient_mock: AiohttpClientMocker,
         *,
-        frozen_time: FrozenDateTimeFactory | StepTickTimeFactory | None = None,
+        frozen_time: _TimeFactory | None = None,
         host: str | None = None,
     ) -> None:
         if isinstance(emulator, str):
