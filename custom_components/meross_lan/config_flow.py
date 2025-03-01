@@ -39,7 +39,7 @@ from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
 
 if typing.TYPE_CHECKING:
-    from homeassistant.components.dhcp import DhcpServiceInfo
+    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
 
     from .meross_profile import MQTTConnection
@@ -336,15 +336,32 @@ class MerossFlowHandlerMixin(
                                 options={},  # required since 2024.6
                                 source=ce.SOURCE_USER,
                                 unique_id=unique_id,
+                                subentries_data=(),  # required since 2025.3
                             )
-                            if hac.MAJOR_VERSION >= 2024
-                            else ce.ConfigEntry(  # type: ignore
-                                version=self.VERSION,
-                                domain=mlc.DOMAIN,
-                                title=profile_config[mc.KEY_EMAIL],
-                                data=profile_config,
-                                source=ce.SOURCE_USER,
-                                unique_id=unique_id,
+                            if (hac.MAJOR_VERSION, hac.MINOR_VERSION) >= (2025, 3)
+                            else (
+                                ce.ConfigEntry(  # type: ignore
+                                    version=self.VERSION,
+                                    minor_version=self.MINOR_VERSION,  # required since 2024.1
+                                    discovery_keys=MappingProxyType(
+                                        {}
+                                    ),  # required since 2024.10
+                                    domain=mlc.DOMAIN,
+                                    title=profile_config[mc.KEY_EMAIL],
+                                    data=profile_config,
+                                    options={},  # required since 2024.6
+                                    source=ce.SOURCE_USER,
+                                    unique_id=unique_id,
+                                )
+                                if hac.MAJOR_VERSION >= 2024
+                                else ce.ConfigEntry(  # type: ignore
+                                    version=self.VERSION,
+                                    domain=mlc.DOMAIN,
+                                    title=profile_config[mc.KEY_EMAIL],
+                                    data=profile_config,
+                                    source=ce.SOURCE_USER,
+                                    unique_id=unique_id,
+                                )
                             )
                         )
                     else:
