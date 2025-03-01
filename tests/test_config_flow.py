@@ -5,9 +5,15 @@ from uuid import uuid4
 
 from homeassistant import config_entries, const as hac
 from homeassistant.components import dhcp
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigFlowResult
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult, FlowResultType
+from homeassistant.data_entry_flow import FlowResultType
+
+try:
+    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+except ImportError:
+    from homeassistant.components.dhcp import DhcpServiceInfo  # type: ignore
+
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
@@ -24,13 +30,13 @@ from custom_components.meross_lan.merossclient import (
 
 from tests import const as tc, helpers
 
-if (hac.MAJOR_VERSION, hac.MINOR_VERSION) >= (2024, 10):
+try:
     from homeassistant.helpers import discovery_flow
-else:
+except ImportError:
     discovery_flow = None
 
 
-async def _cleanup_config_entry(hass: HomeAssistant, result: FlowResult):
+async def _cleanup_config_entry(hass: HomeAssistant, result: ConfigFlowResult):
     config_entry: ConfigEntry = result["result"]  # type: ignore
     assert config_entry.state == ConfigEntryState.LOADED
     await hass.config_entries.async_unload(config_entry.entry_id)
@@ -265,7 +271,7 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
 
 
 async def _create_dhcp_discovery_flow(
-    hass: HomeAssistant, dhcp_service_info: dhcp.DhcpServiceInfo
+    hass: HomeAssistant, dhcp_service_info: DhcpServiceInfo
 ):
     # helper to create the dhcp discovery under different HA cores discovery semantics
     if discovery_flow:
@@ -274,7 +280,7 @@ async def _create_dhcp_discovery_flow(
         discovery_flow.async_create_flow(
             hass,
             mlc.DOMAIN,
-            dhcp_discovery_flow_context,
+            dhcp_discovery_flow_context, # type: ignore
             dhcp_service_info,
             discovery_key=discovery_flow.DiscoveryKey(
                 domain=dhcp.DOMAIN,
@@ -303,7 +309,7 @@ async def _create_dhcp_discovery_flow(
 async def test_dhcp_discovery_config_flow(hass: HomeAssistant):
     result = await _create_dhcp_discovery_flow(
         hass,
-        dhcp.DhcpServiceInfo(
+        DhcpServiceInfo(
             tc.MOCK_DEVICE_IP,
             "",
             tc.MOCK_MACADDRESS,
@@ -315,7 +321,7 @@ async def test_dhcp_discovery_config_flow(hass: HomeAssistant):
 
 async def test_dhcp_ignore_config_flow(hass: HomeAssistant):
 
-    dhcp_service_info = dhcp.DhcpServiceInfo(
+    dhcp_service_info = DhcpServiceInfo(
         tc.MOCK_DEVICE_IP,
         "",
         tc.MOCK_MACADDRESS,
@@ -399,9 +405,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             result = await hass.config_entries.flow.async_init(
                 mlc.DOMAIN,
                 context={"source": config_entries.SOURCE_DHCP},
-                data=dhcp.DhcpServiceInfo(
-                    DHCP_GOOD_HOST, "", device.descriptor.macAddress
-                ),
+                data=DhcpServiceInfo(DHCP_GOOD_HOST, "", device.descriptor.macAddress),
             )
 
             assert result["type"] == FlowResultType.ABORT  # type: ignore
@@ -429,9 +433,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             result = await hass.config_entries.flow.async_init(
                 mlc.DOMAIN,
                 context={"source": config_entries.SOURCE_DHCP},
-                data=dhcp.DhcpServiceInfo(
-                    DHCP_BOGUS_HOST, "", device.descriptor.macAddress
-                ),
+                data=DhcpServiceInfo(DHCP_BOGUS_HOST, "", device.descriptor.macAddress),
             )
 
             assert result["type"] == FlowResultType.ABORT  # type: ignore
