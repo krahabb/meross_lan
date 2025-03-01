@@ -486,7 +486,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._queued_smartpoll_requests = 0
         self.multiple_max = 0
         self._timezone_next_check = (
-            0 if mn.Appliance_System_Time.name in descriptor.ability else PARAM_INFINITE_TIMEOUT
+            0
+            if mn.Appliance_System_Time.name in descriptor.ability
+            else PARAM_INFINITE_TIMEOUT
         )
         self._trace_ability_callback_unsub = None
         self._diagnostics_build = False
@@ -964,7 +966,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 vol.Optional(
                     mlc.CONF_DISABLE_MULTIPLE,
                     default=False,
-                    description={"suggested_value": self.config.get(mlc.CONF_DISABLE_MULTIPLE)},
+                    description={
+                        "suggested_value": self.config.get(mlc.CONF_DISABLE_MULTIPLE)
+                    },
                 )
             ] = bool
 
@@ -1400,25 +1404,34 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     async def async_request_poll(self, handler: NamespaceHandler):
         handler.lastrequest = self._polling_epoch
         handler.polling_epoch_next = handler.lastrequest + handler.polling_period
-        if (self._multiple_requests is not None) and (
-            handler.polling_response_size < self.device_response_size_max
-        ):
-            # device supports NS_APPLIANCE_CONTROL_MULTIPLE namespace
-            # so we pack this request
+        if self._multiple_requests is None:
+            # multiple requests are disabled
+            await self.async_request(*handler.polling_request)
+            return
+        if handler.polling_response_size >= self.device_response_size_max:
+            # this request alone would overflow the device response size limit
+            await self.async_request(*handler.polling_request)
+            return
+        # estimate the size of the multiple response
+        multiple_response_size = (
+            self._multiple_response_size + handler.polling_response_size
+        )
+        if multiple_response_size > self.device_response_size_max:
+            # this request (together with already previously packed)
+            # would overflow the device response size limit
+            if not self._multiple_requests:
+                # again this request alone would overflow the device response size limit
+                await self.async_request(*handler.polling_request)
+                return
+            # flush the pending multiple requests
+            await self._async_multiple_requests_flush()
             multiple_response_size = (
                 self._multiple_response_size + handler.polling_response_size
             )
-            if multiple_response_size > self.device_response_size_max:
-                await self._async_multiple_requests_flush()
-                multiple_response_size = (
-                    self._multiple_response_size + handler.polling_response_size
-                )
-            self._multiple_requests.append(handler.polling_request)
-            self._multiple_response_size = multiple_response_size
-            if len(self._multiple_requests) >= self.multiple_max:
-                await self._async_multiple_requests_flush()
-        else:
-            await self.async_request(*handler.polling_request)
+        self._multiple_requests.append(handler.polling_request)
+        self._multiple_response_size = multiple_response_size
+        if len(self._multiple_requests) >= self.multiple_max:
+            await self._async_multiple_requests_flush()
 
     async def async_request_smartpoll(
         self,
