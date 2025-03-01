@@ -96,6 +96,8 @@ CONF_PROTOCOL_OPTIONS: dict[str | None, str] = {
 CONF_POLLING_PERIOD: Final = "polling_period"
 CONF_POLLING_PERIOD_MIN: Final = 5
 CONF_POLLING_PERIOD_DEFAULT: Final = 30
+# enable/disable Appliance.Control.Multiple
+CONF_DISABLE_MULTIPLE: Final = "disable_multiple"
 # this is a 'fake' conf used to force-flush
 CONF_TIMESTAMP: Final = mc.KEY_TIMESTAMP
 

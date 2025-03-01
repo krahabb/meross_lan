@@ -157,7 +157,8 @@
                     "polling_period": "Interval dotazování",
                     "timezone": "Časové pásmo zařízení",
                     "trace_timeout": "Doba trvání trasování ladění (sec)",
-                    "error": "Chybová zpráva"
+                    "error": "Chybová zpráva",
+                    "disable_multiple": "Zakázat balení více požadavků"
                 }
             },
             "keyerror": {
@@ -253,7 +254,7 @@
             }
         },
         "device_identity_mismatch": {
-            "title": "Přijata neodpovídající identita zařízení {device_name}",
+            "title": "Přijata neodpovídající identita zařízení '{device_name}'",
             "fix_flow": {
                 "step": {
                     "device": {
@@ -266,7 +267,8 @@
                             "polling_period": "Interval dotazování",
                             "timezone": "Časové pásmo zařízení",
                             "trace_timeout": "Doba trvání trasování ladění (sec)",
-                            "error": "Chybová zpráva"
+                            "error": "Chybová zpráva",
+                            "disable_multiple": "Zakázat balení více požadavků"
                         }
                     }
                 }

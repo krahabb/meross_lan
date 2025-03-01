@@ -157,7 +157,8 @@
                     "polling_period": "Période de requête",
                     "timezone": "Fuseau horaire de l'appareil",
                     "trace_timeout": "Durée du suivi du débogage (sec)",
-                    "error": "Message d'erreur"
+                    "error": "Message d'erreur",
+                    "disable_multiple": "Désactiver le regroupement de plusieurs requêtes"
                 }
             },
             "keyerror": {
@@ -266,7 +267,8 @@
                             "polling_period": "Période de requête",
                             "timezone": "Fuseau horaire de l'appareil",
                             "trace_timeout": "Durée du suivi du débogage (sec)",
-                            "error": "Message d'erreur"
+                            "error": "Message d'erreur",
+                            "disable_multiple": "Désactiver le regroupement de plusieurs requêtes"
                         }
                     }
                 }

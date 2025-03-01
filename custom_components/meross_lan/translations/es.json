@@ -157,7 +157,8 @@
                     "polling_period": "Intervalo de consulta",
                     "timezone": "Zona horaria del dispositivo",
                     "trace_timeout": "Duración del seguimiento de debug (sec)",
-                    "error": "Mensaje de error"
+                    "error": "Mensaje de error",
+                    "disable_multiple": "Deshabilitar el empaquetado de múltiples solicitudes"
                 }
             },
             "keyerror": {
@@ -266,7 +267,8 @@
                             "polling_period": "Intervalo de consulta",
                             "timezone": "Zona horaria del dispositivo",
                             "trace_timeout": "Duración del seguimiento de debug (sec)",
-                            "error": "Mensaje de error"
+                            "error": "Mensaje de error",
+                            "disable_multiple": "Deshabilitar el empaquetado de múltiples solicitudes"
                         }
                     }
                 }

@@ -157,7 +157,8 @@
                     "polling_period": "Polling period",
                     "timezone": "Device time zone",
                     "trace_timeout": "Debug tracing duration (sec)",
-                    "error": "Error message"
+                    "error": "Error message",
+                    "disable_multiple": "Disable multiple requests packing"
                 }
             },
             "keyerror": {
@@ -266,7 +267,8 @@
                             "polling_period": "Polling period",
                             "timezone": "Device time zone",
                             "trace_timeout": "Debug tracing duration (sec)",
-                            "error": "Error message"
+                            "error": "Error message",
+                            "disable_multiple": "Disable multiple requests packing"
                         }
                     }
                 }

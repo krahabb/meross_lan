@@ -157,7 +157,8 @@
                     "polling_period": "ポーリング間隔(秒)",
                     "timezone": "デバイスのタイムゾーン",
                     "trace_timeout": "デバグトレース時間 [秒]",
-                    "error": "エラーメッセージ"
+                    "error": "エラーメッセージ",
+                    "disable_multiple": "パッキングを無効化"
                 }
             },
             "keyerror": {
@@ -266,7 +267,8 @@
                             "polling_period": "ポーリング間隔(秒)",
                             "timezone": "デバイスのタイムゾーン",
                             "trace_timeout": "デバグトレース時間 [秒]",
-                            "error": "エラーメッセージ"
+                            "error": "エラーメッセージ",
+                            "disable_multiple": "パッキングを無効化"
                         }
                     }
                 }

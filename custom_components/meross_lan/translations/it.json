@@ -157,7 +157,8 @@
                     "polling_period": "Intervallo di aggiornamento",
                     "timezone": "Zona oraria",
                     "trace_timeout": "Durata debug tracing (sec)",
-                    "error": "Messaggio di errore"
+                    "error": "Messaggio di errore",
+                    "disable_multiple": "Disabilita il raggruppamento di richieste multiple"
                 }
             },
             "keyerror": {
@@ -266,7 +267,8 @@
                             "polling_period": "Intervallo di aggiornamento",
                             "timezone": "Zona oraria",
                             "trace_timeout": "Durata debug tracing (sec)",
-                            "error": "Messaggio di errore"
+                            "error": "Messaggio di errore",
+                            "disable_multiple": "Disabilita il raggruppamento di richieste multiple"
                         }
                     }
                 }
