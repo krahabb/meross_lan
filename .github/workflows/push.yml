@@ -3,7 +3,7 @@ name: Push actions
 on: push
 
 env:
-  DEFAULT_PYTHON: "3.12"
+  DEFAULT_PYTHON: "3.13"
 
 jobs:
   validate:
