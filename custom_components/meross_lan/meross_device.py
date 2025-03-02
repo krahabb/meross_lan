@@ -1219,23 +1219,40 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         message[mc.KEY_PAYLOAD],
                     )
                 return
-            # the requests payload was too big and the response was
-            # truncated. the http client tried to 'recover' by discarding
-            # the incomplete payloads so we'll check what's missing
-            for message in multiple_responses:
-                m_header = message[mc.KEY_HEADER]
-                self._handle(
-                    m_header,
-                    message[mc.KEY_PAYLOAD],
+            elif responses_len:
+                # the requests payload was too big and the response was
+                # truncated. the http client tried to 'recover' by discarding
+                # the incomplete payloads so we'll check what's missing
+                for message in multiple_responses:
+                    m_header = message[mc.KEY_HEADER]
+                    self._handle(
+                        m_header,
+                        message[mc.KEY_PAYLOAD],
+                    )
+                    namespace = m_header[mc.KEY_NAMESPACE]
+                    for request in multiple_requests:
+                        if request[0] == namespace:
+                            multiple_requests.remove(request)
+                            break
+                # and re-issue the missing ones
+                requests_len = len(multiple_requests)
+                multiple_response_size = -1  # logging purpose
+                continue
+            else:
+                # no response at all..this is pathological but we have
+                # examples (#526) of this so we'll just try issue single requests
+                self.log(
+                    self.WARNING,
+                    "Appliance.Control.Multiple empty response (requests=%d expected size=%d)",
+                    requests_len,
+                    multiple_response_size,
+                    timeout=14400,
                 )
-                namespace = m_header[mc.KEY_NAMESPACE]
                 for request in multiple_requests:
-                    if request[0] == namespace:
-                        multiple_requests.remove(request)
+                    await self.async_request(*request)
+                    if not self._online:
                         break
-            # and re-issue the missing ones
-            requests_len = len(multiple_requests)
-            multiple_response_size = -1  # logging purpose
+                return
 
     async def async_mqtt_request_raw(
         self,
