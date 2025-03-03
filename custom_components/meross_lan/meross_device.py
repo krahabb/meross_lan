@@ -459,7 +459,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.device_timedelta_log_epoch = 0
         self.device_timedelta_config_epoch = 0
         self.device_response_size_min = 1000
-        self.device_response_size_max = 5000
+        self.device_response_size_max = (
+            descriptor.ability.get(mn.Appliance_Control_Multiple.name, {}).get(
+                "maxCmdNum", 0
+            )
+            * 1000
+        )
         self.lastrequest = 0.0
         self.lastresponse = 0.0
         self._topic_response = mc.MANUFACTURER
@@ -1421,12 +1426,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     async def async_request_poll(self, handler: NamespaceHandler):
         handler.lastrequest = self._polling_epoch
         handler.polling_epoch_next = handler.lastrequest + handler.polling_period
-        if self._multiple_requests is None:
+        if (self._multiple_requests is None) or (
+            handler.polling_response_size >= self.device_response_size_max
+        ):
             # multiple requests are disabled
-            await self.async_request(*handler.polling_request)
-            return
-        if handler.polling_response_size >= self.device_response_size_max:
-            # this request alone would overflow the device response size limit
+            # or this request alone would overflow the device response size limit
             await self.async_request(*handler.polling_request)
             return
         # estimate the size of the multiple response
