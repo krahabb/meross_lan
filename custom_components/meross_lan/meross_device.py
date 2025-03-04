@@ -463,7 +463,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             descriptor.ability.get(mn.Appliance_Control_Multiple.name, {}).get(
                 "maxCmdNum", 0
             )
-            * 1000
+            * 800
         )
         self.lastrequest = 0.0
         self.lastresponse = 0.0
