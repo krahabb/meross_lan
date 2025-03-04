@@ -805,7 +805,7 @@ POLLING_STRATEGY_CONF: dict[
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         320,
-        400,
+        900,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_ConsumptionX: (
