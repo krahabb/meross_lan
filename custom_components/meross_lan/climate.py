@@ -30,8 +30,8 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     ATTR_TEMPERATURE: typing.Final = climate.ATTR_TEMPERATURE
     TEMP_CELSIUS: typing.Final = me.MerossEntity.hac.UnitOfTemperature.CELSIUS
 
-    HVACAction: typing.Final = climate.HVACAction
-    HVACMode: typing.Final = climate.HVACMode
+    HVACAction: typing.TypeAlias = climate.HVACAction
+    HVACMode: typing.TypeAlias = climate.HVACMode
 
     PRESET_CUSTOM: typing.Final = "custom"
     PRESET_COMFORT: typing.Final = "comfort"
