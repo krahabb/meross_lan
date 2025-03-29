@@ -810,6 +810,13 @@ class MTS150PSubDevice(MTS100SubDevice):
 WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150P] = MTS150PSubDevice
 
 
+class GS559MuteToggle(me.MEListChannelMixin, MLSwitch):
+    ns = mn.Appliance_Hub_Sensor_Smoke
+    key_value: str = mc.KEY_INTERCONN
+
+    # HA core entity attributes:
+
+
 class GS559SubDevice(MerossSubDevice):
     STATUS_MAP = {
         17: "error_temperature",
@@ -835,7 +842,8 @@ class GS559SubDevice(MerossSubDevice):
         "binary_sensor_error",
         "binary_sensor_muted",
         "sensor_status",
-        "sensor_interConn",
+        #"sensor_interConn",
+        "switch_interConn",
     )
 
     def __init__(self, hub: HubMixin, p_digest: dict):
@@ -843,7 +851,10 @@ class GS559SubDevice(MerossSubDevice):
         self.sensor_status = MLEnumSensor(
             self, self.id, mc.KEY_STATUS, translation_key="smoke_alarm_status"
         )
-        self.sensor_interConn = MLEnumSensor(self, self.id, mc.KEY_INTERCONN)
+        #self.sensor_interConn = MLEnumSensor(self, self.id, mc.KEY_INTERCONN)
+        self.switch_interConn = GS559MuteToggle(
+            self, self.id, mc.KEY_INTERCONN, MLSwitch.DeviceClass.SWITCH
+        )
         self.binary_sensor_alarm = MLBinarySensor(
             self, self.id, "alarm", MLBinarySensor.DeviceClass.SAFETY
         )
@@ -858,7 +869,8 @@ class GS559SubDevice(MerossSubDevice):
         self.binary_sensor_error: MLBinarySensor = None  # type: ignore
         self.binary_sensor_alarm: MLBinarySensor = None  # type: ignore
         self.sensor_status: MLEnumSensor = None  # type: ignore
-        self.sensor_interConn: MLEnumSensor = None  # type: ignore
+        self.switch_interConn: GS559MuteToggle = None  # type: ignore
+        #self.sensor_interConn: MLEnumSensor = None  # type: ignore
 
     def _parse_smokeAlarm(self, p_smokealarm: dict):
         if mc.KEY_STATUS in p_smokealarm:
@@ -870,7 +882,8 @@ class GS559SubDevice(MerossSubDevice):
                 GS559SubDevice.STATUS_MAP.get(value, value)
             )
         if mc.KEY_INTERCONN in p_smokealarm:
-            self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
+            #self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
+            self.switch_interConn.update_onoff(p_smokealarm[mc.KEY_INTERCONN])
 
 
 WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
