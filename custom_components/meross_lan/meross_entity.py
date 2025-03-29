@@ -529,13 +529,7 @@ class MerossNumericEntity(MerossEntity):
         self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
         if "device_value" in kwargs:
             self.device_value = kwargs.pop("device_value")
-            if self.suggested_display_precision is None:
-                self.native_value = self.device_value / self.device_scale
-            else:
-                self.native_value = round(
-                    self.device_value / self.device_scale,
-                    self.suggested_display_precision,
-                )
+            self.native_value = self.device_value / self.device_scale
         else:
             self.device_value = None
             self.native_value = None
@@ -552,18 +546,11 @@ class MerossNumericEntity(MerossEntity):
     def update_device_value(self, device_value: int | float):
         if self.device_value != device_value:
             self.device_value = device_value
-            if self.suggested_display_precision is None:
-                self.native_value = device_value / self.device_scale
-            else:
-                self.native_value = round(
-                    device_value / self.device_scale, self.suggested_display_precision
-                )
+            self.native_value = device_value / self.device_scale
             self.flush_state()
             return True
 
     def update_native_value(self, native_value: int | float):
-        if self.suggested_display_precision is not None:
-            native_value = round(native_value, self.suggested_display_precision)
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()

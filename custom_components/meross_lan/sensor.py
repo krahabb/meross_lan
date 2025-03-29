@@ -151,7 +151,7 @@ class MLHumiditySensor(MLNumericSensor):
 
     _attr_device_scale = 10
     # HA core entity attributes:
-    _attr_suggested_display_precision = 0
+    _attr_suggested_display_precision = 1
 
     def __init__(
         self,
