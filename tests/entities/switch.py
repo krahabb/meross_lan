@@ -1,6 +1,7 @@
 from homeassistant.components import switch as haec
 from homeassistant.helpers.entity import STATE_OFF, STATE_ON
 
+from custom_components.meross_lan.devices.hub import GS559MuteToggle
 from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
 from custom_components.meross_lan.devices.thermostat import MtsExternalSensorSwitch
 from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
@@ -24,6 +25,10 @@ class EntityTest(EntityComponentTest):
         mn.Appliance_Control_PhysicalLock.name: [PhysicalLockSwitch],
         mn.Appliance_Control_Thermostat_Sensor.name: [MtsExternalSensorSwitch],
         mn.Appliance_Control_Toggle.name: [MLToggle],
+    }
+
+    HUB_SUBDEVICES_ENTITIES = {
+        mc.KEY_SMOKEALARM: [GS559MuteToggle],  #  interConn switch
     }
 
     async def async_test_enabled_callback(self, entity: haec.SwitchEntity):
