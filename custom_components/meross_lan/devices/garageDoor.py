@@ -12,7 +12,7 @@ from ..const import (
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
 from ..cover import MLCover
-from ..helpers import clamp
+from ..helpers import clamp, versiontuple
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber, MLEmulatedNumber, MLNumber
@@ -717,21 +717,42 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                     self.number_doorCloseDuration = garage.number_close_timeout
 
 
+class GarageDoorStateNamespaceHandler(NamespaceHandler):
+
+    def __init__(self, device: "MerossDevice"):
+        NamespaceHandler.__init__(
+            self,
+            device,
+            mn.Appliance_GarageDoor_State,
+        )
+
+    def _polling_request_init(self, request_payload_type: mn.RequestPayloadType):
+        # TODO: move this device type 'patching' to some 'smart' Namespace grammar
+        descriptor = self.device.descriptor
+        if descriptor.type.startswith(mc.TYPE_MSG200) and (
+            versiontuple(descriptor.firmwareVersion) < (4, 0, 0)
+        ):
+            # trying to patch lacking of state polling (#538)
+            # It's not sure querying with the list of channels works.
+            # Also, in fw 4.0.0 the default polling with empty dict correctly returns
+            # the list of channels so this is not needed
+            super()._polling_request_init(mn.RequestPayloadType.LIST_C)
+        else:
+            super()._polling_request_init(request_payload_type)
+
+
 def digest_init_garageDoor(
     device: "MerossDevice", digest: list
 ) -> "DigestInitReturnType":
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
     device.platforms.setdefault(MLSwitch.PLATFORM, None)
-    ability = device.descriptor.ability
+
+    handler = GarageDoorStateNamespaceHandler(device)
+
     for channel_digest in digest:
         MLGarage(device, channel_digest[mc.KEY_CHANNEL])
 
-    if mn.Appliance_GarageDoor_Config.name in ability:
+    if mn.Appliance_GarageDoor_Config.name in device.descriptor.ability:
         GarageDoorConfigNamespaceHandler(device)
 
-    # We have notice (#428) that the msg200 pushes a strange garage door state
-    # over channel 0 which is not in the list of channels exposed in digest.
-    # We so prepare the handler to eventually build an MLGarage instance
-    # even though it's behavior is unknown at the moment.
-    handler = device.get_handler(mn.Appliance_GarageDoor_State)
     return handler.parse_list, (handler,)

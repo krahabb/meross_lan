@@ -428,6 +428,8 @@ TYPE_NAME_MAP["mod"] = "Smart Humidifier"
 
 TYPE_NAME_MAP["mrs"] = "Smart Roller Shutter"
 
+TYPE_MSG100 = "msg100"  # smart garage door (1 channel)
+TYPE_MSG200 = "msg200"  # smart garage door (3 channels)
 TYPE_NAME_MAP["msg"] = "Smart Garage Door"
 
 TYPE_MSH300 = "msh300"  # WiFi Hub
