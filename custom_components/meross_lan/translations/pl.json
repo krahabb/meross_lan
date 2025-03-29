@@ -1,0 +1,306 @@
+{
+    "entity": {
+        "climate": {
+            "mts_climate": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "off": "Wyłączony",
+                            "custom": "Ręczny",
+                            "comfort": "Komfort (ciepło)",
+                            "sleep": "Sen (chłodno)",
+                            "away": "Poza domem (ekonomia)",
+                            "auto": "Auto",
+                            "heating": "Grzanie",
+                            "cooling": "Chłodzenie",
+                            "schedule_heating": "Harmonogram ogrzewania",
+                            "schedule_cooling": "Harmonogram chłodzenia",
+                            "timer_cycle": "Timer cyklu",
+                            "timer_countdown_on": "Odliczanie włączone",
+                            "timer_countdown_off": "Odliczanie wyłączone"
+                        }
+                    }
+                }
+            }
+        },
+        "sensor": {
+            "smoke_alarm_status": {
+                "state": {
+                    "error_temperature": "Błąd: Czujnik temperatury",
+                    "error_smoke": "Błąd: Czujnik dymu",
+                    "error_battery": "Błąd: Bateria",
+                    "alarm_test": "Alarm: Test",
+                    "alarm_temperature_high": "Alarm: Wysoka temperatura",
+                    "alarm_smoke": "Alarm: Dym",
+                    "ok": "Brak problemów"
+                }
+            },
+            "common": {
+                "state": {
+                    "ok": "Ok",
+                    "disconnected": "Rozłączony"
+                }
+            },
+            "mts_overheat_warning": {
+                "state": {
+                    "0": "Ok",
+                    "1": "Przegrzewanie",
+                    "2": "Rozłączony"
+                }
+            },
+            "mts_frost_warning": {
+                "state": {
+                    "0": "Ok",
+                    "1": "Zamarzanie",
+                    "2": "Rozłączony"
+                }
+            }
+        }
+    },
+    "config": {
+        "flow_title": "{name}",
+        "abort": {
+            "already_configured": "Wpis już skonfigurowany",
+            "no_devices_found": "Nie znaleziono urządzeń w sieci",
+            "single_instance_allowed": "Już skonfigurowane. Możliwa tylko jedna konfiguracja."
+        },
+        "error": {
+            "already_configured_device": "Urządzenie jest już skonfigurowane",
+            "cannot_connect": "Nie można się połączyć",
+            "cloud_profile_mismatch": "Profil chmury nie pasuje do konfiguracji",
+            "invalid_auth": "Błąd uwierzytelniania",
+            "invalid_key": "Błąd klucza: wybierz 'Pobierz z chmury', aby uzyskać dostęp do konta Meross",
+            "invalid_nullkey": "Błąd klucza: wybierz 'Tryb hakerski' umożliwiający użycie pustego klucza"
+        },
+        "step": {
+            "user": {
+                "title": "Wybierz opcję",
+                "menu_options": {
+                    "profile": "Zarejestruj profil w chmurze Meross",
+                    "device": "Ręczna konfiguracja urządzenia"
+                }
+            },
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Konfigurowanie globalnych ustawień sieci LAN Meross",
+                "data": {
+                    "key": "Klucz urządzenia",
+                    "error": "Komunikat błędu"
+                }
+            },
+            "device": {
+                "description": "Konfiguracja urządzenia Meross\nTyp: {device_type}\nUUID: {device_id}",
+                "data": {
+                    "host": "Adres hosta urządzenia",
+                    "key": "Klucz urządzenia",
+                    "error": "Komunikat błędu"
+                }
+            },
+            "keyerror": {
+                "title": "Błąd klucza urządzenia",
+                "description": "Podany klucz jest błędny. Wybierz opcję",
+                "menu_options": {
+                    "profile": "Odzyskaj z chmury Meross",
+                    "device": "Spróbuj ponownie"
+                }
+            },
+            "profile": {
+                "title": "Profil chmury Meross",
+                "description": "Zarejestruj się i połącz z kontem Meross",
+                "data": {
+                    "email": "Meross login",
+                    "password": "Hasło Meross",
+                    "save_password": "Zapisz hasło",
+                    "allow_mqtt_publish": "Zezwalaj na publikację MQTT w chmurze",
+                    "check_firmware_updates": "Sprawdź aktualizacje oprogramowania sprzętowego",
+                    "error": "Komunikat błędu",
+                    "cloud_region": "Region konta",
+                    "mfa_code": "Kod autoryzacyjny"
+                }
+            },
+            "finalize": {
+                "title": "Konfiguracja urządzenia",
+                "description": "Typ: {device_type}\nUUID: {device_id}"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "diagnostics": {
+                "data": {
+                    "create_diagnostic_entities": "Utwórz encje diagnostyczne",
+                    "trace_timeout": "Czas trwania śledzenia debugowania (sek.)",
+                    "error": "Komunikat błędu",
+                    "logging_level": "Poziom logowania",
+                    "trace": "Rozpocznij śledzenie diagnostyki",
+                    "obfuscate": "Ukryj poufne dane w logach"
+                },
+                "title": "Diagnostyka",
+                "description": "Ustaw poziom logowania dla tego urządzenia\/profilu i opcjonalnie rozpocznij śledzenie diagnostyczne przez skonfigurowany okres"
+            },
+            "hub": {
+                "title": "Meross LAN MQTT Hub",
+                "description": "Konfigurowanie globalnych ustawień sieci LAN Meross",
+                "data": {
+                    "key": "Klucz urządzenia",
+                    "error": "Komunikat błędu",
+                    "allow_mqtt_publish": "Zezwalaj na publikację MQTT w chmurze"
+                }
+            },
+            "device": {
+                "title": "Konfiguracja urządzenia",
+                "description": "Typ: {device_type}\nUUID: {device_id}\nHost: {host}",
+                "data": {
+                    "host": "Adres hosta urządzenia",
+                    "key": "Klucz urządzenia",
+                    "protocol": "Protokół połączeń",
+                    "polling_period": "Okres odpytywania",
+                    "timezone": "Strefa czasowa urządzenia",
+                    "trace_timeout": "Czas trwania śledzenia debugowania (sek.)",
+                    "error": "Komunikat błędu",
+                    "disable_multiple": "Wyłącz pakowanie wielokrotnych żądań"
+                }
+            },
+            "keyerror": {
+                "title": "Błąd klucza urządzenia",
+                "description": "Podany klucz jest błędny. Wybierz opcję",
+                "menu_options": {
+                    "profile": "Odzyskaj z chmury Meross",
+                    "device": "Spróbuj ponownie"
+                }
+            },
+            "profile": {
+                "title": "Profil chmury Meross",
+                "description": "Skonfiguruj konto Meross {email}\n{placeholder}",
+                "data": {
+                    "email": "Meross login",
+                    "password": "Hasło Meross",
+                    "save_password": "Zapisz hasło",
+                    "allow_mqtt_publish": "Zezwalaj na publikację MQTT w chmurze",
+                    "check_firmware_updates": "Sprawdź aktualizacje oprogramowania sprzętowego",
+                    "error": "Komunikat błędu",
+                    "mfa_code": "Kod autoryzacyjny"
+                }
+            },
+            "menu": {
+                "title": "Wybierz opcję",
+                "menu_options": {
+                    "hub": "Konfiguruj",
+                    "device": "Konfiguruj",
+                    "profile": "Konfiguruj",
+                    "diagnostics": "Diagnostyka",
+                    "bind": "Skonfiguruj ponownie MQTT (powiązanie lokalne)",
+                    "unbind": "Resetowanie sprzętu"
+                }
+            },
+            "bind": {
+                "title": "Skonfiguruj ponownie MQTT (powiązanie lokalne)",
+                "description": "Połącz (powiąż) urządzenie z innym brokerem MQTT\nBieżący broker: {domain}",
+                "data": {
+                    "domain": "Adres nowego brokera MQTT",
+                    "check": "Przed ponowną konfiguracją sprawdź kompatybilność brokera",
+                    "key": "Klucz urządzenia",
+                    "userid": "Id użytkownika",
+                    "error": "Komunikat błędu"
+                },
+                "data_description": {
+                    "domain": "Wprowadź adres w formacie 'host(:port)' lub pozostaw pusty, aby użyć adresu HA",
+                    "userid": "Pozostaw puste, aby uzyskać lepszą zgodność z meross_lan",
+                    "key": "Pozostaw puste, aby uzyskać lepszą zgodność z meross_lan"
+                }
+            },
+            "unbind": {
+                "title": "Resetowanie sprzętu",
+                "description": "OSTRZEŻENIE! spowoduje to wydanie specjalnego polecenia, które odłączy urządzenie od bieżącego brokera MQTT (chmury Meross lub lokalnego) i przywróci ustawienia fabryczne.\n Następnie urządzenie będzie musiało zostać ponownie skonfigurowane, aby można było z niego korzystać.",
+                "data": {
+                    "post_action": "Po odwiązaniu:",
+                    "error": "Komunikat błędu"
+                }
+            },
+            "bind_finalize": {
+                "title": "Skonfiguruj ponownie MQTT (powiązanie lokalne)",
+                "description": "Urządzenie zostało pomyślnie skonfigurowane z nowym brokerem MQTT w domenie {domain}.\nKonfiguracja została zaktualizowana i ponownie załadowana, ale może być konieczne ponowne uruchomienie urządzenia (wyłączenie i ponowne uruchomienie), aby mogło połączyć się z nowym brokerem."
+            }
+        },
+        "error": {
+            "already_configured_device": "Urządzenie jest już skonfigurowane",
+            "cannot_connect": "Nie można się połączyć",
+            "cloud_profile_mismatch": "Profil chmury nie pasuje do konfiguracji",
+            "device_id_mismatch": "Niezgodność UUID urządzenia: urządzenie nie jest to samo",
+            "invalid_auth": "Błąd uwierzytelniania",
+            "invalid_key": "Błąd klucza: wybierz 'Pobierz z chmury', aby uzyskać dostęp do konta Meross",
+            "invalid_nullkey": "Błąd klucza: wybierz 'Tryb hakerski' umożliwiający użycie pustego klucza",
+            "habroker_not_connected": "Broker MQTT Home Assistant'a nie jest podłączony"
+        }
+    },
+    "issues": {
+        "cloud_token_expired": {
+            "title": "Token w chmurze wygasł dla {email}",
+            "fix_flow": {
+                "step": {
+                    "profile": {
+                        "title": "Profil chmury Meross",
+                        "description": "Skonfiguruj konto Meross {email}\n{placeholder}",
+                        "data": {
+                            "email": "Meross login",
+                            "password": "Hasło Meross",
+                            "save_password": "Zapisz hasło",
+                            "allow_mqtt_publish": "Zezwalaj na publikację MQTT w chmurze",
+                            "check_firmware_updates": "Sprawdź aktualizacje oprogramowania sprzętowego",
+                            "error": "Komunikat błędu"
+                        }
+                    }
+                }
+            }
+        },
+        "device_identity_mismatch": {
+            "title": "Otrzymano niezgodną tożsamość urządzenia {device_name}",
+            "fix_flow": {
+                "step": {
+                    "device": {
+                        "title": "Konfiguracja urządzenia",
+                        "description": "Typ: {device_type}\nUUID: {device_id}\nHost: {host}",
+                        "data": {
+                            "host": "Adres hosta urządzenia",
+                            "key": "Klucz urządzenia",
+                            "protocol": "Protokół połączeń",
+                            "polling_period": "Okres odpytywania",
+                            "timezone": "Strefa czasowa urządzenia",
+                            "trace_timeout": "Czas trwania śledzenia debugowania (sek.)",
+                            "error": "Komunikat błędu",
+                            "disable_multiple": "Wyłącz pakowanie wielokrotnych żądań"
+                        }
+                    }
+                }
+            }
+        },
+        "device_timezone": {
+            "title": "Strefa czasowa dla {device_name} nie jest ustawiona lub różni się od domyślnej strefy Home Assistant'a",
+            "fix_flow": {
+                "abort": {
+                    "cannot_connect": "Nie można się połączyć"
+                },
+                "step": {
+                    "confirm": {
+                        "title": "Strefa czasowa dla {device_name} nie jest ustawiona lub różni się od domyślnej strefy Home Assistant'a"
+                    }
+                }
+            }
+        }
+    },
+    "selector": {
+        "unbind_post_action": {
+            "options": {
+                "disable": "Wyłącz wpis konfiguracji",
+                "delete": "Trwale usuń wpis konfiguracji"
+            }
+        },
+        "cloud_region": {
+            "options": {
+                "ap": "Azja\/Pacyfik",
+                "eu": "Europa",
+                "us": "Ameryka"
+            }
+        }
+    }
+}
