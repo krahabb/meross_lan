@@ -48,7 +48,10 @@ class Mts200Climate(MtsClimate):
     }
     MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS200_MODE_TO_TARGETTEMP_MAP
 
-    __slots__ = ("_mts_summermode",)
+    __slots__ = (
+        "_mts_summermode",
+        "_mts_summermode_supported",
+    )
 
     def __init__(
         self,
@@ -64,10 +67,8 @@ class Mts200Climate(MtsClimate):
             Mts200Schedule,
         )
         self._mts_summermode = None
-        if (
-            mn.Appliance_Control_Thermostat_SummerMode.name
-            in manager.descriptor.ability
-        ):
+        self._mts_summermode_supported = mn.Appliance_Control_Thermostat_SummerMode.name in manager.descriptor.ability
+        if self._mts_summermode_supported:
             self.hvac_modes = [
                 MtsClimate.HVACMode.OFF,
                 MtsClimate.HVACMode.HEAT,
@@ -95,7 +96,7 @@ class Mts200Climate(MtsClimate):
             await self.async_request_onoff(0)
             return
 
-        if not (self._mts_summermode is None):
+        if self._mts_summermode_supported:
             # this is an indicator the device supports it
             summermode = self.HVAC_MODE_TO_MTS_SUMMERMODE[hvac_mode]
             if self._mts_summermode != summermode:
@@ -231,11 +232,10 @@ class Mts200Climate(MtsClimate):
 
     def _parse_summerMode(self, payload: dict):
         """{ "channel": 0, "mode": 0 }"""
-        if mc.KEY_MODE in payload:
-            summermode = payload[mc.KEY_MODE]
-            if self._mts_summermode != summermode:
-                self._mts_summermode = summermode
-                self.flush_state()
+        summermode = payload[mc.KEY_MODE]
+        if self._mts_summermode != summermode:
+            self._mts_summermode = summermode
+            self.flush_state()
 
 
 class Mts200Schedule(MtsSchedule):
