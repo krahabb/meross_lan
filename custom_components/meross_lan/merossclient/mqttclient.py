@@ -41,6 +41,18 @@ class _MQTTRateLimiter:
     quick burst but this seemed to lead to message rejection at the device
     (at least on a recent msl320) and my guess is the device is trying to prevent
     message spoofing by rejecting messages too old in time (a few seconds for that msl320)
+
+    2025-03-31
+    In this discussion (https://github.com/krahabb/meross_lan/discussions/545#discussioncomment-12678003)
+    There's a statement from Meross regarding data rate:
+    "Important Requirement:
+    To ensure optimal performance and security,
+    please limit your device's communication to no more than 200 messages every one hour."
+
+    TODO
+    Taking this into account, we should set the rate-limiting to 1 message every 18 seconds
+    on average but I guess the short term burst should be allowed (up to 6 messages in 60 seconds)
+    We should eventually setup also a long-term data rate-limiting (e.g. 200 messages in 1 hour)
     """
 
     DURATION: typing.Final = 60

@@ -1,4 +1,3 @@
-import bisect
 import typing
 
 from .. import const as mlc
@@ -569,25 +568,22 @@ class NamespaceHandler:
         be done. If it hasn't elapsed then they're eventually packed
         with the outgoing ns_multiple
         """
-        epoch = device._polling_epoch
-        if epoch >= self.polling_epoch_next:
+        if device._polling_epoch >= self.polling_epoch_next:
             await device.async_request_smartpoll(self)
         else:
-            # insert into the lazypoll_requests ordering by least recently polled
-            def _lazypoll_key(_handler: NamespaceHandler):
-                return _handler.lastrequest - epoch
-
-            bisect.insort(device.lazypoll_requests, self, key=_lazypoll_key)
+            device.request_lazypoll(self)
 
     async def async_poll_smart(self, device: "MerossDevice"):
         if device._polling_epoch >= self.polling_epoch_next:
-            await device.async_request_smartpoll(self)
+            if not await device.async_request_smartpoll(self):
+                # if the cloud MQTT limit hitted try to compete for lazypolls
+                device.request_lazypoll(self)
 
     async def async_poll_once(self, device: "MerossDevice"):
         """
         This strategy is for 'constant' namespace data which do not change and only
         need to be requested once (after onlining that is). When polling use
-        same queueing policy as async_poll_smart (don't overwhelm the cloud mqtt),
+        same queueing policy as async_poll_smart to don't overwhelm the cloud mqtt
         """
         if not self.polling_epoch_next:
             await device.async_request_smartpoll(self)
@@ -803,35 +799,35 @@ POLLING_STRATEGY_CONF: dict[
     ),
     mn.Appliance_Control_ConsumptionH: (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
         320,
         900,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_ConsumptionX: (
         mlc.PARAM_ENERGY_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_ENERGY_UPDATE_CLOUD_PERIOD,
         320,
         53,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_Diffuser_Sensor: (
         mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         100,
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Electricity: (
         mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD,
         430,
         0,
         NamespaceHandler.async_poll_smart,
     ),
     mn.Appliance_Control_ElectricityX: (
         mlc.PARAM_SENSOR_FAST_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_FAST_UPDATE_CLOUD_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         100,
         NamespaceHandler.async_poll_smart,
@@ -887,7 +883,7 @@ POLLING_STRATEGY_CONF: dict[
     ),
     mn.Appliance_Control_Sensor_Latest: (
         mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_lazy,
@@ -922,14 +918,14 @@ POLLING_STRATEGY_CONF: dict[
     ),
     mn.Appliance_Control_Thermostat_Frost: (
         mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Overheat: (
         mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         140,
         NamespaceHandler.async_poll_lazy,
@@ -957,7 +953,7 @@ POLLING_STRATEGY_CONF: dict[
     ),
     mn.Appliance_Control_Thermostat_Sensor: (
         mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         40,
         NamespaceHandler.async_poll_lazy,

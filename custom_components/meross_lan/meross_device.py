@@ -425,11 +425,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "namespace_pushes",
         "digest_handlers",
         "digest_pollers",
-        "lazypoll_requests",
+        "_lazypoll_requests",
         "_polling_epoch",
         "_polling_callback_unsub",
         "_polling_callback_shutdown",
-        "_queued_smartpoll_requests",
+        "_queued_cloudpoll_requests",
         "multiple_max",
         "_multiple_requests",
         "_multiple_response_size",
@@ -483,12 +483,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.namespace_pushes: dict[str, dict] = {}
         self.digest_handlers: dict[str, "DigestParseFunc"] = {}
         self.digest_pollers: set["NamespaceHandler"] = set()
-        self.lazypoll_requests: list["NamespaceHandler"] = []
+        self._lazypoll_requests: list["NamespaceHandler"] = []
         NamespaceHandler(self, mn.Appliance_System_All)
         self._polling_epoch = 0.0
         self._polling_callback_unsub = None
         self._polling_callback_shutdown = None
-        self._queued_smartpoll_requests = 0
+        self._queued_cloudpoll_requests = 0
         self.multiple_max = 0
         self._timezone_next_check = (
             0
@@ -704,7 +704,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.namespace_handlers = None  # type: ignore
         self.digest_handlers = None  # type: ignore
         self.digest_pollers = None  # type: ignore
-        self.lazypoll_requests = None  # type: ignore
+        self._lazypoll_requests = None  # type: ignore
         self.sensor_protocol = None  # type: ignore
         self.update_firmware = None
         ApiProfile.devices[self.id] = None
@@ -1124,7 +1124,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         requests_len = len(multiple_requests)
         while self.online and requests_len:
-            lazypoll_requests = self.lazypoll_requests
+            lazypoll_requests = self._lazypoll_requests
             while (requests_len < self.multiple_max) and lazypoll_requests:
                 # we have space available in current ns_multiple and lazy pollers are waiting
                 for handler in lazypoll_requests:
@@ -1263,7 +1263,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self,
         request: "MerossMessage",
     ) -> MerossResponse | None:
-        if not self._mqtt_publish:
+        _mqtt_publish = self._mqtt_publish
+        if not _mqtt_publish:
             # even if we're smart enough to not call async_mqtt_request when no mqtt
             # available, it could happen we loose that when asynchronously coming here
             self.log(
@@ -1278,8 +1279,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             CONF_PROTOCOL_MQTT,
             self.TRACE_TX,
         )
-        self._queued_smartpoll_requests += 1
-        return await self._mqtt_publish.async_mqtt_publish(self.id, request)
+        if _mqtt_publish.is_cloud_connection:
+            self._queued_cloudpoll_requests += 1
+        return await _mqtt_publish.async_mqtt_publish(self.id, request)
 
     async def async_mqtt_request(
         self,
@@ -1460,15 +1462,27 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         *,
         cloud_queue_max: int = 1,
     ):
-        if (self.curr_protocol is CONF_PROTOCOL_MQTT) and self.mqtt_cloudactive:
-            # the request would go over cloud mqtt
-            if (self._queued_smartpoll_requests >= cloud_queue_max) or (
+        if (
+            (self.curr_protocol is CONF_PROTOCOL_MQTT)
+            and (self._queued_cloudpoll_requests >= cloud_queue_max)
+            and (
                 (self._polling_epoch - handler.lastrequest)
                 < handler.polling_period_cloud
-            ):
-                return False
+            )
+        ):
+            # the request would go over cloud mqtt but we've already queued some
+            # and we could wait up to handler.polling_period_cloud
+            return False
         await self.async_request_poll(handler)
         return True
+
+    def request_lazypoll(self, handler: NamespaceHandler):
+        """Insert into the lazypoll_requests ordering by least recently polled"""
+
+        def _lazypoll_key(_handler: NamespaceHandler):
+            return _handler.lastrequest - self._polling_epoch
+
+        bisect.insort(self._lazypoll_requests, handler, key=_lazypoll_key)
 
     async def _async_request_updates(self, epoch: float, namespace: str | None):
         """
@@ -1486,8 +1500,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         on the next polling cycle. This will 'spread' smart requests over
         subsequent polls
         """
-        self.lazypoll_requests = []
-        self._queued_smartpoll_requests = 0
+        self._lazypoll_requests = []
+        self._queued_cloudpoll_requests = 0
         # self.namespace_handlers could change at any time due to async
         # message parsing (handlers might be dynamically created by then)
         for handler in [
