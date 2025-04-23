@@ -181,6 +181,8 @@ ISSUE_DEVICE_TIMEZONE = "device_timezone"
 """raised when a device timezone is not set or is anyway different from HA default"""
 
 # general working/configuration parameters
+PARAM_DEFAULT_KEY = "meross"
+"""Default key commonly used for local MQTT binded devices (MQTT Hub conf)"""
 PARAM_INFINITE_TIMEOUT = 2147483647  # inifinite epoch (2038 bug?)
 """the (infinite) timeout in order to disable timed schedules"""
 PARAM_COLDSTARTPOLL_DELAY = 2

@@ -280,7 +280,7 @@ async def _create_dhcp_discovery_flow(
         discovery_flow.async_create_flow(
             hass,
             mlc.DOMAIN,
-            dhcp_discovery_flow_context, # type: ignore
+            dhcp_discovery_flow_context,  # type: ignore
             dhcp_service_info,
             discovery_key=discovery_flow.DiscoveryKey(
                 domain=dhcp.DOMAIN,
@@ -460,23 +460,20 @@ async def test_options_flow(
         result = await helpers.async_assert_flow_menu_to_step(
             options_flow, result, "menu", "device"
         )
+        user_input = {
+            mlc.CONF_HOST: device.host,
+            mlc.CONF_KEY: "wrongkey",
+            mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
+            mlc.CONF_POLLING_PERIOD: mlc.CONF_POLLING_PERIOD_DEFAULT,
+        }
         result = await options_flow.async_configure(
-            result["flow_id"],
-            user_input={
-                mlc.CONF_HOST: device.host,
-                mlc.CONF_KEY: "wrongkey",
-                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
-            },
+            result["flow_id"], user_input=user_input
         )
         result = await helpers.async_assert_flow_menu_to_step(
             options_flow, result, "keyerror", "device"
         )
+        user_input[mlc.CONF_KEY] = device.key
         result = await options_flow.async_configure(
-            result["flow_id"],
-            user_input={
-                mlc.CONF_HOST: device.host,
-                mlc.CONF_KEY: device.key,
-                mlc.CONF_PROTOCOL: mlc.CONF_PROTOCOL_HTTP,
-            },
+            result["flow_id"], user_input=user_input
         )
         assert result.get("type") == FlowResultType.CREATE_ENTRY
