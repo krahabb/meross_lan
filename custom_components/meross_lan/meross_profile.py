@@ -554,65 +554,6 @@ class MQTTConnection(Loggable):
         Sends an ns_all and ns_ability GET requests encapsulated in an ns_multiple
         to speed up things. Raises exception in case of error
         """
-        topic_response = self.topic_response
-        if False:
-            # 1-step identification disabled since it proves a bit unreliable on my msl320
-            self.log(
-                self.DEBUG,
-                "Initiating 1-step identification for uuid:%s",
-                self.profile.loggable_device_id(device_id),
-            )
-            try:
-                response = check_message_strict(
-                    await self.async_mqtt_publish(
-                        device_id,
-                        MerossRequest(
-                            key,
-                            mn.Appliance_Control_Multiple.name,
-                            mc.METHOD_SET,
-                            {
-                                mn.Appliance_Control_Multiple.key: [
-                                    MerossRequest(
-                                        key,
-                                        *mn.Appliance_System_All.request_get,
-                                        topic_response,
-                                    ),
-                                    MerossRequest(
-                                        key,
-                                        *mn.Appliance_System_Ability.request_get,
-                                        topic_response,
-                                    ),
-                                ]
-                            },
-                            topic_response,
-                        ),
-                    )
-                )
-                multiple_response: list["MerossMessageType"] = response[mc.KEY_PAYLOAD][
-                    mc.KEY_MULTIPLE
-                ]
-                # this syntax ensures both the responses are the expected ones
-                return {
-                    CONF_DEVICE_ID: device_id,
-                    CONF_PAYLOAD: {
-                        mc.KEY_ALL: multiple_response[0][mc.KEY_PAYLOAD][mc.KEY_ALL],
-                        mc.KEY_ABILITY: multiple_response[1][mc.KEY_PAYLOAD][
-                            mc.KEY_ABILITY
-                        ],
-                    },
-                    CONF_KEY: key,
-                }
-            except MerossKeyError as error:
-                # no point in attempting 2-steps identification
-                raise error
-            except Exception as exception:
-                self.log(
-                    self.DEBUG,
-                    "Identification error('%s') for uuid:%s. Falling back to 2-steps procedure",
-                    str(exception),
-                    self.profile.loggable_device_id(device_id),
-                )
-
         try:
             response = check_message_strict(
                 await self.async_mqtt_publish(
@@ -620,7 +561,7 @@ class MQTTConnection(Loggable):
                     MerossRequest(
                         key,
                         *mn.Appliance_System_Ability.request_get,
-                        topic_response,
+                        self.topic_response,
                     ),
                 )
             )
@@ -637,7 +578,7 @@ class MQTTConnection(Loggable):
                     MerossRequest(
                         key,
                         *mn.Appliance_System_All.request_get,
-                        topic_response,
+                        self.topic_response,
                     ),
                 )
             )
