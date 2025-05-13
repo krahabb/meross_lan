@@ -569,7 +569,7 @@ class MLLight(MLLightBase):
             elif self._t_temp_end:
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_TEMPERATURE_LUMINANCE
             else:
-                _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_LUMINANCE
+                _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_LUMINANCE
         else:
             _t_duration = None
             if ATTR_BRIGHTNESS in kwargs:
@@ -578,7 +578,7 @@ class MLLight(MLLightBase):
                 _light[mc.KEY_LUMINANCE] = MSL_LUMINANCE_MAX
             if ATTR_EFFECT in kwargs:
                 _light[mc.KEY_EFFECT] = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
-                _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_EFFECT
+                _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_EFFECT
             elif ATTR_RGB_COLOR in kwargs:
                 _light[mc.KEY_RGB] = self._rgb_to_native(kwargs[ATTR_RGB_COLOR])
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_RGB_LUMINANCE
@@ -588,7 +588,7 @@ class MLLight(MLLightBase):
                 )
                 _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_TEMPERATURE_LUMINANCE
             else:
-                _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_LUMINANCE
+                _light[mc.KEY_CAPACITY] = mc.LIGHT_CAPACITY_LUMINANCE
 
         if await self.async_request_light_on_flush(_light):
             if _t_duration:
@@ -741,13 +741,15 @@ class MLLightEffect(MLLight):
     async def async_turn_on(self, **kwargs):
         if self._t_unsub:
             self._transition_cancel()
+        _light = self._light
+        _capacity = _light.get(mc.KEY_CAPACITY, 0)
         # intercept light command if it is related to effects (on/off/change of luminance)
         if ATTR_EFFECT in kwargs:
             effect_index = self.effect_list.index(kwargs[ATTR_EFFECT])  # type: ignore
             if effect_index == len(self._light_effect_list):  # EFFECT_OFF
-                _light = dict(self._light)
+                _light = dict(_light)
                 _light.pop(mc.KEY_EFFECT, None)
-                _light[mc.KEY_CAPACITY] &= ~mc.LIGHT_CAPACITY_EFFECT
+                _light[mc.KEY_CAPACITY] = _capacity & ~mc.LIGHT_CAPACITY_EFFECT
                 if await self.async_request_light_on_flush(_light):
                     return
             else:
@@ -758,9 +760,8 @@ class MLLightEffect(MLLight):
                     mc.METHOD_SET,
                     {mc.KEY_EFFECT: [_light_effect]},
                 ):
-                    _light = self._light
                     _light[mc.KEY_EFFECT] = effect_index
-                    _light[mc.KEY_CAPACITY] |= mc.LIGHT_CAPACITY_EFFECT
+                    _light[mc.KEY_CAPACITY] = _capacity | mc.LIGHT_CAPACITY_EFFECT
                     self._flush_light(_light)
                     if not self.is_on:
                         await self.async_request_onoff(1)
@@ -770,8 +771,7 @@ class MLLightEffect(MLLight):
             return  # TODO: report an HomeAssistantError maybe
 
         if ATTR_BRIGHTNESS in kwargs:
-            _light = self._light
-            if _light[mc.KEY_CAPACITY] & mc.LIGHT_CAPACITY_EFFECT:
+            if _capacity & mc.LIGHT_CAPACITY_EFFECT:
                 # we're trying to control the luminance of the effect though...
                 _light_effect = None
                 try:
