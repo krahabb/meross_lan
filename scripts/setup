@@ -17,6 +17,6 @@ curl -sfL https://raw.githubusercontent.com/lokalise/lokalise-cli-2-go/master/in
 
 # add go2rtc binary (needed from HA 2024.11) at least until we're using an image lacking it
 cd /usr/local/bin
-wget https://github.com/AlexxIT/go2rtc/releases/download/v1.9.7/go2rtc_linux_amd64
+wget https://github.com/AlexxIT/go2rtc/releases/download/v1.9.9/go2rtc_linux_amd64
 chmod +x go2rtc_linux_amd64
 mv go2rtc_linux_amd64 go2rtc
