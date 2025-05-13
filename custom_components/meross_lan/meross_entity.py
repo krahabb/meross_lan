@@ -1,11 +1,11 @@
 """
- Base-Common behaviour for all Meross-LAN entities
+Base-Common behaviour for all Meross-LAN entities
 
- actual HA custom platform entities will be derived like this:
- MLSwitch(MerossToggle, SwitchEntity)
+actual HA custom platform entities will be derived like this:
+MLSwitch(MerossToggle, SwitchEntity)
 
- we also try to 'commonize' HA core symbols import in order to better manage
- versioning
+we also try to 'commonize' HA core symbols import in order to better manage
+versioning
 """
 
 from functools import partial
@@ -25,6 +25,7 @@ from .helpers.namespaces import NamespaceParser
 from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
+    from typing import NotRequired
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -34,8 +35,9 @@ if typing.TYPE_CHECKING:
 
     # optional arguments for MerossEntity init
     class MerossEntityArgs(typing.TypedDict):
-        name: typing.NotRequired[str]
-        translation_key: typing.NotRequired[str]
+        name: NotRequired[str]
+        translation_key: NotRequired[str]
+        entity_category: NotRequired[EntityCategory | None]
 
     # optional arguments for MerossBinaryEntity init
     class MerossBinaryEntityArgs(MerossEntityArgs):
@@ -224,9 +226,8 @@ class MerossEntity(
         # we don't flush here since we'll wait for actual device readings
 
     def set_unavailable(self):
-        if self.available:
-            self.available = False
-            self.flush_state()
+        self.available = False
+        self.flush_state()
 
     def update_device_value(self, device_value):
         """This is a stub definition. It will be called by _parse (when namespace dispatching
@@ -285,6 +286,7 @@ class MerossEntity(
         """Default parsing for entities. Set the proper
         key_value in class/instance definition to make it work."""
         self.update_device_value(payload[self.key_value])
+
 
 class MENoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
     """

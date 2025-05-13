@@ -52,8 +52,7 @@ class ManagerState(StrEnum):
     INIT = "init"
     LOADING = "loading"
     LOADED = "loaded"
-    STARTED = "started"
-    SHUTDOWN = "shutdown"
+    UNLOADING = "unloading"
 
 
 class EntityManager(Loggable):
@@ -321,6 +320,7 @@ class ConfigEntryManager(EntityManager):
     async def async_unload_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
+        self.state = ManagerState.UNLOADING
         if not await hass.config_entries.async_unload_platforms(
             config_entry, self.platforms.keys()
         ):

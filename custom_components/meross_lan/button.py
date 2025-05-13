@@ -5,11 +5,13 @@ from homeassistant.components import button
 from . import meross_entity as me
 
 if typing.TYPE_CHECKING:
+    from types import CoroutineType
+    from typing import Any, Callable, Unpack
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .helpers.manager import EntityManager
-    from .meross_device import MerossDevice
 
 
 async def async_setup_entry(
@@ -18,12 +20,15 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, button.DOMAIN)
 
 
-class MLButton(me.MerossEntity, button.ButtonEntity):
+class MLButton(me.MEPartialAvailableMixin, me.MerossEntity, button.ButtonEntity):
+    # MEPartialAvailableMixin is needed here since this entity state is not being updated
+    # by our component. This will ensure (by default) the entity is available/unavailable
+    # when the device is online/offline
+
     PLATFORM = button.DOMAIN
     DeviceClass = button.ButtonDeviceClass
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.CONFIG
 
     __slots__ = ()
 
@@ -31,40 +36,18 @@ class MLButton(me.MerossEntity, button.ButtonEntity):
         self,
         manager: "EntityManager",
         channel: object | None,
-        entitykey: str | None = None,
+        entitykey: str | None,
+        press_func: "Callable[[], CoroutineType[Any, Any, None]]",
         device_class: DeviceClass | None = None,
+        **kwargs: "Unpack[me.MerossEntityArgs]",
     ):
-        super().__init__(manager, channel, entitykey, device_class)
+        super().__init__(manager, channel, entitykey, device_class, **kwargs)
+        self.async_press = press_func
 
-    # interface: button.buttonEntity
-    async def async_press(self) -> None:
-        """Press the button.(BOOM!)"""
-        pass
+    async def async_shutdown(self):
+        self.async_press = None  # type: ignore BOOM!
+        return await super().async_shutdown()
 
 
-class _MLUnbindButton(MLButton):
-    """
-    This button, will send the Appliance.Control.Unbind PUSH
-    through the broker thus completely resetting the binding of
-    the device and removing it from the Meross account (if Meross paired)
-    pretty destructive...
-
-    BTW:
-    I think having a simple UI button which could just be pressed and BOOM!
-    is a very bad idea from a UX perspective. Any trick (like raising an
-    error on first attempt or so) could just prove to be useless since people
-    don't read pop-ups. I'll move this feature to a redesign of the OptionsFlow
-    (lot of work to be done...sadly..) by introducing a menu and letting the
-    user consciously step by step proceed to destruction.
-
-    This code is left for reference...buttons might prove to be useful in
-    other contexts
-    """
-
-    manager: "MerossDevice"
-
-    def __init__(
-        self,
-        manager: "MerossDevice",
-    ):
-        super().__init__(manager, None, "unbind", None)
+class MLPersistentButton(me.MEAlwaysAvailableMixin, MLButton):
+    pass

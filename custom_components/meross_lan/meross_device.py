@@ -17,30 +17,25 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
 from . import const as mlc
+
+# only import those 'often used' symbols to get a tiny bit of speed improvement
 from .const import (
-    CONF_DEVICE_ID,
     CONF_HOST,
     CONF_PAYLOAD,
-    CONF_POLLING_PERIOD,
-    CONF_POLLING_PERIOD_DEFAULT,
-    CONF_POLLING_PERIOD_MIN,
-    CONF_PROTOCOL,
     CONF_PROTOCOL_AUTO,
     CONF_PROTOCOL_HTTP,
     CONF_PROTOCOL_MQTT,
-    CONF_PROTOCOL_OPTIONS,
-    CONF_TIMESTAMP,
-    DOMAIN,
     PARAM_HEADER_SIZE,
     PARAM_HEARTBEAT_PERIOD,
-    PARAM_INFINITE_TIMEOUT,
     PARAM_TIMESTAMP_TOLERANCE,
-    PARAM_TIMEZONE_CHECK_NOTOK_PERIOD,
-    PARAM_TIMEZONE_CHECK_OK_PERIOD,
-    PARAM_TRACING_ABILITY_POLL_TIMEOUT,
-    DeviceConfigType,
 )
-from .helpers import async_import_module, async_load_zoneinfo, datetime_from_epoch
+from .button import MLPersistentButton
+from .helpers import (
+    ConfigEntriesHelper,
+    async_import_module,
+    async_load_zoneinfo,
+    datetime_from_epoch,
+)
 from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
 from .helpers.namespaces import NamespaceHandler
 from .merossclient import (
@@ -162,7 +157,7 @@ class MerossDeviceBase(EntityManager):
         super().__init__(
             id,
             config_entry_id=config_entry_id,
-            deviceentry_id={"identifiers": {(DOMAIN, id)}},
+            deviceentry_id={"identifiers": {(mlc.DOMAIN, id)}},
             **kwargs,
         )
         self._online = False
@@ -377,7 +372,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     }
 
     # these are set from ConfigEntry
-    config: DeviceConfigType
+    config: mlc.DeviceConfigType
     polling_period: int
     _polling_delay: int
     conf_protocol: str
@@ -485,7 +480,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.digest_pollers: set["NamespaceHandler"] = set()
         self._lazypoll_requests: list["NamespaceHandler"] = []
         NamespaceHandler(self, mn.Appliance_System_All)
-        self._polling_epoch = 0.0
+        self._polling_epoch = 0.0  # when 0 we're not in the polling callback loop
         self._polling_callback_unsub = None
         self._polling_callback_shutdown = None
         self._queued_cloudpoll_requests = 0
@@ -493,13 +488,13 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._timezone_next_check = (
             0
             if mn.Appliance_System_Time.name in descriptor.ability
-            else PARAM_INFINITE_TIMEOUT
+            else mlc.PARAM_INFINITE_TIMEOUT
         )
         self._trace_ability_callback_unsub = None
         self._diagnostics_build = False
 
         super().__init__(
-            config_entry.data[CONF_DEVICE_ID],
+            config_entry.data[mlc.CONF_DEVICE_ID],
             config_entry,
             default_name=descriptor.productname,
             model=descriptor.productmodel,
@@ -510,6 +505,24 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         self.sensor_protocol = ProtocolSensor(self)
         self.update_firmware = None
+        MLPersistentButton(
+            self,
+            None,
+            "button_refresh",
+            self._async_button_refresh_press,
+            MLPersistentButton.DeviceClass.RESTART,
+            name="Refresh",
+            entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
+        )
+        MLPersistentButton(
+            self,
+            None,
+            "button_reload",
+            self._async_button_reload_press,
+            MLPersistentButton.DeviceClass.RESTART,
+            name="Reload",
+            entity_category=MLPersistentButton.EntityCategory.DIAGNOSTIC,
+        )
 
         self._update_config()
 
@@ -611,7 +624,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._polling_callback_unsub = self.schedule_async_callback(
             0, self._async_polling_callback, None
         )
-        self.state = ManagerState.STARTED
 
     # interface: ConfigEntryManager
     async def entry_update_listener(
@@ -663,7 +675,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # set the scheduled callback first so it gets (eventually) cleaned
         # should the following self.trace close the file due to an error
         self._trace_ability_callback_unsub = self.schedule_async_callback(
-            PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+            mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
             self._async_trace_ability,
             iter(descr.ability),
         )
@@ -687,18 +699,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         if self._profile:
             self._profile.unlink(self)
         if self._http:
+            # to be called before stopping polling so that it breaks http timeouts
             await self._http.async_terminate()
             self._http = None
 
-        if self.state is ManagerState.STARTED:
-            if self._polling_callback_unsub:
-                self._polling_callback_unsub.cancel()
-                self._polling_callback_unsub = None
-            else:
-                self._polling_callback_shutdown = (
-                    asyncio.get_running_loop().create_future()
-                )
-                await self._polling_callback_shutdown
+        await self._async_polling_stop()
 
         await super().async_shutdown()
         self.namespace_handlers = None  # type: ignore
@@ -935,7 +940,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             entries = self.hass.config_entries
             if entry := entries.async_get_entry(self.config_entry_id):
                 data = dict(entry.data)
-                data[CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+                data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
                 data[CONF_PAYLOAD][mc.KEY_ALL] = self.descriptor.all
                 if query_abilities and (
                     response := await self.async_request(
@@ -1004,7 +1009,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 )
             ] = TIMEZONES_SET
 
-    async def async_entry_option_update(self, user_input: DeviceConfigType):
+    async def async_entry_option_update(self, user_input: mlc.DeviceConfigType):
         """
         called when the user 'SUBMIT' an OptionsFlowHandler: here we'll
         receive the full user_input so to update device config properties
@@ -1509,6 +1514,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             for handler in self.namespace_handlers.values()
             if (handler.ns.name != namespace)
         ]:
+            if self._polling_callback_shutdown:
+                return
             if handler.polling_strategy:
                 await handler.polling_strategy(handler, self)  # type: ignore
                 if not self._online:
@@ -1517,6 +1524,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # needed even if offline: it takes care of resetting the ns_multiple state
         if self._multiple_requests:
             await self._async_multiple_requests_flush()
+            if self._polling_callback_shutdown:
+                return
 
         # when create_diagnostic_entities is True, after onlining we'll dynamically
         # scan the abilities to look for 'unknown' namespaces (kind of like tracing)
@@ -1525,7 +1534,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self.log(self.DEBUG, "Diagnostic scan begin")
             try:
                 abilities = iter(self.descriptor.ability)
-                while self._online:
+                while self._online and not self._polling_callback_shutdown:
                     ability = next(abilities)
                     if (ability in TRACE_ABILITY_EXCLUDE) or (
                         (handler := self.namespace_handlers.get(ability))
@@ -1542,10 +1551,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     @callback
     async def _async_polling_callback(self, namespace: str):
-        self._polling_callback_unsub = None
         try:
-            self.log(self.DEBUG, "Polling begin")
+            self._polling_callback_unsub = None
             self._polling_epoch = epoch = time()
+            self.log(self.DEBUG, "Polling begin")
             # We're 'strictly' online when the device 'was' online and last request
             # got succesfully replied.
             # When last request(s) somewhat failed we'll probe NS_ALL before stating it is really
@@ -1597,7 +1606,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         # scheduling not so often and depending on a bunch of
                         # side conditions (like the device being time-aligned)
                         self._timezone_next_check = (
-                            epoch + PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
+                            epoch + mlc.PARAM_TIMEZONE_CHECK_NOTOK_PERIOD
                         )
                         if abs(self.device_timedelta) < PARAM_TIMESTAMP_TOLERANCE:
                             with self.exception_warning("_check_device_timerules"):
@@ -1608,7 +1617,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                                     )
                                 else:  # timezone trans good..check again in more time
                                     self._timezone_next_check = (
-                                        epoch + PARAM_TIMEZONE_CHECK_OK_PERIOD
+                                        epoch + mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD
                                     )
 
                 await self._async_request_updates(epoch, namespace)
@@ -1651,6 +1660,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     else:
                         self._polling_delay = PARAM_HEARTBEAT_PERIOD
         finally:
+            self._polling_epoch = 0.0
             if self._polling_callback_shutdown:
                 self._polling_callback_shutdown.set_result(True)
                 self._polling_callback_shutdown = None
@@ -1659,6 +1669,18 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     self._polling_delay, self._async_polling_callback, None
                 )
             self.log(self.DEBUG, "Polling end")
+
+    async def _async_polling_stop(self):
+        """Ensure we're not polling nor any schedule is in place."""
+        if self._polling_callback_unsub:
+            self._polling_callback_unsub.cancel()
+            self._polling_callback_unsub = None
+        elif self._polling_epoch:
+            if not self._polling_callback_shutdown:
+                self._polling_callback_shutdown = (
+                    asyncio.get_running_loop().create_future()
+                )
+            await self._polling_callback_shutdown
 
     def mqtt_receive(self, message: "MerossResponse"):
         assert self._mqtt_connected
@@ -2131,7 +2153,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 return True
             # actual device time is covered but we also check if the device timerules
             # are ok in the near future
-            timestamp_future = timestamp + PARAM_TIMEZONE_CHECK_OK_PERIOD
+            timestamp_future = timestamp + mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD
             # we have to search (again) in the timerules but we do some
             # short-circuit checks to see if epoch_future is still
             # contained in current timerule
@@ -2253,7 +2275,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 )
                 timerules = [
                     [0, 0, 0],
-                    [timestamp + PARAM_TIMEZONE_CHECK_OK_PERIOD, 0, 1],
+                    [timestamp + mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD, 0, 1],
                 ]
 
             p_time = {
@@ -2292,14 +2314,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         common properties caches, read from ConfigEntry on __init__ or when a configentry updates
         """
         config = self.config
-        self.conf_protocol = CONF_PROTOCOL_OPTIONS.get(
-            config.get(CONF_PROTOCOL), CONF_PROTOCOL_AUTO
+        self.conf_protocol = mlc.CONF_PROTOCOL_OPTIONS.get(
+            config.get(mlc.CONF_PROTOCOL), CONF_PROTOCOL_AUTO
         )
         self.polling_period = (
-            config.get(CONF_POLLING_PERIOD) or CONF_POLLING_PERIOD_DEFAULT
+            config.get(mlc.CONF_POLLING_PERIOD) or mlc.CONF_POLLING_PERIOD_DEFAULT
         )
-        if self.polling_period < CONF_POLLING_PERIOD_MIN:
-            self.polling_period = CONF_POLLING_PERIOD_MIN
+        if self.polling_period < mlc.CONF_POLLING_PERIOD_MIN:
+            self.polling_period = mlc.CONF_POLLING_PERIOD_MIN
         self._polling_delay = self.polling_period
 
         if config.get(mlc.CONF_DISABLE_MULTIPLE):
@@ -2462,11 +2484,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         if (self.curr_protocol is CONF_PROTOCOL_MQTT) and self._mqtt_publish:
             timeout = (
-                PARAM_TRACING_ABILITY_POLL_TIMEOUT
+                mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
                 + self._mqtt_publish.get_rl_safe_delay(self.id)
             )
         else:
-            timeout = PARAM_TRACING_ABILITY_POLL_TIMEOUT
+            timeout = mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT
         self._trace_ability_callback_unsub = self.schedule_async_callback(
             timeout,
             self._async_trace_ability,
@@ -2521,3 +2543,19 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     header[mc.KEY_MESSAGEID],
                 ),
             )
+
+    async def _async_button_refresh_press(self):
+        """Forces a full poll."""
+        await self._async_polling_stop()
+        # before retriggering ensure we're not overlapping with device shutdown
+        if self.state is ManagerState.LOADED:
+            self.device_debug = None
+            for handler in self.namespace_handlers.values():
+                handler.polling_epoch_next = 0.0
+            self._polling_callback_unsub = self.schedule_async_callback(
+                0, self._async_polling_callback, None
+            )
+
+    async def _async_button_reload_press(self):
+        """Reload the config_entry."""
+        ConfigEntriesHelper(self.hass).schedule_reload(self.config_entry_id)
