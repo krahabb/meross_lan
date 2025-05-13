@@ -1550,7 +1550,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self.log_exception(self.WARNING, exception, "diagnostic scan")
 
     @callback
-    async def _async_polling_callback(self, namespace: str):
+    async def _async_polling_callback(self, namespace: str | None):
         try:
             self._polling_callback_unsub = None
             self._polling_epoch = epoch = time()
@@ -1681,6 +1681,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     asyncio.get_running_loop().create_future()
                 )
             await self._polling_callback_shutdown
+
+    async def _async_poll(self):
+        """Stops an ongoing poll if any and executes a full poll (like when onlining)."""
+        await self._async_polling_stop()
+        # before retriggering ensure we're not overlapping with device shutdown
+        if self.state is ManagerState.LOADED:
+            self.device_debug = None
+            for handler in self.namespace_handlers.values():
+                handler.polling_epoch_next = 0.0
+            # this will also restart/schedule the cycle
+            await self._async_polling_callback(None)
 
     def mqtt_receive(self, message: "MerossResponse"):
         assert self._mqtt_connected
@@ -2436,6 +2447,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             ]
             self.trace(epoch, descr.all, mn.Appliance_System_All.name)
             self.trace(epoch, descr.ability, mn.Appliance_System_Ability.name)
+            await self._async_poll()
             try:
                 abilities = iter(descr.ability)
                 while self._online and self.is_tracing:
@@ -2546,15 +2558,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     async def _async_button_refresh_press(self):
         """Forces a full poll."""
-        await self._async_polling_stop()
-        # before retriggering ensure we're not overlapping with device shutdown
-        if self.state is ManagerState.LOADED:
-            self.device_debug = None
-            for handler in self.namespace_handlers.values():
-                handler.polling_epoch_next = 0.0
-            self._polling_callback_unsub = self.schedule_async_callback(
-                0, self._async_polling_callback, None
-            )
+        await self._async_poll()
 
     async def _async_button_reload_press(self):
         """Reload the config_entry."""
