@@ -911,34 +911,6 @@ class MerossCloudProfile(ApiProfile):
         if next_query_delay < mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT:
             # we'll give some breath to the init process
             next_query_delay = mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT
-        """REMOVE
-        # the device_info refresh did not kick in or failed
-        # for whatever reason. We just scan the device_info
-        # we have and setup the polling
-        device_info_unknown = [
-            device_info
-            for device_id, device_info in data[
-                MerossCloudProfile.KEY_DEVICE_INFO
-            ].items()
-            if device_id not in ApiProfile.devices
-        ]
-        if len(device_info_unknown):
-            await self._process_device_info_unknown(device_info_unknown)
-        """
-        """REMOVE
-        with self._cloud_token_exception_manager("async_cloudapi_deviceinfo") as token:
-            if token is not None:
-                for device_id, device_info in self[self.KEY_DEVICE_INFO].items():
-                    _data = await async_cloudapi_device_devextrainfo(
-                        token, device_id, async_get_clientsession(ApiProfile.hass)
-                    )
-                    self.log(
-                        DEBUG,
-                        "Device/devExtraInfo(%s): %s",
-                        device_id,
-                        json_dumps(_data),
-                    )
-        """
         self._unsub_polling_query_device_info = self.schedule_async_callback(
             next_query_delay,
             self._async_polling_query_device_info,
