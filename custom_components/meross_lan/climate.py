@@ -222,7 +222,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
             try:
                 ns_adjust = self.get_ns_adjust()
                 if ns_adjust.polling_epoch_next > (
-                    ns_adjust.device._polling_epoch + 30
+                    ns_adjust.device.lastresponse + 30
                 ):
                     ns_adjust.polling_epoch_next = 0.0
             except:

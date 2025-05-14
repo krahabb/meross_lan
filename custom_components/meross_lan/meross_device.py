@@ -57,7 +57,8 @@ from .sensor import ProtocolSensor
 from .update import MLUpdate
 
 if typing.TYPE_CHECKING:
-
+    from types import CoroutineType
+    from typing import Any, Callable, Iterable
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -74,10 +75,11 @@ if typing.TYPE_CHECKING:
     )
     from .merossclient.cloudapi import DeviceInfoType, LatestVersionType
 
-    DigestParseFunc = typing.Callable[[dict], None] | typing.Callable[[list], None]
-    DigestInitReturnType = tuple[DigestParseFunc, typing.Iterable[NamespaceHandler]]
-    DigestInitFunc = typing.Callable[["MerossDevice", typing.Any], DigestInitReturnType]
-    NamespaceInitFunc = typing.Callable[["MerossDevice"], None]
+    DigestParseFunc = Callable[[dict], None] | Callable[[list], None]
+    DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
+    DigestInitFunc = Callable[["MerossDevice", typing.Any], DigestInitReturnType]
+    NamespaceInitFunc = Callable[["MerossDevice"], None]
+    AsyncRequestFunc = Callable[[str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse | None]]
 
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
@@ -704,7 +706,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._http = None
 
         await self._async_polling_stop()
-
         await super().async_shutdown()
         self.namespace_handlers = None  # type: ignore
         self.digest_handlers = None  # type: ignore
@@ -1489,7 +1490,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         bisect.insort(self._lazypoll_requests, handler, key=_lazypoll_key)
 
-    async def _async_request_updates(self, epoch: float, namespace: str | None):
+    async def _async_request_updates(self, namespace: str | None):
         """
         This is a 'versatile' polling strategy called on timer
         or when the device comes online (passing in the received namespace)
@@ -1505,7 +1506,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         on the next polling cycle. This will 'spread' smart requests over
         subsequent polls
         """
-        self._lazypoll_requests = []
+        self._lazypoll_requests.clear()
         self._queued_cloudpoll_requests = 0
         # self.namespace_handlers could change at any time due to async
         # message parsing (handlers might be dynamically created by then)
@@ -1514,23 +1515,19 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             for handler in self.namespace_handlers.values()
             if (handler.ns.name != namespace)
         ]:
-            if self._polling_callback_shutdown:
-                return
             if handler.polling_strategy:
-                await handler.polling_strategy(handler, self)  # type: ignore
-                if not self._online:
+                await handler.polling_strategy(handler)
+                if not self._online or self._polling_callback_shutdown:
                     break  # do not return: do the flush first!
 
         # needed even if offline: it takes care of resetting the ns_multiple state
         if self._multiple_requests:
             await self._async_multiple_requests_flush()
-            if self._polling_callback_shutdown:
-                return
 
         # when create_diagnostic_entities is True, after onlining we'll dynamically
         # scan the abilities to look for 'unknown' namespaces (kind of like tracing)
         # and try to build diagnostic entitities out of that
-        if self._diagnostics_build and self._online:
+        if self._diagnostics_build and self._online and not self._polling_callback_shutdown:
             self.log(self.DEBUG, "Diagnostic scan begin")
             try:
                 abilities = iter(self.descriptor.ability)
@@ -1620,7 +1617,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                                         epoch + mlc.PARAM_TIMEZONE_CHECK_OK_PERIOD
                                     )
 
-                await self._async_request_updates(epoch, namespace)
+                await self._async_request_updates(namespace)
 
             else:  # offline or 'likely' offline (failed last request)
                 ns_all_handler = self.namespace_handlers[mn.Appliance_System_All.name]
@@ -1651,7 +1648,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         epoch + ns_all_handler.polling_period
                     )
                     ns_all_handler.polling_response_size = len(ns_all_response.json())
-                    await self._async_request_updates(epoch, ns_all_handler.ns.name)
+                    await self._async_request_updates(ns_all_handler.ns.name)
                 elif self._online:
                     self._set_offline()
                 else:
@@ -2445,6 +2442,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._trace_data = trace_data = [
                 ["time", "rxtx", "protocol", "method", "namespace", "data"]
             ]
+            # TODO: remove these from diagnostic since they're present in header data
+            # before that we need to update the emulator code to extract those
             self.trace(epoch, descr.all, mn.Appliance_System_All.name)
             self.trace(epoch, descr.ability, mn.Appliance_System_Ability.name)
             await self._async_poll()
@@ -2454,7 +2453,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     ability = next(abilities)
                     if ability not in TRACE_ABILITY_EXCLUDE:
                         await self.get_handler_by_name(ability).async_trace(
-                            CONF_PROTOCOL_HTTP
+                            self.async_http_request
                         )
 
                 return trace_data  # might be truncated because offlining or async shutting trace
@@ -2472,7 +2471,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         return await future
 
     async def _async_trace_ability(self, abilities_iterator: typing.Iterator[str]):
-        self._trace_ability_callback_unsub = None
         try:
             # avoid interleave tracing ability with polling loop
             # also, since we could trigger this at early stages
@@ -2483,14 +2481,16 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 while (ability := next(abilities_iterator)) in TRACE_ABILITY_EXCLUDE:
                     continue
                 self.log(self.DEBUG, "Tracing %s ability", ability)
-                await self.get_handler_by_name(ability).async_trace(None)
+                await self.get_handler_by_name(ability).async_trace(self.async_request)
 
         except StopIteration:
+            self._trace_ability_callback_unsub = None
             self.log(self.DEBUG, "Tracing abilities end")
             return
         except Exception as exception:
             self.log_exception(self.WARNING, exception, "_async_trace_ability")
 
+        self._trace_ability_callback_unsub = None
         if not self.is_tracing:
             return
 

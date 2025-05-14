@@ -14,13 +14,13 @@ from ..const import (
 from ..cover import MLCover
 from ..helpers import clamp, versiontuple
 from ..helpers.namespaces import NamespaceHandler
-from ..merossclient import const as mc, namespaces as mn
+from ..merossclient import check_message_strict, const as mc, namespaces as mn
 from ..number import MLConfigNumber, MLEmulatedNumber, MLNumber
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..merossclient import MerossRequestType
-    from ..meross_device import DigestInitReturnType, MerossDevice
+    from ..merossclient import MerossResponse, MerossRequestType
+    from ..meross_device import AsyncRequestFunc, DigestInitReturnType, MerossDevice
     from ..number import MLConfigNumberArgs
 
 
@@ -726,7 +726,9 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             mn.Appliance_GarageDoor_State,
         )
 
-    def _polling_request_init(self, request_payload_type: mn.RequestPayloadType):
+    def polling_request_configure(
+        self, request_payload_type: mn.RequestPayloadType | None
+    ):
         # TODO: move this device type 'patching' to some 'smart' Namespace grammar
         descriptor = self.device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
@@ -735,11 +737,65 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             # trying to patch lacking of state polling (#538)
             # It's not sure querying with the list of channels works.
             # Also, in fw 4.0.0 the default polling with empty dict correctly returns
-            # the list of channels so this is not needed
-            super()._polling_request_init(mn.RequestPayloadType.LIST_C)
-        else:
-            super()._polling_request_init(request_payload_type)
+            # the list of channels so this should not be needed
+            request_payload_type = request_payload_type or mn.RequestPayloadType.LIST_C
 
+        NamespaceHandler.polling_request_configure(self, request_payload_type)
+
+    async def async_trace(
+        self,
+        async_request_func: "AsyncRequestFunc",
+    ):
+        # 2025-05-14: since garageDoor querying seems to be failing with 'default' euristics
+        # we go down a deep search. It might be the format and behavior is really
+        # varying a lot between versions (msg100/200) and firmwares
+        ns = self.ns
+
+        # try these first for completeness of tracing
+        await async_request_func(ns.name, mc.METHOD_PUSH, ns.DEFAULT_PUSH_PAYLOAD)
+        channels_payload = []
+        for channel in self.parsers:
+            channel_payload = {ns.key_channel: channel}
+            channels_payload.append(channel_payload)
+            # If this querying format works but none of the subsequent does then we'll
+            # need to implement async_poll_digest in order to send the whole set of requests
+            # needed to poll the digest
+            await async_request_func(ns.name, mc.METHOD_GET, {ns.key: channel_payload})
+
+        # We'll try then querying with those different payload structures as they're well known
+        # for channelized devices, starting from the most complex (verbose) to the least one.
+        # If any of these works it will candidate for this NamespaceHandler polling_request format.
+        detected_request_payload_type: mn.RequestPayloadType | None = None
+
+        def _check_response(response: "MerossResponse | None"):
+            if response:
+                try:
+                    response = check_message_strict(response)
+                    payload = response["payload"]["state"]
+                    if type(payload) is list:
+                        return len(self.parsers) == len(payload)
+                    else:  # dict
+                        return len(self.parsers) == 1
+                except Exception:
+                    pass
+            return False
+
+        if _check_response(
+            await async_request_func(ns.name, mc.METHOD_GET, {ns.key: channels_payload})
+        ):
+            detected_request_payload_type = mn.RequestPayloadType.LIST_C
+        if _check_response(
+            await async_request_func(ns.name, mc.METHOD_GET, {ns.key: []})
+        ):
+            detected_request_payload_type = mn.RequestPayloadType.LIST
+        if _check_response(
+            await async_request_func(ns.name, mc.METHOD_GET, {ns.key: {}})
+        ):
+            detected_request_payload_type = mn.RequestPayloadType.DICT
+
+        if detected_request_payload_type:
+            # this will override the request_payload format from its default
+            self.polling_request_configure(detected_request_payload_type)
 
 def digest_init_garageDoor(
     device: "MerossDevice", digest: list

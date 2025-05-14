@@ -20,7 +20,7 @@ from ..sensor import (
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import DigestInitReturnType
+    from ..meross_device import AsyncRequestFunc, DigestInitReturnType
     from ..meross_entity import MerossEntity
     from ..merossclient.cloudapi import SubDeviceInfoType
     from .mts100 import Mts100Climate
@@ -151,9 +151,10 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         self._models = models
         self._included = included
         self._count = count
-        self.polling_strategy = HubChunkedNamespaceHandler.async_poll_chunked
+        self.polling_strategy = HubChunkedNamespaceHandler.async_poll_chunked # type: ignore
 
-    async def async_poll_chunked(self, device: "HubMixin"):
+    async def async_poll_chunked(self):
+        device = self.device
         if (not device._mqtt_active) or (
             device._polling_epoch >= self.polling_epoch_next
         ):
@@ -180,15 +181,10 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
                 ):
                     max_queuable += 1
 
-    async def async_trace(self, protocol: str | None):
-        """
-        Used while tracing abilities. In general, we use an euristic 'default'
-        query but for some 'well known namespaces' we might be better off querying with
-        a better structured payload.
-        """
+    async def async_trace(self, async_request_func: "AsyncRequestFunc"):
         for p in self._build_subdevices_payload():
             self.polling_request_set(p)
-            await super().async_trace(protocol)
+            await HubNamespaceHandler.async_trace(self, async_request_func)
 
     def _build_subdevices_payload(self):
         """
