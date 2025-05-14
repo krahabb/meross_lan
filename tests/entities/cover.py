@@ -83,7 +83,7 @@ class EntityTest(EntityComponentTest):
                 haec.SERVICE_SET_COVER_POSITION, {haec.ATTR_POSITION: 60}
             )
             # advance the time a bit
-            await self.device_context.async_tick(
+            await self.device_context.time.async_tick(
                 mlc.PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
             )
             # ensure we're still opening
@@ -114,7 +114,7 @@ class EntityTest(EntityComponentTest):
         # TODO: use and check that callback instead of the raw 60 seconds timeout
         # we're using async_warp over 40 seconds (which are enough on our emulators
         # to complete the transition) so to better 'match' the callbacks state refresh
-        await self.device_context.async_warp(
+        await self.device_context.time.async_warp(
             40,
             tick=1,
         )
@@ -153,7 +153,7 @@ class EntityTest(EntityComponentTest):
         ), f"started {haec.SERVICE_SET_COVER_POSITION}({target_position}): state!={expected_state}"
 
         # process the transition state machine
-        time_mock = self.device_context._time_mock
+        time_mock = self.device_context.time
         loop_time = self.hass.loop.time
         current_epoch = loop_time()
         transition_end_epoch = current_epoch + expected_duration

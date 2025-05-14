@@ -1,5 +1,5 @@
 """
-    Tests the HA diagnostics and device tracing feature
+Tests the HA diagnostics and device tracing feature
 """
 
 import asyncio
@@ -10,6 +10,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.diagnostics import async_get_device_diagnostics
 from custom_components.meross_lan.merossclient import const as mc
+from emulator import generate_emulators
 
 from tests import const as tc, helpers
 
@@ -89,23 +90,73 @@ async def test_profile_tracing(
         await _async_run_tracing(entry_mock, time_mock)
 
 
-async def test_device_diagnostics(hass: HomeAssistant, aioclient_mock):
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
-        await context.perform_coldstart()
+async def test_device_diagnostics(
+    hass: HomeAssistant,
+    aioclient_mock: helpers.AiohttpClientMocker,
+    time_mock: helpers.TimeMocker,
+    log_exception: helpers.LoggableException,
+):
 
-        context.warp(tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT)
-        diagnostic = await async_get_device_diagnostics(
-            hass, context.config_entry, None
-        )
-        await context.async_stopwarp()
-        assert diagnostic
+    for emulator in generate_emulators(
+        tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
+    ):
+        async with helpers.DeviceContext(
+            hass, emulator, aioclient_mock, time=time_mock
+        ) as context:
+            await context.perform_coldstart()
+            if context.device_id in (
+                "01234567890123456789012345678919",
+                "0123456789012345678901234567891D",
+                "01234567890123456789012345678922",
+            ):
+                log_exception.raise_on_log_exception = False
+            time_mock.warp(tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT)
+            try:
+                diagnostic = await async_get_device_diagnostics(
+                    hass, context.config_entry, None
+                )
+            finally:
+                await time_mock.async_stopwarp()
+                log_exception.raise_on_log_exception = True
+
+            assert diagnostic
 
 
-async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
-        await context.perform_coldstart()
+async def test_device_tracing(
+    hass: HomeAssistant,
+    aioclient_mock: helpers.AiohttpClientMocker,
+    #time_mock: helpers.TimeMocker,
+    log_exception: helpers.LoggableException,
+):
 
-        await _async_configure_options_tracing(context)
-        # We now need to 'coldstart' again the device
-        await context.perform_coldstart()
-        await _async_run_tracing(context, context._time_mock)
+    for emulator in generate_emulators(
+        tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
+    ):
+        async with helpers.DeviceContext(
+            hass, emulator, aioclient_mock
+        ) as context:
+            await context.perform_coldstart()
+            await _async_configure_options_tracing(context)
+            # We now need to 'coldstart' again the device
+            await context.perform_coldstart()
+            device = context.device
+            if device.id in (
+                "01234567890123456789012345678919",
+                "0123456789012345678901234567891D",
+                "01234567890123456789012345678922",
+            ):
+                log_exception.raise_on_log_exception = False
+            try:
+                #await _async_run_tracing(context, context.time)
+                async for time in context.time.async_warp_iterator(
+                    tc.MOCK_TRACE_TIMEOUT,
+                    tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+                ):
+                    if not device._trace_ability_callback_unsub:
+                        device.trace_close()
+                        break
+                    
+                assert not device._trace_file
+
+            finally:
+                log_exception.raise_on_log_exception = True

@@ -3,9 +3,11 @@ import base64
 import contextlib
 from copy import deepcopy
 from datetime import datetime, timedelta
+import enum
 import hashlib
 import re
 import time
+import typing
 from typing import Any, Callable, Coroutine, Final
 from unittest.mock import ANY, MagicMock, patch
 
@@ -20,8 +22,10 @@ from homeassistant import config_entries, const as hac
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry
-from pytest_homeassistant_custom_component.common import MockConfigEntry  # type: ignore
-from pytest_homeassistant_custom_component.common import async_fire_time_changed_exact
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry as _MockConfigEntry,
+    async_fire_time_changed_exact,
+)
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
     AiohttpClientMockResponse,
@@ -51,7 +55,11 @@ from . import const as tc
 _TimeFactory = FrozenDateTimeFactory | StepTickTimeFactory | TickingDateTimeFactory
 
 
-class MockConfigEntry(MockConfigEntry):
+if typing.TYPE_CHECKING:
+    from typing import ClassVar
+
+
+class MockConfigEntry(_MockConfigEntry):
     """
     compatibility layer for changing MockConfigEntry signatures between
     HA core 2023.latest and 2024.1
@@ -137,6 +145,53 @@ class MessageMatcher:
         )
 
 
+class LoggableException(contextlib.AbstractContextManager):
+
+
+    raise_on_log_exception: bool
+
+    __slots__ = (
+        "raise_on_log_exception",
+        "patch",
+        "_log_exception_old",
+    )
+
+    def __init__(self, raise_on_log_exception = True):
+        self.raise_on_log_exception = raise_on_log_exception
+        self._log_exception_old = Loggable.log_exception
+        self.patch = patch.object(
+            Loggable,
+            "log_exception",
+            autospec=True,
+            side_effect=self._patch_log_exception,
+        )
+
+    def __enter__(self):
+        self.patch.start()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.patch.stop()
+
+    def _patch_log_exception(
+        self,
+        loggable: Loggable,
+        level: int,
+        exception: Exception,
+        msg: str,
+        *args,
+        **kwargs,
+    ):
+        self._log_exception_old(
+            loggable, level, exception, msg, *args, **kwargs
+        )
+        if self.raise_on_log_exception:
+            raise Exception(
+                f'log_exception called with msg="{msg % args}"'
+            ) from exception
+        else:
+            print(f'log_exception called with msg="{msg % args}"')
+
 class TimeMocker(contextlib.AbstractContextManager):
     """
     time mocker helper using freeztime and providing some helpers
@@ -169,6 +224,9 @@ class TimeMocker(contextlib.AbstractContextManager):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self._freeze_time.stop()
+
+    def __call__(self):
+        return self.time()
 
     def tick(self, tick: timedelta | float | int):
         self.time.tick(tick if isinstance(tick, timedelta) else timedelta(seconds=tick))
@@ -218,13 +276,34 @@ class TimeMocker(contextlib.AbstractContextManager):
         """
         time_current = self.time()
         time_next = time_current + tick
-        tick_next = tick
         while time_current < timeout:
-            await self.async_tick(tick_next)
+            await self.async_move_to(time_next)
             # here self.time() might have been advanced more than tick
-            time_current = time_next
-            time_next = time_current + tick
-            tick_next = time_next - self.time()
+            time_current = self.time()
+            time_next = time_next + tick
+
+    async def async_warp_iterator(
+        self,
+        timeout: float | int | timedelta | datetime,
+        tick: float | int | timedelta = 1,
+    ):
+        """generator version of async time warping (async_warp)"""
+        if not isinstance(timeout, datetime):
+            if isinstance(timeout, timedelta):
+                timeout = self.time() + timeout
+            else:
+                timeout = self.time() + timedelta(seconds=timeout)
+        if not isinstance(tick, timedelta):
+            tick = timedelta(seconds=tick)
+
+        time_current = self.time()
+        time_next = time_current + tick
+        while time_current < timeout:
+            await self.async_move_to(time_next)
+            # here self.time() might have been advanced more than tick
+            time_current = self.time()
+            time_next = time_next + tick
+            yield time_current
 
     def warp(self, tick: float | int | timedelta = 0.5):
         """
@@ -510,15 +589,15 @@ class DeviceContext(ConfigEntryMocker):
     up as a configured device in HA
     It also provides timefreezing
     """
+    time: Final[TimeMocker]
 
     __slots__ = (
         "emulator",
         "emulator_context",
         "device_id",
+        "time",
         "_aioclient_mock",
-        "_time_mock",
         "_time_mock_owned",
-        "_exception_warning_patcher",
         "exception_warning_mock",
     )
 
@@ -544,52 +623,32 @@ class DeviceContext(ConfigEntryMocker):
         self.device_id = emulator.uuid
         self._aioclient_mock = aioclient_mock
         if isinstance(time, TimeMocker):
-            self._time_mock = time
+            self.time = time
             self._time_mock_owned = False
         else:
-            self._time_mock = TimeMocker(hass, time)
+            self.time = TimeMocker(hass, time)
             self._time_mock_owned = True
 
     @property
     def device(self) -> MerossDevice:
         return self.api.devices[self.device_id]  # type: ignore
 
-    @property
-    def time(self):
-        return self._time_mock.time
-
     async def __aenter__(self):
         if self._time_mock_owned:
-            self._time_mock.__enter__()
+            self.time.__enter__()
         self.emulator_context = EmulatorContext(
-            self.emulator, self._aioclient_mock, frozen_time=self._time_mock.time
+            self.emulator, self._aioclient_mock, frozen_time=self.time.time
         )
         self.emulator_context.__enter__()
-
-        def _patch_loggable_log_exception(
-            level: int, exception: Exception, msg: str, *args, **kwargs
-        ):
-            raise Exception(
-                f"log_exception called while testing {self.device_id}"
-            ) from exception
-
-        self._exception_warning_patcher = patch.object(
-            Loggable,
-            "log_exception",
-            side_effect=_patch_loggable_log_exception,
-        )
-        self.exception_warning_mock = self._exception_warning_patcher.start()
-
         return await super().__aenter__()
 
     async def __aexit__(self, exc_type, exc_value: BaseException | None, traceback):
         try:
             return await super().__aexit__(exc_type, exc_value, traceback)
         finally:
-            self._exception_warning_patcher.stop()
             self.emulator_context.__exit__(exc_type, exc_value, traceback)
             if self._time_mock_owned:
-                self._time_mock.__exit__(exc_type, exc_value, traceback)
+                self.time.__exit__(exc_type, exc_value, traceback)
             if exc_value:
                 exc_value.args = (*exc_value.args, self.emulator.uuid)
 
@@ -603,7 +662,7 @@ class DeviceContext(ConfigEntryMocker):
         if not self.config_entry_loaded:
             await self.async_setup()
         assert (device := self.device) and not device.online
-        await self.async_tick(timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY))
+        await self.time.async_tick(timedelta(seconds=mlc.PARAM_COLDSTARTPOLL_DELAY))
         assert device.online
         return device
 
@@ -633,34 +692,15 @@ class DeviceContext(ConfigEntryMocker):
         # fire the entity registry changed
         await self.hass.async_block_till_done()
         # perform the reload task after RELOAD_AFTER_UPDATE_DELAY
-        await self.async_tick(
+        await self.time.async_tick(
             timedelta(seconds=config_entries.RELOAD_AFTER_UPDATE_DELAY)
         )
         # (re)online the device
         return await self.perform_coldstart()
 
-    async def async_tick(self, tick: timedelta | float | int):
-        await self._time_mock.async_tick(tick)
-
-    async def async_move_to(self, target_datetime: datetime):
-        await self._time_mock.async_move_to(target_datetime)
-
-    async def async_warp(
-        self,
-        timeout: float | int | timedelta | datetime,
-        tick: float | int | timedelta = 1,
-    ):
-        await self._time_mock.async_warp(timeout, tick)
-
-    def warp(self, tick: float | int | timedelta = 0.5):
-        self._time_mock.warp(tick)
-
-    async def async_stopwarp(self):
-        await self._time_mock.async_stopwarp()
-
     async def async_poll_single(self):
         """Advances the time mocker up to the next polling cycle and executes it."""
-        await self._time_mock.async_tick(
+        await self.time.async_tick(
             self.device._polling_callback_unsub.when() - self.hass.loop.time()  # type: ignore
         )
 

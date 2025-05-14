@@ -23,6 +23,8 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     mock_aiohttp_client,
 )
 
+from custom_components.meross_lan.helpers import Loggable
+
 from . import helpers
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -97,6 +99,12 @@ def disable_entity_registry_update():
     MLGarageDoorEnableSwitch.update_onoff = MLGarageMultipleConfigSwitch.update_onoff
     yield
 
+@pytest.fixture(autouse=True, scope="function")
+def log_exception():
+    """Intercepts any code managed exception sent to logging."""
+
+    with helpers.LoggableException() as mock:
+        yield mock
 
 @pytest.fixture()
 def aioclient_mock(hass):

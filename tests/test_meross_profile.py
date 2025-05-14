@@ -20,6 +20,7 @@ async def test_meross_profile(
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
     time_mock: helpers.TimeMocker,
+    log_exception: helpers.LoggableException,
 ):
     """
     Tests basic MerossCloudProfile (alone) behavior:
@@ -28,6 +29,8 @@ async def test_meross_profile(
     - discovery setup
     - saving
     """
+    log_exception.raise_on_log_exception = False
+    
     hass_storage.update(tc.MOCK_PROFILE_STORAGE)
     async with helpers.ProfileEntryMocker(hass) as profile_entry_mock:
         assert (profile := MerossApi.profiles.get(tc.MOCK_PROFILE_ID))
@@ -205,7 +208,7 @@ async def test_meross_profile_with_device(
             )
         ) and device_registry_entry.name == tc.MOCK_PROFILE_MSS310_DEVNAME_STORED
         # now the profile should query the cloudapi and get an updated device_info list
-        await devicecontext.async_tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
+        await devicecontext.time.async_tick(mlc.PARAM_CLOUDPROFILE_DELAYED_SETUP_TIMEOUT)
         mqttconnections = list(profile.mqttconnections.values())
         merossmqtt_mock.safe_start_mock.assert_has_calls(
             [
@@ -229,7 +232,7 @@ async def test_meross_profile_with_device(
         # now check if a new fw is correctly managed in update entity
         assert device.update_firmware is None
         tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION[0][mc.KEY_VERSION] = "2.1.5"
-        await devicecontext.async_tick(
+        await devicecontext.time.async_tick(
             mlc.PARAM_CLOUDPROFILE_QUERY_LATESTVERSION_TIMEOUT
         )
         update_firmware = device.update_firmware

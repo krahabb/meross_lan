@@ -160,7 +160,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
         # offset bug correction logic to kick in correctly so we move the time
         # to a point before midnight where the reported consumption 'will' change
         # before midnight
-        await context.async_move_to(
+        await context.time.async_move_to(
             tomorrow
             - dt.timedelta(seconds=TEST_DURATION + mlc.PARAM_ENERGY_UPDATE_PERIOD)
         )
@@ -177,7 +177,7 @@ async def test_consumption(hass: HomeAssistant, aioclient_mock):
                 yesterday_consumption = sensor_consumption.native_value
                 assert yesterday_consumption is not None
                 # the estimate should be reset right at midnight
-                await context.async_move_to(tomorrow)
+                await context.time.async_move_to(tomorrow)
                 assert sensor_electricity.native_value == 0
                 break
 
@@ -245,7 +245,7 @@ async def test_consumption_with_timezone(hass: HomeAssistant, aioclient_mock):
         # offset bug correction logic to kick in correctly so we move the time
         # to a point before midnight where the reported consumption 'will' change
         # before midnight
-        await context.async_move_to(
+        await context.time.async_move_to(
             tomorrow
             - dt.timedelta(seconds=TEST_DURATION + mlc.PARAM_ENERGY_UPDATE_PERIOD)
         )
@@ -339,7 +339,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
             await async_wait_recording_done(hass)
 
             # move the time before reloading to make the emulator accumulate some energy
-            await context.async_tick(dt.timedelta(seconds=2 * TEST_DURATION))
+            await context.time.async_tick(dt.timedelta(seconds=2 * TEST_DURATION))
 
             assert await context.async_setup()
             device = context.device
@@ -376,7 +376,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
         # offset bug correction logic to kick in correctly so we move the time
         # to a point before midnight where the reported consumption 'will' change
         # before midnight
-        await context.async_move_to(
+        await context.time.async_move_to(
             tomorrow
             - dt.timedelta(seconds=TEST_DURATION + mlc.PARAM_ENERGY_UPDATE_PERIOD)
         )
@@ -393,7 +393,7 @@ async def test_consumption_with_reload(hass: HomeAssistant, aioclient_mock):
                 yesterday_consumption = sensor_consumption.native_value
                 assert yesterday_consumption is not None
                 # the estimate should be reset right at midnight
-                await context.async_move_to(tomorrow)
+                await context.time.async_move_to(tomorrow)
                 assert sensor_electricity.native_value == 0
                 break
 
