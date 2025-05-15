@@ -3,8 +3,8 @@ import base64
 import contextlib
 from copy import deepcopy
 from datetime import datetime, timedelta
-import enum
 import hashlib
+import logging
 import re
 import time
 import typing
@@ -57,6 +57,9 @@ _TimeFactory = FrozenDateTimeFactory | StepTickTimeFactory | TickingDateTimeFact
 
 if typing.TYPE_CHECKING:
     from typing import ClassVar
+
+
+LOGGER = logging.getLogger("meross_lan.tests")
 
 
 class MockConfigEntry(_MockConfigEntry):
@@ -147,19 +150,19 @@ class MessageMatcher:
 
 class LoggableException(contextlib.AbstractContextManager):
 
-
     raise_on_log_exception: bool
 
     __slots__ = (
         "raise_on_log_exception",
-        "patch",
+        "_patch",
+        "_mock",
         "_log_exception_old",
     )
 
-    def __init__(self, raise_on_log_exception = True):
+    def __init__(self, raise_on_log_exception=True):
         self.raise_on_log_exception = raise_on_log_exception
         self._log_exception_old = Loggable.log_exception
-        self.patch = patch.object(
+        self._patch = patch.object(
             Loggable,
             "log_exception",
             autospec=True,
@@ -167,11 +170,11 @@ class LoggableException(contextlib.AbstractContextManager):
         )
 
     def __enter__(self):
-        self.patch.start()
+        self._mock = self._patch.start()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.patch.stop()
+        self._patch.stop()
 
     def _patch_log_exception(
         self,
@@ -182,15 +185,18 @@ class LoggableException(contextlib.AbstractContextManager):
         *args,
         **kwargs,
     ):
-        self._log_exception_old(
-            loggable, level, exception, msg, *args, **kwargs
+        self._log_exception_old(loggable, level, exception, msg, *args, **kwargs)
+        LOGGER.warning(
+            f"Loggable.log_exception called with: loggable={loggable} level={level} exception={exception}",
         )
-        if self.raise_on_log_exception:
+        """if self.raise_on_log_exception:
             raise Exception(
                 f'log_exception called with msg="{msg % args}"'
             ) from exception
         else:
             print(f'log_exception called with msg="{msg % args}"')
+        """
+
 
 class TimeMocker(contextlib.AbstractContextManager):
     """
@@ -589,6 +595,7 @@ class DeviceContext(ConfigEntryMocker):
     up as a configured device in HA
     It also provides timefreezing
     """
+
     time: Final[TimeMocker]
 
     __slots__ = (

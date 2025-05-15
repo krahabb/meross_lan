@@ -343,6 +343,9 @@ class Loggable(abc.ABC):
         self.configure_logger()
         self.log(self.DEBUG, "init")
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.id})"
+
     def configure_logger(self):
         self.logtag = f"{self.__class__.__name__}({self.id})"
 

@@ -100,11 +100,15 @@ def disable_entity_registry_update():
     yield
 
 @pytest.fixture(autouse=True, scope="function")
-def log_exception():
+def log_exception(capsys):
     """Intercepts any code managed exception sent to logging."""
 
-    with helpers.LoggableException() as mock:
-        yield mock
+    with helpers.LoggableException() as patch:
+        yield patch
+        with capsys.disabled():
+            print("\nLoggable.log_exception calls:")
+            for call in patch._mock.mock_calls:
+                print(call)
 
 @pytest.fixture()
 def aioclient_mock(hass):
