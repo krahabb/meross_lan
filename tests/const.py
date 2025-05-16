@@ -119,7 +119,7 @@ MOCK_HTTP_RESPONSE_DELAY = 0.05
 # setting mocks for a 'default' nicely working cloud profile
 # to test expected normal behavior state
 MOCK_PROFILE_ID = "111111"
-MOCK_PROFILE_EMAIL = "mockprofile@meross_lan.local"
+MOCK_PROFILE_EMAIL = "mockprofile@meross.com"
 MOCK_PROFILE_PASSWORD = "Avery.-Strangest?:001$%ò*"
 MOCK_PROFILE_KEY = "abcdefghijklmnopq"
 MOCK_PROFILE_TOKEN = "1234567890ABCDEF"
@@ -155,8 +155,8 @@ MOCK_PROFILE_MSH300_DEVNAME = "Cloud smart hub"
 MOCK_PROFILE_MSH300_DOMAIN = "mqtt-2.meross_lan.local"
 MOCK_PROFILE_MSH300_RESERVEDDOMAIN = "mqtt-1.meross_lan.local"
 # cloudapi mocked responses
-MOCK_CLOUDAPI_DEVICE_DEVLIST: list[cloudapi.DeviceInfoType] = [
-    {
+MOCK_CLOUDAPI_DEVICE_DEVLIST: dict[str, cloudapi.DeviceInfoType] = {
+    MOCK_PROFILE_MSS310_UUID: {
         "uuid": MOCK_PROFILE_MSS310_UUID,
         "onlineStatus": 1,
         "devName": MOCK_PROFILE_MSS310_DEVNAME,
@@ -174,7 +174,7 @@ MOCK_CLOUDAPI_DEVICE_DEVLIST: list[cloudapi.DeviceInfoType] = [
         "reservedDomain": MOCK_PROFILE_MSS310_RESERVEDDOMAIN,
         "hardwareCapabilities": [],
     },
-    {
+    MOCK_PROFILE_MSH300_UUID: {
         "uuid": MOCK_PROFILE_MSH300_UUID,
         "onlineStatus": 1,
         "devName": MOCK_PROFILE_MSH300_DEVNAME,
@@ -192,7 +192,7 @@ MOCK_CLOUDAPI_DEVICE_DEVLIST: list[cloudapi.DeviceInfoType] = [
         "reservedDomain": MOCK_PROFILE_MSH300_RESERVEDDOMAIN,
         "hardwareCapabilities": [],
     },
-]
+}
 MOCK_CLOUDAPI_DEVICE_LATESTVERSION: list[cloudapi.LatestVersionType] = [
     {
         "type": "mss310r",

@@ -9,8 +9,10 @@ from custom_components.meross_lan.merossclient import const as mc
 from tests import helpers
 
 
-async def profile_async_request_updates(hass, aioclient_mock, capsys):
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
+async def profile_async_request_updates(request, hass, aioclient_mock, capsys):
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, aioclient_mock
+    ) as context:
         device = await context.perform_coldstart()
 
         # disable delay in emulator<->aioclient_mock response

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+from collections import namedtuple
 import contextlib
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -8,22 +9,16 @@ import logging
 import re
 import time
 import typing
-from typing import Any, Callable, Coroutine, Final
 from unittest.mock import ANY, MagicMock, patch
 
 import aiohttp
-from freezegun.api import (
-    FrozenDateTimeFactory,
-    StepTickTimeFactory,
-    TickingDateTimeFactory,
-    freeze_time,
-)
+from freezegun.api import freeze_time
 from homeassistant import config_entries, const as hac
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import entity_registry
+import pytest
 from pytest_homeassistant_custom_component.common import (
-    MockConfigEntry as _MockConfigEntry,
+    MockConfigEntry,
     async_fire_time_changed_exact,
 )
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
@@ -52,40 +47,41 @@ from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
 from . import const as tc
 
-_TimeFactory = FrozenDateTimeFactory | StepTickTimeFactory | TickingDateTimeFactory
-
-
 if typing.TYPE_CHECKING:
-    from typing import ClassVar
+    from typing import (
+        Any,
+        Callable,
+        ClassVar,
+        Coroutine,
+        Final,
+        Iterable,
+        Mapping,
+        NotRequired,
+        TypedDict,
+        Unpack,
+    )
+
+    from freezegun.api import (
+        FrozenDateTimeFactory,
+        StepTickTimeFactory,
+        TickingDateTimeFactory,
+        _Freezable,
+    )
+
+    _TimeFactory = FrozenDateTimeFactory | StepTickTimeFactory | TickingDateTimeFactory
+
+    from homeassistant.core import HomeAssistant
+
+    MqttMockPahoClient = MagicMock
+    """MagicMock for `paho.mqtt.client.Client`"""
+    MqttMockHAClient = MagicMock
+    """MagicMock for `homeassistant.components.mqtt.MQTT`."""
+    MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
+
+    from pytest import CaptureFixture, FixtureRequest, LogCaptureFixture
 
 
 LOGGER = logging.getLogger("meross_lan.tests")
-
-
-class MockConfigEntry(_MockConfigEntry):
-    """
-    compatibility layer for changing MockConfigEntry signatures between
-    HA core 2023.latest and 2024.1
-    """
-
-    def __init__(
-        self,
-        *,
-        domain: str,
-        data,
-        version: int,
-        minor_version: int,
-        unique_id: str,
-    ):
-        kwargs = {
-            "domain": domain,
-            "data": data,
-            "version": version,
-            "unique_id": unique_id,
-        }
-        if hac.MAJOR_VERSION >= 2024:
-            kwargs["minor_version"] = minor_version
-        super().__init__(**kwargs)
 
 
 async def async_assert_flow_menu_to_step(
@@ -189,13 +185,6 @@ class LoggableException(contextlib.AbstractContextManager):
         LOGGER.warning(
             f"Loggable.log_exception called with: loggable={loggable} level={level} exception={exception}",
         )
-        """if self.raise_on_log_exception:
-            raise Exception(
-                f'log_exception called with msg="{msg % args}"'
-            ) from exception
-        else:
-            print(f'log_exception called with msg="{msg % args}"')
-        """
 
 
 class TimeMocker(contextlib.AbstractContextManager):
@@ -206,7 +195,7 @@ class TimeMocker(contextlib.AbstractContextManager):
     mocks its own time
     """
 
-    time: _TimeFactory
+    time: "_TimeFactory"
 
     __slots__ = (
         "hass",
@@ -216,7 +205,9 @@ class TimeMocker(contextlib.AbstractContextManager):
         "_warp_run",
     )
 
-    def __init__(self, hass: HomeAssistant, time_to_freeze=None):
+    def __init__(
+        self, hass: "HomeAssistant", time_to_freeze: "_Freezable | None" = None
+    ):
         super().__init__()
         self.hass = hass
         self._freeze_time = freeze_time(time_to_freeze)
@@ -325,7 +316,6 @@ class TimeMocker(contextlib.AbstractContextManager):
             tick = timedelta(seconds=tick)
 
         def _warp():
-            print("TimeMocker.warp: entering executor")
             count = 0
             while self._warp_run:
                 _time = self.time()
@@ -333,20 +323,144 @@ class TimeMocker(contextlib.AbstractContextManager):
                 while _time == self.time():
                     time.sleep(0.01)
                 count += 1
-            print(f"TimeMocker.warp: exiting executor (_warp count={count})")
 
         self._warp_run = True
         self._warp_task = self.hass.async_add_executor_job(_warp)
 
     async def async_stopwarp(self):
-        print("TimeMocker.warp: stopping executor")
         assert self._warp_task
         self._warp_run = False
         await self._warp_task
         self._warp_task = None
 
 
-class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
+class LogManager:
+
+    MEROSS_LAN_LOGGER: "Final" = r"custom_components\.meross_lan.*"
+
+    if typing.TYPE_CHECKING:
+
+        class Args(TypedDict):
+            pass
+
+        request: Final[FixtureRequest]
+        capsys: Final[CaptureFixture | None]  # type: ignore
+        caplog: Final[LogCaptureFixture | None]  # type: ignore
+
+        class LogMatchArgs(TypedDict):
+            level: NotRequired[int]
+            name: NotRequired[str]
+            message: NotRequired[str]
+
+    LogMatchTuple = namedtuple(
+        "LogMatchArgsTuple",
+        "message, level, name",
+        defaults=(logging.WARNING, MEROSS_LAN_LOGGER),
+    )
+
+    IGNORED_LOGS: "ClassVar[Iterable[LogMatchTuple]]" = ()
+    """List of logs to be automatically ignored when dumping
+     the WARNINGS in flush_logs."""
+
+    OPTIONAL_FIXTURES: "ClassVar" = ["capsys", "caplog"]
+
+    __slots__ = ["request"] + OPTIONAL_FIXTURES
+
+    def __init__(self, request: "FixtureRequest"):
+        self.request = request
+        for fixture in self.__class__.OPTIONAL_FIXTURES:
+            setattr(
+                self,
+                fixture,
+                (
+                    (
+                        request.getfixturevalue(fixture)
+                        if fixture in request.fixturenames
+                        else None
+                    )
+                    if request
+                    else None
+                ),
+            )
+
+    def pop_logs(self, **kwargs: "Unpack[LogMatchArgs]"):
+        if caplog := self.caplog:
+            level = kwargs.get("level")
+            p_name = re.compile(kwargs.get("name", LogManager.MEROSS_LAN_LOGGER))
+            p_message = re.compile(kwargs.get("message", r".*"))
+            records = caplog.records
+            if level:
+                pop = [
+                    record
+                    for record in records
+                    if record.levelno == level
+                    and p_name.match(record.name)
+                    and p_message.match(record.message)
+                ]
+            else:
+                pop = [
+                    record
+                    for record in records
+                    if p_name.match(record.name) and p_message.match(record.message)
+                ]
+
+            for record in pop:
+                records.remove(record)
+            return pop
+        else:
+            return []
+
+    def assert_logs(self, count: int, **kwargs: "Unpack[LogMatchArgs]"):
+        logs = self.pop_logs(**kwargs)
+        assert logs and len(logs) == count, "Inconsistent logging output"
+
+    def flush_logs(self, context_tag: str):
+        if (capsys := self.capsys) and (caplog := self.caplog):
+            with capsys.disabled():
+                for ignored in self.__class__.IGNORED_LOGS:
+                    self.pop_logs(**ignored._asdict())
+                # this might be overkill since this code only runs in 'call' phase
+                phases = ("setup", "call", "teardown")
+                phase_records = {phase: caplog.get_records(phase) for phase in phases}
+                messages = []
+                for phase, records in phase_records.items():
+                    meross_lan_records = [
+                        record
+                        for record in records
+                        if record.levelno >= logging.WARNING
+                        and record.name.startswith("custom_components.meross_lan")
+                    ]
+
+                    def _pop_record(record):
+                        # eat up from caplog context (only) the records we're going
+                        # to print out so that other managers can inspect the remaining.
+                        records.remove(record)
+                        return record.message
+
+                    messages += [
+                        (phase, _pop_record(record)) for record in meross_lan_records
+                    ]
+                    phase_records[phase] = meross_lan_records
+
+                if messages:
+                    print(f"\n{self.request.node.name}: WARNINGS in {context_tag}")
+                    print(*messages, sep="\n")
+
+
+class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
+
+    if typing.TYPE_CHECKING:
+
+        class Args(TypedDict):
+            data: NotRequired[Mapping[str, Any]]
+            auto_add: NotRequired[bool]
+            auto_setup: NotRequired[bool]
+
+        hass: Final
+        config_entry: Final
+        config_entry_id: Final
+        auto_setup: Final
+
     __slots__ = (
         "hass",
         "config_entry",
@@ -356,25 +470,27 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
 
     def __init__(
         self,
-        hass: HomeAssistant,
+        request: "FixtureRequest",
+        hass: "HomeAssistant",
         unique_id: str,
-        *,
-        data: Any | None = None,
-        auto_add: bool = True,
-        auto_setup: bool = True,
+        title: str,
+        **kwargs: "Unpack[Args]",
     ) -> None:
-        super().__init__()
-        self.hass: Final = hass
-        self.config_entry: Final = MockConfigEntry(
-            domain=mlc.DOMAIN,
-            data=data,
-            version=ConfigFlow.VERSION,
-            minor_version=ConfigFlow.MINOR_VERSION,
-            unique_id=unique_id,
-        )
-        self.config_entry_id: Final = self.config_entry.entry_id
-        self.auto_setup = auto_setup
-        if auto_add:
+        super().__init__(request)
+        self.hass = hass
+        config_entry_kwargs = {
+            "domain": mlc.DOMAIN,
+            "data": kwargs.get("data"),
+            "version": ConfigFlow.VERSION,
+            "unique_id": unique_id,
+            "title": title,
+        }
+        if hac.MAJOR_VERSION >= 2024:
+            config_entry_kwargs["minor_version"] = ConfigFlow.MINOR_VERSION
+        self.config_entry = MockConfigEntry(**config_entry_kwargs)
+        self.config_entry_id = self.config_entry.entry_id
+        self.auto_setup = kwargs.get("auto_setup", True)
+        if kwargs.get("auto_add", True):
             self.config_entry.add_to_hass(hass)
 
     @property
@@ -414,42 +530,45 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager):
     async def __aexit__(self, exc_type, exc_value, traceback):
         if self.config_entry.state.recoverable:
             assert await self.async_unload()
+        self.flush_logs(self.config_entry.title)
         return None
 
 
 class MQTTHubEntryMocker(ConfigEntryMocker):
+
+    if typing.TYPE_CHECKING:
+
+        class Args(ConfigEntryMocker.Args):
+            pass
+
     def __init__(
-        self,
-        hass: HomeAssistant,
-        *,
-        data=tc.MOCK_HUB_CONFIG,
-        auto_add: bool = True,
-        auto_setup: bool = True,
+        self, request: "FixtureRequest", hass: "HomeAssistant", **kwargs: "Unpack[Args]"
     ):
-        super().__init__(
-            hass,
-            mlc.DOMAIN,
-            data=data,
-            auto_add=auto_add,
-            auto_setup=auto_setup,
-        )
+        if not "data" in kwargs:
+            kwargs["data"] = tc.MOCK_HUB_CONFIG
+        super().__init__(request, hass, mlc.DOMAIN, "MQTTHub", **kwargs)
 
 
 class ProfileEntryMocker(ConfigEntryMocker):
+
+    if typing.TYPE_CHECKING:
+
+        class Args(ConfigEntryMocker.Args):
+            pass
+
     def __init__(
-        self,
-        hass: HomeAssistant,
-        *,
-        data=tc.MOCK_PROFILE_CONFIG,
-        auto_add: bool = True,
-        auto_setup: bool = True,
+        self, request: "FixtureRequest", hass: "HomeAssistant", **kwargs: "Unpack[Args]"
     ):
+        if "data" in kwargs:
+            data = kwargs["data"]
+        else:
+            kwargs["data"] = data = tc.MOCK_PROFILE_CONFIG
         super().__init__(
+            request,
             hass,
             f"profile.{data[mc.KEY_USERID_]}",
-            data=data,
-            auto_add=auto_add,
-            auto_setup=auto_setup,
+            f"CloudProfile({data[mc.KEY_EMAIL]})",
+            **kwargs,
         )
 
 
@@ -519,7 +638,7 @@ def build_emulator_for_profile(
 
 
 def build_emulator_config_entry(
-    emulator: MerossEmulator, config_data: dict | None = None
+    emulator: MerossEmulator, config_data: "Mapping | None" = None
 ):
     """
     Builds a consistent config_entry for an emulated device with HTTP communication.
@@ -555,7 +674,7 @@ class EmulatorContext(contextlib.AbstractContextManager):
         emulator: MerossEmulator | str,
         aioclient_mock: AiohttpClientMocker,
         *,
-        frozen_time: _TimeFactory | None = None,
+        frozen_time: "_TimeFactory | None" = None,
         host: str | None = None,
     ) -> None:
         if isinstance(emulator, str):
@@ -596,7 +715,18 @@ class DeviceContext(ConfigEntryMocker):
     It also provides timefreezing
     """
 
-    time: Final[TimeMocker]
+    if typing.TYPE_CHECKING:
+
+        class Args(ConfigEntryMocker.Args):
+            time: NotRequired[TimeMocker | datetime | None]
+
+        time: Final[TimeMocker]
+
+    IGNORED_LOGS = (
+        LogManager.LogMatchTuple(
+            r"Protocol error: namespace:.*not supported in emulator",
+        ),
+    )
 
     __slots__ = (
         "emulator",
@@ -610,25 +740,31 @@ class DeviceContext(ConfigEntryMocker):
 
     def __init__(
         self,
-        hass: HomeAssistant,
+        request: "FixtureRequest",
+        hass: "HomeAssistant",
         emulator: MerossEmulator | str,
         aioclient_mock: AiohttpClientMocker,
-        *,
-        time: TimeMocker | datetime | None = None,
-        config_data: dict | None = None,
+        **kwargs: "Unpack[Args]",
     ):
         if isinstance(emulator, str):
             emulator = build_emulator(emulator)
+        kwargs["data"] = build_emulator_config_entry(
+            emulator, config_data=kwargs.get("data")
+        )
+        descriptor = emulator.descriptor
+        kwargs["auto_add"] = True
+        kwargs["auto_setup"] = False
         super().__init__(
+            request,
             hass,
             emulator.uuid,
-            data=build_emulator_config_entry(emulator, config_data=config_data),
-            auto_add=True,
-            auto_setup=False,
+            f"Device({descriptor.productname}-{descriptor.productmodel})",
+            **kwargs,
         )
         self.emulator = emulator
         self.device_id = emulator.uuid
         self._aioclient_mock = aioclient_mock
+        time = kwargs.get("time")
         if isinstance(time, TimeMocker):
             self.time = time
             self._time_mock_owned = False
@@ -830,7 +966,9 @@ class CloudApiMocker(contextlib.AbstractContextManager):
         assert len(request) == 0
         return {
             mc.KEY_APISTATUS: cloudapi.APISTATUS_NO_ERROR,
-            mc.KEY_DATA: [item.copy() for item in tc.MOCK_CLOUDAPI_DEVICE_DEVLIST],
+            mc.KEY_DATA: [
+                item.copy() for item in tc.MOCK_CLOUDAPI_DEVICE_DEVLIST.values()
+            ],
         }
 
     def _v1_device_latestversion(self, request: dict):
@@ -863,7 +1001,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
 
 
 class MQTTConnectionMocker(contextlib.AbstractContextManager):
-    def __init__(self, hass: HomeAssistant):
+    def __init__(self, hass: "HomeAssistant"):
 
         async def _async_mqtt_publish(
             _self: MQTTConnection, device_id: str, request: MerossMessage
@@ -880,16 +1018,19 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
         async def _async_identify_device(
             _self: MQTTConnection, device_id: str, key: str
         ) -> mlc.DeviceConfigType:
-            # we're expecting a query for an MSH300
-            device_info = tc.MOCK_CLOUDAPI_DEVICE_DEVLIST[1]
-            assert device_info.get(mc.KEY_UUID) == device_id
-            emulator = build_emulator_for_profile(
-                tc.MOCK_PROFILE_CONFIG,
-                model=device_info.get(mc.KEY_DEVICETYPE),
-                device_id=device_id,
-            )
-            device_config = build_emulator_config_entry(emulator)
-            return device_config
+            try:
+                device_info = tc.MOCK_CLOUDAPI_DEVICE_DEVLIST[device_id]
+                emulator = build_emulator_for_profile(
+                    tc.MOCK_PROFILE_CONFIG,
+                    model=device_info.get(mc.KEY_DEVICETYPE),
+                    device_id=device_id,
+                )
+                device_config = build_emulator_config_entry(emulator)
+                return device_config
+            except KeyError as e:
+                raise Exception(
+                    f"MQTTConnectionMocker: unknown device (uuid:{device_id})"
+                ) from e
 
         self.async_identify_device_patcher = patch.object(
             MQTTConnection,
@@ -911,15 +1052,8 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
         return None
 
 
-MqttMockPahoClient = MagicMock
-"""MagicMock for `paho.mqtt.client.Client`"""
-MqttMockHAClient = MagicMock
-"""MagicMock for `homeassistant.components.mqtt.MQTT`."""
-MqttMockHAClientGenerator = Callable[..., Coroutine[Any, Any, MqttMockHAClient]]
-
-
 class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
-    def __init__(self, hass: HomeAssistant):
+    def __init__(self, hass: "HomeAssistant"):
         self.hass = hass
         self.async_publish_patcher = patch(
             "homeassistant.components.mqtt.async_publish"
@@ -942,13 +1076,13 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
         return None
 
     async def _async_publish(
-        self, hass: HomeAssistant, topic: str, payload: str, *args, **kwargs
+        self, hass: "HomeAssistant", topic: str, payload: str, *args, **kwargs
     ):
         pass
 
 
 class MerossMQTTMocker(MQTTConnectionMocker):
-    def __init__(self, hass: HomeAssistant):
+    def __init__(self, hass: "HomeAssistant"):
         super().__init__(hass)
 
         def _safe_start(_self: MerossMQTTConnection, *args, **kwargs):

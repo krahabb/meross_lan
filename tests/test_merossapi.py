@@ -1,8 +1,8 @@
 """Test the core MerossApi class"""
 
 from time import time
+import typing
 
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
 from custom_components.meross_lan import MerossApi, const as mlc
@@ -15,9 +15,12 @@ from custom_components.meross_lan.merossclient import (
 
 from . import const as tc, helpers
 
+if typing.TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
 
 async def test_hamqtt_device_session(
-    hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker, aioclient_mock
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker, aioclient_mock
 ):
     """
     check the local broker session management handles the device transactions
@@ -26,7 +29,9 @@ async def test_hamqtt_device_session(
 
     # We need to provide a configured device so that our
     # api HAMQTTConnection doesn't spawn discoveries
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, aioclient_mock
+    ) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 

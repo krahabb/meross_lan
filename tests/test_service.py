@@ -1,8 +1,7 @@
 """Test for meross_lan.request service calls"""
 
+import typing
 from unittest.mock import ANY
-
-from homeassistant.core import HomeAssistant
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import (
@@ -13,16 +12,16 @@ from custom_components.meross_lan.merossclient import (
 
 from tests import const as tc, helpers
 
+if typing.TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
-async def test_request_on_mqtt(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker, log_exception):
+async def test_request_on_mqtt(request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker):
     """
     Test service call routed through mqtt without being forwarded to
     MerossDevice. This happens when we want to send request to
     devices not registered in HA
     """
-    log_exception.raise_on_log_exception = False # TODO: better handling
-    
-    async with helpers.MQTTHubEntryMocker(hass):
+    async with helpers.MQTTHubEntryMocker(request, hass):
         await hass.services.async_call(
             mlc.DOMAIN,
             mlc.SERVICE_REQUEST,
@@ -41,14 +40,14 @@ async def test_request_on_mqtt(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTM
 
 
 async def test_request_on_device(
-    hass: HomeAssistant,
+    request, hass: "HomeAssistant",
     hamqtt_mock: helpers.HAMQTTMocker,
     aioclient_mock,
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310, aioclient_mock) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -85,14 +84,14 @@ async def test_request_on_device(
 
 
 async def test_request_notification(
-    hass: HomeAssistant,
+    request, hass: "HomeAssistant",
     hamqtt_mock: helpers.HAMQTTMocker,
     aioclient_mock,
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
+    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310, aioclient_mock) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
         # when routing the call through a device the service data 'key' is not used

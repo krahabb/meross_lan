@@ -1,12 +1,12 @@
 """Test meross_lan config flow"""
 
+import typing
 from typing import Final
 from uuid import uuid4
 
 from homeassistant import config_entries, const as hac
 from homeassistant.components import dhcp
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigFlowResult
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 try:
@@ -36,13 +36,17 @@ except ImportError:
     discovery_flow = None
 
 
-async def _cleanup_config_entry(hass: HomeAssistant, result: ConfigFlowResult):
+if typing.TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
+
+async def _cleanup_config_entry(hass: "HomeAssistant", result: ConfigFlowResult):
     config_entry: ConfigEntry = result["result"]  # type: ignore
     assert config_entry.state == ConfigEntryState.LOADED
     await hass.config_entries.async_unload(config_entry.entry_id)
 
 
-async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
+async def test_device_config_flow(hass: "HomeAssistant", aioclient_mock):
     """
     Test standard manual device entry config flow
     """
@@ -92,7 +96,7 @@ async def test_device_config_flow(hass: HomeAssistant, aioclient_mock):
 
 
 async def test_profile_config_flow(
-    hass: HomeAssistant,
+    hass: "HomeAssistant",
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
 ):
@@ -155,7 +159,7 @@ async def test_profile_config_flow(
 
 
 async def test_device_config_flow_with_profile(
-    hass: HomeAssistant,
+    hass: "HomeAssistant",
     aioclient_mock: AiohttpClientMocker,
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
@@ -221,7 +225,7 @@ async def test_device_config_flow_with_profile(
             await hass.async_block_till_done()
 
 
-async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
+async def test_mqtt_discovery_config_flow(hass: "HomeAssistant", hamqtt_mock):
     """
     Test the initial discovery process i.e. meross_lan
     not configured yet
@@ -271,7 +275,7 @@ async def test_mqtt_discovery_config_flow(hass: HomeAssistant, hamqtt_mock):
 
 
 async def _create_dhcp_discovery_flow(
-    hass: HomeAssistant, dhcp_service_info: DhcpServiceInfo
+    hass: "HomeAssistant", dhcp_service_info: DhcpServiceInfo
 ):
     # helper to create the dhcp discovery under different HA cores discovery semantics
     if discovery_flow:
@@ -306,7 +310,7 @@ async def _create_dhcp_discovery_flow(
         )
 
 
-async def test_dhcp_discovery_config_flow(hass: HomeAssistant):
+async def test_dhcp_discovery_config_flow(hass: "HomeAssistant"):
     result = await _create_dhcp_discovery_flow(
         hass,
         DhcpServiceInfo(
@@ -319,7 +323,7 @@ async def test_dhcp_discovery_config_flow(hass: HomeAssistant):
     assert result.get("step_id") == "device"
 
 
-async def test_dhcp_ignore_config_flow(hass: HomeAssistant):
+async def test_dhcp_ignore_config_flow(hass: "HomeAssistant"):
 
     dhcp_service_info = DhcpServiceInfo(
         tc.MOCK_DEVICE_IP,
@@ -367,14 +371,14 @@ async def test_dhcp_ignore_config_flow(hass: HomeAssistant):
     """
 
 
-async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
+async def test_dhcp_renewal_config_flow(request, hass: "HomeAssistant", aioclient_mock):
     """
     When an entry is already configured, check what happens when dhcp sends
     us a new ip
     """
     device_type: Final = mc.TYPE_MTS200
     async with helpers.DeviceContext(
-        hass, device_type, aioclient_mock
+        request, hass, device_type, aioclient_mock
     ) as device_context:
         emulator = device_context.emulator
         device = await device_context.perform_coldstart()
@@ -382,7 +386,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
         # better be sure our context is consistent with expectations!
         assert device.host == str(id(emulator))
         assert device.id == device.descriptor.uuid
-
+        device_macaddress: Final = device.descriptor.macAddress
         # since we check the DHCP renewal comes form a legit device we need to setup
         # a mock responding at the solicited ip with the same device info (descriptor)
         # since dhcp config flow will check by mac address
@@ -392,7 +396,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             device_type, key=device.key, uuid=device.id
         )
         assert (
-            emulator_dhcp.descriptor.macAddress == device.descriptor.macAddress
+            emulator_dhcp.descriptor.macAddress == device_macaddress
         ), "wrong emulator clone"
         assert (
             emulator_dhcp.descriptor.uuid == device.descriptor.uuid
@@ -405,7 +409,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             result = await hass.config_entries.flow.async_init(
                 mlc.DOMAIN,
                 context={"source": config_entries.SOURCE_DHCP},
-                data=DhcpServiceInfo(DHCP_GOOD_HOST, "", device.descriptor.macAddress),
+                data=DhcpServiceInfo(DHCP_GOOD_HOST, "", device_macaddress),
             )
 
             assert result["type"] == FlowResultType.ABORT  # type: ignore
@@ -420,7 +424,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             device_type, key=device.key, uuid=BOGUS_DEVICE_ID
         )
         assert (
-            emulator_dhcp.descriptor.macAddress != device.descriptor.macAddress
+            emulator_dhcp.descriptor.macAddress != device_macaddress
         ), "wrong emulator clone"
         assert (
             emulator_dhcp.descriptor.uuid != device.descriptor.uuid
@@ -433,7 +437,7 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             result = await hass.config_entries.flow.async_init(
                 mlc.DOMAIN,
                 context={"source": config_entries.SOURCE_DHCP},
-                data=DhcpServiceInfo(DHCP_BOGUS_HOST, "", device.descriptor.macAddress),
+                data=DhcpServiceInfo(DHCP_BOGUS_HOST, "", device_macaddress),
             )
 
             assert result["type"] == FlowResultType.ABORT  # type: ignore
@@ -441,10 +445,18 @@ async def test_dhcp_renewal_config_flow(hass: HomeAssistant, aioclient_mock):
             # also check the device host got updated with MOCK_DEVICE_IP
             await hass.async_block_till_done()
             assert device.host == DHCP_GOOD_HOST, "device host was wrongly updated"
+            device_context.assert_logs(
+                1,
+                message=(
+                    r"received a DHCP update \(ip:99\.99\.99\.99 mac:00:11:22:33:44:55\) "
+                    r"but the new uuid:\S* doesn't match "
+                    r"the configured one \(uuid:\S*\)"
+                ),
+            )
 
 
 async def test_options_flow(
-    hass: HomeAssistant, aioclient_mock, hamqtt_mock, merossmqtt_mock
+    request, hass: "HomeAssistant", aioclient_mock, hamqtt_mock, merossmqtt_mock
 ):
     """
     Tests the device config entry option flow. This code could potentially use
@@ -452,7 +464,9 @@ async def test_options_flow(
     against different config options (namely: the protocol) in order to see if
     they behave as expected
     """
-    async with helpers.DeviceContext(hass, mc.TYPE_MTS200, aioclient_mock) as context:
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MTS200, aioclient_mock
+    ) as context:
         device = await context.perform_coldstart()
 
         options_flow = hass.config_entries.options
