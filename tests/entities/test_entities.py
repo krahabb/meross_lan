@@ -34,6 +34,7 @@ HUB_SUBDEVICES_ENTITIES: dict[str, MerossEntityTypesList] = {}
 UNAVAILABLE_ENTITIES = {}
 
 for entity_domain in (
+    "button",
     "calendar",
     "climate",
     "cover",
@@ -189,6 +190,7 @@ async def _async_test_entities(manager: "MerossDeviceBase"):
 
         if entity.PLATFORM not in COMPONENTS_TESTS:
             # TODO: add missing platform tests
+            helpers.LOGGER.warning("Missing testing for platform %s", entity.PLATFORM)
             continue
 
         EntityComponentTest.entity_id = entity_id = entity.entity_id

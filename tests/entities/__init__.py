@@ -51,7 +51,7 @@ class EntityComponentTest:
             service_data=service_data | {"entity_id": self.entity_id},
             blocking=True,
         )
-        assert (state := self.hass_states.get(self.entity_id))
+        assert (state := self.hass_states.get(self.entity_id)), ("missing state", self.entity_id)
         return state
 
     async def async_service_call_check(
@@ -62,7 +62,7 @@ class EntityComponentTest:
             state.state == expected_state
         ), f"service:{service} expected_state:{expected_state}"
         await self.device_context.async_poll_single()
-        assert (state := self.hass_states.get(self.entity_id))
+        assert (state := self.hass_states.get(self.entity_id)), ("missing state", self.entity_id)
         assert (
             state.state == expected_state
         ), f"service:{service} expected_state:{expected_state}"
