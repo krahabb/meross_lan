@@ -157,7 +157,7 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         self._models = models
         self._included = included
         self._count = count
-        self.polling_strategy = HubChunkedNamespaceHandler.async_poll_chunked # type: ignore
+        self.polling_strategy = HubChunkedNamespaceHandler.async_poll_chunked  # type: ignore
 
     async def async_poll_chunked(self):
         device = self.device
@@ -253,9 +253,7 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
         return DeviceType.HUB
 
     def _create_handler(self, ns: "mn.Namespace"):
-        _handler = getattr(
-            self, f"_handle_{ns.name.replace('.', '_')}", None
-        )
+        _handler = getattr(self, f"_handle_{ns.name.replace('.', '_')}", None)
         if _handler:
             return NamespaceHandler(
                 self,
@@ -423,7 +421,7 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
         id = p_digest[mc.KEY_ID]
         super().__init__(
             id,
-            config_entry_id=hub.config_entry_id,
+            config_entry=hub.config_entry,
             logger=hub,
             default_name=get_productnameuuid(model, id),
             model=model,
@@ -594,7 +592,7 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
         """
         self.p_digest = p_digest
         self._parse_online(p_digest)
-        if self._online:
+        if self.online:
             for _ in (
                 self._hub_parse(key, value)
                 for key, value in p_digest.items()
@@ -643,7 +641,7 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
         # Specialized subdevices might totally override this...
         self._parse_online(p_all.get(mc.KEY_ONLINE, {}))
 
-        if self._online:
+        if self.online:
             for _ in (
                 self._hub_parse(key, value)
                 for key, value in p_all.items()
@@ -660,7 +658,7 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
                 number.update_device_value(p_value)
 
     def _parse_battery(self, p_battery: dict):
-        if self._online:
+        if self.online:
             self.sensor_battery.update_native_value(p_battery[mc.KEY_VALUE])
 
     def _parse_exception(self, p_exception: dict):
@@ -670,10 +668,10 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
     def _parse_online(self, p_online: dict):
         if mc.KEY_STATUS in p_online:
             if p_online[mc.KEY_STATUS] == mc.STATUS_ONLINE:
-                if not self._online:
+                if not self.online:
                     self._set_online()
             else:
-                if self._online:
+                if self.online:
                     self._set_offline()
 
     def _parse_togglex(self, p_togglex: dict):
@@ -847,7 +845,7 @@ class GS559SubDevice(MerossSubDevice):
         "binary_sensor_error",
         "binary_sensor_muted",
         "sensor_status",
-        #"sensor_interConn",
+        # "sensor_interConn",
         "switch_interConn",
     )
 
@@ -856,7 +854,7 @@ class GS559SubDevice(MerossSubDevice):
         self.sensor_status = MLEnumSensor(
             self, self.id, mc.KEY_STATUS, translation_key="smoke_alarm_status"
         )
-        #self.sensor_interConn = MLEnumSensor(self, self.id, mc.KEY_INTERCONN)
+        # self.sensor_interConn = MLEnumSensor(self, self.id, mc.KEY_INTERCONN)
         self.switch_interConn = GS559MuteToggle(
             self, self.id, mc.KEY_INTERCONN, MLSwitch.DeviceClass.SWITCH
         )
@@ -875,7 +873,7 @@ class GS559SubDevice(MerossSubDevice):
         self.binary_sensor_alarm: MLBinarySensor = None  # type: ignore
         self.sensor_status: MLEnumSensor = None  # type: ignore
         self.switch_interConn: GS559MuteToggle = None  # type: ignore
-        #self.sensor_interConn: MLEnumSensor = None  # type: ignore
+        # self.sensor_interConn: MLEnumSensor = None  # type: ignore
 
     def _parse_smokeAlarm(self, p_smokealarm: dict):
         if mc.KEY_STATUS in p_smokealarm:
@@ -887,7 +885,7 @@ class GS559SubDevice(MerossSubDevice):
                 GS559SubDevice.STATUS_MAP.get(value, value)
             )
         if mc.KEY_INTERCONN in p_smokealarm:
-            #self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
+            # self.sensor_interConn.update_native_value(p_smokealarm[mc.KEY_INTERCONN])
             self.switch_interConn.update_onoff(p_smokealarm[mc.KEY_INTERCONN])
 
 

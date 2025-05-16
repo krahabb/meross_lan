@@ -7,7 +7,6 @@ from json import JSONDecodeError
 from time import time
 import typing
 from uuid import uuid4
-import weakref
 import zoneinfo
 
 import aiohttp
@@ -17,6 +16,7 @@ from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
 from . import const as mlc
+from .button import MLPersistentButton
 
 # only import those 'often used' symbols to get a tiny bit of speed improvement
 from .const import (
@@ -29,7 +29,6 @@ from .const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
 )
-from .button import MLPersistentButton
 from .helpers import (
     ConfigEntriesHelper,
     async_import_module,
@@ -58,7 +57,8 @@ from .update import MLUpdate
 
 if typing.TYPE_CHECKING:
     from types import CoroutineType
-    from typing import Any, Callable, Iterable
+    from typing import Any, Callable, Final, Iterable
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
@@ -79,7 +79,9 @@ if typing.TYPE_CHECKING:
     DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
     DigestInitFunc = Callable[["MerossDevice", typing.Any], DigestInitReturnType]
     NamespaceInitFunc = Callable[["MerossDevice"], None]
-    AsyncRequestFunc = Callable[[str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse | None]]
+    AsyncRequestFunc = Callable[
+        [str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse | None]
+    ]
 
 
 # when tracing we enumerate appliance abilities to get insights on payload structures
@@ -136,18 +138,24 @@ class MerossDeviceBase(EntityManager):
     giving common behaviors like device_registry interface
     """
 
-    deviceentry_id: dict[str, set[tuple[str, str]]]
+    if typing.TYPE_CHECKING:
+        # override some nullable since we're pretty sure they're none
+        config_entry: ConfigEntry
+        deviceentry_id: EntityManager.DeviceEntryIdType
+
+        online: Final[bool]
+        device_registry_entry: Final[dr.DeviceEntry | None]
 
     __slots__ = (
-        "_online",
-        "_device_registry_entry",
+        "online",
+        "device_registry_entry",
     )
 
     def __init__(
         self,
         id: str,
         *,
-        config_entry_id: str,
+        config_entry: "ConfigEntry",
         default_name: str,
         model: str,
         hw_version: str | None = None,
@@ -158,25 +166,23 @@ class MerossDeviceBase(EntityManager):
     ):
         super().__init__(
             id,
-            config_entry_id=config_entry_id,
+            config_entry=config_entry,
             deviceentry_id={"identifiers": {(mlc.DOMAIN, id)}},
             **kwargs,
         )
-        self._online = False
-        self._device_registry_entry = None
+        self.online = False
+        self.device_registry_entry = None
         with self.exception_warning("DeviceRegistry.async_get_or_create"):
-            self._device_registry_entry = weakref.ref(
-                self.get_device_registry().async_get_or_create(
-                    config_entry_id=self.config_entry_id,
-                    connections=connections,
-                    manufacturer=mc.MANUFACTURER,
-                    name=default_name,
-                    model=model,
-                    hw_version=hw_version,
-                    sw_version=sw_version,
-                    via_device=via_device,
-                    **self.deviceentry_id,  # type: ignore
-                )
+            self.device_registry_entry = self.get_device_registry().async_get_or_create(
+                config_entry_id=config_entry.entry_id,
+                connections=connections,
+                manufacturer=mc.MANUFACTURER,
+                name=default_name,
+                model=model,
+                hw_version=hw_version,
+                sw_version=sw_version,
+                via_device=via_device,
+                **self.deviceentry_id,  # type: ignore
             )
 
     # interface: EntityManager
@@ -193,24 +199,7 @@ class MerossDeviceBase(EntityManager):
             )
         return self._get_internal_name()
 
-    @property
-    def online(self):
-        return self._online
-
     # interface: self
-    @property
-    def device_registry_entry(self):
-        _device_registry_entry = (
-            self._device_registry_entry and self._device_registry_entry()
-        )
-        if _device_registry_entry is None:
-            _device_registry_entry = self.get_device_registry().async_get_device(
-                **self.deviceentry_id
-            )
-            if _device_registry_entry:
-                self._device_registry_entry = weakref.ref(_device_registry_entry)
-        return _device_registry_entry
-
     async def async_request(
         self,
         namespace: str,
@@ -242,13 +231,13 @@ class MerossDeviceBase(EntityManager):
 
     def _set_online(self):
         self.log(self.DEBUG, "Back online!")
-        self._online = True
+        self.online = True  # type: ignore
         for entity in self.entities.values():
             entity.set_available()
 
     def _set_offline(self):
         self.log(self.DEBUG, "Going offline!")
-        self._online = False
+        self.online = False  # type: ignore
         for entity in self.entities.values():
             entity.set_unavailable()
 
@@ -271,6 +260,51 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     Generic protocol handler class managing the physical device stack/state
     """
 
+    if typing.TYPE_CHECKING:
+        DIGEST_INIT: Final[dict[str, Any]]
+        NAMESPACE_INIT: Final[dict[str, Any]]
+
+        # these are set from ConfigEntry
+        config: mlc.DeviceConfigType
+        polling_period: int
+        _polling_delay: int
+        conf_protocol: str
+        pref_protocol: str
+        curr_protocol: str
+        # other default property values
+        tz: tzinfo
+
+        device_timestamp: int
+
+        _profile: ApiProfile | None
+        _mqtt_connection: MQTTConnection | None
+        _mqtt_connected: MQTTConnection | None
+        _mqtt_publish: MQTTConnection | None
+        _mqtt_active: MQTTConnection | None
+        _mqtt_lastrequest: float
+        _mqtt_lastresponse: float
+        _http: MerossHttpClient | None
+        _http_active: MerossHttpClient | None
+        _http_lastrequest: float
+        _http_lastresponse: float
+        namespace_handlers: dict[str, NamespaceHandler]
+        namespace_pushes: dict[str, dict]
+        digest_handlers: dict[str, DigestParseFunc]
+        digest_pollers: set[NamespaceHandler]
+        _lazypoll_requests: list[NamespaceHandler]
+        _polling_epoch: float
+        _polling_callback_unsub: asyncio.TimerHandle | None
+        _polling_callback_shutdown: asyncio.Future | None
+        _queued_cloudpoll_requests: int
+        multiple_max: int
+        _timezone_next_check: float
+        _trace_ability_callback_unsub: asyncio.TimerHandle | None
+        _diagnostics_build: bool
+
+        # entities
+        sensor_protocol: ProtocolSensor
+        update_firmware: MLUpdate | None
+
     @staticmethod
     def digest_parse_empty(digest: dict | list):
         pass
@@ -285,7 +319,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     def namespace_init_empty(device: "MerossDevice"):
         pass
 
-    DIGEST_INIT: typing.Final[dict[str, typing.Any]] = {
+    DIGEST_INIT = {
         mc.KEY_FAN: ".fan",
         mc.KEY_LIGHT: ".light",
         mc.KEY_TIMER: digest_init_empty,
@@ -313,7 +347,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     init/parsing will not harm.
     """
 
-    NAMESPACE_INIT: typing.Final[dict[str, typing.Any]] = {
+    NAMESPACE_INIT = {
         mn.Appliance_Config_OverTemp.name: (".devices.mss", "OverTempEnableSwitch"),
         mn.Appliance_Control_ConsumptionConfig.name: (
             ".devices.mss",
@@ -373,19 +407,6 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         MLUpdate.PLATFORM: None,
     }
 
-    # these are set from ConfigEntry
-    config: mlc.DeviceConfigType
-    polling_period: int
-    _polling_delay: int
-    conf_protocol: str
-    pref_protocol: str
-    curr_protocol: str
-    # other default property values
-    tz: tzinfo
-    device_timestamp: int
-    sensor_protocol: ProtocolSensor
-    update_firmware: MLUpdate | None
-
     __slots__ = (
         "descriptor",
         "tz",
@@ -395,7 +416,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         "pref_protocol",
         "curr_protocol",
         "needsave",
-        "_entry_update_unsub",
+        "_async_entry_update_unsub",
         "device_debug",
         "device_info",
         "device_timestamp",
@@ -447,7 +468,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.descriptor = descriptor
         self.tz = UTC
         self.needsave = False
-        self._entry_update_unsub = None
+        self._async_entry_update_unsub = None
         self.curr_protocol = CONF_PROTOCOL_AUTO
         self.device_debug = None
         self.device_info = None
@@ -465,22 +486,22 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.lastrequest = 0.0
         self.lastresponse = 0.0
         self._topic_response = mc.MANUFACTURER
-        self._profile: ApiProfile | None = None
-        self._mqtt_connection: "MQTTConnection | None" = None
-        self._mqtt_connected: "MQTTConnection | None" = None
-        self._mqtt_publish: "MQTTConnection | None" = None
-        self._mqtt_active: "MQTTConnection | None" = None
+        self._profile = None
+        self._mqtt_connection = None
+        self._mqtt_connected = None
+        self._mqtt_publish = None
+        self._mqtt_active = None
         self._mqtt_lastrequest = 0
         self._mqtt_lastresponse = 0
-        self._http: "MerossHttpClient | None" = None
-        self._http_active: "MerossHttpClient | None" = None
+        self._http = None
+        self._http_active = None
         self._http_lastrequest = 0
         self._http_lastresponse = 0
-        self.namespace_handlers: dict[str, "NamespaceHandler"] = {}
-        self.namespace_pushes: dict[str, dict] = {}
-        self.digest_handlers: dict[str, "DigestParseFunc"] = {}
-        self.digest_pollers: set["NamespaceHandler"] = set()
-        self._lazypoll_requests: list["NamespaceHandler"] = []
+        self.namespace_handlers = {}
+        self.namespace_pushes = {}
+        self.digest_handlers = {}
+        self.digest_pollers = set()
+        self._lazypoll_requests = []
         NamespaceHandler(self, mn.Appliance_System_All)
         self._polling_epoch = 0.0  # when 0 we're not in the polling callback loop
         self._polling_callback_unsub = None
@@ -594,7 +615,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         _module_path = MerossDevice.DIGEST_INIT.get(
                             key_digest, f".devices.{key_digest}"
                         )
-                        digest_init_func: DigestInitFunc = getattr(
+                        digest_init_func: "DigestInitFunc" = getattr(
                             await async_import_module(_module_path),
                             f"digest_init_{key_digest}",
                         )
@@ -652,7 +673,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         # config_entry update might come from DHCP or OptionsFlowHandler address update
         # so we'll eventually retry querying the device
-        if not self._online:
+        if not self.online:
             self.request(mn.Appliance_System_All.request_get)
 
     async def async_create_diagnostic_entities(self):
@@ -684,18 +705,20 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self.trace(epoch, descr.all, mn.Appliance_System_All.name)
         self.trace(epoch, descr.ability, mn.Appliance_System_Ability.name)
 
-    def trace_close(self):
+    def trace_close(
+        self, exception: Exception | None = None, error_context: str | None = None
+    ):
         if self._trace_ability_callback_unsub:
             self._trace_ability_callback_unsub.cancel()
             self._trace_ability_callback_unsub = None
-        super().trace_close()
+        super().trace_close(exception, error_context)
 
     # interface: MerossDeviceBase
     async def async_shutdown(self):
         remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
-        if self._entry_update_unsub:
-            self._entry_update_unsub.cancel()
-            self._entry_update_unsub = None
+        if self._async_entry_update_unsub:
+            self._async_entry_update_unsub.cancel()
+            self._async_entry_update_unsub = None
         # disconnect transports first so that any pending request
         # is invalidated and this shortens the eventual polling loop
         if self._profile:
@@ -914,9 +937,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         """
         Schedule the ConfigEntry update due to self.descriptor changing.
         """
-        if self._entry_update_unsub:
-            self._entry_update_unsub.cancel()
-        self._entry_update_unsub = self.schedule_async_callback(
+        if self._async_entry_update_unsub:
+            self._async_entry_update_unsub.cancel()
+        self._async_entry_update_unsub = self.schedule_async_callback(
             5,
             self._async_entry_update,
             query_abilities,
@@ -934,26 +957,24 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         This is in order to detect 'abilities' changes even on the OptionFlow
         execution which independently queries the device itself.
         """
-        self._entry_update_unsub = None
+        self._async_entry_update_unsub = None
         self.needsave = False
 
         with self.exception_warning("_async_entry_update"):
-            entries = self.hass.config_entries
-            if entry := entries.async_get_entry(self.config_entry_id):
-                data = dict(entry.data)
-                data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
-                data[CONF_PAYLOAD][mc.KEY_ALL] = self.descriptor.all
-                if query_abilities and (
-                    response := await self.async_request(
-                        *mn.Appliance_System_Ability.request_default
-                    )
-                ):
-                    # fw update or whatever might have modified the device abilities.
-                    # we refresh the abilities list before saving the new config_entry
-                    data[CONF_PAYLOAD][mc.KEY_ABILITY] = response[mc.KEY_PAYLOAD][
-                        mc.KEY_ABILITY
-                    ]
-                entries.async_update_entry(entry, data=data)
+            data = dict(self.config_entry.data)
+            data[mlc.CONF_TIMESTAMP] = time()  # force ConfigEntry update..
+            data[CONF_PAYLOAD][mc.KEY_ALL] = self.descriptor.all
+            if query_abilities and (
+                response := await self.async_request(
+                    *mn.Appliance_System_Ability.request_default
+                )
+            ):
+                # fw update or whatever might have modified the device abilities.
+                # we refresh the abilities list before saving the new config_entry
+                data[CONF_PAYLOAD][mc.KEY_ABILITY] = response[mc.KEY_PAYLOAD][
+                    mc.KEY_ABILITY
+                ]
+            self.hass.config_entries.async_update_entry(self.config_entry, data=data)
 
         # we also take the time to sync our tz to the device timezone
         tzname = self.descriptor.timezone
@@ -1186,7 +1207,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 # msl bulb timeouts completely on MQTT, so the response to our mqtt requests
                 # is None again. At this point, if the device is still online we're
                 # trying a last resort issue of single requests
-                if self._online:
+                if self.online:
                     self.log(
                         self.DEBUG,
                         "Appliance.Control.Multiple failed with no response: requests=%d expected size=%d",
@@ -1206,7 +1227,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     )
                     for request in multiple_requests:
                         await self.async_request(*request)
-                        if not self._online:
+                        if not self.online:
                             break
                 return
 
@@ -1261,7 +1282,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 )
                 for request in multiple_requests:
                     await self.async_request(*request)
-                    if not self._online:
+                    if not self.online:
                         break
                 return
 
@@ -1381,7 +1402,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 exception.__class__.__name__,
                 str(exception),
             )
-            if not self._online:
+            if not self.online:
                 return None
 
             if namespace is mn.Appliance_System_All.name:
@@ -1517,7 +1538,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         ]:
             if handler.polling_strategy:
                 await handler.polling_strategy(handler)
-                if not self._online or self._polling_callback_shutdown:
+                if not self.online or self._polling_callback_shutdown:
                     break  # do not return: do the flush first!
 
         # needed even if offline: it takes care of resetting the ns_multiple state
@@ -1527,11 +1548,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # when create_diagnostic_entities is True, after onlining we'll dynamically
         # scan the abilities to look for 'unknown' namespaces (kind of like tracing)
         # and try to build diagnostic entitities out of that
-        if self._diagnostics_build and self._online and not self._polling_callback_shutdown:
+        if (
+            self._diagnostics_build
+            and self.online
+            and not self._polling_callback_shutdown
+        ):
             self.log(self.DEBUG, "Diagnostic scan begin")
             try:
                 abilities = iter(self.descriptor.ability)
-                while self._online and not self._polling_callback_shutdown:
+                while self.online and not self._polling_callback_shutdown:
                     ability = next(abilities)
                     if (ability in TRACE_ABILITY_EXCLUDE) or (
                         (handler := self.namespace_handlers.get(ability))
@@ -1557,7 +1582,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # When last request(s) somewhat failed we'll probe NS_ALL before stating it is really
             # unreachable. This kind of probing is the same done when the device is (definitely)
             # offline.
-            if self._online and (
+            if self.online and (
                 (self.lastresponse > self.lastrequest)
                 or ((epoch - self.lastrequest) < (self.polling_period - 2))
             ):
@@ -1627,7 +1652,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                         ns_all_response = await self.async_http_request(
                             *ns_all_handler.polling_request
                         )
-                    if self._mqtt_publish and not self._online:
+                    if self._mqtt_publish and not self.online:
                         ns_all_response = await self.async_mqtt_request(
                             *ns_all_handler.polling_request
                         )
@@ -1649,7 +1674,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     )
                     ns_all_handler.polling_response_size = len(ns_all_response.json())
                     await self._async_request_updates(ns_all_handler.ns.name)
-                elif self._online:
+                elif self.online:
                     self._set_offline()
                 else:
                     if self._polling_delay < PARAM_HEARTBEAT_PERIOD:
@@ -1696,7 +1721,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._trace_or_log(epoch, message, CONF_PROTOCOL_MQTT, self.TRACE_RX)
         if not self._mqtt_active:
             self._mqtt_active = self._mqtt_connected
-            if self._online:
+            if self.online:
                 self.sensor_protocol.update_attr_active(ProtocolSensor.ATTR_MQTT)
         if self.curr_protocol is not CONF_PROTOCOL_MQTT:
             if (self.pref_protocol is CONF_PROTOCOL_MQTT) or (not self._http_active):
@@ -1739,7 +1764,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._mqtt_connected = _mqtt_connection
         if _mqtt_connection.profile.allow_mqtt_publish:
             self._mqtt_publish = _mqtt_connection
-            if not self._online and self._polling_callback_unsub:
+            if not self.online and self._polling_callback_unsub:
                 # reschedule immediately
                 self._polling_callback_unsub.cancel()
                 self._polling_callback_unsub = self.schedule_async_callback(
@@ -1767,7 +1792,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self._switch_protocol(CONF_PROTOCOL_HTTP)
                 return
             # conf_protocol should be CONF_PROTOCOL_MQTT:
-            elif self._online:
+            elif self.online:
                 self._set_offline()
                 return
         # run this at the end so it will not double flush
@@ -1899,7 +1924,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     str(self.loggable_dict(header)),
                 )
 
-        if not self._online:
+        if not self.online:
             self._set_online()
             self._polling_delay = self.polling_period
             # retrigger the polling loop in case it is scheduled/pending.
@@ -2314,7 +2339,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             protocol,
         )
         self.curr_protocol = protocol
-        if self._online:
+        if self.online:
             self.sensor_protocol.set_available()
 
     def _update_config(self):
@@ -2371,7 +2396,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self.id,
                 timeout=900,
             )
-            if self._online:
+            if self.online:
                 self._set_offline()
             create_issue(
                 mlc.ISSUE_DEVICE_ID_MISMATCH,
@@ -2449,7 +2474,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             await self._async_poll()
             try:
                 abilities = iter(descr.ability)
-                while self._online and self.is_tracing:
+                while self.online and self.is_tracing:
                     ability = next(abilities)
                     if ability not in TRACE_ABILITY_EXCLUDE:
                         await self.get_handler_by_name(ability).async_trace(
@@ -2477,7 +2502,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             # in device init, this check will prevent iterating
             # at least until the device fully initialize through
             # self.start()
-            if self._polling_callback_unsub and self._online:
+            if self._polling_callback_unsub and self.online:
                 while (ability := next(abilities_iterator)) in TRACE_ABILITY_EXCLUDE:
                     continue
                 self.log(self.DEBUG, "Tracing %s ability", ability)
@@ -2562,4 +2587,4 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     async def _async_button_reload_press(self):
         """Reload the config_entry."""
-        ConfigEntriesHelper(self.hass).schedule_reload(self.config_entry_id)
+        ConfigEntriesHelper(self.hass).schedule_reload(self.config_entry.entry_id)

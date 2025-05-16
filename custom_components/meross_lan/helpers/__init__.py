@@ -1,5 +1,5 @@
 """
-    Helpers!
+Helpers!
 """
 
 import abc
@@ -38,7 +38,7 @@ from .. import const as mlc
 if typing.TYPE_CHECKING:
     from datetime import tzinfo
     import ssl
-    from typing import Callable, Coroutine
+    from typing import Any, Callable, ClassVar, Coroutine, Final
 
     from homeassistant.core import HomeAssistant
 
@@ -304,6 +304,12 @@ class Loggable(abc.ABC):
     intercept log messages.
     """
 
+    if typing.TYPE_CHECKING:
+        hass: ClassVar[HomeAssistant]
+        api: ClassVar[MerossApi]
+        id: Final[Any]
+        logger: "Loggable | logging.Logger"
+
     hac = hac
 
     VERBOSE = mlc.CONF_LOGGING_VERBOSE
@@ -313,9 +319,9 @@ class Loggable(abc.ABC):
     CRITICAL = mlc.CONF_LOGGING_CRITICAL
 
     # hass, api: set when initializing MerossApi
-    hass: typing.ClassVar["HomeAssistant"] = None  # type: ignore
+    hass = None  # type: ignore
     """Cached HomeAssistant instance (Boom!)"""
-    api: typing.ClassVar["MerossApi"] = None  # type: ignore
+    api = None  # type: ignore
     """Cached MerossApi instance (Boom!)"""
 
     @staticmethod
@@ -338,7 +344,7 @@ class Loggable(abc.ABC):
         *,
         logger: "Loggable | logging.Logger" = LOGGER,
     ):
-        self.id: typing.Final = id
+        self.id = id
         self.logger = logger
         self.configure_logger()
         self.log(self.DEBUG, "init")

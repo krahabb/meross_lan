@@ -5,6 +5,7 @@ import os
 from time import localtime, strftime, time
 import typing
 
+from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -38,9 +39,10 @@ from .obfuscate import (
 if typing.TYPE_CHECKING:
     import asyncio
     import io
+    from typing import Callable, ClassVar, Coroutine, Final
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 
     from ..meross_device import MerossDevice
     from ..meross_entity import MerossEntity
@@ -67,10 +69,20 @@ class EntityManager(Loggable):
     an isolation level between MerossSubDevice and a ConfigEntry
     """
 
+    if typing.TYPE_CHECKING:
+
+        DeviceEntryIdType = dict[str, set[tuple[str, str]]]
+
+        config_entry: ConfigEntry | None
+        deviceentry_id: DeviceEntryIdType | None
+        entities: Final[dict[object, MerossEntity]]
+        state: ManagerState
+        _tasks: set[asyncio.Future]
+
     # slots for ConfigEntryManager are defined here since we would have some
     # multiple inheritance conflicts in MerossDevice
     __slots__ = (
-        "config_entry_id",
+        "config_entry",
         "deviceentry_id",
         "entities",
         "platforms",
@@ -91,18 +103,15 @@ class EntityManager(Loggable):
         self,
         id: str,
         *,
-        config_entry_id: str,
-        deviceentry_id: dict[str, set[tuple[str, str]]] | None = None,
+        config_entry: "ConfigEntry | None",
+        deviceentry_id: "DeviceEntryIdType | None" = None,
         **kwargs,
     ):
-        self.config_entry_id = config_entry_id
+        self.config_entry = config_entry
         self.deviceentry_id = deviceentry_id
-        # This is a collection of all of the instanced entities
-        # they're generally built here during inherited __init__ and will be registered
-        # in platforms(s) async_setup_entry with their corresponding platform
-        self.entities: typing.Final[dict[object, "MerossEntity"]] = {}
+        self.entities = {}
         self.state = ManagerState.INIT
-        self._tasks: set[asyncio.Future] = set()
+        self._tasks = set()
         super().__init__(id, **kwargs)
 
     async def async_shutdown(self):
@@ -136,7 +145,8 @@ class EntityManager(Loggable):
 
     @property
     def name(self) -> str:
-        return self.logtag
+        config_entry = self.config_entry
+        return config_entry.title if config_entry else self.logtag
 
     @property
     def online(self) -> bool:
@@ -159,7 +169,7 @@ class EntityManager(Loggable):
         return f"{self.id}_{entity.id}"
 
     def schedule_async_callback(
-        self, delay: float, target: "typing.Callable[..., typing.Coroutine]", *args
+        self, delay: float, target: "Callable[..., Coroutine]", *args
     ) -> "asyncio.TimerHandle":
         @callback
         def _callback(_target, *_args):
@@ -168,14 +178,14 @@ class EntityManager(Loggable):
         return self.hass.loop.call_later(delay, _callback, target, *args)
 
     def schedule_callback(
-        self, delay: float, target: "typing.Callable", *args
+        self, delay: float, target: "Callable", *args
     ) -> "asyncio.TimerHandle":
         return self.hass.loop.call_later(delay, target, *args)
 
     @callback
     def async_create_task(
         self,
-        target: typing.Coroutine,
+        target: "Coroutine",
         name: str,
         eager_start: bool = True,
     ) -> "asyncio.Task":
@@ -201,15 +211,23 @@ class ConfigEntryManager(EntityManager):
     and manages the relation(s) with the ConfigEntry (config, life-cycle)
     """
 
+    if typing.TYPE_CHECKING:
+        DEFAULT_PLATFORMS: ClassVar[dict[str, Callable | None]]
+        key: str
+        logger: logging.Logger
+        _trace_file: io.TextIOWrapper | None
+        _trace_future: asyncio.Future | None
+        _trace_data: list | None
+        _unsub_trace_endtime: asyncio.TimerHandle | None
+        _unsub_entry_reload: asyncio.TimerHandle | None
+        _unsub_entry_update_listener: CALLBACK_TYPE | None
+
     TRACE_RX = "RX"
     TRACE_TX = "TX"
 
-    DEFAULT_PLATFORMS: typing.ClassVar[dict[str, typing.Callable | None]] = {}
+    DEFAULT_PLATFORMS = {}
     """Defined at the class level to preset a list of domains for entities
     which could be dynamically added after ConfigEntry loading."""
-
-    key: str
-    logger: logging.Logger
 
     def __init__(
         self,
@@ -218,14 +236,12 @@ class ConfigEntryManager(EntityManager):
         **kwargs,
     ):
         if config_entry:
-            config_entry_id = config_entry.entry_id
             self.config = config = config_entry.data
             self.key = config.get(CONF_KEY) or ""
             self.obfuscate = config.get(CONF_OBFUSCATE, True)
         else:
             # this is the MerossApi: it will be better initialized when
             # the ConfigEntry is loaded
-            config_entry_id = ""
             self.config = {}
             self.key = ""
             self.obfuscate = True
@@ -236,13 +252,13 @@ class ConfigEntryManager(EntityManager):
         # during the corresponding platform async_setup_entry so to be able
         # to dynamically add more entities should they 'pop-up' (Hub only?)
         self.platforms = self.DEFAULT_PLATFORMS.copy()
-        self._trace_file: "io.TextIOWrapper | None" = None
-        self._trace_future: "asyncio.Future | None" = None
-        self._trace_data: list | None = None
-        self._unsub_trace_endtime: "asyncio.TimerHandle | None" = None
+        self._trace_file = None
+        self._trace_future = None
+        self._trace_data = None
+        self._unsub_trace_endtime = None
         self._unsub_entry_reload = None
         self._unsub_entry_update_listener = None
-        super().__init__(id, config_entry_id=config_entry_id, **kwargs)
+        super().__init__(id, config_entry=config_entry, **kwargs)
 
     async def async_shutdown(self):
         """
@@ -297,12 +313,14 @@ class ConfigEntryManager(EntityManager):
     ):
         assert self.state is ManagerState.INIT
         assert config_entry.entry_id not in ApiProfile.managers
-        assert self.config_entry_id == config_entry.entry_id
-        ApiProfile.managers[self.config_entry_id] = self
+        assert self.config_entry == config_entry
+        ApiProfile.managers[config_entry.entry_id] = self
         self.state = ManagerState.LOADING
         # open the trace before adding the entities
         # so we could catch logs in this phase too
-        state = ApiProfile.managers_transient_state.setdefault(self.config_entry_id, {})
+        state = ApiProfile.managers_transient_state.setdefault(
+            config_entry.entry_id, {}
+        )
         if state.pop(CONF_TRACE, None):
             await self.async_trace_open()
 
@@ -330,7 +348,7 @@ class ConfigEntryManager(EntityManager):
         self.config = {}
         await self.async_shutdown()
         self.state = ManagerState.INIT
-        ApiProfile.managers.pop(self.config_entry_id)
+        ApiProfile.managers.pop(config_entry.entry_id)
         return True
 
     def schedule_entry_reload(self, delay: float = 0):
@@ -341,10 +359,11 @@ class ConfigEntryManager(EntityManager):
         """
         if self._unsub_entry_reload:
             self._unsub_entry_reload.cancel()
+        assert self.config_entry
         self._unsub_entry_reload = self.schedule_callback(
             delay,
             ConfigEntriesHelper(self.hass).schedule_reload,
-            self.config_entry_id,
+            self.config_entry.entry_id,
         )
 
     async def entry_update_listener(
@@ -430,7 +449,7 @@ class ConfigEntryManager(EntityManager):
                 return open(
                     os.path.join(
                         tracedir,
-                        f"{strftime('%Y-%m-%d_%H-%M-%S', localtime(epoch))}_{self.config_entry_id}.csv",
+                        f"{strftime('%Y-%m-%d_%H-%M-%S', localtime(epoch))}_{self.logtag}.csv",
                     ),
                     mode="w",
                     encoding="utf8",
@@ -448,9 +467,15 @@ class ConfigEntryManager(EntityManager):
                 _trace_close_callback,
             )
             self._trace_opened(epoch)
+            pn.async_create(
+                self.hass,
+                f"Device: {self.name}\nFile: {self._trace_file.name}",  # type: ignore
+                "meross_lan tracing started",
+                f"{DOMAIN}.{self.id}.tracing",
+            )
+
         except Exception as exception:
-            self.trace_close()
-            self.log_exception(self.WARNING, exception, "creating trace file")
+            self.trace_close(exception, "creating file")
 
     def _trace_opened(self, epoch: float):
         """
@@ -459,14 +484,21 @@ class ConfigEntryManager(EntityManager):
         """
         pass
 
-    def trace_close(self):
+    def trace_close(
+        self, exception: Exception | None = None, error_context: str | None = None
+    ):
+        notify_message = "Data not available"
         if self._trace_file:
             try:
+                notify_message = f"Data available in {self._trace_file.name}"
                 self._trace_file.close()
-            except Exception as exception:
-                self.log_exception(self.WARNING, exception, "closing trace file")
+            except Exception as e:
+                if not exception:
+                    exception = e
+                    error_context = "closing file"
             self._trace_file = None
             self.log(self.DEBUG, "Tracing end")
+
         if self._unsub_trace_endtime:
             self._unsub_trace_endtime.cancel()
             self._unsub_trace_endtime = None
@@ -474,6 +506,20 @@ class ConfigEntryManager(EntityManager):
             self._trace_future.set_result(self._trace_data)
             self._trace_future = None
         self._trace_data = None
+        if exception:
+            self.log_exception(
+                self.WARNING, exception, "tracing operation (%s)", error_context
+            )
+            notify_title = "Tracing error"
+            notify_message = f"{exception} in {error_context}\n{notify_message}"
+        else:
+            notify_title = "Tracing terminated"
+        pn.async_create(
+            self.hass,
+            f"Device: {self.name}\n{notify_message}",
+            notify_title,
+            f"{DOMAIN}.{self.id}.tracing",
+        )
 
     def trace(
         self,
@@ -504,8 +550,7 @@ class ConfigEntryManager(EntityManager):
                     self.trace_close()
 
         except Exception as exception:
-            self.trace_close()
-            self.log_exception(self.WARNING, exception, "appending trace data")
+            self.trace_close(exception, "appending data")
 
     def trace_log(
         self,
@@ -529,8 +574,7 @@ class ConfigEntryManager(EntityManager):
                     self.trace_close()
 
         except Exception as exception:
-            self.trace_close()
-            self.log_exception(self.WARNING, exception, "appending trace log")
+            self.trace_close(exception, "appending log")
 
     def _cleanup_subscriptions(self):
         if self._unsub_entry_update_listener:
