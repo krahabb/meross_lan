@@ -120,6 +120,12 @@ class HubNamespaceHandler(NamespaceHandler):
                             mn.Appliance_System_All.name
                         ].polling_epoch_next = 0.0
                     subdevices_parsed.add(subdevice_id)
+            except TypeError:
+                # This could happen when the main payload is not a list of subdevices
+                # and might indicate this namespace is likely devoted to general hub
+                # commands/info (something like Appliance.Hub.*)
+                self.handler = self._handle_undefined
+                self._handle_undefined(header, payload)
             except Exception as exception:
                 self.handle_exception(exception, "_handle_subdevice", p_subdevice)
 
@@ -247,11 +253,14 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
         return DeviceType.HUB
 
     def _create_handler(self, ns: "mn.Namespace"):
-        if ns is mn.Appliance_Hub_SubdeviceList:
+        _handler = getattr(
+            self, f"_handle_{ns.name.replace('.', '_')}", None
+        )
+        if _handler:
             return NamespaceHandler(
                 self,
                 ns,
-                handler=self._handle_Appliance_Hub_SubdeviceList,
+                handler=_handler,
             )
         elif ns.is_hub or ns.is_sensor:
             return HubNamespaceHandler(self, ns)
