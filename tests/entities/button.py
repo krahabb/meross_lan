@@ -1,8 +1,8 @@
 from homeassistant.components import button as habc
 from homeassistant.util import dt as dt_util
 
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 from custom_components.meross_lan.button import MLButton, MLPersistentButton
+from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 
 from tests.entities import EntityComponentTest
 

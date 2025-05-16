@@ -416,33 +416,33 @@ class LogManager:
 
     def flush_logs(self, context_tag: str):
         if (capsys := self.capsys) and (caplog := self.caplog):
-            with capsys.disabled():
-                for ignored in self.__class__.IGNORED_LOGS:
-                    self.pop_logs(**ignored._asdict())
-                # this might be overkill since this code only runs in 'call' phase
-                phases = ("setup", "call", "teardown")
-                phase_records = {phase: caplog.get_records(phase) for phase in phases}
-                messages = []
-                for phase, records in phase_records.items():
-                    meross_lan_records = [
-                        record
-                        for record in records
-                        if record.levelno >= logging.WARNING
-                        and record.name.startswith("custom_components.meross_lan")
-                    ]
+            for ignored in self.__class__.IGNORED_LOGS:
+                self.pop_logs(**ignored._asdict())
+            # this might be overkill since this code only runs in 'call' phase
+            phases = ("setup", "call", "teardown")
+            phase_records = {phase: caplog.get_records(phase) for phase in phases}
+            messages = []
+            for phase, records in phase_records.items():
+                meross_lan_records = [
+                    record
+                    for record in records
+                    if record.levelno >= logging.WARNING
+                    and record.name.startswith("custom_components.meross_lan")
+                ]
 
-                    def _pop_record(record):
-                        # eat up from caplog context (only) the records we're going
-                        # to print out so that other managers can inspect the remaining.
-                        records.remove(record)
-                        return record.message
+                def _pop_record(record):
+                    # eat up from caplog context (only) the records we're going
+                    # to print out so that other managers can inspect the remaining.
+                    records.remove(record)
+                    return record.message
 
-                    messages += [
-                        (phase, _pop_record(record)) for record in meross_lan_records
-                    ]
-                    phase_records[phase] = meross_lan_records
+                messages += [
+                    (phase, _pop_record(record)) for record in meross_lan_records
+                ]
+                phase_records[phase] = meross_lan_records
 
-                if messages:
+            if messages:
+                with capsys.disabled():
                     print(f"\n{self.request.node.name}: WARNINGS in {context_tag}")
                     print(*messages, sep="\n")
 
@@ -870,20 +870,12 @@ class CloudApiMocker(contextlib.AbstractContextManager):
 
     def __init__(self, aioclient_mock: AiohttpClientMocker, online: bool = True):
         self.aioclient_mock = aioclient_mock
-        self._online = online
+        self.online = online
         self.api_calls: dict[str, int] = {}
         aioclient_mock.post(
             re.compile(r"https://iot\.meross\.com"),
             side_effect=self._async_handle,
         )
-
-    @property
-    def online(self):
-        return self._online
-
-    @online.setter
-    def online(self, value: bool):
-        self._online = value
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.aioclient_mock.clear_requests()
@@ -913,7 +905,7 @@ class CloudApiMocker(contextlib.AbstractContextManager):
     async def _async_handle(self, method, url, data):
         path: str = url.path
         self.api_calls[path] = self.api_calls.get(path, 0) + 1
-        if self._online:
+        if self.online:
             try:
                 result = getattr(self, path.replace("/", "_").lower())(
                     self._validate_request_payload(data)

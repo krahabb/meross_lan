@@ -470,7 +470,7 @@ async def test_options_flow(
         device = await context.perform_coldstart()
 
         options_flow = hass.config_entries.options
-        result = await options_flow.async_init(device.config_entry_id)
+        result = await options_flow.async_init(context.config_entry_id)
         result = await helpers.async_assert_flow_menu_to_step(
             options_flow, result, "menu", "device"
         )
