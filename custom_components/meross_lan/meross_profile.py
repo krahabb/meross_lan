@@ -1,5 +1,5 @@
 """
-    meross_lan module interface to access Meross Cloud services
+meross_lan module interface to access Meross Cloud services
 """
 
 import abc
@@ -320,7 +320,10 @@ class MQTTConnection(Loggable):
         return self._mqtt_is_connected
 
     def attach(self, device: "MerossDevice"):
-        assert device.id not in self.mqttdevices
+        assert device.id not in self.mqttdevices, (
+            "unexpected MQTTConnection.attach",
+            device.id,
+        )
         device.mqtt_attached(self)
         self.mqttdevices[device.id] = device
         if sensor_connection := self.sensor_connection:
@@ -328,7 +331,10 @@ class MQTTConnection(Loggable):
 
     def detach(self, device: "MerossDevice"):
         device_id = device.id
-        assert device_id in self.mqttdevices
+        assert device_id in self.mqttdevices, (
+            "unexpected MQTTConnection.detach",
+            device_id,
+        )
         for mqtt_transaction in list(self._mqtt_transactions.values()):
             if mqtt_transaction.device_id == device_id:
                 mqtt_transaction.cancel()
@@ -601,17 +607,22 @@ class MQTTConnection(Loggable):
         Tries device identification and starts a flow if succeded returning
         the FlowResult. Returns None if anything fails for whatever reason.
         """
-        result = None
+
         self.mqttdiscovering.add(device_id)
-        with self.exception_warning(
-            "async_try_discovery (uuid:%s)",
-            self.profile.loggable_device_id(device_id),
-            timeout=14400,
-        ):
+        try:
             result = await self.hass.config_entries.flow.async_init(
                 DOMAIN,
                 context={"source": SOURCE_INTEGRATION_DISCOVERY},
                 data=await self.async_identify_device(device_id, self.profile.key),
+            )
+        except Exception as e:
+            result = None
+            self.log_exception(
+                self.WARNING,
+                e,
+                "async_try_discovery (uuid:%s)",
+                self.profile.loggable_device_id(device_id),
+                timeout=14400,
             )
         self.mqttdiscovering.remove(device_id)
         return result

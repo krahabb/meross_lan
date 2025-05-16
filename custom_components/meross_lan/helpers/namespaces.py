@@ -5,7 +5,7 @@ from ..merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from typing import Any, Callable, Coroutine
-    
+
     from ..meross_device import AsyncRequestFunc, MerossDevice
     from ..meross_entity import MerossEntity
 
@@ -132,9 +132,10 @@ class NamespaceHandler:
         handler: typing.Callable[[dict, dict], None] | None = None,
     ):
         namespace = ns.name
-        assert (
-            namespace not in device.namespace_handlers
-        ), f"{namespace} already registered"
+        assert namespace not in device.namespace_handlers, (
+            "Namespace already registered",
+            namespace,
+        )
         self.device = device
         self.ns = ns
         self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
@@ -169,7 +170,9 @@ class NamespaceHandler:
         self.polling_request_configure(None)
         device.namespace_handlers[namespace] = self
 
-    def polling_request_configure(self, request_payload_type: mn.RequestPayloadType | None):
+    def polling_request_configure(
+        self, request_payload_type: mn.RequestPayloadType | None
+    ):
         """The structure of the polling payload is usually 'fixed' in the namespace
         grammar (see merossclient.namespaces.Namespace) but we have some exceptions
         here and there (one example is Refoss EM06) where the 'standard' is not valid.
