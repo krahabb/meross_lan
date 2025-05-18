@@ -9,23 +9,26 @@ from custom_components.meross_lan.merossclient import const as mc, namespaces as
 from emulator import generate_emulators
 
 from tests import const as tc, helpers
-from tests.entities import (
-    EntityComponentTest,
-    MerossEntityTypesDigestContainer,
-    MerossEntityTypesList,
-)
+from tests.entities import EntityComponentTest
 
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-    from custom_components.meross_lan.meross_device import MerossDeviceBase
+    from custom_components.meross_lan.helpers.device import BaseDevice
 
+    from tests.entities import MerossEntityTypesDigestContainer, MerossEntityTypesList
 
-COMPONENTS_TESTS: dict[str, EntityComponentTest] = {}
-DEVICE_ENTITIES: MerossEntityTypesList = []
-DIGEST_ENTITIES: dict[str, MerossEntityTypesDigestContainer] = {}
-NAMESPACES_ENTITIES: dict[str, MerossEntityTypesList] = {}
-HUB_SUBDEVICES_ENTITIES: dict[str, MerossEntityTypesList] = {}
+    COMPONENTS_TESTS: dict[str, EntityComponentTest]
+    DEVICE_ENTITIES: MerossEntityTypesList
+    DIGEST_ENTITIES: dict[str, MerossEntityTypesDigestContainer]
+    NAMESPACES_ENTITIES: dict[str, MerossEntityTypesList]
+    HUB_SUBDEVICES_ENTITIES: dict[str, MerossEntityTypesList]
+
+COMPONENTS_TESTS = {}
+DEVICE_ENTITIES = []
+DIGEST_ENTITIES = {}
+NAMESPACES_ENTITIES = {}
+HUB_SUBDEVICES_ENTITIES = {}
 
 # list of exclusions from the general rule which states that
 # every entity must be 'available' once the device is loaded
@@ -185,7 +188,7 @@ async def test_entities(
         EntityComponentTest.hass_service_call = None  # type: ignore
 
 
-async def _async_test_entities(manager: "MerossDeviceBase"):
+async def _async_test_entities(manager: "BaseDevice"):
     for entity in manager.entities.values():
 
         if entity.PLATFORM not in COMPONENTS_TESTS:

@@ -1,47 +1,15 @@
 import typing
 
 from homeassistant.components.repairs import ConfirmRepairFlow
-from homeassistant.helpers import issue_registry
-from homeassistant.helpers.issue_registry import IssueSeverity
 from homeassistant.util import dt as dt_util
 
 from . import const as mlc
-from .helpers import ConfigEntriesHelper
-from .helpers.manager import ApiProfile
+from .helpers.component_api import ComponentApi
 
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-
-_ISSUE_IDS = set()
-
-
-def create_issue(
-    issue_id: str,
-    manager_id: str,
-    *,
-    severity: IssueSeverity = IssueSeverity.CRITICAL,
-    translation_placeholders: dict[str, str] | None = None,
-):
-    issue_unique_id = ".".join((issue_id, manager_id))
-    if issue_unique_id not in _ISSUE_IDS:
-        issue_registry.async_create_issue(
-            ApiProfile.hass,
-            mlc.DOMAIN,
-            issue_unique_id,
-            is_fixable=True,
-            severity=severity,
-            translation_key=issue_id,
-            translation_placeholders=translation_placeholders,
-        )
-        _ISSUE_IDS.add(issue_unique_id)
-
-
-def remove_issue(issue_id: str, manager_id: str):
-    issue_unique_id = ".".join((issue_id, manager_id))
-    if issue_unique_id in _ISSUE_IDS:
-        _ISSUE_IDS.remove(issue_unique_id)
-        issue_registry.async_delete_issue(ApiProfile.hass, mlc.DOMAIN, issue_unique_id)
+    from .helpers.device import Device
 
 
 class SimpleRepairFlow(ConfirmRepairFlow):
@@ -61,13 +29,14 @@ class SimpleRepairFlow(ConfirmRepairFlow):
 
     async def async_step_confirm(self, user_input: dict[str, str] | None = None):
         if user_input is not None:
+            config_entry = ComponentApi.get(self.hass).get_config_entry(self.manager_id)
+            device: "Device | None" = getattr(config_entry, "runtime_data", None)
             if (
-                (device := ApiProfile.devices.get(self.manager_id))
+                device
                 and (tzname := getattr(dt_util.DEFAULT_TIME_ZONE, "key", None))
                 and await device.async_config_device_timezone(tzname)
             ):
-                if self.issue_unique_id in _ISSUE_IDS:
-                    _ISSUE_IDS.remove(self.issue_unique_id)
+                device.remove_issue(self.issue_id)
             else:
                 return super().async_abort(reason="cannot_connect")
 
@@ -87,13 +56,11 @@ async def async_create_fix_flow(
         return SimpleRepairFlow(issue_id, _issue_id, manager_id)
 
     if _issue_id == mlc.ISSUE_CLOUD_TOKEN_EXPIRED:
-        config_entry = ConfigEntriesHelper(hass).get_config_entry(
-            f"profile.{manager_id}"
-        )
+        config_entry = ComponentApi.get(hass).get_config_entry(f"profile.{manager_id}")
         assert config_entry
         return OptionsFlow(config_entry, repair_issue_id=_issue_id)
 
     if _issue_id == mlc.ISSUE_DEVICE_ID_MISMATCH:
-        config_entry = ConfigEntriesHelper(hass).get_config_entry(manager_id)
+        config_entry = ComponentApi.get(hass).get_config_entry(manager_id)
         assert config_entry
         return OptionsFlow(config_entry, repair_issue_id=_issue_id)

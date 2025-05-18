@@ -2,7 +2,7 @@ import typing
 
 from homeassistant.components import button
 
-from . import meross_entity as me
+from .helpers import entity as me
 
 if typing.TYPE_CHECKING:
     from types import CoroutineType
@@ -20,7 +20,7 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, button.DOMAIN)
 
 
-class MLButton(me.MEPartialAvailableMixin, me.MerossEntity, button.ButtonEntity):
+class MLButton(me.MEPartialAvailableMixin, me.MLEntity, button.ButtonEntity):
     # MEPartialAvailableMixin is needed here since this entity state is not being updated
     # by our component. This will ensure (by default) the entity is available/unavailable
     # when the device is online/offline
@@ -39,7 +39,7 @@ class MLButton(me.MEPartialAvailableMixin, me.MerossEntity, button.ButtonEntity)
         entitykey: str | None,
         press_func: "Callable[[], CoroutineType[Any, Any, None]]",
         device_class: DeviceClass | None = None,
-        **kwargs: "Unpack[me.MerossEntityArgs]",
+        **kwargs: "Unpack[MLButton.Args]",
     ):
         super().__init__(manager, channel, entitykey, device_class, **kwargs)
         self.async_press = press_func

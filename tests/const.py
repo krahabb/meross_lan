@@ -1,7 +1,9 @@
 """Constants for integration_blueprint tests."""
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.meross_profile import MerossCloudProfileStoreType
+from custom_components.meross_lan.helpers.meross_profile import (
+    MerossProfileStoreType,
+)
 from custom_components.meross_lan.merossclient import cloudapi, const as mc
 
 # Mock config data to be used across multiple tests
@@ -224,7 +226,7 @@ MOCK_CLOUDAPI_HUB_GETSUBDEVICES: dict[str, list[cloudapi.SubDeviceInfoType]] = {
         },
     ]
 }
-# MerossCloudProfile storage
+# MerossProfile storage
 MOCK_PROFILE_STORE_KEY = f"{mlc.DOMAIN}.profile.{MOCK_PROFILE_ID}"
 MOCK_PROFILE_STORE_DEVICEINFO_DICT: dict[str, cloudapi.DeviceInfoType] = {
     MOCK_PROFILE_MSS310_UUID: {
@@ -248,7 +250,7 @@ MOCK_PROFILE_STORE_DEVICEINFO_DICT: dict[str, cloudapi.DeviceInfoType] = {
 }
 MOCK_PROFILE_STORE = {
     "version": 1,
-    "data": MerossCloudProfileStoreType(
+    "data": MerossProfileStoreType(
         {
             "appId": "0",
             "deviceInfo": MOCK_PROFILE_STORE_DEVICEINFO_DICT,

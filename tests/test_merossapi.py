@@ -1,11 +1,10 @@
-"""Test the core MerossApi class"""
+"""Test the core ComponentApi class"""
 
 from time import time
 import typing
 
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
-from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.merossclient import (
     build_message,
     const as mc,
@@ -50,7 +49,7 @@ async def test_hamqtt_device_session(
             topic_subscribe,
         )
         # since nothing is (yet) built at the moment, we expect this message
-        # will go through all of the initialization process of MerossApi
+        # will go through all of the initialization process of ComponentApi
         # and then manage the message
         async_fire_mqtt_message(hass, topic_publish, json_dumps(message_bind_set))
         await hass.async_block_till_done()

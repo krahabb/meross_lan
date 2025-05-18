@@ -1,7 +1,7 @@
 import typing
 
-from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
+from ..helpers import entity as me
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber, MtsTemperatureNumber
@@ -11,8 +11,9 @@ from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import DigestInitReturnType, DigestParseFunc, MerossDevice
-    from ..number import MLConfigNumberArgs
+    from typing import Unpack
+
+    from ..helpers.device import Device, DigestInitReturnType, DigestParseFunc
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
 
@@ -39,7 +40,7 @@ class MtsWarningSensor(MLEnumSensor):
 class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.CONFIG
+    entity_category = MLSwitch.EntityCategory.CONFIG
 
     __slot__ = ("number_temperature",)
 
@@ -84,7 +85,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
     """
 
-    manager: "MerossDevice"
+    manager: "Device"
     entitykey: str
     key_value = mc.KEY_VALUE
 
@@ -99,7 +100,7 @@ class MtsRichTemperatureNumber(MtsTemperatureNumber):
     def __init__(
         self,
         climate: "MtsThermostatClimate",
-        **kwargs: "typing.Unpack[MLConfigNumberArgs]",
+        **kwargs: "Unpack[MtsTemperatureNumber.Args]",
     ):
         super().__init__(climate, self.__class__.ns.key, **kwargs)
         manager = self.manager
@@ -250,7 +251,7 @@ class MtsExternalSensorSwitch(me.MEListChannelMixin, MLSwitch):
     key_value = mc.KEY_MODE
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.CONFIG
+    entity_category = MLSwitch.EntityCategory.CONFIG
 
     def __init__(self, climate: "MtsThermostatClimate"):
         super().__init__(
@@ -300,9 +301,7 @@ OPTIONAL_ENTITIES_INITIALIZERS: dict[
 # to be PUSHED when over MQTT. The rest are either 'never seen' or 'not pushed'
 
 
-def digest_init_thermostat(
-    device: "MerossDevice", digest: dict
-) -> "DigestInitReturnType":
+def digest_init_thermostat(device: "Device", digest: dict) -> "DigestInitReturnType":
 
     ability = device.descriptor.ability
 
@@ -363,7 +362,7 @@ def digest_init_thermostat(
 
 
 class MLScreenBrightnessNumber(MLConfigNumber):
-    manager: "MerossDevice"
+    manager: "Device"
 
     ns = mn.Appliance_Control_Screen_Brightness
 
@@ -373,7 +372,7 @@ class MLScreenBrightnessNumber(MLConfigNumber):
     native_min_value = 0
     native_step = 12.5
 
-    def __init__(self, manager: "MerossDevice", key: str):
+    def __init__(self, manager: "Device", key: str):
         self.key_value = key
         super().__init__(
             manager,
@@ -397,7 +396,7 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
         "number_brightness_standby",
     )
 
-    def __init__(self, device: "MerossDevice"):
+    def __init__(self, device: "Device"):
         NamespaceHandler.__init__(
             self,
             device,

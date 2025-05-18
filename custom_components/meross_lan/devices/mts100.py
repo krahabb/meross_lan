@@ -76,7 +76,7 @@ class Mts100Climate(MtsClimate):
         )
         self.binary_sensor_window = manager.build_binary_sensor_window()
         self.switch_patch_hvacaction = MLConfigSwitch(
-            manager, manager.id, "patch_hvacaction"
+            manager, manager.id, "patch_hvacaction", device_value=0
         )
         self.switch_patch_hvacaction.register_state_callback(
             self._switch_emulate_hvacaction_state_callback

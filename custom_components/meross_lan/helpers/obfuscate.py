@@ -195,7 +195,7 @@ OBFUSCATE_KEYS: dict[str, ObfuscateRule] = {
     mlc.CONF_CLOUD_KEY: OBFUSCATE_KEY_MAP,
     mlc.CONF_PASSWORD: OBFUSCATE_NO_MAP,
     #
-    # MerossCloudProfile keys
+    # MerossProfile keys
     "appId": ObfuscateMap({}),
 }
 

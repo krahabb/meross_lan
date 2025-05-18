@@ -18,7 +18,7 @@ if typing.TYPE_CHECKING:
 async def test_request_on_mqtt(request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker):
     """
     Test service call routed through mqtt without being forwarded to
-    MerossDevice. This happens when we want to send request to
+    Device. This happens when we want to send request to
     devices not registered in HA
     """
     async with helpers.MQTTHubEntryMocker(request, hass):

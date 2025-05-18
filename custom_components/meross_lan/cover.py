@@ -3,30 +3,29 @@ import typing
 from homeassistant.components import cover
 from homeassistant.exceptions import InvalidStateError
 
-from . import meross_entity as me
 from .const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
-from .helpers import versiontuple
+from .helpers import entity as me, versiontuple
 from .merossclient import const as mc, namespaces as mn
 from .number import MLConfigNumber
 
 if typing.TYPE_CHECKING:
     import asyncio
 
-    from .meross_device import MerossDevice
+    from .helpers.device import Device
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
     me.platform_setup_entry(hass, config_entry, async_add_devices, cover.DOMAIN)
 
 
-class MLCover(me.MerossEntity, cover.CoverEntity):
+class MLCover(me.MLEntity, cover.CoverEntity):
 
     ENTITY_COMPONENT = cover
     PLATFORM = cover.DOMAIN
     DeviceClass = cover.CoverDeviceClass
     EntityFeature = cover.CoverEntityFeature
 
-    manager: "MerossDevice"
+    manager: "Device"
 
     # HA core entity attributes:
     is_closed: bool | None
@@ -43,7 +42,7 @@ class MLCover(me.MerossEntity, cover.CoverEntity):
 
     def __init__(
         self,
-        manager: "MerossDevice",
+        manager: "Device",
         channel: object | None,
         device_class: "MLCover.DeviceClass",
     ):
@@ -54,7 +53,7 @@ class MLCover(me.MerossEntity, cover.CoverEntity):
         self._transition_end_unsub: "asyncio.TimerHandle | None" = None
         super().__init__(manager, channel, None, device_class)
 
-    # interface: MerossEntity
+    # interface: MLEntity
     async def async_shutdown(self):
         self._transition_cancel()
         await super().async_shutdown()
@@ -104,7 +103,7 @@ class MLRollerShutter(MLCover):
         "_position_starttime",
     )
 
-    def __init__(self, manager: "MerossDevice"):
+    def __init__(self, manager: "Device"):
         self.current_cover_position = None
         self.supported_features = (
             MLCover.EntityFeature.OPEN
@@ -255,7 +254,7 @@ class MLRollerShutter(MLCover):
             # since the only reason for failing is the device not supporting
             # ns_multiple (unlikely) or the response being truncated due to
             # overflow (unlikely too)
-            # At this stage the responses are already processed by the MerossDevice
+            # At this stage the responses are already processed by the Device
             # interface and we should already be 'in transition'
             if responses[0][mc.KEY_HEADER][mc.KEY_METHOD] == mc.METHOD_SETACK:
                 if (

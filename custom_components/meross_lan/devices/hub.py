@@ -1,11 +1,12 @@
 import typing
 
-from .. import const as mlc, meross_entity as me
+from .. import const as mlc
 from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
+from ..helpers import entity as me
+from ..helpers.device import BaseDevice, Device
 from ..helpers.namespaces import NamespaceHandler, NamespaceParser
-from ..meross_device import DeviceType, MerossDevice, MerossDeviceBase
 from ..merossclient import const as mc, get_productnameuuid, namespaces as mn
 from ..number import MLConfigNumber
 from ..select import MtsTrackedSensor
@@ -20,8 +21,8 @@ from ..sensor import (
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import AsyncRequestFunc, DigestInitReturnType
-    from ..meross_entity import MerossEntity
+    from ..helpers.device import AsyncRequestFunc, DigestInitReturnType
+    from ..helpers.entity import MLEntity
     from ..merossclient.cloudapi import SubDeviceInfoType
     from .mts100 import Mts100Climate
 
@@ -46,7 +47,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
 
     def __init__(
         self,
-        manager: "MerossSubDevice",
+        manager: "SubDevice",
         key: str,
         device_class: MLConfigNumber.DeviceClass,
         min_value: float,
@@ -80,7 +81,7 @@ class MLHubToggle(me.MEListChannelMixin, MLSwitch):
     ns = mn.Appliance_Hub_ToggleX
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.CONFIG
+    entity_category = MLSwitch.EntityCategory.CONFIG
 
 
 class HubNamespaceHandler(NamespaceHandler):
@@ -213,12 +214,12 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
             yield payload
 
 
-class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
+class HubMixin(Device if typing.TYPE_CHECKING else object):
     """
-    Specialized MerossDevice for smart hub(s) like MSH300
+    Specialized Device for smart hub(s) like MSH300
     """
 
-    DEFAULT_PLATFORMS = MerossDevice.DEFAULT_PLATFORMS | {
+    DEFAULT_PLATFORMS = Device.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
         MtsSchedule.PLATFORM: None,
         MLConfigNumber.PLATFORM: None,
@@ -228,7 +229,7 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
         MtsTrackedSensor.PLATFORM: None,
     }
 
-    subdevices: dict[object, "MerossSubDevice"]
+    subdevices: dict[object, "SubDevice"]
 
     # interface: EntityManager
     def managed_entities(self, platform):
@@ -237,7 +238,7 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
             entities.extend(subdevice.managed_entities(platform))
         return entities
 
-    # interface: MerossDevice
+    # interface: Device
     async def async_shutdown(self):
         await super().async_shutdown()
         for subdevice in self.subdevices.values():
@@ -249,8 +250,8 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
             subdevice._set_offline()
         super()._set_offline()
 
-    def get_type(self) -> DeviceType:
-        return DeviceType.HUB
+    def get_type(self) -> mlc.DeviceType:
+        return mlc.DeviceType.HUB
 
     def _create_handler(self, ns: "mn.Namespace"):
         _handler = getattr(self, f"_handle_{ns.name.replace('.', '_')}", None)
@@ -301,7 +302,7 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
                 )
             # needsave=True might need some time querying abilities before
             # actually saving. We'll let some time to complete
-            self.schedule_entry_reload(5)
+            self.schedule_reload(5)
 
     # interface: self
     def log_duplicated_subdevice(self, subdevice_id: object):
@@ -363,7 +364,7 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
             # this is true when subdevice is offline and hub has no recent info
             # we'll check our device registry for luck
             try:
-                hassdevice = self.get_device_registry().async_get_device(
+                hassdevice = self.api.device_registry.async_get_device(
                     identifiers={(mlc.DOMAIN, p_subdevice[mc.KEY_ID])}
                 )
                 if not hassdevice:
@@ -377,16 +378,16 @@ class HubMixin(MerossDevice if typing.TYPE_CHECKING else object):
             return WELL_KNOWN_TYPE_MAP[model](self, p_subdevice)
         except:
             # build something anyway...
-            return MerossSubDevice(self, p_subdevice, model)  # type: ignore
+            return SubDevice(self, p_subdevice, model)  # type: ignore
 
 
-class MerossSubDevice(NamespaceParser, MerossDeviceBase):
+class SubDevice(NamespaceParser, BaseDevice):
     """
-    MerossSubDevice introduces some hybridization in EntityManager:
-    (owned) entities will refer to MerossSubDevice effectively as if
+    SubDevice introduces some hybridization in EntityManager:
+    (owned) entities will refer to SubDevice effectively as if
     it were a full-fledged device but some EntityManager properties
     are overriden in order to manage ConfigEntry setup/unload since
-    MerossSubDevice doesn't actively represent one (it delegates this to
+    SubDevice doesn't actively represent one (it delegates this to
     the owning Hub).
     Inheriting from NamespaceParser allows this class to be registered
     as a parser for any namespace where the list payload indexing is carried
@@ -408,7 +409,7 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
     )
 
     def __init__(self, hub: HubMixin, p_digest: dict, model: str):
-        # this is a very dirty trick/optimization to override some MerossDeviceBase
+        # this is a very dirty trick/optimization to override some BaseDevice
         # properties/methods that just needs to be forwarded to the hub
         # this way we're short-circuiting that indirection
         self.async_request = hub.async_request
@@ -421,9 +422,11 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
         id = p_digest[mc.KEY_ID]
         super().__init__(
             id,
+            api=hub.api,
+            hass=hub.hass,
             config_entry=hub.config_entry,
             logger=hub,
-            default_name=get_productnameuuid(model, id),
+            name=get_productnameuuid(model, id),
             model=model,
             via_device=next(iter(hub.deviceentry_id["identifiers"])),
         )
@@ -443,7 +446,7 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
             hub.setup_chunked_handler(mn.Appliance_Hub_Sensor_All, False, 8)
 
     # interface: EntityManager
-    def generate_unique_id(self, entity: "MerossEntity"):
+    def generate_unique_id(self, entity: "MLEntity"):
         """
         flexible policy in order to generate unique_ids for entities:
         This is an helper needed to better control migrations in code
@@ -453,10 +456,10 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
         """
         return f"{self.hub.id}_{entity.id}"
 
-    # interface: MerossDeviceBase
+    # interface: BaseDevice
     async def async_shutdown(self):
         await NamespaceParser.async_shutdown(self)
-        await MerossDeviceBase.async_shutdown(self)
+        await BaseDevice.async_shutdown(self)
         self.check_device_timezone = None  # type: ignore
         self.async_request = None  # type: ignore
         self.hub: HubMixin = None  # type: ignore
@@ -467,8 +470,8 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
     def tz(self):
         return self.hub.tz
 
-    def get_type(self) -> DeviceType:
-        return DeviceType.SUBDEVICE
+    def get_type(self) -> mlc.DeviceType:
+        return mlc.DeviceType.SUBDEVICE
 
     def _get_internal_name(self) -> str:
         return get_productnameuuid(self.model, self.id)
@@ -495,14 +498,11 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
 
     def update_sub_device_info(self, sub_device_info: "SubDeviceInfoType"):
         self.sub_device_info = sub_device_info
-        if _device_registry_entry := self.device_registry_entry:
-            name = (
-                sub_device_info.get(mc.KEY_SUBDEVICENAME) or self._get_internal_name()
+        name = sub_device_info.get(mc.KEY_SUBDEVICENAME) or self._get_internal_name()
+        if name != self.device_registry_entry.name:
+            self.api.device_registry.async_update_device(
+                self.device_registry_entry.id, name=name
             )
-            if name != _device_registry_entry.name:
-                self.get_device_registry().async_update_device(
-                    _device_registry_entry.id, name=name
-                )
 
     def _hub_parse(self, key: str, payload: dict):
         try:
@@ -691,21 +691,21 @@ class MerossSubDevice(NamespaceParser, MerossDeviceBase):
 
     def _parse_version(self, p_version: dict):
         """{"id": "00000000", "hardware": "1.1.5", "firmware": "5.1.8"}"""
-        if device_registry_entry := self.device_registry_entry:
-            kwargs = {}
-            hw_version = p_version[mc.KEY_HARDWARE]
-            if hw_version != device_registry_entry.hw_version:
-                kwargs["hw_version"] = hw_version
-            sw_version = p_version[mc.KEY_FIRMWARE]
-            if sw_version != device_registry_entry.sw_version:
-                kwargs["sw_version"] = sw_version
-            if kwargs:
-                self.get_device_registry().async_update_device(
-                    device_registry_entry.id, **kwargs
-                )
+        device_registry_entry = self.device_registry_entry
+        kwargs = {}
+        hw_version = p_version[mc.KEY_HARDWARE]
+        if hw_version != device_registry_entry.hw_version:
+            kwargs["hw_version"] = hw_version
+        sw_version = p_version[mc.KEY_FIRMWARE]
+        if sw_version != device_registry_entry.sw_version:
+            kwargs["sw_version"] = sw_version
+        if kwargs:
+            self.api.device_registry.async_update_device(
+                device_registry_entry.id, **kwargs
+            )
 
 
-class MTS100SubDevice(MerossSubDevice):
+class MTS100SubDevice(SubDevice):
     __slots__ = ("climate",)
 
     def __init__(self, hub: HubMixin, p_digest: dict, model: str = mc.TYPE_MTS100):
@@ -751,7 +751,7 @@ class MTS100SubDevice(MerossSubDevice):
         climate.flush_state()
 
     def _parse_mts100(self, p_mts100: dict):
-        # typically called by MerossSubDevice.parse_digest
+        # typically called by SubDevice.parse_digest
         # when parsing Appliance.System.All
         pass
 
@@ -775,7 +775,7 @@ class MTS100V3SubDevice(MTS100SubDevice):
         super().__init__(hub, p_digest, mc.TYPE_MTS100V3)
 
     def _parse_mts100v3(self, p_mts100v3: dict):
-        # typically called by MerossSubDevice.parse_digest
+        # typically called by SubDevice.parse_digest
         # when parsing Appliance.System.All
         pass
 
@@ -790,7 +790,7 @@ class MTS150SubDevice(MTS100SubDevice):
     def _parse_mts150(self, p_mts150: dict):
         """{"mode": 3,"currentSet": 60,"updateMode": 3,"updateTemp": 175,
         "motorCurLocation": 0,"motorStartCtr": 883,"motorTotalPath": 69852}"""
-        # typically called by MerossSubDevice.parse_digest
+        # typically called by SubDevice.parse_digest
         # when parsing Appliance.System.All
         pass
 
@@ -805,7 +805,7 @@ class MTS150PSubDevice(MTS100SubDevice):
     def _parse_mts150p(self, p_mts150p: dict):
         """{"mode": 3,"currentSet": 60,"updateMode": 3,"updateTemp": 175,
         "motorCurLocation": 0,"motorStartCtr": 883,"motorTotalPath": 69852}"""
-        # typically called by MerossSubDevice.parse_digest
+        # typically called by SubDevice.parse_digest
         # when parsing Appliance.System.All
         pass
 
@@ -820,7 +820,7 @@ class GS559MuteToggle(me.MEListChannelMixin, MLSwitch):
     # HA core entity attributes:
 
 
-class GS559SubDevice(MerossSubDevice):
+class GS559SubDevice(SubDevice):
     STATUS_MAP = {
         17: "error_temperature",
         18: "error_smoke",
@@ -895,7 +895,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_GS559] = GS559SubDevice
 WELL_KNOWN_TYPE_MAP[mc.KEY_SMOKEALARM] = GS559SubDevice
 
 
-class MS100SubDevice(MerossSubDevice):
+class MS100SubDevice(SubDevice):
     __slots__ = (
         "sensor_temperature",
         "sensor_humidity",
@@ -937,7 +937,7 @@ class MS100SubDevice(MerossSubDevice):
             self._update_sensor(self.sensor_humidity, p_humidity[mc.KEY_LATEST])
 
     def _parse_ms100(self, p_ms100: dict):
-        # typically called by MerossSubDevice.parse_digest
+        # typically called by SubDevice.parse_digest
         # when parsing Appliance.System.All
         self._parse_tempHum(p_ms100)
 
@@ -975,7 +975,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS100] = MS100SubDevice
 WELL_KNOWN_TYPE_MAP[mc.KEY_TEMPHUM] = MS100SubDevice
 
 
-class MS130SubDevice(MerossSubDevice):
+class MS130SubDevice(SubDevice):
     __slots__ = (
         "sensor_humidity",
         "sensor_light",
@@ -1076,7 +1076,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS130] = MS130SubDevice
 WELL_KNOWN_TYPE_MAP[mc.KEY_TEMPHUMI] = MS130SubDevice
 
 
-class MS200SubDevice(MerossSubDevice):
+class MS200SubDevice(SubDevice):
     __slots__ = ("binary_sensor_window",)
 
     def __init__(self, hub: HubMixin, p_digest: dict):
@@ -1097,7 +1097,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MS200] = MS200SubDevice
 WELL_KNOWN_TYPE_MAP[mc.KEY_DOORWINDOW] = MS200SubDevice
 
 
-class MS400SubDevice(MerossSubDevice):
+class MS400SubDevice(SubDevice):
     __slots__ = ("binary_sensor_waterleak",)
 
     def __init__(self, hub: HubMixin, p_digest: dict):

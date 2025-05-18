@@ -2,7 +2,6 @@ import abc
 import asyncio
 import bisect
 from datetime import UTC, tzinfo
-from enum import Enum
 from json import JSONDecodeError
 from time import time
 import typing
@@ -10,16 +9,18 @@ from uuid import uuid4
 import zoneinfo
 
 import aiohttp
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from . import const as mlc
-from .button import MLPersistentButton
+from . import datetime_from_epoch
+from .. import const as mlc
+from ..button import MLPersistentButton
 
 # only import those 'often used' symbols to get a tiny bit of speed improvement
-from .const import (
+from ..const import (
     CONF_HOST,
     CONF_PAYLOAD,
     CONF_PROTOCOL_AUTO,
@@ -29,15 +30,7 @@ from .const import (
     PARAM_HEARTBEAT_PERIOD,
     PARAM_TIMESTAMP_TOLERANCE,
 )
-from .helpers import (
-    ConfigEntriesHelper,
-    async_import_module,
-    async_load_zoneinfo,
-    datetime_from_epoch,
-)
-from .helpers.manager import ApiProfile, ConfigEntryManager, EntityManager, ManagerState
-from .helpers.namespaces import NamespaceHandler
-from .merossclient import (
+from ..merossclient import (
     HostAddress,
     MerossRequest,
     MerossResponse,
@@ -50,22 +43,20 @@ from .merossclient import (
     json_dumps,
     namespaces as mn,
 )
-from .merossclient.httpclient import MerossHttpClient, TerminatedException
-from .repairs import IssueSeverity, create_issue, remove_issue
-from .sensor import ProtocolSensor
-from .update import MLUpdate
+from ..merossclient.httpclient import MerossHttpClient, TerminatedException
+from ..sensor import ProtocolSensor
+from ..update import MLUpdate
+from .manager import ConfigEntryManager, EntityManager
+from .namespaces import NamespaceHandler
 
 if typing.TYPE_CHECKING:
     from types import CoroutineType
-    from typing import Any, Callable, Final, Iterable
+    from typing import Any, Callable, Final, Iterable, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.namespaces import NamespaceParser
-    from .meross_entity import MerossEntity
-    from .meross_profile import MQTTConnection
-    from .merossclient import (
+    from ..merossclient import (
         MerossDeviceDescriptor,
         MerossHeaderType,
         MerossMessage,
@@ -73,12 +64,16 @@ if typing.TYPE_CHECKING:
         MerossPayloadType,
         MerossRequestType,
     )
-    from .merossclient.cloudapi import DeviceInfoType, LatestVersionType
+    from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
+    from .component_api import ComponentApi
+    from .entity import MLEntity
+    from .mqtt_profile import MQTTConnection, MQTTProfile
+    from .namespaces import NamespaceParser
 
     DigestParseFunc = Callable[[dict], None] | Callable[[list], None]
     DigestInitReturnType = tuple[DigestParseFunc, Iterable[NamespaceHandler]]
-    DigestInitFunc = Callable[["MerossDevice", typing.Any], DigestInitReturnType]
-    NamespaceInitFunc = Callable[["MerossDevice"], None]
+    DigestInitFunc = Callable[["Device", Any], DigestInitReturnType]
+    NamespaceInitFunc = Callable[["Device"], None]
     AsyncRequestFunc = Callable[
         [str, str, MerossPayloadType], CoroutineType[Any, Any, MerossResponse | None]
     ]
@@ -126,64 +121,53 @@ TRACE_ABILITY_EXCLUDE = (
 TIMEZONES_SET = None
 
 
-class DeviceType(Enum):
-    DEVICE = 1
-    HUB = 2
-    SUBDEVICE = 3
-
-
-class MerossDeviceBase(EntityManager):
+class BaseDevice(EntityManager):
     """
-    Abstract base class for MerossDevice and MerossSubDevice (from hub)
+    Abstract base class for Device and SubDevice (from hub)
     giving common behaviors like device_registry interface
     """
 
     if typing.TYPE_CHECKING:
         # override some nullable since we're pretty sure they're none
-        config_entry: ConfigEntry
-        deviceentry_id: EntityManager.DeviceEntryIdType
+        config_entry: Final[ConfigEntry]  # type: ignore
+        deviceentry_id: Final[EntityManager.DeviceEntryIdType]  # type: ignore
 
         online: Final[bool]
-        device_registry_entry: Final[dr.DeviceEntry | None]
+        device_registry_entry: Final[dr.DeviceEntry]
+
+        class Args(EntityManager.Args):
+            config_entry: ConfigEntry
+            name: str
+            model: str
+            hw_version: NotRequired[str]
+            sw_version: NotRequired[str]
+            connections: NotRequired[set[tuple[str, str]]]
+            via_device: NotRequired[tuple[str, str]]
 
     __slots__ = (
         "online",
         "device_registry_entry",
     )
 
-    def __init__(
-        self,
-        id: str,
-        *,
-        config_entry: "ConfigEntry",
-        default_name: str,
-        model: str,
-        hw_version: str | None = None,
-        sw_version: str | None = None,
-        connections: set[tuple[str, str]] | None = None,
-        via_device: tuple[str, str] | None = None,
-        **kwargs,
-    ):
+    def __init__(self, id: str, **kwargs: "Unpack[Args]"):
+        identifiers = {(mlc.DOMAIN, id)}
+        kwargs["deviceentry_id"] = {"identifiers": identifiers}
         super().__init__(
             id,
-            config_entry=config_entry,
-            deviceentry_id={"identifiers": {(mlc.DOMAIN, id)}},
             **kwargs,
         )
         self.online = False
-        self.device_registry_entry = None
-        with self.exception_warning("DeviceRegistry.async_get_or_create"):
-            self.device_registry_entry = self.get_device_registry().async_get_or_create(
-                config_entry_id=config_entry.entry_id,
-                connections=connections,
-                manufacturer=mc.MANUFACTURER,
-                name=default_name,
-                model=model,
-                hw_version=hw_version,
-                sw_version=sw_version,
-                via_device=via_device,
-                **self.deviceentry_id,  # type: ignore
-            )
+        self.device_registry_entry = self.api.device_registry.async_get_or_create(
+            config_entry_id=self.config_entry.entry_id,
+            connections=kwargs.get("connections"),
+            manufacturer=mc.MANUFACTURER,
+            name=kwargs.get("name"),
+            model=kwargs.get("model"),
+            hw_version=kwargs.get("hw_version"),
+            sw_version=kwargs.get("sw_version"),
+            via_device=kwargs.get("via_device"),
+            identifiers=identifiers,
+        )
 
     # interface: EntityManager
     @property
@@ -247,7 +231,7 @@ class MerossDeviceBase(EntityManager):
         raise NotImplementedError("tz")
 
     @abc.abstractmethod
-    def get_type(self) -> DeviceType:
+    def get_type(self) -> mlc.DeviceType:
         raise NotImplementedError("get_type")
 
     @abc.abstractmethod
@@ -255,7 +239,7 @@ class MerossDeviceBase(EntityManager):
         raise NotImplementedError("_get_internal_name")
 
 
-class MerossDevice(ConfigEntryManager, MerossDeviceBase):
+class Device(BaseDevice, ConfigEntryManager):
     """
     Generic protocol handler class managing the physical device stack/state
     """
@@ -276,7 +260,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         device_timestamp: int
 
-        _profile: ApiProfile | None
+        _profile: MQTTProfile | None
         _mqtt_connection: MQTTConnection | None
         _mqtt_connected: MQTTConnection | None
         _mqtt_publish: MQTTConnection | None
@@ -311,12 +295,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     @staticmethod
     def digest_init_empty(
-        device: "MerossDevice", digest: dict | list
+        device: "Device", digest: dict | list
     ) -> "DigestInitReturnType":
-        return MerossDevice.digest_parse_empty, ()
+        return Device.digest_parse_empty, ()
 
     @staticmethod
-    def namespace_init_empty(device: "MerossDevice"):
+    def namespace_init_empty(device: "Device"):
         pass
 
     DIGEST_INIT = {
@@ -331,8 +315,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
     }
     """
     Static dict of 'digest initialization function(s)'.
-    This is built on demand during MerossDevice init whenever a new digest key
-    is encountered. This static dict in turn is used to setup the MerossDevice instance
+    This is built on demand during Device init whenever a new digest key
+    is encountered. This static dict in turn is used to setup the Device instance
     'digest_handlers' dict which contains a lookup to the digest parsing function when
     an NS_ALL message is received/parsed.
     The 'digest initialization function' will (at device init time) parse the digest to
@@ -462,8 +446,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def __init__(
         self,
-        descriptor: "MerossDeviceDescriptor",
+        api: "ComponentApi",
         config_entry: "ConfigEntry",
+        descriptor: "MerossDeviceDescriptor",
     ):
         self.descriptor = descriptor
         self.tz = UTC
@@ -518,8 +503,10 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
         super().__init__(
             config_entry.data[mlc.CONF_DEVICE_ID],
-            config_entry,
-            default_name=descriptor.productname,
+            api=api,
+            hass=api.hass,
+            config_entry=config_entry,
+            name=descriptor.productname,
             model=descriptor.productmodel,
             hw_version=descriptor.hardwareVersion,
             sw_version=descriptor.firmwareVersion,
@@ -553,7 +540,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # we might not have this for devices not related to a cloud profile
         # This cleanup code is to ease the transition out of the registry
         # when previous version polluted it
-        ent_reg = self.get_entity_registry()
+        ent_reg = self.api.entity_registry
         update_firmware_entity_id = ent_reg.async_get_entity_id(
             MLUpdate.PLATFORM, mlc.DOMAIN, f"{self.id}_update_firmware"
         )
@@ -561,16 +548,19 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             ent_reg.async_remove(update_firmware_entity_id)
 
     async def async_init(self):
+        api = self.api
         descriptor = self.descriptor
 
         if tzname := descriptor.timezone:
             # self.tz defaults to UTC on init
-            try:
-                self.tz = await async_load_zoneinfo(tzname, self)
-            except:
-                pass
+            with self.exception_warning(
+                "loading timezone(%s) - check your python environment",
+                tzname,
+                timeout=14400,
+            ):
+                self.tz = await api.async_load_zoneinfo(tzname)
 
-        for namespace, ns_init_func in MerossDevice.NAMESPACE_INIT.items():
+        for namespace, ns_init_func in Device.NAMESPACE_INIT.items():
             if namespace not in descriptor.ability:
                 continue
             try:
@@ -579,7 +569,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 except TypeError:
                     try:
                         ns_init_func = getattr(
-                            await async_import_module(ns_init_func[0]),
+                            await api.async_import_module(ns_init_func[0]),
                             ns_init_func[1],
                         )
                     except Exception as exception:
@@ -589,8 +579,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             "loading namespace initializer for %s",
                             namespace,
                         )
-                        ns_init_func = MerossDevice.namespace_init_empty
-                    MerossDevice.NAMESPACE_INIT[namespace] = ns_init_func
+                        ns_init_func = Device.namespace_init_empty
+                    Device.NAMESPACE_INIT[namespace] = ns_init_func
                     ns_init_func(self)
 
             except Exception as exception:
@@ -606,17 +596,17 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             try:
                 try:
                     self.digest_handlers[key_digest], _digest_pollers = (
-                        MerossDevice.DIGEST_INIT[key_digest](self, _digest)
+                        Device.DIGEST_INIT[key_digest](self, _digest)
                     )
                 except (KeyError, TypeError):
                     # KeyError: key is unknown to our code (fallback to lookup ".devices.{key_digest}")
                     # TypeError: key is a string containing the module path
                     try:
-                        _module_path = MerossDevice.DIGEST_INIT.get(
+                        _module_path = Device.DIGEST_INIT.get(
                             key_digest, f".devices.{key_digest}"
                         )
                         digest_init_func: "DigestInitFunc" = getattr(
-                            await async_import_module(_module_path),
+                            await api.async_import_module(_module_path),
                             f"digest_init_{key_digest}",
                         )
                     except Exception as exception:
@@ -626,8 +616,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                             "loading digest initializer for key '%s'",
                             key_digest,
                         )
-                        digest_init_func = MerossDevice.digest_init_empty
-                    MerossDevice.DIGEST_INIT[key_digest] = digest_init_func
+                        digest_init_func = Device.digest_init_empty
+                    Device.DIGEST_INIT[key_digest] = digest_init_func
                     self.digest_handlers[key_digest], _digest_pollers = (
                         digest_init_func(self, _digest)
                     )
@@ -637,7 +627,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 self.log_exception(
                     self.WARNING, exception, "initializing digest key '%s'", key_digest
                 )
-                self.digest_handlers[key_digest] = MerossDevice.digest_parse_empty
+                self.digest_handlers[key_digest] = Device.digest_parse_empty
 
     def start(self):
         # called by async_setup_entry after the entities have been registered
@@ -664,7 +654,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 str(ability_new - ability_old),
                 str(ability_old - ability_new),
             )
-            self.schedule_entry_reload()
+            self.schedule_reload()
             return
 
         await super().entry_update_listener(hass, config_entry)
@@ -713,9 +703,9 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._trace_ability_callback_unsub = None
         super().trace_close(exception, error_context)
 
-    # interface: MerossDeviceBase
+    # interface: BaseDevice
     async def async_shutdown(self):
-        remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
+        self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
         if self._async_entry_update_unsub:
             self._async_entry_update_unsub.cancel()
             self._async_entry_update_unsub = None
@@ -736,7 +726,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._lazypoll_requests = None  # type: ignore
         self.sensor_protocol = None  # type: ignore
         self.update_firmware = None
-        ApiProfile.devices[self.id] = None
+        self.api.devices[self.id] = None
 
     async def async_request_raw(
         self,
@@ -825,12 +815,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         ha_now = dt_util.now()
         device_now = ha_now.astimezone(self.tz)
         if ha_now.utcoffset() == device_now.utcoffset():
-            remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
+            self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
             return
-        create_issue(
+        self.create_issue(
             mlc.ISSUE_DEVICE_TIMEZONE,
-            self.id,
-            severity=IssueSeverity.WARNING,
+            severity=self.IssueSeverity.WARNING,
             translation_placeholders={"device_name": self.name},
         )
 
@@ -842,8 +831,8 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         for handler in self.namespace_handlers.values():
             handler.polling_epoch_next = 0.0
 
-    def get_type(self) -> DeviceType:
-        return DeviceType.DEVICE
+    def get_type(self) -> mlc.DeviceType:
+        return mlc.DeviceType.DEVICE
 
     def _get_internal_name(self) -> str:
         return self.descriptor.productname
@@ -867,7 +856,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         in order to decide if we can/should send over a local MQTT with good
         chances of success.
         we should also check if the _mqtt_connection is 'publishable' but
-        at the moment the MerossApi MQTTConnection doesn't allow disabling it
+        at the moment the ComponentApi MQTTConnection doesn't allow disabling it
         """
         return self._mqtt_active and not self._mqtt_active.is_cloud_connection
 
@@ -918,11 +907,11 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     def register_parser_entity(
         self,
-        entity: "MerossEntity",
+        entity: "MLEntity",
     ):
         self.get_handler(entity.ns).register_parser(entity, entity.ns.key_channel)
 
-    def register_togglex_channel(self, entity: "MerossEntity"):
+    def register_togglex_channel(self, entity: "MLEntity"):
         """
         Checks if entity has an associated ToggleX behavior and eventually
         registers it
@@ -979,10 +968,12 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         # we also take the time to sync our tz to the device timezone
         tzname = self.descriptor.timezone
         if tzname:
-            try:
-                self.tz = await async_load_zoneinfo(tzname, self)
-            except:
-                pass
+            with self.exception_warning(
+                "loading timezone(%s) - check your python environment",
+                tzname,
+                timeout=14400,
+            ):
+                self.tz = await self.api.async_load_zoneinfo(tzname)
         else:
             self.tz = UTC
 
@@ -1045,7 +1036,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                     # if there's a pending issue, the user might still
                     # use the OptionsFlow to fix stuff so we'll
                     # shut this down anyway..it will reappear in case
-                    remove_issue(mlc.ISSUE_DEVICE_TIMEZONE, self.id)
+                    self.remove_issue(mlc.ISSUE_DEVICE_TIMEZONE)
 
     async def async_bind(
         self, broker: HostAddress, *, key: str | None = None, userid: str | None = None
@@ -1304,7 +1295,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._mqtt_lastrequest,
             request,
             CONF_PROTOCOL_MQTT,
-            self.TRACE_TX,
+            ConfigEntryManager.TRACE_TX,
         )
         if _mqtt_publish.is_cloud_connection:
             self._queued_cloudpoll_requests += 1
@@ -1348,7 +1339,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             self._http_lastrequest,
             request,
             CONF_PROTOCOL_HTTP,
-            self.TRACE_TX,
+            ConfigEntryManager.TRACE_TX,
         )
         try:
             response = await http.async_request_raw(request.json())
@@ -1708,7 +1699,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         """Stops an ongoing poll if any and executes a full poll (like when onlining)."""
         await self._async_polling_stop()
         # before retriggering ensure we're not overlapping with device shutdown
-        if self.state is ManagerState.LOADED:
+        if self.config_entry.state is ConfigEntryState.LOADED:
             self.device_debug = None
             for handler in self.namespace_handlers.values():
                 handler.polling_epoch_next = 0.0
@@ -1800,7 +1791,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             ProtocolSensor.ATTR_MQTT_BROKER, ProtocolSensor.ATTR_MQTT
         )
 
-    def profile_linked(self, profile: ApiProfile):
+    def profile_linked(self, profile: "MQTTProfile"):
         if self._profile is not profile:
             if self._profile:
                 self._profile.unlink(self)
@@ -1824,13 +1815,14 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         self._profile = None
 
     def _check_protocol_ext(self):
+        api = self.api
         userId = self.descriptor.userId
-        if userId in ApiProfile.profiles:
-            profile = ApiProfile.profiles[userId]
+        if userId in api.profiles:
+            profile = api.profiles[userId]
             if profile and (profile.key != self.key):
-                profile = ApiProfile.api
+                profile = api
         else:
-            profile = ApiProfile.api
+            profile = api
         _profile = self._profile
         if _profile != profile:
             if _profile:
@@ -2033,7 +2025,7 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
         ):
             return
         else:
-            remove_issue(mlc.ISSUE_DEVICE_ID_MISMATCH, self.id)
+            self.remove_issue(mlc.ISSUE_DEVICE_ID_MISMATCH)
 
         descr = self.descriptor
         oldfirmware = descr.firmware
@@ -2235,8 +2227,15 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
                 tzname = _TZ_PATCH[tzname]
 
             try:
-                tz = await async_load_zoneinfo(tzname, self)
-            except:
+                tz = await self.api.async_load_zoneinfo(tzname)
+            except Exception as e:
+                self.log_exception(
+                    self.WARNING,
+                    e,
+                    "loading timezone(%s) - check your python environment",
+                    tzname,
+                    timeout=14400,
+                )
                 return False
 
             timestamp = self.device_timestamp
@@ -2398,25 +2397,24 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
             )
             if self.online:
                 self._set_offline()
-            create_issue(
+            self.create_issue(
                 mlc.ISSUE_DEVICE_ID_MISMATCH,
-                self.id,
-                severity=IssueSeverity.CRITICAL,
+                severity=self.IssueSeverity.CRITICAL,
                 translation_placeholders={"device_name": self.name},
             )
             return True
         return False
 
     def update_device_info(self, device_info: "DeviceInfoType"):
+        api = self.api
         self.device_info = device_info
-        if _device_registry_entry := self.device_registry_entry:
-            name = device_info.get(mc.KEY_DEVNAME) or self._get_internal_name()
-            if name != _device_registry_entry.name:
-                self.get_device_registry().async_update_device(
-                    _device_registry_entry.id, name=name
-                )
+        name = device_info.get(mc.KEY_DEVNAME) or self._get_internal_name()
+        if name != self.device_registry_entry.name:
+            api.device_registry.async_update_device(
+                self.device_registry_entry.id, name=name
+            )
         channel = -1
-        async_update_entity = self.get_entity_registry().async_update_entity
+        async_update_entity = api.entity_registry.async_update_entity
         for device_info_channel in device_info.get("channels", []):
             # we assume the device_info.channels struct are mapped
             # to what we consider 'default' entities for the device
@@ -2587,4 +2585,4 @@ class MerossDevice(ConfigEntryManager, MerossDeviceBase):
 
     async def _async_button_reload_press(self):
         """Reload the config_entry."""
-        ConfigEntriesHelper(self.hass).schedule_reload(self.config_entry.entry_id)
+        self.schedule_reload()

@@ -2,12 +2,12 @@ import typing
 
 from homeassistant.components import fan
 
-from . import meross_entity as me
+from .helpers import entity as me
 from .helpers.namespaces import NamespaceHandler
 from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
-    from .meross_device import DigestInitReturnType, MerossDevice
+    from .helpers.device import Device, DigestInitReturnType
 
 
 async def async_setup_entry(hass, config_entry, async_add_devices):
@@ -21,13 +21,13 @@ except:
     _supported_features = fan.FanEntityFeature.SET_SPEED
 
 
-class MLFan(me.MerossBinaryEntity, fan.FanEntity):
+class MLFan(me.MLBinaryEntity, fan.FanEntity):
     """
     Fan entity for map100 Air Purifier (or any device implementing Appliance.Control.Fan)
     """
 
     PLATFORM = fan.DOMAIN
-    manager: "MerossDevice"
+    manager: "Device"
 
     ns = mn.Appliance_Control_Fan
     key_value = mc.KEY_SPEED
@@ -49,7 +49,7 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
         "_togglex",
     )
 
-    def __init__(self, manager: "MerossDevice", channel):
+    def __init__(self, manager: "Device", channel):
         self.percentage = None
         self.speed_count = 1  # safe default: auto-inc when 'fan' payload updates
         self._fan = {}
@@ -137,7 +137,7 @@ class MLFan(me.MerossBinaryEntity, fan.FanEntity):
         self.update_onoff(payload[mc.KEY_ONOFF])
 
 
-def digest_init_fan(device: "MerossDevice", digest) -> "DigestInitReturnType":
+def digest_init_fan(device: "Device", digest) -> "DigestInitReturnType":
     """[{ "channel": 2, "speed": 3, "maxSpeed": 3 }]"""
     for channel_digest in digest:
         MLFan(device, channel_digest[mc.KEY_CHANNEL])
@@ -145,7 +145,7 @@ def digest_init_fan(device: "MerossDevice", digest) -> "DigestInitReturnType":
     return handler.parse_list, (handler,)
 
 
-def namespace_init_fan(device: "MerossDevice"):
+def namespace_init_fan(device: "Device"):
     """Special care for NS_FAN since it might have been initialized in digest_init"""
     if mc.KEY_FAN not in device.descriptor.digest:
         # actually only map100 (so far)

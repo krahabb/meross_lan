@@ -6,7 +6,8 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.util import dt as dt_util
 
-from .. import const as mlc, meross_entity as me
+from .. import const as mlc
+from ..helpers import entity as me
 from ..helpers.namespaces import (
     EntityNamespaceHandler,
     EntityNamespaceMixin,
@@ -18,7 +19,7 @@ from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import MerossDevice
+    from ..helpers.device import Device
 
 
 class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
@@ -30,7 +31,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
     when the power is very low (likely due to power readings being a bit off).
     """
 
-    manager: "MerossDevice"
+    manager: "Device"
 
     SENSOR_DEFS: typing.ClassVar[
         dict[
@@ -79,7 +80,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         "sensor_consumptionx",
     )
 
-    def __init__(self, manager: "MerossDevice", channel: object | None):
+    def __init__(self, manager: "Device", channel: object | None):
         self._estimate = 0.0
         self._electricity_lastepoch = 0.0
         self._reset_unsub = None
@@ -224,7 +225,7 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
         self._schedule_reset(_now)
 
 
-def namespace_init_electricity(device: "MerossDevice"):
+def namespace_init_electricity(device: "Device"):
     NamespaceHandler(
         device,
         mn.Appliance_Control_Electricity,
@@ -267,7 +268,7 @@ class ElectricityXSensor(ElectricitySensor):
 
     __slots__ = ()
 
-    def __init__(self, manager: "MerossDevice", channel: object):
+    def __init__(self, manager: "Device", channel: object):
         super().__init__(manager, channel)
         manager.register_parser(self, mn.Appliance_Control_ElectricityX)
 
@@ -284,7 +285,7 @@ class ElectricityXNamespaceHandler(NamespaceHandler):
     the same approach as in ConsumptionH namespace
     """
 
-    def __init__(self, device: "MerossDevice"):
+    def __init__(self, device: "Device"):
         NamespaceHandler.__init__(
             self,
             device,
@@ -316,7 +317,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
     ATTR_OFFSET: typing.Final = "offset"
     ATTR_RESET_TS: typing.Final = "reset_ts"
 
-    manager: "MerossDevice"
+    manager: "Device"
     ns = mn.Appliance_Control_ConsumptionX
 
     __slots__ = (
@@ -330,7 +331,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         "_tomorrow_midnight_epoch",
     )
 
-    def __init__(self, manager: "MerossDevice"):
+    def __init__(self, manager: "Device"):
         self.offset: int = 0
         self.reset_ts: int = 0
         self.energy_estimate: float = 0.0
@@ -353,7 +354,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
         )
         EntityNamespaceHandler(self).polling_response_size_adj(30)
 
-    # interface: MerossEntity
+    # interface: MLEntity
     def set_unavailable(self):
         self._yesterday_midnight_epoch = 0
         self._today_midnight_epoch = 0
@@ -453,7 +454,7 @@ class ConsumptionXSensor(EntityNamespaceMixin, MLNumericSensor):
 
         # we're optimizing the payload response_size calculation
         # so our multiple requests are more reliable. If anything
-        # goes wrong, the MerossDevice multiple payload managment
+        # goes wrong, the Device multiple payload managment
         # is smart enough to adapt to wrong estimates
         days = payload[mc.KEY_CONSUMPTIONX]
         days_len = len(days)
@@ -553,7 +554,7 @@ class ConsumptionConfigNamespaceHandler(VoidNamespaceHandler):
     """Suppress processing Appliance.Control.ConsumptionConfig since
     it is already processed at the MQTTConnection message handling."""
 
-    def __init__(self, device: "MerossDevice"):
+    def __init__(self, device: "Device"):
         super().__init__(device, mn.Appliance_Control_ConsumptionConfig)
 
 
@@ -563,11 +564,11 @@ class OverTempEnableSwitch(EntityNamespaceMixin, me.MENoChannelMixin, MLSwitch):
     key_value = mc.KEY_ENABLE
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.CONFIG
+    entity_category = MLSwitch.EntityCategory.CONFIG
 
     __slots__ = ("sensor_overtemp_type",)
 
-    def __init__(self, manager: "MerossDevice"):
+    def __init__(self, manager: "Device"):
         super().__init__(
             manager, None, "config_overtemp_enable", MLSwitch.DeviceClass.SWITCH
         )

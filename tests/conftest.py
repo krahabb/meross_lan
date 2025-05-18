@@ -15,7 +15,6 @@
 #
 # See here for more info: https://docs.pytest.org/en/latest/fixture.html (note that
 # pytest includes fixtures OOB which you can use as defined on this page)
-import logging
 from unittest.mock import patch
 
 import pytest
@@ -23,8 +22,6 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
     mock_aiohttp_client,
 )
-
-from custom_components.meross_lan.helpers import Loggable
 
 from . import helpers
 
@@ -57,7 +54,7 @@ def auto_enable(request: pytest.FixtureRequest):
             yield
         else:
             with patch(
-                "custom_components.meross_lan.meross_entity.MerossEntity.get_last_state_available",
+                "custom_components.meross_lan.helpers.entity.MLEntity.get_last_state_available",
                 return_value=None,
             ):
                 yield
@@ -82,11 +79,11 @@ def skip_notifications_fixture():
 def disable_debug_fixture():
     """Disable development debug code so to test in a production env."""
     with (
-        patch("custom_components.meross_lan.MEROSSDEBUG", None),
-        patch("custom_components.meross_lan.meross_profile.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.helpers.meross_profile.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.helpers.component_api.MEROSSDEBUG", None),
         patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None),
-        patch("custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None),
         patch("custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None),
     ):
         yield
 
@@ -103,9 +100,10 @@ def disable_entity_registry_update():
         MLGarageMultipleConfigSwitch,
     )
 
+    saved = MLGarageDoorEnableSwitch.update_onoff
     MLGarageDoorEnableSwitch.update_onoff = MLGarageMultipleConfigSwitch.update_onoff
     yield
-
+    MLGarageDoorEnableSwitch.update_onoff = saved
 
 @pytest.fixture(autouse=True, scope="function")
 def log_exception(request: pytest.FixtureRequest, capsys: pytest.CaptureFixture):

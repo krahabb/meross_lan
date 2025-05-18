@@ -7,10 +7,10 @@ from homeassistant.core import CoreState, callback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from . import meross_entity as me
-from .helpers import reverse_lookup
+from .helpers import entity as me, reverse_lookup
 
 if typing.TYPE_CHECKING:
+    from typing import Unpack
 
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
@@ -19,11 +19,8 @@ if typing.TYPE_CHECKING:
     from homeassistant.helpers.event import EventStateChangedData
 
     from .climate import MtsClimate
-    from .meross_device import MerossDeviceBase
+    from .helpers.device import BaseDevice
 
-    # optional arguments for MLConfigNumber init
-    class MLConfigSelectArgs(me.MerossEntityArgs):
-        pass
 
 
 async def async_setup_entry(
@@ -32,7 +29,7 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, select.DOMAIN)
 
 
-class MLSelect(me.MerossEntity, select.SelectEntity):
+class MLSelect(me.MLEntity, select.SelectEntity):
     """Base 'abstract' class for both select entities representing a
     device config/option value (through MLConfigSelect) and
     emulated entities used to configure meross_lan (i.e. MtsTrackedSensor).
@@ -77,10 +74,10 @@ class MLConfigSelect(MLSelect):
 
     def __init__(
         self,
-        manager: "MerossDeviceBase",
+        manager: "BaseDevice",
         channel: object | None,
         entitykey: str | None = None,
-        **kwargs: "typing.Unpack[MLConfigSelectArgs]",
+        **kwargs: "Unpack[MLSelect.Args]",
     ):
         self.current_option = None
         self.options_map = dict(
@@ -118,7 +115,7 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
 
     # HA core entity attributes:
     current_option: str
-    entity_category = me.EntityCategory.CONFIG
+    entity_category = MLSelect.EntityCategory.CONFIG
     entity_registry_enabled_default = False
 
     __slots__ = (
@@ -142,7 +139,7 @@ class MtsTrackedSensor(me.MEAlwaysAvailableMixin, MLSelect):
         self._tracking_unsub = None
         super().__init__(climate.manager, climate.channel, "tracked_sensor")
 
-    # interface: MerossEntity
+    # interface: MLEntity
     async def async_shutdown(self):
         self._tracking_stop()
         await super().async_shutdown()

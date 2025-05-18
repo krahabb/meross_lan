@@ -7,7 +7,8 @@ from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.meross_lan import MerossApi, const as mlc
+from custom_components.meross_lan import const as mlc
+from custom_components.meross_lan.helpers.component_api import ComponentApi
 from custom_components.meross_lan.light import MLDNDLightEntity
 from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 from emulator import generate_emulators
@@ -29,12 +30,12 @@ async def test_mqtthub_entry(
     """Test mqtt hub entry setup and unload."""
     async with helpers.MQTTHubEntryMocker(request, hass):
         api = hass.data[mlc.DOMAIN]
-        assert isinstance(api, MerossApi)
+        assert isinstance(api, ComponentApi)
         assert api._mqtt_connection and api._mqtt_connection.mqtt_is_subscribed
 
     # Unload the entry and verify that the data has not been removed
-    # we actually never remove the MerossApi...
-    assert type(hass.data[mlc.DOMAIN]) is MerossApi
+    # we actually never remove the ComponentApi...
+    assert type(hass.data[mlc.DOMAIN]) is ComponentApi
 
     # try to fight subscribe/unsubscribe cooldowns
     await asyncio.sleep(1)
@@ -124,5 +125,5 @@ async def test_profile_entry(
     """
     Test a Meross cloud profile entry
     """
-    async with helpers.ProfileEntryMocker(request, hass):
-        assert MerossApi.profiles[tc.MOCK_PROFILE_ID] is not None
+    async with helpers.ProfileEntryMocker(request, hass) as profile_mock:
+        assert profile_mock.api.profiles[tc.MOCK_PROFILE_ID] is not None

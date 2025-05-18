@@ -6,7 +6,7 @@ from ..merossclient import const as mc, namespaces as mn
 from ..number import MtsSetPointNumber
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import MerossDevice
+    from ..helpers.device import Device
     from ..number import MtsTemperatureNumber
 
 
@@ -21,7 +21,7 @@ class Mts200SetPointNumber(MtsSetPointNumber):
 class Mts200Climate(MtsClimate):
     """Climate entity for MTS200 devices"""
 
-    manager: "MerossDevice"
+    manager: "Device"
     ns = mn.Appliance_Control_Thermostat_Mode
 
     MTS_MODE_TO_PRESET_MAP = {
@@ -55,7 +55,7 @@ class Mts200Climate(MtsClimate):
 
     def __init__(
         self,
-        manager: "MerossDevice",
+        manager: "Device",
         channel: object,
         adjust_number_class: typing.Type["MtsTemperatureNumber"],
     ):
@@ -67,7 +67,10 @@ class Mts200Climate(MtsClimate):
             Mts200Schedule,
         )
         self._mts_summermode = None
-        self._mts_summermode_supported = mn.Appliance_Control_Thermostat_SummerMode.name in manager.descriptor.ability
+        self._mts_summermode_supported = (
+            mn.Appliance_Control_Thermostat_SummerMode.name
+            in manager.descriptor.ability
+        )
         if self._mts_summermode_supported:
             self.hvac_modes = [
                 MtsClimate.HVACMode.OFF,

@@ -1,19 +1,23 @@
-from typing import Any, ClassVar
+import typing
 
 from homeassistant.core import HomeAssistant, StateMachine
-from homeassistant.helpers.entity import Entity
+from homeassistant.helpers import entity
 
-from custom_components.meross_lan.meross_entity import MerossEntity
 from custom_components.meross_lan.merossclient import const as mc
 from custom_components.meross_lan.switch import MLToggleX
 
 from tests.helpers import DeviceContext
 
-EntityType = type[Entity]
-MerossEntityTypesList = list[type[MerossEntity]]
-MerossEntityTypesDigestContainer = (
-    MerossEntityTypesList | dict[str, MerossEntityTypesList]
-)
+if typing.TYPE_CHECKING:
+    from typing import Any, ClassVar
+
+    from custom_components.meross_lan.helpers.entity import MLEntity
+
+    EntityType = type[entity.Entity]
+    MerossEntityTypesList = list[type[MLEntity]]
+    MerossEntityTypesDigestContainer = (
+        MerossEntityTypesList | dict[str, MerossEntityTypesList]
+    )
 
 
 class EntityComponentTest:
@@ -22,27 +26,36 @@ class EntityComponentTest:
     proper testing on the different test types.
     """
 
-    # static test context
-    hass: ClassVar[HomeAssistant]
-    hass_service_call: ClassVar
-    hass_states: ClassVar[StateMachine]
-    ability: ClassVar[dict[str, Any]]
-    digest: ClassVar[dict[str, Any]]
-    expected_entity_types: ClassVar[MerossEntityTypesList]
-    device_context: ClassVar[DeviceContext]
-    entity_id: ClassVar[str]
+    if typing.TYPE_CHECKING:
+        # static test context
+        hass: ClassVar[HomeAssistant]
+        hass_service_call: ClassVar
+        hass_states: ClassVar[StateMachine]
+        ability: ClassVar[dict[str, Any]]
+        digest: ClassVar[dict[str, Any]]
+        expected_entity_types: ClassVar[MerossEntityTypesList]
+        device_context: ClassVar[DeviceContext]
+        entity_id: ClassVar[str]
 
-    # class members: configure the entity component testing
-    DOMAIN: str
-    ENTITY_TYPE: ClassVar[EntityType]
-    DEVICE_ENTITIES: ClassVar[MerossEntityTypesList] = []
+        # class members: configure the entity component testing
+        DOMAIN: str
+        ENTITY_TYPE: ClassVar[EntityType]
+        DEVICE_ENTITIES: ClassVar[MerossEntityTypesList]
+        """Types of entities which are instanced on every device."""
+        DIGEST_ENTITIES: ClassVar[dict[str, MerossEntityTypesDigestContainer]]
+        """Types of entities which are instanced based off the digest structure."""
+        NAMESPACES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]]
+        """Types of entities which are instanced based off namespace ability presence."""
+        HUB_SUBDEVICES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]]
+        """Types of entities which are instanced based off subdevice definition in Hub digest."""
+
+    DEVICE_ENTITIES = []
     """Types of entities which are instanced on every device."""
-    DIGEST_ENTITIES: ClassVar[dict[str, MerossEntityTypesDigestContainer]] = {}
+    DIGEST_ENTITIES = {}
     """Types of entities which are instanced based off the digest structure."""
-    NAMESPACES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]] = {}
+    NAMESPACES_ENTITIES = {}
     """Types of entities which are instanced based off namespace ability presence."""
-    HUB_SUBDEVICES_ENTITIES: ClassVar[dict[str, MerossEntityTypesList]] = {}
-    """Types of entities which are instanced based off subdevice definition in Hub digest."""
+    HUB_SUBDEVICES_ENTITIES = {}
 
     async def async_service_call(self, service: str, service_data: dict = {}):
         await self.hass_service_call(
@@ -51,7 +64,10 @@ class EntityComponentTest:
             service_data=service_data | {"entity_id": self.entity_id},
             blocking=True,
         )
-        assert (state := self.hass_states.get(self.entity_id)), ("missing state", self.entity_id)
+        assert (state := self.hass_states.get(self.entity_id)), (
+            "missing state",
+            self.entity_id,
+        )
         return state
 
     async def async_service_call_check(
@@ -62,23 +78,26 @@ class EntityComponentTest:
             state.state == expected_state
         ), f"service:{service} expected_state:{expected_state}"
         await self.device_context.async_poll_single()
-        assert (state := self.hass_states.get(self.entity_id)), ("missing state", self.entity_id)
+        assert (state := self.hass_states.get(self.entity_id)), (
+            "missing state",
+            self.entity_id,
+        )
         assert (
             state.state == expected_state
         ), f"service:{service} expected_state:{expected_state}"
         return state
 
-    async def async_test_each_callback(self, entity: MerossEntity):
+    async def async_test_each_callback(self, entity: "MLEntity"):
         if entity.manager.online:
             assert entity.available, f"entity {entity.entity_id} not available"
 
-    async def async_test_enabled_callback(self, entity: MerossEntity):
+    async def async_test_enabled_callback(self, entity: "MLEntity"):
         pass
 
-    async def async_test_disabled_callback(self, entity: MerossEntity):
+    async def async_test_disabled_callback(self, entity: "MLEntity"):
         pass
 
-    def _check_remove_togglex(self, entity: MerossEntity):
+    def _check_remove_togglex(self, entity: "MLEntity"):
         """
         Use to remove expected (but not instantiated) MLToggleX entities
         for those hybrid entities which overtake ToggleX behavior

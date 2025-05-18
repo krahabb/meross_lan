@@ -6,8 +6,9 @@ from ..merossclient import const as mc, namespaces as mn
 if typing.TYPE_CHECKING:
     from typing import Any, Callable, Coroutine
 
-    from ..meross_device import AsyncRequestFunc, MerossDevice
-    from ..meross_entity import MerossEntity
+    from . import Loggable
+    from .device import AsyncRequestFunc, Device
+    from .entity import MLEntity
 
     PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
 
@@ -23,14 +24,14 @@ class EntityDisablerMixin:
     entity_registry_enabled_default = False
 
 
-class NamespaceParser:
+class NamespaceParser(Loggable if typing.TYPE_CHECKING else object):
     """
     Represents the final 'parser' of a message after 'handling' in NamespaceHandler.
     In this model, NamespaceHandler is responsible for unpacking those messages
     who are intended to be delivered to different entities based off some indexing
     keys. These are typically: "channel", "Id", "subId" depending on the namespace itself.
     The class implementing the NamespaceParser protocol needs to expose that key value as a
-    property with the same name. 99% of the time the class is a MerossEntity with its "channel"
+    property with the same name. 99% of the time the class is a MLEntity with its "channel"
     property but the implementation allows more versatility.
     The protocol implementation needs to also expose a proper _parse_{key_namespace}
     (see NamespaceHandler.register_parser).
@@ -59,9 +60,8 @@ class NamespaceParser:
         specific class of entities instead of having to define a specific _parse_xxxx.
         This is useful for generalized sensor classes which are just mapped to a single
         namespace."""
-        # forgive typing: the parser will nevertheless inherit from Loggable
-        self.log(  # type: ignore
-            self.WARNING,  # type: ignore
+        self.log(
+            self.WARNING,
             "Parsing undefined for payload:(%s)",
             str(payload),
             timeout=14400,
@@ -75,8 +75,8 @@ class NamespaceParser:
         message as an optimization in case the namespace is only mapped to a single
         entity/class instance (See DNDMode)
         """
-        self.log(  # type: ignore
-            self.WARNING,  # type: ignore
+        self.log(
+            self.WARNING,
             "Handler undefined for payload:(%s)",
             str(payload),
             timeout=14400,
@@ -88,13 +88,13 @@ class NamespaceHandler:
     This is the root class for somewhat dynamic namespace handlers.
     Every device keeps its own list of method handlers indexed through
     the message namespace in order to speed up parsing/routing when receiving
-    a message from the device see MerossDevice.namespace_handlers and
-    MerossDevice._handle to get the basic behavior.
+    a message from the device see Device.namespace_handlers and
+    Device._handle to get the basic behavior.
 
     - handler: specify a custom handler method for this namespace. By default
     it will be looked-up in the device definition (looking for _handle_xxxxxx)
 
-    - entity_class: specify a MerossEntity type (actually an implementation
+    - entity_class: specify a MLEntity type (actually an implementation
     of Merossentity) to be instanced whenever a message for a particular channel
     is received and the channel has no parser associated (see _handle_list)
 
@@ -126,7 +126,7 @@ class NamespaceHandler:
 
     def __init__(
         self,
-        device: "MerossDevice",
+        device: "Device",
         ns: "mn.Namespace",
         *,
         handler: typing.Callable[[dict, dict], None] | None = None,
@@ -238,7 +238,7 @@ class NamespaceHandler:
 
     def register_entity_class(
         self,
-        entity_class: type["MerossEntity"],
+        entity_class: type["MLEntity"],
         *,
         initially_disabled: bool = True,
         build_from_digest: bool = False,
@@ -275,7 +275,7 @@ class NamespaceHandler:
         key_channel: str,
     ):
         # when setting up the entity-dispatching we'll substitute the legacy handler
-        # (used to be a MerossDevice method with syntax like _handle_Appliance_xxx_xxx)
+        # (used to be a Device method with syntax like _handle_Appliance_xxx_xxx)
         # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
         # to be optimized against a well known type of payload. We're starting by guessing our
         # payload is a list but we'll dynamically adjust this whenever we find (in real world)
@@ -693,14 +693,14 @@ class NamespaceHandler:
             await async_request_func(*self.polling_request)
 
 
-class EntityNamespaceMixin(MerossEntity if typing.TYPE_CHECKING else object):
+class EntityNamespaceMixin(MLEntity if typing.TYPE_CHECKING else object):
     """
     Special 'polling enabler/disabler' mixin used with entities which are
     'single instance' for a namespace handler and so they'll disable polling
     should they're disabled in HA.
     """
 
-    manager: "MerossDevice"
+    manager: "Device"
 
     async def async_added_to_hass(self):
         self.manager.get_handler(self.ns).polling_strategy = POLLING_STRATEGY_CONF[
@@ -740,7 +740,7 @@ class VoidNamespaceHandler(NamespaceHandler):
     just provides an empty handler and so suppresses any log too (for unknown namespaces)
     done by the base default handling."""
 
-    def __init__(self, device: "MerossDevice", namespace: "mn.Namespace"):
+    def __init__(self, device: "Device", namespace: "mn.Namespace"):
         NamespaceHandler.__init__(self, device, namespace, handler=self._handle_void)
 
     def _handle_void(self, header: dict, payload: dict):

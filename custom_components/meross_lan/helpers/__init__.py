@@ -3,18 +3,14 @@ Helpers!
 """
 
 import abc
-import asyncio
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from enum import StrEnum
-import importlib
 import logging
 from time import gmtime, time
 import typing
-import zoneinfo
 
 from homeassistant import const as hac
-from homeassistant.helpers import device_registry, entity_registry
 
 try:
     # HA core compatibility patch (these were likely introduced in 2024.9)
@@ -38,11 +34,13 @@ from .. import const as mlc
 if typing.TYPE_CHECKING:
     from datetime import tzinfo
     import ssl
-    from typing import Any, Callable, ClassVar, Coroutine, Final
-
-    from homeassistant.core import HomeAssistant
-
-    from .. import MerossApi
+    from typing import (
+        Any,
+        Final,
+        NotRequired,
+        TypedDict,
+        Unpack,
+    )
 
 
 def clamp(_value, _min, _max):
@@ -83,67 +81,12 @@ def datetime_from_epoch(epoch, tz: "tzinfo | None"):
     If tz is None it'll return a naive datetime in UTC coordinates
     """
     y, m, d, hh, mm, ss, weekday, jday, dst = gmtime(epoch)
-    utcdt = datetime(y, m, d, hh, mm, min(ss, 59), 0, UTC)
     if tz is UTC:
-        return utcdt
+        return datetime(y, m, d, hh, mm, min(ss, 59), 0, tz)
     elif tz is None:
-        return utcdt.replace(tzinfo=None)
+        return datetime(y, m, d, hh, mm, min(ss, 59), 0, UTC).replace(tzinfo=None)
     else:
-        return utcdt.astimezone(tz)
-
-
-_import_module_lock = asyncio.Lock()
-_import_module_cache = {}
-
-
-async def async_import_module(name: str):
-
-    try:
-        return _import_module_cache[name]
-    except KeyError:
-        async with _import_module_lock:
-            # check (again) the module was not asyncronously loaded when waiting the lock
-            try:
-                return _import_module_cache[name]
-            except KeyError:
-                module = await Loggable.hass.async_add_executor_job(
-                    importlib.import_module,
-                    name,
-                    "custom_components.meross_lan",
-                )
-                _import_module_cache[name] = module
-                return module
-
-
-_zoneinfo_cache: dict[str, zoneinfo.ZoneInfo] = {}
-
-
-async def async_load_zoneinfo(key: str, loggable: "Loggable"):
-    """
-    Creates a ZoneInfo instance from an executor.
-    HA core 2024.5 might complain if ZoneInfo needs to load files (no cache hit)
-    so we have to always demand this to an executor because the 'decision' to
-    load is embedded inside the ZoneInfo initialization.
-    A bit cumbersome though..
-    """
-    try:
-        return _zoneinfo_cache[key]
-    except KeyError:
-        try:
-            _zoneinfo_cache[key] = tz = await Loggable.hass.async_add_executor_job(
-                zoneinfo.ZoneInfo,
-                key,
-            )
-            return tz
-        except Exception as exception:
-            loggable.log_exception(
-                loggable.WARNING,
-                exception,
-                "Unable to load timezone(%s) info - check your python environment",
-                key,
-                timeout=14400,
-            )
-            raise exception
+        return datetime(y, m, d, hh, mm, min(ss, 59), 0, UTC).astimezone(tz)
 
 
 class ConfigEntryType(StrEnum):
@@ -163,65 +106,6 @@ class ConfigEntryType(StrEnum):
                 return (ConfigEntryType.PROFILE, profile_id)
             case _:
                 return (ConfigEntryType.UNKNOWN, None)
-
-
-class ConfigEntriesHelper:
-    """
-    Helpers and compatibility layer (among HA cores) for Hass ConfigEntries
-    """
-
-    # TODO: move to a static class model
-
-    __slots__ = (
-        "config_entries",
-        "_entries",
-        "_async_entry_for_domain_unique_id",
-    )
-
-    def __init__(self, hass: "HomeAssistant"):
-        self.config_entries: typing.Final = hass.config_entries
-        self._entries = None
-        # added in HA core 2024.2
-        self._async_entry_for_domain_unique_id = getattr(
-            self.config_entries, "async_entry_for_domain_unique_id", None
-        )
-
-    def get_config_entry(self, unique_id: str):
-        """Gets the configured entry if it exists."""
-        if self._async_entry_for_domain_unique_id:
-            return self._async_entry_for_domain_unique_id(mlc.DOMAIN, unique_id)
-        if self._entries is None:
-            self._entries = self.config_entries.async_entries(mlc.DOMAIN)
-        for config_entry in self._entries:
-            if config_entry.unique_id == unique_id:
-                return config_entry
-        return None
-
-    def get_config_flow(self, unique_id: str):
-        """Returns the current flow (in progres) if any."""
-        for progress in self.config_entries.flow.async_progress_by_handler(
-            mlc.DOMAIN,
-            include_uninitialized=True,
-            match_context={"unique_id": unique_id},
-        ):
-            return progress
-        return None
-
-    def schedule_reload(self, entry_id: str):
-        """Pre HA core 2024.2 compatibility layer"""
-        _async_schedule_reload = getattr(
-            self.config_entries, "async_schedule_reload", None
-        )
-        if _async_schedule_reload:
-            _async_schedule_reload(entry_id)
-        else:
-            """Schedule a config entry to be reloaded."""
-            if entry := self.config_entries.async_get_entry(entry_id):
-                entry.async_cancel_retry_setup()
-                MerossApi.api.async_create_task(
-                    self.config_entries.async_reload(entry_id),
-                    f".schedule_reload({entry.title},{entry_id})",
-                )
 
 
 def getLogger(name):
@@ -300,15 +184,16 @@ class Loggable(abc.ABC):
     Derived classes can customize this in different flavours:
     - basic way is to override 'logtag' to provide a custom name when
     logging.
-    - custom way by overriding 'log' like in 'MerossDevice' we can
+    - custom way by overriding 'log' like in 'Device' we can
     intercept log messages.
     """
 
     if typing.TYPE_CHECKING:
-        hass: ClassVar[HomeAssistant]
-        api: ClassVar[MerossApi]
         id: Final[Any]
         logger: "Loggable | logging.Logger"
+
+        class Args(TypedDict):
+            logger: NotRequired["Loggable | logging.Logger"]
 
     hac = hac
 
@@ -318,34 +203,11 @@ class Loggable(abc.ABC):
     WARNING = mlc.CONF_LOGGING_WARNING
     CRITICAL = mlc.CONF_LOGGING_CRITICAL
 
-    # hass, api: set when initializing MerossApi
-    hass = None  # type: ignore
-    """Cached HomeAssistant instance (Boom!)"""
-    api = None  # type: ignore
-    """Cached MerossApi instance (Boom!)"""
+    __slots__ = ("id", "logtag", "logger")
 
-    @staticmethod
-    def get_device_registry():
-        return device_registry.async_get(Loggable.hass)
-
-    @staticmethod
-    def get_entity_registry():
-        return entity_registry.async_get(Loggable.hass)
-
-    __slots__ = (
-        "id",
-        "logtag",
-        "logger",
-    )
-
-    def __init__(
-        self,
-        id,
-        *,
-        logger: "Loggable | logging.Logger" = LOGGER,
-    ):
+    def __init__(self, id, **kwargs: "Unpack[Args]"):
         self.id = id
-        self.logger = logger
+        self.logger = kwargs.get("logger", LOGGER)
         self.configure_logger()
         self.log(self.DEBUG, "init")
 

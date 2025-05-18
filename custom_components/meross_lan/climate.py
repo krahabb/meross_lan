@@ -2,8 +2,7 @@ import typing
 
 from homeassistant.components import climate
 
-from . import meross_entity as me
-from .helpers import reverse_lookup
+from .helpers import entity as me, reverse_lookup
 from .merossclient import const as mc
 from .select import MtsTrackedSensor
 from .sensor import MLTemperatureSensor
@@ -13,8 +12,8 @@ if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from .calendar import MtsSchedule
+    from .helpers.device import BaseDevice
     from .helpers.namespaces import NamespaceHandler
-    from .meross_device import MerossDeviceBase
     from .number import MtsSetPointNumber, MtsTemperatureNumber
 
 
@@ -24,11 +23,11 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, climate.DOMAIN)
 
 
-class MtsClimate(me.MerossEntity, climate.ClimateEntity):
+class MtsClimate(me.MLEntity, climate.ClimateEntity):
     PLATFORM = climate.DOMAIN
 
     ATTR_TEMPERATURE: typing.Final = climate.ATTR_TEMPERATURE
-    TEMP_CELSIUS: typing.Final = me.MerossEntity.hac.UnitOfTemperature.CELSIUS
+    TEMP_CELSIUS: typing.Final = me.MLEntity.hac.UnitOfTemperature.CELSIUS
 
     HVACAction: typing.TypeAlias = climate.HVACAction
     HVACMode: typing.TypeAlias = climate.HVACMode
@@ -55,7 +54,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
     SET_TEMP_FORCE_MANUAL_MODE = True
     """Determines the behavior of async_set_temperature."""
 
-    manager: "MerossDeviceBase"
+    manager: "BaseDevice"
     number_adjust_temperature: typing.Final["MtsTemperatureNumber"]
     number_preset_temperature: dict[str, "MtsSetPointNumber"]
     schedule: typing.Final["MtsSchedule"]
@@ -113,7 +112,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
 
     def __init__(
         self,
-        manager: "MerossDeviceBase",
+        manager: "BaseDevice",
         channel: object,
         adjust_number_class: typing.Type["MtsTemperatureNumber"],
         preset_number_class: typing.Type["MtsSetPointNumber"] | None,
@@ -145,7 +144,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
         self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
         self.sensor_current_temperature.entity_registry_enabled_default = False
 
-    # interface: MerossEntity
+    # interface: MLEntity
     async def async_shutdown(self):
         await super().async_shutdown()
         self.sensor_current_temperature: "MLTemperatureSensor" = None  # type: ignore
@@ -221,9 +220,7 @@ class MtsClimate(me.MerossEntity, climate.ClimateEntity):
             # we'll speed up polling for the adjust/calibration ns
             try:
                 ns_adjust = self.get_ns_adjust()
-                if ns_adjust.polling_epoch_next > (
-                    ns_adjust.device.lastresponse + 30
-                ):
+                if ns_adjust.polling_epoch_next > (ns_adjust.device.lastresponse + 30):
                     ns_adjust.polling_epoch_next = 0.0
             except:
                 # in case the ns is not available for this device

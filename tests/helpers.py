@@ -15,7 +15,7 @@ import aiohttp
 from freezegun.api import freeze_time
 from homeassistant import config_entries, const as hac
 from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import entity_registry
+from homeassistant.helpers import entity_registry as er
 import pytest
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -26,19 +26,15 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMockResponse,
 )
 
-from custom_components.meross_lan import MerossApi, MerossDevice, const as mlc
+from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.config_flow import ConfigFlow
 from custom_components.meross_lan.diagnostics import async_get_config_entry_diagnostics
 from custom_components.meross_lan.helpers import Loggable
-from custom_components.meross_lan.meross_profile import (
-    MerossCloudProfileStoreType,
+from custom_components.meross_lan.helpers.meross_profile import (
     MerossMQTTConnection,
     MQTTConnection,
 )
 from custom_components.meross_lan.merossclient import (
-    HostAddress,
-    MerossMessage,
-    MerossResponse,
     cloudapi,
     const as mc,
     json_loads,
@@ -70,6 +66,7 @@ if typing.TYPE_CHECKING:
 
     _TimeFactory = FrozenDateTimeFactory | StepTickTimeFactory | TickingDateTimeFactory
 
+    from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     MqttMockPahoClient = MagicMock
@@ -80,6 +77,10 @@ if typing.TYPE_CHECKING:
 
     from pytest import CaptureFixture, FixtureRequest, LogCaptureFixture
 
+    from custom_components.meross_lan.helpers.component_api import ComponentApi
+    from custom_components.meross_lan.helpers.device import Device
+    from custom_components.meross_lan.helpers.manager import ConfigEntryManager
+    from custom_components.meross_lan.merossclient import MerossMessage, MerossResponse
 
 LOGGER = logging.getLogger("meross_lan.tests")
 
@@ -456,8 +457,8 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
             auto_add: NotRequired[bool]
             auto_setup: NotRequired[bool]
 
-        hass: Final
-        config_entry: Final
+        hass: Final[HomeAssistant]
+        config_entry: Final[ConfigEntry[ConfigEntryManager]]
         config_entry_id: Final
         auto_setup: Final
 
@@ -494,12 +495,17 @@ class ConfigEntryMocker(contextlib.AbstractAsyncContextManager, LogManager):
             self.config_entry.add_to_hass(hass)
 
     @property
-    def api(self) -> MerossApi:
+    def api_loaded(self):
+        return mlc.DOMAIN in self.hass.data
+
+    @property
+    def api(self) -> "ComponentApi":
+        """Beware unsafe access: ensure the component is currently loaded"""
         return self.hass.data[mlc.DOMAIN]
 
     @property
     def manager(self):
-        return self.api.managers[self.config_entry_id]
+        return self.config_entry.runtime_data
 
     @property
     def config_entry_loaded(self):
@@ -735,7 +741,6 @@ class DeviceContext(ConfigEntryMocker):
         "time",
         "_aioclient_mock",
         "_time_mock_owned",
-        "exception_warning_mock",
     )
 
     def __init__(
@@ -773,7 +778,7 @@ class DeviceContext(ConfigEntryMocker):
             self._time_mock_owned = True
 
     @property
-    def device(self) -> MerossDevice:
+    def device(self) -> "Device":
         return self.api.devices[self.device_id]  # type: ignore
 
     async def __aenter__(self):
@@ -810,8 +815,8 @@ class DeviceContext(ConfigEntryMocker):
         return device
 
     async def async_setup(self):
-        assert not MerossApi.devices.get(self.device_id)
         assert not self.config_entry_loaded
+        assert not (self.api_loaded and self.api.devices.get(self.device_id))
         result = await super().async_setup()
         assert (device := self.device) and not device.online
         return result
@@ -822,7 +827,7 @@ class DeviceContext(ConfigEntryMocker):
         and the device cleanup done, whatever the config_entry.state
         """
         result = await super().async_unload()
-        assert not MerossApi.devices.get(self.device_id)
+        assert not (self.api_loaded and self.api.devices.get(self.device_id))
         return result
 
     async def async_enable_entity(self, entity_id):
@@ -830,7 +835,7 @@ class DeviceContext(ConfigEntryMocker):
         # by firing a trigger event which will the be collected by
         # config_entries
         # so we have to recover the right instances
-        ent_reg = entity_registry.async_get(self.hass)
+        ent_reg = er.async_get(self.hass)
         ent_reg.async_update_entity(entity_id, disabled_by=None)
         # fire the entity registry changed
         await self.hass.async_block_till_done()
@@ -996,8 +1001,8 @@ class MQTTConnectionMocker(contextlib.AbstractContextManager):
     def __init__(self, hass: "HomeAssistant"):
 
         async def _async_mqtt_publish(
-            _self: MQTTConnection, device_id: str, request: MerossMessage
-        ) -> MerossResponse | None:
+            _self: MQTTConnection, device_id: str, request: "MerossMessage"
+        ) -> "MerossResponse | None":
             return None
 
         self.async_mqtt_publish_patcher = patch.object(
@@ -1058,7 +1063,7 @@ class HAMQTTMocker(contextlib.AbstractAsyncContextManager):
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         self.async_publish_patcher.stop()
-        api: MerossApi = self.hass.data[mlc.DOMAIN]
+        api: "ComponentApi" = self.hass.data[mlc.DOMAIN]
         if api and api._mqtt_connection:
             from homeassistant.components.mqtt.client import UNSUBSCRIBE_COOLDOWN
 

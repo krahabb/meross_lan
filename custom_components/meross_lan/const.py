@@ -1,5 +1,6 @@
 """Constants for the Meross IoT local LAN integration."""
 
+import enum
 import logging
 from typing import Final, NotRequired, TypedDict
 
@@ -8,6 +9,12 @@ from homeassistant import const as hac
 from .merossclient import cloudapi, const as mc
 
 DOMAIN: Final = "meross_lan"
+
+class DeviceType(enum.Enum):
+    DEVICE = 1
+    HUB = 2
+    SUBDEVICE = 3
+
 #########################
 # common ConfigEntry keys
 #########################
@@ -72,7 +79,7 @@ class HubConfigType(ApiProfileConfigType):
 
 
 ###############################
-# MerossDevice ConfigEntry keys
+# Device ConfigEntry keys
 ###############################
 CONF_DEVICE_ID: Final = hac.CONF_DEVICE_ID
 # device key eventually retrieved from Meross account
@@ -161,7 +168,7 @@ SERVICE_REQUEST = "request"
 CONF_NOTIFYRESPONSE = "notifyresponse"
 """key used in service 'request' call"""
 CONF_PROFILE_ID_LOCAL: Final = ""
-"""label for MerossApi as a 'fake' cloud profile"""
+"""label for ComponentApi as a 'fake' cloud profile"""
 
 #
 # some common entitykeys
