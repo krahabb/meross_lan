@@ -1,8 +1,8 @@
 {
   "name": "Meross LAN",
   "render_readme": true,
-  "country": ["IT", "GB", "US", "JP", "ES", "FR", "DE"],
-  "homeassistant": "2023.7.0",
+  "country": ["IT", "GB", "US", "JP", "ES", "FR", "DE", "PL"],
+  "homeassistant": "2024.5.0b0",
   "persistent_directory": "traces",
   "hacs": "1.6.0"
 }
