@@ -144,7 +144,7 @@
                 "data": {
                     "key": "Klucz urządzenia",
                     "error": "Komunikat błędu",
-                    "allow_mqtt_publish": "Zezwalaj na publikację MQTT w chmurze"
+                    "allow_mqtt_publish": "Zezwalaj na publikację MQTT"
                 }
             },
             "device": {

@@ -144,7 +144,7 @@
                 "data": {
                     "key": "デバイスキー",
                     "error": "エラーメッセージ",
-                    "allow_mqtt_publish": "クラウド MQTT パブリッシュを許可する"
+                    "allow_mqtt_publish": "MQTT パブリッシュを許可する"
                 }
             },
             "device": {

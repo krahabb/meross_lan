@@ -144,7 +144,7 @@
                 "data": {
                     "key": "Device key",
                     "error": "Error message",
-                    "allow_mqtt_publish": "Allow cloud MQTT publish"
+                    "allow_mqtt_publish": "Allow local MQTT publish"
                 }
             },
             "device": {

@@ -144,7 +144,7 @@
                 "data": {
                     "key": "Clé",
                     "error": "Message d'erreur",
-                    "allow_mqtt_publish": "Autoriser la publication cloud MQTT"
+                    "allow_mqtt_publish": "Autoriser la publication MQTT"
                 }
             },
             "device": {

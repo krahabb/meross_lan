@@ -144,7 +144,7 @@
                 "data": {
                     "key": "Geräteschlüssel",
                     "error": "Fehlermeldung",
-                    "allow_mqtt_publish": "Cloud-MQTT-Veröffentlichung zulassen"
+                    "allow_mqtt_publish": "MQTT-Veröffentlichung zulassen"
                 }
             },
             "device": {
