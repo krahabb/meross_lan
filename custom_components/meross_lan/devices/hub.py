@@ -663,6 +663,8 @@ class SubDevice(NamespaceParser, BaseDevice):
 
     def _parse_exception(self, p_exception: dict):
         """{"id": "00000000", "code": 5061}"""
+        # TODO: code 5061 seems related to loss of connectivity between the hub
+        # and the device. We might put up a binary sensor.
         self.log(self.WARNING, "Received exception payload: %s", str(p_exception))
 
     def _parse_online(self, p_online: dict):
