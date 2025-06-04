@@ -1,5 +1,6 @@
 import typing
 
+from ..helpers.entity import MEListChannelMixin
 from ..helpers.namespaces import NamespaceHandler
 from ..light import (
     ATTR_BRIGHTNESS,
@@ -14,13 +15,12 @@ from ..light import (
     native_to_rgb,
     rgb_to_native,
 )
-from ..meross_entity import MEListChannelMixin
 from ..merossclient import const as mc, namespaces as mn
 from ..sensor import MLHumiditySensor, MLNumericSensorDef, MLTemperatureSensor
 from .spray import MLSpray
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import DigestInitReturnType, MerossDevice
+    from ..helpers.device import Device, DigestInitReturnType
     from ..sensor import MLNumericSensor
 
 
@@ -30,9 +30,7 @@ DIFFUSER_SENSOR_CLASS_MAP: dict[str, MLNumericSensorDef] = {
 }
 
 
-def digest_init_diffuser(
-    device: "MerossDevice", digest: dict
-) -> "DigestInitReturnType":
+def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnType":
     """
     {
         "type": "mod100",
@@ -106,7 +104,7 @@ class MLDiffuserLight(MLLightBase):
 
     ns = mn.Appliance_Control_Diffuser_Light
 
-    def __init__(self, manager: "MerossDevice", digest: dict):
+    def __init__(self, manager: "Device", digest: dict):
 
         self.supported_color_modes = {ColorMode.RGB}
 

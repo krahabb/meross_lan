@@ -1,19 +1,22 @@
 """
-    Tests the HA diagnostics and device tracing feature
+Tests the HA diagnostics and device tracing feature
 """
 
 import asyncio
+import typing
 
-from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.diagnostics import async_get_device_diagnostics
 from custom_components.meross_lan.merossclient import const as mc
+from emulator import generate_emulators
 
 from tests import const as tc, helpers
 
-
+if typing.TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    
 async def _async_configure_options_tracing(entry_mock: helpers.ConfigEntryMocker):
     hass = entry_mock.hass
 
@@ -52,9 +55,9 @@ async def _async_run_tracing(
 
 
 async def test_mqtthub_diagnostics(
-    hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
 ):
-    async with helpers.MQTTHubEntryMocker(hass) as entry_mock:
+    async with helpers.MQTTHubEntryMocker(request, hass) as entry_mock:
         await entry_mock.async_test_config_entry_diagnostics()
 
     # try to fight subscribe/unsubscribe cooldowns
@@ -62,50 +65,80 @@ async def test_mqtthub_diagnostics(
 
 
 async def test_mqtthub_tracing(
-    hass: HomeAssistant,
+    request,
+    hass: "HomeAssistant",
     hamqtt_mock: helpers.HAMQTTMocker,
     time_mock: helpers.TimeMocker,
 ):
-    async with helpers.MQTTHubEntryMocker(hass) as entry_mock:
+    async with helpers.MQTTHubEntryMocker(request, hass) as entry_mock:
         await _async_configure_options_tracing(entry_mock)
         await _async_run_tracing(entry_mock, time_mock)
 
 
 async def test_profile_diagnostics(
-    hass: HomeAssistant, merossmqtt_mock: helpers.MerossMQTTMocker
+    request,
+    hass: "HomeAssistant",
+    merossmqtt_mock: helpers.MerossMQTTMocker,
 ):
-    async with helpers.ProfileEntryMocker(hass) as entry_mock:
+    async with helpers.ProfileEntryMocker(request, hass) as entry_mock:
         await entry_mock.async_test_config_entry_diagnostics()
 
 
 async def test_profile_tracing(
-    hass: HomeAssistant,
+    request,
+    hass: "HomeAssistant",
     hamqtt_mock: helpers.HAMQTTMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
     time_mock: helpers.TimeMocker,
 ):
-    async with helpers.ProfileEntryMocker(hass) as entry_mock:
+    async with helpers.ProfileEntryMocker(request, hass) as entry_mock:
         await _async_configure_options_tracing(entry_mock)
         await _async_run_tracing(entry_mock, time_mock)
 
 
-async def test_device_diagnostics(hass: HomeAssistant, aioclient_mock):
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
-        await context.perform_coldstart()
+async def test_device_diagnostics(
+    request,
+    hass: "HomeAssistant",
+    aioclient_mock: helpers.AiohttpClientMocker,
+    time_mock: helpers.TimeMocker,
+):
 
-        context.warp(tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT)
-        diagnostic = await async_get_device_diagnostics(
-            hass, context.config_entry, None
-        )
-        await context.async_stopwarp()
-        assert diagnostic
+    for emulator in generate_emulators(
+        tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
+    ):
+        async with helpers.DeviceContext(
+            request, hass, emulator, aioclient_mock, time=time_mock
+        ) as context:
+            await context.perform_coldstart()
+            time_mock.warp(tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT)
+            try:
+                diagnostic = await async_get_device_diagnostics(
+                    hass, context.config_entry, None
+                )
+            finally:
+                await time_mock.async_stopwarp()
+            assert diagnostic
 
 
-async def test_device_tracing(hass: HomeAssistant, aioclient_mock):
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
-        await context.perform_coldstart()
+async def test_device_tracing(
+    request, hass: "HomeAssistant", aioclient_mock: helpers.AiohttpClientMocker
+):
 
-        await _async_configure_options_tracing(context)
-        # We now need to 'coldstart' again the device
-        await context.perform_coldstart()
-        await _async_run_tracing(context, context._time_mock)
+    for emulator in generate_emulators(
+        tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
+    ):
+        async with helpers.DeviceContext(request, hass, emulator, aioclient_mock) as context:
+            await context.perform_coldstart()
+            await _async_configure_options_tracing(context)
+            # We now need to 'coldstart' again the device
+            await context.perform_coldstart()
+            device = context.device
+            async for time in context.time.async_warp_iterator(
+                tc.MOCK_TRACE_TIMEOUT,
+                tick=mlc.PARAM_TRACING_ABILITY_POLL_TIMEOUT,
+            ):
+                if not device._trace_ability_callback_unsub:
+                    device.trace_close()
+                    break
+
+            assert not device._trace_file

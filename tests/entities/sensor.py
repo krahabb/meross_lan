@@ -51,7 +51,7 @@ class EntityTest(EntityComponentTest):
         mc.TYPE_MTS100: [MLTemperatureSensor],
         mc.TYPE_MTS100V3: [MLTemperatureSensor],
         mc.TYPE_MTS150: [MLTemperatureSensor],
-        mc.KEY_SMOKEALARM: [MLEnumSensor, MLEnumSensor],  # status, interConn sensors
+        mc.KEY_SMOKEALARM: [MLEnumSensor],  # status, interConn sensors
     }
 
     async def async_test_enabled_callback(self, entity: MLEnumSensor | MLNumericSensor):

@@ -1,11 +1,11 @@
 """
- Base-Common behaviour for all Meross-LAN entities
+Base-Common behaviour for all Meross-LAN entities
 
- actual HA custom platform entities will be derived like this:
- MLSwitch(MerossToggle, SwitchEntity)
+actual HA custom platform entities will be derived like this:
+MLSwitch(MerossToggle, SwitchEntity)
 
- we also try to 'commonize' HA core symbols import in order to better manage
- versioning
+we also try to 'commonize' HA core symbols import in order to better manage
+versioning
 """
 
 from functools import partial
@@ -17,50 +17,56 @@ try:
 except ImportError:
     get_last_state_changes = None
 
-from homeassistant.helpers.entity import Entity, EntityCategory
+from homeassistant.helpers import entity
 
-from .helpers import Loggable
-from .helpers.manager import ApiProfile
-from .helpers.namespaces import NamespaceParser
-from .merossclient import const as mc, namespaces as mn
+from . import Loggable
+from ..merossclient import const as mc, namespaces as mn
+from .namespaces import NamespaceParser
 
 if typing.TYPE_CHECKING:
+    from typing import Any, ClassVar, NotRequired, TypedDict, Unpack
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .helpers.manager import EntityManager
-    from .helpers.namespaces import NamespaceHandler
-    from .meross_device import MerossDeviceBase
-
-    # optional arguments for MerossEntity init
-    class MerossEntityArgs(typing.TypedDict):
-        name: typing.NotRequired[str]
-        translation_key: typing.NotRequired[str]
-
-    # optional arguments for MerossBinaryEntity init
-    class MerossBinaryEntityArgs(MerossEntityArgs):
-        device_value: typing.NotRequired[typing.Any]
-
-    # optional arguments for  MerossNumericEntity init
-    class MerossNumericEntityArgs(MerossEntityArgs):
-        device_value: typing.NotRequired[int | float]
-        device_scale: typing.NotRequired[int | float]
-        native_unit_of_measurement: typing.NotRequired[str]
-        suggested_display_precision: typing.NotRequired[int]
+    from .device import BaseDevice
+    from .manager import ConfigEntryManager, EntityManager
 
 
-class MerossEntity(
-    NamespaceParser, Loggable, Entity if typing.TYPE_CHECKING else object
+#
+# helper function to 'commonize' platform setup
+#
+def platform_setup_entry(
+    hass: "HomeAssistant",
+    config_entry: "ConfigEntry[ConfigEntryManager]",
+    async_add_devices,
+    platform: str,
+):
+    manager = config_entry.runtime_data
+    manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
+    manager.platforms[platform] = async_add_devices
+    async_add_devices(manager.managed_entities(platform))
+
+
+class MLEntity(
+    NamespaceParser, Loggable, entity.Entity if typing.TYPE_CHECKING else object
 ):
     """
     Mixin style base class for all of the entity platform(s)
     This class must prepend the HA entity class in our custom
     entity classe definitions like:
     from homeassistant.components.switch import Switch
-    class MyCustomSwitch(MerossEntity, Switch)
+    class MyCustomSwitch(MLEntity, Switch)
     """
 
-    EntityCategory = EntityCategory
+    if typing.TYPE_CHECKING:
+
+        class Args(TypedDict):
+            name: NotRequired[str]
+            translation_key: NotRequired[str]
+            entity_category: NotRequired[entity.EntityCategory | None]
+
+    EntityCategory = entity.EntityCategory
 
     PLATFORM: typing.ClassVar[str]
 
@@ -96,7 +102,6 @@ class MerossEntity(
     translation_key: str | None = None
     # These are actually per instance
     available: bool
-    device_class: typing.Final[object | str | None]
     name: str | None
     suggested_object_id: str | None
     unique_id: str
@@ -105,12 +110,22 @@ class MerossEntity(
     _hass_connected: bool
 
     __slots__ = (
+        # slotting also base Entity freqeuntly used attributes...
+        "entity_id",
+        "hass",
+        "platform",
+        "registry_entry",
+        "device_entry",
+        "_context",
+        "_context_set",
+        # meross_lan managed attributes
         "manager",
         "channel",
         "entitykey",
         "state_callbacks",
         "available",
         "device_class",
+        "device_info",
         "name",
         "suggested_object_id",
         "unique_id",
@@ -122,8 +137,8 @@ class MerossEntity(
         manager: "EntityManager",
         channel: object | None,
         entitykey: str | None = None,
-        device_class: object | str | None = None,
-        **kwargs: "typing.Unpack[MerossEntityArgs]",
+        device_class: str | None = None,
+        **kwargs: "Unpack[Args]",
     ):
         """
         - channel: historically used to create an unique id for this entity inside the device
@@ -140,12 +155,20 @@ class MerossEntity(
             if entitykey is None
             else entitykey if channel is None else f"{channel}_{entitykey}"
         )
+        self.entity_id = entity.Entity.entity_id
+        self.hass = entity.Entity.hass
+        self.platform = entity.Entity.platform
+        self.registry_entry = None
+        self.device_entry = None
+        self._context = None
+        self._context_set = None
         self.manager = manager
         self.channel = channel
         self.entitykey = entitykey
         self.state_callbacks = None
         self.available = self._attr_available or manager.online
         self.device_class = device_class
+        self.device_info = self.manager.deviceentry_id  # type: ignore
         Loggable.__init__(self, id, logger=manager)
         # init before raising exceptions so that the Loggable is
         # setup before any exception is raised
@@ -185,10 +208,6 @@ class MerossEntity(
             async_add_devices([self])
 
     # interface: Entity
-    @property
-    def device_info(self):
-        return self.manager.deviceentry_id
-
     async def async_added_to_hass(self):
         self.log(self.VERBOSE, "Added to HomeAssistant")
         self._hass_connected = True
@@ -224,9 +243,8 @@ class MerossEntity(
         # we don't flush here since we'll wait for actual device readings
 
     def set_unavailable(self):
-        if self.available:
-            self.available = False
-            self.flush_state()
+        self.available = False
+        self.flush_state()
 
     def update_device_value(self, device_value):
         """This is a stub definition. It will be called by _parse (when namespace dispatching
@@ -271,8 +289,8 @@ class MerossEntity(
         if states := _last_state.get(self.entity_id):
             for state in reversed(states):
                 if state.state not in (
-                    MerossEntity.hac.STATE_UNKNOWN,
-                    MerossEntity.hac.STATE_UNAVAILABLE,
+                    MLEntity.hac.STATE_UNKNOWN,
+                    MLEntity.hac.STATE_UNAVAILABLE,
                 ):
                     return state
         return None
@@ -286,15 +304,16 @@ class MerossEntity(
         key_value in class/instance definition to make it work."""
         self.update_device_value(payload[self.key_value])
 
-class MENoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+
+class MENoChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
     """
     Implementation for protocol method 'SET' on entities/namespaces not backed by a channel.
     Actual examples: Appliance.Control.Toggle, Appliance.GarageDoor.Config, and so on..
     """
 
-    manager: "MerossDeviceBase"
+    manager: "BaseDevice"
 
-    # interface: MerossEntity
+    # interface: MLEntity
     async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
@@ -305,16 +324,16 @@ class MENoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
         )
 
 
-class MEDictChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+class MEDictChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
     """
     Implementation for protocol method 'SET' on entities/namespaces backed by a channel
     where the command payload must be enclosed in a plain dict (without enclosing list).
     Actual examples: Appliance.Control.ToggleX, Appliance.RollerShutter.Config, and so on..
     """
 
-    manager: "MerossDeviceBase"
+    manager: "BaseDevice"
 
-    # interface: MerossEntity
+    # interface: MLEntity
     async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
@@ -330,16 +349,16 @@ class MEDictChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
         )
 
 
-class MEListChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+class MEListChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
     """
     Implementation for protocol method 'SET' on entities/namespaces backed by a channel
     where the command payload must be enclosed in a list
     Actual examples: Appliance.Control.ToggleX and so on..
     """
 
-    manager: "MerossDeviceBase"
+    manager: "BaseDevice"
 
-    # interface: MerossEntity
+    # interface: MLEntity
     async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
@@ -350,7 +369,7 @@ class MEListChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
         )
 
 
-class MEAutoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
+class MEAutoChannelMixin(MLEntity if typing.TYPE_CHECKING else object):
     """
     Implementation for protocol method 'SET' on entities/namespaces backed by a channel
     where the command payload could be either a list or a dict. This mixin actually
@@ -358,11 +377,11 @@ class MEAutoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
     Actual examples: Appliance.Control.ToggleX
     """
 
-    manager: "MerossDeviceBase"
+    manager: "BaseDevice"
 
     _set_format = None
 
-    # interface: MerossEntity
+    # interface: MLEntity
     async def async_request_value(self, device_value):
         """sends the actual request to the device. this is likely to be overloaded"""
         ns = self.ns
@@ -418,7 +437,7 @@ class MEAutoChannelMixin(MerossEntity if typing.TYPE_CHECKING else object):
             )
 
 
-class MEAlwaysAvailableMixin(MerossEntity if typing.TYPE_CHECKING else object):
+class MEAlwaysAvailableMixin(MLEntity if typing.TYPE_CHECKING else object):
     """
     Mixin class for entities which should always be available
     disregarding current device connection state.
@@ -434,7 +453,7 @@ class MEAlwaysAvailableMixin(MerossEntity if typing.TYPE_CHECKING else object):
         pass
 
 
-class MEPartialAvailableMixin(MerossEntity if typing.TYPE_CHECKING else object):
+class MEPartialAvailableMixin(MLEntity if typing.TYPE_CHECKING else object):
     """
     Mixin class for entities which should be available when device is connected
     but their state needs to be preserved since they're representing a state not directly
@@ -450,24 +469,29 @@ class MEPartialAvailableMixin(MerossEntity if typing.TYPE_CHECKING else object):
         self.flush_state()
 
 
-class MerossBinaryEntity(MerossEntity):
+class MLBinaryEntity(MLEntity):
     """Partially abstract common base class for ToggleEntity and BinarySensor.
     The initializer is skipped."""
 
-    key_value = mc.KEY_ONOFF
+    if typing.TYPE_CHECKING:
 
-    # HA core entity attributes:
-    is_on: bool | None
+        class Args(MLEntity.Args):
+            device_value: NotRequired[Any]
+
+        # HA core entity attributes:
+        is_on: bool | None
+
+    key_value = mc.KEY_ONOFF
 
     __slots__ = ("is_on",)
 
     def __init__(
         self,
-        manager: "MerossDeviceBase",
+        manager: "BaseDevice",
         channel: object,
         entitykey: str | None = None,
-        device_class: object | None = None,
-        **kwargs: "typing.Unpack[MerossBinaryEntityArgs]",
+        device_class: str | None = None,
+        **kwargs: "Unpack[Args]",
     ):
         self.is_on = kwargs.pop("device_value", None)
         super().__init__(manager, channel, entitykey, device_class, **kwargs)
@@ -487,25 +511,33 @@ class MerossBinaryEntity(MerossEntity):
         self.update_onoff(payload[self.key_value])
 
 
-class MerossNumericEntity(MerossEntity):
+class MLNumericEntity(MLEntity):
     """Common base class for (numeric) sensors and numbers."""
 
-    DEVICECLASS_TO_UNIT_MAP: typing.ClassVar[dict[object | None, str | None]]
-    """To be init in derived classes with their DeviceClass own types"""
-    _attr_device_scale: int | float = 1
-    """
-    Provides a class initializer default for device_scale
-    """
-    device_value: int | float | None
-    """The 'native' device value carried in protocol messages"""
+    if typing.TYPE_CHECKING:
 
-    # HA core entity attributes:
-    native_value: int | float | None
-    native_unit_of_measurement: str | None
-    # these are core attributes only for Sensor entity but we're
-    # trying emulate that kind of same behavior for Number
-    _attr_suggested_display_precision: typing.ClassVar[int | None] = None
-    suggested_display_precision: int | None
+        class Args(MLEntity.Args):
+            device_value: NotRequired[int | float]
+            device_scale: NotRequired[int | float]
+            native_unit_of_measurement: NotRequired[str]
+            suggested_display_precision: NotRequired[int]
+
+        device_value: int | float | None
+        """The 'native' device value carried in protocol messages."""
+
+        # HA core entity attributes:
+        native_value: int | float | None
+        native_unit_of_measurement: str | None
+        # these are core attributes only for Sensor entity but we're
+        # trying emulate that kind of same behavior for Number
+        _attr_suggested_display_precision: ClassVar[int | None]
+        suggested_display_precision: int | None
+
+    DEVICECLASS_TO_UNIT_MAP: typing.ClassVar[dict[object | None, str | None]]
+    """To be init in derived classes with their DeviceClass own types."""
+    _attr_device_scale: int | float = 1
+    """Provides a class initializer default for device_scale."""
+    _attr_suggested_display_precision = None
 
     __slots__ = (
         "device_scale",
@@ -520,8 +552,8 @@ class MerossNumericEntity(MerossEntity):
         manager: "EntityManager",
         channel: object,
         entitykey: str | None = None,
-        device_class: object | None = None,
-        **kwargs: "typing.Unpack[MerossNumericEntityArgs]",
+        device_class: str | None = None,
+        **kwargs: "Unpack[Args]",
     ):
         self.suggested_display_precision = kwargs.pop(
             "suggested_display_precision", self._attr_suggested_display_precision
@@ -529,13 +561,7 @@ class MerossNumericEntity(MerossEntity):
         self.device_scale = kwargs.pop("device_scale", self._attr_device_scale)
         if "device_value" in kwargs:
             self.device_value = kwargs.pop("device_value")
-            if self.suggested_display_precision is None:
-                self.native_value = self.device_value / self.device_scale
-            else:
-                self.native_value = round(
-                    self.device_value / self.device_scale,
-                    self.suggested_display_precision,
-                )
+            self.native_value = self.device_value / self.device_scale
         else:
             self.device_value = None
             self.native_value = None
@@ -552,31 +578,12 @@ class MerossNumericEntity(MerossEntity):
     def update_device_value(self, device_value: int | float):
         if self.device_value != device_value:
             self.device_value = device_value
-            if self.suggested_display_precision is None:
-                self.native_value = device_value / self.device_scale
-            else:
-                self.native_value = round(
-                    device_value / self.device_scale, self.suggested_display_precision
-                )
+            self.native_value = device_value / self.device_scale
             self.flush_state()
             return True
 
     def update_native_value(self, native_value: int | float):
-        if self.suggested_display_precision is not None:
-            native_value = round(native_value, self.suggested_display_precision)
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()
             return True
-
-
-#
-# helper functions to 'commonize' platform setup
-#
-def platform_setup_entry(
-    hass: "HomeAssistant", config_entry: "ConfigEntry", async_add_devices, platform: str
-):
-    manager = ApiProfile.managers[config_entry.entry_id]
-    manager.log(manager.DEBUG, "platform_setup_entry { platform: %s }", platform)
-    manager.platforms[platform] = async_add_devices
-    async_add_devices(manager.managed_entities(platform))

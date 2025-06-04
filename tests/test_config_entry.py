@@ -1,18 +1,22 @@
 """Test meross_lan config entry setup"""
 
 import asyncio
+import typing
 
 from homeassistant import const as hac
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.meross_lan import MerossApi, const as mlc
+from custom_components.meross_lan import const as mlc
+from custom_components.meross_lan.helpers.component_api import ComponentApi
 from custom_components.meross_lan.light import MLDNDLightEntity
 from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
 from emulator import generate_emulators
 
 from tests import const as tc, helpers
+
+if typing.TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 
 # We can pass fixtures as defined in conftest.py to tell pytest to use the fixture
@@ -20,33 +24,43 @@ from tests import const as tc, helpers
 # Home Assistant using the pytest_homeassistant_custom_component plugin.
 # Assertions allow you to verify that the return value of whatever is on the left
 # side of the assertion matches with the right side.
-async def test_mqtthub_entry(hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker):
+async def test_mqtthub_entry(
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
+):
     """Test mqtt hub entry setup and unload."""
-    async with helpers.MQTTHubEntryMocker(hass):
+    async with helpers.MQTTHubEntryMocker(request, hass):
         api = hass.data[mlc.DOMAIN]
-        assert isinstance(api, MerossApi)
+        assert isinstance(api, ComponentApi)
         assert api._mqtt_connection and api._mqtt_connection.mqtt_is_subscribed
 
     # Unload the entry and verify that the data has not been removed
-    # we actually never remove the MerossApi...
-    assert type(hass.data[mlc.DOMAIN]) is MerossApi
+    # we actually never remove the ComponentApi...
+    assert type(hass.data[mlc.DOMAIN]) is ComponentApi
 
     # try to fight subscribe/unsubscribe cooldowns
     await asyncio.sleep(1)
 
 
-async def test_mqtthub_entry_notready(hass: HomeAssistant):
+async def test_mqtthub_entry_notready(request, hass: "HomeAssistant"):
     """Test ConfigEntryNotReady when API raises an exception during entry setup"""
-    async with helpers.MQTTHubEntryMocker(
-        hass, auto_setup=False
-    ) as mqtthub_entry_mocker:
-        await mqtthub_entry_mocker.async_setup()
+    async with helpers.MQTTHubEntryMocker(request, hass, auto_setup=False) as mqtthub:
+        await mqtthub.async_setup()
         # In this case we are testing the condition where async_setup_entry raises
         # ConfigEntryNotReady since we don't have mqtt component in the test environment
-        assert mqtthub_entry_mocker.config_entry.state == ConfigEntryState.SETUP_RETRY
+        assert mqtthub.config_entry.state == ConfigEntryState.SETUP_RETRY
+        mqtthub.assert_logs(
+            1,
+            message=(
+                r"HAMQTTConnection\(############0:@0\): "
+                r"HomeAssistantError\(Cannot subscribe to topic '/appliance/\+/publish', "
+                r"make sure MQTT is set up correctly\) in async_mqtt_subscribe"
+            ),
+        )
 
 
-async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def test_device_entry(
+    request, hass: "HomeAssistant", aioclient_mock: AiohttpClientMocker
+):
     """
     Generic device setup testing:
     we'll try to configure and setup devices according to our
@@ -59,7 +73,9 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
     for emulator in generate_emulators(
         tc.EMULATOR_TRACES_PATH, key=tc.MOCK_KEY, uuid=tc.MOCK_DEVICE_UUID
     ):
-        async with helpers.DeviceContext(hass, emulator, aioclient_mock) as context:
+        async with helpers.DeviceContext(
+            request, hass, emulator, aioclient_mock
+        ) as context:
             assert await context.async_setup()
 
             descriptor = emulator.descriptor
@@ -101,12 +117,13 @@ async def test_device_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMo
 
 
 async def test_profile_entry(
-    hass: HomeAssistant,
+    request,
+    hass: "HomeAssistant",
     cloudapi_mock: helpers.CloudApiMocker,
     merossmqtt_mock: helpers.MerossMQTTMocker,
 ):
     """
     Test a Meross cloud profile entry
     """
-    async with helpers.ProfileEntryMocker(hass):
-        assert MerossApi.profiles[tc.MOCK_PROFILE_ID] is not None
+    async with helpers.ProfileEntryMocker(request, hass) as profile_mock:
+        assert profile_mock.api.profiles[tc.MOCK_PROFILE_ID] is not None

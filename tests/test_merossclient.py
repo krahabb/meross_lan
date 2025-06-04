@@ -26,7 +26,7 @@ async def test_cloudapi(hass, cloudapi_mock: helpers.CloudApiMocker):
     assert credentials == tc.MOCK_PROFILE_CREDENTIALS_SIGNIN
 
     result = await cloudapiclient.async_device_devlist()
-    assert result == tc.MOCK_CLOUDAPI_DEVICE_DEVLIST
+    assert result == list(tc.MOCK_CLOUDAPI_DEVICE_DEVLIST.values())
 
     result = await cloudapiclient.async_device_latestversion()
     assert result == tc.MOCK_CLOUDAPI_DEVICE_LATESTVERSION

@@ -144,7 +144,7 @@
                 "data": {
                     "key": "Klíč zařízení",
                     "error": "Chybová zpráva",
-                    "allow_mqtt_publish": "Povolit cloudové publikování MQTT"
+                    "allow_mqtt_publish": "Povolit publikování MQTT"
                 }
             },
             "device": {

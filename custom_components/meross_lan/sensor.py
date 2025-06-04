@@ -3,7 +3,8 @@ import typing
 
 from homeassistant.components import sensor
 
-from . import const as mlc, meross_entity as me
+from . import const as mlc
+from .helpers import entity as me
 from .helpers.namespaces import (
     EntityNamespaceHandler,
     EntityNamespaceMixin,
@@ -12,19 +13,13 @@ from .helpers.namespaces import (
 from .merossclient import const as mc, json_dumps, namespaces as mn
 
 if typing.TYPE_CHECKING:
+    from typing import NotRequired, Unpack
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .helpers.device import Device
     from .helpers.manager import EntityManager
-    from .meross_device import MerossDevice
-
-    # optional arguments for MLEnumSensor init
-    class MLEnumSensorArgs(me.MerossEntityArgs):
-        native_value: typing.NotRequired[sensor.StateType]
-
-    # optional arguments for MLNumericSensor init
-    class MLNumericSensorArgs(me.MerossNumericEntityArgs):
-        state_class: typing.NotRequired[sensor.SensorStateClass]
 
 
 async def async_setup_entry(
@@ -33,9 +28,13 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, sensor.DOMAIN)
 
 
-class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
+class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
     """Specialization for sensor with ENUM device_class which allows to store
     anything as opposed to numeric sensor types which have units and so."""
+
+    if typing.TYPE_CHECKING:
+        class Args(me.MLEntity.Args):
+            native_value: NotRequired[sensor.StateType]
 
     PLATFORM = sensor.DOMAIN
 
@@ -50,7 +49,7 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
         manager: "EntityManager",
         channel: object | None,
         entitykey: str | None,
-        **kwargs: "typing.Unpack[MLEnumSensorArgs]",
+        **kwargs: "Unpack[Args]",
     ):
         self.native_value = kwargs.pop("native_value", None)
         super().__init__(
@@ -68,20 +67,25 @@ class MLEnumSensor(me.MerossEntity, sensor.SensorEntity):
             return True
 
 
-class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
+class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
+
+    if typing.TYPE_CHECKING:
+        class Args(me.MLNumericEntity.Args):
+            state_class: NotRequired[sensor.SensorStateClass]
+
     PLATFORM = sensor.DOMAIN
     DeviceClass = sensor.SensorDeviceClass
     StateClass = sensor.SensorStateClass
 
     DEVICECLASS_TO_UNIT_MAP = {
-        DeviceClass.POWER: me.MerossEntity.hac.UnitOfPower.WATT,
-        DeviceClass.CURRENT: me.MerossEntity.hac.UnitOfElectricCurrent.AMPERE,
-        DeviceClass.VOLTAGE: me.MerossEntity.hac.UnitOfElectricPotential.VOLT,
-        DeviceClass.ENERGY: me.MerossEntity.hac.UnitOfEnergy.WATT_HOUR,
-        DeviceClass.TEMPERATURE: me.MerossEntity.hac.UnitOfTemperature.CELSIUS,
-        DeviceClass.HUMIDITY: me.MerossEntity.hac.PERCENTAGE,
-        DeviceClass.BATTERY: me.MerossEntity.hac.PERCENTAGE,
-        DeviceClass.ILLUMINANCE: me.MerossEntity.hac.LIGHT_LUX,
+        DeviceClass.POWER: me.MLEntity.hac.UnitOfPower.WATT,
+        DeviceClass.CURRENT: me.MLEntity.hac.UnitOfElectricCurrent.AMPERE,
+        DeviceClass.VOLTAGE: me.MLEntity.hac.UnitOfElectricPotential.VOLT,
+        DeviceClass.ENERGY: me.MLEntity.hac.UnitOfEnergy.WATT_HOUR,
+        DeviceClass.TEMPERATURE: me.MLEntity.hac.UnitOfTemperature.CELSIUS,
+        DeviceClass.HUMIDITY: me.MLEntity.hac.PERCENTAGE,
+        DeviceClass.BATTERY: me.MLEntity.hac.PERCENTAGE,
+        DeviceClass.ILLUMINANCE: me.MLEntity.hac.LIGHT_LUX,
     }
 
     # we basically default Sensor.state_class to SensorStateClass.MEASUREMENT
@@ -102,7 +106,7 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
         channel: object | None,
         entitykey: str | None,
         device_class: DeviceClass | None = None,
-        **kwargs: "typing.Unpack[MLNumericSensorArgs]",
+        **kwargs: "Unpack[Args]",
     ):
         assert device_class is not sensor.SensorDeviceClass.ENUM
         self.state_class = kwargs.pop(
@@ -121,9 +125,9 @@ class MLNumericSensor(me.MerossNumericEntity, sensor.SensorEntity):
 
     @staticmethod
     def build_for_device(
-        device: "MerossDevice",
+        device: "Device",
         device_class: "MLNumericSensor.DeviceClass",
-        **kwargs: "typing.Unpack[MLNumericSensorArgs]",
+        **kwargs: "Unpack[Args]",
     ):
         return MLNumericSensor(
             device,
@@ -140,7 +144,7 @@ class MLNumericSensorDef:
     entities based on their appearance in a payload key."""
 
     type: "type[MLNumericSensor]"
-    args: "MLNumericSensorArgs"
+    args: "MLNumericSensor.Args"
 
 
 class MLHumiditySensor(MLNumericSensor):
@@ -151,14 +155,14 @@ class MLHumiditySensor(MLNumericSensor):
 
     _attr_device_scale = 10
     # HA core entity attributes:
-    _attr_suggested_display_precision = 0
+    _attr_suggested_display_precision = 1
 
     def __init__(
         self,
         manager: "EntityManager",
         channel: object | None,
         entitykey: str = "humidity",
-        **kwargs: "typing.Unpack[MLNumericSensorArgs]",
+        **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
         kwargs.setdefault("name", entitykey.capitalize())
         super().__init__(
@@ -184,7 +188,7 @@ class MLTemperatureSensor(MLNumericSensor):
         manager: "EntityManager",
         channel: object | None,
         entitykey: str = "temperature",
-        **kwargs: "typing.Unpack[MLNumericSensorArgs]",
+        **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
         kwargs.setdefault("name", entitykey.capitalize())
         super().__init__(
@@ -208,7 +212,7 @@ class MLLightSensor(MLNumericSensor):
         manager: "EntityManager",
         channel: object | None,
         entitykey: str = "light",
-        **kwargs: "typing.Unpack[MLNumericSensorArgs]",
+        **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
         kwargs.setdefault("name", entitykey.capitalize())
         super().__init__(
@@ -244,10 +248,10 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
     ATTR_MQTT = mlc.CONF_PROTOCOL_MQTT
     ATTR_MQTT_BROKER = "mqtt_broker"
 
-    manager: "MerossDevice"
+    manager: "Device"
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.DIAGNOSTIC
+    entity_category = MLEnumSensor.EntityCategory.DIAGNOSTIC
     entity_registry_enabled_default = False
     native_value: str
     options: list[str] = [
@@ -262,7 +266,7 @@ class ProtocolSensor(me.MEAlwaysAvailableMixin, MLEnumSensor):
 
     def __init__(
         self,
-        manager: "MerossDevice",
+        manager: "Device",
     ):
         self.extra_state_attributes = {}
         super().__init__(
@@ -338,16 +342,16 @@ class MLSignalStrengthSensor(EntityNamespaceMixin, MLNumericSensor):
     ns = mn.Appliance_System_Runtime
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.DIAGNOSTIC
+    entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
     icon = "mdi:wifi"
 
-    def __init__(self, manager: "MerossDevice"):
+    def __init__(self, manager: "Device"):
         super().__init__(
             manager,
             None,
             mlc.SIGNALSTRENGTH_ID,
             None,
-            native_unit_of_measurement=me.MerossEntity.hac.PERCENTAGE,
+            native_unit_of_measurement=me.MLEntity.hac.PERCENTAGE,
         )
         EntityNamespaceHandler(self)
 
@@ -361,22 +365,22 @@ class MLFilterMaintenanceSensor(MLNumericSensor):
     key_value = mc.KEY_LIFE
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.DIAGNOSTIC
+    entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC
 
-    def __init__(self, manager: "MerossDevice", channel):
+    def __init__(self, manager: "Device", channel):
         super().__init__(
             manager,
             channel,
             mc.KEY_FILTER,
             None,
-            native_unit_of_measurement=me.MerossEntity.hac.PERCENTAGE,
+            native_unit_of_measurement=me.MLEntity.hac.PERCENTAGE,
         )
         manager.register_parser_entity(self)
 
 
 class FilterMaintenanceNamespaceHandler(NamespaceHandler):
 
-    def __init__(self, device: "MerossDevice"):
+    def __init__(self, device: "Device"):
         NamespaceHandler.__init__(
             self,
             device,
@@ -387,14 +391,14 @@ class FilterMaintenanceNamespaceHandler(NamespaceHandler):
 
 class ConsumptionHSensor(MLNumericSensor):
 
-    manager: "MerossDevice"
+    manager: "Device"
     ns = mn.Appliance_Control_ConsumptionH
 
     _attr_suggested_display_precision = 0
 
     __slots__ = ()
 
-    def __init__(self, manager: "MerossDevice", channel: object | None):
+    def __init__(self, manager: "Device", channel: object | None):
         super().__init__(
             manager,
             channel,
@@ -426,7 +430,7 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
     em06: 6 channels (but the query works without setting any)
     """
 
-    def __init__(self, device: "MerossDevice"):
+    def __init__(self, device: "Device"):
         NamespaceHandler.__init__(
             self,
             device,
@@ -439,9 +443,18 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
             ConsumptionHSensor, initially_disabled=False, build_from_digest=True
         )
 
-    def _polling_request_init(self, request_payload_type: mn.RequestPayloadType):
+    def polling_request_configure(
+        self, request_payload_type: mn.RequestPayloadType | None
+    ):
         # TODO: move this device type 'patching' to some 'smart' Namespace grammar
-        if self.device.descriptor.type.startswith(mc.TYPE_EM06):
-            super()._polling_request_init(mn.RequestPayloadType.DICT)
-        else:
-            super()._polling_request_init(request_payload_type)
+        NamespaceHandler.polling_request_configure(
+            self,
+            (
+                request_payload_type
+                or (
+                    mn.RequestPayloadType.DICT
+                    if self.device.descriptor.type.startswith(mc.TYPE_EM06)
+                    else None
+                )
+            ),
+        )

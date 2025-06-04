@@ -6,9 +6,9 @@ a dedicated unit for each of them would increase the number of small modules.
 
 import typing
 
+from .. import const as mlc
 from ..climate import MtsClimate
 from ..helpers.namespaces import NamespaceHandler
-from ..meross_device import DeviceType
 from ..merossclient import const as mc, namespaces as mn
 from ..sensor import (
     MLHumiditySensor,
@@ -20,7 +20,7 @@ from ..sensor import (
 from .ms600 import MLPresenceSensor
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import MerossDevice
+    from ..helpers.device import Device
 
 
 class SensorLatestNamespaceHandler(NamespaceHandler):
@@ -42,7 +42,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
         mc.KEY_LIGHT: MLNumericSensorDef(MLLightSensor, {}),  # just guessed (2024/09)
     }
 
-    def __init__(self, device: "MerossDevice"):
+    def __init__(self, device: "Device"):
         NamespaceHandler.__init__(
             self,
             device,
@@ -102,7 +102,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
     """
     Specialized handler for Appliance.Control.Sensor.LatestX. This ns carries
     a variadic payload of sensor values (seen on Hub/ms130 and ms600).
-    This specific implementation is for standard MerossDevice(s) while
+    This specific implementation is for standard Device(s) while
     Hub(s) have a somewhat different parser.
     """
 
@@ -117,7 +117,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
 
     __slots__ = ()
 
-    def __init__(self, device: "MerossDevice"):
+    def __init__(self, device: "Device"):
         NamespaceHandler.__init__(
             self,
             device,
@@ -182,7 +182,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                 entity._parse(value_data[0])
 
 
-def namespace_init_sensor_latestx(device: "MerossDevice"):
+def namespace_init_sensor_latestx(device: "Device"):
     # Hub(s) have a different ns handler so far
-    if device.get_type() is DeviceType.DEVICE:
+    if device.get_type() is mlc.DeviceType.DEVICE:
         SensorLatestXNamespaceHandler(device)

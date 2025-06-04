@@ -7,15 +7,14 @@ from homeassistant.components.media_player.const import (
     MediaType,
 )
 
-from . import meross_entity as me
-from .helpers import clamp
+from .helpers import clamp, entity as me
 from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import MerossDevice
+    from .helpers.device import Device
 
 
 async def async_setup_entry(
@@ -24,10 +23,10 @@ async def async_setup_entry(
     me.platform_setup_entry(hass, config_entry, async_add_devices, media_player.DOMAIN)
 
 
-class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
+class MLMp3Player(me.MLEntity, media_player.MediaPlayerEntity):
     PLATFORM = media_player.DOMAIN
 
-    manager: "MerossDevice"
+    manager: "Device"
 
     ns = mn.Appliance_Control_Mp3
 
@@ -58,7 +57,7 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         "_mp3",
     )
 
-    def __init__(self, manager: "MerossDevice"):
+    def __init__(self, manager: "Device"):
         self._mp3 = {}
         self.is_volume_muted = None
         self.media_title = None
@@ -70,7 +69,7 @@ class MLMp3Player(me.MerossEntity, media_player.MediaPlayerEntity):
         )
         manager.register_parser_entity(self)
 
-    # interface: MerossEntity
+    # interface: MLEntity
     def set_unavailable(self):
         self._mp3 = {}
         self.is_volume_muted = None

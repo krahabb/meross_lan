@@ -1,11 +1,10 @@
-"""Test the core MerossApi class"""
+"""Test the core ComponentApi class"""
 
 from time import time
+import typing
 
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import async_fire_mqtt_message
 
-from custom_components.meross_lan import MerossApi, const as mlc
 from custom_components.meross_lan.merossclient import (
     build_message,
     const as mc,
@@ -15,9 +14,12 @@ from custom_components.meross_lan.merossclient import (
 
 from . import const as tc, helpers
 
+if typing.TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
 
 async def test_hamqtt_device_session(
-    hass: HomeAssistant, hamqtt_mock: helpers.HAMQTTMocker, aioclient_mock
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker, aioclient_mock
 ):
     """
     check the local broker session management handles the device transactions
@@ -26,7 +28,9 @@ async def test_hamqtt_device_session(
 
     # We need to provide a configured device so that our
     # api HAMQTTConnection doesn't spawn discoveries
-    async with helpers.DeviceContext(hass, mc.TYPE_MSS310, aioclient_mock) as context:
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, aioclient_mock
+    ) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -45,7 +49,7 @@ async def test_hamqtt_device_session(
             topic_subscribe,
         )
         # since nothing is (yet) built at the moment, we expect this message
-        # will go through all of the initialization process of MerossApi
+        # will go through all of the initialization process of ComponentApi
         # and then manage the message
         async_fire_mqtt_message(hass, topic_publish, json_dumps(message_bind_set))
         await hass.async_block_till_done()

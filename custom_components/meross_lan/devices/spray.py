@@ -1,14 +1,14 @@
 import typing
 
-from ..meross_entity import MEDictChannelMixin
+from ..helpers.entity import MEDictChannelMixin
 from ..merossclient import const as mc, namespaces as mn
 from ..select import MLConfigSelect
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import DigestInitReturnType, MerossDevice
+    from ..helpers.device import Device, DigestInitReturnType
 
 
-def digest_init_spray(device: "MerossDevice", digest) -> "DigestInitReturnType":
+def digest_init_spray(device: "Device", digest) -> "DigestInitReturnType":
     """[{"channel": 0, "mode": 0, "lmTime": 1629035486, "lastMode": 1, "onoffTime": 1629035486}]"""
     for channel_digest in digest:
         MLSpray(device, channel_digest[mc.KEY_CHANNEL])
@@ -33,8 +33,8 @@ class MLSpray(MEDictChannelMixin, MLConfigSelect):
         mc.SPRAY_MODE_INTERMITTENT: "eco",
     }
 
-    manager: "MerossDevice"
+    manager: "Device"
 
-    def __init__(self, manager: "MerossDevice", channel: object):
+    def __init__(self, manager: "Device", channel: object):
         super().__init__(manager, channel, mc.KEY_SPRAY)
         manager.register_parser_entity(self)

@@ -1,7 +1,7 @@
 import typing
 
-from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
+from ..helpers import entity as me
 from ..helpers.namespaces import NamespaceHandler
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MLConfigNumber
@@ -9,21 +9,22 @@ from ..select import MLConfigSelect
 from ..sensor import MLNumericSensor
 
 if typing.TYPE_CHECKING:
-    from ..meross_device import MerossDevice
-    from ..sensor import MLNumericSensorArgs
+    from typing import Unpack
+
+    from ..helpers.device import Device
 
 
-class PresenceConfigBase(me.MerossEntity if typing.TYPE_CHECKING else object):
+class PresenceConfigBase(me.MLEntity if typing.TYPE_CHECKING else object):
     """Mixin style base class for all of the entities managed in Appliance.Control.Presence.Config"""
 
-    manager: "MerossDevice"
+    manager: "Device"
 
     ns = mn.Appliance_Control_Presence_Config
 
     key_value_root: str
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.CONFIG
+    entity_category = me.MLEntity.EntityCategory.CONFIG
 
     async def async_request_value(self, device_value):
         ns = self.ns
@@ -61,7 +62,7 @@ class PresenceConfigModeBase(PresenceConfigSelectBase):
         2: "2",
     }
 
-    def __init__(self, manager: "MerossDevice", channel: object, key: str):
+    def __init__(self, manager: "Device", channel: object, key: str):
         self.key_value = key
         super().__init__(manager, channel, f"presence_config_mode_{key}", name=key)
 
@@ -76,7 +77,7 @@ class PresenceConfigNoBodyTime(PresenceConfigNumberBase):
     native_min_value = 1
     native_step = 1
 
-    def __init__(self, manager: "MerossDevice", channel: object):
+    def __init__(self, manager: "Device", channel: object):
         super().__init__(
             manager,
             channel,
@@ -96,7 +97,7 @@ class PresenceConfigDistance(PresenceConfigNumberBase):
     native_min_value = 0.1
     native_step = 0.1
 
-    def __init__(self, manager: "MerossDevice", channel: object):
+    def __init__(self, manager: "Device", channel: object):
         super().__init__(
             manager,
             channel,
@@ -120,7 +121,7 @@ class PresenceConfigSensitivity(PresenceConfigSelectBase):
         2: "2",
     }
 
-    def __init__(self, manager: "MerossDevice", channel: object):
+    def __init__(self, manager: "Device", channel: object):
         super().__init__(
             manager,
             channel,
@@ -136,7 +137,7 @@ class PresenceConfigMthX(PresenceConfigNumberBase):
     native_min_value = 1
     native_step = 1
 
-    def __init__(self, manager: "MerossDevice", channel: object, key: str):
+    def __init__(self, manager: "Device", channel: object, key: str):
         self.key_value = key
         super().__init__(
             manager,
@@ -153,7 +154,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
 
     __slots__ = ("_entities",)
 
-    def __init__(self, manager: "MerossDevice", channel: object):
+    def __init__(self, manager: "Device", channel: object):
         super().__init__(manager, channel, mc.KEY_WORKMODE)
         self._entities = (
             self,
@@ -186,7 +187,7 @@ class PresenceConfigMode(PresenceConfigModeBase):
             entity.update_device_value(payload[entity.key_value_root][entity.key_value])
 
 
-def namespace_init_presence_config(device: "MerossDevice"):
+def namespace_init_presence_config(device: "Device"):
     NamespaceHandler(
         device, mn.Appliance_Control_Presence_Config
     ).register_entity_class(PresenceConfigMode)
@@ -196,7 +197,7 @@ def namespace_init_presence_config(device: "MerossDevice"):
 class MLPresenceSensor(MLNumericSensor):
     """ms600 presence sensor."""
 
-    manager: "MerossDevice"
+    manager: "Device"
 
     __slots__ = (
         "sensor_distance",
@@ -206,10 +207,10 @@ class MLPresenceSensor(MLNumericSensor):
 
     def __init__(
         self,
-        manager: "MerossDevice",
+        manager: "Device",
         channel: object | None,
         entitykey: str | None,
-        **kwargs: "typing.Unpack[MLNumericSensorArgs]",
+        **kwargs: "Unpack[MLNumericSensor.Args]",
     ):
         super().__init__(
             manager, channel, entitykey, None, **(kwargs | {"name": "Presence"})

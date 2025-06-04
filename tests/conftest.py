@@ -40,20 +40,26 @@ def auto_enable(request: pytest.FixtureRequest):
     When we don't need it, we'd also want our helpers.get_entity_last_states
     to not return an exception (since the recorder instance is missing then)
     """
-    has_recorder = "recorder_mock" in request.fixturenames
-    if has_recorder:
-        request.getfixturevalue("recorder_mock")
 
-    hass = request.getfixturevalue("hass")
-    hass.data.pop("custom_components")
-    if has_recorder:
-        yield
-    else:
-        with patch(
-            "custom_components.meross_lan.meross_entity.MerossEntity.get_last_state_available",
-            return_value=None,
-        ):
+    if "hass" in request.fixturenames:
+        request.getfixturevalue("capsys")
+        request.getfixturevalue("caplog")
+        has_recorder = "recorder_mock" in request.fixturenames
+        if has_recorder:
+            request.getfixturevalue("recorder_mock")
+
+        hass = request.getfixturevalue("hass")
+        hass.data.pop("custom_components")
+        if has_recorder:
             yield
+        else:
+            with patch(
+                "custom_components.meross_lan.helpers.entity.MLEntity.get_last_state_available",
+                return_value=None,
+            ):
+                yield
+    else:
+        yield
 
 
 # This fixture is used to prevent HomeAssistant from attempting to create and dismiss persistent
@@ -73,11 +79,11 @@ def skip_notifications_fixture():
 def disable_debug_fixture():
     """Disable development debug code so to test in a production env."""
     with (
-        patch("custom_components.meross_lan.MEROSSDEBUG", None),
-        patch("custom_components.meross_lan.meross_profile.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.helpers.meross_profile.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.helpers.component_api.MEROSSDEBUG", None),
         patch("custom_components.meross_lan.merossclient.MEROSSDEBUG", None),
-        patch("custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None),
         patch("custom_components.meross_lan.merossclient.cloudapi.MEROSSDEBUG", None),
+        patch("custom_components.meross_lan.merossclient.httpclient.MEROSSDEBUG", None),
     ):
         yield
 
@@ -94,8 +100,22 @@ def disable_entity_registry_update():
         MLGarageMultipleConfigSwitch,
     )
 
+    saved = MLGarageDoorEnableSwitch.update_onoff
     MLGarageDoorEnableSwitch.update_onoff = MLGarageMultipleConfigSwitch.update_onoff
     yield
+    MLGarageDoorEnableSwitch.update_onoff = saved
+
+@pytest.fixture(autouse=True, scope="function")
+def log_exception(request: pytest.FixtureRequest, capsys: pytest.CaptureFixture):
+    """Intercepts any code managed exception sent to logging."""
+
+    with helpers.LoggableException() as patch:
+        yield patch
+        calls = patch._mock.mock_calls
+        if calls:
+            with capsys.disabled():
+                print(f"\n{request.node.name}: Loggable.log_exception calls:")
+                print(*calls, sep="\n")
 
 
 @pytest.fixture()

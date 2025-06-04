@@ -14,16 +14,15 @@ from homeassistant.components.calendar.const import (
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt
 
-from . import meross_entity as me
 from .climate import MtsClimate
-from .helpers import clamp
+from .helpers import clamp, entity as me
 from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-    from .meross_device import MerossDeviceBase
+    from .helpers.device import BaseDevice
 
 
 async def async_setup_entry(
@@ -90,12 +89,12 @@ class MtsScheduleEntry:
         )
 
 
-class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
+class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
     PLATFORM = calendar.DOMAIN
-    manager: "MerossDeviceBase"
+    manager: "BaseDevice"
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.CONFIG
+    entity_category = me.MLEntity.EntityCategory.CONFIG
     supported_features: calendar.CalendarEntityFeature = (
         calendar.CalendarEntityFeature.CREATE_EVENT
         | calendar.CalendarEntityFeature.DELETE_EVENT
@@ -141,7 +140,7 @@ class MtsSchedule(me.MerossEntity, calendar.CalendarEntity):
         self._schedule_entry_count_min = 0
         super().__init__(climate.manager, climate.channel, self.ns.key, name="Schedule")
 
-    # interface: MerossEntity
+    # interface: MLEntity
     async def async_shutdown(self):
         self.climate = None  # type: ignore
         await super().async_shutdown()

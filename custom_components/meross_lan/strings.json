@@ -142,7 +142,7 @@
                 "data": {
                     "key": "[%key:config::step::hub::data::key%]",
                     "error": "[%key:config::step::hub::data::error%]",
-                    "allow_mqtt_publish": "[%key:config::step::profile::data::allow_mqtt_publish%]"
+                    "allow_mqtt_publish": "Allow local MQTT publish"
                 }
             },
             "device": {

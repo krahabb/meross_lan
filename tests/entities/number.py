@@ -52,28 +52,30 @@ class EntityTest(EntityComponentTest):
     async def async_test_enabled_callback(self, entity: MLNumber):
         is_config_number = isinstance(entity, MLConfigNumber)
         states = self.hass_states
+        time_mocker = self.device_context.time
         await self.async_service_call(
             haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.max_value}
         )
         if is_config_number:
-            await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
+            await time_mocker.async_tick(entity.DEBOUNCE_DELAY)
         assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.max_value, "max_value"
         await self.async_service_call(
             haec.SERVICE_SET_VALUE, {haec.ATTR_VALUE: entity.min_value}
         )
         if is_config_number:
-            await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
+            await time_mocker.async_tick(entity.DEBOUNCE_DELAY)
         assert (state := states.get(self.entity_id))
         assert float(state.state) == entity.min_value, "min_value"
 
     async def async_test_disabled_callback(self, entity: MLNumber):
         is_config_number = isinstance(entity, MLConfigNumber)
+        time_mocker = self.device_context.time
         await entity.async_set_native_value(entity.native_max_value)
         if is_config_number:
-            await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
+            await time_mocker.async_tick(entity.DEBOUNCE_DELAY)
         assert entity.state == entity.max_value
         await entity.async_set_native_value(entity.native_min_value)
         if is_config_number:
-            await self.device_context.async_tick(entity.DEBOUNCE_DELAY)
+            await time_mocker.async_tick(entity.DEBOUNCE_DELAY)
         assert entity.state == entity.min_value

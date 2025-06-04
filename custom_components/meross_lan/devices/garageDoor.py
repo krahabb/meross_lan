@@ -1,10 +1,9 @@
 from time import time
 import typing
 
-from homeassistant.helpers import entity_registry
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util.dt import now
 
-from .. import meross_entity as me
 from ..binary_sensor import MLBinarySensor
 from ..const import (
     CONF_PROTOCOL_HTTP,
@@ -12,16 +11,16 @@ from ..const import (
     PARAM_GARAGEDOOR_TRANSITION_MINDURATION,
 )
 from ..cover import MLCover
-from ..helpers import clamp
+from ..helpers import clamp, entity as me, versiontuple
 from ..helpers.namespaces import NamespaceHandler
-from ..merossclient import const as mc, namespaces as mn
+from ..merossclient import check_message_strict, const as mc, namespaces as mn
 from ..number import MLConfigNumber, MLEmulatedNumber, MLNumber
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
-    from ..merossclient import MerossRequestType
-    from ..meross_device import DigestInitReturnType, MerossDevice
-    from ..number import MLConfigNumberArgs
+    from typing import Unpack
+    from ..helpers.device import AsyncRequestFunc, Device, DigestInitReturnType
+    from ..merossclient import MerossRequestType, MerossResponse
 
 
 class MLGarageTimeoutBinarySensor(me.MEPartialAvailableMixin, MLBinarySensor):
@@ -79,16 +78,16 @@ class MLGarageMultipleConfigSwitch(me.MEListChannelMixin, MLSwitch):
     'x channel' through mc.NS_APPLIANCE_GARAGEDOOR_MULTIPLECONFIG
     """
 
-    manager: "MerossDevice"
+    manager: "Device"
 
     ns = mn.Appliance_GarageDoor_MultipleConfig
 
     # HA core entity attributes:
-    entity_category = me.EntityCategory.CONFIG
+    entity_category = MLSwitch.EntityCategory.CONFIG
 
     def __init__(
         self,
-        manager: "MerossDevice",
+        manager: "Device",
         channel,
         key: str,
         *,
@@ -114,7 +113,7 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
 
     def __init__(
         self,
-        manager: "MerossDevice",
+        manager: "Device",
         channel,
         key: str,
         *,
@@ -137,8 +136,8 @@ class MLGarageDoorEnableSwitch(MLGarageMultipleConfigSwitch):
     def _channel_enable(self, enabled):
         """enables/disables all the entities of this channel garageDoor in the
         entity registry"""
-        registry_update_entity = self.get_entity_registry().async_update_entity
-        disabler = entity_registry.RegistryEntryDisabler.INTEGRATION
+        registry_update_entity = self.manager.api.entity_registry.async_update_entity
+        disabler = er.RegistryEntryDisabler.INTEGRATION
         for entity in self.manager.entities.values():
             if (
                 (entity.channel == self.channel)
@@ -161,7 +160,7 @@ class MLGarageConfigSwitch(me.MENoChannelMixin, MLGarageMultipleConfigSwitch):
 
     ns = mn.Appliance_GarageDoor_Config
 
-    def __init__(self, manager: "MerossDevice", key: str, payload: dict):
+    def __init__(self, manager: "Device", key: str, payload: dict):
         super().__init__(
             manager,
             None,
@@ -195,10 +194,10 @@ class MLGarageMultipleConfigNumber(MLConfigNumber):
 
     def __init__(
         self,
-        manager: "MerossDevice",
+        manager: "Device",
         channel,
         key: str,
-        **kwargs: "typing.Unpack[MLConfigNumberArgs]",
+        **kwargs: "Unpack[MLConfigNumber.Args]",
     ):
         self.key_value = key
         kwargs["name"] = key
@@ -222,7 +221,7 @@ class MLGarageConfigNumber(me.MENoChannelMixin, MLGarageMultipleConfigNumber):
 
     ns = mn.Appliance_GarageDoor_Config
 
-    def __init__(self, manager: "MerossDevice", key: str, payload: dict):
+    def __init__(self, manager: "Device", key: str, payload: dict):
         super().__init__(manager, None, key, device_value=payload[key])
 
 
@@ -288,7 +287,7 @@ class MLGarage(MLCover):
         "number_open_timeout",
     )
 
-    def __init__(self, manager: "MerossDevice", channel: object):
+    def __init__(self, manager: "Device", channel: object):
         self._config = {}
         self._transition_duration = (
             PARAM_GARAGEDOOR_TRANSITION_MAXDURATION
@@ -332,7 +331,7 @@ class MLGarage(MLCover):
             self.number_close_timeout = None
             self.number_open_timeout = None
 
-    # interface: MerossEntity
+    # interface: MLEntity
     async def async_shutdown(self):
         await super().async_shutdown()
         self.binary_sensor_timeout = None  # type: ignore
@@ -620,7 +619,7 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
         "number_doorCloseDuration",
     )
 
-    def __init__(self, device: "MerossDevice"):
+    def __init__(self, device: "Device"):
         self.number_signalDuration = None  # type: ignore
         self.switch_buzzerEnable = None  # type: ignore
         self.number_doorOpenDuration = None  # type: ignore
@@ -717,21 +716,97 @@ class GarageDoorConfigNamespaceHandler(NamespaceHandler):
                     self.number_doorCloseDuration = garage.number_close_timeout
 
 
-def digest_init_garageDoor(
-    device: "MerossDevice", digest: list
-) -> "DigestInitReturnType":
+class GarageDoorStateNamespaceHandler(NamespaceHandler):
+
+    def __init__(self, device: "Device"):
+        NamespaceHandler.__init__(
+            self,
+            device,
+            mn.Appliance_GarageDoor_State,
+        )
+
+    def polling_request_configure(
+        self, request_payload_type: mn.RequestPayloadType | None
+    ):
+        # TODO: move this device type 'patching' to some 'smart' Namespace grammar
+        descriptor = self.device.descriptor
+        if descriptor.type.startswith(mc.TYPE_MSG200) and (
+            versiontuple(descriptor.firmwareVersion) < (4, 0, 0)
+        ):
+            # trying to patch lacking of state polling (#538)
+            # It's not sure querying with the list of channels works.
+            # Also, in fw 4.0.0 the default polling with empty dict correctly returns
+            # the list of channels so this should not be needed
+            request_payload_type = request_payload_type or mn.RequestPayloadType.LIST_C
+
+        NamespaceHandler.polling_request_configure(self, request_payload_type)
+
+    async def async_trace(
+        self,
+        async_request_func: "AsyncRequestFunc",
+    ):
+        # 2025-05-14: since garageDoor querying seems to be failing with 'default' euristics
+        # we go down a deep search. It might be the format and behavior is really
+        # varying a lot between versions (msg100/200) and firmwares
+        ns = self.ns
+
+        # try these first for completeness of tracing
+        await async_request_func(ns.name, mc.METHOD_PUSH, ns.DEFAULT_PUSH_PAYLOAD)
+        channels_payload = []
+        for channel in self.parsers:
+            channel_payload = {ns.key_channel: channel}
+            channels_payload.append(channel_payload)
+            # If this querying format works but none of the subsequent does then we'll
+            # need to implement async_poll_digest in order to send the whole set of requests
+            # needed to poll the digest
+            await async_request_func(ns.name, mc.METHOD_GET, {ns.key: channel_payload})
+
+        # We'll try then querying with those different payload structures as they're well known
+        # for channelized devices, starting from the most complex (verbose) to the least one.
+        # If any of these works it will candidate for this NamespaceHandler polling_request format.
+        detected_request_payload_type: mn.RequestPayloadType | None = None
+
+        def _check_response(response: "MerossResponse | None"):
+            if response:
+                try:
+                    response = check_message_strict(response)
+                    payload = response["payload"]["state"]
+                    if type(payload) is list:
+                        return len(self.parsers) == len(payload)
+                    else:  # dict
+                        return len(self.parsers) == 1
+                except Exception:
+                    pass
+            return False
+
+        if _check_response(
+            await async_request_func(ns.name, mc.METHOD_GET, {ns.key: channels_payload})
+        ):
+            detected_request_payload_type = mn.RequestPayloadType.LIST_C
+        if _check_response(
+            await async_request_func(ns.name, mc.METHOD_GET, {ns.key: []})
+        ):
+            detected_request_payload_type = mn.RequestPayloadType.LIST
+        if _check_response(
+            await async_request_func(ns.name, mc.METHOD_GET, {ns.key: {}})
+        ):
+            detected_request_payload_type = mn.RequestPayloadType.DICT
+
+        if detected_request_payload_type:
+            # this will override the request_payload format from its default
+            self.polling_request_configure(detected_request_payload_type)
+
+
+def digest_init_garageDoor(device: "Device", digest: list) -> "DigestInitReturnType":
     device.platforms.setdefault(MLConfigNumber.PLATFORM, None)
     device.platforms.setdefault(MLSwitch.PLATFORM, None)
-    ability = device.descriptor.ability
+
+    handler = GarageDoorStateNamespaceHandler(device)
+
     for channel_digest in digest:
         MLGarage(device, channel_digest[mc.KEY_CHANNEL])
 
-    if mn.Appliance_GarageDoor_Config.name in ability:
+    if mn.Appliance_GarageDoor_Config.name in device.descriptor.ability:
         GarageDoorConfigNamespaceHandler(device)
 
-    # We have notice (#428) that the msg200 pushes a strange garage door state
-    # over channel 0 which is not in the list of channels exposed in digest.
-    # We so prepare the handler to eventually build an MLGarage instance
-    # even though it's behavior is unknown at the moment.
-    handler = device.get_handler(mn.Appliance_GarageDoor_State)
     return handler.parse_list, (handler,)

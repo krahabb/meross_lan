@@ -1,29 +1,23 @@
 import abc
-from enum import StrEnum
+import asyncio
 import logging
 import os
 from time import localtime, strftime, time
 import typing
 
+from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
 from homeassistant.core import callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import LOGGER, ConfigEntriesHelper, Loggable, getLogger
+from . import LOGGER, Loggable, getLogger
+from .. import const as mlc
 from ..const import (
-    CONF_ALLOW_MQTT_PUBLISH,
     CONF_CREATE_DIAGNOSTIC_ENTITIES,
     CONF_KEY,
-    CONF_LOGGING_LEVEL,
-    CONF_LOGGING_LEVEL_OPTIONS,
     CONF_OBFUSCATE,
     CONF_PROTOCOL_AUTO,
-    CONF_PROTOCOL_MQTT,
-    CONF_TRACE,
-    CONF_TRACE_DIRECTORY,
-    CONF_TRACE_MAXSIZE,
-    CONF_TRACE_TIMEOUT,
-    CONF_TRACE_TIMEOUT_DEFAULT,
     DOMAIN,
 )
 from ..merossclient import cloudapi, const as mc, json_dumps
@@ -36,50 +30,64 @@ from .obfuscate import (
 )
 
 if typing.TYPE_CHECKING:
-    import asyncio
     import io
+    from typing import Callable, ClassVar, Coroutine, Final, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
-    from homeassistant.core import HomeAssistant
+    from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 
-    from ..meross_device import MerossDevice
-    from ..meross_entity import MerossEntity
-    from ..meross_profile import MerossCloudProfile, MQTTConnection
-    from ..merossclient import HostAddress, MerossMessage, MerossPayloadType
-
-
-class ManagerState(StrEnum):
-    INIT = "init"
-    LOADING = "loading"
-    LOADED = "loaded"
-    STARTED = "started"
-    SHUTDOWN = "shutdown"
+    from ..merossclient import HostAddress, MerossPayloadType
+    from .component_api import ComponentApi
+    from .entity import MLEntity
 
 
 class EntityManager(Loggable):
     """
     This is an abstraction of an actual (device or other) container
-    for MerossEntity(s). This container is very 'hybrid', end its main purpose
+    for MLEntity(s). This container is very 'hybrid', end its main purpose
     is to provide interfaces to their owned MerossEntities.
-    It could represent a MerossDevice, a MerossSubDevice or an ApiProfile
+    It could represent a Device, a SubDevice or an ApiProfile
     and manages the relation(s) with the ConfigEntry (config, life-cycle).
     This is a 'partial' base class for ConfigEntryManager which definitely establishes
     the relationship with the ConfigEntry. This is in turn needed to better establish
-    an isolation level between MerossSubDevice and a ConfigEntry
+    an isolation level between SubDevice and a ConfigEntry
     """
 
+    if typing.TYPE_CHECKING:
+
+        class DeviceEntryIdType(typing.TypedDict):
+            identifiers: set[tuple[str, str]]
+
+        api: Final[ComponentApi]
+        hass: Final[HomeAssistant]
+        config_entry: Final[ConfigEntry | None]
+        deviceentry_id: Final[DeviceEntryIdType | None]
+        entities: Final[dict[object, MLEntity]]
+        _tasks: set[asyncio.Future]
+        _issues: set[str]  # BEWARE: on demand attribute
+
+        class Args(Loggable.Args):
+            api: ComponentApi
+            hass: HomeAssistant
+            config_entry: NotRequired[ConfigEntry]
+            deviceentry_id: NotRequired["EntityManager.DeviceEntryIdType"]
+
+    IssueSeverity = ir.IssueSeverity
+
     # slots for ConfigEntryManager are defined here since we would have some
-    # multiple inheritance conflicts in MerossDevice
+    # multiple inheritance conflicts in Device
     __slots__ = (
-        "config_entry_id",
+        "api",
+        "hass",
+        "config_entry",
         "deviceentry_id",
         "entities",
         "platforms",
         "config",
         "key",
         "obfuscate",
-        "state",
         "_tasks",
+        "_issues",
         "_trace_file",
         "_trace_future",
         "_trace_data",
@@ -88,22 +96,13 @@ class EntityManager(Loggable):
         "_unsub_entry_update_listener",
     )
 
-    def __init__(
-        self,
-        id: str,
-        *,
-        config_entry_id: str,
-        deviceentry_id: dict[str, set[tuple[str, str]]] | None = None,
-        **kwargs,
-    ):
-        self.config_entry_id = config_entry_id
-        self.deviceentry_id = deviceentry_id
-        # This is a collection of all of the instanced entities
-        # they're generally built here during inherited __init__ and will be registered
-        # in platforms(s) async_setup_entry with their corresponding platform
-        self.entities: typing.Final[dict[object, "MerossEntity"]] = {}
-        self.state = ManagerState.INIT
-        self._tasks: set[asyncio.Future] = set()
+    def __init__(self, id: str, **kwargs: "Unpack[Args]"):
+        self.api = kwargs["api"]
+        self.hass = kwargs["hass"]
+        self.config_entry = kwargs.get("config_entry")
+        self.deviceentry_id = kwargs.get("deviceentry_id")
+        self.entities = {}
+        self._tasks = set()
         super().__init__(id, **kwargs)
 
     async def async_shutdown(self):
@@ -111,7 +110,7 @@ class EntityManager(Loggable):
         Cleanup code called when the config entry is unloaded.
         Beware, when a derived class owns some direct member pointers to entities,
         be sure to invalidate them after calling the super() implementation.
-        This is especially true for MerossDevice(s) classes which need to stop
+        This is especially true for Device(s) classes which need to stop
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
@@ -137,7 +136,8 @@ class EntityManager(Loggable):
 
     @property
     def name(self) -> str:
-        return self.logtag
+        config_entry = self.config_entry
+        return config_entry.title if config_entry else self.logtag
 
     @property
     def online(self) -> bool:
@@ -149,7 +149,7 @@ class EntityManager(Loggable):
             entity for entity in self.entities.values() if entity.PLATFORM is platform
         ]
 
-    def generate_unique_id(self, entity: "MerossEntity"):
+    def generate_unique_id(self, entity: "MLEntity"):
         """
         flexible policy in order to generate unique_ids for entities:
         This is an helper needed to better control migrations in code
@@ -160,7 +160,7 @@ class EntityManager(Loggable):
         return f"{self.id}_{entity.id}"
 
     def schedule_async_callback(
-        self, delay: float, target: "typing.Callable[..., typing.Coroutine]", *args
+        self, delay: float, target: "Callable[..., Coroutine]", *args
     ) -> "asyncio.TimerHandle":
         @callback
         def _callback(_target, *_args):
@@ -169,14 +169,14 @@ class EntityManager(Loggable):
         return self.hass.loop.call_later(delay, _callback, target, *args)
 
     def schedule_callback(
-        self, delay: float, target: "typing.Callable", *args
+        self, delay: float, target: "Callable", *args
     ) -> "asyncio.TimerHandle":
         return self.hass.loop.call_later(delay, target, *args)
 
     @callback
     def async_create_task(
         self,
-        target: typing.Coroutine,
+        target: "Coroutine",
         name: str,
         eager_start: bool = True,
     ) -> "asyncio.Task":
@@ -192,41 +192,83 @@ class EntityManager(Loggable):
             task.add_done_callback(self._tasks.remove)
         return task
 
+    def create_issue(
+        self,
+        issue_id: str,
+        *,
+        severity: ir.IssueSeverity = ir.IssueSeverity.CRITICAL,
+        translation_placeholders: dict[str, str] | None = None,
+    ):
+
+        try:
+            issues = self._issues
+            if issue_id in issues:
+                return
+        except AttributeError:
+            issues = self._issues = set()
+        ir.async_create_issue(
+            self.hass,
+            mlc.DOMAIN,
+            f"{issue_id}.{self.id}",
+            is_fixable=True,
+            severity=severity,
+            translation_key=issue_id,
+            translation_placeholders=translation_placeholders,
+        )
+        issues.add(issue_id)
+
+    def remove_issue(self, issue_id: str):
+        try:
+            self._issues.remove(issue_id)
+            ir.async_delete_issue(self.hass, mlc.DOMAIN, f"{issue_id}.{self.id}")
+        except (AttributeError, KeyError):
+            # either no _issues attr or issue_id not in set
+            return
+
 
 class ConfigEntryManager(EntityManager):
     """
     This is an abstraction of an actual (device or other) container
-    for MerossEntity(s). This container is very 'hybrid', end its main purpose
+    for MLEntity(s). This container is very 'hybrid', end its main purpose
     is to provide interfaces to their owned MerossEntities.
-    It could represent a MerossDevice, a MerossSubDevice or an ApiProfile
+    It could represent a Device, a SubDevice or an ApiProfile
     and manages the relation(s) with the ConfigEntry (config, life-cycle)
     """
+
+    if typing.TYPE_CHECKING:
+        TRACE_RX: Final
+        TRACE_TX: Final
+        DEFAULT_PLATFORMS: ClassVar[dict[str, Callable | None]]
+        key: str
+        logger: logging.Logger
+        _trace_file: io.TextIOWrapper | None
+        _trace_future: asyncio.Future | None
+        _trace_data: list | None
+        _unsub_trace_endtime: asyncio.TimerHandle | None
+        _unsub_entry_reload: asyncio.TimerHandle | None
+        _unsub_entry_update_listener: CALLBACK_TYPE | None
+
+        class Args(EntityManager.Args):
+            pass
 
     TRACE_RX = "RX"
     TRACE_TX = "TX"
 
-    DEFAULT_PLATFORMS: typing.ClassVar[dict[str, typing.Callable | None]] = {}
+    DEFAULT_PLATFORMS = {}
     """Defined at the class level to preset a list of domains for entities
     which could be dynamically added after ConfigEntry loading."""
 
-    key: str
-    logger: logging.Logger
+    def __init__(self, id: str, **kwargs: "Unpack[Args]"):
 
-    def __init__(
-        self,
-        id: str,
-        config_entry: "ConfigEntry | None",
-        **kwargs,
-    ):
-        if config_entry:
-            config_entry_id = config_entry.entry_id
+        try:
+            config_entry = kwargs["config_entry"]  # type: ignore
+            config_entry.runtime_data = self
             self.config = config = config_entry.data
             self.key = config.get(CONF_KEY) or ""
             self.obfuscate = config.get(CONF_OBFUSCATE, True)
-        else:
-            # this is the MerossApi: it will be better initialized when
+        except KeyError:
+            # this is the ComponentApi: it will be better initialized when
             # the ConfigEntry is loaded
-            config_entry_id = ""
             self.config = {}
             self.key = ""
             self.obfuscate = True
@@ -237,20 +279,20 @@ class ConfigEntryManager(EntityManager):
         # during the corresponding platform async_setup_entry so to be able
         # to dynamically add more entities should they 'pop-up' (Hub only?)
         self.platforms = self.DEFAULT_PLATFORMS.copy()
-        self._trace_file: "io.TextIOWrapper | None" = None
-        self._trace_future: "asyncio.Future | None" = None
-        self._trace_data: list | None = None
-        self._unsub_trace_endtime: "asyncio.TimerHandle | None" = None
+        self._trace_file = None
+        self._trace_future = None
+        self._trace_data = None
+        self._unsub_trace_endtime = None
         self._unsub_entry_reload = None
         self._unsub_entry_update_listener = None
-        super().__init__(id, config_entry_id=config_entry_id, **kwargs)
+        super().__init__(id, **kwargs)
 
     async def async_shutdown(self):
         """
         Cleanup code called when the config entry is unloaded.
         Beware, when a derived class owns some direct member pointers to entities,
         be sure to invalidate them after calling the super() implementation.
-        This is especially true for MerossDevice(s) classes which need to stop
+        This is especially true for Device(s) classes which need to stop
         their async polling before invalidating the member pointers (which are
         usually referred to inside the polling /parsing code)
         """
@@ -271,7 +313,7 @@ class ConfigEntryManager(EntityManager):
         self.logtag = self.get_logger_name()
         self.logger = logger = getLogger(f"{LOGGER.name}.{self.logtag}")
         try:
-            logger.setLevel(self.config.get(CONF_LOGGING_LEVEL, logging.NOTSET))
+            logger.setLevel(self.config.get(mlc.CONF_LOGGING_LEVEL, logging.NOTSET))
         except Exception as exception:
             # do not use self Loggable interface since we might be not set yet
             LOGGER.warning(
@@ -296,15 +338,12 @@ class ConfigEntryManager(EntityManager):
     async def async_setup_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
     ):
-        assert self.state is ManagerState.INIT
-        assert config_entry.entry_id not in ApiProfile.managers
-        assert self.config_entry_id == config_entry.entry_id
-        ApiProfile.managers[self.config_entry_id] = self
-        self.state = ManagerState.LOADING
+        assert self.config_entry == config_entry
+        api = self.api
         # open the trace before adding the entities
         # so we could catch logs in this phase too
-        state = ApiProfile.managers_transient_state.setdefault(self.config_entry_id, {})
-        if state.pop(CONF_TRACE, None):
+        state = api.managers_transient_state.setdefault(config_entry.entry_id, {})
+        if state.pop(mlc.CONF_TRACE, None):
             await self.async_trace_open()
 
         if self.config.get(CONF_CREATE_DIAGNOSTIC_ENTITIES):
@@ -316,7 +355,6 @@ class ConfigEntryManager(EntityManager):
         self._unsub_entry_update_listener = config_entry.add_update_listener(
             self.entry_update_listener
         )
-        self.state = ManagerState.LOADED
 
     async def async_unload_entry(
         self, hass: "HomeAssistant", config_entry: "ConfigEntry"
@@ -329,11 +367,9 @@ class ConfigEntryManager(EntityManager):
         self.platforms = {}
         self.config = {}
         await self.async_shutdown()
-        self.state = ManagerState.INIT
-        ApiProfile.managers.pop(self.config_entry_id)
         return True
 
-    def schedule_entry_reload(self, delay: float = 0):
+    def schedule_reload(self, delay: float = 0):
         """
         Schedule the reload in a delayed task (using 'call_later').
         config_entries.async_schedule_reload is now 'eager' and
@@ -341,10 +377,11 @@ class ConfigEntryManager(EntityManager):
         """
         if self._unsub_entry_reload:
             self._unsub_entry_reload.cancel()
+        assert self.config_entry
         self._unsub_entry_reload = self.schedule_callback(
             delay,
-            ConfigEntriesHelper(self.hass).schedule_reload,
-            self.config_entry_id,
+            self.api.schedule_entry_reload,
+            self.config_entry.entry_id,
         )
 
     async def entry_update_listener(
@@ -366,7 +403,7 @@ class ConfigEntryManager(EntityManager):
     async def async_destroy_diagnostic_entities(self, remove: bool = False):
         """Cleanup diagnostic entities, when the entry is unloaded. If 'remove' is True
         it will be removed from the entity registry as well."""
-        ent_reg = self.get_entity_registry() if remove else None
+        ent_reg = self.api.entity_registry if remove else None
         for entity in self.managed_entities(SENSOR_DOMAIN):
             if entity.is_diagnostic:
                 if entity._hass_connected:
@@ -424,13 +461,13 @@ class ConfigEntryManager(EntityManager):
 
             def _trace_open():
                 tracedir = hass.config.path(
-                    "custom_components", DOMAIN, CONF_TRACE_DIRECTORY
+                    "custom_components", DOMAIN, mlc.CONF_TRACE_DIRECTORY
                 )
                 os.makedirs(tracedir, exist_ok=True)
                 return open(
                     os.path.join(
                         tracedir,
-                        f"{strftime('%Y-%m-%d_%H-%M-%S', localtime(epoch))}_{self.config_entry_id}.csv",
+                        f"{strftime('%Y-%m-%d_%H-%M-%S', localtime(epoch))}_{self.logtag}.csv",
                     ),
                     mode="w",
                     encoding="utf8",
@@ -444,13 +481,20 @@ class ConfigEntryManager(EntityManager):
                 self.trace_close()
 
             self._unsub_trace_endtime = self.schedule_callback(
-                self.config.get(CONF_TRACE_TIMEOUT) or CONF_TRACE_TIMEOUT_DEFAULT,
+                self.config.get(mlc.CONF_TRACE_TIMEOUT)
+                or mlc.CONF_TRACE_TIMEOUT_DEFAULT,
                 _trace_close_callback,
             )
             self._trace_opened(epoch)
+            pn.async_create(
+                self.hass,
+                f"Device: {self.name}\nFile: {self._trace_file.name}",  # type: ignore
+                "meross_lan tracing started",
+                f"{DOMAIN}.{self.id}.tracing",
+            )
+
         except Exception as exception:
-            self.trace_close()
-            self.log_exception(self.WARNING, exception, "creating trace file")
+            self.trace_close(exception, "creating file")
 
     def _trace_opened(self, epoch: float):
         """
@@ -459,14 +503,21 @@ class ConfigEntryManager(EntityManager):
         """
         pass
 
-    def trace_close(self):
+    def trace_close(
+        self, exception: Exception | None = None, error_context: str | None = None
+    ):
+        notify_message = "Data not available"
         if self._trace_file:
             try:
+                notify_message = f"Data available in {self._trace_file.name}"
                 self._trace_file.close()
-            except Exception as exception:
-                self.log_exception(self.WARNING, exception, "closing trace file")
+            except Exception as e:
+                if not exception:
+                    exception = e
+                    error_context = "closing file"
             self._trace_file = None
             self.log(self.DEBUG, "Tracing end")
+
         if self._unsub_trace_endtime:
             self._unsub_trace_endtime.cancel()
             self._unsub_trace_endtime = None
@@ -474,6 +525,20 @@ class ConfigEntryManager(EntityManager):
             self._trace_future.set_result(self._trace_data)
             self._trace_future = None
         self._trace_data = None
+        if exception:
+            self.log_exception(
+                self.WARNING, exception, "tracing operation (%s)", error_context
+            )
+            notify_title = "Tracing error"
+            notify_message = f"{exception} in {error_context}\n{notify_message}"
+        else:
+            notify_title = "Tracing terminated"
+        pn.async_create(
+            self.hass,
+            f"Device: {self.name}\n{notify_message}",
+            notify_title,
+            f"{DOMAIN}.{self.id}.tracing",
+        )
 
     def trace(
         self,
@@ -500,12 +565,11 @@ class ConfigEntryManager(EntityManager):
                 columns[5] = json_dumps(data)
                 self._trace_file.write("\t".join(columns) + "\r\n")
                 columns[5] = data  # restore the (eventual) _trace_data ref
-                if self._trace_file.tell() > CONF_TRACE_MAXSIZE:
+                if self._trace_file.tell() > mlc.CONF_TRACE_MAXSIZE:
                     self.trace_close()
 
         except Exception as exception:
-            self.trace_close()
-            self.log_exception(self.WARNING, exception, "appending trace data")
+            self.trace_close(exception, "appending data")
 
     def trace_log(
         self,
@@ -518,19 +582,19 @@ class ConfigEntryManager(EntityManager):
                 "",
                 CONF_PROTOCOL_AUTO,
                 "LOG",
-                CONF_LOGGING_LEVEL_OPTIONS.get(level) or logging.getLevelName(level),
+                mlc.CONF_LOGGING_LEVEL_OPTIONS.get(level)
+                or logging.getLevelName(level),
                 msg,
             ]
             if self._trace_data:
                 self._trace_data.append(columns)
             if self._trace_file:
                 self._trace_file.write("\t".join(columns) + "\r\n")
-                if self._trace_file.tell() > CONF_TRACE_MAXSIZE:
+                if self._trace_file.tell() > mlc.CONF_TRACE_MAXSIZE:
                     self.trace_close()
 
         except Exception as exception:
-            self.trace_close()
-            self.log_exception(self.WARNING, exception, "appending trace log")
+            self.trace_close(exception, "appending log")
 
     def _cleanup_subscriptions(self):
         if self._unsub_entry_update_listener:
@@ -539,170 +603,6 @@ class ConfigEntryManager(EntityManager):
         if self._unsub_entry_reload:
             self._unsub_entry_reload.cancel()
             self._unsub_entry_reload = None
-
-
-class ApiProfile(ConfigEntryManager):
-    """
-    Base class for both MerossCloudProfile and MerossApi allowing lightweight
-    sharing of globals and defining some common interfaces.
-    """
-
-    DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
-        SENSOR_DOMAIN: None,
-    }
-
-    devices: typing.ClassVar[dict[str, "MerossDevice | None"]] = {}
-    """
-    dict of configured devices. Every device config_entry in the system is mapped here and
-    set to the MerossDevice instance if the device is actually active (config_entry loaded)
-    or set to None if the config_entry is not loaded (no device instance)
-    """
-    profiles: typing.ClassVar[dict[str, "MerossCloudProfile | None"]] = {}
-    """
-    dict of configured cloud profiles (behaves as the 'devices' dict).
-    """
-    managers: typing.ClassVar[dict[str, "ConfigEntryManager"]] = {}
-    """
-    dict of loaded EntityManagers (ApiProfile(s) or devices) and
-    matches exactly the loaded config entries.
-    """
-    managers_transient_state: typing.ClassVar[dict[str, dict]] = {}
-    """
-    This is actually a temporary memory storage used to mantain some info related to
-    an ConfigEntry/EntityManager that we don't want to persist to hass storage (useless overhead)
-    since they're just runtime context but we need an independent storage than
-    EntityManager since these info are needed during EntityManager async_setup_entry.
-    See the tracing feature activated through the OptionsFlow for insights.
-    """
-
-    @staticmethod
-    def active_devices():
-        """Iterates over the currently loaded MerossDevices."""
-        return (device for device in ApiProfile.devices.values() if device)
-
-    @staticmethod
-    def active_profiles():
-        """Iterates over the currently loaded MerossCloudProfiles."""
-        return (profile for profile in ApiProfile.profiles.values() if profile)
-
-    @staticmethod
-    def get_device_with_mac(macaddress: str):
-        # macaddress from dhcp discovery is already stripped/lower but...
-        macaddress = macaddress.replace(":", "").lower()
-        for device in ApiProfile.active_devices():
-            if device.descriptor.macAddress.replace(":", "").lower() == macaddress:
-                return device
-        return None
-
-    __slots__ = (
-        "linkeddevices",
-        "mqttconnections",
-    )
-
-    def __init__(self, id: str, config_entry: "ConfigEntry | None"):
-        super().__init__(id, config_entry)
-        self.linkeddevices: dict[str, MerossDevice] = {}
-        self.mqttconnections: dict[str, MQTTConnection] = {}
-
-    # interface: ConfigEntryManager
-    async def async_shutdown(self):
-        for mqttconnection in self.mqttconnections.values():
-            await mqttconnection.async_shutdown()
-        self.mqttconnections.clear()
-        for device in self.linkeddevices.values():
-            device.profile_unlinked()
-        self.linkeddevices.clear()
-        await super().async_shutdown()
-
-    async def entry_update_listener(self, hass, config_entry: "ConfigEntry"):
-        config = config_entry.data
-        # the MerossApi always enable (independent of config) mqtt publish
-        allow_mqtt_publish = config.get(CONF_ALLOW_MQTT_PUBLISH) or (self is self.api)
-        if allow_mqtt_publish != self.allow_mqtt_publish:
-            # device._mqtt_publish is rather 'passive' so
-            # we do some fast 'smart' updates:
-            if allow_mqtt_publish:
-                for device in self.linkeddevices.values():
-                    device._mqtt_publish = device._mqtt_connected
-            else:
-                for device in self.linkeddevices.values():
-                    device._mqtt_publish = None
-        await super().entry_update_listener(hass, config_entry)
-        for mqttconnection in self.mqttconnections.values():
-            await mqttconnection.entry_update_listener(self)
-
-    async def async_create_diagnostic_entities(self):
-        await super().async_create_diagnostic_entities()
-        for mqttconnection in self.mqttconnections.values():
-            await mqttconnection.async_create_diagnostic_entities()
-
-    # interface: self
-    @property
-    def allow_mqtt_publish(self):
-        return self.config.get(CONF_ALLOW_MQTT_PUBLISH)
-
-    def link(self, device: "MerossDevice"):
-        device_id = device.id
-        assert device_id not in self.linkeddevices
-        device.profile_linked(self)
-        self.linkeddevices[device_id] = device
-
-    def unlink(self, device: "MerossDevice"):
-        device_id = device.id
-        assert device_id in self.linkeddevices
-        device.profile_unlinked()
-        self.linkeddevices.pop(device_id)
-
-    @abc.abstractmethod
-    def attach_mqtt(self, device: "MerossDevice"):
-        pass
-
-    def trace_or_log(
-        self,
-        connection: "MQTTConnection",
-        device_id: str,
-        message: "MerossMessage",
-        rxtx: str,
-    ):
-        if self.is_tracing:
-            header = message[mc.KEY_HEADER]
-            self.trace(
-                time(),
-                message[mc.KEY_PAYLOAD],
-                header[mc.KEY_NAMESPACE],
-                header[mc.KEY_METHOD],
-                CONF_PROTOCOL_MQTT,
-                rxtx,
-            )
-        if self.isEnabledFor(self.VERBOSE):
-            header = message[mc.KEY_HEADER]
-            connection.log(
-                self.VERBOSE,
-                "%s(%s) %s %s (uuid:%s messageId:%s) %s",
-                rxtx,
-                CONF_PROTOCOL_MQTT,
-                header[mc.KEY_METHOD],
-                header[mc.KEY_NAMESPACE],
-                self.loggable_device_id(device_id),
-                header[mc.KEY_MESSAGEID],
-                (
-                    json_dumps(obfuscated_dict(message))
-                    if self.obfuscate
-                    else message.json()
-                ),
-            )
-        elif self.isEnabledFor(self.DEBUG):
-            header = message[mc.KEY_HEADER]
-            connection.log(
-                self.DEBUG,
-                "%s(%s) %s %s (uuid:%s messageId:%s)",
-                rxtx,
-                CONF_PROTOCOL_MQTT,
-                header[mc.KEY_METHOD],
-                header[mc.KEY_NAMESPACE],
-                self.loggable_device_id(device_id),
-                header[mc.KEY_MESSAGEID],
-            )
 
 
 class CloudApiClient(cloudapi.CloudApiClient, Loggable):
@@ -720,7 +620,7 @@ class CloudApiClient(cloudapi.CloudApiClient, Loggable):
         cloudapi.CloudApiClient.__init__(
             self,
             credentials=credentials,
-            session=async_get_clientsession(Loggable.hass),
+            session=async_get_clientsession(manager.hass),
             logger=self,  # type: ignore (Loggable almost duck-compatible with logging.Logger)
             obfuscate_func=manager.loggable_any,
         )
