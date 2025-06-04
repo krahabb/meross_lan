@@ -3,7 +3,7 @@ Descriptors for namespaces management.
 This file contains the knowledge about how namespaces work (their syntax and behaviors).
 """
 
-from enum import Enum
+import enum
 from functools import cached_property
 import re
 import typing
@@ -11,7 +11,11 @@ import typing
 from . import const as mc
 
 if typing.TYPE_CHECKING:
+    from typing import Final, Mapping
+
     from . import MerossRequestType
+
+    NAMESPACES: Final[Mapping[str, "Namespace"]]
 
 
 class _NamespacesMap(dict):
@@ -25,18 +29,34 @@ class _NamespacesMap(dict):
         try:
             return super().__getitem__(namespace)
         except KeyError:
-            return Namespace(namespace, experimental=True)
+            return _ns_unknown(namespace)
 
 
-NAMESPACES: dict[str, "Namespace"] = _NamespacesMap()
+NAMESPACES = _NamespacesMap()
 
 # singletons for default payloads (TODO:should be immutable though)
 
 
-class RequestPayloadType(Enum):
+class RequestPayloadType(enum.Enum):
+    """Depicts the payload structure in GET queries (defaults to DICT in case)."""
+
     DICT = {}
+    """Command GET with an empty dict returns all the (channels) state."""
+    DICT_C = {mc.KEY_CHANNEL: 0}
+    """Command GET with channel index in dict returns the state requested."""
     LIST = []
+    """Command GET with an empty list returns all the (channels) state."""
     LIST_C = [{mc.KEY_CHANNEL: 0}]
+    """Command GET with channel index dicts in a list returns the states requested."""
+
+
+class Grammar(enum.StrEnum):
+    UNKNOWN = enum.auto()
+    """Used to mark namespaces which still don't have a proper normalization (new/unknown ones)."""
+    EXPERIMENTAL = enum.auto()
+    """Used to mark namespaces for which our normalization is not 100% sure."""
+    STABLE = enum.auto()
+    """Used to mark namespaces for which our normalization is about 100% correct and complete."""
 
 
 class Namespace:
@@ -45,22 +65,22 @@ class Namespace:
     of namespace behaviors and syntax.
     """
 
-    DEFAULT_PUSH_PAYLOAD: typing.Final = RequestPayloadType.DICT.value
+    if typing.TYPE_CHECKING:
+        DEFAULT_PUSH_PAYLOAD: Final
+        name: Final[str]
+        """The namespace name"""
+        key: Final[str]
+        """The root key of the payload"""
+        key_channel: Final[str]
+        """The key used to index items in list payloads"""
+        has_get: Final[bool | None]
+        """ns supports method GET - is None when we have no clue"""
+        has_push: Final[bool | None]
+        """ns supports method PUSH - is None when we have no clue"""
+        request_payload_type: Final[RequestPayloadType]
+        grammar: Final[Grammar]
 
-    name: str
-    """The namespace name"""
-    key: str
-    """The root key of the payload"""
-    key_channel: str
-    """The key used to index items in list payloads"""
-    has_get: bool | None
-    """ns supports method GET - is None when we have no clue"""
-    has_push: bool | None
-    """ns supports method PUSH - is None when we have no clue"""
-    request_payload_type: RequestPayloadType
-    """Depicts the payload structure in GET queries (defaults to DICT in case)"""
-    experimental: bool
-    """True if the namespace definition/behavior is somewhat unknown"""
+    DEFAULT_PUSH_PAYLOAD = RequestPayloadType.DICT.value
 
     __slots__ = (
         "name",
@@ -69,7 +89,7 @@ class Namespace:
         "has_get",
         "has_push",
         "payload_get_type",
-        "experimental",
+        "grammar",
         "__dict__",
     )
 
@@ -78,11 +98,12 @@ class Namespace:
         name: str,
         key: str | None = None,
         request_payload_type: RequestPayloadType | None = None,
+        grammar: Grammar = Grammar.UNKNOWN,
+        /,
         *,
         key_channel: str | None = None,
         has_get: bool | None = None,
         has_push: bool | None = None,
-        experimental: bool = False,
     ) -> None:
         self.name = name
         if key:
@@ -116,8 +137,8 @@ class Namespace:
         self.key_channel = key_channel or (mc.KEY_ID if self.is_hub else mc.KEY_CHANNEL)
         self.has_get = has_get
         self.has_push = has_push
-        self.experimental = experimental
-        NAMESPACES[name] = self
+        self.grammar = grammar
+        NAMESPACES[name] = self  # type: ignore
 
     @cached_property
     def is_sensor(self):
@@ -160,7 +181,7 @@ class Namespace:
         return self.name, mc.METHOD_PUSH, Namespace.DEFAULT_PUSH_PAYLOAD
 
 
-def ns_build_from_message(namespace: str, method: str, payload: dict):
+def ns_build_from_message(namespace: str, method: str, payload: dict, /):
     ns_key = None
     key_channel = None
     request_payload_type = None
@@ -188,52 +209,50 @@ def ns_build_from_message(namespace: str, method: str, payload: dict):
         namespace,
         ns_key,
         request_payload_type,
+        Grammar.UNKNOWN,
         key_channel=key_channel,
         has_push=True if method == mc.METHOD_PUSH else None,
-        experimental=True,
     )
 
 
-def _ns_unknown(
-    name: str,
-    key: str | None = None,
-):
+def _ns_unknown(name: str, key: str | None = None, /):
     """Builds a definition for a namespace without specific knowledge of supported methods"""
-    return Namespace(name, key, None, experimental=True)
+    return Namespace(name, key, None, Grammar.UNKNOWN)
 
 
-def _ns_push(
-    name: str,
-    key: str | None = None,
-):
+def _ns_push(name: str, key: str | None = None, /):
     """Builds a definition for a namespace supporting only PUSH queries (no GET)"""
-    return Namespace(name, key, None, has_get=False, has_push=True)
+    return Namespace(name, key, None, Grammar.STABLE, has_get=False, has_push=True)
 
 
 def _ns_get(
     name: str,
     key: str | None = None,
     request_payload_type: RequestPayloadType | None = None,
+    grammar: Grammar = Grammar.STABLE,
+    /,
 ):
     """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
-    return Namespace(name, key, request_payload_type, has_get=True, has_push=False)
+    return Namespace(
+        name, key, request_payload_type, grammar, has_get=True, has_push=False
+    )
 
 
 def _ns_get_push(
     name: str,
     key: str | None = None,
     request_payload_type: RequestPayloadType | None = None,
-    *,
-    experimental: bool = False,
+    grammar: Grammar = Grammar.STABLE,
+    /,
 ):
     """Builds a definition for a namespace supporting GET queries (which also PUSHes updates)"""
     return Namespace(
         name,
         key,
         request_payload_type,
+        grammar,
         has_get=True,
         has_push=True,
-        experimental=experimental,
     )
 
 
@@ -241,17 +260,23 @@ def _ns_set(
     name: str,
     key: str | None = None,
     request_payload_type: RequestPayloadType | None = None,
+    grammar: Grammar = Grammar.STABLE,
+    /,
 ):
     """Builds a definition for a namespace supporting only SET"""
-    return Namespace(name, key, request_payload_type, has_get=False, has_push=False)
+    return Namespace(
+        name, key, request_payload_type, grammar, has_get=False, has_push=False
+    )
 
 
 def _ns_no_query(
     name: str,
     key: str | None = None,
+    grammar: Grammar = Grammar.STABLE,
+    /,
 ):
     """Builds a definition for a namespace not supporting GET,PUSH"""
-    return Namespace(name, key, None, has_get=False, has_push=False)
+    return Namespace(name, key, None, grammar, has_get=False, has_push=False)
 
 
 # We predefine grammar for some widely used and well known namespaces either to skip 'euristics'
@@ -331,7 +356,7 @@ Appliance_Control_ElectricityX = _ns_get_push(
     "Appliance.Control.ElectricityX",
     mc.KEY_ELECTRICITY,
     RequestPayloadType.LIST_C,
-    experimental=True,
+    Grammar.EXPERIMENTAL,
 )
 Appliance_Control_Fan = _ns_get("Appliance.Control.Fan", mc.KEY_FAN)
 Appliance_Control_FilterMaintenance = _ns_push(
@@ -356,7 +381,7 @@ Appliance_Control_Presence_Config = _ns_get(
 )
 Appliance_Control_Presence_Study = _ns_push(
     "Appliance.Control.Presence.Study", mc.KEY_CONFIG
-)
+)  # TODO: parse this namespace (ms600)?
 Appliance_Control_Spray = _ns_get_push(
     "Appliance.Control.Spray", mc.KEY_SPRAY, RequestPayloadType.DICT
 )
@@ -387,17 +412,22 @@ Appliance_Control_Sensor_Latest = _ns_get_push(
 Appliance_Control_Sensor_History = _ns_get_push(
     "Appliance.Control.Sensor.History", mc.KEY_HISTORY, RequestPayloadType.LIST_C
 )  # history of sensor values
-Appliance_Control_Sensor_LatestX = _ns_get_push(
+# These 2 next are appearing on both regular devices (ms600) and hub/subdevices (ms130)
+# we cannot set a valid grammar here so we're just setting values for regular devices
+# namespace parser (i.e. mostly based on channel(s)). At any rate, even if traces from
+# devices show presence of values at channel 0, the 'LIST_C' query format doesn't work
+# We so try introduce a new payload type 'DICT_C'. PUSH query too seems to not work.
+Appliance_Control_Sensor_LatestX = _ns_get(
     "Appliance.Control.Sensor.LatestX",
     mc.KEY_LATEST,
-    RequestPayloadType.LIST_C,
-    experimental=True,
-)  # Appearing on both regular devices (ms600) and hub/subdevices (ms130)
-Appliance_Control_Sensor_HistoryX = _ns_get_push(
+    RequestPayloadType.DICT_C,
+    Grammar.EXPERIMENTAL,
+)
+Appliance_Control_Sensor_HistoryX = _ns_get(
     "Appliance.Control.Sensor.HistoryX",
     mc.KEY_HISTORY,
-    RequestPayloadType.LIST_C,
-    experimental=True,
+    RequestPayloadType.DICT_C,
+    Grammar.EXPERIMENTAL,
 )  # history of sensor values
 # MTS200-960 smart thermostat
 Appliance_Control_Screen_Brightness = _ns_get_push(
@@ -461,7 +491,12 @@ Appliance_GarageDoor_MultipleConfig = _ns_get(
     mc.KEY_CONFIG,
     RequestPayloadType.LIST_C,
 )
-Appliance_GarageDoor_State = _ns_get_push("Appliance.GarageDoor.State")
+Appliance_GarageDoor_State = _ns_get_push(
+    "Appliance.GarageDoor.State",
+    mc.KEY_STATE,
+    RequestPayloadType.DICT,
+    Grammar.EXPERIMENTAL,
+)
 
 Appliance_Digest_Hub = _ns_get(
     "Appliance.Digest.Hub", mc.KEY_HUB, RequestPayloadType.LIST
