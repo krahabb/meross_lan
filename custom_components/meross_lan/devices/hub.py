@@ -96,10 +96,6 @@ class HubNamespaceHandler(NamespaceHandler):
 
     def __init__(self, device: "HubMixin", ns: "mn.Namespace"):
         NamespaceHandler.__init__(self, device, ns, handler=self._handle_subdevice)
-        if ns.is_sensor:
-            # patch the indexing key since by default 'sensor' namespaces
-            # are configured for indexing by mc.KEY_CHANNEL
-            self.key_channel = mc.KEY_SUBID
 
     def _handle_subdevice(self, header, payload):
         """Generalized Hub namespace dispatcher to subdevices"""
@@ -107,9 +103,10 @@ class HubNamespaceHandler(NamespaceHandler):
         subdevices = hub.subdevices
         subdevices_parsed = set()
         key_namespace = self.ns.key
+        key_channel = self.key_channel
         for p_subdevice in payload[key_namespace]:
             try:
-                subdevice_id = p_subdevice[self.key_channel]
+                subdevice_id = p_subdevice[key_channel]
                 if subdevice_id in subdevices_parsed:
                     hub.log_duplicated_subdevice(subdevice_id)
                 else:
@@ -204,9 +201,10 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         bigger payloads like NS_APPLIANCE_HUB_MTS100_SCHEDULEB
         """
         payload = []
+        key_channel = self.key_channel
         for subdevice in self.device.subdevices.values():
             if (subdevice.model in self._models) == self._included:
-                payload.append({self.key_channel: subdevice.id})
+                payload.append({key_channel: subdevice.id})
                 if len(payload) == self._count:
                     yield payload
                     payload = []
@@ -218,6 +216,8 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
     """
     Specialized Device for smart hub(s) like MSH300
     """
+
+    NAMESPACES = mn.HUB_NAMESPACES
 
     DEFAULT_PLATFORMS = Device.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
@@ -323,10 +323,11 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
             )
 
     def setup_simple_handler(self, ns: mn.Namespace):
-        if ns.name in self.namespace_handlers:
+        try:
             self.namespace_handlers[ns.name].polling_response_size_inc()
-        elif ns.name in self.descriptor.ability:
-            HubNamespaceHandler(self, ns)
+        except KeyError:
+            if ns.name in self.descriptor.ability:
+                HubNamespaceHandler(self, ns)
 
     def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
         self._parse_hub(payload[mc.KEY_HUB])
@@ -396,6 +397,8 @@ class SubDevice(NamespaceParser, BaseDevice):
     flexibility is now necessary to allow for some new 'exotic' design (see
     ms130-Appliance.Control.Sensor.LatestX)
     """
+
+    NAMESPACES = mn.HUB_NAMESPACES
 
     __slots__ = (
         "async_request",
@@ -989,9 +992,18 @@ class MS130SubDevice(SubDevice):
         self.sensor_humidity = MLHumiditySensor(self, self.id)
         self.sensor_temperature = MLTemperatureSensor(self, self.id, device_scale=100)
         self.sensor_light = MLLightSensor(self, self.id)
-        # TODO: check the polling verb/payload since we don't know if
-        # PUSH is enough or if we have to explicitly set the (sub)Id
-        hub.setup_simple_handler(mn.Appliance_Control_Sensor_LatestX)
+        # This hybrid ns should have LIST_C structure in Hub(s)
+        ns = mn.Hub_Control_Sensor_LatestX
+        try:
+            handler = hub.namespace_handlers[ns.name]
+        except KeyError:
+            handler = (
+                HubNamespaceHandler(hub, ns)
+                if ns.name in hub.descriptor.ability
+                else None
+            )
+        if handler:
+            handler.polling_request_add_channel(self.id)
 
     async def async_shutdown(self):
         await super().async_shutdown()

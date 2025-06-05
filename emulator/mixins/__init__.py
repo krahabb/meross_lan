@@ -34,6 +34,8 @@ from custom_components.meross_lan.merossclient import (
 from custom_components.meross_lan.merossclient.mqttclient import MerossMQTTDeviceClient
 
 if typing.TYPE_CHECKING:
+    from typing import ClassVar
+
     import paho.mqtt.client as mqtt
 
 
@@ -153,6 +155,12 @@ class MerossEmulator:
     If state is not available there it could be looked up in the specific
     command carrying the message and so automatically managed too
     """
+
+    if typing.TYPE_CHECKING:
+        NAMESPACES: ClassVar
+        MAXIMUM_RESPONSE_SIZE: ClassVar
+
+    NAMESPACES = mn.NAMESPACES
 
     MAXIMUM_RESPONSE_SIZE = 3000
 
@@ -387,7 +395,7 @@ class MerossEmulator:
                 f"{namespace} not supported in emulator ({exception})"
             ) from exception
 
-        ns = mn.NAMESPACES[namespace]
+        ns = self.NAMESPACES[namespace]
 
         match method:
             case mc.METHOD_GET:
@@ -574,7 +582,7 @@ class MerossEmulator:
         For some devices not all state is carried there tho, so we'll inspect the
         GETACK payload for the relevant namespace looking for state there too
         """
-        key = mn.NAMESPACES[namespace].key
+        key = self.NAMESPACES[namespace].key
 
         match namespace.split("."):
             case (_, "RollerShutter", _):
@@ -622,7 +630,7 @@ class MerossEmulator:
         self, namespace: str, channel, key_channel: str = mc.KEY_CHANNEL
     ) -> dict:
         p_namespace_state = self.descriptor.namespaces[namespace][
-            mn.NAMESPACES[namespace].key
+            self.NAMESPACES[namespace].key
         ]
         return get_element_by_key(p_namespace_state, key_channel, channel)
 
@@ -634,7 +642,7 @@ class MerossEmulator:
         """
         try:
             p_namespace_state: list = self.descriptor.namespaces[namespace][
-                mn.NAMESPACES[namespace].key
+                self.NAMESPACES[namespace].key
             ]
             try:
                 p_channel_state = get_element_by_key(
@@ -647,7 +655,7 @@ class MerossEmulator:
             p_channel_state = {key_channel: channel}
             p_namespace_state = [p_channel_state]
             self.descriptor.namespaces[namespace] = {
-                mn.NAMESPACES[namespace].key: p_namespace_state
+                self.NAMESPACES[namespace].key: p_namespace_state
             }
 
         p_channel_state.update(payload)

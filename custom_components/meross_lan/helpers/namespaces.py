@@ -960,11 +960,18 @@ POLLING_STRATEGY_CONF: dict[
         NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Sensor_LatestX: (
-        0,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
         mlc.PARAM_HEADER_SIZE,
         220,
-        NamespaceHandler.async_poll_default,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn.Hub_Control_Sensor_LatestX: (
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        220,
+        NamespaceHandler.async_poll_lazy,
     ),
     mn.Appliance_Control_Thermostat_Calibration: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,

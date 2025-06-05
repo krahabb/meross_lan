@@ -19,6 +19,8 @@ if typing.TYPE_CHECKING:
 
 class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
+    NAMESPACES = mn.HUB_NAMESPACES
+
     MAXIMUM_RESPONSE_SIZE = 4000
 
     def __init__(self, descriptor: "MerossEmulatorDescriptor", key):
@@ -228,7 +230,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
     def _handler_default(self, method: str, namespace: str, payload: dict):
         if method == mc.METHOD_GET:
-            ns = mn.NAMESPACES[namespace]
+            ns = self.NAMESPACES[namespace]
             if ns.is_hub:
                 response_payload = self.descriptor.namespaces[namespace]
                 request_subdevices = payload[ns.key]

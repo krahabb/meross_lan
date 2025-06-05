@@ -11,30 +11,66 @@ import typing
 from . import const as mc
 
 if typing.TYPE_CHECKING:
-    from typing import Final, Mapping
+    from typing import Final, Mapping, NotRequired, TypedDict, Unpack
 
     from . import MerossRequestType
 
-    NAMESPACES: Final[Mapping[str, "Namespace"]]
+    type NamespacesMapType = Mapping[str, "Namespace"]
+    NAMESPACES: Final[NamespacesMapType]
+    HUB_NAMESPACES: Final[NamespacesMapType]
 
 
 class _NamespacesMap(dict):
     """
-    Map a namespace to the main key carrying the asociated payload.
-    This map is incrementally built at runtime (so we don't waste time manually coding this)
-    whenever we use it
+    Default general map of Namespace(s).
+    This map is populated with a set of static (known) definitions but could also be
+    updated at runtime when a new undefined namespace enter the device message pipe.
     """
 
     def __getitem__(self, namespace: str) -> "Namespace":
         try:
-            return super().__getitem__(namespace)
+            return dict.__getitem__(self, namespace)
         except KeyError:
             return _ns_unknown(namespace)
+
+    def get(self, namespace: str) -> "Namespace | None":
+        try:
+            return dict.__getitem__(self, namespace)
+        except KeyError:
+            return None
 
 
 NAMESPACES = _NamespacesMap()
 
-# singletons for default payloads (TODO:should be immutable though)
+
+class _HubNamespacesMap(dict):
+    """
+    This map is specific for Hub devices so that we can 'override' some Namespace(s) when
+    their default (standard device) based behavior could differ when managed in a Hub.
+    Examples are Appliance.Control.Sensor.LatestX and HistoryX.
+    If a namespace is not found here, it will be looked-up in the default NAMESPACES map
+    and eventually created there. Beware this is not the same meaning of Namespace property 'is_hub'.
+    TODO: for 'sensor' type namespaces we need to manage the case when they're dynamically built
+    at runtime since, when this happens they would be placed in NAMESPACES even if the device is an Hub since
+    we're not managing this kind of context when dynamically adding devices (see device message handling pipe).
+    If they follow the same heuristics as those actually known, they should be placed in HUB_NAMESPACES and
+    key_channel = mc.KEY_SUBID with payload type = LIST_C
+    """
+
+    def __getitem__(self, namespace: str) -> "Namespace":
+        try:
+            return dict.__getitem__(self, namespace)
+        except KeyError:
+            return NAMESPACES[namespace]
+
+    def get(self, namespace: str) -> "Namespace | None":
+        try:
+            return dict.__getitem__(self, namespace)
+        except KeyError:
+            return NAMESPACES.get(namespace)
+
+
+HUB_NAMESPACES = _HubNamespacesMap()
 
 
 class RequestPayloadType(enum.Enum):
@@ -66,6 +102,16 @@ class Namespace:
     """
 
     if typing.TYPE_CHECKING:
+
+        class Args(TypedDict):
+            map: NotRequired[NamespacesMapType]
+            key_channel: NotRequired[str | None]
+            has_get: NotRequired[bool | None]
+            has_push: NotRequired[bool | None]
+            is_hub: NotRequired[bool]
+            is_sensor: NotRequired[bool]
+            is_thermostat: NotRequired[bool]
+
         DEFAULT_PUSH_PAYLOAD: Final
         name: Final[str]
         """The namespace name"""
@@ -100,12 +146,10 @@ class Namespace:
         request_payload_type: RequestPayloadType | None = None,
         grammar: Grammar = Grammar.UNKNOWN,
         /,
-        *,
-        key_channel: str | None = None,
-        has_get: bool | None = None,
-        has_push: bool | None = None,
+        **kwargs: "Unpack[Args]",
     ) -> None:
         self.name = name
+        self.grammar = grammar
         if key:
             self.key = key
         else:
@@ -118,42 +162,65 @@ class Namespace:
             else:
                 self.key = "".join((key[0].lower(), key[1:]))
 
+        map = kwargs.pop("map", NAMESPACES)
+        self.key_channel = kwargs.pop("key_channel", None)  # type: ignore
+        self.has_get = kwargs.pop("has_get", None)
+        self.has_push = kwargs.pop("has_push", None)
+        # process eventual is_hub, is_thermostat or so
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+
         if request_payload_type is None:
             match name.split("."):
                 case (_, "Hub", *_):
+                    self.is_hub = True
+                    self.key_channel = self.key_channel or mc.KEY_ID
                     request_payload_type = RequestPayloadType.LIST
                 case (_, "RollerShutter", *_):
                     request_payload_type = RequestPayloadType.LIST
-                case (
-                    (_, "Control", "Thermostat", *_)
-                    | (_, "Control", "Screen", *_)
-                    | (_, "Control", "Sensor", *_)
-                ):
+                case (_, "Control", "Screen", *_):
+                    request_payload_type = RequestPayloadType.LIST_C
+                case (_, "Control", "Sensor", *_):
+                    self.is_sensor = True
+                    if map is HUB_NAMESPACES:
+                        self.key_channel = self.key_channel or mc.KEY_SUBID
+                        request_payload_type = RequestPayloadType.LIST_C
+                    else:
+                        self.key_channel = self.key_channel or mc.KEY_CHANNEL
+                        request_payload_type = RequestPayloadType.DICT_C
+                case (_, "Control", "Thermostat", *_):
+                    self.is_thermostat = True
                     request_payload_type = RequestPayloadType.LIST_C
                 case _:
                     request_payload_type = RequestPayloadType.DICT
 
         self.request_payload_type = request_payload_type
-        self.key_channel = key_channel or (mc.KEY_ID if self.is_hub else mc.KEY_CHANNEL)
-        self.has_get = has_get
-        self.has_push = has_push
-        self.grammar = grammar
-        NAMESPACES[name] = self  # type: ignore
+        # eventually fix the key_channel should we need some heuristics
+        self.key_channel = self.key_channel or (
+            mc.KEY_ID
+            if self.is_hub
+            else (
+                mc.KEY_SUBID
+                if (self.is_sensor and (map is HUB_NAMESPACES))
+                else mc.KEY_CHANNEL
+            )
+        )
+        map[name] = self  # type: ignore
+
+    @cached_property
+    def is_hub(self):
+        """Namespace payload indexed on subdevice by key 'id'."""
+        return bool(re.match(r"Appliance\.Hub\.(.*)", self.name))
 
     @cached_property
     def is_sensor(self):
         """Namespace payload indexed on hub/subdevice by key 'subId' or
         by 'channel' for regular devices."""
-        return re.match(r"Appliance\.Control\.Sensor\.(.*)", self.name)
-
-    @cached_property
-    def is_hub(self):
-        """Namespace payload indexed on subdevice by key 'id'."""
-        return re.match(r"Appliance\.Hub\.(.*)", self.name)
+        return bool(re.match(r"Appliance\.Control\.Sensor\.(.*)", self.name))
 
     @cached_property
     def is_thermostat(self):
-        return re.match(r"Appliance\.Control\.Thermostat\.(.*)", self.name)
+        return bool(re.match(r"Appliance\.Control\.Thermostat\.(.*)", self.name))
 
     @cached_property
     def payload_get(self) -> dict[str, dict | list]:
@@ -181,7 +248,9 @@ class Namespace:
         return self.name, mc.METHOD_PUSH, Namespace.DEFAULT_PUSH_PAYLOAD
 
 
-def ns_build_from_message(namespace: str, method: str, payload: dict, /):
+def ns_build_from_message(
+    namespace: str, method: str, payload: dict, map: "NamespacesMapType", /
+):
     ns_key = None
     key_channel = None
     request_payload_type = None
@@ -211,7 +280,8 @@ def ns_build_from_message(namespace: str, method: str, payload: dict, /):
         request_payload_type,
         Grammar.UNKNOWN,
         key_channel=key_channel,
-        has_push=True if method == mc.METHOD_PUSH else None,
+        has_push=(method == mc.METHOD_PUSH) or None,
+        map=map,
     )
 
 
@@ -231,14 +301,108 @@ def _ns_get(
     request_payload_type: RequestPayloadType | None = None,
     grammar: Grammar = Grammar.STABLE,
     /,
+    **kwargs: "Unpack[Namespace.Args]",
+):
+    """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
+    kwargs["has_get"] = True
+    kwargs["has_push"] = False
+    return Namespace(name, key, request_payload_type, grammar, **kwargs)
+
+
+def _ns_get_hub(
+    name: str,
+    key: str | None = None,
+    request_payload_type: RequestPayloadType | None = None,
+    grammar: Grammar = Grammar.STABLE,
+    /,
 ):
     """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
     return Namespace(
-        name, key, request_payload_type, grammar, has_get=True, has_push=False
+        name,
+        key,
+        request_payload_type,
+        grammar,
+        **{
+            "map": HUB_NAMESPACES,
+            "key_channel": mc.KEY_ID,
+            "has_get": True,
+            "has_push": False,
+            "is_hub": True,
+            "is_thermostat": False,
+            "is_sensor": False,
+        },
+    )
+
+
+def _ns_get_sensor(
+    name: str,
+    key: str | None = None,
+    map: "NamespacesMapType" = NAMESPACES,
+    /,
+):
+    """Builds a definition for a namespace supporting only GET queries (no PUSH).
+    By specifying the 'map' parameter we can define both 'regular' devices grammar
+    and a different grammar for Hub(s)."""
+    return Namespace(
+        name,
+        key,
+        (
+            RequestPayloadType.LIST_C
+            if map is HUB_NAMESPACES
+            else RequestPayloadType.DICT_C
+        ),
+        Grammar.EXPERIMENTAL,
+        **{
+            "map": map,
+            "key_channel": mc.KEY_SUBID if map is HUB_NAMESPACES else mc.KEY_CHANNEL,
+            "has_get": True,
+            "has_push": False,
+            "is_hub": False,
+            "is_thermostat": False,
+            "is_sensor": True,
+        },
+    )
+
+
+def _ns_get_thermostat(
+    name: str,
+    key: str | None = None,
+    request_payload_type: RequestPayloadType | None = None,
+    grammar: Grammar = Grammar.STABLE,
+    /,
+):
+    """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
+    return Namespace(
+        name,
+        key,
+        request_payload_type,
+        grammar,
+        **{
+            "key_channel": mc.KEY_CHANNEL,
+            "has_get": True,
+            "has_push": False,
+            "is_hub": False,
+            "is_thermostat": True,
+            "is_sensor": False,
+        },
     )
 
 
 def _ns_get_push(
+    name: str,
+    key: str | None = None,
+    request_payload_type: RequestPayloadType | None = None,
+    grammar: Grammar = Grammar.STABLE,
+    /,
+    **kwargs: "Unpack[Namespace.Args]",
+):
+    """Builds a definition for a namespace supporting GET queries (which also PUSHes updates)"""
+    kwargs["has_get"] = True
+    kwargs["has_push"] = True
+    return Namespace(name, key, request_payload_type, grammar, **kwargs)
+
+
+def _ns_get_push_hub(
     name: str,
     key: str | None = None,
     request_payload_type: RequestPayloadType | None = None,
@@ -251,8 +415,39 @@ def _ns_get_push(
         key,
         request_payload_type,
         grammar,
-        has_get=True,
-        has_push=True,
+        **{
+            "map": HUB_NAMESPACES,
+            "key_channel": mc.KEY_ID,
+            "has_get": True,
+            "has_push": True,
+            "is_hub": True,
+            "is_thermostat": False,
+            "is_sensor": False,
+        },
+    )
+
+
+def _ns_get_push_thermostat(
+    name: str,
+    key: str | None = None,
+    request_payload_type: RequestPayloadType | None = None,
+    grammar: Grammar = Grammar.STABLE,
+    /,
+):
+    """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
+    return Namespace(
+        name,
+        key,
+        request_payload_type,
+        grammar,
+        **{
+            "key_channel": mc.KEY_CHANNEL,
+            "has_get": True,
+            "has_push": True,
+            "is_hub": False,
+            "is_thermostat": True,
+            "is_sensor": False,
+        },
     )
 
 
@@ -262,11 +457,13 @@ def _ns_set(
     request_payload_type: RequestPayloadType | None = None,
     grammar: Grammar = Grammar.STABLE,
     /,
+    **kwargs: "Unpack[Namespace.Args]",
 ):
-    """Builds a definition for a namespace supporting only SET"""
-    return Namespace(
-        name, key, request_payload_type, grammar, has_get=False, has_push=False
-    )
+    """Builds a definition for a namespace supporting only SET.
+    Actually indistinguishable from 'no_query'."""
+    kwargs["has_get"] = False
+    kwargs["has_push"] = False
+    return Namespace(name, key, request_payload_type, grammar, **kwargs)
 
 
 def _ns_no_query(
@@ -274,9 +471,12 @@ def _ns_no_query(
     key: str | None = None,
     grammar: Grammar = Grammar.STABLE,
     /,
+    **kwargs: "Unpack[Namespace.Args]",
 ):
     """Builds a definition for a namespace not supporting GET,PUSH"""
-    return Namespace(name, key, None, grammar, has_get=False, has_push=False)
+    kwargs["has_get"] = False
+    kwargs["has_push"] = False
+    return Namespace(name, key, None, grammar, **kwargs)
 
 
 # We predefine grammar for some widely used and well known namespaces either to skip 'euristics'
@@ -412,64 +612,87 @@ Appliance_Control_Sensor_Latest = _ns_get_push(
 Appliance_Control_Sensor_History = _ns_get_push(
     "Appliance.Control.Sensor.History", mc.KEY_HISTORY, RequestPayloadType.LIST_C
 )  # history of sensor values
-# These 2 next are appearing on both regular devices (ms600) and hub/subdevices (ms130)
-# we cannot set a valid grammar here so we're just setting values for regular devices
-# namespace parser (i.e. mostly based on channel(s)). At any rate, even if traces from
-# devices show presence of values at channel 0, the 'LIST_C' query format doesn't work
+# Appliance.Control.Sensor.* appear on both regular devices (ms600) and hub/subdevices (ms130)
+# To distinguish the grammar between regular devices and hubs we save different definitions
+# in NAMESPACES (for regular devices) and in HUB_NAMESPACES (for hubs).
+# For regular devices, even if traces show presence of values at channel 0,
+# the 'LIST_C' query format doesn't work
 # We so try introduce a new payload type 'DICT_C'. PUSH query too seems to not work.
-Appliance_Control_Sensor_LatestX = _ns_get(
-    "Appliance.Control.Sensor.LatestX",
-    mc.KEY_LATEST,
-    RequestPayloadType.DICT_C,
-    Grammar.EXPERIMENTAL,
-)
-Appliance_Control_Sensor_HistoryX = _ns_get(
+# See _ns_get_sensor to get some clues.
+Appliance_Control_Sensor_HistoryX = _ns_get_sensor(
     "Appliance.Control.Sensor.HistoryX",
     mc.KEY_HISTORY,
-    RequestPayloadType.DICT_C,
-    Grammar.EXPERIMENTAL,
-)  # history of sensor values
+)
+Hub_Control_Sensor_HistoryX = _ns_get_sensor(
+    "Appliance.Control.Sensor.HistoryX",
+    mc.KEY_HISTORY,
+    HUB_NAMESPACES,
+)
+Appliance_Control_Sensor_LatestX = _ns_get_sensor(
+    "Appliance.Control.Sensor.LatestX",
+    mc.KEY_LATEST,
+)
+Hub_Control_Sensor_LatestX = _ns_get_sensor(
+    "Appliance.Control.Sensor.LatestX",
+    mc.KEY_LATEST,
+    HUB_NAMESPACES,
+)
+
 # MTS200-960 smart thermostat
 Appliance_Control_Screen_Brightness = _ns_get_push(
     "Appliance.Control.Screen.Brightness"
 )
-Appliance_Control_Thermostat_Alarm = _ns_get_push("Appliance.Control.Thermostat.Alarm")
-Appliance_Control_Thermostat_AlarmConfig = _ns_get(
+Appliance_Control_Thermostat_Alarm = _ns_get_push_thermostat(
+    "Appliance.Control.Thermostat.Alarm"
+)
+Appliance_Control_Thermostat_AlarmConfig = _ns_get_thermostat(
     "Appliance.Control.Thermostat.AlarmConfig"
 )
-Appliance_Control_Thermostat_Calibration = _ns_get(
+Appliance_Control_Thermostat_Calibration = _ns_get_thermostat(
     "Appliance.Control.Thermostat.Calibration"
 )
-Appliance_Control_Thermostat_CompressorDelay = _ns_get(
+Appliance_Control_Thermostat_CompressorDelay = _ns_get_thermostat(
     "Appliance.Control.Thermostat.CompressorDelay",
     mc.KEY_DELAY,
     RequestPayloadType.LIST_C,
 )
-Appliance_Control_Thermostat_CtlRange = _ns_get("Appliance.Control.Thermostat.CtlRange")
-Appliance_Control_Thermostat_DeadZone = _ns_get("Appliance.Control.Thermostat.DeadZone")
-Appliance_Control_Thermostat_Frost = _ns_get("Appliance.Control.Thermostat.Frost")
-Appliance_Control_Thermostat_HoldAction = _ns_get_push(
+Appliance_Control_Thermostat_CtlRange = _ns_get_thermostat(
+    "Appliance.Control.Thermostat.CtlRange"
+)
+Appliance_Control_Thermostat_DeadZone = _ns_get_thermostat(
+    "Appliance.Control.Thermostat.DeadZone"
+)
+Appliance_Control_Thermostat_Frost = _ns_get_thermostat(
+    "Appliance.Control.Thermostat.Frost"
+)
+Appliance_Control_Thermostat_HoldAction = _ns_get_push_thermostat(
     "Appliance.Control.Thermostat.HoldAction"
 )
-Appliance_Control_Thermostat_Mode = _ns_get_push("Appliance.Control.Thermostat.Mode")
-Appliance_Control_Thermostat_ModeB = _ns_get_push("Appliance.Control.Thermostat.ModeB")
-Appliance_Control_Thermostat_Overheat = _ns_get_push(
+Appliance_Control_Thermostat_Mode = _ns_get_push_thermostat(
+    "Appliance.Control.Thermostat.Mode"
+)
+Appliance_Control_Thermostat_ModeB = _ns_get_push_thermostat(
+    "Appliance.Control.Thermostat.ModeB"
+)
+Appliance_Control_Thermostat_Overheat = _ns_get_push_thermostat(
     "Appliance.Control.Thermostat.Overheat"
 )
-Appliance_Control_Thermostat_Schedule = _ns_get_push(
+Appliance_Control_Thermostat_Schedule = _ns_get_push_thermostat(
     "Appliance.Control.Thermostat.Schedule"
 )
-Appliance_Control_Thermostat_ScheduleB = _ns_get_push(
+Appliance_Control_Thermostat_ScheduleB = _ns_get_push_thermostat(
     "Appliance.Control.Thermostat.ScheduleB"
 )
-Appliance_Control_Thermostat_Sensor = _ns_get_push(
+Appliance_Control_Thermostat_Sensor = _ns_get_push_thermostat(
     "Appliance.Control.Thermostat.Sensor"
 )
-Appliance_Control_Thermostat_SummerMode = _ns_get_push(
+Appliance_Control_Thermostat_SummerMode = _ns_get_push_thermostat(
     "Appliance.Control.Thermostat.SummerMode"
 )
-Appliance_Control_Thermostat_Timer = _ns_get_push("Appliance.Control.Thermostat.Timer")
-Appliance_Control_Thermostat_WindowOpened = _ns_get_push(
+Appliance_Control_Thermostat_Timer = _ns_get_push_thermostat(
+    "Appliance.Control.Thermostat.Timer"
+)
+Appliance_Control_Thermostat_WindowOpened = _ns_get_push_thermostat(
     "Appliance.Control.Thermostat.WindowOpened"
 )
 
@@ -499,74 +722,74 @@ Appliance_GarageDoor_State = _ns_get_push(
 )
 
 Appliance_Digest_Hub = _ns_get(
-    "Appliance.Digest.Hub", mc.KEY_HUB, RequestPayloadType.LIST
+    "Appliance.Digest.Hub", mc.KEY_HUB, RequestPayloadType.LIST, map=HUB_NAMESPACES
 )
 
-Appliance_Hub_Battery = _ns_get_push(
+Appliance_Hub_Battery = _ns_get_push_hub(
     "Appliance.Hub.Battery", mc.KEY_BATTERY, RequestPayloadType.LIST
 )
-Appliance_Hub_Exception = _ns_get_push(
+Appliance_Hub_Exception = _ns_get_push_hub(
     "Appliance.Hub.Exception", mc.KEY_EXCEPTION, RequestPayloadType.LIST
 )
-Appliance_Hub_Online = _ns_get_push(
+Appliance_Hub_Online = _ns_get_push_hub(
     "Appliance.Hub.Online", mc.KEY_ONLINE, RequestPayloadType.LIST
 )
-Appliance_Hub_PairSubDev = _ns_get_push("Appliance.Hub.PairSubDev")
-Appliance_Hub_Report = _ns_get_push("Appliance.Hub.Report")
-Appliance_Hub_Sensitivity = _ns_get_push("Appliance.Hub.Sensitivity")
-Appliance_Hub_SubdeviceList = _ns_get_push("Appliance.Hub.SubdeviceList")
-Appliance_Hub_ToggleX = _ns_get_push(
+Appliance_Hub_PairSubDev = _ns_get_push_hub("Appliance.Hub.PairSubDev")
+Appliance_Hub_Report = _ns_get_push_hub("Appliance.Hub.Report")
+Appliance_Hub_Sensitivity = _ns_get_push_hub("Appliance.Hub.Sensitivity")
+Appliance_Hub_SubdeviceList = _ns_get_push_hub("Appliance.Hub.SubdeviceList")
+Appliance_Hub_ToggleX = _ns_get_push_hub(
     "Appliance.Hub.ToggleX", mc.KEY_TOGGLEX, RequestPayloadType.LIST
 )
 
-Appliance_Hub_Mts100_Adjust = _ns_get(
+Appliance_Hub_Mts100_Adjust = _ns_get_hub(
     "Appliance.Hub.Mts100.Adjust", mc.KEY_ADJUST, RequestPayloadType.LIST
 )
-Appliance_Hub_Mts100_All = _ns_get(
+Appliance_Hub_Mts100_All = _ns_get_hub(
     "Appliance.Hub.Mts100.All", mc.KEY_ALL, RequestPayloadType.LIST
 )
-Appliance_Hub_Mts100_Mode = _ns_get_push(
+Appliance_Hub_Mts100_Mode = _ns_get_push_hub(
     "Appliance.Hub.Mts100.Mode", mc.KEY_MODE, RequestPayloadType.LIST
 )
-Appliance_Hub_Mts100_Schedule = _ns_get_push(
+Appliance_Hub_Mts100_Schedule = _ns_get_push_hub(
     "Appliance.Hub.Mts100.Schedule", mc.KEY_SCHEDULE, RequestPayloadType.LIST
 )
-Appliance_Hub_Mts100_ScheduleB = _ns_get_push(
+Appliance_Hub_Mts100_ScheduleB = _ns_get_push_hub(
     "Appliance.Hub.Mts100.ScheduleB", mc.KEY_SCHEDULE, RequestPayloadType.LIST
 )
-Appliance_Hub_Mts100_Temperature = _ns_get_push(
+Appliance_Hub_Mts100_Temperature = _ns_get_push_hub(
     "Appliance.Hub.Mts100.Temperature",
     mc.KEY_TEMPERATURE,
     RequestPayloadType.LIST,
 )
-Appliance_Hub_Mts100_TimeSync = _ns_get_push("Appliance.Hub.Mts100.TimeSync")
-Appliance_Hub_Mts100_SuperCtl = _ns_get_push("Appliance.Hub.Mts100.SuperCtl")
+Appliance_Hub_Mts100_TimeSync = _ns_get_push_hub("Appliance.Hub.Mts100.TimeSync")
+Appliance_Hub_Mts100_SuperCtl = _ns_get_push_hub("Appliance.Hub.Mts100.SuperCtl")
 
-Appliance_Hub_Sensor_Adjust = _ns_get(
+Appliance_Hub_Sensor_Adjust = _ns_get_hub(
     "Appliance.Hub.Sensor.Adjust", mc.KEY_ADJUST, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_Alert = _ns_get_push("Appliance.Hub.Sensor.Alert")
-Appliance_Hub_Sensor_All = _ns_get(
+Appliance_Hub_Sensor_Alert = _ns_get_push_hub("Appliance.Hub.Sensor.Alert")
+Appliance_Hub_Sensor_All = _ns_get_hub(
     "Appliance.Hub.Sensor.All", mc.KEY_ALL, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_DoorWindow = _ns_get_push(
+Appliance_Hub_Sensor_DoorWindow = _ns_get_push_hub(
     "Appliance.Hub.Sensor.DoorWindow", mc.KEY_DOORWINDOW, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_Latest = _ns_get_push(
+Appliance_Hub_Sensor_Latest = _ns_get_push_hub(
     "Appliance.Hub.Sensor.Latest", mc.KEY_LATEST, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_Motion = _ns_get_push("Appliance.Hub.Sensor.Motion")
-Appliance_Hub_Sensor_Smoke = _ns_get_push(
+Appliance_Hub_Sensor_Motion = _ns_get_push_hub("Appliance.Hub.Sensor.Motion")
+Appliance_Hub_Sensor_Smoke = _ns_get_push_hub(
     "Appliance.Hub.Sensor.Smoke", mc.KEY_SMOKEALARM, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_TempHum = _ns_get_push("Appliance.Hub.Sensor.TempHum")
-Appliance_Hub_Sensor_WaterLeak = _ns_get_push("Appliance.Hub.Sensor.WaterLeak")
+Appliance_Hub_Sensor_TempHum = _ns_get_push_hub("Appliance.Hub.Sensor.TempHum")
+Appliance_Hub_Sensor_WaterLeak = _ns_get_push_hub("Appliance.Hub.Sensor.WaterLeak")
 
-Appliance_Hub_SubDevice_Beep = _ns_get_push("Appliance.Hub.SubDevice.Beep")
-Appliance_Hub_SubDevice_MotorAdjust = _ns_get_push(
+Appliance_Hub_SubDevice_Beep = _ns_get_push_hub("Appliance.Hub.SubDevice.Beep")
+Appliance_Hub_SubDevice_MotorAdjust = _ns_get_push_hub(
     "Appliance.Hub.SubDevice.MotorAdjust", mc.KEY_ADJUST, RequestPayloadType.LIST
 )
-Appliance_Hub_SubDevice_Version = _ns_get_push(
+Appliance_Hub_SubDevice_Version = _ns_get_push_hub(
     "Appliance.Hub.SubDevice.Version", mc.KEY_VERSION, RequestPayloadType.LIST
 )
 

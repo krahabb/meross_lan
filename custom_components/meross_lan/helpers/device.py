@@ -51,7 +51,7 @@ from .namespaces import NamespaceHandler
 
 if typing.TYPE_CHECKING:
     from types import CoroutineType
-    from typing import Any, Callable, Final, Iterable, NotRequired, Unpack
+    from typing import Any, Callable, ClassVar, Final, Iterable, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -128,6 +128,7 @@ class BaseDevice(EntityManager):
     """
 
     if typing.TYPE_CHECKING:
+        NAMESPACES: ClassVar[mn.NamespacesMapType]
         # override some nullable since we're pretty sure they're none
         config_entry: Final[ConfigEntry]  # type: ignore
         deviceentry_id: Final[EntityManager.DeviceEntryIdType]  # type: ignore
@@ -143,6 +144,8 @@ class BaseDevice(EntityManager):
             sw_version: NotRequired[str]
             connections: NotRequired[set[tuple[str, str]]]
             via_device: NotRequired[tuple[str, str]]
+
+    NAMESPACES = mn.NAMESPACES
 
     __slots__ = (
         "online",
@@ -894,7 +897,7 @@ class Device(BaseDevice, ConfigEntryManager):
         try:
             return self.namespace_handlers[namespace]
         except KeyError:
-            return self._create_handler(mn.NAMESPACES[namespace])
+            return self._create_handler(self.NAMESPACES[namespace])
 
     def register_parser(
         self,
@@ -1554,7 +1557,7 @@ class Device(BaseDevice, ConfigEntryManager):
                         and (handler.polling_strategy)
                     ):
                         continue
-                    await self.async_request(*mn.NAMESPACES[ability].request_get)
+                    await self.async_request(*self.NAMESPACES[ability].request_get)
             except StopIteration:
                 self._diagnostics_build = False
                 self.log(self.DEBUG, "Diagnostic scan end")
@@ -1983,11 +1986,10 @@ class Device(BaseDevice, ConfigEntryManager):
                 return
             # here the namespace might be unknown to our definitions (mn.Namespace)
             # so we try, in case, to build a new one with good presets
-            if namespace in mn.NAMESPACES:
-                ns = mn.NAMESPACES[namespace]
-            else:
-                ns = mn.ns_build_from_message(namespace, method, payload)
-            handler = self._create_handler(ns)
+            handler = self._create_handler(
+                self.NAMESPACES.get(namespace)
+                or mn.ns_build_from_message(namespace, method, payload, self.NAMESPACES)
+            )
 
         handler.lastresponse = self.lastresponse
         handler.polling_epoch_next = handler.lastresponse + handler.polling_period

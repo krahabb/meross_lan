@@ -134,7 +134,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         }
         """
         namespace = header[mc.KEY_NAMESPACE]
-        namespace_key = mn.NAMESPACES[namespace].key
+        namespace_key = self.NAMESPACES[namespace].key
         method = header[mc.KEY_METHOD]
 
         digest: list[dict[str, object]] = self.descriptor.namespaces[namespace][
