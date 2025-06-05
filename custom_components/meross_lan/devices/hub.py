@@ -1,4 +1,4 @@
-import typing
+from typing import TYPE_CHECKING
 
 from .. import const as mlc
 from ..binary_sensor import MLBinarySensor
@@ -20,14 +20,16 @@ from ..sensor import (
 )
 from ..switch import MLSwitch
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from typing import Any, Callable, Collection, Final
     from ..helpers.device import AsyncRequestFunc, DigestInitReturnType
     from ..helpers.entity import MLEntity
     from ..merossclient.cloudapi import SubDeviceInfoType
     from .mts100 import Mts100Climate
 
+    WELL_KNOWN_TYPE_MAP: Final[dict[str, Callable]]
 
-WELL_KNOWN_TYPE_MAP: dict[str, typing.Callable] = dict(
+WELL_KNOWN_TYPE_MAP = dict(
     {
         # typical entries (they're added on SubDevice declaration)
         # mc.TYPE_MS100: MS100SubDevice,
@@ -147,7 +149,7 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         self,
         device: "HubMixin",
         ns: "mn.Namespace",
-        models: typing.Collection,
+        models: "Collection",
         included: bool,
         count: int,
     ):
@@ -212,7 +214,7 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
             yield payload
 
 
-class HubMixin(Device if typing.TYPE_CHECKING else object):
+class HubMixin(Device if TYPE_CHECKING else object):
     """
     Specialized Device for smart hub(s) like MSH300
     """
@@ -228,8 +230,6 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
         MtsClimate.PLATFORM: None,
         MtsTrackedSensor.PLATFORM: None,
     }
-
-    subdevices: dict[object, "SubDevice"]
 
     # interface: EntityManager
     def managed_entities(self, platform):
@@ -261,7 +261,15 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
                 ns,
                 handler=_handler,
             )
-        elif ns.is_hub or ns.is_sensor:
+        elif ns.is_hub_namespace:
+            # TODO: this rule is failable since it's not only about is_hub and is_sensor
+            # but in general for any namespace which would need special processing for Hub
+            # which is different from the common device namespaces.
+            # In current implementation (5.5.1) this should be related to the namespace being
+            # collected in HUB_NAMESPACES.
+            # TODO: For better design we should start getting away from hub parsing general
+            # mechanics and migrate to using the standard dispatching api in NamespaceHandler
+            # by registering subdevices (or directly subdevice entities) as sinks.
             return HubNamespaceHandler(self, ns)
         else:
             return super()._create_handler(ns)
@@ -271,7 +279,7 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
         # Here we'll check the fresh subdevice list against the actual one and
         # eventually manage newly added subdevices or removed ones #119
         # telling the caller to persist the changed configuration (self.needsave)
-        subdevices_actual = set(self.subdevices.keys())
+        subdevices_actual = set(self.subdevices)
         for p_subdevice_digest in p_hub[mc.KEY_SUBDEVICE]:
             try:
                 subdevice_id = p_subdevice_digest[mc.KEY_ID]
@@ -352,7 +360,7 @@ class HubMixin(Device if typing.TYPE_CHECKING else object):
             # is it likely unpaired?
             pass
 
-    def _subdevice_build(self, p_subdevice: dict[str, typing.Any]):
+    def _subdevice_build(self, p_subdevice: "dict[str, Any]"):
         # parses the subdevice payload in 'digest' to look for a well-known type
         # and builds accordingly
         model = None

@@ -4,7 +4,7 @@ import bisect
 from datetime import UTC, tzinfo
 from json import JSONDecodeError
 from time import time
-import typing
+from typing import TYPE_CHECKING
 from uuid import uuid4
 import zoneinfo
 
@@ -49,13 +49,24 @@ from ..update import MLUpdate
 from .manager import ConfigEntryManager, EntityManager
 from .namespaces import NamespaceHandler
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from types import CoroutineType
-    from typing import Any, Callable, ClassVar, Final, Iterable, NotRequired, Unpack
+    from typing import (
+        Any,
+        Callable,
+        ClassVar,
+        Collection,
+        Final,
+        Iterable,
+        Iterator,
+        NotRequired,
+        Unpack,
+    )
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from ..devices.hub import SubDevice
     from ..merossclient import (
         MerossDeviceDescriptor,
         MerossHeaderType,
@@ -127,7 +138,7 @@ class BaseDevice(EntityManager):
     giving common behaviors like device_registry interface
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
         NAMESPACES: ClassVar[mn.NamespacesMapType]
         # override some nullable since we're pretty sure they're none
         config_entry: Final[ConfigEntry]  # type: ignore
@@ -247,7 +258,7 @@ class Device(BaseDevice, ConfigEntryManager):
     Generic protocol handler class managing the physical device stack/state
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
         DIGEST_INIT: Final[dict[str, Any]]
         NAMESPACE_INIT: Final[dict[str, Any]]
 
@@ -291,6 +302,10 @@ class Device(BaseDevice, ConfigEntryManager):
         # entities
         sensor_protocol: ProtocolSensor
         update_firmware: MLUpdate | None
+
+        # HubMixin attributes: beware these are only
+        # initialized in HubMixin(s) and not set/available in standard Device(s)
+        subdevices: dict[object, "SubDevice"]
 
     @staticmethod
     def digest_parse_empty(digest: dict | list):
@@ -1098,7 +1113,7 @@ class Device(BaseDevice, ConfigEntryManager):
             self._multiple_response_size = PARAM_HEADER_SIZE
 
     async def async_multiple_requests_ack(
-        self, requests: typing.Collection["MerossRequestType"], auto_handle: bool = True
+        self, requests: "Collection[MerossRequestType]", auto_handle: bool = True
     ) -> list["MerossMessageType"] | None:
         """Send requests in a single NS_APPLIANCE_CONTROL_MULTIPLE message.
         If the whole request is succesful (might be partial if the device response
@@ -2495,7 +2510,7 @@ class Device(BaseDevice, ConfigEntryManager):
         await self.async_trace_open()
         return await future
 
-    async def _async_trace_ability(self, abilities_iterator: typing.Iterator[str]):
+    async def _async_trace_ability(self, abilities_iterator: "Iterator[str]"):
         try:
             # avoid interleave tracing ability with polling loop
             # also, since we could trigger this at early stages

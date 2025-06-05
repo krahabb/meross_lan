@@ -1,7 +1,7 @@
 """"""
 
 from random import randint
-import typing
+from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
     const as mc,
@@ -12,12 +12,12 @@ from custom_components.meross_lan.merossclient import (
     update_dict_strict,
 )
 
-if typing.TYPE_CHECKING:
-
+if TYPE_CHECKING:
+    from typing import Any
     from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
-class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
+class HubMixin(MerossEmulator if TYPE_CHECKING else object):
 
     NAMESPACES = mn.HUB_NAMESPACES
 
@@ -186,7 +186,7 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
 
     def _get_subdevice_namespace(
         self, subdevice_id: str, ns: mn.Namespace, *, force_create: bool = True
-    ) -> dict[str, typing.Any]:
+    ) -> "dict[str, Any]":
         """returns the subdevice namespace dict. It will create a default entry if not present
         and the device abilities supports the namespace."""
         try:
@@ -213,42 +213,47 @@ class HubMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return p_subdevice
 
     def _get_mts100_all(self, subdevice_id: str, *, force_create: bool = True):
-        return self._get_subdevice_namespace(subdevice_id, mn.Appliance_Hub_Mts100_All, force_create=force_create)
+        return self._get_subdevice_namespace(
+            subdevice_id, mn.Appliance_Hub_Mts100_All, force_create=force_create
+        )
 
     def _get_sensor_all(self, subdevice_id: str, *, force_create: bool = True):
-        return self._get_subdevice_namespace(subdevice_id, mn.Appliance_Hub_Sensor_All, force_create=force_create)
+        return self._get_subdevice_namespace(
+            subdevice_id, mn.Appliance_Hub_Sensor_All, force_create=force_create
+        )
 
     def _get_subdevice_all(self, subdevice_id: str):
         """returns the subdevice 'all' dict from either the Hub.Sensor.All or Hub.Mts100.All"""
         try:
-            return self._get_mts100_all(subdevice_id,force_create=False)
+            return self._get_mts100_all(subdevice_id, force_create=False)
         except KeyError:
             # this is a sensor like subdevice
             # so we'll try to get the sensor all
-            return self._get_sensor_all(subdevice_id,force_create=False)
-
+            return self._get_sensor_all(subdevice_id, force_create=False)
 
     def _handler_default(self, method: str, namespace: str, payload: dict):
         if method == mc.METHOD_GET:
             ns = self.NAMESPACES[namespace]
-            if ns.is_hub:
+            if ns.is_hub_namespace:
+                ns_key = ns.key
+                ns_key_channel = ns.key_channel
                 response_payload = self.descriptor.namespaces[namespace]
-                request_subdevices = payload[ns.key]
+                request_subdevices = payload[ns_key]
                 if request_subdevices:
                     # client asked for defined set of ids
-                    current_subdevices = response_payload[ns.key]
+                    current_subdevices = response_payload[ns_key]
                     response_subdevices = []
                     for p_subdevice_id in request_subdevices:
                         if p_subdevice := get_element_by_key_safe(
                             current_subdevices,
-                            mc.KEY_ID,
-                            p_subdevice_id[mc.KEY_ID],
+                            ns_key_channel,
+                            p_subdevice_id[ns_key_channel],
                         ):
                             response_subdevices.append(p_subdevice)
-                    response_payload = {ns.key: response_subdevices}
+                    response_payload = {ns_key: response_subdevices}
                 else:
                     # client request empty list -> device responds with full set
-                    response_subdevices = response_payload[ns.key]
+                    response_subdevices = response_payload[ns_key]
 
                 # response_subdevices contains the list of subdevices state being returned.
                 # we'll apply some randomization to the state to emulate signals

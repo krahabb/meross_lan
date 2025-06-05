@@ -117,6 +117,8 @@ class Namespace:
         """The namespace name"""
         key: Final[str]
         """The root key of the payload"""
+        is_hub_namespace: Final[bool]
+        """This is an indication the namespace is for subdevices (key_channel could be "id" or "subId")"""
         key_channel: Final[str]
         """The key used to index items in list payloads"""
         has_get: Final[bool | None]
@@ -131,6 +133,7 @@ class Namespace:
     __slots__ = (
         "name",
         "key",
+        "is_hub_namespace",
         "key_channel",
         "has_get",
         "has_push",
@@ -167,8 +170,8 @@ class Namespace:
         self.has_get = kwargs.pop("has_get", None)
         self.has_push = kwargs.pop("has_push", None)
         # process eventual is_hub, is_thermostat or so
-        for name, value in kwargs.items():
-            setattr(self, name, value)
+        for _attr, _value in kwargs.items():
+            setattr(self, _attr, _value)
 
         if request_payload_type is None:
             match name.split("."):
@@ -196,16 +199,16 @@ class Namespace:
 
         self.request_payload_type = request_payload_type
         # eventually fix the key_channel should we need some heuristics
-        self.key_channel = self.key_channel or (
-            mc.KEY_ID
-            if self.is_hub
-            else (
-                mc.KEY_SUBID
-                if (self.is_sensor and (map is HUB_NAMESPACES))
-                else mc.KEY_CHANNEL
+        if (map is HUB_NAMESPACES) or self.is_hub:
+            self.is_hub_namespace = True
+            self.key_channel = (
+                self.key_channel or mc.KEY_ID if self.is_hub else mc.KEY_SUBID
             )
-        )
-        map[name] = self  # type: ignore
+            HUB_NAMESPACES[name] = self  # type: ignore
+        else:
+            self.is_hub_namespace = False
+            self.key_channel = self.key_channel or mc.KEY_CHANNEL
+            NAMESPACES[name] = self  # type: ignore
 
     @cached_property
     def is_hub(self):
@@ -402,7 +405,7 @@ def _ns_get_push(
     return Namespace(name, key, request_payload_type, grammar, **kwargs)
 
 
-def _ns_get_push_hub(
+def _ns_get_push_hub_id(
     name: str,
     key: str | None = None,
     request_payload_type: RequestPayloadType | None = None,
@@ -421,6 +424,31 @@ def _ns_get_push_hub(
             "has_get": True,
             "has_push": True,
             "is_hub": True,
+            "is_thermostat": False,
+            "is_sensor": False,
+        },
+    )
+
+
+def _ns_get_push_hub_subid(
+    name: str,
+    key: str | None = None,
+    request_payload_type: RequestPayloadType | None = None,
+    grammar: Grammar = Grammar.STABLE,
+    /,
+):
+    """Builds a definition for a namespace supporting GET queries (which also PUSHes updates)"""
+    return Namespace(
+        name,
+        key,
+        request_payload_type,
+        grammar,
+        **{
+            "map": HUB_NAMESPACES,
+            "key_channel": mc.KEY_SUBID,
+            "has_get": True,
+            "has_push": True,
+            "is_hub": False,
             "is_thermostat": False,
             "is_sensor": False,
         },
@@ -516,6 +544,16 @@ Appliance_System_Position = _ns_get(
     "Appliance.System.Position", mc.KEY_POSITION, RequestPayloadType.DICT
 )
 
+Appliance_Config_DeviceCfg = _ns_get_push(
+    "Appliance.Config.DeviceCfg", mc.KEY_DEVICECFG, RequestPayloadType.LIST_C
+)
+Hub_Config_DeviceCfg = _ns_get_push(
+    "Appliance.Config.DeviceCfg",
+    mc.KEY_DEVICECFG,
+    RequestPayloadType.LIST_C,
+    map=HUB_NAMESPACES,
+    key_channel=mc.KEY_SUBID,
+)
 Appliance_Config_Key = _ns_set(
     "Appliance.Config.Key", mc.KEY_KEY, RequestPayloadType.DICT
 )
@@ -527,6 +565,16 @@ Appliance_Config_Wifi = _ns_get("Appliance.Config.Wifi")
 Appliance_Config_WifiList = _ns_get("Appliance.Config.WifiList")
 Appliance_Config_WifiX = _ns_get("Appliance.Config.WifiX")
 
+Appliance_Config_Sensor_Association = _ns_get_push(
+    "Appliance.Config.Sensor.Association", mc.KEY_CONFIG, RequestPayloadType.LIST_C
+)
+Hub_Config_Sensor_Association = _ns_get_push(
+    "Appliance.Config.Sensor.Association",
+    mc.KEY_CONFIG,
+    RequestPayloadType.LIST_C,
+    map=HUB_NAMESPACES,
+    key_channel=mc.KEY_SUBID,
+)
 
 Appliance_Control_Bind = _ns_get(
     "Appliance.Control.Bind", mc.KEY_BIND, RequestPayloadType.DICT
@@ -725,20 +773,20 @@ Appliance_Digest_Hub = _ns_get(
     "Appliance.Digest.Hub", mc.KEY_HUB, RequestPayloadType.LIST, map=HUB_NAMESPACES
 )
 
-Appliance_Hub_Battery = _ns_get_push_hub(
+Appliance_Hub_Battery = _ns_get_push_hub_id(
     "Appliance.Hub.Battery", mc.KEY_BATTERY, RequestPayloadType.LIST
 )
-Appliance_Hub_Exception = _ns_get_push_hub(
+Appliance_Hub_Exception = _ns_get_push_hub_id(
     "Appliance.Hub.Exception", mc.KEY_EXCEPTION, RequestPayloadType.LIST
 )
-Appliance_Hub_Online = _ns_get_push_hub(
+Appliance_Hub_Online = _ns_get_push_hub_id(
     "Appliance.Hub.Online", mc.KEY_ONLINE, RequestPayloadType.LIST
 )
-Appliance_Hub_PairSubDev = _ns_get_push_hub("Appliance.Hub.PairSubDev")
-Appliance_Hub_Report = _ns_get_push_hub("Appliance.Hub.Report")
-Appliance_Hub_Sensitivity = _ns_get_push_hub("Appliance.Hub.Sensitivity")
-Appliance_Hub_SubdeviceList = _ns_get_push_hub("Appliance.Hub.SubdeviceList")
-Appliance_Hub_ToggleX = _ns_get_push_hub(
+Appliance_Hub_PairSubDev = _ns_get_push_hub_id("Appliance.Hub.PairSubDev")
+Appliance_Hub_Report = _ns_get_push_hub_id("Appliance.Hub.Report")
+Appliance_Hub_Sensitivity = _ns_get_push_hub_id("Appliance.Hub.Sensitivity")
+Appliance_Hub_SubdeviceList = _ns_get_push_hub_id("Appliance.Hub.SubdeviceList")
+Appliance_Hub_ToggleX = _ns_get_push_hub_id(
     "Appliance.Hub.ToggleX", mc.KEY_TOGGLEX, RequestPayloadType.LIST
 )
 
@@ -748,48 +796,48 @@ Appliance_Hub_Mts100_Adjust = _ns_get_hub(
 Appliance_Hub_Mts100_All = _ns_get_hub(
     "Appliance.Hub.Mts100.All", mc.KEY_ALL, RequestPayloadType.LIST
 )
-Appliance_Hub_Mts100_Mode = _ns_get_push_hub(
+Appliance_Hub_Mts100_Mode = _ns_get_push_hub_id(
     "Appliance.Hub.Mts100.Mode", mc.KEY_MODE, RequestPayloadType.LIST
 )
-Appliance_Hub_Mts100_Schedule = _ns_get_push_hub(
+Appliance_Hub_Mts100_Schedule = _ns_get_push_hub_id(
     "Appliance.Hub.Mts100.Schedule", mc.KEY_SCHEDULE, RequestPayloadType.LIST
 )
-Appliance_Hub_Mts100_ScheduleB = _ns_get_push_hub(
+Appliance_Hub_Mts100_ScheduleB = _ns_get_push_hub_id(
     "Appliance.Hub.Mts100.ScheduleB", mc.KEY_SCHEDULE, RequestPayloadType.LIST
 )
-Appliance_Hub_Mts100_Temperature = _ns_get_push_hub(
+Appliance_Hub_Mts100_Temperature = _ns_get_push_hub_id(
     "Appliance.Hub.Mts100.Temperature",
     mc.KEY_TEMPERATURE,
     RequestPayloadType.LIST,
 )
-Appliance_Hub_Mts100_TimeSync = _ns_get_push_hub("Appliance.Hub.Mts100.TimeSync")
-Appliance_Hub_Mts100_SuperCtl = _ns_get_push_hub("Appliance.Hub.Mts100.SuperCtl")
+Appliance_Hub_Mts100_TimeSync = _ns_get_push_hub_id("Appliance.Hub.Mts100.TimeSync")
+Appliance_Hub_Mts100_SuperCtl = _ns_get_push_hub_id("Appliance.Hub.Mts100.SuperCtl")
 
 Appliance_Hub_Sensor_Adjust = _ns_get_hub(
     "Appliance.Hub.Sensor.Adjust", mc.KEY_ADJUST, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_Alert = _ns_get_push_hub("Appliance.Hub.Sensor.Alert")
+Appliance_Hub_Sensor_Alert = _ns_get_push_hub_id("Appliance.Hub.Sensor.Alert")
 Appliance_Hub_Sensor_All = _ns_get_hub(
     "Appliance.Hub.Sensor.All", mc.KEY_ALL, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_DoorWindow = _ns_get_push_hub(
+Appliance_Hub_Sensor_DoorWindow = _ns_get_push_hub_id(
     "Appliance.Hub.Sensor.DoorWindow", mc.KEY_DOORWINDOW, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_Latest = _ns_get_push_hub(
+Appliance_Hub_Sensor_Latest = _ns_get_push_hub_id(
     "Appliance.Hub.Sensor.Latest", mc.KEY_LATEST, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_Motion = _ns_get_push_hub("Appliance.Hub.Sensor.Motion")
-Appliance_Hub_Sensor_Smoke = _ns_get_push_hub(
+Appliance_Hub_Sensor_Motion = _ns_get_push_hub_id("Appliance.Hub.Sensor.Motion")
+Appliance_Hub_Sensor_Smoke = _ns_get_push_hub_id(
     "Appliance.Hub.Sensor.Smoke", mc.KEY_SMOKEALARM, RequestPayloadType.LIST
 )
-Appliance_Hub_Sensor_TempHum = _ns_get_push_hub("Appliance.Hub.Sensor.TempHum")
-Appliance_Hub_Sensor_WaterLeak = _ns_get_push_hub("Appliance.Hub.Sensor.WaterLeak")
+Appliance_Hub_Sensor_TempHum = _ns_get_push_hub_id("Appliance.Hub.Sensor.TempHum")
+Appliance_Hub_Sensor_WaterLeak = _ns_get_push_hub_id("Appliance.Hub.Sensor.WaterLeak")
 
-Appliance_Hub_SubDevice_Beep = _ns_get_push_hub("Appliance.Hub.SubDevice.Beep")
-Appliance_Hub_SubDevice_MotorAdjust = _ns_get_push_hub(
+Appliance_Hub_SubDevice_Beep = _ns_get_push_hub_id("Appliance.Hub.SubDevice.Beep")
+Appliance_Hub_SubDevice_MotorAdjust = _ns_get_push_hub_id(
     "Appliance.Hub.SubDevice.MotorAdjust", mc.KEY_ADJUST, RequestPayloadType.LIST
 )
-Appliance_Hub_SubDevice_Version = _ns_get_push_hub(
+Appliance_Hub_SubDevice_Version = _ns_get_push_hub_id(
     "Appliance.Hub.SubDevice.Version", mc.KEY_VERSION, RequestPayloadType.LIST
 )
 
