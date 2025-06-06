@@ -101,7 +101,7 @@ async def test_device_entry(
             for namespace_handler in device.namespace_handlers.values():
                 ns = namespace_handler.ns
                 assert (
-                    (ns.request_payload_type is not mn.RequestPayloadType.LIST_C)
+                    (ns.request_payload_type is not mn.PayloadType.LIST_C)
                     or ns.is_sensor
                     or namespace_handler.polling_request_channels
                     or descriptor.type.startswith(mc.TYPE_EM06)  # brutal exception

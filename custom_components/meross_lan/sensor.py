@@ -33,6 +33,7 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
     anything as opposed to numeric sensor types which have units and so."""
 
     if typing.TYPE_CHECKING:
+
         class Args(me.MLEntity.Args):
             native_value: NotRequired[sensor.StateType]
 
@@ -70,6 +71,7 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
 class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
 
     if typing.TYPE_CHECKING:
+
         class Args(me.MLNumericEntity.Args):
             state_class: NotRequired[sensor.SensorStateClass]
 
@@ -443,16 +445,14 @@ class ConsumptionHNamespaceHandler(NamespaceHandler):
             ConsumptionHSensor, initially_disabled=False, build_from_digest=True
         )
 
-    def polling_request_configure(
-        self, request_payload_type: mn.RequestPayloadType | None
-    ):
+    def polling_request_configure(self, request_payload_type: mn.PayloadType | None):
         # TODO: move this device type 'patching' to some 'smart' Namespace grammar
         NamespaceHandler.polling_request_configure(
             self,
             (
                 request_payload_type
                 or (
-                    mn.RequestPayloadType.DICT
+                    mn.PayloadType.DICT
                     if self.device.descriptor.type.startswith(mc.TYPE_EM06)
                     else None
                 )

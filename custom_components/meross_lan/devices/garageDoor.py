@@ -725,9 +725,7 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             mn.Appliance_GarageDoor_State,
         )
 
-    def polling_request_configure(
-        self, request_payload_type: mn.RequestPayloadType | None
-    ):
+    def polling_request_configure(self, request_payload_type: mn.PayloadType | None):
         # TODO: move this device type 'patching' to some 'smart' Namespace grammar
         descriptor = self.device.descriptor
         if descriptor.type.startswith(mc.TYPE_MSG200) and (
@@ -737,7 +735,7 @@ class GarageDoorStateNamespaceHandler(NamespaceHandler):
             # It's not sure querying with the list of channels works.
             # Also, in fw 4.0.0 the default polling with empty dict correctly returns
             # the list of channels so this should not be needed
-            request_payload_type = request_payload_type or mn.RequestPayloadType.LIST_C
+            request_payload_type = request_payload_type or mn.PayloadType.LIST_C
 
         NamespaceHandler.polling_request_configure(self, request_payload_type)
 

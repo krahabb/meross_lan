@@ -111,7 +111,6 @@ TRACE_ABILITY_EXCLUDE = (
     mn.Appliance_Config_WifiX.name,
     mn.Appliance_Control_Bind.name,
     mn.Appliance_Control_Multiple.name,
-    mn.Appliance_Control_PhysicalLock.name,  # disconnects
     mn.Appliance_Control_TimerX.name,
     mn.Appliance_Control_TriggerX.name,
     mn.Appliance_Control_Unbind.name,
@@ -1569,7 +1568,13 @@ class Device(BaseDevice, ConfigEntryManager):
                     ability = next(abilities)
                     if (ability in TRACE_ABILITY_EXCLUDE) or (
                         (handler := self.namespace_handlers.get(ability))
-                        and (handler.polling_strategy)
+                        and (
+                            handler.polling_strategy
+                            or (
+                                (handler.ns.has_get is False)
+                                and (handler.ns.has_push_query is False)
+                            )
+                        )
                     ):
                         continue
                     await self.async_request(*self.NAMESPACES[ability].request_get)

@@ -171,9 +171,9 @@ async def test_entities(
                     ), f"device({descriptor.type}-{descriptor.uuid}) does not generate {expected_entity_types}"
 
                     assert (
-                        not mn.RequestPayloadType.LIST.value
-                        and not mn.RequestPayloadType.DICT.value
-                        and (len(mn.RequestPayloadType.LIST_C.value) == 1)
+                        not mn.PayloadType.LIST.value
+                        and not mn.PayloadType.DICT.value
+                        and (len(mn.PayloadType.LIST_C.value) == 1)
                     ), f"device({descriptor.type}-{descriptor.uuid}) corrupts const data (namespaces)"
 
                 except BaseException as e:

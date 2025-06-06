@@ -176,9 +176,7 @@ class NamespaceHandler:
         self.polling_request_configure(None)
         device.namespace_handlers[namespace] = self
 
-    def polling_request_configure(
-        self, request_payload_type: mn.RequestPayloadType | None, /
-    ):
+    def polling_request_configure(self, request_payload_type: mn.PayloadType | None, /):
         """The structure of the polling payload is usually 'fixed' in the namespace
         grammar (see merossclient.namespaces.Namespace) but we have some exceptions
         here and there (one example is Refoss EM06) where the 'standard' is not valid.
@@ -189,7 +187,7 @@ class NamespaceHandler:
         """
         ns = self.ns
         request_payload_type = request_payload_type or ns.request_payload_type
-        if request_payload_type is mn.RequestPayloadType.LIST_C:
+        if request_payload_type is mn.PayloadType.LIST_C:
             self.polling_request = (
                 ns.name,
                 mc.METHOD_GET,
@@ -652,7 +650,7 @@ class NamespaceHandler:
                 # We'll try then querying with those different payload structures as they're well known
                 # for channelized devices, starting from the most complex (verbose) to the least one.
                 # If any of these works it will candidate for this NamespaceHandler polling_request format.
-                detected_request_payload_type: mn.RequestPayloadType | None = None
+                detected_request_payload_type: mn.PayloadType | None = None
 
                 def _check_response(_response: "MerossResponse | None"):
                     if _response:
@@ -672,15 +670,15 @@ class NamespaceHandler:
                         ns_name, mc.METHOD_GET, {ns_key: channels_payload}
                     )
                 ):
-                    detected_request_payload_type = mn.RequestPayloadType.LIST_C
+                    detected_request_payload_type = mn.PayloadType.LIST_C
                 if _check_response(
                     await async_request_func(ns_name, mc.METHOD_GET, {ns_key: []})
                 ):
-                    detected_request_payload_type = mn.RequestPayloadType.LIST
+                    detected_request_payload_type = mn.PayloadType.LIST
                 if _check_response(
                     await async_request_func(ns_name, mc.METHOD_GET, {ns_key: {}})
                 ):
-                    detected_request_payload_type = mn.RequestPayloadType.DICT
+                    detected_request_payload_type = mn.PayloadType.DICT
 
                 if detected_request_payload_type:
                     # this will override the request_payload format from its default
@@ -716,7 +714,7 @@ class NamespaceHandler:
 
             case mn.Grammar.UNKNOWN:
                 # We don't know yet how to query this ns so we'll brute-force it
-                if ns.has_push is not False:
+                if ns.has_push_query is not False:
                     response = await async_request_func(
                         ns_name, mc.METHOD_PUSH, ns.DEFAULT_PUSH_PAYLOAD
                     )

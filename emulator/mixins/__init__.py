@@ -420,13 +420,13 @@ class MerossEmulator:
                 else:
                     update_dict_strict(p_state, p_payload)
 
-                if self.mqtt_connected:
+                if self.mqtt_connected and ns.has_push:
                     self.mqtt_publish_push(namespace, {key_namespace: p_state})
 
                 return mc.METHOD_SETACK, {}
 
             case mc.METHOD_PUSH:
-                if (ns.has_get is False) and (ns.has_push):
+                if ns.has_push_query:
                     return mc.METHOD_PUSH, self.descriptor.namespaces[namespace]
 
         raise Exception(f"{method} not supported in emulator for {namespace}")
