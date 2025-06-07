@@ -1,5 +1,5 @@
 from time import time
-import typing
+from typing import TYPE_CHECKING, override
 
 from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
@@ -8,7 +8,8 @@ from ..merossclient import const as mc, namespaces as mn
 from ..number import MLEmulatedNumber
 from ..sensor import MLDiagnosticSensor
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from typing import Final
     from ..helpers.device import Device
     from ..number import MtsTemperatureNumber
 
@@ -50,13 +51,13 @@ class Mts960Climate(MtsClimate):
     ns = mn.Appliance_Control_Thermostat_ModeB
     device_scale = mc.MTS960_TEMP_SCALE
 
-    PRESET_HEATING: typing.Final = "heating"
-    PRESET_COOLING: typing.Final = "cooling"
-    PRESET_SCHEDULE_HEATING: typing.Final = "schedule_heating"
-    PRESET_SCHEDULE_COOLING: typing.Final = "schedule_cooling"
-    PRESET_TIMER_CYCLE: typing.Final = "timer_cycle"
-    PRESET_TIMER_COUNTDOWN_ON: typing.Final = "timer_countdown_on"
-    PRESET_TIMER_COUNTDOWN_OFF: typing.Final = "timer_countdown_off"
+    PRESET_HEATING: "Final" = "heating"
+    PRESET_COOLING: "Final" = "cooling"
+    PRESET_SCHEDULE_HEATING: "Final" = "schedule_heating"
+    PRESET_SCHEDULE_COOLING: "Final" = "schedule_cooling"
+    PRESET_TIMER_CYCLE: "Final" = "timer_cycle"
+    PRESET_TIMER_COUNTDOWN_ON: "Final" = "timer_countdown_on"
+    PRESET_TIMER_COUNTDOWN_OFF: "Final" = "timer_countdown_off"
 
     TIMER_TYPE_KEY = {
         mc.MTS960_TIMER_TYPE_COUNTDOWN: mc.KEY_DOWN,
@@ -105,7 +106,7 @@ class Mts960Climate(MtsClimate):
         self,
         manager: "Device",
         channel: object,
-        adjust_number_class: typing.Type["MtsTemperatureNumber"],
+        adjust_number_class: type["MtsTemperatureNumber"],
     ):
         self._mts_working = None
         self._mts_timer_payload = None

@@ -1,11 +1,11 @@
-import typing
+from typing import TYPE_CHECKING
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..merossclient import const as mc, namespaces as mn
 from ..number import MtsSetPointNumber
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from ..helpers.device import Device
     from ..number import MtsTemperatureNumber
 
@@ -57,7 +57,8 @@ class Mts200Climate(MtsClimate):
         self,
         manager: "Device",
         channel: object,
-        adjust_number_class: typing.Type["MtsTemperatureNumber"],
+        adjust_number_class: type["MtsTemperatureNumber"],
+        /,
     ):
         super().__init__(
             manager,
@@ -94,7 +95,7 @@ class Mts200Climate(MtsClimate):
 
         super().flush_state()
 
-    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
+    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode, /):
         if hvac_mode == MtsClimate.HVACMode.OFF:
             await self.async_request_onoff(0)
             return
@@ -107,7 +108,7 @@ class Mts200Climate(MtsClimate):
 
         await self.async_request_onoff(1)
 
-    async def async_set_temperature(self, **kwargs):
+    async def async_set_temperature(self, /, **kwargs):
         mode = self._mts_mode
         if self.SET_TEMP_FORCE_MANUAL_MODE or (mode == mc.MTS200_MODE_AUTO):
             # ensure we're not in schedule mode or any other preset (#401)
@@ -125,7 +126,7 @@ class Mts200Climate(MtsClimate):
             }
         )
 
-    async def async_request_mode(self, mode: int):
+    async def async_request_mode(self, mode: int, /):
         await self._async_request_mode(
             {
                 mc.KEY_CHANNEL: self.channel,
@@ -134,7 +135,7 @@ class Mts200Climate(MtsClimate):
             }
         )
 
-    async def async_request_onoff(self, onoff: int):
+    async def async_request_onoff(self, onoff: int, /):
         await self._async_request_mode(
             {mc.KEY_CHANNEL: self.channel, mc.KEY_ONOFF: onoff}
         )
@@ -148,7 +149,7 @@ class Mts200Climate(MtsClimate):
         ]
 
     # interface: self
-    async def async_request_summermode(self, summermode: int):
+    async def async_request_summermode(self, summermode: int, /):
         if await self.manager.async_request_ack(
             mn.Appliance_Control_Thermostat_SummerMode.name,
             mc.METHOD_SET,
@@ -163,7 +164,7 @@ class Mts200Climate(MtsClimate):
             self._mts_summermode = summermode
             self.flush_state()
 
-    async def _async_request_mode(self, p_mode: dict):
+    async def _async_request_mode(self, p_mode: dict, /):
         if response := await self.manager.async_request_ack(
             self.ns.name,
             mc.METHOD_SET,
@@ -181,7 +182,7 @@ class Mts200Climate(MtsClimate):
             self._parse_mode(payload)
 
     # message handlers
-    def _parse_mode(self, payload: dict):
+    def _parse_mode(self, payload: dict, /):
         """{
             "channel": 0,
             "onoff": 1,
@@ -225,7 +226,7 @@ class Mts200Climate(MtsClimate):
 
         self.flush_state()
 
-    def _parse_holdAction(self, payload: dict):
+    def _parse_holdAction(self, payload: dict, /):
         """{"channel": 0, "mode": 0, "expire": 1697010767}"""
         # TODO: it looks like this message is related to #369.
         # The trace shows the log about the missing handler in 4.5.2
@@ -233,7 +234,7 @@ class Mts200Climate(MtsClimate):
         # the mts is not really changing its setpoint (as per the issue).
         # We need more info about how to process this.
 
-    def _parse_summerMode(self, payload: dict):
+    def _parse_summerMode(self, payload: dict, /):
         """{ "channel": 0, "mode": 0 }"""
         summermode = payload[mc.KEY_MODE]
         if self._mts_summermode != summermode:

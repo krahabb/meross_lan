@@ -396,6 +396,20 @@ def _ns_get_set_push(
     kwargs["payload"] = _payload
     return Namespace(name, key, **kwargs)
 
+def _ns_get_set_push_query(
+    name: str,
+    key: str | None = None,
+    _payload: PayloadType | None = PayloadType.DICT,
+    /,
+    **kwargs: "Unpack[Namespace.Args]",
+):
+    """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
+    kwargs["has_get"] = True
+    kwargs["has_set"] = True
+    kwargs["has_push"] = True
+    kwargs["has_push_query"] = True
+    kwargs["payload"] = _payload
+    return Namespace(name, key, **kwargs)
 
 def _ns_get_push(
     name: str,
@@ -491,11 +505,11 @@ Appliance_System_Time = _ns_get_push(
 Appliance_System_Position = _ns_get("Appliance.System.Position", mc.KEY_POSITION)
 
 Appliance_Config_DeviceCfg = _ns_get_push(
-    "Appliance.Config.DeviceCfg", mc.KEY_DEVICECFG, PayloadType.LIST_C
-)
-Hub_Config_DeviceCfg = _ns_get_push(
-    "Appliance.Config.DeviceCfg", mc.KEY_DEVICECFG, is_hub_subid=True
-)
+    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, PayloadType.LIST_C
+) # mts300
+Hub_Config_DeviceCfg = _ns_get_set_push(
+    "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, is_hub_subid=True
+) # ms130
 Appliance_Config_Key = _ns_set("Appliance.Config.Key", mc.KEY_KEY)
 Appliance_Config_OverTemp = _ns_get("Appliance.Config.OverTemp", mc.KEY_OVERTEMP)
 Appliance_Config_Trace = _ns_no_query("Appliance.Config.Trace")
@@ -503,19 +517,25 @@ Appliance_Config_Wifi = _ns_no_query("Appliance.Config.Wifi")
 Appliance_Config_WifiList = _ns_no_query("Appliance.Config.WifiList")
 Appliance_Config_WifiX = _ns_no_query("Appliance.Config.WifiX")
 
-Appliance_Config_Sensor_Association = _ns_get_push(
+Appliance_Config_Sensor_Association = _ns_get_set_push_query(
     "Appliance.Config.Sensor.Association",
     mc.KEY_CONFIG,
     PayloadType.LIST_C,
     is_sensor=True,
 )
-Hub_Config_Sensor_Association = _ns_get_push(
+Hub_Config_Sensor_Association = _ns_get_set_push(
     "Appliance.Config.Sensor.Association",
     mc.KEY_CONFIG,
     is_sensor=True,
     map=HUB_NAMESPACES,
-)
+) # Not seen really..just an extrapolation for Hub(s)
 
+Appliance_Control_AlertConfig = _ns_get_set_push_query(
+    "Appliance.Control.AlertConfig", mc.KEY_CONFIG, PayloadType.LIST_C
+) # mts300 support the full set of verbs - em06 also exposes it but that's likely different
+Appliance_Control_AlertReport = _ns_get_set(
+    "Appliance.Control.AlertReport", mc.KEY_REPORT, PayloadType.LIST_C
+) # no PUSH seen..not correctly traced..though 'alertReport' as an ns key seems wrong
 Appliance_Control_Bind = _ns_no_query("Appliance.Control.Bind", mc.KEY_BIND)
 Appliance_Control_ConsumptionConfig = _ns_get(
     "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG
@@ -570,27 +590,16 @@ Appliance_Control_Presence_Config = _ns_get(
 Appliance_Control_Presence_Study = _ns_push_query(
     "Appliance.Control.Presence.Study", mc.KEY_CONFIG
 )
-Appliance_Control_Spray = _ns_get_set_push(
-    "Appliance.Control.Spray", mc.KEY_SPRAY, PayloadType.DICT
+Appliance_Control_Screen_Brightness = _ns_get_set_push(
+    "Appliance.Control.Screen.Brightness", mc.KEY_BRIGHTNESS, PayloadType.LIST_C
 )
-Appliance_Control_TempUnit = _ns_get_push(
-    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, PayloadType.LIST_C
-)
-Appliance_Control_TimerX = _ns_no_query("Appliance.Control.TimerX", mc.KEY_TIMERX)
-Appliance_Control_Toggle = _ns_get_set_push("Appliance.Control.Toggle", mc.KEY_TOGGLE)
-Appliance_Control_ToggleX = _ns_get_set_push(
-    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX
-)
-Appliance_Control_Trigger = _ns_get_set_push(
-    "Appliance.Control.Trigger", mc.KEY_TRIGGER
-)
-Appliance_Control_TriggerX = _ns_get_set_push(
-    "Appliance.Control.TriggerX", mc.KEY_TRIGGERX
-)
-Appliance_Control_Unbind = _ns_push_query("Appliance.Control.Unbind")
-Appliance_Control_Upgrade = _ns_no_query("Appliance.Control.Upgrade")
-
-Appliance_Control_Sensor_History = _ns_get_push(
+Appliance_Control_Sensor_Association = _ns_get(
+    "Appliance.Control.Sensor.Association",
+    mc.KEY_CONTROL,
+    PayloadType.LIST,
+    is_sensor=True,
+)  # history of sensor values
+Appliance_Control_Sensor_History = _ns_get(
     "Appliance.Control.Sensor.History",
     mc.KEY_HISTORY,
     PayloadType.LIST_C,
@@ -606,13 +615,13 @@ Appliance_Control_Sensor_Latest = _ns_get_push(
 # the 'LIST_C' query format doesn't work
 # We so try introduce a new payload type 'DICT_C'. PUSH query too seems to not work.
 # See _ns_get_sensor to get some clues.
-Appliance_Control_Sensor_HistoryX = _ns_get_push(
+Appliance_Control_Sensor_HistoryX = _ns_get(
     "Appliance.Control.Sensor.HistoryX",
     mc.KEY_HISTORY,
     PayloadType.DICT_C,
     is_sensor=True,
 )
-Hub_Control_Sensor_HistoryX = _ns_get_push(
+Hub_Control_Sensor_HistoryX = _ns_get(
     "Appliance.Control.Sensor.HistoryX",
     mc.KEY_HISTORY,
     is_sensor=True,
@@ -630,10 +639,11 @@ Hub_Control_Sensor_LatestX = _ns_get_push(
     is_sensor=True,
     map=HUB_NAMESPACES,
 )
-
-# MTS200-960 smart thermostat
-Appliance_Control_Screen_Brightness = _ns_get_set_push(
-    "Appliance.Control.Screen.Brightness", mc.KEY_BRIGHTNESS, PayloadType.LIST_C
+Appliance_Control_Spray = _ns_get_set_push(
+    "Appliance.Control.Spray", mc.KEY_SPRAY, PayloadType.DICT
+)
+Appliance_Control_TempUnit = _ns_get(
+    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, PayloadType.LIST_C
 )
 Appliance_Control_Thermostat_Alarm = _ns_get_push(
     "Appliance.Control.Thermostat.Alarm", mc.KEY_ALARM, is_thermostat=True
@@ -657,35 +667,55 @@ Appliance_Control_Thermostat_Frost = _ns_get_set(
     "Appliance.Control.Thermostat.Frost", mc.KEY_FROST, is_thermostat=True
 )
 Appliance_Control_Thermostat_HoldAction = _ns_get_push(
-    "Appliance.Control.Thermostat.HoldAction", is_thermostat=True
+    "Appliance.Control.Thermostat.HoldAction", mc.KEY_HOLDACTION, is_thermostat=True
 )
 Appliance_Control_Thermostat_Mode = _ns_get_set_push(
-    "Appliance.Control.Thermostat.Mode", is_thermostat=True
+    "Appliance.Control.Thermostat.Mode", mc.KEY_MODE, is_thermostat=True
 )
 Appliance_Control_Thermostat_ModeB = _ns_get_set_push(
-    "Appliance.Control.Thermostat.ModeB", is_thermostat=True
+    "Appliance.Control.Thermostat.ModeB", mc.KEY_MODEB, is_thermostat=True
 )
+Appliance_Control_Thermostat_ModeC = _ns_get_set_push(
+    "Appliance.Control.Thermostat.ModeC", mc.KEY_CONTROL, PayloadType.LIST_C
+) # pretty different namespace semantics for this device (mts300)
 Appliance_Control_Thermostat_Overheat = _ns_get_set_push(
-    "Appliance.Control.Thermostat.Overheat", is_thermostat=True
+    "Appliance.Control.Thermostat.Overheat", mc.KEY_OVERHEAT, is_thermostat=True
 )
 Appliance_Control_Thermostat_Schedule = _ns_get_set_push(
-    "Appliance.Control.Thermostat.Schedule", is_thermostat=True
+    "Appliance.Control.Thermostat.Schedule", mc.KEY_SCHEDULE, is_thermostat=True
 )
 Appliance_Control_Thermostat_ScheduleB = _ns_get_set_push(
-    "Appliance.Control.Thermostat.ScheduleB", is_thermostat=True
+    "Appliance.Control.Thermostat.ScheduleB", mc.KEY_SCHEDULEB, is_thermostat=True
 )
 Appliance_Control_Thermostat_Sensor = _ns_get_push(
-    "Appliance.Control.Thermostat.Sensor", is_thermostat=True
+    "Appliance.Control.Thermostat.Sensor", mc.KEY_SENSOR, is_thermostat=True
 )
 Appliance_Control_Thermostat_SummerMode = _ns_get_set_push(
-    "Appliance.Control.Thermostat.SummerMode", is_thermostat=True
+    "Appliance.Control.Thermostat.SummerMode", mc.KEY_SUMMERMODE, is_thermostat=True
+)
+Appliance_Control_Thermostat_System = _ns_get_push(
+    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, is_thermostat=True
 )
 Appliance_Control_Thermostat_Timer = _ns_get_set_push(
-    "Appliance.Control.Thermostat.Timer", is_thermostat=True
+    "Appliance.Control.Thermostat.Timer", mc.KEY_TIMER, is_thermostat=True
 )
 Appliance_Control_Thermostat_WindowOpened = _ns_get_push(
-    "Appliance.Control.Thermostat.WindowOpened", is_thermostat=True
+    "Appliance.Control.Thermostat.WindowOpened", mc.KEY_WINDOWOPENED, is_thermostat=True
 )
+Appliance_Control_TimerX = _ns_no_query("Appliance.Control.TimerX", mc.KEY_TIMERX)
+Appliance_Control_Toggle = _ns_get_set_push("Appliance.Control.Toggle", mc.KEY_TOGGLE)
+Appliance_Control_ToggleX = _ns_get_set_push(
+    "Appliance.Control.ToggleX", mc.KEY_TOGGLEX
+)
+Appliance_Control_Trigger = _ns_get_set_push(
+    "Appliance.Control.Trigger", mc.KEY_TRIGGER
+)
+Appliance_Control_TriggerX = _ns_get_set_push(
+    "Appliance.Control.TriggerX", mc.KEY_TRIGGERX
+)
+Appliance_Control_Unbind = _ns_push_query("Appliance.Control.Unbind")
+Appliance_Control_Upgrade = _ns_no_query("Appliance.Control.Upgrade")
+
 
 Appliance_Digest_TimerX = _ns_no_query("Appliance.Digest.TimerX", mc.KEY_DIGEST)
 Appliance_Digest_TriggerX = _ns_no_query("Appliance.Digest.TriggerX", mc.KEY_DIGEST)

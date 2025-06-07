@@ -114,9 +114,9 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self,
         manager: "BaseDevice",
         channel: object,
-        adjust_number_class: typing.Type["MtsTemperatureNumber"],
-        preset_number_class: typing.Type["MtsSetPointNumber"] | None,
-        calendar_class: typing.Type["MtsSchedule"],
+        adjust_number_class: type["MtsTemperatureNumber"],
+        preset_number_class: type["MtsSetPointNumber"] | None,
+        calendar_class: type["MtsSchedule"],
     ):
         self.current_humidity = None
         self.current_temperature = None
@@ -157,7 +157,7 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self._mts_active = None
         self._mts_mode = None
         self._mts_onoff = None
-        self._mts_payload = {}
+        self._mts_payload.clear()
         self.current_humidity = None
         self.current_temperature = None
         self.preset_mode = None

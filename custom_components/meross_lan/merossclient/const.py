@@ -1,5 +1,5 @@
 """
-    static constants symbols for Meross protocol symbols/semantics
+static constants symbols for Meross protocol symbols/semantics
 """
 
 import collections
@@ -263,7 +263,6 @@ KEY_DOMAIN = "domain"
 KEY_MQTTDOMAIN = "mqttDomain"
 KEY_MFALOCKEXPIRE = "mfaLockExpire"
 KEY_DEVNAME = "devName"
-KEY_DEVICECFG = "deviceCfg"
 KEY_DEVICETYPE = "deviceType"
 KEY_CLUSTER = "cluster"
 KEY_RESERVEDDOMAIN = "reservedDomain"
@@ -303,15 +302,13 @@ ROLLERSHUTTER_POSITION_OPENED = 100
 ROLLERSHUTTER_POSITION_CLOSED = 0
 
 MTS_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
-MTS960_TEMP_SCALE = 100  # native mts960 temperatures expressed in hundredths of °C
-
 
 # mts100 (and the likes..) valves mode
 MTS100_MODE_CUSTOM = 0
-MTS100_MODE_HEAT = 1
-MTS100_MODE_COOL = 2
-MTS100_MODE_ECO = 4
-MTS100_MODE_AUTO = 3
+MTS100_MODE_HEAT = 1 # preset heat/comfort
+MTS100_MODE_COOL = 2 # preset cool/night
+MTS100_MODE_ECO = 4 # preset away/eco
+MTS100_MODE_AUTO = 3 # schedule mode
 MTS100_MODE_TO_CURRENTSET_MAP = {
     MTS100_MODE_CUSTOM: KEY_CUSTOM,
     MTS100_MODE_HEAT: KEY_COMFORT,
@@ -322,10 +319,10 @@ MTS100_MODE_TO_CURRENTSET_MAP = {
 
 
 # I don't have an MTS200 to test so these are inferred from a user trace
-MTS200_MODE_HEAT = 0
-MTS200_MODE_COOL = 1
-MTS200_MODE_ECO = 2
-MTS200_MODE_AUTO = 3
+MTS200_MODE_HEAT = 0 # preset heat/comfort
+MTS200_MODE_COOL = 1 # preset cool/night
+MTS200_MODE_ECO = 2 # preset away/eco
+MTS200_MODE_AUTO = 3 # schedule mode
 MTS200_MODE_MANUAL = 4
 MTS200_MODE_TO_TARGETTEMP_MAP = {
     MTS200_MODE_MANUAL: KEY_MANUALTEMP,
@@ -348,6 +345,12 @@ MTS200_OVERHEAT_WARNING_MAP = {
     MTS200_OVERHEAT_WARNING_NOTCONNECTED: "disconnected",
 }
 
+MTS300_TEMP_SCALE = 100  # 1°C == 100 device value
+MTS300_MODE_SCHEDULE = 3
+MTS300_WORK_HEAT = 1
+MTS300_WORK_COOL = 2
+
+MTS960_TEMP_SCALE = 100  # 1°C == 100 device value
 # inferring the mts960 modes from the manual
 MTS960_MODE_HEAT_COOL = 1
 MTS960_MODE_SCHEDULE = 2
