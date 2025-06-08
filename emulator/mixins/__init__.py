@@ -144,11 +144,12 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         match method:
             case mc.METHOD_PUSH:
                 if rxtx == "RX":
-                    self.namespaces[namespace] = (
-                        {mn.NAMESPACES[namespace].key: data}
-                        if protocol == mlc.CONF_PROTOCOL_AUTO
-                        else data
-                    )
+                    if namespace not in self.namespaces:
+                        self.namespaces[namespace] = (
+                            {mn.NAMESPACES[namespace].key: data}
+                            if protocol == mlc.CONF_PROTOCOL_AUTO
+                            else data
+                        )
             case mc.METHOD_GETACK:
                 self.namespaces[namespace] = (
                     {mn.NAMESPACES[namespace].key: data}
