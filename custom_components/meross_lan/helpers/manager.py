@@ -37,7 +37,8 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 
-    from ..merossclient import HostAddress, MerossPayloadType
+    from ..merossclient import HostAddress
+    from ..merossclient.protocol.types import MerossPayloadType
     from .component_api import ComponentApi
     from .entity import MLEntity
 
