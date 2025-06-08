@@ -35,6 +35,7 @@ from custom_components.meross_lan.merossclient.protocol.message import (
 )
 
 if typing.TYPE_CHECKING:
+    from io import TextIOWrapper
     from typing import ClassVar
 
     import paho.mqtt.client as mqtt
@@ -61,7 +62,7 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
     ):
         self.namespaces = {}
         with open(tracefile, "r", encoding="utf8") as f:
-            if tracefile.endswith(".json.txt"):
+            if tracefile.endswith(".json.txt") or tracefile.endswith(".json"):
                 # HA diagnostics trace
                 self._import_json(f)
             else:
@@ -86,15 +87,19 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
         if userId:
             self.firmware[mc.KEY_USERID] = userId
 
-    def _import_tsv(self, f):
+    def _import_tsv(self, f: "TextIOWrapper"):
         """
         parse a legacy tab separated values meross_lan trace
         """
         for line in f:
             row = line.split("\t")
-            self._import_tracerow(row)
+            if len(row) == 5:
+                row.insert(1, "") # patch earlier versions missing 'txrx'
+            if row[3] != "LOG":
+                row[-1] = json_loads(row[-1])
+                self._import_tracerow(*row)  # type:ignore
 
-    def _import_json(self, f):
+    def _import_json(self, f: "TextIOWrapper"):
         """
         parse a 'diagnostics' HA trace
         """
@@ -109,7 +114,8 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
                     # algorithm here should the trace layout change
                     # right now it's the same as for csv files...
                 else:
-                    self._import_tracerow(row)
+                    if row[3] != "LOG":
+                        self._import_tracerow(*row)
 
             _device: dict = _data["device"]
             try:
@@ -125,25 +131,33 @@ class MerossEmulatorDescriptor(MerossDeviceDescriptor):
 
         return
 
-    def _import_tracerow(self, values: list):
-        protocol = values[-4]
-        method = values[-3]
-        namespace = values[-2]
-        data = values[-1]
-
-        def _get_data_dict(_data):
-            return _data if type(_data) is dict else json_loads(_data)
+    def _import_tracerow(
+        self,
+        epoch: str,
+        rxtx: str,
+        protocol: str,
+        method: str,
+        namespace: str,
+        data: dict,
+    ):
 
         match method:
+            case mc.METHOD_PUSH:
+                if rxtx == "RX":
+                    self.namespaces[namespace] = (
+                        {mn.NAMESPACES[namespace].key: data}
+                        if protocol == mlc.CONF_PROTOCOL_AUTO
+                        else data
+                    )
             case mc.METHOD_GETACK:
                 self.namespaces[namespace] = (
-                    {mn.NAMESPACES[namespace].key: _get_data_dict(data)}
+                    {mn.NAMESPACES[namespace].key: data}
                     if protocol == mlc.CONF_PROTOCOL_AUTO
-                    else _get_data_dict(data)
+                    else data
                 )
             case mc.METHOD_SETACK:
                 if namespace == mn.Appliance_Control_Multiple.name:
-                    for message in _get_data_dict(data)[mc.KEY_MULTIPLE]:
+                    for message in data[mc.KEY_MULTIPLE]:
                         header = message[mc.KEY_HEADER]
                         if header[mc.KEY_METHOD] == mc.METHOD_GETACK:
                             self.namespaces[header[mc.KEY_NAMESPACE]] = message[
