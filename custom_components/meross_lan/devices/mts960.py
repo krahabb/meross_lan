@@ -4,12 +4,13 @@ from typing import TYPE_CHECKING, override
 from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..merossclient import const as mc, namespaces as mn
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import MLEmulatedNumber
 from ..sensor import MLDiagnosticSensor
 
 if TYPE_CHECKING:
     from typing import Final
+
     from ..helpers.device import Device
     from ..number import MtsTemperatureNumber
 

@@ -3,7 +3,10 @@ from homeassistant.components import cover as haec
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.cover import MLCover, MLRollerShutter
 from custom_components.meross_lan.devices.garageDoor import MLGarage
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from emulator.mixins.rollershutter import RollerShutterMixin
 
 from tests.entities import EntityComponentTest

@@ -1,7 +1,7 @@
 import typing
 
 from ..helpers.entity import MEListChannelMixin
-from ..helpers.namespaces import NamespaceHandler
+from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..light import (
     ATTR_BRIGHTNESS,
     ATTR_EFFECT,
@@ -15,7 +15,6 @@ from ..light import (
     native_to_rgb,
     rgb_to_native,
 )
-from ..merossclient import const as mc, namespaces as mn
 from ..sensor import MLHumiditySensor, MLNumericSensorDef, MLTemperatureSensor
 from .spray import MLSpray
 

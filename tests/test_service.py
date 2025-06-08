@@ -4,9 +4,9 @@ import typing
 from unittest.mock import ANY
 
 from custom_components.meross_lan import const as mlc
-from custom_components.meross_lan.merossclient import (
+from custom_components.meross_lan.merossclient import json_dumps
+from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
-    json_dumps,
     namespaces as mn,
 )
 
@@ -15,7 +15,10 @@ from tests import const as tc, helpers
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-async def test_request_on_mqtt(request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker):
+
+async def test_request_on_mqtt(
+    request, hass: "HomeAssistant", hamqtt_mock: helpers.HAMQTTMocker
+):
     """
     Test service call routed through mqtt without being forwarded to
     Device. This happens when we want to send request to
@@ -40,14 +43,17 @@ async def test_request_on_mqtt(request, hass: "HomeAssistant", hamqtt_mock: help
 
 
 async def test_request_on_device(
-    request, hass: "HomeAssistant",
+    request,
+    hass: "HomeAssistant",
     hamqtt_mock: helpers.HAMQTTMocker,
     aioclient_mock,
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310, aioclient_mock) as context:
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, aioclient_mock
+    ) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
 
@@ -84,14 +90,17 @@ async def test_request_on_device(
 
 
 async def test_request_notification(
-    request, hass: "HomeAssistant",
+    request,
+    hass: "HomeAssistant",
     hamqtt_mock: helpers.HAMQTTMocker,
     aioclient_mock,
 ):
     """
     Test service calls routed through a device
     """
-    async with helpers.DeviceContext(request, hass, mc.TYPE_MSS310, aioclient_mock) as context:
+    async with helpers.DeviceContext(
+        request, hass, mc.TYPE_MSS310, aioclient_mock
+    ) as context:
         # let the device perform it's poll and come online
         await context.perform_coldstart()
         # when routing the call through a device the service data 'key' is not used

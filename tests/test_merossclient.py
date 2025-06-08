@@ -2,11 +2,7 @@
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from custom_components.meross_lan.merossclient import (
-    cloudapi,
-    const as mc,
-    namespaces as mn,
-)
+from custom_components.meross_lan.merossclient import cloudapi
 
 from . import const as tc, helpers
 

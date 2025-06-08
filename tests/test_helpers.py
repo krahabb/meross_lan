@@ -1,7 +1,7 @@
 """Test the .helpers module"""
 
 from custom_components.meross_lan.helpers import obfuscate
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient.protocol import const as mc
 
 
 def test_obfuscated_key():

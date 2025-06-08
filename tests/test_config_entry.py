@@ -10,7 +10,10 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.helpers.component_api import ComponentApi
 from custom_components.meross_lan.light import MLDNDLightEntity
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from emulator import generate_emulators
 
 from tests import const as tc, helpers

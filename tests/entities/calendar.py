@@ -4,7 +4,10 @@ from custom_components.meross_lan.calendar import MtsSchedule
 from custom_components.meross_lan.devices.mts100 import Mts100Schedule
 from custom_components.meross_lan.devices.mts200 import Mts200Schedule
 from custom_components.meross_lan.devices.mts960 import Mts960Schedule
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests.entities import EntityComponentTest
 

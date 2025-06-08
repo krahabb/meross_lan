@@ -32,22 +32,22 @@ from ..const import (
 )
 from ..merossclient import (
     HostAddress,
+    get_active_broker,
+    is_device_online,
+    json_dumps,
+)
+from ..merossclient.httpclient import MerossHttpClient, TerminatedException
+from ..merossclient.protocol.message import (
     MerossRequest,
     MerossResponse,
     compute_message_encryption_key,
     compute_message_signature,
-    const as mc,
-    get_active_broker,
     get_message_uuid,
-    is_device_online,
-    json_dumps,
-    namespaces as mn,
 )
-from ..merossclient.httpclient import MerossHttpClient, TerminatedException
 from ..sensor import ProtocolSensor
 from ..update import MLUpdate
 from .manager import ConfigEntryManager, EntityManager
-from .namespaces import NamespaceHandler
+from .namespaces import NamespaceHandler, mc, mn
 
 if TYPE_CHECKING:
     from types import CoroutineType
@@ -67,15 +67,14 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
     from ..devices.hub import SubDevice
-    from ..merossclient import (
-        MerossDeviceDescriptor,
+    from ..merossclient import MerossDeviceDescriptor, MerossRequestType
+    from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
+    from ..merossclient.protocol.message import MerossMessage
+    from ..merossclient.protocol.types import (
         MerossHeaderType,
-        MerossMessage,
         MerossMessageType,
         MerossPayloadType,
-        MerossRequestType,
     )
-    from ..merossclient.cloudapi import DeviceInfoType, LatestVersionType
     from .component_api import ComponentApi
     from .entity import MLEntity
     from .mqtt_profile import MQTTConnection, MQTTProfile
@@ -102,21 +101,21 @@ TRACE_ABILITY_EXCLUDE = (
     mn.Appliance_System_Hardware.name,
     mn.Appliance_System_Online.name,
     mn.Appliance_System_Position.name,
-    mn.Appliance_System_Report.name,
+    #mn.Appliance_System_Report.name,
     mn.Appliance_System_Time.name,
-    mn.Appliance_Config_Key.name,
-    mn.Appliance_Config_Trace.name,
-    mn.Appliance_Config_Wifi.name,
-    mn.Appliance_Config_WifiList.name,
-    mn.Appliance_Config_WifiX.name,
-    mn.Appliance_Control_Bind.name,
-    mn.Appliance_Control_Multiple.name,
-    mn.Appliance_Control_TimerX.name,
+    #mn.Appliance_Config_Key.name,
+    #mn.Appliance_Config_Trace.name,
+    #mn.Appliance_Config_Wifi.name,
+    #mn.Appliance_Config_WifiList.name,
+    #mn.Appliance_Config_WifiX.name,
+    #mn.Appliance_Control_Bind.name,
+    #mn.Appliance_Control_Multiple.name,
+    #mn.Appliance_Control_TimerX.name,
     mn.Appliance_Control_TriggerX.name,
     mn.Appliance_Control_Unbind.name,
-    mn.Appliance_Control_Upgrade.name,  # disconnects
-    mn.Appliance_Digest_TimerX.name,
-    mn.Appliance_Digest_TriggerX.name,
+    #mn.Appliance_Control_Upgrade.name,  # disconnects
+    #mn.Appliance_Digest_TimerX.name,
+    #mn.Appliance_Digest_TriggerX.name,
     mn.Appliance_Hub_Exception.name,  # disconnects
     mn.Appliance_Hub_Report.name,  # disconnects
     mn.Appliance_Hub_SubdeviceList.name,  # disconnects
@@ -126,6 +125,16 @@ TRACE_ABILITY_EXCLUDE = (
     mn.Appliance_Mcu_Firmware.name,  # disconnects
     mn.Appliance_Mcu_Upgrade.name,  # disconnects
     mn.Appliance_Mcu_Hp110_Preview.name,  # disconnects
+    *(
+        name
+        for name, ns in mn.NAMESPACES.items()
+        if (ns.has_get is False) and (ns.has_push_query is False)
+    ),
+    *(
+        name
+        for name, ns in mn.HUB_NAMESPACES.items()
+        if (ns.has_get is False) and (ns.has_push_query is False)
+    ),
 )
 
 TIMEZONES_SET = None
@@ -390,6 +399,10 @@ class Device(BaseDevice, ConfigEntryManager):
             ".devices.misc",
             "namespace_init_sensor_latestx",
         ),
+        # mn.Appliance_Control_Thermostat_ModeC.name: (
+        #    ".devices.mts300",
+        #    "Mts300Climate",
+        # ),
         mn.Appliance_RollerShutter_State.name: (".cover", "MLRollerShutter"),
         mn.Appliance_System_DNDMode.name: (".light", "MLDNDLightEntity"),
         mn.Appliance_System_Runtime.name: (".sensor", "MLSignalStrengthSensor"),

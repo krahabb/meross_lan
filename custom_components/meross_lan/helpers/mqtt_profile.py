@@ -16,17 +16,17 @@ from ..const import (
 )
 from ..merossclient import (
     HostAddress,
-    MerossKeyError,
+    json_dumps,
+)
+from ..merossclient.mqttclient import MerossMQTTRateLimitException
+from ..merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
+from ..merossclient.protocol.message import (
     MerossRequest,
     MerossResponse,
     check_message_strict,
-    const as mc,
     get_message_uuid,
     get_replykey,
-    json_dumps,
-    namespaces as mn,
 )
-from ..merossclient.mqttclient import MerossMQTTRateLimitException
 from ..sensor import MLDiagnosticSensor
 from .manager import ConfigEntryManager
 from .obfuscate import obfuscated_dict
@@ -40,10 +40,10 @@ if typing.TYPE_CHECKING:
     from homeassistant.helpers.service_info.mqtt import MqttServiceInfo
     import paho.mqtt.client as paho_mqtt
 
-    from ..merossclient import (
-        HostAddress,
+    from ..merossclient import HostAddress
+    from ..merossclient.protocol.message import MerossMessage
+    from ..merossclient.protocol.types import (
         MerossHeaderType,
-        MerossMessage,
         MerossPayloadType,
     )
     from .device import Device

@@ -4,7 +4,10 @@ from custom_components.meross_lan.devices.mss import (
     ConsumptionXSensor,
     ElectricitySensor,
 )
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from custom_components.meross_lan.sensor import (
     MLEnumSensor,
     MLFilterMaintenanceSensor,

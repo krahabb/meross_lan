@@ -20,7 +20,8 @@ from ..const import (
     CONF_PROTOCOL_AUTO,
     DOMAIN,
 )
-from ..merossclient import cloudapi, const as mc, json_dumps
+from ..merossclient import cloudapi, json_dumps
+from ..merossclient.protocol import const as mc
 from .obfuscate import (
     OBFUSCATE_DEVICE_ID_MAP,
     OBFUSCATE_SERVER_MAP,

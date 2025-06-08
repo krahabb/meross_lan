@@ -13,34 +13,41 @@ from custom_components.meross_lan.helpers.manager import ConfigEntryManager
 from custom_components.meross_lan.merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
-    MerossHeaderType,
-    MerossMessage,
-    MerossNamespaceType,
-    MerossPayloadType,
-    MerossRequest,
-    build_message,
-    compute_message_encryption_key,
-    const as mc,
     extract_dict_payloads,
     get_element_by_key,
     get_macaddress_from_uuid,
-    get_replykey,
     json_dumps,
     json_loads,
-    namespaces as mn,
     update_dict_strict,
     update_dict_strict_by_key,
 )
 from custom_components.meross_lan.merossclient.mqttclient import MerossMQTTDeviceClient
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
+from custom_components.meross_lan.merossclient.protocol.message import (
+    MerossMessage,
+    MerossRequest,
+    build_message,
+    compute_message_encryption_key,
+    get_replykey,
+)
 
 if typing.TYPE_CHECKING:
     from typing import ClassVar
 
     import paho.mqtt.client as mqtt
 
+    from custom_components.meross_lan.merossclient.protocol.types import (
+        MerossHeaderType,
+        MerossNamespaceType,
+        MerossPayloadType,
+    )
+
 
 class MerossEmulatorDescriptor(MerossDeviceDescriptor):
-    namespaces: dict[MerossNamespaceType, MerossPayloadType]
+    namespaces: "dict[MerossNamespaceType, MerossPayloadType]"
 
     __slots__ = ("namespaces",)
 
@@ -332,7 +339,7 @@ class MerossEmulator:
 
         return None
 
-    def _handle_message(self, header: MerossHeaderType, payload: MerossPayloadType):
+    def _handle_message(self, header: "MerossHeaderType", payload: "MerossPayloadType"):
         namespace = header[mc.KEY_NAMESPACE]
         method = header[mc.KEY_METHOD]
         try:

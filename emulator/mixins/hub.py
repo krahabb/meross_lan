@@ -4,16 +4,19 @@ from random import randint
 from typing import TYPE_CHECKING
 
 from custom_components.meross_lan.merossclient import (
-    const as mc,
     get_element_by_key,
     get_element_by_key_safe,
     get_mts_digest,
-    namespaces as mn,
     update_dict_strict,
+)
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
 )
 
 if TYPE_CHECKING:
     from typing import Any
+
     from .. import MerossEmulator, MerossEmulatorDescriptor
 
 

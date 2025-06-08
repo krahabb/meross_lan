@@ -13,8 +13,9 @@ from ..helpers.namespaces import (
     EntityNamespaceMixin,
     NamespaceHandler,
     VoidNamespaceHandler,
+    mc,
+    mn,
 )
-from ..merossclient import const as mc, namespaces as mn
 from ..sensor import MLEnumSensor, MLNumericSensor
 from ..switch import MLSwitch
 

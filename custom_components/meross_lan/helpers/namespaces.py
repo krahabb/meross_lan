@@ -1,15 +1,16 @@
 from typing import TYPE_CHECKING
 
 from .. import const as mlc
-from ..merossclient import check_message_strict, const as mc, namespaces as mn
+from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient.protocol.message import check_message_strict
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Coroutine
 
     from . import Loggable
+    from ..merossclient.protocol.message import MerossResponse
     from .device import AsyncRequestFunc, Device
     from .entity import MLEntity
-    from ..merossclient import MerossMessageType, MerossResponse
 
     PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
 
@@ -622,6 +623,9 @@ class NamespaceHandler:
         """
         ns = self.ns
         if ns.grammar is mn.Grammar.STABLE:
+            if (ns.has_get is False) and (ns.has_push_query is False):
+                # corresponding to _ns_no_query definitions in merossclient.namespaces
+                return
             await async_request_func(*self.polling_request)
             return
 

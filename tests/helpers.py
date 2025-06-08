@@ -36,9 +36,9 @@ from custom_components.meross_lan.helpers.meross_profile import (
 )
 from custom_components.meross_lan.merossclient import (
     cloudapi,
-    const as mc,
     json_loads,
 )
+from custom_components.meross_lan.merossclient.protocol import const as mc
 from emulator import MerossEmulator, build_emulator as emulator_build_emulator
 
 from . import const as tc

@@ -1,6 +1,6 @@
 """
-    Implementation for an async (aiohttp.ClientSession) http client
-    for Meross devices.
+Implementation for an async (aiohttp.ClientSession) http client
+for Meross devices.
 """
 
 import asyncio
@@ -8,23 +8,20 @@ from base64 import b64decode, b64encode
 import logging
 import socket
 import sys
-import typing
+from typing import TYPE_CHECKING
 
 import aiohttp
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from yarl import URL
 
-from . import (
-    JSON_ENCODER,
-    MEROSSDEBUG,
-    KeyType,
-    MerossKeyError,
-    MerossPayloadType,
-    MerossResponse,
-    build_message,
-    check_message_strict,
-    const as mc,
-)
+from . import JSON_ENCODER, MEROSSDEBUG
+from .protocol import MerossKeyError, const as mc
+from .protocol.message import MerossResponse, build_message, check_message_strict
+
+if TYPE_CHECKING:
+    from typing import ClassVar
+
+    from protocol.types import KeyType, MerossPayloadType
 
 
 class TerminatedException(Exception):
@@ -32,9 +29,15 @@ class TerminatedException(Exception):
 
 
 class MerossHttpClient:
-    SESSION_MAXIMUM_CONNECTIONS: typing.ClassVar = 50
-    SESSION_MAXIMUM_CONNECTIONS_PER_HOST: typing.ClassVar = 1
-    SESSION_TIMEOUT: typing.ClassVar = aiohttp.ClientTimeout(total=10, connect=5)
+    if TYPE_CHECKING:
+        SESSION_MAXIMUM_CONNECTIONS: ClassVar
+        SESSION_MAXIMUM_CONNECTIONS_PER_HOST: ClassVar
+        SESSION_TIMEOUT: ClassVar
+        _SESSION: ClassVar[aiohttp.ClientSession | None]
+
+    SESSION_MAXIMUM_CONNECTIONS = 50
+    SESSION_MAXIMUM_CONNECTIONS_PER_HOST = 1
+    SESSION_TIMEOUT = aiohttp.ClientTimeout(total=10, connect=5)
 
     # Use an 'isolated' and dedicated client session to better manage
     # Meross http specifics following concern from @garysargentpersonal
@@ -42,7 +45,7 @@ class MerossHttpClient:
     # https://github.com/krahabb/meross_lan/issues/206#issuecomment-1999837054.
     # Setting SESSION_MAXIMUM_CONNECTIONS_PER_HOST == 1 should prevent
     # concurrent http sessions to the same device.
-    _SESSION: typing.ClassVar[aiohttp.ClientSession | None] = None
+    _SESSION = None
 
     @staticmethod
     def _get_or_create_client_session():
@@ -87,7 +90,7 @@ class MerossHttpClient:
     def __init__(
         self,
         host: str,
-        key: KeyType = None,
+        key: "KeyType" = None,
         session: aiohttp.ClientSession | None = None,
         logger: logging.Logger | None = None,
         log_level_dump: int = logging.NOTSET,
@@ -102,7 +105,7 @@ class MerossHttpClient:
         self._host = host
         self._requesturl = URL(f"http://{host}/config")
         self.key = key  # key == None for hack-mode
-        self.replykey: KeyType = None
+        self.replykey: "KeyType" = None
         self.timeout = MerossHttpClient.SESSION_TIMEOUT
         self._session = session or MerossHttpClient._get_or_create_client_session()
         self._logger = logger
@@ -241,7 +244,7 @@ class MerossHttpClient:
             self._terminate_guard -= 1
 
     async def async_request(
-        self, namespace: str, method: str, payload: MerossPayloadType
+        self, namespace: str, method: str, payload: "MerossPayloadType"
     ) -> MerossResponse:
         key = self.key
         request = build_message(
@@ -286,7 +289,7 @@ class MerossHttpClient:
         return response
 
     async def async_request_strict(
-        self, namespace: str, method: str, payload: MerossPayloadType
+        self, namespace: str, method: str, payload: "MerossPayloadType"
     ):
         """
         check the protocol layer is correct and no protocol ERROR

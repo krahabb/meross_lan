@@ -5,7 +5,7 @@ from homeassistant.exceptions import InvalidStateError
 
 from .const import CONF_PROTOCOL_HTTP, PARAM_ROLLERSHUTTER_TRANSITION_POLL_TIMEOUT
 from .helpers import entity as me, versiontuple
-from .merossclient import const as mc, namespaces as mn
+from .merossclient.protocol import const as mc, namespaces as mn
 from .number import MLConfigNumber
 
 if typing.TYPE_CHECKING:

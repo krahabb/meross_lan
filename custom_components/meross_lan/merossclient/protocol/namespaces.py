@@ -13,7 +13,7 @@ from . import const as mc
 if typing.TYPE_CHECKING:
     from typing import Final, Mapping, NotRequired, TypedDict, Unpack
 
-    from . import MerossRequestType
+    from .. import MerossRequestType
 
     type NamespacesMapType = Mapping[str, "Namespace"]
     NAMESPACES: Final[NamespacesMapType]
@@ -178,8 +178,7 @@ class Namespace:
         self,
         name: str,
         key: str | None = None,
-        /,
-        **kwargs: "Unpack[Args]",
+        kwargs: "Args" = {},
     ) -> None:
         self.name = name
         if key:
@@ -269,8 +268,7 @@ class Namespace:
             self.is_hub_namespace = False
             map[name] = self  # type: ignore
 
-
-    """
+    r"""
     @cached_property
     def is_hub_id(self):
         return bool(re.match(r"Appliance\.Hub\.(.*)", self.name))
@@ -322,32 +320,44 @@ def ns_build_from_message(
     return Namespace(
         namespace,
         ns_key,
-        grammar=Grammar.UNKNOWN,
-        has_get=(method == mc.METHOD_GETACK) or None,
-        has_set=(method == mc.METHOD_SETACK) or None,
-        has_push=(method == mc.METHOD_PUSH) or None,
-        map=map,
+        {
+            "grammar": Grammar.UNKNOWN,
+            "has_get": (method == mc.METHOD_GETACK) or None,
+            "has_set": (method == mc.METHOD_SETACK) or None,
+            "has_push": (method == mc.METHOD_PUSH) or None,
+            "map": map,
+        },
     )
 
 
+GET: "Namespace.Args" = {"has_get": True}
+NO_GET: "Namespace.Args" = {"has_get": False}
+SET: "Namespace.Args" = {"has_set": True}
+NO_SET: "Namespace.Args" = {"has_set": False}
+PUSH: "Namespace.Args" = {"has_push": True}
+NO_PUSH: "Namespace.Args" = {"has_push": False}
+PUSHQ: "Namespace.Args" = {"has_push_query": True}
+NO_PUSHQ: "Namespace.Args" = {"has_push_query": False}
+P_NONE: "Namespace.Args" = {"payload": PayloadType.NONE}
+P_DICT: "Namespace.Args" = {"payload": PayloadType.DICT}
+G_UNKNOWN: "Namespace.Args" = {"grammar": Grammar.UNKNOWN}
+
 def _ns_unknown(name: str, /):
     """Builds a definition for a namespace without specific knowledge of supported methods"""
-    return Namespace(name, None, grammar=Grammar.UNKNOWN)
+    return Namespace(name, None, G_UNKNOWN)
+
+_ns_no_query_args = NO_GET | NO_SET | NO_PUSH | NO_PUSHQ | P_NONE
 
 
 def _ns_no_query(
     name: str,
     key: str | None = None,
-    /,
-    **kwargs: "Unpack[Namespace.Args]",
 ):
     """Builds a definition for a namespace not supporting GET,SET,PUSH"""
-    kwargs["has_get"] = False
-    kwargs["has_set"] = False
-    kwargs["has_push"] = False
-    kwargs["has_push_query"] = False
-    kwargs["payload"] = PayloadType.NONE
-    return Namespace(name, key, **kwargs)
+    return Namespace(name, key, _ns_no_query_args)
+
+
+_ns_get_args = _ns_no_query_args | GET | P_DICT
 
 
 def _ns_get(
@@ -358,12 +368,10 @@ def _ns_get(
     **kwargs: "Unpack[Namespace.Args]",
 ):
     """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
-    kwargs["has_get"] = True
-    kwargs["has_set"] = False
-    kwargs["has_push"] = False
-    kwargs["has_push_query"] = False
-    kwargs["payload"] = _payload
-    return Namespace(name, key, **kwargs)
+    return Namespace(name, key, _ns_get_args | {"payload": _payload} | kwargs)
+
+
+_ns_get_set_args = _ns_get_args | SET
 
 
 def _ns_get_set(
@@ -373,12 +381,10 @@ def _ns_get_set(
     /,
     **kwargs: "Unpack[Namespace.Args]",
 ):
-    kwargs["has_get"] = True
-    kwargs["has_set"] = True
-    kwargs["has_push"] = False
-    kwargs["has_push_query"] = False
-    kwargs["payload"] = _payload
-    return Namespace(name, key, **kwargs)
+    return Namespace(name, key, _ns_get_set_args | {"payload": _payload} | kwargs)
+
+
+_ns_get_set_push_args = _ns_get_set_args | PUSH
 
 
 def _ns_get_set_push(
@@ -388,13 +394,11 @@ def _ns_get_set_push(
     /,
     **kwargs: "Unpack[Namespace.Args]",
 ):
-    """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
-    kwargs["has_get"] = True
-    kwargs["has_set"] = True
-    kwargs["has_push"] = True
-    kwargs["has_push_query"] = False
-    kwargs["payload"] = _payload
-    return Namespace(name, key, **kwargs)
+    return Namespace(name, key, _ns_get_set_push_args | {"payload": _payload} | kwargs)
+
+
+_ns_get_set_push_query_args = _ns_get_set_push_args | PUSHQ
+
 
 def _ns_get_set_push_query(
     name: str,
@@ -403,13 +407,13 @@ def _ns_get_set_push_query(
     /,
     **kwargs: "Unpack[Namespace.Args]",
 ):
-    """Builds a definition for a namespace supporting only GET queries (no PUSH)"""
-    kwargs["has_get"] = True
-    kwargs["has_set"] = True
-    kwargs["has_push"] = True
-    kwargs["has_push_query"] = True
-    kwargs["payload"] = _payload
-    return Namespace(name, key, **kwargs)
+    return Namespace(
+        name, key, _ns_get_set_push_query_args | {"payload": _payload} | kwargs
+    )
+
+
+_ns_get_push_args = _ns_get_args | PUSH
+
 
 def _ns_get_push(
     name: str,
@@ -418,13 +422,10 @@ def _ns_get_push(
     /,
     **kwargs: "Unpack[Namespace.Args]",
 ):
-    """Builds a definition for a namespace supporting GET queries (which also PUSHes updates)"""
-    kwargs["has_get"] = True
-    kwargs["has_set"] = False
-    kwargs["has_push"] = True
-    kwargs["has_push_query"] = False
-    kwargs["payload"] = _payload
-    return Namespace(name, key, **kwargs)
+    return Namespace(name, key, _ns_get_push_args | {"payload": _payload} | kwargs)
+
+
+_ns_set_args = _ns_no_query_args | SET
 
 
 def _ns_set(
@@ -434,12 +435,11 @@ def _ns_set(
     **kwargs: "Unpack[Namespace.Args]",
 ):
     """Builds a definition for a namespace supporting only SET."""
-    kwargs["has_get"] = False
-    kwargs["has_set"] = True
-    kwargs["has_push"] = False
-    kwargs["has_push_query"] = False
-    kwargs["payload"] = PayloadType.NONE
-    return Namespace(name, key, **kwargs)
+    return Namespace(name, key, _ns_set_args | kwargs)
+
+
+_ns_set_push_args = _ns_set_args | PUSH
+_ns_set_push_query_args = _ns_set_push_args | PUSHQ
 
 
 def _ns_set_push_query(
@@ -448,39 +448,24 @@ def _ns_set_push_query(
     /,
     **kwargs: "Unpack[Namespace.Args]",
 ):
-    """Builds a definition for a namespace supporting only SET."""
-    kwargs["has_get"] = False
-    kwargs["has_set"] = True
-    kwargs["has_push"] = True
-    kwargs["has_push_query"] = True
-    kwargs["payload"] = PayloadType.NONE
-    return Namespace(name, key, **kwargs)
+    """Builds a definition for a namespace supporting SET and PUSH querying."""
+    return Namespace(name, key, _ns_set_push_query_args | kwargs)
+
+
+_ns_push_args = _ns_no_query_args | PUSH
 
 
 def _ns_push(name: str, key: str | None = None, /):
     """Builds a definition for a namespace only receiving PUSH."""
-    return Namespace(
-        name,
-        key,
-        payload=PayloadType.NONE,
-        has_get=False,
-        has_set=False,
-        has_push=True,
-        has_push_query=False,
-    )
+    return Namespace(name, key, _ns_push_args)
+
+
+_ns_push_query_args = _ns_push_args | PUSHQ
 
 
 def _ns_push_query(name: str, key: str | None = None, /):
-    """Builds a definition for a namespace supporting PUSH queries/replies (no GET)"""
-    return Namespace(
-        name,
-        key,
-        payload=PayloadType.NONE,
-        has_get=False,
-        has_set=False,
-        has_push=True,
-        has_push_query=True,
-    )
+    """Builds a definition for a namespace supporting PUSH queries/replies (no GET/SET)"""
+    return Namespace(name, key, _ns_push_query_args)
 
 
 # We predefine grammar for some widely used and well known namespaces either to skip 'euristics'
@@ -506,10 +491,10 @@ Appliance_System_Position = _ns_get("Appliance.System.Position", mc.KEY_POSITION
 
 Appliance_Config_DeviceCfg = _ns_get_push(
     "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, PayloadType.LIST_C
-) # mts300
+)  # mts300
 Hub_Config_DeviceCfg = _ns_get_set_push(
     "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, is_hub_subid=True
-) # ms130
+)  # ms130
 Appliance_Config_Key = _ns_set("Appliance.Config.Key", mc.KEY_KEY)
 Appliance_Config_OverTemp = _ns_get("Appliance.Config.OverTemp", mc.KEY_OVERTEMP)
 Appliance_Config_Trace = _ns_no_query("Appliance.Config.Trace")
@@ -528,14 +513,14 @@ Hub_Config_Sensor_Association = _ns_get_set_push(
     mc.KEY_CONFIG,
     is_sensor=True,
     map=HUB_NAMESPACES,
-) # Not seen really..just an extrapolation for Hub(s)
+)  # Not seen really..just an extrapolation for Hub(s)
 
 Appliance_Control_AlertConfig = _ns_get_set_push_query(
     "Appliance.Control.AlertConfig", mc.KEY_CONFIG, PayloadType.LIST_C
-) # mts300 support the full set of verbs - em06 also exposes it but that's likely different
+)  # mts300 support the full set of verbs - em06 also exposes it but that's likely different
 Appliance_Control_AlertReport = _ns_get_set(
     "Appliance.Control.AlertReport", mc.KEY_REPORT, PayloadType.LIST_C
-) # no PUSH seen..not correctly traced..though 'alertReport' as an ns key seems wrong
+)  # no PUSH seen..not correctly traced..though 'alertReport' as an ns key seems wrong
 Appliance_Control_Bind = _ns_no_query("Appliance.Control.Bind", mc.KEY_BIND)
 Appliance_Control_ConsumptionConfig = _ns_get(
     "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG
@@ -677,7 +662,7 @@ Appliance_Control_Thermostat_ModeB = _ns_get_set_push(
 )
 Appliance_Control_Thermostat_ModeC = _ns_get_set_push(
     "Appliance.Control.Thermostat.ModeC", mc.KEY_CONTROL, PayloadType.LIST_C
-) # pretty different namespace semantics for this device (mts300)
+)  # pretty different namespace semantics for this device (mts300)
 Appliance_Control_Thermostat_Overheat = _ns_get_set_push(
     "Appliance.Control.Thermostat.Overheat", mc.KEY_OVERHEAT, is_thermostat=True
 )
@@ -839,3 +824,27 @@ Appliance_RollerShutter_Position = _ns_get_set_push(
 Appliance_RollerShutter_State = _ns_get_push(
     "Appliance.RollerShutter.State", mc.KEY_STATE, PayloadType.LIST
 )
+
+
+"""
+Experiment to try declare namespaces as Enum
+
+class NamespaceEnum(Namespace, enum.Enum):
+    def __new__(cls, key=None, kwargs={}):
+        return Namespace.__new__(cls)
+
+    def __init__(self, key=None, kwargs={}):
+        fq_name = self.__class__.__name__.split("_")
+        fq_name.append(self._name_)
+        fq_name = ".".join(fq_name)
+        super().__init__(fq_name, key, kwargs)
+        self._value_ = self
+
+
+class Appliance_System(NamespaceEnum):
+
+    Position = (
+        mc.KEY_POSITION,
+        _ns_get_args,
+    )
+"""

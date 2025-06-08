@@ -20,8 +20,7 @@ except ImportError:
 from homeassistant.helpers import entity
 
 from . import Loggable
-from ..merossclient import const as mc, namespaces as mn
-from .namespaces import NamespaceParser
+from .namespaces import NamespaceParser, mc, mn
 
 if typing.TYPE_CHECKING:
     from typing import Any, ClassVar, NotRequired, TypedDict, Unpack

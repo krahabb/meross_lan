@@ -9,8 +9,10 @@ from .helpers.namespaces import (
     EntityNamespaceHandler,
     EntityNamespaceMixin,
     NamespaceHandler,
+    mc,
+    mn,
 )
-from .merossclient import const as mc, json_dumps, namespaces as mn
+from .merossclient import json_dumps
 
 if typing.TYPE_CHECKING:
     from typing import NotRequired, Unpack

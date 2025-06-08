@@ -18,7 +18,7 @@ from custom_components.meross_lan.devices.mss import (
     ConsumptionXSensor,
     ElectricitySensor,
 )
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient.protocol import const as mc
 from custom_components.meross_lan.sensor import MLNumericSensor
 from emulator.mixins.electricity import (
     ConsumptionXMixin as EmulatorConsumptionMixin,
@@ -32,7 +32,7 @@ if typing.TYPE_CHECKING:
 
     from .helpers import DeviceContext
 
-    
+
 # set TEST_POWER and TEST_DURATION so they produce at least
 # 1 Wh of energy
 TEST_POWER = 1000  # unit: W

@@ -27,17 +27,17 @@ from .helpers.manager import CloudApiClient
 from .merossclient import (
     HostAddress,
     MerossDeviceDescriptor,
-    MerossKeyError,
     cloudapi,
-    compute_message_encryption_key,
-    const as mc,
     fmt_macaddress,
     get_macaddress_from_uuid,
-    get_message_uuid,
-    namespaces as mn,
 )
 from .merossclient.httpclient import MerossHttpClient
 from .merossclient.mqttclient import MerossMQTTDeviceClient
+from .merossclient.protocol import MerossKeyError, const as mc, namespaces as mn
+from .merossclient.protocol.message import (
+    compute_message_encryption_key,
+    get_message_uuid,
+)
 
 if typing.TYPE_CHECKING:
     from typing import Final

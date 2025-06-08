@@ -3,11 +3,13 @@
 import typing
 
 from custom_components.meross_lan.merossclient import (
-    const as mc,
     get_element_by_key,
     get_element_by_key_safe,
-    namespaces as mn,
     update_dict_strict,
+)
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
 )
 
 if typing.TYPE_CHECKING:

@@ -17,15 +17,16 @@ from .. import const as mlc
 from ..merossclient import (
     MEROSSDEBUG,
     HostAddress,
-    MerossAckReply,
     MerossDeviceDescriptor,
-    MerossPushReply,
-    MerossRequest,
-    const as mc,
     json_loads,
-    namespaces as mn,
 )
 from ..merossclient.httpclient import MerossHttpClient
+from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient.protocol.message import (
+    MerossAckReply,
+    MerossPushReply,
+    MerossRequest,
+)
 from .device import Device
 from .manager import ConfigEntryManager
 from .mqtt_profile import MQTTConnection, MQTTProfile
@@ -38,7 +39,8 @@ if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse
 
-    from ..merossclient import MerossHeaderType, MerossMessage, MerossPayloadType
+    from ..merossclient.protocol.message import MerossMessage
+    from ..merossclient.protocol.types import MerossHeaderType, MerossPayloadType
     from .meross_profile import MerossProfile
 
 

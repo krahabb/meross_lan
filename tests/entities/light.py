@@ -13,7 +13,10 @@ from custom_components.meross_lan.light import (
     native_to_rgb,
     rgb_to_native,
 )
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests.entities import EntityComponentTest
 

@@ -22,15 +22,10 @@ from ..const import (
     CONF_PASSWORD,
     DOMAIN,
 )
-from ..merossclient import (
-    MEROSSDEBUG,
-    HostAddress,
-    const as mc,
-    get_active_broker,
-    namespaces as mn,
-)
+from ..merossclient import MEROSSDEBUG, HostAddress, get_active_broker
 from ..merossclient.cloudapi import APISTATUS_TOKEN_ERRORS, CloudApiError
 from ..merossclient.mqttclient import MerossMQTTAppClient, generate_app_id
+from ..merossclient.protocol import const as mc, namespaces as mn
 from .manager import CloudApiClient
 from .mqtt_profile import ConnectionSensor, MQTTConnection, MQTTProfile
 
@@ -42,12 +37,12 @@ if typing.TYPE_CHECKING:
 
     from ..const import ProfileConfigType
     from ..devices.hub import HubMixin
-    from ..merossclient import MerossMessage
     from ..merossclient.cloudapi import (
         DeviceInfoType,
         LatestVersionType,
         SubDeviceInfoType,
     )
+    from ..merossclient.protocol.message import MerossMessage
     from .component_api import ComponentApi
     from .device import Device, MerossDeviceDescriptor
 

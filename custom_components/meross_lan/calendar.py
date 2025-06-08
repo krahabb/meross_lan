@@ -16,7 +16,7 @@ from homeassistant.util import dt
 
 from .climate import MtsClimate
 from .helpers import clamp, entity as me
-from .merossclient import const as mc, namespaces as mn
+from .merossclient.protocol import const as mc
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry

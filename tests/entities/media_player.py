@@ -1,7 +1,10 @@
 from homeassistant.components import media_player as haec  # HA EntityComponent
 
 from custom_components.meross_lan.media_player import MLMp3Player
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests.entities import EntityComponentTest
 

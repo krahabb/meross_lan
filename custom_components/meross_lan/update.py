@@ -3,8 +3,8 @@ import typing
 from homeassistant.components import update
 
 from .helpers import entity as me
-from .merossclient import const as mc
 from .merossclient.cloudapi import LatestVersionType
+from .merossclient.protocol import const as mc
 
 if typing.TYPE_CHECKING:
 

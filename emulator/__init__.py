@@ -1,17 +1,17 @@
 """
-    Emulator module: implementation for an emulator able to
-    simulate the real protocol stack working on a device. This can be used to
-    setup an http server representing a connection to a physical device for
-    testing purposes (or for fun).
-    The emulator is implemented as a 'generic' protocol parser which uses
-    the grammar from a trace/diagnostic to setup the proper response
-    Somewhere, here and there, some hardcoded behavior is implemented to
-    reach an higher state of functionality since at the core, the emulator
-    is just a reply service of what's inside a trace.
-    Typically, an emulator is built by using 'build_emulator' since it is
-    a mixin based class.
-    'generate_emulators' is an helper (python generator) to build a whole
-    set of emulators from all the traces stored in a path.
+Emulator module: implementation for an emulator able to
+simulate the real protocol stack working on a device. This can be used to
+setup an http server representing a connection to a physical device for
+testing purposes (or for fun).
+The emulator is implemented as a 'generic' protocol parser which uses
+the grammar from a trace/diagnostic to setup the proper response
+Somewhere, here and there, some hardcoded behavior is implemented to
+reach an higher state of functionality since at the core, the emulator
+is just a reply service of what's inside a trace.
+Typically, an emulator is built by using 'build_emulator' since it is
+a mixin based class.
+'generate_emulators' is an helper (python generator) to build a whole
+set of emulators from all the traces stored in a path.
 """
 
 import os
@@ -49,7 +49,10 @@ from aiohttp import web
 # so I've changed a bit the import sequence in meross_lan
 # to have the homeassistant.core imported (initialized) before
 # homeassistant.helpers.storage
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
 

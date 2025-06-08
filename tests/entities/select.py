@@ -2,7 +2,7 @@ from homeassistant.components import select as haec
 
 from custom_components.meross_lan.devices.diffuser import MLDiffuserSpray
 from custom_components.meross_lan.devices.spray import MLSpray
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient.protocol import const as mc
 from custom_components.meross_lan.select import MLSelect, MtsTrackedSensor
 
 from tests.entities import EntityComponentTest

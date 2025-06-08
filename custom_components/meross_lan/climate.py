@@ -3,7 +3,7 @@ import typing
 from homeassistant.components import climate
 
 from .helpers import entity as me, reverse_lookup
-from .merossclient import const as mc
+from .merossclient.protocol import const as mc
 from .select import MtsTrackedSensor
 from .sensor import MLTemperatureSensor
 

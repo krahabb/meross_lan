@@ -3,8 +3,7 @@
 from random import randint
 import typing
 
-from custom_components.meross_lan.merossclient import (
-    MerossRequest,
+from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )

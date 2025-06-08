@@ -6,7 +6,8 @@ from typing import Final, NotRequired, TypedDict
 
 from homeassistant import const as hac
 
-from .merossclient import cloudapi, const as mc
+from .merossclient import cloudapi
+from .merossclient.protocol import const as mc
 
 DOMAIN: Final = "meross_lan"
 

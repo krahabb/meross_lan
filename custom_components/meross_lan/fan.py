@@ -3,8 +3,8 @@ import typing
 from homeassistant.components import fan
 
 from .helpers import entity as me
-from .helpers.namespaces import NamespaceHandler
-from .merossclient import const as mc, namespaces as mn
+from .helpers.namespaces import NamespaceHandler, mn
+from .merossclient.protocol import const as mc
 
 if typing.TYPE_CHECKING:
     from .helpers.device import Device, DigestInitReturnType

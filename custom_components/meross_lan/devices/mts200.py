@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..merossclient import const as mc, namespaces as mn
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..number import MtsSetPointNumber
 
 if TYPE_CHECKING:

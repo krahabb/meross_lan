@@ -3,7 +3,7 @@ import typing
 from homeassistant.core import HomeAssistant, StateMachine
 from homeassistant.helpers import entity
 
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient.protocol import const as mc
 from custom_components.meross_lan.switch import MLToggleX
 
 from tests.helpers import DeviceContext

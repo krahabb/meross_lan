@@ -5,9 +5,9 @@ from time import time
 import typing
 
 from custom_components.meross_lan.helpers import clamp, versiontuple
-from custom_components.meross_lan.merossclient import (
+from custom_components.meross_lan.merossclient import extract_dict_payloads
+from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
-    extract_dict_payloads,
     namespaces as mn,
 )
 from emulator.mixins import MerossEmulatorDescriptor
@@ -113,7 +113,7 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     SIGNALCLOSE = 20000
     SIGNALOPEN = 30000
     # the internal sampling of the 'Transition'
-    SIGNAL_TRANSITION_PERIOD = 1 # sec
+    SIGNAL_TRANSITION_PERIOD = 1  # sec
 
     def __init__(self, descriptor: MerossEmulatorDescriptor, key: str):
         self._transitions: dict[int, _Transition] = {}

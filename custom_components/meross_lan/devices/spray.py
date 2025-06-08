@@ -1,7 +1,7 @@
 import typing
 
 from ..helpers.entity import MEDictChannelMixin
-from ..merossclient import const as mc, namespaces as mn
+from ..merossclient.protocol import const as mc, namespaces as mn
 from ..select import MLConfigSelect
 
 if typing.TYPE_CHECKING:

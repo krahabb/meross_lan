@@ -9,14 +9,14 @@ from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.diagnostics import async_get_device_diagnostics
-from custom_components.meross_lan.merossclient import const as mc
+from custom_components.meross_lan.merossclient.protocol import const as mc
 from emulator import generate_emulators
 
 from tests import const as tc, helpers
 
 if typing.TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-    
+
 async def _async_configure_options_tracing(entry_mock: helpers.ConfigEntryMocker):
     hass = entry_mock.hass
 

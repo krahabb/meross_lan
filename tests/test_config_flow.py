@@ -19,13 +19,15 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 
 from custom_components.meross_lan import const as mlc
 from custom_components.meross_lan.merossclient import (
-    build_message,
     cloudapi,
-    const as mc,
     fmt_macaddress,
     json_dumps,
+)
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
     namespaces as mn,
 )
+from custom_components.meross_lan.merossclient.protocol.message import build_message
 
 from tests import const as tc, helpers
 

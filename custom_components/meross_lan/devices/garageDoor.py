@@ -12,13 +12,13 @@ from ..const import (
 )
 from ..cover import MLCover
 from ..helpers import clamp, entity as me, versiontuple
-from ..helpers.namespaces import NamespaceHandler
-from ..merossclient import const as mc, namespaces as mn
+from ..helpers.namespaces import NamespaceHandler, mc, mn
 from ..number import MLConfigNumber, MLEmulatedNumber, MLNumber
 from ..switch import MLSwitch
 
 if typing.TYPE_CHECKING:
     from typing import Unpack
+
     from ..helpers.device import Device, DigestInitReturnType
     from ..merossclient import MerossRequestType
 

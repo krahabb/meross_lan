@@ -6,8 +6,8 @@ from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..helpers import entity as me
 from ..helpers.device import BaseDevice, Device
-from ..helpers.namespaces import NamespaceHandler, NamespaceParser
-from ..merossclient import const as mc, get_productnameuuid, namespaces as mn
+from ..helpers.namespaces import NamespaceHandler, NamespaceParser, mc, mn
+from ..merossclient import get_productnameuuid
 from ..number import MLConfigNumber
 from ..select import MtsTrackedSensor
 from ..sensor import (
@@ -22,6 +22,7 @@ from ..switch import MLSwitch
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Collection, Final
+
     from ..helpers.device import AsyncRequestFunc, DigestInitReturnType
     from ..helpers.entity import MLEntity
     from ..merossclient.cloudapi import SubDeviceInfoType

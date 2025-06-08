@@ -21,8 +21,9 @@ from .helpers.namespaces import (
     EntityNamespaceHandler,
     EntityNamespaceMixin,
     NamespaceHandler,
+    mc,
+    mn,
 )
-from .merossclient import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry

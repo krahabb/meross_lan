@@ -8,8 +8,8 @@ import typing
 
 from .. import const as mlc
 from ..climate import MtsClimate
-from ..helpers.namespaces import NamespaceHandler
-from ..merossclient import const as mc, namespaces as mn
+from ..helpers.namespaces import NamespaceHandler, mn
+from ..merossclient.protocol import const as mc
 from ..sensor import (
     MLHumiditySensor,
     MLLightSensor,

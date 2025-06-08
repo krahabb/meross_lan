@@ -4,7 +4,8 @@ import typing
 from homeassistant.components import switch
 
 from .helpers import entity as me
-from .merossclient import const as mc, extract_dict_payloads, namespaces as mn
+from .merossclient import extract_dict_payloads
+from .merossclient.protocol import const as mc, namespaces as mn
 
 if typing.TYPE_CHECKING:
     from typing import Unpack

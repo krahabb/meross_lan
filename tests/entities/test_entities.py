@@ -5,7 +5,10 @@ import typing
 from homeassistant.helpers.entity import STATE_UNAVAILABLE
 
 from custom_components.meross_lan.devices.hub import HubMixin
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from emulator import generate_emulators
 
 from tests import const as tc, helpers

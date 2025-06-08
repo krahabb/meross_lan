@@ -5,11 +5,13 @@ from random import randint
 import typing
 
 from custom_components.meross_lan.merossclient import (
-    const as mc,
     get_element_by_key,
-    namespaces as mn,
     update_dict_strict,
     update_dict_strict_by_key,
+)
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
 )
 
 if typing.TYPE_CHECKING:

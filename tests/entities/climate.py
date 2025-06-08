@@ -5,7 +5,10 @@ from custom_components.meross_lan.climate import MtsClimate
 from custom_components.meross_lan.devices.mts100 import Mts100Climate
 from custom_components.meross_lan.devices.mts200 import Mts200Climate
 from custom_components.meross_lan.devices.mts960 import Mts960Climate
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 
 from tests.entities import EntityComponentTest
 

@@ -4,7 +4,10 @@ from homeassistant.helpers.entity import STATE_OFF, STATE_ON
 from custom_components.meross_lan.devices.hub import GS559MuteToggle
 from custom_components.meross_lan.devices.mss import OverTempEnableSwitch
 from custom_components.meross_lan.devices.thermostat import MtsExternalSensorSwitch
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from custom_components.meross_lan.switch import MLToggle, MLToggleX, PhysicalLockSwitch
 
 from tests.entities import EntityComponentTest

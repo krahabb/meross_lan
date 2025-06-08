@@ -11,7 +11,10 @@ from custom_components.meross_lan.devices.thermostat import (
     MLScreenBrightnessNumber,
     MtsRichTemperatureNumber,
 )
-from custom_components.meross_lan.merossclient import const as mc, namespaces as mn
+from custom_components.meross_lan.merossclient.protocol import (
+    const as mc,
+    namespaces as mn,
+)
 from custom_components.meross_lan.number import MLConfigNumber, MLNumber
 
 from tests.entities import EntityComponentTest
