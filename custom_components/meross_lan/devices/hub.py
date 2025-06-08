@@ -106,7 +106,7 @@ class HubNamespaceHandler(NamespaceHandler):
         subdevices = hub.subdevices
         subdevices_parsed = set()
         key_namespace = self.ns.key
-        key_channel = self.key_channel
+        key_channel = self.ns.key_channel
         for p_subdevice in payload[key_namespace]:
             try:
                 subdevice_id = p_subdevice[key_channel]
@@ -204,7 +204,7 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
         bigger payloads like NS_APPLIANCE_HUB_MTS100_SCHEDULEB
         """
         payload = []
-        key_channel = self.key_channel
+        key_channel = self.ns.key_channel
         for subdevice in self.device.subdevices.values():
             if (subdevice.model in self._models) == self._included:
                 payload.append({key_channel: subdevice.id})

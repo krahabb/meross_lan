@@ -22,9 +22,10 @@ MerossHeaderType = typing.TypedDict(
     },
 )
 MerossPayloadType = dict[str, typing.Any]
-MerossMessageType = typing.TypedDict(
-    "MerossMessageType", {"header": MerossHeaderType, "payload": MerossPayloadType}
-)
+class MerossMessageType(typing.TypedDict):
+    header: MerossHeaderType
+    payload: MerossPayloadType
+
 MerossRequestType = tuple[MerossNamespaceType, MerossMethodType, MerossPayloadType]
 type KeyType = typing.Union[MerossHeaderType, str, None]
 

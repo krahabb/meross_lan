@@ -12,7 +12,8 @@ if TYPE_CHECKING:
     from .device import AsyncRequestFunc, Device
     from .entity import MLEntity
 
-    PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
+    type PollingStrategyFunc = Callable[["NamespaceHandler"], Coroutine]
+    type NamespaceConfigType = tuple[int, int, int, int, PollingStrategyFunc | None]
 
 
 class EntityDisablerMixin:
@@ -115,7 +116,6 @@ class NamespaceHandler:
         "ns",
         "handler",
         "parsers",
-        "key_channel",
         "entity_class",
         "lastrequest",
         "lastresponse",
@@ -137,6 +137,7 @@ class NamespaceHandler:
         /,
         *,
         handler: "Callable[[dict, dict], None] | None" = None,
+        config: "NamespaceConfigType | None" = None,
     ):
         namespace = ns.name
         assert namespace not in device.namespace_handlers, (
@@ -147,13 +148,12 @@ class NamespaceHandler:
         self.ns = ns
         self.lastresponse = self.lastrequest = self.polling_epoch_next = 0.0
         self.parsers = {}
-        self.key_channel = ns.key_channel
         self.entity_class = None
         self.handler = handler or getattr(
             device, f"_handle_{namespace.replace('.', '_')}", self._handle_undefined
         )
 
-        if _conf := POLLING_STRATEGY_CONF.get(ns):
+        if _conf := config or POLLING_STRATEGY_CONF.get(ns):
             self.polling_period = _conf[0]
             self.polling_period_cloud = _conf[1]
             self.polling_response_base_size = _conf[2]
@@ -209,7 +209,7 @@ class NamespaceHandler:
         the ns need it. Also adjusts the estimated polling_response_size.
         Returns False if not needed"""
         polling_request_channels = self.polling_request_channels
-        key_channel = self.key_channel
+        key_channel = self.ns.key_channel
         for channel_payload in polling_request_channels:
             if channel_payload[key_channel] == channel:
                 break
@@ -275,7 +275,7 @@ class NamespaceHandler:
             for channel in channels:
                 entity_class(self.device, channel)
 
-    def register_parser(self, parser: "NamespaceParser", key_channel: str, /):
+    def register_parser(self, parser: "NamespaceParser", /):
         # when setting up the entity-dispatching we'll substitute the legacy handler
         # (used to be a Device method with syntax like _handle_Appliance_xxx_xxx)
         # with our _handle_list, _handle_dict, _handle_generic. The 3 versions are meant
@@ -287,10 +287,9 @@ class NamespaceHandler:
         # either carry dict or, worse, could present themselves in both forms
         # (ToggleX is a well-known example)
         ns = self.ns
-        self.key_channel = key_channel
-        channel = getattr(parser, key_channel)
+        channel = getattr(parser, ns.key_channel)
         assert channel not in self.parsers, "parser already registered"
-        self.parsers[channel] = getattr(parser, f"_parse_{ns.key}", parser._parse)
+        self.parsers[channel] = getattr(parser, f"_parse_{ns.slug}", parser._parse)
         if not parser.namespace_handlers:
             parser.namespace_handlers = set()
         parser.namespace_handlers.add(self)
@@ -298,7 +297,7 @@ class NamespaceHandler:
         self.handler = self._handle_list
 
     def unregister(self, parser: "NamespaceParser", /):
-        if self.parsers.pop(getattr(parser, self.key_channel), None):
+        if self.parsers.pop(getattr(parser, self.ns.key_channel), None):
             parser.namespace_handlers.remove(self)
 
     def handle_exception(self, exception: Exception, function_name: str, payload, /):
@@ -324,7 +323,7 @@ class NamespaceHandler:
         try:
             for p_channel in payload[self.ns.key]:
                 try:
-                    _parse = self.parsers[p_channel[self.key_channel]]
+                    _parse = self.parsers[p_channel[self.ns.key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -342,7 +341,7 @@ class NamespaceHandler:
         """
         p_channel = payload[self.ns.key]
         try:
-            _parse = self.parsers[p_channel.get(self.key_channel)]
+            _parse = self.parsers[p_channel.get(self.ns.key_channel)]
         except KeyError as key_error:
             _parse = self._try_create_entity(key_error)
         except AttributeError:
@@ -364,14 +363,15 @@ class NamespaceHandler:
         p_channel = payload[self.ns.key]
         if type(p_channel) is dict:
             try:
-                _parse = self.parsers[p_channel.get(self.key_channel)]
+                _parse = self.parsers[p_channel.get(self.ns.key_channel)]
             except KeyError as key_error:
                 _parse = self._try_create_entity(key_error)
             _parse(p_channel)
         else:
+            key_channel = self.ns.key_channel
             for p_channel in p_channel:
                 try:
-                    _parse = self.parsers[p_channel[self.key_channel]]
+                    _parse = self.parsers[p_channel[key_channel]]
                 except KeyError as key_error:
                     _parse = self._try_create_entity(key_error)
                 _parse(p_channel)
@@ -389,14 +389,19 @@ class NamespaceHandler:
         if device.create_diagnostic_entities:
             # since we're parsing an unknown namespace, our euristic about
             # the key_namespace might be wrong so we use another euristic
-            key_channel = self.ns.key_channel
+            ns = self.ns
             for key, payload in payload.items():
-                if isinstance(payload, dict):
-                    self._parse_undefined_dict(key, payload, payload.get(key_channel))
+                # since the ns_key might be often the same across different namespaces
+                # we add the last split of the namespace to the extracted payload key
+                if type(payload) is dict:
+                    self._parse_undefined_dict(
+                        f"{ns.slug}_{key}", payload, payload.get(ns.key_channel)
+                    )
                 else:
+                    key = f"{ns.slug}_{key}"
                     for payload in payload:
                         # not having a "channel" in the list payloads is unexpected so far
-                        self._parse_undefined_dict(key, payload, payload[key_channel])
+                        self._parse_undefined_dict(key, payload, payload[ns.key_channel])
 
     def parse_list(self, digest: list, /):
         """twin method for _handle (same job - different context).
@@ -505,8 +510,7 @@ class NamespaceHandler:
                     self.device,
                     channel,
                     self.ns.key,
-                ),
-                self.ns.key_channel,
+                )
             )
         else:
             self.parsers[channel] = self._parse_stub
@@ -891,9 +895,10 @@ response. This issue also appeared on hubs when querying for a big number of sub
 as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
 responses though
 """
-POLLING_STRATEGY_CONF: dict[
-    mn.Namespace, tuple[int, int, int, int, "PollingStrategyFunc | None"]
-] = {
+# TODO: for many of these (used only on specific patterns) it should be better
+# moving configuration to the relative 'namespace_init' function
+# so that we don't waste time and memory here inizializing the whole set
+POLLING_STRATEGY_CONF: dict[mn.Namespace, "NamespaceConfigType"] = {
     mn.Appliance_System_All: (
         mlc.PARAM_HEARTBEAT_PERIOD,
         0,
@@ -1055,6 +1060,13 @@ POLLING_STRATEGY_CONF: dict[
         mlc.PARAM_HEADER_SIZE,
         80,
         NamespaceHandler.async_poll_lazy,
+    ),
+    mn.Appliance_Control_Thermostat_ModeC: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        120,
+        NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_Control_Thermostat_Overheat: (
         mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,

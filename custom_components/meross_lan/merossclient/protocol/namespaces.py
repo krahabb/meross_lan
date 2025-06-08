@@ -134,6 +134,8 @@ class Namespace:
         DEFAULT_PUSH_PAYLOAD: Final
         name: Final[str]
         """The namespace name"""
+        slug: Final[str]
+        """The namespace 'slug' i.e. the last split of name"""
         key: Final[str]
         """The root key of the payload"""
         key_channel: Final[str]
@@ -158,6 +160,7 @@ class Namespace:
 
     __slots__ = (
         "name",
+        "slug",
         "key",
         "key_channel",
         "has_get",
@@ -181,17 +184,18 @@ class Namespace:
         kwargs: "Args" = {},
     ) -> None:
         self.name = name
-        if key:
-            self.key = key
+        slug = name.split(".")[-1]
+        # When namespace 'key' is not provided we'll infer it
+        # by camelCasing the last split of the namespace
+        # with special care for also the last char which looks
+        # lowercase when it's a X (i.e. ToggleX -> togglex).
+        # Recently (2025) it appears the namespace 'key' is likely to be the 2nd
+        # split of the namespace though (i.e. Appliance.Config.DeviceCfg -> config)
+        if slug[-1] == "X":
+            self.slug = f"{slug[0].lower()}{slug[1:-1]}x"
         else:
-            key = name.split(".")[-1]
-            # mainly camelCasing the last split of the namespace
-            # with special care for also the last char which looks
-            # lowercase when it's a X (i.e. ToggleX -> togglex)
-            if key[-1] == "X":
-                self.key = "".join((key[0].lower(), key[1:-1], "x"))
-            else:
-                self.key = "".join((key[0].lower(), key[1:]))
+            self.slug = f"{slug[0].lower()}{slug[1:]}"
+        self.key = key or self.slug
 
         map = kwargs.get("map", NAMESPACES)
         payload = kwargs.get("payload")
@@ -307,6 +311,13 @@ class Namespace:
     def request_push(self) -> "MerossRequestType":
         return self.name, mc.METHOD_PUSH, Namespace.DEFAULT_PUSH_PAYLOAD
 
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, value):
+        if isinstance(value, self.__class__):
+            return (self is value) or self.name == value.name
+        return False
 
 def ns_build_from_message(
     namespace: str, method: str, payload: dict, map: "NamespacesMapType", /
@@ -496,6 +507,8 @@ Hub_Config_DeviceCfg = _ns_get_set_push(
     "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, is_hub_subid=True
 )  # ms130
 Appliance_Config_Key = _ns_set("Appliance.Config.Key", mc.KEY_KEY)
+Appliance_Config_Matter = _ns_push_query("Appliance.Config.Matter", mc.KEY_CONFIG)
+Appliance_Config_NtpSite = _ns_no_query("Appliance.Config.NtpSite") # maybe key="config"?
 Appliance_Config_OverTemp = _ns_get("Appliance.Config.OverTemp", mc.KEY_OVERTEMP)
 Appliance_Config_Trace = _ns_no_query("Appliance.Config.Trace")
 Appliance_Config_Wifi = _ns_no_query("Appliance.Config.Wifi")
@@ -520,8 +533,9 @@ Appliance_Control_AlertConfig = _ns_get_set_push_query(
 )  # mts300 support the full set of verbs - em06 also exposes it but that's likely different
 Appliance_Control_AlertReport = _ns_get_set(
     "Appliance.Control.AlertReport", mc.KEY_REPORT, PayloadType.LIST_C
-)  # no PUSH seen..not correctly traced..though 'alertReport' as an ns key seems wrong
+)
 Appliance_Control_Bind = _ns_no_query("Appliance.Control.Bind", mc.KEY_BIND)
+Appliance_Control_ChangeWifi = _ns_no_query("Appliance.Control.ChangeWifi")
 Appliance_Control_ConsumptionConfig = _ns_get(
     "Appliance.Control.ConsumptionConfig", mc.KEY_CONFIG
 )
@@ -700,7 +714,7 @@ Appliance_Control_TriggerX = _ns_get_set_push(
 )
 Appliance_Control_Unbind = _ns_push_query("Appliance.Control.Unbind")
 Appliance_Control_Upgrade = _ns_no_query("Appliance.Control.Upgrade")
-
+Appliance_Control_Weather = _ns_no_query("Appliance.Control.Weather")
 
 Appliance_Digest_TimerX = _ns_no_query("Appliance.Digest.TimerX", mc.KEY_DIGEST)
 Appliance_Digest_TriggerX = _ns_no_query("Appliance.Digest.TriggerX", mc.KEY_DIGEST)

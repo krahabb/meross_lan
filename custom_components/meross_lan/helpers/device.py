@@ -101,21 +101,21 @@ TRACE_ABILITY_EXCLUDE = (
     mn.Appliance_System_Hardware.name,
     mn.Appliance_System_Online.name,
     mn.Appliance_System_Position.name,
-    #mn.Appliance_System_Report.name,
+    # mn.Appliance_System_Report.name,
     mn.Appliance_System_Time.name,
-    #mn.Appliance_Config_Key.name,
-    #mn.Appliance_Config_Trace.name,
-    #mn.Appliance_Config_Wifi.name,
-    #mn.Appliance_Config_WifiList.name,
-    #mn.Appliance_Config_WifiX.name,
-    #mn.Appliance_Control_Bind.name,
-    #mn.Appliance_Control_Multiple.name,
-    #mn.Appliance_Control_TimerX.name,
+    # mn.Appliance_Config_Key.name,
+    # mn.Appliance_Config_Trace.name,
+    # mn.Appliance_Config_Wifi.name,
+    # mn.Appliance_Config_WifiList.name,
+    # mn.Appliance_Config_WifiX.name,
+    # mn.Appliance_Control_Bind.name,
+    # mn.Appliance_Control_Multiple.name,
+    # mn.Appliance_Control_TimerX.name,
     mn.Appliance_Control_TriggerX.name,
     mn.Appliance_Control_Unbind.name,
-    #mn.Appliance_Control_Upgrade.name,  # disconnects
-    #mn.Appliance_Digest_TimerX.name,
-    #mn.Appliance_Digest_TriggerX.name,
+    # mn.Appliance_Control_Upgrade.name,  # disconnects
+    # mn.Appliance_Digest_TimerX.name,
+    # mn.Appliance_Digest_TriggerX.name,
     mn.Appliance_Hub_Exception.name,  # disconnects
     mn.Appliance_Hub_Report.name,  # disconnects
     mn.Appliance_Hub_SubdeviceList.name,  # disconnects
@@ -399,10 +399,10 @@ class Device(BaseDevice, ConfigEntryManager):
             ".devices.misc",
             "namespace_init_sensor_latestx",
         ),
-        # mn.Appliance_Control_Thermostat_ModeC.name: (
-        #    ".devices.mts300",
-        #    "Mts300Climate",
-        # ),
+        mn.Appliance_Control_Thermostat_ModeC.name: (
+            ".devices.mts300",
+            "Mts300Climate",
+        ),
         mn.Appliance_RollerShutter_State.name: (".cover", "MLRollerShutter"),
         mn.Appliance_System_DNDMode.name: (".light", "MLDNDLightEntity"),
         mn.Appliance_System_Runtime.name: (".sensor", "MLSignalStrengthSensor"),
@@ -930,16 +930,14 @@ class Device(BaseDevice, ConfigEntryManager):
         self,
         parser: "NamespaceParser",
         ns: "mn.Namespace",
-        *,
-        key_channel: str | None = None,
     ):
-        self.get_handler(ns).register_parser(parser, key_channel or ns.key_channel)
+        self.get_handler(ns).register_parser(parser)
 
     def register_parser_entity(
         self,
         entity: "MLEntity",
     ):
-        self.get_handler(entity.ns).register_parser(entity, entity.ns.key_channel)
+        self.get_handler(entity.ns).register_parser(entity)
 
     def register_togglex_channel(self, entity: "MLEntity"):
         """

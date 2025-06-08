@@ -144,9 +144,9 @@ class ElectricitySensor(me.MEAlwaysAvailableMixin, MLNumericSensor):
 
     # interface: self
     def _handle_Appliance_Control_Electricity(self, header: dict, payload: dict):
-        self._parse_electricity(payload[mc.KEY_ELECTRICITY])
+        self._parse(payload[mc.KEY_ELECTRICITY])
 
-    def _parse_electricity(self, payload: dict):
+    def _parse(self, payload: dict):
         """{"channel": 0, "power": 11000, ...}"""
         device = self.manager
         entities = device.entities

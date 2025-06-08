@@ -460,7 +460,7 @@ class MLGarage(MLCover):
         if (mc.KEY_DOORENABLE in payload) and (
             self._config.get(mc.KEY_DOORENABLE) != payload[mc.KEY_DOORENABLE]
         ):
-            self._parse_config({mc.KEY_DOORENABLE: payload[mc.KEY_DOORENABLE]})
+            self._parse_multipleConfig({mc.KEY_DOORENABLE: payload[mc.KEY_DOORENABLE]})
 
         is_closed = not payload[mc.KEY_OPEN]
         if self.is_closed == is_closed:
@@ -494,7 +494,7 @@ class MLGarage(MLCover):
         self.is_closed = is_closed
         self.flush_state()
 
-    def _parse_config(self, payload: dict):
+    def _parse_multipleConfig(self, payload: dict):
         """
         {
           "channel": 1,

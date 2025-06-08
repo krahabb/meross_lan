@@ -4,6 +4,7 @@ from homeassistant.components.climate import ClimateEntity, HVACMode
 from custom_components.meross_lan.climate import MtsClimate
 from custom_components.meross_lan.devices.mts100 import Mts100Climate
 from custom_components.meross_lan.devices.mts200 import Mts200Climate
+from custom_components.meross_lan.devices.mts300 import Mts300Climate
 from custom_components.meross_lan.devices.mts960 import Mts960Climate
 from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
@@ -15,6 +16,7 @@ from tests.entities import EntityComponentTest
 HVAC_MODES: dict[type[MtsClimate], set[HVACMode]] = {
     Mts100Climate: {HVACMode.OFF, HVACMode.HEAT},
     Mts200Climate: {HVACMode.OFF, HVACMode.HEAT},
+    Mts300Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO},
     Mts960Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO},
 }
 
@@ -46,7 +48,9 @@ class EntityTest(EntityComponentTest):
             mc.KEY_MODEB: [Mts960Climate],
         },
     }
-
+    NAMESPACES_ENTITIES = {
+        mn.Appliance_Control_Thermostat_ModeC.name: [Mts300Climate],
+    }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MTS100: [Mts100Climate],
         mc.TYPE_MTS100V3: [Mts100Climate],
@@ -75,7 +79,7 @@ class EntityTest(EntityComponentTest):
             assert entity.current_humidity is not None
 
     async def async_test_enabled_callback(self, entity: MtsClimate):
-        if isinstance(entity, Mts960Climate):
+        if isinstance(entity, Mts960Climate) or isinstance(entity, Mts300Climate):
             # TODO: restore testing once mts960 is done
             return
 

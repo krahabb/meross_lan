@@ -305,10 +305,10 @@ MTS_TEMP_SCALE = 10  # native mts temperatures expressed in tenths of °C
 
 # mts100 (and the likes..) valves mode
 MTS100_MODE_CUSTOM = 0
-MTS100_MODE_HEAT = 1 # preset heat/comfort
-MTS100_MODE_COOL = 2 # preset cool/night
-MTS100_MODE_ECO = 4 # preset away/eco
-MTS100_MODE_AUTO = 3 # schedule mode
+MTS100_MODE_HEAT = 1  # preset heat/comfort
+MTS100_MODE_COOL = 2  # preset cool/night
+MTS100_MODE_ECO = 4  # preset away/eco
+MTS100_MODE_AUTO = 3  # schedule mode
 MTS100_MODE_TO_CURRENTSET_MAP = {
     MTS100_MODE_CUSTOM: KEY_CUSTOM,
     MTS100_MODE_HEAT: KEY_COMFORT,
@@ -319,10 +319,10 @@ MTS100_MODE_TO_CURRENTSET_MAP = {
 
 
 # I don't have an MTS200 to test so these are inferred from a user trace
-MTS200_MODE_HEAT = 0 # preset heat/comfort
-MTS200_MODE_COOL = 1 # preset cool/night
-MTS200_MODE_ECO = 2 # preset away/eco
-MTS200_MODE_AUTO = 3 # schedule mode
+MTS200_MODE_HEAT = 0  # preset heat/comfort
+MTS200_MODE_COOL = 1  # preset cool/night
+MTS200_MODE_ECO = 2  # preset away/eco
+MTS200_MODE_AUTO = 3  # schedule mode
 MTS200_MODE_MANUAL = 4
 MTS200_MODE_TO_TARGETTEMP_MAP = {
     MTS200_MODE_MANUAL: KEY_MANUALTEMP,
@@ -346,7 +346,8 @@ MTS200_OVERHEAT_WARNING_MAP = {
 }
 
 MTS300_TEMP_SCALE = 100  # 1°C == 100 device value
-MTS300_MODE_SCHEDULE = 3
+MTS300_MODE_AUTO = 3
+MTS300_WORK_OFF = 0
 MTS300_WORK_HEAT = 1
 MTS300_WORK_COOL = 2
 
