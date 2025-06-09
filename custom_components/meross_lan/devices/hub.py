@@ -6,8 +6,15 @@ from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..helpers import entity as me
 from ..helpers.device import BaseDevice, Device
-from ..helpers.namespaces import NamespaceHandler, NamespaceParser, mc, mn
+from ..helpers.namespaces import (
+    POLLING_STRATEGY_CONF,
+    NamespaceHandler,
+    NamespaceParser,
+    mc,
+    mn,
+)
 from ..merossclient import get_productnameuuid
+from ..merossclient.protocol.namespaces import hub as mn_h
 from ..number import MLConfigNumber
 from ..select import MtsTrackedSensor
 from ..sensor import (
@@ -26,6 +33,7 @@ if TYPE_CHECKING:
     from ..helpers.device import AsyncRequestFunc, DigestInitReturnType
     from ..helpers.entity import MLEntity
     from ..merossclient.cloudapi import SubDeviceInfoType
+    from ..merossclient.protocol.namespaces import Namespace
     from .mts100 import Mts100Climate
 
     WELL_KNOWN_TYPE_MAP: Final[dict[str, Callable]]
@@ -40,7 +48,7 @@ WELL_KNOWN_TYPE_MAP = dict(
 
 
 class MLHubSensorAdjustNumber(MLConfigNumber):
-    ns = mn.Appliance_Hub_Sensor_Adjust
+    ns = mn_h.Appliance_Hub_Sensor_Adjust
 
     __slots__ = (
         "native_max_value",
@@ -81,7 +89,7 @@ class MLHubSensorAdjustNumber(MLConfigNumber):
 
 
 class MLHubToggle(me.MEListChannelMixin, MLSwitch):
-    ns = mn.Appliance_Hub_ToggleX
+    ns = mn_h.Appliance_Hub_ToggleX
 
     # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
@@ -97,7 +105,7 @@ class HubNamespaceHandler(NamespaceHandler):
 
     device: "HubMixin"
 
-    def __init__(self, device: "HubMixin", ns: "mn.Namespace"):
+    def __init__(self, device: "HubMixin", ns: "Namespace"):
         NamespaceHandler.__init__(self, device, ns, handler=self._handle_subdevice)
 
     def _handle_subdevice(self, header, payload):
@@ -149,7 +157,7 @@ class HubChunkedNamespaceHandler(HubNamespaceHandler):
     def __init__(
         self,
         device: "HubMixin",
-        ns: "mn.Namespace",
+        ns: "Namespace",
         models: "Collection",
         included: bool,
         count: int,
@@ -220,7 +228,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
     Specialized Device for smart hub(s) like MSH300
     """
 
-    NAMESPACES = mn.HUB_NAMESPACES
+    NAMESPACES = mn_h.HUB_NAMESPACES
 
     DEFAULT_PLATFORMS = Device.DEFAULT_PLATFORMS | {
         MLBinarySensor.PLATFORM: None,
@@ -254,7 +262,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
     def get_type(self) -> mlc.DeviceType:
         return mlc.DeviceType.HUB
 
-    def _create_handler(self, ns: "mn.Namespace"):
+    def _create_handler(self, ns: "Namespace"):
         _handler = getattr(self, f"_handle_{ns.name.replace('.', '_')}", None)
         if _handler:
             return NamespaceHandler(
@@ -314,7 +322,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
             self.schedule_reload(5)
 
     # interface: self
-    def log_duplicated_subdevice(self, subdevice_id: object):
+    def log_duplicated_subdevice(self, subdevice_id: object, /):
         self.log(
             self.CRITICAL,
             "Subdevice %s (id:%s) appears twice in device data. Shouldn't happen",
@@ -323,7 +331,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
             timeout=604800,  # 1 week
         )
 
-    def setup_chunked_handler(self, ns: mn.Namespace, is_mts100: bool, count: int):
+    def setup_chunked_handler(self, ns: "Namespace", is_mts100: bool, count: int, /):
         if (ns.name not in self.namespace_handlers) and (
             ns.name in self.descriptor.ability
         ):
@@ -331,7 +339,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
                 self, ns, mc.MTS100_ALL_TYPESET, is_mts100, count
             )
 
-    def setup_simple_handler(self, ns: mn.Namespace):
+    def setup_simple_handler(self, ns: "Namespace", /):
         try:
             self.namespace_handlers[ns.name].polling_response_size_inc()
         except KeyError:
@@ -407,7 +415,7 @@ class SubDevice(NamespaceParser, BaseDevice):
     ms130-Appliance.Control.Sensor.LatestX)
     """
 
-    NAMESPACES = mn.HUB_NAMESPACES
+    NAMESPACES = mn_h.HUB_NAMESPACES
 
     __slots__ = (
         "async_request",
@@ -451,11 +459,11 @@ class SubDevice(NamespaceParser, BaseDevice):
         # 'advertises' it and no specialized implementation is in place
         self.switch_togglex: MLSwitch | None = None
 
-        hub.setup_simple_handler(mn.Appliance_Hub_Battery)
-        hub.setup_simple_handler(mn.Appliance_Hub_ToggleX)
-        hub.setup_simple_handler(mn.Appliance_Hub_SubDevice_Version)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_Battery)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_ToggleX)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_SubDevice_Version)
         if model not in mc.MTS100_ALL_TYPESET:
-            hub.setup_chunked_handler(mn.Appliance_Hub_Sensor_All, False, 8)
+            hub.setup_chunked_handler(mn_h.Appliance_Hub_Sensor_All, False, 8)
 
     # interface: EntityManager
     def generate_unique_id(self, entity: "MLEntity"):
@@ -493,9 +501,9 @@ class SubDevice(NamespaceParser, BaseDevice):
         # force a re-poll even on MQTT
         self.hub.namespace_handlers[
             (
-                mn.Appliance_Hub_Mts100_All.name
+                mn_h.Appliance_Hub_Mts100_All.name
                 if self.model in mc.MTS100_ALL_TYPESET
-                else mn.Appliance_Hub_Sensor_All.name
+                else mn_h.Appliance_Hub_Sensor_All.name
             )
         ].polling_epoch_next = 0.0
 
@@ -727,9 +735,9 @@ class MTS100SubDevice(SubDevice):
         from .mts100 import Mts100Climate
 
         self.climate = Mts100Climate(self)
-        hub.setup_chunked_handler(mn.Appliance_Hub_Mts100_All, True, 8)
-        hub.setup_chunked_handler(mn.Appliance_Hub_Mts100_ScheduleB, True, 4)
-        hub.setup_simple_handler(mn.Appliance_Hub_Mts100_Adjust)
+        hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_All, True, 8)
+        hub.setup_chunked_handler(mn_h.Appliance_Hub_Mts100_ScheduleB, True, 4)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_Mts100_Adjust)
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -828,7 +836,7 @@ WELL_KNOWN_TYPE_MAP[mc.TYPE_MTS150P] = MTS150PSubDevice
 
 
 class GS559MuteToggle(me.MEListChannelMixin, MLSwitch):
-    ns = mn.Appliance_Hub_Sensor_Smoke
+    ns = mn_h.Appliance_Hub_Sensor_Smoke
     key_value: str = mc.KEY_INTERCONN
 
     # HA core entity attributes:
@@ -937,7 +945,7 @@ class MS100SubDevice(SubDevice):
             20,
             1,
         )
-        hub.setup_simple_handler(mn.Appliance_Hub_Sensor_Adjust)
+        hub.setup_simple_handler(mn_h.Appliance_Hub_Sensor_Adjust)
 
     async def async_shutdown(self):
         await super().async_shutdown()
@@ -977,7 +985,9 @@ class MS100SubDevice(SubDevice):
         # the adjust sooner than scheduled in case the change
         # was due to an adjustment
         if sensor.update_device_value(device_value):
-            strategy = self.hub.namespace_handlers[mn.Appliance_Hub_Sensor_Adjust.name]
+            strategy = self.hub.namespace_handlers[
+                mn_h.Appliance_Hub_Sensor_Adjust.name
+            ]
             if strategy.lastrequest < (self.hub.lastresponse - 30):
                 strategy.polling_epoch_next = 0.0
 
@@ -1002,7 +1012,7 @@ class MS130SubDevice(SubDevice):
         self.sensor_temperature = MLTemperatureSensor(self, self.id, device_scale=100)
         self.sensor_light = MLLightSensor(self, self.id)
         # This hybrid ns should have LIST_C structure in Hub(s)
-        ns = mn.Hub_Control_Sensor_LatestX
+        ns = mn_h.Hub_Control_Sensor_LatestX
         try:
             handler = hub.namespace_handlers[ns.name]
         except KeyError:
@@ -1157,3 +1167,70 @@ def digest_init_hub(device: "HubMixin", digest) -> "DigestInitReturnType":
             device.log_exception(device.WARNING, exception, "digest_init_hub")
 
     return device._parse_hub, ()
+
+
+POLLING_STRATEGY_CONF |= {
+    mn_h.Hub_Control_Sensor_LatestX: (
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        220,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_h.Appliance_Hub_Battery: (
+        3600,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_h.Appliance_Hub_Mts100_Adjust: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_h.Appliance_Hub_Mts100_All: (
+        mlc.PARAM_HEARTBEAT_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        350,
+        None,  # HubChunkedNamespaceHandler.async_poll_chunked
+    ),
+    mn_h.Appliance_Hub_Mts100_ScheduleB: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        500,
+        None,  # HubChunkedNamespaceHandler.async_poll_chunked
+    ),
+    mn_h.Appliance_Hub_Sensor_Adjust: (
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        60,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_h.Appliance_Hub_Sensor_All: (
+        mlc.PARAM_HEARTBEAT_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        250,
+        None,  # HubChunkedNamespaceHandler.async_poll_chunked
+    ),
+    mn_h.Appliance_Hub_SubDevice_Version: (
+        0,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        55,
+        NamespaceHandler.async_poll_once,
+    ),
+    mn_h.Appliance_Hub_ToggleX: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        35,
+        NamespaceHandler.async_poll_default,
+    ),
+}

@@ -116,12 +116,12 @@ TRACE_ABILITY_EXCLUDE = (
     # mn.Appliance_Control_Upgrade.name,  # disconnects
     # mn.Appliance_Digest_TimerX.name,
     # mn.Appliance_Digest_TriggerX.name,
-    mn.Appliance_Hub_Exception.name,  # disconnects
-    mn.Appliance_Hub_Report.name,  # disconnects
-    mn.Appliance_Hub_SubdeviceList.name,  # disconnects
-    mn.Appliance_Hub_PairSubDev.name,  # disconnects
-    mn.Appliance_Hub_SubDevice_Beep.name,  # protocol replies with error code: 5000
-    mn.Appliance_Hub_SubDevice_MotorAdjust.name,  # protocol replies with error code: 5000
+    "Appliance.Hub.Exception",  # disconnects
+    "Appliance.Hub.Report",  # disconnects
+    "Appliance.Hub.SubdeviceList",  # disconnects
+    "Appliance.Hub.PairSubDev",  # disconnects
+    "Appliance.Hub.SubDevice.Beep",  # protocol replies with error code: 5000
+    "Appliance.Hub.SubDevice.MotorAdjust",  # protocol replies with error code: 5000
     mn.Appliance_Mcu_Firmware.name,  # disconnects
     mn.Appliance_Mcu_Upgrade.name,  # disconnects
     mn.Appliance_Mcu_Hp110_Preview.name,  # disconnects

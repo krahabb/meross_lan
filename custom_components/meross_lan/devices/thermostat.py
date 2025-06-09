@@ -276,7 +276,7 @@ DIGEST_KEY_TO_NAMESPACE: dict[str, mn.Namespace] = {
 }
 """Maps the digest key to the associated namespace handler (used in _parse_thermostat)"""
 
-OPTIONAL_NAMESPACES_INITIALIZERS = {
+OPTIONAL_NAMESPACES_INITIALIZERS: set[mn.Namespace] = {
     mn.Appliance_Control_Thermostat_CtlRange,
     mn.Appliance_Control_Thermostat_HoldAction,
     mn.Appliance_Control_Thermostat_SummerMode,

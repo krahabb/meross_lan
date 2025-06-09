@@ -8,9 +8,10 @@ from .thermostat import MtsCalibrationNumber
 
 if TYPE_CHECKING:
     from typing import Final
+
     from ..helpers.device import Device
-    from ..number import MtsTemperatureNumber
     from ..merossclient.protocol.types import thermostat
+    from ..number import MtsTemperatureNumber
 
     """
     "Appliance.System.Ability",

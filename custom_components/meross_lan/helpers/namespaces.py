@@ -1026,13 +1026,6 @@ POLLING_STRATEGY_CONF: dict[mn.Namespace, "NamespaceConfigType"] = {
         220,
         NamespaceHandler.async_poll_lazy,
     ),
-    mn.Hub_Control_Sensor_LatestX: (
-        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        220,
-        NamespaceHandler.async_poll_lazy,
-    ),
     mn.Appliance_Control_Thermostat_Calibration: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
         mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
@@ -1116,62 +1109,6 @@ POLLING_STRATEGY_CONF: dict[mn.Namespace, "NamespaceConfigType"] = {
         mlc.PARAM_HEADER_SIZE,
         140,
         NamespaceHandler.async_poll_lazy,
-    ),
-    mn.Appliance_Hub_Battery: (
-        3600,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        40,
-        NamespaceHandler.async_poll_lazy,
-    ),
-    mn.Appliance_Hub_Mts100_Adjust: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        40,
-        NamespaceHandler.async_poll_lazy,
-    ),
-    mn.Appliance_Hub_Mts100_All: (
-        mlc.PARAM_HEARTBEAT_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        350,
-        None,  # HubChunkedNamespaceHandler.async_poll_chunked
-    ),
-    mn.Appliance_Hub_Mts100_ScheduleB: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        500,
-        None,  # HubChunkedNamespaceHandler.async_poll_chunked
-    ),
-    mn.Appliance_Hub_Sensor_Adjust: (
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        60,
-        NamespaceHandler.async_poll_lazy,
-    ),
-    mn.Appliance_Hub_Sensor_All: (
-        mlc.PARAM_HEARTBEAT_PERIOD,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        250,
-        None,  # HubChunkedNamespaceHandler.async_poll_chunked
-    ),
-    mn.Appliance_Hub_SubDevice_Version: (
-        0,
-        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
-        mlc.PARAM_HEADER_SIZE,
-        55,
-        NamespaceHandler.async_poll_once,
-    ),
-    mn.Appliance_Hub_ToggleX: (
-        0,
-        0,
-        mlc.PARAM_HEADER_SIZE,
-        35,
-        NamespaceHandler.async_poll_default,
     ),
     mn.Appliance_RollerShutter_Adjust: (
         mlc.PARAM_CONFIG_UPDATE_PERIOD,
