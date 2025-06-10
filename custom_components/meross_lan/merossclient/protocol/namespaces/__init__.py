@@ -49,11 +49,6 @@ class _HubNamespacesMap(dict):
     Examples are Appliance.Control.Sensor.LatestX and HistoryX.
     If a namespace is not found here, it will be looked-up in the default NAMESPACES map
     and eventually created there. Beware this is not the same meaning of Namespace property 'is_hub'.
-    TODO: for 'sensor' type namespaces we need to manage the case when they're dynamically built
-    at runtime since, when this happens they would be placed in NAMESPACES even if the device is an Hub since
-    we're not managing this kind of context when dynamically adding devices (see device message handling pipe).
-    If they follow the same heuristics as those actually known, they should be placed in HUB_NAMESPACES and
-    key_channel = mc.KEY_SUBID with payload type = LIST_C
     """
 
     def __getitem__(self, namespace: str) -> "Namespace":

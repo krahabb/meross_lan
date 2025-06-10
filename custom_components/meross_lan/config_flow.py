@@ -142,7 +142,6 @@ class MerossFlowHandlerMixin(
 
     @cached_property
     def api(self):
-        # TODO: improve consistence in caching/access to api
         return ComponentApi.get(self.hass)
 
     @ce.callback

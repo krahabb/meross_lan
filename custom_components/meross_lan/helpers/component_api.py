@@ -85,7 +85,6 @@ class HAMQTTConnection(MQTTConnection):
         self._unsub_mqtt_connected = None
         self._mqtt_subscribe_future = None
         if MEROSSDEBUG:
-            # TODO : check bug in hass shutdown
             async def _async_random_disconnect():
                 self._unsub_random_disconnect = api.schedule_async_callback(
                     60, _async_random_disconnect

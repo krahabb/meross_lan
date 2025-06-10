@@ -162,7 +162,6 @@ class Mts300Climate(MtsClimate):
 
     @override
     async def async_request_onoff(self, onoff: int):
-        # TODO: remomber last 'work'
         await self._async_request_modeC(
             {"mode": self._mts_mode if onoff else mc.MTS300_MODE_OFF}
         )

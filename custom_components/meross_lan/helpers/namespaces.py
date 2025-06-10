@@ -895,9 +895,6 @@ response. This issue also appeared on hubs when querying for a big number of sub
 as reported in #244 (here the buffer limit was around 4000 chars). From limited testing this 'kind of overflow' is not happening on MQTT
 responses though
 """
-# TODO: for many of these (used only on specific patterns) it should be better
-# moving configuration to the relative 'namespace_init' function
-# so that we don't waste time and memory here inizializing the whole set
 POLLING_STRATEGY_CONF: dict[mn.Namespace, "NamespaceConfigType"] = {
     mn.Appliance_System_All: (
         mlc.PARAM_HEARTBEAT_PERIOD,
