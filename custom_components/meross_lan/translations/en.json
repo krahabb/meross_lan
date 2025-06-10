@@ -38,7 +38,11 @@
             "common": {
                 "state": {
                     "ok": "Ok",
-                    "disconnected": "Disconnected"
+                    "disconnected": "Disconnected",
+                    "low": "Low",
+                    "medium": "Medium",
+                    "high": "High",
+                    "idle": "Idle"
                 }
             },
             "mts_overheat_warning": {
@@ -53,6 +57,21 @@
                     "0": "Ok",
                     "1": "Freezing",
                     "2": "Disconnected"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "Idle",
+                    "1": "Low",
+                    "2": "Medium",
+                    "3": "High"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "1": "Dehumidification",
+                    "2": "Humidifying",
+                    "0": "Idle"
                 }
             }
         }

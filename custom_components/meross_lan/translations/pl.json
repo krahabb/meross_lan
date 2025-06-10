@@ -38,13 +38,17 @@
             "common": {
                 "state": {
                     "ok": "Ok",
-                    "disconnected": "Rozłączony"
+                    "disconnected": "Rozłączony",
+                    "low": "Niska",
+                    "medium": "Średnia",
+                    "high": "Wysoka",
+                    "idle": "Bezczynny"
                 }
             },
             "mts_overheat_warning": {
                 "state": {
-                    "0": "Ok",
                     "1": "Przegrzewanie",
+                    "0": "Ok",
                     "2": "Rozłączony"
                 }
             },
@@ -53,6 +57,21 @@
                     "0": "Ok",
                     "1": "Zamarzanie",
                     "2": "Rozłączony"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "Bezczynny",
+                    "1": "Niska",
+                    "2": "Średnia",
+                    "3": "Wysoka"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "1": "Osuszanie",
+                    "2": "Nawilżanie",
+                    "0": "Bezczynny"
                 }
             }
         }

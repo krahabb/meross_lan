@@ -38,7 +38,11 @@
             "common": {
                 "state": {
                     "ok": "良い",
-                    "disconnected": "切断された"
+                    "disconnected": "切断された",
+                    "low": "低",
+                    "medium": "中",
+                    "high": "高",
+                    "idle": "アイドル"
                 }
             },
             "mts_overheat_warning": {
@@ -53,6 +57,21 @@
                     "0": "良い",
                     "1": "Freezing",
                     "2": "切断された"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "アイドル",
+                    "1": "低",
+                    "2": "中",
+                    "3": "高"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "1": "除湿",
+                    "2": "加湿",
+                    "0": "アイドル"
                 }
             }
         }
@@ -144,7 +163,7 @@
                 "data": {
                     "key": "デバイスキー",
                     "error": "エラーメッセージ",
-                    "allow_mqtt_publish": "MQTT パブリッシュを許可する"
+                    "allow_mqtt_publish": "ローカルMQTT公開を許可"
                 }
             },
             "device": {

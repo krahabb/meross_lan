@@ -106,11 +106,11 @@ class Mts300Climate(MtsClimate):
     }
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
     STATUS_SENSOR_DEF_MAP = {
-        "hdStatus": MLEnumSensor.SensorDef("(de)humidifier_status"),
-        "hStatus": MLEnumSensor.SensorDef("heating_status"),
-        "cStatus": MLEnumSensor.SensorDef("cooling_status"),
-        "fStatus": MLEnumSensor.SensorDef("fan_speed"),
-        "aStatus": MLEnumSensor.SensorDef("auxiliary_status"),
+        "hdStatus": MLEnumSensor.SensorDef("(de)humidifier_status", translation_key="mts300_hdstatus"),
+        "hStatus": MLEnumSensor.SensorDef("heating_status", translation_key="mts300_status"),
+        "cStatus": MLEnumSensor.SensorDef("cooling_status", translation_key="mts300_status"),
+        "fStatus": MLEnumSensor.SensorDef("fan_speed", translation_key="mts300_status"),
+        "aStatus": MLEnumSensor.SensorDef("auxiliary_status", translation_key="mts300_status"),
     }
 
     # HA core entity attributes:
@@ -132,10 +132,7 @@ class Mts300Climate(MtsClimate):
         "target_temperature_high",
         "target_temperature_low",
         "_mts_work",
-        "sensor_hStatus",
-        "sensor_cStatus",
-        "sensor_fStatus",
-    )
+    ) + tuple(f"sensor_{_key}" for _key in STATUS_SENSOR_DEF_MAP)
 
     def __init__(
         self,

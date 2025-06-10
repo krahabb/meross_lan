@@ -38,7 +38,11 @@
             "common": {
                 "state": {
                     "ok": "Ok",
-                    "disconnected": "Odpojeno"
+                    "disconnected": "Odpojeno",
+                    "low": "Nízká",
+                    "medium": "Střední",
+                    "high": "Vysoká",
+                    "idle": "Nečinný"
                 }
             },
             "mts_overheat_warning": {
@@ -53,6 +57,21 @@
                     "0": "Ok",
                     "1": "Freezing",
                     "2": "Odpojeno"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "Nečinný",
+                    "1": "Nízká",
+                    "2": "Střední",
+                    "3": "Vysoká"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "1": "Odvlhčování",
+                    "2": "Zvlhčování",
+                    "0": "Nečinný"
                 }
             }
         }
@@ -144,7 +163,7 @@
                 "data": {
                     "key": "Klíč zařízení",
                     "error": "Chybová zpráva",
-                    "allow_mqtt_publish": "Povolit publikování MQTT"
+                    "allow_mqtt_publish": "Povolit místní publikování MQTT"
                 }
             },
             "device": {

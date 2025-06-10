@@ -38,7 +38,11 @@
             "common": {
                 "state": {
                     "ok": "Ok",
-                    "disconnected": "Disconnesso"
+                    "disconnected": "Disconnesso",
+                    "low": "Bassa",
+                    "medium": "Media",
+                    "high": "Alta",
+                    "idle": "Inattivo"
                 }
             },
             "mts_overheat_warning": {
@@ -53,6 +57,21 @@
                     "0": "Ok",
                     "1": "Freezing",
                     "2": "Disconnesso"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "Inattivo",
+                    "1": "Bassa",
+                    "2": "Media",
+                    "3": "Alta"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "1": "Deumidificazione",
+                    "2": "Umidificazione",
+                    "0": "Inattivo"
                 }
             }
         }
@@ -144,7 +163,7 @@
                 "data": {
                     "key": "Chiave dispositivo",
                     "error": "Messaggio di errore",
-                    "allow_mqtt_publish": "Consenti pubblicazione MQTT"
+                    "allow_mqtt_publish": "Consenti pubblicazione MQTT locale"
                 }
             },
             "device": {

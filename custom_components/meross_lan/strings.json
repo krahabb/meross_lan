@@ -38,7 +38,11 @@
             "common": {
                 "state": {
                     "ok": "Ok",
-                    "disconnected": "Disconnected"
+                    "disconnected": "Disconnected",
+                    "idle": "Idle",
+                    "low": "Low",
+                    "medium": "Medium",
+                    "high": "High"
                 }
             },
             "mts_overheat_warning": {
@@ -53,6 +57,21 @@
                     "0": "[%key:entity::sensor::common::state::ok%]",
                     "1": "Freezing",
                     "2": "[%key:entity::sensor::common::state::disconnected%]"
+                }
+            },
+            "mts300_status": {
+                "state": {
+                    "0": "[%key:entity::sensor::common::state::idle%]",
+                    "1": "[%key:entity::sensor::common::state::low%]",
+                    "2": "[%key:entity::sensor::common::state::medium%]",
+                    "3": "[%key:entity::sensor::common::state::high%]"
+                }
+            },
+            "mts300_hdstatus": {
+                "state": {
+                    "0": "[%key:entity::sensor::common::state::idle%]",
+                    "1": "Dehumidification",
+                    "2": "Humidifying"
                 }
             }
         }

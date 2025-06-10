@@ -1,0 +1,23 @@
+{
+    "entity": {
+        "sensor": {
+            "mts300_status": {
+                "default": "mdi:fan-alert",
+                "state": {
+                    "0": "mdi:fan-off",
+                    "1": "mdi:fan-speed-1",
+                    "2": "mdi:fan-speed-2",
+                    "3": "mdi:fan-speed-3"
+                }
+            },
+            "mts300_hdstatus": {
+                "default": "mdi:fan-alert",
+                "state": {
+                    "0": "mdi:fan-off",
+                    "1": "mdi:air-purifier", 
+                    "2": "mdi:air-humidifier"
+                }
+            }
+        }
+    }
+}
