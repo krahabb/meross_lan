@@ -81,6 +81,8 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             mn_h.Appliance_Hub_Sensor_DoorWindow,
             mn_h.Appliance_Hub_Online,
             mn_h.Appliance_Hub_ToggleX,
+            mn_h.Hub_Control_Sensor_HistoryX,
+            mn_h.Hub_Control_Sensor_LatestX,
         ):
             if ns.name in ability:
                 ns_state[ns] = namespaces.setdefault(ns.name, {ns.key: []})[ns.key]
@@ -198,13 +200,13 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             try:
                 return get_element_by_key(
                     subdevices_namespace,
-                    mc.KEY_ID,
+                    ns.key_channel,
                     subdevice_id,
                 )
             except KeyError:
                 if not force_create:
                     raise
-                p_subdevice = {mc.KEY_ID: subdevice_id}
+                p_subdevice = {ns.key_channel: subdevice_id}
                 subdevices_namespace.append(p_subdevice)
         except KeyError:
             if not force_create:
@@ -212,7 +214,7 @@ class HubMixin(MerossEmulator if TYPE_CHECKING else object):
             assert (
                 ns.name in self.descriptor.ability
             ), f"{ns.name} not available in Hub abilities"
-            p_subdevice = {mc.KEY_ID: subdevice_id}
+            p_subdevice = {ns.key_channel: subdevice_id}
             self.descriptor.namespaces[ns.name] = {ns.key: [p_subdevice]}
         return p_subdevice
 

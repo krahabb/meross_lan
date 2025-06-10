@@ -15,6 +15,9 @@ from . import (
     ARGS_GETPUSH,
     ARGS_GETSET,
     ARGS_GETSETPUSH,
+    ARGS_NO_Q,
+    ARGS_SET,
+    G_EXPERIMENTAL,
     HUB_NAMESPACES,
     IS_SENSOR,
     P_LIST,
@@ -32,17 +35,17 @@ Hub_Config_DeviceCfg = ns(
 Hub_Config_Sensor_Association = ns(
     "Appliance.Config.Sensor.Association",
     mc.KEY_CONFIG,
-    ARGS_GETSETPUSH | IS_SENSOR | MAP_HUB,
+    ARGS_GETSETPUSH | IS_SENSOR | IS_HUB_SUBID,
 )  # Not seen really..just an extrapolation for Hub(s)
 Hub_Control_Sensor_HistoryX = ns(
     "Appliance.Control.Sensor.HistoryX",
     mc.KEY_HISTORY,
-    ARGS_GET | IS_SENSOR | MAP_HUB,
+    ARGS_GET | IS_SENSOR | IS_HUB_SUBID,
 )
 Hub_Control_Sensor_LatestX = ns(
     "Appliance.Control.Sensor.LatestX",
     mc.KEY_LATEST,
-    ARGS_GETPUSH | IS_SENSOR | MAP_HUB,
+    ARGS_GETPUSH | IS_SENSOR | IS_HUB_SUBID,
 )
 
 Appliance_Digest_Hub = ns(
@@ -54,18 +57,21 @@ Appliance_Hub_Battery = ns(
 Appliance_Hub_Exception = ns(
     "Appliance.Hub.Exception", mc.KEY_EXCEPTION, ARGS_GETPUSH | IS_HUB_ID
 )
+Appliance_Hub_ExtraInfo = ns(
+    "Appliance.Hub.ExtraInfo", "extraInfo", ARGS_GET | MAP_HUB
+)
 Appliance_Hub_Online = ns(
     "Appliance.Hub.Online", mc.KEY_ONLINE, ARGS_GETPUSH | IS_HUB_ID
 )
 Appliance_Hub_PairSubDev = ns(
-    "Appliance.Hub.PairSubDev", None, ARGS_GETPUSH | IS_HUB_ID
+    "Appliance.Hub.PairSubDev", None, ARGS_NO_Q | G_EXPERIMENTAL
 )
-Appliance_Hub_Report = ns("Appliance.Hub.Report", None, ARGS_GETPUSH | IS_HUB_ID)
+Appliance_Hub_Report = ns("Appliance.Hub.Report", None, ARGS_GETPUSH | IS_HUB_ID | G_EXPERIMENTAL)
 Appliance_Hub_Sensitivity = ns(
     "Appliance.Hub.Sensitivity", None, ARGS_GETPUSH | IS_HUB_ID
 )
 Appliance_Hub_SubdeviceList = ns(
-    "Appliance.Hub.SubdeviceList", None, ARGS_GETPUSH | IS_HUB_ID
+    "Appliance.Hub.SubdeviceList", None, ARGS_GETPUSH | MAP_HUB
 )
 Appliance_Hub_ToggleX = ns(
     "Appliance.Hub.ToggleX", mc.KEY_TOGGLEX, ARGS_GETSETPUSH | IS_HUB_ID
@@ -75,6 +81,9 @@ Appliance_Hub_Mts100_Adjust = ns(
 )
 Appliance_Hub_Mts100_All = ns(
     "Appliance.Hub.Mts100.All", mc.KEY_ALL, ARGS_GET | IS_HUB_ID
+)
+Appliance_Hub_Mts100_Config = ns(
+    "Appliance.Hub.Mts100.Config", mc.KEY_CONFIG, ARGS_GETSET | IS_HUB_ID | G_EXPERIMENTAL # maybe push too
 )
 Appliance_Hub_Mts100_Mode = ns(
     "Appliance.Hub.Mts100.Mode", mc.KEY_MODE, ARGS_GETSETPUSH | IS_HUB_ID
@@ -122,10 +131,10 @@ Appliance_Hub_Sensor_WaterLeak = ns(
     "Appliance.Hub.Sensor.WaterLeak", mc.KEY_WATERLEAK, ARGS_GETPUSH | IS_HUB_ID
 )
 Appliance_Hub_SubDevice_Beep = ns(
-    "Appliance.Hub.SubDevice.Beep", None, ARGS_GETPUSH | IS_HUB_ID
+    "Appliance.Hub.SubDevice.Beep", None, ARGS_SET | IS_HUB_ID | G_EXPERIMENTAL # no clue yet
 )
 Appliance_Hub_SubDevice_MotorAdjust = ns(
-    "Appliance.Hub.SubDevice.MotorAdjust", mc.KEY_ADJUST, ARGS_GETPUSH | IS_HUB_ID
+    "Appliance.Hub.SubDevice.MotorAdjust", mc.KEY_ADJUST, ARGS_SET | IS_HUB_ID | G_EXPERIMENTAL # no clue yet
 )
 Appliance_Hub_SubDevice_Version = ns(
     "Appliance.Hub.SubDevice.Version", mc.KEY_VERSION, ARGS_GETPUSH | IS_HUB_ID

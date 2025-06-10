@@ -233,6 +233,11 @@ class Namespace:
             # used by our factory functions ('_ns_xxx') to skip unneded name parsing
             match name.split("."):
                 case (_, "Hub", *_):
+                    # This is not always true: some 'hub' namespaces don't get indexed by 'id' (nor by 'subId')
+                    # Examples are ExtraInfo or SubdeviceList. In our definitions we'll solve the problem
+                    # by explicitly passing the map=HUB_NAMESPACES so that they're mapped into the right storage
+                    # but the rules for parsing are very custom and likely need to be managed on a case by case
+                    # at the HubMixin level.
                     self.is_hub_id = True
                     self.key_channel = mc.KEY_ID
                     payload = PayloadType.LIST
@@ -389,22 +394,10 @@ ARGS_PUSHQ = ARGS_PUSH | PUSHQ
 # and time consuming evaluation.
 # Moreover, for some namespaces, the euristics about 'namespace key' and payload structure are not
 # good so we must fix those beforehand.
-Appliance_System_Ability = ns("Appliance.System.Ability", mc.KEY_ABILITY, ARGS_GET)
-Appliance_System_All = ns("Appliance.System.All", mc.KEY_ALL, ARGS_GET)
-Appliance_System_Clock = ns("Appliance.System.Clock", mc.KEY_CLOCK, ARGS_PUSHQ)
-Appliance_System_Debug = ns("Appliance.System.Debug", mc.KEY_DEBUG, ARGS_GET)
-Appliance_System_DNDMode = ns("Appliance.System.DNDMode", mc.KEY_DNDMODE, ARGS_GET)
-Appliance_System_Firmware = ns("Appliance.System.Firmware", mc.KEY_FIRMWARE, ARGS_GET)
-Appliance_System_Hardware = ns("Appliance.System.Hardware", mc.KEY_HARDWARE, ARGS_GET)
-Appliance_System_Online = ns("Appliance.System.Online", mc.KEY_ONLINE, ARGS_GETPUSH)
-Appliance_System_Report = ns("Appliance.System.Report", mc.KEY_REPORT, ARGS_PUSH)
-Appliance_System_Runtime = ns("Appliance.System.Runtime", mc.KEY_RUNTIME, ARGS_GET)
-Appliance_System_Time = ns("Appliance.System.Time", mc.KEY_TIME, ARGS_GETPUSH)
-Appliance_System_Position = ns("Appliance.System.Position", mc.KEY_POSITION, ARGS_GET)
-
 Appliance_Config_DeviceCfg = ns(
     "Appliance.Config.DeviceCfg", mc.KEY_CONFIG, ARGS_GETPUSH | P_LIST_C
 )  # mts300
+Appliance_Config_Info = ns("Appliance.Config.Info", mc.KEY_INFO, ARGS_GET | ARGS_PUSHQ)
 Appliance_Config_Key = ns("Appliance.Config.Key", mc.KEY_KEY, ARGS_SET)
 Appliance_Config_Matter = ns("Appliance.Config.Matter", mc.KEY_CONFIG, ARGS_PUSHQ)
 Appliance_Config_NtpSite = ns("Appliance.Config.NtpSite", None, ARGS_NO_Q)
@@ -510,6 +503,9 @@ Appliance_Control_Spray = ns("Appliance.Control.Spray", mc.KEY_SPRAY, ARGS_GETSE
 Appliance_Control_TempUnit = ns(
     "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, ARGS_GET | P_LIST_C
 )
+Appliance_Control_Timer = ns(
+    "Appliance.Control.Timer", mc.KEY_TIMER, ARGS_GET | P_LIST | G_EXPERIMENTAL
+)
 Appliance_Control_TimerX = ns("Appliance.Control.TimerX", mc.KEY_TIMERX, ARGS_NO_Q)
 Appliance_Control_Toggle = ns(
     "Appliance.Control.Toggle", mc.KEY_TOGGLE, ARGS_GETSETPUSH
@@ -566,6 +562,19 @@ Appliance_RollerShutter_State = ns(
     "Appliance.RollerShutter.State", mc.KEY_STATE, ARGS_GETPUSH | P_LIST
 )
 
+Appliance_System_Ability = ns("Appliance.System.Ability", mc.KEY_ABILITY, ARGS_GET)
+Appliance_System_All = ns("Appliance.System.All", mc.KEY_ALL, ARGS_GET)
+Appliance_System_Clock = ns("Appliance.System.Clock", mc.KEY_CLOCK, ARGS_PUSHQ)
+Appliance_System_Debug = ns("Appliance.System.Debug", mc.KEY_DEBUG, ARGS_GET)
+Appliance_System_DNDMode = ns("Appliance.System.DNDMode", mc.KEY_DNDMODE, ARGS_GET)
+Appliance_System_Factory = ns("Appliance.System.Factory", "factory", ARGS_GET)
+Appliance_System_Firmware = ns("Appliance.System.Firmware", mc.KEY_FIRMWARE, ARGS_GET)
+Appliance_System_Hardware = ns("Appliance.System.Hardware", mc.KEY_HARDWARE, ARGS_GET)
+Appliance_System_Online = ns("Appliance.System.Online", mc.KEY_ONLINE, ARGS_GETPUSH)
+Appliance_System_Report = ns("Appliance.System.Report", mc.KEY_REPORT, ARGS_PUSH)
+Appliance_System_Runtime = ns("Appliance.System.Runtime", mc.KEY_RUNTIME, ARGS_GET)
+Appliance_System_Time = ns("Appliance.System.Time", mc.KEY_TIME, ARGS_GETPUSH)
+Appliance_System_Position = ns("Appliance.System.Position", mc.KEY_POSITION, ARGS_GET)
 
 """
 Experiment to try declare namespaces as Enum

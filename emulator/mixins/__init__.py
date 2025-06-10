@@ -385,7 +385,7 @@ class MerossEmulator:
         except Exception as e:
             self._log_message(e.__class__.__name__, str(e))
             response_method = mc.METHOD_ERROR
-            response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": str(e)}}
+            response_payload = {mc.KEY_ERROR: {mc.KEY_CODE: -1, "message": f"{e.__class__.__name__}({e})"}}
 
         if response_method:
             response = build_message(

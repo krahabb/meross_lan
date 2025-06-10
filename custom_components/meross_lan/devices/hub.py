@@ -270,12 +270,8 @@ class HubMixin(Device if TYPE_CHECKING else object):
                 ns,
                 handler=_handler,
             )
-        elif ns.is_hub_namespace:
-            # TODO: this rule is failable since it's not only about is_hub and is_sensor
-            # but in general for any namespace which would need special processing for Hub
-            # which is different from the common device namespaces.
-            # In current implementation (5.5.1) this should be related to the namespace being
-            # collected in HUB_NAMESPACES.
+        elif ns.is_hub_id or ns.is_hub_subid:
+            # This rule  states that the payload is a list of subdevices indexed by 'id' or 'subId'.
             # TODO: For better design we should start getting away from hub parsing general
             # mechanics and migrate to using the standard dispatching api in NamespaceHandler
             # by registering subdevices (or directly subdevice entities) as sinks.
@@ -349,8 +345,31 @@ class HubMixin(Device if TYPE_CHECKING else object):
     def _handle_Appliance_Digest_Hub(self, header: dict, payload: dict):
         self._parse_hub(payload[mc.KEY_HUB])
 
-    def _handle_Appliance_Hub_SubdeviceList(self, header: dict, payload: dict):
+    def _handle_Appliance_Hub_ExtraInfo(self, header: dict, payload: dict):
+        """ TODO: decode
+        {
+          "extraInfo": {
+            "upgradeSubDevs": [
+              {
+                "type": "ms200"
+              },
+              {
+                "type": "mts150p"
+              },
+              {
+                "type": "ms130"
+              },
+              {
+                "type": "ms120"
+              }
+            ]
+          }
+        }
         """
+        pass
+
+    def _handle_Appliance_Hub_SubdeviceList(self, header: dict, payload: dict):
+        """ TODO: decode
         {
             'subdeviceList': {
                 'subdevice': [
@@ -362,12 +381,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
             }
         }
         """
-        p_subdevicelist = payload[mc.KEY_SUBDEVICELIST]
-        for p_subdevice in p_subdevicelist[mc.KEY_SUBDEVICE]:
-            # TODO: decode subdeviceList
-            # actually, the sample payload is reporting status=1 for a device which appears to be offline
-            # is it likely unpaired?
-            pass
+        pass
 
     def _subdevice_build(self, p_subdevice: "dict[str, Any]"):
         # parses the subdevice payload in 'digest' to look for a well-known type
