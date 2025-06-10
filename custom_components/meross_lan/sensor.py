@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import sensor
 
@@ -14,8 +14,8 @@ from .helpers.namespaces import (
 )
 from .merossclient import json_dumps
 
-if typing.TYPE_CHECKING:
-    from typing import NotRequired, Unpack
+if TYPE_CHECKING:
+    from typing import Final, NotRequired, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
@@ -34,10 +34,26 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
     """Specialization for sensor with ENUM device_class which allows to store
     anything as opposed to numeric sensor types which have units and so."""
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(me.MLEntity.Args):
             native_value: NotRequired[sensor.StateType]
+
+    @dataclass(slots=True)
+    class SensorDef:
+        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
+        entities based on their appearance in a payload key."""
+
+        type: "Final[type[MLEnumSensor]]"
+        entitykey: str | None
+        kwargs: "Final[MLEnumSensor.Args]"
+
+        def __init__(
+            self, entitykey: str | None = None, **kwargs: "Unpack[MLEnumSensor.Args]"
+        ):
+            self.type = MLEnumSensor
+            self.entitykey = entitykey
+            self.kwargs = kwargs
 
     PLATFORM = sensor.DOMAIN
 
@@ -72,10 +88,29 @@ class MLEnumSensor(me.MLEntity, sensor.SensorEntity):
 
 class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
         class Args(me.MLNumericEntity.Args):
             state_class: NotRequired[sensor.SensorStateClass]
+
+    @dataclass(slots=True)
+    class SensorDef:
+        """Descriptor class used when populating maps used to dynamically instantiate (sensor)
+        entities based on their appearance in a payload key."""
+
+        type: "Final[type[MLNumericSensor]]"
+        entitykey: str | None
+        kwargs: "Final[MLNumericSensor.Args]"
+
+        def __init__(
+            self,
+            type: "type[MLNumericSensor] | None" = None,
+            entitykey: str | None = None,
+            **kwargs: "Unpack[MLNumericSensor.Args]",
+        ):
+            self.type = type or MLNumericSensor
+            self.entitykey = entitykey
+            self.kwargs = kwargs
 
     PLATFORM = sensor.DOMAIN
     DeviceClass = sensor.SensorDeviceClass
@@ -140,15 +175,6 @@ class MLNumericSensor(me.MLNumericEntity, sensor.SensorEntity):
             device_class,
             **kwargs,
         )
-
-
-@dataclass(frozen=True, slots=True)
-class MLNumericSensorDef:
-    """Descriptor class used when populating maps used to dynamically instantiate (sensor)
-    entities based on their appearance in a payload key."""
-
-    type: "type[MLNumericSensor]"
-    args: "MLNumericSensor.Args"
 
 
 class MLHumiditySensor(MLNumericSensor):
@@ -230,7 +256,10 @@ class MLLightSensor(MLNumericSensor):
 
 class MLDiagnosticSensor(MLEnumSensor):
 
-    is_diagnostic: typing.Final = True
+    if TYPE_CHECKING:
+        is_diagnostic: Final
+
+    is_diagnostic = True
 
     # HA core entity attributes:
     entity_category = MLNumericSensor.EntityCategory.DIAGNOSTIC

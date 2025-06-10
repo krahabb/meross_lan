@@ -1,4 +1,4 @@
-import typing
+from typing import TYPE_CHECKING
 
 from ..helpers.entity import MEListChannelMixin
 from ..helpers.namespaces import NamespaceHandler, mc, mn
@@ -15,17 +15,21 @@ from ..light import (
     native_to_rgb,
     rgb_to_native,
 )
-from ..sensor import MLHumiditySensor, MLNumericSensorDef, MLTemperatureSensor
+from ..sensor import MLHumiditySensor, MLTemperatureSensor
 from .spray import MLSpray
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from typing import Final
     from ..helpers.device import Device, DigestInitReturnType
     from ..sensor import MLNumericSensor
 
+    DIFFUSER_SENSOR_CLASS_MAP: Final
 
-DIFFUSER_SENSOR_CLASS_MAP: dict[str, MLNumericSensorDef] = {
-    mc.KEY_HUMIDITY: MLNumericSensorDef(MLHumiditySensor, {}),
-    mc.KEY_TEMPERATURE: MLNumericSensorDef(MLTemperatureSensor, {"device_scale": 10}),
+DIFFUSER_SENSOR_CLASS_MAP = {
+    mc.KEY_HUMIDITY: MLHumiditySensor.SensorDef(MLHumiditySensor),
+    mc.KEY_TEMPERATURE: MLTemperatureSensor.SensorDef(
+        MLTemperatureSensor, device_scale=10
+    ),
 }
 
 
@@ -67,10 +71,10 @@ def digest_init_diffuser(device: "Device", digest: dict) -> "DigestInitReturnTyp
             for key in DIFFUSER_SENSOR_CLASS_MAP:
                 if key in payload:
                     try:
-                        entity: MLNumericSensor = entities[key]  # type: ignore
+                        entity: "MLNumericSensor" = entities[key]  # type: ignore
                     except KeyError:
                         entity_def = DIFFUSER_SENSOR_CLASS_MAP[key]
-                        entity = entity_def.type(device, None, key, **entity_def.args)
+                        entity = entity_def.type(device, None, key, **entity_def.kwargs)
                     entity.update_device_value(payload[key][mc.KEY_VALUE])
 
         NamespaceHandler(

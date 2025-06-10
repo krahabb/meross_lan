@@ -4,7 +4,7 @@ This unit is a collection of rarely used small components where having
 a dedicated unit for each of them would increase the number of small modules.
 """
 
-import typing
+from typing import TYPE_CHECKING
 
 from .. import const as mlc
 from ..climate import MtsClimate
@@ -14,12 +14,11 @@ from ..sensor import (
     MLHumiditySensor,
     MLLightSensor,
     MLNumericSensor,
-    MLNumericSensorDef,
     MLTemperatureSensor,
 )
 from .ms600 import MLPresenceSensor
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from ..helpers.device import Device
 
 
@@ -31,15 +30,17 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
 
     VALUE_KEY_EXCLUDED = (mc.KEY_TIMESTAMP, mc.KEY_TIMESTAMPMS)
 
-    VALUE_KEY_ENTITY_DEF_DEFAULT = MLNumericSensorDef(MLNumericSensor, {})
-    VALUE_KEY_ENTITY_DEF_MAP: dict[str, MLNumericSensorDef] = {
-        mc.KEY_HUMI: MLNumericSensorDef(
-            MLHumiditySensor, {}
+    VALUE_KEY_ENTITY_DEF_DEFAULT = MLNumericSensor.SensorDef(MLNumericSensor)
+    VALUE_KEY_ENTITY_DEF_MAP = {
+        mc.KEY_HUMI: MLNumericSensor.SensorDef(
+            MLHumiditySensor
         ),  # confirmed in MTS200 trace (2024/06)
-        mc.KEY_TEMP: MLNumericSensorDef(
-            MLTemperatureSensor, {"device_scale": 100}
+        mc.KEY_TEMP: MLNumericSensor.SensorDef(
+            MLTemperatureSensor, device_scale=100
         ),  # just guessed (2024/04)
-        mc.KEY_LIGHT: MLNumericSensorDef(MLLightSensor, {}),  # just guessed (2024/09)
+        mc.KEY_LIGHT: MLNumericSensor.SensorDef(
+            MLLightSensor
+        ),  # just guessed (2024/09)
     }
 
     def __init__(self, device: "Device"):
@@ -83,7 +84,7 @@ class SensorLatestNamespaceHandler(NamespaceHandler):
                             self.device,
                             channel,
                             f"sensor_{key}",
-                            **entity_def.args,
+                            **entity_def.kwargs,
                         )
                         self.polling_request_add_channel(channel)
 
@@ -106,13 +107,13 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
     Hub(s) have a somewhat different parser.
     """
 
-    VALUE_KEY_ENTITY_DEF_DEFAULT = MLNumericSensorDef(MLNumericSensor, {})
+    VALUE_KEY_ENTITY_DEF_DEFAULT = MLNumericSensor.SensorDef()
     # many of these defs are guesses
-    VALUE_KEY_ENTITY_DEF_MAP: dict[str, MLNumericSensorDef] = {
-        mc.KEY_HUMI: MLNumericSensorDef(MLHumiditySensor, {}),
-        mc.KEY_LIGHT: MLNumericSensorDef(MLLightSensor, {}),
-        mc.KEY_PRESENCE: MLNumericSensorDef(MLPresenceSensor, {}),
-        mc.KEY_TEMP: MLNumericSensorDef(MLTemperatureSensor, {"device_scale": 100}),
+    VALUE_KEY_ENTITY_DEF_MAP = {
+        mc.KEY_HUMI: MLNumericSensor.SensorDef(MLHumiditySensor),
+        mc.KEY_LIGHT: MLNumericSensor.SensorDef(MLLightSensor),
+        mc.KEY_PRESENCE: MLNumericSensor.SensorDef(MLPresenceSensor),
+        mc.KEY_TEMP: MLNumericSensor.SensorDef(MLTemperatureSensor, device_scale=100),
     }
 
     __slots__ = ()
@@ -175,7 +176,7 @@ class SensorLatestXNamespaceHandler(NamespaceHandler):
                         self.device,
                         channel,
                         f"sensor_{key_data}",
-                        **entity_def.args,
+                        **entity_def.kwargs,
                     )
                     # this is needed if we detect a new channel through a PUSH msg parsing
                     self.polling_request_add_channel(channel)
