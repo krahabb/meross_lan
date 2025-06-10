@@ -133,23 +133,40 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
             p_digest_modec: "thermostat.ModeC" = update_dict_strict_by_key(
                 p_digest_modec_list, p_modec
             )
-            # TODO: set idle/active state in "more" key
+            p_fan = p_digest_modec["fan"]
+            fan_mode = p_fan["fMode"]
+            fan_speed = p_fan["speed"]
+            # actually we assume (here and in component)
+            # (fan_speed != 0) <-> (fMode == MANUAL)
             p_more = p_digest_modec["more"]
-            p_currenttemp = p_digest_modec["currentTemp"]
+            currenttemp = p_digest_modec["currentTemp"]
             p_targettemp = p_digest_modec["targetTemp"]
             match p_digest_modec[mc.KEY_MODE]:
                 case mc.MTS300_MODE_OFF:
-                    p_more["cStatus"] = 0
                     p_more["hStatus"] = 0
+                    p_more["cStatus"] = 0
+                    p_more["fStatus"] = 0
                 case mc.MTS300_MODE_HEAT:
+                    delta_t = round((p_targettemp["heat"] - currenttemp) / self.device_scale)
+                    p_more["hStatus"] = 0 if delta_t <= 0 else 3 if delta_t >= 3 else delta_t
                     p_more["cStatus"] = 0
-                    p_more["hStatus"] = 1 if p_targettemp["heat"] > p_currenttemp else 0
+                    p_more["fStatus"] = fan_speed or p_more["hStatus"]
                 case mc.MTS300_MODE_COOL:
-                    p_more["cStatus"] = 1 if p_targettemp["cold"] < p_currenttemp else 0
                     p_more["hStatus"] = 0
+                    delta_t = round((currenttemp - p_targettemp["cold"]) / self.device_scale)
+                    p_more["cStatus"] = 0 if delta_t <= 0 else 2 if delta_t >= 2 else delta_t
+                    p_more["fStatus"] = fan_speed or p_more["cStatus"]
                 case mc.MTS300_MODE_AUTO:
-                    p_more["cStatus"] = 1 if p_targettemp["cold"] < p_currenttemp else 0
-                    p_more["hStatus"] = 1 if p_targettemp["heat"] > p_currenttemp else 0
+                    delta_t = round((p_targettemp["heat"] - currenttemp) / self.device_scale)
+                    if delta_t > 0:
+                        p_more["hStatus"] = 3 if delta_t >= 3 else delta_t
+                        p_more["cStatus"] = 0
+                        p_more["fStatus"] = fan_speed or p_more["hStatus"]
+                    else:
+                        delta_t = round((currenttemp - p_targettemp["cold"]) / self.device_scale)
+                        p_more["hStatus"] = 0
+                        p_more["cStatus"] = 0 if delta_t <= 0 else 2 if delta_t >= 2 else delta_t
+                        p_more["fStatus"] = fan_speed or p_more["cStatus"]
 
         # WARNING: returning only the last element of the loop (usually just 1 item per device tho)
         return mc.METHOD_SETACK, {ns.key: [p_digest_modec]}
