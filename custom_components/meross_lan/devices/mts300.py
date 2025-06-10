@@ -7,6 +7,7 @@ from ..climate import MtsClimate
 from ..helpers import reverse_lookup
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.namespaces import thermostat as mn_t
+from ..sensor import MLEnumSensor
 from .thermostat import MtsCalibrationNumber
 
 if TYPE_CHECKING:
@@ -62,6 +63,11 @@ class Mts300Climate(MtsClimate):
         target_temperature_high: float | None
         target_temperature_low: float | None
 
+        # entities
+        sensor_hStatus: MLEnumSensor
+        sensor_cStatus: MLEnumSensor
+        sensor_fStatus: MLEnumSensor
+
     ns = mn_t.Appliance_Control_Thermostat_ModeC
     device_scale = mc.MTS300_TEMP_SCALE
 
@@ -99,6 +105,13 @@ class Mts300Climate(MtsClimate):
         (False, False, True): MtsClimate.HVACAction.FAN,
     }
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
+    STATUS_SENSOR_DEF_MAP = {
+        "hdStatus": MLEnumSensor.SensorDef("(de)humidifier_status"),
+        "hStatus": MLEnumSensor.SensorDef("heating_status"),
+        "cStatus": MLEnumSensor.SensorDef("cooling_status"),
+        "fStatus": MLEnumSensor.SensorDef("fan_speed"),
+        "aStatus": MLEnumSensor.SensorDef("auxiliary_status"),
+    }
 
     # HA core entity attributes:
     _attr_fan_modes = list(FAN_MODE_TO_FAN_SPEED_MAP)
@@ -119,15 +132,19 @@ class Mts300Climate(MtsClimate):
         "target_temperature_high",
         "target_temperature_low",
         "_mts_work",
+        "sensor_hStatus",
+        "sensor_cStatus",
+        "sensor_fStatus",
     )
 
     def __init__(
         self,
         manager: "Device",
+        channel = 0,
     ):
         super().__init__(
             manager,
-            0,
+            channel,
             MtsCalibrationNumber,
             None,
             Mts300Schedule,
@@ -137,8 +154,15 @@ class Mts300Climate(MtsClimate):
         self.target_temperature_high = None
         self.target_temperature_low = None
         self._mts_work = None
+        for _key, _def in Mts300Climate.STATUS_SENSOR_DEF_MAP.items():
+            setattr(self, f"sensor_{_key}", _def.type(manager, channel, _def.entitykey, **_def.kwargs))
         manager.register_parser_entity(self)
         manager.register_parser_entity(self.schedule)
+
+    async def async_shutdown(self):
+        await super().async_shutdown()
+        for _key in Mts300Climate.STATUS_SENSOR_DEF_MAP:
+            setattr(self, f"sensor_{_key}", None)
 
     # interface: MtsClimate
     def set_unavailable(self):
@@ -300,6 +324,8 @@ class Mts300Climate(MtsClimate):
             self.target_temperature_low = targetTemp["heat"] / self.device_scale
             more = payload["more"]
             self.current_humidity = more["humi"] / 10
+            for _key in Mts300Climate.STATUS_SENSOR_DEF_MAP:
+                getattr(self, f"sensor_{_key}").update_native_value(more[_key])
 
             fan = payload["fan"]
             self.fan_mode = reverse_lookup(self.FAN_MODE_TO_FAN_SPEED_MAP, fan["speed"])
