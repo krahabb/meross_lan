@@ -82,7 +82,9 @@ class EntityTest(EntityComponentTest):
             assert expected_preset_modes == entity_preset_modes
         except KeyError:
             # likely an Mts960
-            assert type(entity) is Mts960Climate, f"Class: <>{entity.__class__} is not Mts960Climate"
+            assert (
+                type(entity) is Mts960Climate
+            ), f"Class: <>{entity.__class__} is not Mts960Climate"
             # TODO custom checking here..
 
         if mn.Appliance_Control_Sensor_Latest.name in self.ability:
@@ -91,8 +93,9 @@ class EntityTest(EntityComponentTest):
             assert entity.current_humidity is not None
 
     async def async_test_enabled_callback(self, entity: MtsClimate):
-        if isinstance(entity, Mts960Climate) or isinstance(entity, Mts300Climate):
-            # TODO: restore testing once mts960 is done
+        if isinstance(entity, Mts960Climate):
+            # TODO: restore testing once mts960 is done.
+            # Guess we need to add support for Timer namespace in emulator.
             return
 
         for hvac_mode in entity.hvac_modes:
@@ -108,18 +111,44 @@ class EntityTest(EntityComponentTest):
                 state.attributes[haec.ATTR_PRESET_MODE] == preset_mode
             ), f"preset_mode: {preset_mode}"
 
-        state = await self.async_service_call(
-            haec.SERVICE_SET_TEMPERATURE, {haec.ATTR_TEMPERATURE: entity.min_temp}
-        )
-        assert (
-            state.attributes[haec.ATTR_TEMPERATURE] == entity.min_temp
-        ), "set_temperature: min_temp"
-        state = await self.async_service_call(
-            haec.SERVICE_SET_TEMPERATURE, {haec.ATTR_TEMPERATURE: entity.max_temp}
-        )
-        assert (
-            state.attributes[haec.ATTR_TEMPERATURE] == entity.max_temp
-        ), "set_temperature: max_temp"
+        if HVACMode.HEAT in entity.hvac_modes:
+            await self.async_service_call_check(
+                haec.SERVICE_SET_HVAC_MODE,
+                HVACMode.HEAT,
+                {haec.ATTR_HVAC_MODE: HVACMode.HEAT},
+            )
+            state = await self.async_service_call(
+                haec.SERVICE_SET_TEMPERATURE, {haec.ATTR_TEMPERATURE: entity.min_temp}
+            )
+            assert (
+                state.attributes[haec.ATTR_TEMPERATURE] == entity.min_temp
+            ), "set_temperature: min_temp"
+            state = await self.async_service_call(
+                haec.SERVICE_SET_TEMPERATURE, {haec.ATTR_TEMPERATURE: entity.max_temp}
+            )
+            assert (
+                state.attributes[haec.ATTR_TEMPERATURE] == entity.max_temp
+            ), "set_temperature: max_temp"
+
+        if HVACMode.HEAT_COOL in entity.hvac_modes:
+            await self.async_service_call_check(
+                haec.SERVICE_SET_HVAC_MODE,
+                HVACMode.HEAT_COOL,
+                {haec.ATTR_HVAC_MODE: HVACMode.HEAT_COOL},
+            )
+            state = await self.async_service_call(
+                haec.SERVICE_SET_TEMPERATURE,
+                {
+                    haec.ATTR_TARGET_TEMP_HIGH: entity.max_temp,
+                    haec.ATTR_TARGET_TEMP_LOW: entity.min_temp,
+                },
+            )
+            assert (
+                state.attributes[haec.ATTR_TARGET_TEMP_HIGH] == entity.max_temp
+            ) and (
+                state.attributes[haec.ATTR_TARGET_TEMP_LOW] == entity.min_temp
+            ), "set_temperature: target_temperature_high/low"
+
         await self.async_service_call_check(haec.SERVICE_TURN_OFF, HVACMode.OFF)
 
     async def async_test_disabled_callback(self, entity: ClimateEntity):
