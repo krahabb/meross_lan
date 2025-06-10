@@ -399,7 +399,7 @@ class Device(BaseDevice, ConfigEntryManager):
             ".devices.misc",
             "namespace_init_sensor_latestx",
         ),
-        mn.Appliance_Control_Thermostat_ModeC.name: (
+        "Appliance.Control.Thermostat.ModeC": (
             ".devices.mts300",
             "Mts300Climate",
         ),
@@ -944,10 +944,14 @@ class Device(BaseDevice, ConfigEntryManager):
         Checks if entity has an associated ToggleX behavior and eventually
         registers it
         """
-        for togglex_digest in self.descriptor.digest.get(mc.KEY_TOGGLEX, []):
-            if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
-                self.register_parser(entity, mn.Appliance_Control_ToggleX)
-                return True
+        try:
+            for togglex_digest in self.descriptor.digest[mc.KEY_TOGGLEX]:
+                if togglex_digest[mc.KEY_CHANNEL] == entity.channel:
+                    self.register_parser(entity, mn.Appliance_Control_ToggleX)
+                    return True
+        except KeyError:
+            # no "togglex" in digest ?
+            pass
         return False
 
     def schedule_entry_update(self, query_abilities: bool):

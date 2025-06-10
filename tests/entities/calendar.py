@@ -5,9 +5,9 @@ from custom_components.meross_lan.devices.mts100 import Mts100Schedule
 from custom_components.meross_lan.devices.mts200 import Mts200Schedule
 from custom_components.meross_lan.devices.mts300 import Mts300Schedule
 from custom_components.meross_lan.devices.mts960 import Mts960Schedule
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
+from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol.namespaces import (
+    thermostat as mn_t,
 )
 
 from tests.entities import EntityComponentTest
@@ -18,8 +18,8 @@ class EntityTest(EntityComponentTest):
     ENTITY_TYPE = CalendarEntity
 
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Control_Thermostat_Schedule.name: [Mts200Schedule],
-        mn.Appliance_Control_Thermostat_ScheduleB.name: [
+        mn_t.Appliance_Control_Thermostat_Schedule.name: [Mts200Schedule],
+        mn_t.Appliance_Control_Thermostat_ScheduleB.name: [
             Mts960Schedule,
             Mts300Schedule,
         ],
@@ -32,6 +32,7 @@ class EntityTest(EntityComponentTest):
     }
 
     async def async_test_each_callback(self, entity: MtsSchedule):
+        # TODO: add more test for calendar platform(s)
         await super().async_test_each_callback(entity)
         if type(entity) is Mts100Schedule:
             # these are not set in stone though, but always appear like these in our traces

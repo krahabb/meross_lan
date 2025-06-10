@@ -1,8 +1,9 @@
 import typing
 
 from ..binary_sensor import MLBinarySensor
-from ..helpers import entity as me
-from ..helpers.namespaces import NamespaceHandler, mc, mn
+from ..helpers.entity import MEListChannelMixin
+from ..helpers.namespaces import POLLING_STRATEGY_CONF, NamespaceHandler, mc, mlc, mn
+from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..number import MLConfigNumber, MtsTemperatureNumber
 from ..sensor import MLEnumSensor, MLTemperatureSensor
 from ..switch import MLSwitch
@@ -10,9 +11,10 @@ from .mts200 import Mts200Climate
 from .mts960 import Mts960Climate
 
 if typing.TYPE_CHECKING:
-    from typing import Unpack
+    from typing import Any, Callable, Unpack
 
     from ..helpers.device import Device, DigestInitReturnType, DigestParseFunc
+    from ..merossclient.protocol.namespaces import Namespace
 
     MtsThermostatClimate = Mts200Climate | Mts960Climate
 
@@ -36,7 +38,7 @@ class MtsWarningSensor(MLEnumSensor):
         )
 
 
-class MtsConfigSwitch(me.MEListChannelMixin, MLSwitch):
+class MtsConfigSwitch(MEListChannelMixin, MLSwitch):
 
     # HA core entity attributes:
     entity_category = MLSwitch.EntityCategory.CONFIG
@@ -151,7 +153,7 @@ class MtsCalibrationNumber(MtsRichTemperatureNumber):
     {"channel": 0, "value": 0, "min": -80, "max": 80, "lmTime": 1697010767}
     """
 
-    ns = mn.Appliance_Control_Thermostat_Calibration
+    ns = mn_t.Appliance_Control_Thermostat_Calibration
 
     def __init__(self, climate: "MtsThermostatClimate"):
         self.native_max_value = 8
@@ -168,7 +170,7 @@ class MtsDeadZoneNumber(MtsRichTemperatureNumber):
     payload will carry the values and so set them
     """
 
-    ns = mn.Appliance_Control_Thermostat_DeadZone
+    ns = mn_t.Appliance_Control_Thermostat_DeadZone
 
     def __init__(self, climate: "MtsThermostatClimate"):
         self.native_max_value = 3.5
@@ -183,7 +185,7 @@ class MtsFrostNumber(MtsRichTemperatureNumber):
     {"channel": 0, "onoff": 1, "value": 500, "min": 500, "max": 1500, "warning": 0}
     """
 
-    ns = mn.Appliance_Control_Thermostat_Frost
+    ns = mn_t.Appliance_Control_Thermostat_Frost
 
     def __init__(self, climate: "MtsThermostatClimate"):
         self.native_max_value = 15
@@ -200,7 +202,7 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
         "lmTime": 1674121910, "currentTemp": 355, "channel": 0}
     """
 
-    ns = mn.Appliance_Control_Thermostat_Overheat
+    ns = mn_t.Appliance_Control_Thermostat_Overheat
 
     __slots__ = ("sensor_external_temperature",)
 
@@ -230,7 +232,7 @@ class MtsOverheatNumber(MtsRichTemperatureNumber):
 class MtsWindowOpened(MLBinarySensor):
     """specialized binary sensor for Thermostat.WindowOpened entity used in Mts200-Mts960(maybe)."""
 
-    ns = mn.Appliance_Control_Thermostat_WindowOpened
+    ns = mn_t.Appliance_Control_Thermostat_WindowOpened
     key_value = mc.KEY_STATUS
 
     def __init__(self, climate: "MtsThermostatClimate"):
@@ -243,10 +245,10 @@ class MtsWindowOpened(MLBinarySensor):
         climate.manager.register_parser_entity(self)
 
 
-class MtsExternalSensorSwitch(me.MEListChannelMixin, MLSwitch):
+class MtsExternalSensorSwitch(MEListChannelMixin, MLSwitch):
     """sensor mode: use internal(0) vs external(1) sensor as temperature loopback."""
 
-    ns = mn.Appliance_Control_Thermostat_Sensor
+    ns = mn_t.Appliance_Control_Thermostat_Sensor
     key_value = mc.KEY_MODE
 
     # HA core entity attributes:
@@ -268,30 +270,28 @@ CLIMATE_INITIALIZERS: dict[str, type["MtsThermostatClimate"]] = {
 }
 """Core (climate) entities to initialize in _init_thermostat"""
 
-DIGEST_KEY_TO_NAMESPACE: dict[str, mn.Namespace] = {
-    mc.KEY_MODE: mn.Appliance_Control_Thermostat_Mode,
-    mc.KEY_MODEB: mn.Appliance_Control_Thermostat_ModeB,
-    mc.KEY_SUMMERMODE: mn.Appliance_Control_Thermostat_SummerMode,
-    mc.KEY_WINDOWOPENED: mn.Appliance_Control_Thermostat_WindowOpened,
+DIGEST_KEY_TO_NAMESPACE: dict[str, "Namespace"] = {
+    mc.KEY_MODE: mn_t.Appliance_Control_Thermostat_Mode,
+    mc.KEY_MODEB: mn_t.Appliance_Control_Thermostat_ModeB,
+    mc.KEY_SUMMERMODE: mn_t.Appliance_Control_Thermostat_SummerMode,
+    mc.KEY_WINDOWOPENED: mn_t.Appliance_Control_Thermostat_WindowOpened,
 }
 """Maps the digest key to the associated namespace handler (used in _parse_thermostat)"""
 
-OPTIONAL_NAMESPACES_INITIALIZERS: set[mn.Namespace] = {
-    mn.Appliance_Control_Thermostat_CtlRange,
-    mn.Appliance_Control_Thermostat_HoldAction,
-    mn.Appliance_Control_Thermostat_SummerMode,
-    mn.Appliance_Control_Thermostat_Timer,
+OPTIONAL_NAMESPACES_INITIALIZERS: set["Namespace"] = {
+    mn_t.Appliance_Control_Thermostat_CtlRange,
+    mn_t.Appliance_Control_Thermostat_HoldAction,
+    mn_t.Appliance_Control_Thermostat_SummerMode,
+    mn_t.Appliance_Control_Thermostat_Timer,
 }
 """These namespaces handlers will forward message parsing to the climate entity"""
 
-OPTIONAL_ENTITIES_INITIALIZERS: dict[
-    str, typing.Callable[["MtsThermostatClimate"], typing.Any]
-] = {
-    mn.Appliance_Control_Thermostat_DeadZone.name: MtsDeadZoneNumber,
-    mn.Appliance_Control_Thermostat_Frost.name: MtsFrostNumber,
-    mn.Appliance_Control_Thermostat_Overheat.name: MtsOverheatNumber,
-    mn.Appliance_Control_Thermostat_Sensor.name: MtsExternalSensorSwitch,
-    mn.Appliance_Control_Thermostat_WindowOpened.name: MtsWindowOpened,
+OPTIONAL_ENTITIES_INITIALIZERS: dict[str, "Callable[[MtsThermostatClimate], Any]"] = {
+    mn_t.Appliance_Control_Thermostat_DeadZone.name: MtsDeadZoneNumber,
+    mn_t.Appliance_Control_Thermostat_Frost.name: MtsFrostNumber,
+    mn_t.Appliance_Control_Thermostat_Overheat.name: MtsOverheatNumber,
+    mn_t.Appliance_Control_Thermostat_Sensor.name: MtsExternalSensorSwitch,
+    mn_t.Appliance_Control_Thermostat_WindowOpened.name: MtsWindowOpened,
 }
 """Additional entities (linked to the climate one) in case their ns is supported/available"""
 
@@ -389,7 +389,10 @@ class MLScreenBrightnessNumber(MLConfigNumber):
 
 
 class ScreenBrightnessNamespaceHandler(NamespaceHandler):
-
+    """
+    This ns only appears with thermostats so far.. so we put it here but it could
+    nevertheless live in its own module (or in 'misc' maybe)
+    """
     __slots__ = (
         "number_brightness_operation",
         "number_brightness_standby",
@@ -420,3 +423,76 @@ class ScreenBrightnessNamespaceHandler(NamespaceHandler):
                     p_channel[mc.KEY_STANDBY]
                 )
                 break
+
+POLLING_STRATEGY_CONF |= {
+    mn_t.Appliance_Control_Thermostat_Calibration: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_t.Appliance_Control_Thermostat_CtlRange: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_once,
+    ),
+    mn_t.Appliance_Control_Thermostat_DeadZone: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        mlc.PARAM_CLOUDMQTT_UPDATE_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_t.Appliance_Control_Thermostat_Frost: (
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        80,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_t.Appliance_Control_Thermostat_ModeC: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        120,
+        NamespaceHandler.async_poll_default,
+    ),
+    mn_t.Appliance_Control_Thermostat_Overheat: (
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        140,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_t.Appliance_Control_Thermostat_Timer: (
+        0,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        550,
+        NamespaceHandler.async_poll_default,
+    ),
+    mn_t.Appliance_Control_Thermostat_Schedule: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        550,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_t.Appliance_Control_Thermostat_ScheduleB: (
+        mlc.PARAM_CONFIG_UPDATE_PERIOD,
+        0,
+        mlc.PARAM_HEADER_SIZE,
+        550,
+        NamespaceHandler.async_poll_lazy,
+    ),
+    mn_t.Appliance_Control_Thermostat_Sensor: (
+        mlc.PARAM_SENSOR_SLOW_UPDATE_PERIOD,
+        mlc.PARAM_SENSOR_SLOW_UPDATE_CLOUD_PERIOD,
+        mlc.PARAM_HEADER_SIZE,
+        40,
+        NamespaceHandler.async_poll_lazy,
+    ),
+}

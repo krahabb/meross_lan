@@ -10,13 +10,16 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
+from custom_components.meross_lan.merossclient.protocol.namespaces import (
+    thermostat as mn_t,
+)
 
 from tests.entities import EntityComponentTest
 
 HVAC_MODES: dict[type[MtsClimate], set[HVACMode]] = {
     Mts100Climate: {HVACMode.OFF, HVACMode.HEAT},
     Mts200Climate: {HVACMode.OFF, HVACMode.HEAT},
-    Mts300Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO},
+    Mts300Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.HEAT_COOL},
     Mts960Climate: {HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO},
 }
 
@@ -35,6 +38,10 @@ PRESET_MODES: dict[type[MtsClimate], set] = {
         mc.MTS200_MODE_AUTO,
         mc.MTS200_MODE_MANUAL,
     },
+    Mts300Climate: {
+        mc.MTS300_WORK_MANUAL,
+        mc.MTS300_WORK_SCHEDULE,
+    },
 }
 
 
@@ -49,7 +56,7 @@ class EntityTest(EntityComponentTest):
         },
     }
     NAMESPACES_ENTITIES = {
-        mn.Appliance_Control_Thermostat_ModeC.name: [Mts300Climate],
+        mn_t.Appliance_Control_Thermostat_ModeC.name: [Mts300Climate],
     }
     HUB_SUBDEVICES_ENTITIES = {
         mc.TYPE_MTS100: [Mts100Climate],
@@ -62,16 +69,21 @@ class EntityTest(EntityComponentTest):
         entity_hvac_modes = set(entity.hvac_modes)
         expected_hvac_modes = HVAC_MODES[entity.__class__]
         assert expected_hvac_modes.issubset(entity_hvac_modes)
-        if mn.Appliance_Control_Thermostat_SummerMode.name in self.ability:
+        if mn_t.Appliance_Control_Thermostat_SummerMode.name in self.ability:
             assert HVACMode.COOL in entity_hvac_modes
 
-        if entity.__class__ in PRESET_MODES:
+        try:
+            class_preset_modes = PRESET_MODES[entity.__class__]
             entity_preset_modes = set(entity.preset_modes)
             expected_preset_modes = {
                 entity.MTS_MODE_TO_PRESET_MAP[mts_mode]
-                for mts_mode in PRESET_MODES[entity.__class__]
+                for mts_mode in class_preset_modes
             }
             assert expected_preset_modes == entity_preset_modes
+        except KeyError:
+            # likely an Mts960
+            assert type(entity) is Mts960Climate, f"Class: <>{entity.__class__} is not Mts960Climate"
+            # TODO custom checking here..
 
         if mn.Appliance_Control_Sensor_Latest.name in self.ability:
             # this is prone to false checks depending on the

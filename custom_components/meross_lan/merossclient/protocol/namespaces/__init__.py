@@ -356,7 +356,6 @@ PUSHQ: "Namespace.Args" = {"has_push_query": True}
 """Supports querying by PUSH client -> device"""
 NO_PUSHQ: "Namespace.Args" = {"has_push_query": False}
 IS_SENSOR: "Namespace.Args" = {"is_sensor": True}
-IS_THERMOSTAT: "Namespace.Args" = {"is_thermostat": True}
 P_NONE: "Namespace.Args" = {"payload": PayloadType.NONE}
 P_DICT: "Namespace.Args" = {"payload": PayloadType.DICT}
 P_DICT_C: "Namespace.Args" = {"payload": PayloadType.DICT_C}
@@ -510,87 +509,6 @@ Appliance_Control_Sensor_LatestX = ns(
 Appliance_Control_Spray = ns("Appliance.Control.Spray", mc.KEY_SPRAY, ARGS_GETSETPUSH)
 Appliance_Control_TempUnit = ns(
     "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, ARGS_GET | P_LIST_C
-)
-Appliance_Control_Thermostat_Alarm = ns(
-    "Appliance.Control.Thermostat.Alarm", mc.KEY_ALARM, ARGS_GETPUSH | IS_THERMOSTAT
-)
-Appliance_Control_Thermostat_AlarmConfig = ns(
-    "Appliance.Control.Thermostat.AlarmConfig",
-    mc.KEY_ALARMCONFIG,
-    ARGS_GETSET | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_Calibration = ns(
-    "Appliance.Control.Thermostat.Calibration",
-    mc.KEY_CALIBRATION,
-    ARGS_GETSET | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_CompressorDelay = ns(
-    "Appliance.Control.Thermostat.CompressorDelay",
-    mc.KEY_DELAY,
-    ARGS_GETSET | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_CtlRange = ns(
-    "Appliance.Control.Thermostat.CtlRange",
-    mc.KEY_CTLRANGE,
-    ARGS_GETSET | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_DeadZone = ns(
-    "Appliance.Control.Thermostat.DeadZone",
-    mc.KEY_DEADZONE,
-    ARGS_GETSET | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_Frost = ns(
-    "Appliance.Control.Thermostat.Frost", mc.KEY_FROST, ARGS_GETSET | IS_THERMOSTAT
-)
-Appliance_Control_Thermostat_HoldAction = ns(
-    "Appliance.Control.Thermostat.HoldAction",
-    mc.KEY_HOLDACTION,
-    ARGS_GETPUSH | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_Mode = ns(
-    "Appliance.Control.Thermostat.Mode", mc.KEY_MODE, ARGS_GETSETPUSH | IS_THERMOSTAT
-)
-Appliance_Control_Thermostat_ModeB = ns(
-    "Appliance.Control.Thermostat.ModeB", mc.KEY_MODEB, ARGS_GETSETPUSH | IS_THERMOSTAT
-)
-Appliance_Control_Thermostat_ModeC = ns(
-    "Appliance.Control.Thermostat.ModeC",
-    mc.KEY_CONTROL,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_Overheat = ns(
-    "Appliance.Control.Thermostat.Overheat",
-    mc.KEY_OVERHEAT,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_Schedule = ns(
-    "Appliance.Control.Thermostat.Schedule",
-    mc.KEY_SCHEDULE,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_ScheduleB = ns(
-    "Appliance.Control.Thermostat.ScheduleB",
-    mc.KEY_SCHEDULEB,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_Sensor = ns(
-    "Appliance.Control.Thermostat.Sensor", mc.KEY_SENSOR, ARGS_GETPUSH | IS_THERMOSTAT
-)
-Appliance_Control_Thermostat_SummerMode = ns(
-    "Appliance.Control.Thermostat.SummerMode",
-    mc.KEY_SUMMERMODE,
-    ARGS_GETSETPUSH | IS_THERMOSTAT,
-)
-Appliance_Control_Thermostat_System = ns(
-    "Appliance.Control.Thermostat.System", mc.KEY_CONTROL, ARGS_GETPUSH | IS_THERMOSTAT
-)
-Appliance_Control_Thermostat_Timer = ns(
-    "Appliance.Control.Thermostat.Timer", mc.KEY_TIMER, ARGS_GETSETPUSH | IS_THERMOSTAT
-)
-Appliance_Control_Thermostat_WindowOpened = ns(
-    "Appliance.Control.Thermostat.WindowOpened",
-    mc.KEY_WINDOWOPENED,
-    ARGS_GETPUSH | IS_THERMOSTAT,
 )
 Appliance_Control_TimerX = ns("Appliance.Control.TimerX", mc.KEY_TIMERX, ARGS_NO_Q)
 Appliance_Control_Toggle = ns(

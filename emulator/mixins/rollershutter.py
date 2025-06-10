@@ -145,6 +145,15 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                 mc.KEY_STATE: mc.ROLLERSHUTTER_STATE_IDLE,
             },
         )
+        if mn.Appliance_RollerShutter_Adjust.name in descriptor.ability:
+            self.update_namespace_state(
+                mn.Appliance_RollerShutter_Adjust.name,
+                0,
+                {
+                    mc.KEY_STATUS: 0,
+                },
+            )
+
 
     def shutdown(self):
         for transition in set(self._transitions.values()):
@@ -152,7 +161,10 @@ class RollerShutterMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         super().shutdown()
 
     def _GET_Appliance_Control_ToggleX(self, header, payload):
-        return mc.METHOD_GETACK, {"channel": 0}  # 'strange' format response in #447
+        # this code was used to debug our 'resiliency' to
+        # unexpected payloads:
+        # return mc.METHOD_GETACK, {"channel": 0}  # debug testing'strange' format response in #447
+        return mc.METHOD_GETACK, { "togglex": []}
 
     def _SET_Appliance_RollerShutter_Position(self, header, payload):
         """payload = { "postion": {"channel": 0, "position": 100}}"""

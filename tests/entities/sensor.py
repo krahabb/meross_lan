@@ -8,6 +8,9 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
+from custom_components.meross_lan.merossclient.protocol.namespaces import (
+    thermostat as mn_t,
+)
 from custom_components.meross_lan.sensor import (
     MLEnumSensor,
     MLFilterMaintenanceSensor,
@@ -43,7 +46,7 @@ class EntityTest(EntityComponentTest):
             MLNumericSensor,
         ],
         mn.Appliance_Control_FilterMaintenance.name: [MLFilterMaintenanceSensor],
-        mn.Appliance_Control_Thermostat_Overheat.name: [MLTemperatureSensor],
+        mn_t.Appliance_Control_Thermostat_Overheat.name: [MLTemperatureSensor],
         mn.Appliance_Control_Sensor_Latest.name: [MLHumiditySensor],
         mn.Appliance_System_Runtime.name: [MLSignalStrengthSensor],  # Signal strength
     }

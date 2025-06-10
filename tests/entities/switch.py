@@ -8,6 +8,9 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
+from custom_components.meross_lan.merossclient.protocol.namespaces import (
+    thermostat as mn_t,
+)
 from custom_components.meross_lan.switch import MLToggle, MLToggleX, PhysicalLockSwitch
 
 from tests.entities import EntityComponentTest
@@ -26,7 +29,7 @@ class EntityTest(EntityComponentTest):
     NAMESPACES_ENTITIES = {
         mn.Appliance_Config_OverTemp.name: [OverTempEnableSwitch],
         mn.Appliance_Control_PhysicalLock.name: [PhysicalLockSwitch],
-        mn.Appliance_Control_Thermostat_Sensor.name: [MtsExternalSensorSwitch],
+        mn_t.Appliance_Control_Thermostat_Sensor.name: [MtsExternalSensorSwitch],
         mn.Appliance_Control_Toggle.name: [MLToggle],
     }
 

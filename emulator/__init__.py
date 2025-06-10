@@ -53,6 +53,9 @@ from custom_components.meross_lan.merossclient.protocol import (
     const as mc,
     namespaces as mn,
 )
+from custom_components.meross_lan.merossclient.protocol.namespaces import (
+    thermostat as mn_t,
+)
 
 from .mixins import MerossEmulator, MerossEmulatorDescriptor
 
@@ -83,7 +86,10 @@ def build_emulator(
         from .mixins.hub import HubMixin
 
         mixin_classes.append(HubMixin)
-    if mc.KEY_THERMOSTAT in digest:
+    if (
+        mc.KEY_THERMOSTAT in digest
+        or mn_t.Appliance_Control_Thermostat_ModeC.name in ability
+    ):
         from .mixins.thermostat import ThermostatMixin
 
         mixin_classes.append(ThermostatMixin)

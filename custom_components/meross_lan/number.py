@@ -182,7 +182,7 @@ class MtsSetPointNumber(MtsTemperatureNumber):
     def __init__(
         self,
         climate: "MtsClimate",
-        preset_mode: str,
+        preset_mode: "MtsClimate.Preset",
     ):
         self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
             reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)

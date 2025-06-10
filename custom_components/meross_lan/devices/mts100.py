@@ -37,12 +37,13 @@ class Mts100Climate(MtsClimate):
 
     ns = mn_h.Appliance_Hub_Mts100_Temperature
 
+    # MtsClimate class attributes
     MTS_MODE_TO_PRESET_MAP = {
-        mc.MTS100_MODE_CUSTOM: MtsClimate.PRESET_CUSTOM,
-        mc.MTS100_MODE_HEAT: MtsClimate.PRESET_COMFORT,
-        mc.MTS100_MODE_COOL: MtsClimate.PRESET_SLEEP,
-        mc.MTS100_MODE_ECO: MtsClimate.PRESET_AWAY,
-        mc.MTS100_MODE_AUTO: MtsClimate.PRESET_AUTO,
+        mc.MTS100_MODE_CUSTOM: MtsClimate.Preset.CUSTOM,
+        mc.MTS100_MODE_HEAT: MtsClimate.Preset.COMFORT,
+        mc.MTS100_MODE_COOL: MtsClimate.Preset.SLEEP,
+        mc.MTS100_MODE_ECO: MtsClimate.Preset.AWAY,
+        mc.MTS100_MODE_AUTO: MtsClimate.Preset.AUTO,
     }
     # when setting target temp we'll set an appropriate payload key
     # for the mts100 depending on current 'preset' mode.
@@ -164,7 +165,7 @@ class Mts100Climate(MtsClimate):
         ):
             self._parse_temperature(response[mc.KEY_PAYLOAD][mc.KEY_TEMPERATURE][0])
 
-    async def async_request_mode(self, mode: int):
+    async def async_request_preset(self, mode: int):
         """Requests an mts mode and (ensure) turn-on"""
         if await self.manager.async_request_ack(
             mn_h.Appliance_Hub_Mts100_Mode.name,
@@ -198,7 +199,11 @@ class Mts100Climate(MtsClimate):
         if await self.manager.async_request_ack(
             mn_h.Appliance_Hub_ToggleX.name,
             mc.METHOD_SET,
-            {mn_h.Appliance_Hub_ToggleX.key: [{mc.KEY_ID: self.id, mc.KEY_ONOFF: onoff}]},
+            {
+                mn_h.Appliance_Hub_ToggleX.key: [
+                    {mc.KEY_ID: self.id, mc.KEY_ONOFF: onoff}
+                ]
+            },
         ):
             self._mts_onoff = onoff
             self.flush_state()
@@ -207,7 +212,9 @@ class Mts100Climate(MtsClimate):
         return self._mts_onoff and self._mts_mode == mc.MTS100_MODE_AUTO
 
     def get_ns_adjust(self):
-        return self.manager.hub.namespace_handlers[mn_h.Appliance_Hub_Mts100_Adjust.name]
+        return self.manager.hub.namespace_handlers[
+            mn_h.Appliance_Hub_Mts100_Adjust.name
+        ]
 
     # message handlers
     def _parse_temperature(self, payload: dict):

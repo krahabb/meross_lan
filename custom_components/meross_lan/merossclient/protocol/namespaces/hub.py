@@ -1,10 +1,10 @@
 """
 Descriptors for hub specific namespaces management.
 This file contains the knowledge about how namespaces work (their syntax and behaviors).
-Namespaces specific for Hubs are stored in adedicated map (HUB_NAMESPACES) and can also override
-namespace already defined in the default (NAMESPACES) map.
-When code lookup HUB_NAMESPACES it will fallback to NAMESPACES if no match so that
-standard namespaces available in Hubs but preserving their default behavior can be easily accessed through
+Namespaces specific for Hubs are stored in a dedicated map (HUB_NAMESPACES) so that they can also override
+namespaces already defined in the default (NAMESPACES) map.
+When code lookups HUB_NAMESPACES it will fallback to NAMESPACES if no match so that
+standard namespaces are available for Hubs but preserving their default behavior can be easily accessed through
 only HUB_NAMESPACES
 """
 
@@ -21,12 +21,6 @@ from . import (
     ns,
 )
 from .. import const as mc
-
-if TYPE_CHECKING:
-    from typing import Final, Mapping, NotRequired, TypedDict, Unpack
-
-    from . import NamespacesMapType
-    from ..types import MerossRequestType
 
 MAP_HUB: "ns.Args" = {"map": HUB_NAMESPACES}
 IS_HUB_ID: "ns.Args" = {"is_hub_id": True}

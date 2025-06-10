@@ -2,7 +2,8 @@ from typing import TYPE_CHECKING
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
-from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient.protocol import const as mc
+from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..number import MtsSetPointNumber
 
 if TYPE_CHECKING:
@@ -15,22 +16,25 @@ class Mts200SetPointNumber(MtsSetPointNumber):
     customize MtsSetPointNumber to interact with Mts200 family valves
     """
 
-    ns = mn.Appliance_Control_Thermostat_Mode
+    ns = mn_t.Appliance_Control_Thermostat_Mode
 
 
 class Mts200Climate(MtsClimate):
     """Climate entity for MTS200 devices"""
 
     manager: "Device"
-    ns = mn.Appliance_Control_Thermostat_Mode
+    ns = mn_t.Appliance_Control_Thermostat_Mode
 
+    # MtsClimate class attributes
     MTS_MODE_TO_PRESET_MAP = {
-        mc.MTS200_MODE_MANUAL: MtsClimate.PRESET_CUSTOM,
-        mc.MTS200_MODE_HEAT: MtsClimate.PRESET_COMFORT,
-        mc.MTS200_MODE_COOL: MtsClimate.PRESET_SLEEP,
-        mc.MTS200_MODE_ECO: MtsClimate.PRESET_AWAY,
-        mc.MTS200_MODE_AUTO: MtsClimate.PRESET_AUTO,
+        mc.MTS200_MODE_MANUAL: MtsClimate.Preset.CUSTOM,
+        mc.MTS200_MODE_HEAT: MtsClimate.Preset.COMFORT,
+        mc.MTS200_MODE_COOL: MtsClimate.Preset.SLEEP,
+        mc.MTS200_MODE_ECO: MtsClimate.Preset.AWAY,
+        mc.MTS200_MODE_AUTO: MtsClimate.Preset.AUTO,
     }
+    MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS200_MODE_TO_TARGETTEMP_MAP
+
     # right now we're only sure summermode == '1' is 'HEAT'
     MTS_SUMMERMODE_TO_HVAC_MODE = {
         None: MtsClimate.HVACMode.HEAT,  # mapping when no summerMode avail
@@ -46,7 +50,6 @@ class Mts200Climate(MtsClimate):
         mc.MTS200_SUMMERMODE_COOL: MtsClimate.HVACAction.COOLING,
         mc.MTS200_SUMMERMODE_HEAT: MtsClimate.HVACAction.HEATING,
     }
-    MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS200_MODE_TO_TARGETTEMP_MAP
 
     __slots__ = (
         "_mts_summermode",
@@ -69,7 +72,7 @@ class Mts200Climate(MtsClimate):
         )
         self._mts_summermode = None
         self._mts_summermode_supported = (
-            mn.Appliance_Control_Thermostat_SummerMode.name
+            mn_t.Appliance_Control_Thermostat_SummerMode.name
             in manager.descriptor.ability
         )
         if self._mts_summermode_supported:
@@ -126,7 +129,7 @@ class Mts200Climate(MtsClimate):
             }
         )
 
-    async def async_request_mode(self, mode: int, /):
+    async def async_request_preset(self, mode: int, /):
         await self._async_request_mode(
             {
                 mc.KEY_CHANNEL: self.channel,
@@ -145,17 +148,18 @@ class Mts200Climate(MtsClimate):
 
     def get_ns_adjust(self):
         return self.manager.namespace_handlers[
-            mn.Appliance_Control_Thermostat_Calibration.name
+            mn_t.Appliance_Control_Thermostat_Calibration.name
         ]
 
     # interface: self
     async def async_request_summermode(self, summermode: int, /):
+        ns = mn_t.Appliance_Control_Thermostat_SummerMode
         if await self.manager.async_request_ack(
-            mn.Appliance_Control_Thermostat_SummerMode.name,
+            ns.name,
             mc.METHOD_SET,
             {
-                mn.Appliance_Control_Thermostat_SummerMode.key: [
-                    {mc.KEY_CHANNEL: self.channel, mc.KEY_MODE: summermode}
+                ns.key: [
+                    {ns.key_channel: self.channel, mc.KEY_MODE: summermode}
                 ]
             },
         ):
@@ -243,4 +247,4 @@ class Mts200Climate(MtsClimate):
 
 
 class Mts200Schedule(MtsSchedule):
-    ns = mn.Appliance_Control_Thermostat_Schedule
+    ns = mn_t.Appliance_Control_Thermostat_Schedule

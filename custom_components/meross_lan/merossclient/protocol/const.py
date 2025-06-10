@@ -346,10 +346,19 @@ MTS200_OVERHEAT_WARNING_MAP = {
 }
 
 MTS300_TEMP_SCALE = 100  # 1°C == 100 device value
-MTS300_MODE_AUTO = 3
-MTS300_WORK_OFF = 0
-MTS300_WORK_HEAT = 1
-MTS300_WORK_COOL = 2
+MTS300_MODE_OFF = 0
+MTS300_MODE_HEAT = 1
+MTS300_MODE_COOL = 2
+MTS300_MODE_AUTO = 3 # switching automatically between heat/cool
+MTS300_WORK_MANUAL = 1 # manual target temp
+MTS300_WORK_SCHEDULE = 2 # using the schedule to set the target temp
+MTS300_MODE_TO_TARGETTEMP_MAP = {
+    MTS300_MODE_OFF: "",
+    MTS300_MODE_HEAT: "heat",
+    MTS300_MODE_COOL: "cold",
+    MTS300_MODE_AUTO: "",
+    None: "",
+}
 
 MTS960_TEMP_SCALE = 100  # 1°C == 100 device value
 # inferring the mts960 modes from the manual

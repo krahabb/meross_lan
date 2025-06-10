@@ -13,6 +13,8 @@ from uuid import uuid4
 from .protocol import const as mc
 
 if TYPE_CHECKING:
+    from typing import Any, Iterable
+
     from protocol.message import MerossResponse
     from protocol.types import MerossRequestType
 
@@ -138,9 +140,9 @@ def update_dict_strict(dst_dict: dict, src_dict: dict):
                 dst_dict[key] = value
 
 
-def update_dict_strict_by_key(
-    dst_lst: list[dict], src_dict: dict, key: str = mc.KEY_CHANNEL
-) -> dict:
+def update_dict_strict_by_key[_T: "dict[str, Any]"](
+    dst_lst: "Iterable[_T]", src_dict: _T, key: str = mc.KEY_CHANNEL
+) -> _T:
     """
     Much like get_element_by_key scans the dst list looking for the first item matching
     the key value to the corresponding one in src_dict. Usually looking for the matching

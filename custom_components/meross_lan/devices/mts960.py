@@ -1,3 +1,4 @@
+import enum
 from time import time
 from typing import TYPE_CHECKING, override
 
@@ -5,6 +6,7 @@ from ..binary_sensor import MLBinarySensor
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..merossclient.protocol import const as mc, namespaces as mn
+from ..merossclient.protocol.namespaces import thermostat as mn_t
 from ..number import MLEmulatedNumber
 from ..sensor import MLDiagnosticSensor
 
@@ -49,16 +51,17 @@ class Mts960Climate(MtsClimate):
     """Climate entity for MTS960 devices"""
 
     manager: "Device"
-    ns = mn.Appliance_Control_Thermostat_ModeB
+    ns = mn_t.Appliance_Control_Thermostat_ModeB
     device_scale = mc.MTS960_TEMP_SCALE
 
-    PRESET_HEATING: "Final" = "heating"
-    PRESET_COOLING: "Final" = "cooling"
-    PRESET_SCHEDULE_HEATING: "Final" = "schedule_heating"
-    PRESET_SCHEDULE_COOLING: "Final" = "schedule_cooling"
-    PRESET_TIMER_CYCLE: "Final" = "timer_cycle"
-    PRESET_TIMER_COUNTDOWN_ON: "Final" = "timer_countdown_on"
-    PRESET_TIMER_COUNTDOWN_OFF: "Final" = "timer_countdown_off"
+    class Preset(enum.StrEnum):
+        HEATING = enum.auto()
+        COOLING = enum.auto()
+        SCHEDULE_HEATING = enum.auto()
+        SCHEDULE_COOLING = enum.auto()
+        TIMER_CYCLE = enum.auto()
+        TIMER_COUNTDOWN_ON = enum.auto()
+        TIMER_COUNTDOWN_OFF = enum.auto()
 
     TIMER_TYPE_KEY = {
         mc.MTS960_TIMER_TYPE_COUNTDOWN: mc.KEY_DOWN,
@@ -76,22 +79,14 @@ class Mts960Climate(MtsClimate):
     )
 
     # HA core entity attributes:
-    hvac_modes = [
+    _attr_hvac_modes = [
         MtsClimate.HVACMode.OFF,
         MtsClimate.HVACMode.HEAT,
         MtsClimate.HVACMode.COOL,
         MtsClimate.HVACMode.AUTO,
         MtsClimate.HVACMode.FAN_ONLY,
     ]
-    preset_modes = [
-        PRESET_HEATING,
-        PRESET_COOLING,
-        PRESET_SCHEDULE_HEATING,
-        PRESET_SCHEDULE_COOLING,
-        PRESET_TIMER_CYCLE,
-        PRESET_TIMER_COUNTDOWN_ON,
-        PRESET_TIMER_COUNTDOWN_OFF,
-    ]
+    _attr_preset_modes = list(Preset)
 
     __slots__ = (
         "binary_sensor_plug_state",
@@ -151,7 +146,7 @@ class Mts960Climate(MtsClimate):
                 case mc.MTS960_MODE_HEAT_COOL:
                     match self._mts_working:
                         case mc.MTS960_WORKING_HEAT:
-                            self.preset_mode = Mts960Climate.PRESET_HEATING
+                            self.preset_mode = Mts960Climate.Preset.HEATING
                             self.hvac_mode = MtsClimate.HVACMode.HEAT
                             self.hvac_action = (
                                 MtsClimate.HVACAction.HEATING
@@ -159,7 +154,7 @@ class Mts960Climate(MtsClimate):
                                 else MtsClimate.HVACAction.IDLE
                             )
                         case mc.MTS960_WORKING_COOL:
-                            self.preset_mode = Mts960Climate.PRESET_COOLING
+                            self.preset_mode = Mts960Climate.Preset.COOLING
                             self.hvac_mode = MtsClimate.HVACMode.COOL
                             self.hvac_action = (
                                 MtsClimate.HVACAction.COOLING
@@ -175,14 +170,14 @@ class Mts960Climate(MtsClimate):
                     self.hvac_mode = MtsClimate.HVACMode.AUTO
                     match self._mts_working:
                         case mc.MTS960_WORKING_HEAT:
-                            self.preset_mode = Mts960Climate.PRESET_SCHEDULE_HEATING
+                            self.preset_mode = Mts960Climate.Preset.SCHEDULE_HEATING
                             self.hvac_action = (
                                 MtsClimate.HVACAction.HEATING
                                 if self._mts_active
                                 else MtsClimate.HVACAction.IDLE
                             )
                         case mc.MTS960_WORKING_COOL:
-                            self.preset_mode = Mts960Climate.PRESET_SCHEDULE_COOLING
+                            self.preset_mode = Mts960Climate.Preset.SCHEDULE_COOLING
                             self.hvac_action = (
                                 MtsClimate.HVACAction.COOLING
                                 if self._mts_active
@@ -195,11 +190,11 @@ class Mts960Climate(MtsClimate):
                 case mc.MTS960_MODE_TIMER:
                     match self._mts_timer_mode:
                         case (mc.MTS960_TIMER_TYPE_CYCLE, _):
-                            self.preset_mode = Mts960Climate.PRESET_TIMER_CYCLE
+                            self.preset_mode = Mts960Climate.Preset.TIMER_CYCLE
                         case (mc.MTS960_TIMER_TYPE_COUNTDOWN, mc.MTS960_ONOFF_OFF):
-                            self.preset_mode = Mts960Climate.PRESET_TIMER_COUNTDOWN_OFF
+                            self.preset_mode = Mts960Climate.Preset.TIMER_COUNTDOWN_OFF
                         case (mc.MTS960_TIMER_TYPE_COUNTDOWN, mc.MTS960_ONOFF_ON):
-                            self.preset_mode = Mts960Climate.PRESET_TIMER_COUNTDOWN_ON
+                            self.preset_mode = Mts960Climate.Preset.TIMER_COUNTDOWN_ON
                         case _:
                             self.preset_mode = None
                     self.hvac_mode = MtsClimate.HVACMode.FAN_ONLY
@@ -224,7 +219,7 @@ class Mts960Climate(MtsClimate):
             case MtsClimate.HVACMode.OFF:
                 await self.async_request_onoff(0)
             case MtsClimate.HVACMode.HEAT:
-                await self._async_request_modeb(
+                await self._async_request_modeB(
                     {
                         mc.KEY_CHANNEL: self.channel,
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
@@ -233,7 +228,7 @@ class Mts960Climate(MtsClimate):
                     }
                 )
             case MtsClimate.HVACMode.COOL:
-                await self._async_request_modeb(
+                await self._async_request_modeB(
                     {
                         mc.KEY_CHANNEL: self.channel,
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
@@ -243,7 +238,7 @@ class Mts960Climate(MtsClimate):
                 )
             case MtsClimate.HVACMode.AUTO:
                 # preserves heating/cooling as actually set in the device
-                await self._async_request_modeb(
+                await self._async_request_modeB(
                     {
                         mc.KEY_CHANNEL: self.channel,
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
@@ -251,7 +246,7 @@ class Mts960Climate(MtsClimate):
                     }
                 )
             case MtsClimate.HVACMode.FAN_ONLY:
-                await self._async_request_modeb(
+                await self._async_request_modeB(
                     {
                         mc.KEY_CHANNEL: self.channel,
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
@@ -261,12 +256,12 @@ class Mts960Climate(MtsClimate):
 
     async def async_set_preset_mode(self, preset_mode: str):
         match preset_mode:
-            case Mts960Climate.PRESET_HEATING:
+            case Mts960Climate.Preset.HEATING:
                 await self.async_set_hvac_mode(MtsClimate.HVACMode.HEAT)
-            case Mts960Climate.PRESET_COOLING:
+            case Mts960Climate.Preset.COOLING:
                 await self.async_set_hvac_mode(MtsClimate.HVACMode.COOL)
-            case Mts960Climate.PRESET_SCHEDULE_HEATING:
-                await self._async_request_modeb(
+            case Mts960Climate.Preset.SCHEDULE_HEATING:
+                await self._async_request_modeB(
                     {
                         mc.KEY_CHANNEL: self.channel,
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
@@ -274,8 +269,8 @@ class Mts960Climate(MtsClimate):
                         mc.KEY_WORKING: mc.MTS960_WORKING_HEAT,
                     }
                 )
-            case Mts960Climate.PRESET_SCHEDULE_COOLING:
-                await self._async_request_modeb(
+            case Mts960Climate.Preset.SCHEDULE_COOLING:
+                await self._async_request_modeB(
                     {
                         mc.KEY_CHANNEL: self.channel,
                         mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
@@ -283,7 +278,7 @@ class Mts960Climate(MtsClimate):
                         mc.KEY_WORKING: mc.MTS960_WORKING_COOL,
                     }
                 )
-            case Mts960Climate.PRESET_TIMER_CYCLE:
+            case Mts960Climate.Preset.TIMER_CYCLE:
                 # how to start the timer is still unknown..here a guessed impl
                 # trying to start a cycle timer in 'on' state
                 offduration = round(
@@ -303,7 +298,7 @@ class Mts960Climate(MtsClimate):
                     },
                 ):
                     await self.async_set_hvac_mode(MtsClimate.HVACMode.FAN_ONLY)
-            case Mts960Climate.PRESET_TIMER_COUNTDOWN_ON:
+            case Mts960Climate.Preset.TIMER_COUNTDOWN_ON:
                 duration = round(self.number_timer_down_duration.native_value or 1)
                 device_timestamp = round(time() - self.manager.device_timedelta)
                 if await self._async_request_timer(
@@ -315,7 +310,7 @@ class Mts960Climate(MtsClimate):
                     },
                 ):
                     await self.async_set_hvac_mode(MtsClimate.HVACMode.FAN_ONLY)
-            case Mts960Climate.PRESET_TIMER_COUNTDOWN_OFF:
+            case Mts960Climate.Preset.TIMER_COUNTDOWN_OFF:
                 duration = round(self.number_timer_down_duration.native_value or 1)
                 device_timestamp = round(time() - self.manager.device_timedelta)
                 if await self._async_request_timer(
@@ -331,7 +326,7 @@ class Mts960Climate(MtsClimate):
     async def async_set_temperature(self, **kwargs):
         # bumps out of any timer/schedule mode and sets target temp
         # preserving heating/cooling mode
-        await self._async_request_modeb(
+        await self._async_request_modeB(
             {
                 mc.KEY_CHANNEL: self.channel,
                 mc.KEY_MODE: mc.MTS960_MODE_HEAT_COOL,
@@ -342,8 +337,8 @@ class Mts960Climate(MtsClimate):
             }
         )
 
-    async def async_request_mode(self, mode: int):
-        await self._async_request_modeb(
+    async def async_request_preset(self, mode: int):
+        await self._async_request_modeB(
             {
                 mc.KEY_CHANNEL: self.channel,
                 mc.KEY_ONOFF: mc.MTS960_ONOFF_ON,
@@ -352,7 +347,7 @@ class Mts960Climate(MtsClimate):
         )
 
     async def async_request_onoff(self, onoff: int):
-        await self._async_request_modeb(
+        await self._async_request_modeB(
             {
                 mc.KEY_CHANNEL: self.channel,
                 mc.KEY_ONOFF: mc.MTS960_ONOFF_ON if onoff else mc.MTS960_ONOFF_OFF,
@@ -364,11 +359,11 @@ class Mts960Climate(MtsClimate):
 
     def get_ns_adjust(self):
         return self.manager.namespace_handlers[
-            mn.Appliance_Control_Thermostat_Calibration.name
+            mn_t.Appliance_Control_Thermostat_Calibration.name
         ]
 
     # interface: self
-    async def _async_request_modeb(self, p_modeb: dict):
+    async def _async_request_modeB(self, p_modeb: dict):
         if response := await self.manager.async_request_ack(
             self.ns.name,
             mc.METHOD_SET,
@@ -382,15 +377,16 @@ class Mts960Climate(MtsClimate):
             self._parse_modeB(payload)
 
     async def _async_request_timer(self, timer_type: int, payload: dict):
+        ns = mn_t.Appliance_Control_Thermostat_Timer
         p_timer = {
-            mc.KEY_CHANNEL: self.channel,
+            ns.key_channel: self.channel,
             mc.KEY_TYPE: timer_type,
             Mts960Climate.TIMER_TYPE_KEY[timer_type]: payload,
         }
         if response := await self.manager.async_request_ack(
-            mn.Appliance_Control_Thermostat_Timer.name,
+            ns.name,
             mc.METHOD_SET,
-            {mc.KEY_TIMER: [p_timer]},
+            {ns.key: [p_timer]},
         ):
             try:
                 payload = response[mc.KEY_PAYLOAD][mc.KEY_TIMER][0]
@@ -503,4 +499,4 @@ class Mts960Climate(MtsClimate):
 
 
 class Mts960Schedule(MtsSchedule):
-    ns = mn.Appliance_Control_Thermostat_ScheduleB
+    ns = mn_t.Appliance_Control_Thermostat_ScheduleB

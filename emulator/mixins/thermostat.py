@@ -9,12 +9,14 @@ from custom_components.meross_lan.merossclient import (
     update_dict_strict,
     update_dict_strict_by_key,
 )
-from custom_components.meross_lan.merossclient.protocol import (
-    const as mc,
-    namespaces as mn,
+from custom_components.meross_lan.merossclient.protocol import const as mc
+from custom_components.meross_lan.merossclient.protocol.namespaces import (
+    thermostat as mn_t,
 )
 
 if typing.TYPE_CHECKING:
+    from custom_components.meross_lan.merossclient.protocol.types import thermostat
+
     from .. import MerossEmulator, MerossEmulatorDescriptor
 
 
@@ -22,6 +24,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
     MAP_DEVICE_SCALE = {
         "mts200": 10,
         "mts200b": 10,
+        "mts300": 100,
         "mts960": 100,
     }
     MAP_ENTITY_NS_DEFAULT = {
@@ -57,8 +60,8 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         self.device_scale = self.MAP_DEVICE_SCALE[descriptor.type]
 
     def _SET_Appliance_Control_Thermostat_Mode(self, header, payload):
-        p_digest = self.descriptor.digest
-        p_digest_mode_list = p_digest[mc.KEY_THERMOSTAT][mc.KEY_MODE]
+        p_digest_thermostat = self.descriptor.digest[mc.KEY_THERMOSTAT]
+        p_digest_mode_list = p_digest_thermostat[mc.KEY_MODE]
         p_digest_windowopened_list = []
         for p_mode in payload[mc.KEY_MODE]:
             channel = p_mode[mc.KEY_CHANNEL]
@@ -69,7 +72,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                     mc.MTS200_MODE_TO_TARGETTEMP_MAP[mode]
                 ]
             else:  # we use this to trigger a windowOpened later in code
-                p_digest_windowopened_list = p_digest[mc.KEY_THERMOSTAT].get(
+                p_digest_windowopened_list = p_digest_thermostat.get(
                     mc.KEY_WINDOWOPENED, []
                 )
             if p_digest_mode[mc.KEY_ONOFF]:
@@ -93,8 +96,7 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
         return mc.METHOD_SETACK, {}
 
     def _SET_Appliance_Control_Thermostat_ModeB(self, header, payload):
-        p_digest = self.descriptor.digest
-        p_digest_modeb_list = p_digest[mc.KEY_THERMOSTAT][mc.KEY_MODEB]
+        p_digest_modeb_list = self.descriptor.digest[mc.KEY_THERMOSTAT][mc.KEY_MODEB]
         for p_modeb in payload[mc.KEY_MODEB]:
             p_digest_modeb = update_dict_strict_by_key(p_digest_modeb_list, p_modeb)
             if p_digest_modeb[mc.KEY_ONOFF]:
@@ -121,8 +123,36 @@ class ThermostatMixin(MerossEmulator if typing.TYPE_CHECKING else object):
                         pass
             else:
                 p_digest_modeb[mc.KEY_STATE] = mc.MTS960_STATE_UNKNOWN
-
+        # WARNING: returning only the last element of the loop (usually just 1 item per device tho)
         return mc.METHOD_SETACK, {mc.KEY_MODEB: [p_digest_modeb]}
+
+    def _SET_Appliance_Control_Thermostat_ModeC(self, header, payload):
+        ns = mn_t.Appliance_Control_Thermostat_ModeC
+        p_digest_modec_list = self.descriptor.namespaces[ns.name][ns.key]
+        for p_modec in payload[ns.key]:
+            p_digest_modec: "thermostat.ModeC" = update_dict_strict_by_key(
+                p_digest_modec_list, p_modec
+            )
+            # TODO: set idle/active state in "more" key
+            p_more = p_digest_modec["more"]
+            p_currenttemp = p_digest_modec["currentTemp"]
+            p_targettemp = p_digest_modec["targetTemp"]
+            match p_digest_modec[mc.KEY_MODE]:
+                case mc.MTS300_MODE_OFF:
+                    p_more["cStatus"] = 0
+                    p_more["hStatus"] = 0
+                case mc.MTS300_MODE_HEAT:
+                    p_more["cStatus"] = 0
+                    p_more["hStatus"] = 1 if p_targettemp["heat"] > p_currenttemp else 0
+                case mc.MTS300_MODE_COOL:
+                    p_more["cStatus"] = 1 if p_targettemp["cold"] < p_currenttemp else 0
+                    p_more["hStatus"] = 0
+                case mc.MTS300_MODE_AUTO:
+                    p_more["cStatus"] = 1 if p_targettemp["cold"] < p_currenttemp else 0
+                    p_more["hStatus"] = 1 if p_targettemp["heat"] > p_currenttemp else 0
+
+        # WARNING: returning only the last element of the loop (usually just 1 item per device tho)
+        return mc.METHOD_SETACK, {ns.key: [p_digest_modec]}
 
     def _handle_Appliance_Control_Thermostat_Any(self, header, payload):
         """
