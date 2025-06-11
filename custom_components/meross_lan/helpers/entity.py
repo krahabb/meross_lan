@@ -87,7 +87,7 @@ class MLEntity(NamespaceParser, Loggable, entity.Entity if TYPE_CHECKING else ob
         key_value: str
 
         # used to speed-up checks if entity is enabled and loaded
-        hass_connected: Final[bool] # public ReadOnly attribute
+        hass_connected: Final[bool]  # public ReadOnly attribute
 
         # HA core entity attributes:
         # These are constants throughout our model
@@ -615,7 +615,7 @@ class MLNumericEntity(MLEntity):
             self.flush_state()
             return True
 
-    def update_native_value(self, native_value: int | float):
+    def update_native_value(self, native_value: int | float | None):
         if self.native_value != native_value:
             self.native_value = native_value
             self.flush_state()

@@ -1,3 +1,4 @@
+import datetime as dt
 from typing import TYPE_CHECKING, override
 
 from homeassistant.components.climate import const as hacc
@@ -7,7 +8,9 @@ from ..climate import MtsClimate
 from ..helpers import reverse_lookup
 from ..merossclient.protocol import const as mc, namespaces as mn
 from ..merossclient.protocol.namespaces import thermostat as mn_t
+from ..number import MLConfigNumber
 from ..sensor import MLEnumSensor
+from ..switch import MLEmulatedSwitch
 from .thermostat import MtsCalibrationNumber
 
 if TYPE_CHECKING:
@@ -64,6 +67,8 @@ class Mts300Climate(MtsClimate):
         target_temperature_low: float | None
 
         # entities
+        number_fan_hold: MLConfigNumber
+        switch_fan_hold: MLEmulatedSwitch
         sensor_hStatus: MLEnumSensor
         sensor_cStatus: MLEnumSensor
         sensor_fStatus: MLEnumSensor
@@ -106,11 +111,19 @@ class Mts300Climate(MtsClimate):
     }
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
     STATUS_SENSOR_DEF_MAP = {
-        "hdStatus": MLEnumSensor.SensorDef("(de)humidifier_status", translation_key="mts300_hdstatus"),
-        "hStatus": MLEnumSensor.SensorDef("heating_status", translation_key="mts300_status"),
-        "cStatus": MLEnumSensor.SensorDef("cooling_status", translation_key="mts300_status"),
+        "hdStatus": MLEnumSensor.SensorDef(
+            "(de)humidifier_status", translation_key="mts300_hdstatus"
+        ),
+        "hStatus": MLEnumSensor.SensorDef(
+            "heating_status", translation_key="mts300_status"
+        ),
+        "cStatus": MLEnumSensor.SensorDef(
+            "cooling_status", translation_key="mts300_status"
+        ),
         "fStatus": MLEnumSensor.SensorDef("fan_speed", translation_key="mts300_status"),
-        "aStatus": MLEnumSensor.SensorDef("auxiliary_status", translation_key="mts300_status"),
+        "aStatus": MLEnumSensor.SensorDef(
+            "auxiliary_status", translation_key="mts300_status"
+        ),
     }
 
     # HA core entity attributes:
@@ -132,12 +145,14 @@ class Mts300Climate(MtsClimate):
         "target_temperature_high",
         "target_temperature_low",
         "_mts_work",
+        "number_fan_hold",
+        "switch_fan_hold",
     ) + tuple(f"sensor_{_key}" for _key in STATUS_SENSOR_DEF_MAP)
 
     def __init__(
         self,
         manager: "Device",
-        channel = 0,
+        channel=0,
     ):
         super().__init__(
             manager,
@@ -152,12 +167,38 @@ class Mts300Climate(MtsClimate):
         self.target_temperature_low = None
         self._mts_work = None
         for _key, _def in Mts300Climate.STATUS_SENSOR_DEF_MAP.items():
-            setattr(self, f"sensor_{_key}", _def.type(manager, channel, _def.entitykey, **_def.kwargs))
+            setattr(
+                self,
+                f"sensor_{_key}",
+                _def.type(manager, channel, _def.entitykey, **_def.kwargs),
+            )
+
+        self.number_fan_hold = MLConfigNumber(
+            manager,
+            channel,
+            "fan_hold_time",
+            MLConfigNumber.DEVICE_CLASS_DURATION,
+            device_scale=1,
+            native_unit_of_measurement=MLConfigNumber.hac.UnitOfTime.MINUTES,
+        )
+        self.number_fan_hold.async_request_value = (
+            self._async_request_value_number_fan_hold
+        )
+        self.switch_fan_hold = MLEmulatedSwitch(
+            manager,
+            channel,
+            "fan_hold_enable",
+        )
+        self.switch_fan_hold.async_turn_on = self._async_turn_on_switch_fan_hold
+        self.switch_fan_hold.async_turn_off = self._async_turn_off_switch_fan_hold
+
         manager.register_parser_entity(self)
         manager.register_parser_entity(self.schedule)
 
     async def async_shutdown(self):
         await super().async_shutdown()
+        self.switch_fan_hold = None  # type:ignore
+        self.number_fan_hold = None  # type:ignore
         for _key in Mts300Climate.STATUS_SENSOR_DEF_MAP:
             setattr(self, f"sensor_{_key}", None)
 
@@ -326,6 +367,18 @@ class Mts300Climate(MtsClimate):
 
             fan = payload["fan"]
             self.fan_mode = reverse_lookup(self.FAN_MODE_TO_FAN_SPEED_MAP, fan["speed"])
+            fan_hold_time = fan["hTime"]
+            if fan_hold_time == mc.MTS300_FAN_HOLD_DISABLED:
+                # this doesn't update device_value so that it is saved and
+                # eventually reused when switch_fan_hold toggles on
+                self.number_fan_hold.update_native_value(None)
+                self.switch_fan_hold.update_onoff(0)
+            else:
+                if not self.number_fan_hold.update_device_value(fan_hold_time):
+                    # might happen when we toggle-on switch_fan_hold
+                    self.number_fan_hold.update_native_value(fan_hold_time)
+                self.switch_fan_hold.update_onoff(1)
+
             match mode := payload["mode"]:
                 case mc.MTS300_MODE_OFF:
                     self._mts_onoff = 0
@@ -344,17 +397,6 @@ class Mts300Climate(MtsClimate):
                             bool(more["fStatus"]),
                         )
                     ]
-                    """REMOVE
-                    self.hvac_action = (
-                        MtsClimate.HVACAction.HEATING
-                        if more["hStatus"]
-                        else (
-                            MtsClimate.HVACAction.FAN
-                            if more["fStatus"]
-                            else MtsClimate.HVACAction.IDLE
-                        )
-                    )
-                    """
                     self.target_temperature = self.target_temperature_low
                 case mc.MTS300_MODE_COOL:
                     self._mts_onoff = 1
@@ -367,17 +409,6 @@ class Mts300Climate(MtsClimate):
                             bool(more["fStatus"]),
                         )
                     ]
-                    """REMOVE
-                    self.hvac_action = (
-                        MtsClimate.HVACAction.COOLING
-                        if more["cStatus"]
-                        else (
-                            MtsClimate.HVACAction.FAN
-                            if more["fStatus"]
-                            else MtsClimate.HVACAction.IDLE
-                        )
-                    )
-                    """
                     self.target_temperature = self.target_temperature_high
                 case mc.MTS300_MODE_AUTO:
                     self._mts_onoff = 1
@@ -390,17 +421,6 @@ class Mts300Climate(MtsClimate):
                             bool(more["fStatus"]),
                         )
                     ]
-                    """REMOVE
-                    self.hvac_action = (
-                        MtsClimate.HVACAction.COOLING
-                        if more["cStatus"]
-                        else (
-                            MtsClimate.HVACAction.HEATING
-                            if more["hStatus"]
-                            else MtsClimate.HVACAction.IDLE
-                        )
-                    )
-                    """
                     self.target_temperature = None
 
             self.flush_state()
@@ -414,6 +434,21 @@ class Mts300Climate(MtsClimate):
         # and it looks like when we receive this, it is a notification
         # the mts is not really changing its setpoint (as per the issue).
         # We need more info about how to process this.
+
+    async def _async_request_value_number_fan_hold(self, device_value):
+        # this method (ovverriding MLConfig.Number.async_request_value) should
+        # return Success/Failure but we just return None (feailure) since the
+        # number entity stata has already been updated/flushed in our _parse_modeC in case
+        await self._async_request_modeC({"fan": {"hTime": device_value}})
+
+    async def _async_turn_on_switch_fan_hold(self, **kwargs):
+        h_time = self.number_fan_hold.device_value
+        await self._async_request_modeC(
+            {"fan": {"hTime": 60 if h_time is None else h_time}}
+        )
+
+    async def _async_turn_off_switch_fan_hold(self, **kwargs):
+        await self._async_request_modeC({"fan": {"hTime": mc.MTS300_FAN_HOLD_DISABLED}})
 
 
 class Mts300Schedule(MtsSchedule):

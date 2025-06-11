@@ -1,11 +1,11 @@
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import number
 
 from .helpers import entity as me, reverse_lookup
 from .merossclient.protocol import const as mc
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from typing import Unpack
 
     from homeassistant.config_entries import ConfigEntry
@@ -29,6 +29,14 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
     These in turn will be managed with HA state-restoration.
     """
 
+    if TYPE_CHECKING:
+        # HA core entity attributes:
+        entity_category: me.entity.EntityCategory
+        mode: number.NumberMode
+        native_max_value: float
+        native_min_value: float
+        native_step: float
+
     PLATFORM = number.DOMAIN
     DeviceClass = number.NumberDeviceClass
 
@@ -46,10 +54,8 @@ class MLNumber(me.MLNumericEntity, number.NumberEntity):
 
     # HA core entity attributes:
     entity_category = me.MLNumericEntity.EntityCategory.CONFIG
-    mode: number.NumberMode = number.NumberMode.BOX
-    native_max_value: float
-    native_min_value: float
-    native_step: float
+    mode = number.NumberMode.BOX
+    native_step = 1
 
 
 class MLConfigNumber(me.MEListChannelMixin, MLNumber):
