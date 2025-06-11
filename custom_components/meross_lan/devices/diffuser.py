@@ -20,6 +20,7 @@ from .spray import MLSpray
 
 if TYPE_CHECKING:
     from typing import Final
+
     from ..helpers.device import Device, DigestInitReturnType
     from ..sensor import MLNumericSensor
 

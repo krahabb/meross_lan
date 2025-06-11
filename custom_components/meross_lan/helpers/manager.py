@@ -41,8 +41,8 @@ if TYPE_CHECKING:
         Final,
         Mapping,
         NotRequired,
-        Unpack,
         TypedDict,
+        Unpack,
     )
 
     from homeassistant.config_entries import ConfigEntry
