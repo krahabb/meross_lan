@@ -211,7 +211,7 @@ async def _async_test_entities(manager: "BaseDevice"):
 
         state = EntityComponentTest.hass_states.get(entity_id)
         if state:
-            assert entity._hass_connected
+            assert entity.hass_connected
             if not entity.available:
                 assert state.state == STATE_UNAVAILABLE
                 continue
@@ -219,7 +219,7 @@ async def _async_test_entities(manager: "BaseDevice"):
             await entity_component_test.async_test_enabled_callback(entity)
         else:
             # entity not loaded in HA
-            assert not entity._hass_connected
+            assert not entity.hass_connected
             if not entity.available:
                 continue
             # just test the internal interface

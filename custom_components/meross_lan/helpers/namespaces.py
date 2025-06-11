@@ -852,7 +852,7 @@ class EntityNamespaceHandler(NamespaceHandler):
                 entity, f"_handle_{entity.ns.name.replace('.', '_')}", entity._handle
             ),
         )
-        if not entity._hass_connected:
+        if not entity.hass_connected:
             # if initially disabled then uninstall default strategy
             # EntityNamespaceMixin will manage enabling/disabling
             self.polling_strategy = None

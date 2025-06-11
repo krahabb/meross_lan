@@ -128,7 +128,8 @@ class MLConfigNumber(me.MEListChannelMixin, MLNumber):
 
 class MLEmulatedNumber(me.MEPartialAvailableMixin, MLNumber):
     """
-    Number entity for locally (HA recorder) stored parameters.
+    Number entity not directly binded to a device parameter (like MLConfigNumber)
+    but used to store in HA a bit of component configuration.
     """
 
     async def async_added_to_hass(self):

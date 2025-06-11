@@ -33,7 +33,7 @@ class MLSwitchBase(me.MLBinaryEntity, switch.SwitchEntity):
     DeviceClass = switch.SwitchDeviceClass
 
 
-class MLConfigSwitch(me.MEAlwaysAvailableMixin, MLSwitchBase):
+class MLEmulatedSwitch(me.MEPartialAvailableMixin, MLSwitchBase):
     """
     Switch entity not related to any device feature but used to configure
     behaviors for meross_lan entities.

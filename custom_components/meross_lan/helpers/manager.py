@@ -3,7 +3,7 @@ import asyncio
 import logging
 import os
 from time import localtime, strftime, time
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import persistent_notification as pn
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -30,9 +30,20 @@ from .obfuscate import (
     obfuscated_dict,
 )
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     import io
-    from typing import Callable, ClassVar, Coroutine, Final, NotRequired, Unpack
+    from types import MappingProxyType
+    from typing import (
+        Any,
+        Callable,
+        ClassVar,
+        Coroutine,
+        Final,
+        Mapping,
+        NotRequired,
+        Unpack,
+        TypedDict,
+    )
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import CALLBACK_TYPE, HomeAssistant
@@ -55,15 +66,18 @@ class EntityManager(Loggable):
     an isolation level between SubDevice and a ConfigEntry
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
 
-        class DeviceEntryIdType(typing.TypedDict):
+        class DeviceEntryIdType(TypedDict):
             identifiers: set[tuple[str, str]]
+
+        type PlatformsType = dict[str, Callable | None]
 
         api: Final[ComponentApi]
         hass: Final[HomeAssistant]
         config_entry: Final[ConfigEntry | None]
         deviceentry_id: Final[DeviceEntryIdType | None]
+        platforms: PlatformsType  # init in derived
         entities: Final[dict[object, MLEntity]]
         _tasks: set[asyncio.Future]
         _issues: set[str]  # BEWARE: on demand attribute
@@ -230,17 +244,17 @@ class EntityManager(Loggable):
 
 class ConfigEntryManager(EntityManager):
     """
-    This is an abstraction of an actual (device or other) container
-    for MLEntity(s). This container is very 'hybrid', end its main purpose
-    is to provide interfaces to their owned MerossEntities.
-    It could represent a Device, a SubDevice or an ApiProfile
-    and manages the relation(s) with the ConfigEntry (config, life-cycle)
+    This class manages the relationships with an actual ConfigEntry and its managed
+    device(s) and entities. A typical Meross device inherits from this but also
+    A MerossCloudProfile and the 'MQTTHub'.
     """
 
-    if typing.TYPE_CHECKING:
+    if TYPE_CHECKING:
+
         TRACE_RX: Final
         TRACE_TX: Final
-        DEFAULT_PLATFORMS: ClassVar[dict[str, Callable | None]]
+        DEFAULT_PLATFORMS: ClassVar[EntityManager.PlatformsType]
+        config: Mapping[str, Any]
         key: str
         logger: logging.Logger
         _trace_file: io.TextIOWrapper | None
@@ -366,7 +380,7 @@ class ConfigEntryManager(EntityManager):
         ):
             return False
         self._cleanup_subscriptions()
-        self.platforms = {}
+        self.platforms.clear()
         self.config = {}
         await self.async_shutdown()
         return True
@@ -408,7 +422,7 @@ class ConfigEntryManager(EntityManager):
         ent_reg = self.api.entity_registry if remove else None
         for entity in self.managed_entities(SENSOR_DOMAIN):
             if entity.is_diagnostic:
-                if entity._hass_connected:
+                if entity.hass_connected:
                     await entity.async_remove()
                 await entity.async_shutdown()
                 if ent_reg:
@@ -425,7 +439,7 @@ class ConfigEntryManager(EntityManager):
         """
         return obfuscated_any(value) if self.obfuscate else value
 
-    def loggable_dict(self, value: typing.Mapping[str, typing.Any]):
+    def loggable_dict(self, value: "Mapping[str, Any]"):
         """Conditionally obfuscate the dict values (based off OBFUSCATE_KEYS) to send to logging/tracing"""
         return obfuscated_dict(value) if self.obfuscate else value
 

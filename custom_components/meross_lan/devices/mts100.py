@@ -1,13 +1,13 @@
-import typing
+from typing import TYPE_CHECKING
 
 from ..calendar import MtsSchedule
 from ..climate import MtsClimate
 from ..merossclient.protocol import const as mc
 from ..merossclient.protocol.namespaces import hub as mn_h
 from ..number import MtsSetPointNumber, MtsTemperatureNumber
-from ..switch import MLConfigSwitch
+from ..switch import MLEmulatedSwitch
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from ..binary_sensor import MLBinarySensor
     from .hub import MTS100SubDevice
 
@@ -77,18 +77,19 @@ class Mts100Climate(MtsClimate):
             Mts100Schedule,
         )
         self.binary_sensor_window = manager.build_binary_sensor_window()
-        self.switch_patch_hvacaction = MLConfigSwitch(
-            manager, manager.id, "patch_hvacaction", device_value=0
-        )
-        self.switch_patch_hvacaction.register_state_callback(
-            self._switch_emulate_hvacaction_state_callback
+        self.switch_patch_hvacaction = MLEmulatedSwitch(
+            manager,
+            manager.id,
+            "patch_hvacaction",
+            device_value=0,
+            state_callback=self._switch_emulate_hvacaction_state_callback,
         )
 
     # interface: MtsClimate
     async def async_shutdown(self):
         await super().async_shutdown()
         self.binary_sensor_window: "MLBinarySensor" = None  # type: ignore
-        self.switch_patch_hvacaction: "MLConfigSwitch" = None  # type: ignore
+        self.switch_patch_hvacaction: "MLEmulatedSwitch" = None  # type: ignore
 
     def flush_state(self):
         self.preset_mode = self.MTS_MODE_TO_PRESET_MAP.get(self._mts_mode)
