@@ -3,22 +3,23 @@ from typing import TYPE_CHECKING, override
 
 from homeassistant.components.climate import const as hacc
 
-from ..calendar import MtsSchedule
-from ..climate import MtsClimate
-from ..helpers import reverse_lookup
-from ..merossclient.protocol import const as mc, namespaces as mn
-from ..merossclient.protocol.namespaces import thermostat as mn_t
-from ..number import MLConfigNumber
-from ..sensor import MLEnumSensor
-from ..switch import MLEmulatedSwitch
-from .thermostat import MtsCalibrationNumber
+from ...calendar import MtsSchedule
+from ...helpers import reverse_lookup
+from ...number import MLConfigNumber
+from ...sensor import MLEnumSensor
+from ...switch import MLEmulatedSwitch
+from .mtsthermostat import (
+    MtsTempUnit,
+    MtsThermostatClimate,
+    mc,
+    mn_t,
+)
 
 if TYPE_CHECKING:
     from typing import ClassVar, Final
 
-    from ..helpers.device import Device
-    from ..merossclient.protocol.types import thermostat
-    from ..number import MtsTemperatureNumber
+    from ...helpers.device import Device
+    from ...merossclient.protocol.types import thermostat
 
     """
     "Appliance.System.Ability",
@@ -39,10 +40,15 @@ if TYPE_CHECKING:
         "Appliance.Control.Thermostat.ScheduleB": {},
         "Appliance.Control.Thermostat.System": {},
     }
+    TODO:
+    -Appliance.Config.Sensor.Association likely carries info about which sensor (internal/external)
+    is used as observed temp
+    -Appliance.Control.Thermostat.Calibration
+    {"calibration":[{"channel":0,"value":150,"min":-450,"max":450,"humiValue":-60}]}
     """
 
 
-class Mts300Climate(MtsClimate):
+class Mts300Climate(MtsThermostatClimate):
     """Climate entity for MTS300 devices"""
 
     """
@@ -73,22 +79,27 @@ class Mts300Climate(MtsClimate):
         sensor_cStatus: MLEnumSensor
         sensor_fStatus: MLEnumSensor
 
+    # MtsClimate class attributes
     ns = mn_t.Appliance_Control_Thermostat_ModeC
     device_scale = mc.MTS300_TEMP_SCALE
 
-    # MtsClimate class attributes
+    class Schedule(MtsSchedule):
+        ns = mn_t.Appliance_Control_Thermostat_ScheduleB
+
+        # TODO: customize parsing of native payload since we have 2 temperatures
+
     MTS_MODE_TO_PRESET_MAP = {
-        mc.MTS300_WORK_MANUAL: MtsClimate.Preset.CUSTOM,
-        mc.MTS300_WORK_SCHEDULE: MtsClimate.Preset.AUTO,
+        mc.MTS300_WORK_MANUAL: MtsThermostatClimate.Preset.CUSTOM,
+        mc.MTS300_WORK_SCHEDULE: MtsThermostatClimate.Preset.AUTO,
     }
     MTS_MODE_TO_TEMPERATUREKEY_MAP = mc.MTS300_MODE_TO_TARGETTEMP_MAP
 
     # Mts300Climate class attributes
     HVAC_MODE_TO_MODE_MAP = {
-        MtsClimate.HVACMode.OFF: mc.MTS300_MODE_OFF,
-        MtsClimate.HVACMode.HEAT: mc.MTS300_MODE_HEAT,
-        MtsClimate.HVACMode.COOL: mc.MTS300_MODE_COOL,
-        MtsClimate.HVACMode.HEAT_COOL: mc.MTS300_MODE_AUTO,
+        MtsThermostatClimate.HVACMode.OFF: mc.MTS300_MODE_OFF,
+        MtsThermostatClimate.HVACMode.HEAT: mc.MTS300_MODE_HEAT,
+        MtsThermostatClimate.HVACMode.COOL: mc.MTS300_MODE_COOL,
+        MtsThermostatClimate.HVACMode.HEAT_COOL: mc.MTS300_MODE_AUTO,
     }
     FAN_MODE_TO_FAN_SPEED_MAP = {
         hacc.FAN_AUTO: mc.MTS300_FAN_SPEED_AUTO,
@@ -97,17 +108,17 @@ class Mts300Climate(MtsClimate):
         hacc.FAN_HIGH: mc.MTS300_FAN_SPEED_HIGH,
     }
     STATUS_TO_HVAC_ACTION_MAP = {
-        (False, False, False): MtsClimate.HVACAction.IDLE,
+        (False, False, False): MtsThermostatClimate.HVACAction.IDLE,
         # heating flag active (whatever the rest...)
-        (True, False, False): MtsClimate.HVACAction.HEATING,
-        (True, False, True): MtsClimate.HVACAction.HEATING,
-        (True, True, False): MtsClimate.HVACAction.HEATING,
-        (True, True, True): MtsClimate.HVACAction.HEATING,
+        (True, False, False): MtsThermostatClimate.HVACAction.HEATING,
+        (True, False, True): MtsThermostatClimate.HVACAction.HEATING,
+        (True, True, False): MtsThermostatClimate.HVACAction.HEATING,
+        (True, True, True): MtsThermostatClimate.HVACAction.HEATING,
         # cooling flag active (when not heating of course)
-        (False, True, False): MtsClimate.HVACAction.COOLING,
-        (False, True, True): MtsClimate.HVACAction.COOLING,
+        (False, True, False): MtsThermostatClimate.HVACAction.COOLING,
+        (False, True, True): MtsThermostatClimate.HVACAction.COOLING,
         # only fan active
-        (False, False, True): MtsClimate.HVACAction.FAN,
+        (False, False, True): MtsThermostatClimate.HVACAction.FAN,
     }
     """Status flags in "more" dict mapped as: (bool(hStatus), bool(cStatus), bool(fStatus))."""
     STATUS_SENSOR_DEF_MAP = {
@@ -131,12 +142,12 @@ class Mts300Climate(MtsClimate):
     _attr_hvac_modes = list(HVAC_MODE_TO_MODE_MAP)
     _attr_preset_modes = list(MTS_MODE_TO_PRESET_MAP.values())
     _attr_supported_features = (
-        MtsClimate.ClimateEntityFeature.PRESET_MODE
-        | MtsClimate.ClimateEntityFeature.TARGET_TEMPERATURE
-        | getattr(MtsClimate.ClimateEntityFeature, "TURN_OFF", 0)
-        | getattr(MtsClimate.ClimateEntityFeature, "TURN_ON", 0)
-        | MtsClimate.ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
-        | MtsClimate.ClimateEntityFeature.FAN_MODE
+        MtsThermostatClimate.ClimateEntityFeature.PRESET_MODE
+        | MtsThermostatClimate.ClimateEntityFeature.TARGET_TEMPERATURE
+        | getattr(MtsThermostatClimate.ClimateEntityFeature, "TURN_OFF", 0)
+        | getattr(MtsThermostatClimate.ClimateEntityFeature, "TURN_ON", 0)
+        | MtsThermostatClimate.ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+        | MtsThermostatClimate.ClimateEntityFeature.FAN_MODE
     )
 
     __slots__ = (
@@ -154,13 +165,7 @@ class Mts300Climate(MtsClimate):
         manager: "Device",
         channel=0,
     ):
-        super().__init__(
-            manager,
-            channel,
-            MtsCalibrationNumber,
-            None,
-            Mts300Schedule,
-        )
+        super().__init__(manager, channel)
         self.fan_mode = None
         self.fan_modes = self._attr_fan_modes
         self.target_temperature_high = None
@@ -195,6 +200,11 @@ class Mts300Climate(MtsClimate):
         manager.register_parser_entity(self)
         manager.register_parser_entity(self.schedule)
 
+        """
+        if mn.Appliance_Control_TempUnit.name in manager.descriptor.ability:
+            MtsTempUnit(self)
+        """
+
     async def async_shutdown(self):
         await super().async_shutdown()
         self.switch_fan_hold = None  # type:ignore
@@ -211,7 +221,7 @@ class Mts300Climate(MtsClimate):
         return super().set_unavailable()
 
     @override
-    async def async_set_hvac_mode(self, hvac_mode: MtsClimate.HVACMode):
+    async def async_set_hvac_mode(self, hvac_mode: MtsThermostatClimate.HVACMode):
         await self._async_request_modeC({"mode": self.HVAC_MODE_TO_MODE_MAP[hvac_mode]})
 
     @override
@@ -383,13 +393,13 @@ class Mts300Climate(MtsClimate):
                 case mc.MTS300_MODE_OFF:
                     self._mts_onoff = 0
                     # don't set _mts_mode so we remembere last one
-                    self.hvac_mode = MtsClimate.HVACMode.OFF
-                    self.hvac_action = MtsClimate.HVACAction.OFF
+                    self.hvac_mode = MtsThermostatClimate.HVACMode.OFF
+                    self.hvac_action = MtsThermostatClimate.HVACAction.OFF
                     self.target_temperature = None
                 case mc.MTS300_MODE_HEAT:
                     self._mts_onoff = 1
                     self._mts_mode = mode
-                    self.hvac_mode = MtsClimate.HVACMode.HEAT
+                    self.hvac_mode = MtsThermostatClimate.HVACMode.HEAT
                     self.hvac_action = Mts300Climate.STATUS_TO_HVAC_ACTION_MAP[
                         (
                             bool(more["hStatus"]),
@@ -401,7 +411,7 @@ class Mts300Climate(MtsClimate):
                 case mc.MTS300_MODE_COOL:
                     self._mts_onoff = 1
                     self._mts_mode = mode
-                    self.hvac_mode = MtsClimate.HVACMode.COOL
+                    self.hvac_mode = MtsThermostatClimate.HVACMode.COOL
                     self.hvac_action = Mts300Climate.STATUS_TO_HVAC_ACTION_MAP[
                         (
                             False,
@@ -413,7 +423,7 @@ class Mts300Climate(MtsClimate):
                 case mc.MTS300_MODE_AUTO:
                     self._mts_onoff = 1
                     self._mts_mode = mode
-                    self.hvac_mode = MtsClimate.HVACMode.HEAT_COOL
+                    self.hvac_mode = MtsThermostatClimate.HVACMode.HEAT_COOL
                     self.hvac_action = Mts300Climate.STATUS_TO_HVAC_ACTION_MAP[
                         (
                             bool(more["hStatus"]),
@@ -449,9 +459,3 @@ class Mts300Climate(MtsClimate):
 
     async def _async_turn_off_switch_fan_hold(self, **kwargs):
         await self._async_request_modeC({"fan": {"hTime": mc.MTS300_FAN_HOLD_DISABLED}})
-
-
-class Mts300Schedule(MtsSchedule):
-    ns = mn_t.Appliance_Control_Thermostat_ScheduleB
-
-    # TODO: customize parsing of native payload since we have 2 temperatures

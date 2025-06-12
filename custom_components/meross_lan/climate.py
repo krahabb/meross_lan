@@ -1,24 +1,23 @@
 import enum
-import typing
 from typing import TYPE_CHECKING
 
 from homeassistant.components import climate
 
 from .helpers import entity as me, reverse_lookup
 from .merossclient.protocol import const as mc
+from .number import MLConfigNumber
 from .select import MtsTrackedSensor
 from .sensor import MLTemperatureSensor
 
 if TYPE_CHECKING:
-    from typing import ClassVar, Final, TypeAlias
+    from typing import ClassVar, Final, Unpack
 
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
     from .calendar import MtsSchedule
-    from .helpers.device import BaseDevice
+    from .helpers.device import BaseDevice, Device
     from .helpers.namespaces import NamespaceHandler
-    from .number import MtsSetPointNumber, MtsTemperatureNumber
 
 
 async def async_setup_entry(
@@ -37,9 +36,19 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         AUTO = "auto"
 
     if TYPE_CHECKING:
+        ATTR_HVAC_MODE: Final
         ATTR_TEMPERATURE: Final
+        ATTR_TARGET_TEMP_HIGH: Final
+        ATTR_TARGET_TEMP_LOW: Final
         TEMP_CELSIUS: Final
+
         device_scale: ClassVar[float]
+        AdjustNumber: ClassVar[type["MtsTemperatureNumber"]]
+        """The specific Adjust/Calibrate number class to instantiate."""
+        SetPointNumber: ClassVar[type["MtsSetPointNumber"] | None]
+        """The (optional) class for setting up a group of preset setpoints."""
+        Schedule: ClassVar[type[MtsSchedule]]
+        """The specific Schedule/Calendar class to instantiate."""
 
         MTS_MODE_TO_PRESET_MAP: ClassVar[dict[int | None, str]]
         """maps device 'mode' value to the HA climate.preset_mode"""
@@ -50,8 +59,8 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         SET_TEMP_FORCE_MANUAL_MODE: Final[bool]
         """Determines the behavior of async_set_temperature."""
         manager: BaseDevice
-        number_adjust_temperature: Final[MtsTemperatureNumber]
-        number_preset_temperature: dict[str, MtsSetPointNumber]
+        number_adjust_temperature: Final["MtsTemperatureNumber"]
+        number_preset_temperature: dict[str, "MtsSetPointNumber"]
         schedule: Final[MtsSchedule]
         select_tracked_sensor: Final[MtsTrackedSensor]
 
@@ -82,6 +91,8 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
     HVACMode = climate.HVACMode
 
     device_scale = mc.MTS_TEMP_SCALE
+
+    SetPointNumber = None
 
     PRESET_TO_ICON_MAP = {
         Preset.COMFORT: "mdi:sun-thermometer",
@@ -135,9 +146,6 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self,
         manager: "BaseDevice",
         channel: object,
-        adjust_number_class: type["MtsTemperatureNumber"],
-        preset_number_class: type["MtsSetPointNumber"] | None,
-        calendar_class: type["MtsSchedule"],
     ):
         self.current_humidity = None
         self.current_temperature = None
@@ -155,15 +163,15 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
         self._mts_onoff: int | None = None
         self._mts_payload = {}
         super().__init__(manager, channel)
-        self.number_adjust_temperature = adjust_number_class(self)  # type: ignore
+        self.number_adjust_temperature = self.__class__.AdjustNumber(self)  # type: ignore
         self.number_preset_temperature = {}
-        if preset_number_class:
+        if preset_number_class := self.__class__.SetPointNumber:
             for preset in MtsClimate.PRESET_TO_ICON_MAP.keys():
                 number_preset_temperature = preset_number_class(self, preset)
                 self.number_preset_temperature[number_preset_temperature.key_value] = (
                     number_preset_temperature
                 )
-        self.schedule = calendar_class(self)
+        self.schedule = self.__class__.Schedule(self)
         self.select_tracked_sensor = MtsTrackedSensor(self)
         self.sensor_current_temperature = MLTemperatureSensor(manager, channel)
         self.sensor_current_temperature.entity_registry_enabled_default = False
@@ -249,3 +257,84 @@ class MtsClimate(me.MLEntity, climate.ClimateEntity):
             except:
                 # in case the ns is not available for this device
                 pass
+
+
+class MtsTemperatureNumber(MLConfigNumber):
+    """
+    Common number entity for representing MTS temperatures configuration
+    """
+
+    # HA core entity attributes:
+    _attr_suggested_display_precision = 1
+
+    __slots__ = ("climate",)
+
+    def __init__(
+        self,
+        climate: "MtsClimate",
+        entitykey: str,
+        **kwargs: "Unpack[MLConfigNumber.Args]",
+    ):
+        self.climate = climate
+        kwargs["device_scale"] = climate.device_scale
+        super().__init__(
+            climate.manager,
+            climate.channel,
+            entitykey,
+            MLConfigNumber.DeviceClass.TEMPERATURE,
+            **kwargs,
+        )
+
+
+class MtsSetPointNumber(MtsTemperatureNumber):
+    """
+    Helper entity to configure MTS100/150/200 setpoints
+    AKA: Heat(comfort) - Cool(sleep) - Eco(away)
+    """
+
+    # HA core entity attributes:
+    icon: str
+
+    __slots__ = ("icon",)
+
+    def __init__(
+        self,
+        climate: "MtsClimate",
+        preset_mode: "MtsClimate.Preset",
+    ):
+        self.key_value = climate.MTS_MODE_TO_TEMPERATUREKEY_MAP[
+            reverse_lookup(climate.MTS_MODE_TO_PRESET_MAP, preset_mode)
+        ]
+        self.icon = climate.PRESET_TO_ICON_MAP[preset_mode]
+        super().__init__(
+            climate,
+            f"config_temperature_{self.key_value}",
+            name=f"{preset_mode} temperature",
+        )
+
+    @property
+    def native_max_value(self):
+        return self.climate.max_temp
+
+    @property
+    def native_min_value(self):
+        return self.climate.min_temp
+
+    @property
+    def native_step(self):
+        return self.climate.target_temperature_step
+
+    async def async_request_value(self, device_value):
+        if response := await super().async_request_value(device_value):
+            # mts100(s) reply to the setack with the 'full' (or anyway richer) payload
+            # so we'll use the _parse_temperature logic (a bit overkill sometimes) to
+            # make sure the climate state is consistent and all the correct roundings
+            # are processed when changing any of the presets
+            # not sure about mts200 replies..but we're optimist
+            ns_slug = self.ns.slug
+            payload = response[mc.KEY_PAYLOAD]
+            if ns_slug in payload:
+                # by design ns_slug is either "temperature" (mts100) or "mode" (mts200)
+                getattr(self.climate, f"_parse_{ns_slug}")(payload[ns_slug][0])
+
+        return response

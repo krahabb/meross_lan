@@ -116,7 +116,6 @@ class BaseDevice(EntityManager):
             connections: NotRequired[set[tuple[str, str]]]
             via_device: NotRequired[tuple[str, str]]
 
-
     __slots__ = (
         "online",
         "device_registry_entry",
@@ -367,7 +366,7 @@ class Device(BaseDevice, ConfigEntryManager):
             "namespace_init_sensor_latestx",
         ),
         "Appliance.Control.Thermostat.ModeC": (
-            ".devices.mts300",
+            ".devices.thermostat.mts300",
             "Mts300Climate",
         ),
         mn.Appliance_RollerShutter_State.name: (".cover", "MLRollerShutter"),
@@ -394,7 +393,7 @@ class Device(BaseDevice, ConfigEntryManager):
             name
             for name, ns in mn.NAMESPACES.items()
             if (ns.has_get is False) and (ns.has_push_query is False)
-        )
+        ),
     )
 
     DEFAULT_PLATFORMS = ConfigEntryManager.DEFAULT_PLATFORMS | {
@@ -2518,7 +2517,9 @@ class Device(BaseDevice, ConfigEntryManager):
             # at least until the device fully initialize through
             # self.start()
             if self.online and not self._polling_epoch:
-                while (ability := next(abilities_iterator)) in self.TRACE_ABILITY_EXCLUDE:
+                while (
+                    ability := next(abilities_iterator)
+                ) in self.TRACE_ABILITY_EXCLUDE:
                     continue
                 self.log(self.DEBUG, "Tracing %s ability", ability)
                 await self.get_handler_by_name(ability).async_trace(self.async_request)

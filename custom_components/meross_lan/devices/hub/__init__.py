@@ -1,23 +1,23 @@
 from typing import TYPE_CHECKING
 
-from .. import const as mlc
-from ..binary_sensor import MLBinarySensor
-from ..calendar import MtsSchedule
-from ..climate import MtsClimate
-from ..helpers import entity as me
-from ..helpers.device import BaseDevice, Device
-from ..helpers.namespaces import (
+from ... import const as mlc
+from ...binary_sensor import MLBinarySensor
+from ...calendar import MtsSchedule
+from ...climate import MtsClimate
+from ...helpers import entity as me
+from ...helpers.device import BaseDevice, Device
+from ...helpers.namespaces import (
     POLLING_STRATEGY_CONF,
     NamespaceHandler,
     NamespaceParser,
     mc,
     mn,
 )
-from ..merossclient import get_productnameuuid
-from ..merossclient.protocol.namespaces import hub as mn_h
-from ..number import MLConfigNumber
-from ..select import MtsTrackedSensor
-from ..sensor import (
+from ...merossclient import get_productnameuuid
+from ...merossclient.protocol.namespaces import hub as mn_h
+from ...number import MLConfigNumber
+from ...select import MtsTrackedSensor
+from ...sensor import (
     MLDiagnosticSensor,
     MLEnumSensor,
     MLHumiditySensor,
@@ -25,15 +25,15 @@ from ..sensor import (
     MLNumericSensor,
     MLTemperatureSensor,
 )
-from ..switch import MLSwitch
+from ...switch import MLSwitch
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Collection, Final
 
-    from ..helpers.device import AsyncRequestFunc, DigestInitReturnType
-    from ..helpers.entity import MLEntity
-    from ..merossclient.cloudapi import SubDeviceInfoType
-    from ..merossclient.protocol.namespaces import Namespace
+    from ...helpers.device import AsyncRequestFunc, DigestInitReturnType
+    from ...helpers.entity import MLEntity
+    from ...merossclient.cloudapi import SubDeviceInfoType
+    from ...merossclient.protocol.namespaces import Namespace
     from .mts100 import Mts100Climate
 
     WELL_KNOWN_TYPE_MAP: Final[dict[str, Callable]]
@@ -248,7 +248,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
             name
             for name, ns in mn_h.HUB_NAMESPACES.items()
             if (ns.has_get is False) and (ns.has_push_query is False)
-        )
+        ),
     )
 
     # interface: EntityManager
@@ -357,7 +357,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         self._parse_hub(payload[mc.KEY_HUB])
 
     def _handle_Appliance_Hub_ExtraInfo(self, header: dict, payload: dict):
-        """ TODO: decode
+        """TODO: decode
         {
           "extraInfo": {
             "upgradeSubDevs": [
@@ -380,7 +380,7 @@ class HubMixin(Device if TYPE_CHECKING else object):
         pass
 
     def _handle_Appliance_Hub_SubdeviceList(self, header: dict, payload: dict):
-        """ TODO: decode
+        """TODO: decode
         {
             'subdeviceList': {
                 'subdevice': [

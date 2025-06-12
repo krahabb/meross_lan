@@ -3,7 +3,6 @@ A collection of typing definitions for payloads
 in Appliance.Control.Thermostat
 """
 
-import typing
 from typing import TypedDict
 
 from . import ChannelPayload

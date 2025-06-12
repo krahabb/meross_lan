@@ -1,5 +1,5 @@
 from time import time
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant import const as hac
 from homeassistant.components import select
@@ -9,8 +9,8 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .helpers import entity as me, reverse_lookup
 
-if typing.TYPE_CHECKING:
-    from typing import Unpack
+if TYPE_CHECKING:
+    from typing import Any, ClassVar, Unpack
 
     from homeassistant.components.sensor import SensorEntity
     from homeassistant.config_entries import ConfigEntry
@@ -20,7 +20,6 @@ if typing.TYPE_CHECKING:
 
     from .climate import MtsClimate
     from .helpers.device import BaseDevice
-
 
 
 async def async_setup_entry(
@@ -37,9 +36,10 @@ class MLSelect(me.MLEntity, select.SelectEntity):
 
     PLATFORM = select.DOMAIN
 
-    # HA core entity attributes:
-    current_option: str | None
-    options: list[str]
+    if TYPE_CHECKING:
+        # HA core entity attributes:
+        current_option: str | None
+        options: list[str]
 
     __slots__ = (
         "current_option",
@@ -66,10 +66,13 @@ class MLConfigSelect(MLSelect):
     (which also auto-updates should the device provide an unmapped value).
     """
 
-    # configure initial options(map) through a class default
-    OPTIONS_MAP: typing.ClassVar[dict[typing.Any, str]] = {}
+    if TYPE_CHECKING:
+        OPTIONS_MAP: ClassVar[dict[Any, str]]
+        options_map: dict[Any, str]
 
-    options_map: dict[typing.Any, str]
+    # configure initial options(map) through a class default
+    OPTIONS_MAP = {}
+
     __slots__ = ("options_map",)
 
     def __init__(

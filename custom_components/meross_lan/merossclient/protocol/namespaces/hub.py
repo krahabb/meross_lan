@@ -10,9 +10,8 @@ We actually define the symbol HUB_NAMESPACES in the root package since it also u
 but from a design perspective it should be born here.
 """
 
-from .. import namespaces as mn
-from .. import const as mc
 from . import HUB_NAMESPACES
+from .. import const as mc, namespaces as mn
 
 MAP_HUB: "mn.ns.Args" = {"map": HUB_NAMESPACES}
 IS_HUB_ID: "mn.ns.Args" = {

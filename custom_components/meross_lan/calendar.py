@@ -2,7 +2,7 @@ import copy
 import dataclasses
 from datetime import datetime, timedelta
 import re
-import typing
+from typing import TYPE_CHECKING
 
 from homeassistant.components import calendar
 from homeassistant.components.calendar.const import (
@@ -14,15 +14,21 @@ from homeassistant.components.calendar.const import (
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt
 
-from .climate import MtsClimate
 from .helpers import clamp, entity as me
 from .merossclient.protocol import const as mc
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from typing import Any, Final
+
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
+    from .climate import MtsClimate
     from .helpers.device import BaseDevice
+
+    MtsScheduleNativeEntry = list[int]
+    MtsScheduleNativeDayEntry = list[MtsScheduleNativeEntry]
+    MtsScheduleNativeType = dict[str, MtsScheduleNativeDayEntry]
 
 
 async def async_setup_entry(
@@ -33,10 +39,6 @@ async def async_setup_entry(
 
 MTS_SCHEDULE_WEEKDAY = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 MTS_SCHEDULE_RRULE = "FREQ=WEEKLY"
-
-MtsScheduleNativeEntry = list[int]
-MtsScheduleNativeDayEntry = list[MtsScheduleNativeEntry]
-MtsScheduleNativeType = dict[str, MtsScheduleNativeDayEntry]
 
 
 @dataclasses.dataclass
@@ -55,9 +57,9 @@ class MtsScheduleEntry:
     minutes_begin: int
     minutes_end: int
     day: datetime  # base date of day used when querying this: used to calculate CalendarEvent
-    data: MtsScheduleNativeEntry  # actually points to the inner list in the native payload (not a copy)
+    data: "MtsScheduleNativeEntry"  # actually points to the inner list in the native payload (not a copy)
 
-    def get_event(self, climate: MtsClimate) -> calendar.CalendarEvent:
+    def get_event(self, climate: "MtsClimate") -> calendar.CalendarEvent:
         """
         returns an HA CalendarEvent set up with this entry data (schedule)
         relevant for the calendar day provided in event_day
@@ -90,20 +92,24 @@ class MtsScheduleEntry:
 
 
 class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
+
+    if TYPE_CHECKING:
+        manager: "BaseDevice"
+        climate: Final[MtsClimate]
+        _native_schedule: MtsScheduleNativeType | None
+        _schedule: MtsScheduleNativeType | None
+        # HA core entity attributes:
+        supported_features: calendar.CalendarEntityFeature
+
     PLATFORM = calendar.DOMAIN
-    manager: "BaseDevice"
 
     # HA core entity attributes:
     entity_category = me.MLEntity.EntityCategory.CONFIG
-    supported_features: calendar.CalendarEntityFeature = (
+    supported_features = (
         calendar.CalendarEntityFeature.CREATE_EVENT
         | calendar.CalendarEntityFeature.DELETE_EVENT
         | calendar.CalendarEntityFeature.UPDATE_EVENT
     )
-
-    climate: typing.Final[MtsClimate]
-    _native_schedule: MtsScheduleNativeType | None
-    _schedule: MtsScheduleNativeType | None
 
     __slots__ = (
         "climate",
@@ -115,7 +121,7 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
         "_schedule_entry_count_min",
     )
 
-    def __init__(self, climate: MtsClimate):
+    def __init__(self, climate: "MtsClimate"):
         self.climate = climate
         self._flatten = True
         # save a flattened version of the device schedule to ease/optimize CalendarEvent management
@@ -333,7 +339,7 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
                 data=schedule_native_entry,
             )
 
-    def _extract_rfc5545_temp(self, event: dict[str, typing.Any]) -> int:
+    def _extract_rfc5545_temp(self, event: "dict[str, Any]") -> int:
         match = re.search(r"[-+]?(?:\d*\.*\d+)", event[EVENT_SUMMARY])
         if match:
             return round(
@@ -348,7 +354,7 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
             raise Exception("Provide a valid temperature in the summary field")
 
     def _extract_rfc5545_info(
-        self, event: dict[str, typing.Any]
+        self, event: "dict[str, Any]"
     ) -> tuple[datetime, datetime, int]:
         """Returns event start,end,temperature from an RFC5545 dict. Throws exception if
         the temperature cannot be parsed (expecting the SUMMARY field to carry the T value)
@@ -580,7 +586,9 @@ class MtsSchedule(me.MLEntity, calendar.CalendarEntity):
             #   "sun": [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]
             #   }
             with self.exception_warning("_build_internal_schedule", timeout=14400):
-                schedule: MtsScheduleNativeType = {w: [] for w in MTS_SCHEDULE_WEEKDAY}
+                schedule: "MtsScheduleNativeType" = {
+                    w: [] for w in MTS_SCHEDULE_WEEKDAY
+                }
                 for weekday, weekday_schedule in schedule.items():
                     if weekday_state := state.get(weekday):
                         # weekday_state = [[390,150],[90,240],[300,190],[270,220],[300,150],[90,150]]

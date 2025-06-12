@@ -510,7 +510,7 @@ Appliance_Control_Sensor_LatestX = ns(
 )
 Appliance_Control_Spray = ns("Appliance.Control.Spray", mc.KEY_SPRAY, ARGS_GETSETPUSH)
 Appliance_Control_TempUnit = ns(
-    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, ARGS_GET | P_LIST_C
+    "Appliance.Control.TempUnit", mc.KEY_TEMPUNIT, ARGS_GETSET | P_LIST_C
 )
 Appliance_Control_Timer = ns(
     "Appliance.Control.Timer", mc.KEY_TIMER, ARGS_GET | P_LIST | G_EXPERIMENTAL

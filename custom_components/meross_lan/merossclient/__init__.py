@@ -1,5 +1,5 @@
 """
-    A collection of utilities to help managing the Meross device protocol
+A collection of utilities to help managing the Meross device protocol
 """
 
 import asyncio
@@ -135,7 +135,7 @@ def update_dict_strict(dst_dict: dict, src_dict: dict):
                     update_dict_strict(dst_value, value)
             elif dst_type is list:
                 if src_type is list:
-                    dst_dict[key] = value # lists ?!
+                    dst_dict[key] = value  # lists ?!
             else:
                 dst_dict[key] = value
 
@@ -169,7 +169,6 @@ def extract_dict_payloads(payload):
             yield p
     elif payload:  # assert isinstance(payload, dict)
         yield payload
-
 
 
 @dataclass
@@ -279,6 +278,7 @@ def get_mts_digest(p_subdevice_digest: dict) -> dict | None:
             return p_subdevice_digest[digest_mts_key]
     return None
 
+
 #
 #
 #
@@ -287,15 +287,16 @@ class MerossDeviceDescriptor:
     Utility class to extract various info from Appliance.System.All
     device descriptor
     """
+
     if TYPE_CHECKING:
-        all: dict
-        ability: dict
-        digest: dict
-        control: dict
-        system: dict
-        hardware: dict
-        firmware: dict
-        online: dict
+        all: dict[str, Any]
+        ability: dict[str, Any]
+        digest: dict[str, Any]
+        control: dict[str, Any]
+        system: dict[str, Any]
+        hardware: dict[str, Any]
+        firmware: dict[str, Any]
+        online: dict[str, Any]
         type: str
         subType: str
         hardwareVersion: str

@@ -279,6 +279,10 @@ STATUS_ONLINE = 1
 STATUS_OFFLINE = 2
 STATUS_UPGRADING = 3
 
+# Appliance.Control.TempUnit
+TEMPUNIT_CELSIUS = 1
+TEMPUNIT_FAHRENHEIT = 2
+
 # light bulb capacity enums
 LIGHT_CAPACITY_RGB = 1
 LIGHT_CAPACITY_TEMPERATURE = 2
@@ -349,9 +353,9 @@ MTS300_TEMP_SCALE = 100  # 1°C == 100 device value
 MTS300_MODE_OFF = 0
 MTS300_MODE_HEAT = 1
 MTS300_MODE_COOL = 2
-MTS300_MODE_AUTO = 3 # switching automatically between heat/cool
-MTS300_WORK_MANUAL = 1 # manual target temp
-MTS300_WORK_SCHEDULE = 2 # using the schedule to set the target temp
+MTS300_MODE_AUTO = 3  # switching automatically between heat/cool
+MTS300_WORK_MANUAL = 1  # manual target temp
+MTS300_WORK_SCHEDULE = 2  # using the schedule to set the target temp
 MTS300_MODE_TO_TARGETTEMP_MAP = {
     MTS300_MODE_OFF: "",
     MTS300_MODE_HEAT: "heat",
